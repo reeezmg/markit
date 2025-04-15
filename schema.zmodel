@@ -1,0 +1,628 @@
+generator client {
+    provider = 'prisma-client-js'
+}
+
+datasource db {
+    provider = 'postgresql'
+    url      = env('DATABASE_URL')
+}
+
+plugin hooks {
+    provider = '@zenstackhq/tanstack-query'
+    target = 'vue'
+    output = 'lib/hooks'
+}
+
+abstract model Base {
+    id String @id @unique @default(uuid())
+
+    @@allow('read, update', auth().role == 'admin')
+}
+
+enum UserRole {
+    admin
+    user
+}
+
+enum CompanyType {
+    seller
+    buyer
+}
+
+enum paymentType {
+    Credit
+    Cash
+}
+
+enum PaymentMode {
+    CASH
+    CARD
+    BANK_TRANSFER
+    UPI
+}
+
+enum PaymentStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    COMPLETED
+    FAILED
+}
+
+enum OrderType {
+  STANDARD
+  BOOKING
+  TRY_AT_HOME
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  PACKED
+  DELIVERED
+  CANCELED
+  OUTOFSTOCK
+  BOOKED
+}
+
+
+
+model Company extends Base {
+    name        String
+    logo        String?
+    description String?
+    shopifyStoreName  String? @map("shopify_store_name")
+    shopifyAccessToken String?  @map("shopify_access_token")
+    tiktokCipher String? 
+    tiktokStoreName String?
+    tiktokAccessToken String?
+    tiktokAccessTokenExpireIn Int?
+    tiktokRefreshToken String?
+    tiktokRefreshTokenExpireIn Int?
+    images      String?
+    users       CompanyUser[]
+    clients     CompanyClient[]
+    products    Product[]
+    categories  Category[]
+    subcategories  Subcategory[]
+    bills       Bill[]
+    tokenbills  TokenEntry[]
+    accounts    Account[]
+    expenseCategories   ExpenseCategory[]
+    expenses        Expense[]
+    payment         Payment[]
+    status      Boolean       @default(true)
+    type        CompanyType
+    pipeline    Pipeline?
+    accHolderName String?
+    sortCode String?
+    accountNo String?
+    bankName String?
+    distributor   DistributorCompany[]
+    billCounter Int @default(0) @map("bill_counter")
+    
+
+    @@allow('create', auth() != null && status)
+    @@allow('update', users?[user == auth()])
+    @@allow('read', true)
+
+    @@map('companies')
+}
+
+model Distributor extends Base {
+    name        String
+    images      String?
+    companies   DistributorCompany[]
+    purchaseorders    PurchaseOrder[]
+    status      Boolean       @default(true)
+    accHolderName String?
+    ifsc String?
+    accountNo String?
+    bankName String?
+    gstin String?
+    address   Address?
+    
+    @@allow('create', auth() != null && status)
+    @@allow('update',true)
+    @@allow('read', true)
+
+    @@map('distributors')
+}
+
+
+model User extends Base {
+    email     String        @unique @email
+    name      String?
+    password  String
+    status    Boolean       @default(true)
+    role      UserRole      @default(user) @map('role')
+    companies CompanyUser[]
+    address   Address?
+    conversations UserConversation[]
+    clients     UserClient[]
+
+    // everybody can signup
+    @@allow('all', true)
+
+    @@allow('read', companies?[company.users?[user == auth()]])
+
+    @@map('users')
+}
+
+model Client extends Base {
+    email     String?        @unique @email
+    name      String
+    password  String?
+    phone     String        @unique
+    status    Boolean       @default(true)
+    pipelineStatus    String       @default('new')
+    companies CompanyClient[]
+    address   Address[]
+    bill      Bill?
+    conversations ClientConversation[]
+    users     UserClient[]
+    newPipeline     Pipeline?        @relation("PipelineNewClients", fields: [newPipelineId], references: [id])
+    newPipelineId   String?         @map("newPipeline_id")
+    prospectPipeline     Pipeline?        @relation("PipelineProspectClients", fields: [prospectPipelineId], references: [id])
+    prospectPipelineId   String?         @map("prospectPipeline_id")
+    viewingPipeline     Pipeline?        @relation("PipelineViewingClients", fields: [viewingPipelineId], references: [id])
+    viewingPipelineId   String?         @map("viewingPipeline_id")
+    rejectPipeline     Pipeline?        @relation("PipelineRejectClients", fields: [rejectPipelineId], references: [id])
+    rejectPipelineId   String?         @map("rejectPipeline_id")
+    closePipeline     Pipeline?        @relation("PipelineCloseClients", fields: [closePipelineId], references: [id])
+    closePipelineId   String?         @map("closePipeline_id")
+    // everybody can signup
+    @@allow('read, create, update, delete', true)
+
+    @@map('clients')
+}
+
+model Pipeline extends Base {
+    company     Company           @relation(fields: [companyId], references: [id])
+    companyId   String            @map('company_id') @unique
+    newClients      Client[] @relation("PipelineNewClients")
+    prospectClients Client[] @relation("PipelineProspectClients")
+    viewingClients  Client[] @relation("PipelineViewingClients")
+    rejectClients   Client[] @relation("PipelineRejectClients")
+    closeClients    Client[] @relation("PipelineCloseClients")
+
+    @@map("pipelines")
+}
+
+
+model Category {
+    id          String            @id @default(uuid())
+    createdAt   DateTime          @default(now()) @map('created_at')
+    updatedAt   DateTime          @updatedAt @map('updated_at')
+    name        String            @length(1, 256)
+    description String?
+    status      Boolean           @default(true)
+    image       String?
+    company     Company           @relation(fields: [companyId], references: [id])
+    companyId   String            @map('company_id')
+    products     Product[]        
+    subcategories   Subcategory[]
+    entries     Entry[]
+    hsn         String?
+    tax         String?
+
+    @@allow('read', true)
+    @@allow('create, update,delete',company.users?[user == auth()])
+
+    @@map('categories')
+}
+
+
+model Subcategory {
+    id          String             @id @default(uuid())
+    createdAt   DateTime           @default(now()) @map('created_at')
+    updatedAt   DateTime           @updatedAt @map('updated_at')
+    name        String             @length(1, 256)
+    description String?
+    status      Boolean            @default(true)
+    image       String?
+    company     Company            @relation(fields: [companyId], references: [id])
+    companyId   String             @map('company_id')
+    products     Product[] 
+    category     Category?           @relation(fields: [categoryId], references: [id])
+    categoryId   String?             @map('category_id')
+    hsn         String?
+    tax         String?
+    
+
+    @@allow('read', true)
+    @@allow('create, update,delete',company.users?[user == auth()])
+
+    @@map('subcategories')
+}
+
+model Product {
+    id          String            @id @default(uuid())
+    createdAt   DateTime          @default(now())
+    updatedAt   DateTime          @updatedAt
+    name        String            @length(1, 256)
+    brand       String?            @length(1, 256)
+    status      Boolean           @default(true)
+    rating      Float?
+    description String?
+    company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade) // Cascade delete
+    companyId   String            @map('company_id')
+    category     Category?           @relation(fields: [categoryId], references: [id], onDelete: Cascade) // Cascade delete
+    categoryId   String?            @map('category_id')
+    subcategory    Subcategory?           @relation(fields: [subcategoryId], references: [id], onDelete: Cascade) // Cascade delete
+    subcategoryId   String?            @map('subcategory_id')
+  
+    variants    Variant[]         
+    purchaseorder     PurchaseOrder @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade) // Cascade delete
+    purchaseorderId   String            @map('purchaseorder_id')
+
+    @@allow('read', true)
+    @@allow('read, create, update, delete', company.users?[user == auth()])
+
+    @@map('products')
+}
+
+
+model Variant {
+    id          String            @id @default(uuid())
+    createdAt   DateTime          @default(now())
+    updatedAt   DateTime          @updatedAt
+    name        String            @length(1, 256)
+    code        String?            @length(1, 256)
+    status      Boolean           @default(true)
+    sprice      Float
+    pprice      Float?
+    qty         Int?
+    discount    Float?
+    sizes       Json?
+    images      String[]
+    product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+    productId   String
+    items       Item[]  
+    entries     Entry[]
+
+    @@allow('read', true)
+    @@allow('update', true)
+    @@allow('read, create, update, delete', product.company.users?[user == auth()])
+
+    
+    @@map('variants')
+}
+
+model Item {
+    id          String  @id @default(uuid())  // Unique ID for each item
+    barcode     String? @unique @db.Text    // Ensure it can store varying barcode lengths
+    createdAt   DateTime @default(now())
+    updatedAt   DateTime @updatedAt
+    variant     Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+    variantId   String
+    status      String @default("in_stock")  // in_stock, sold, damaged, etc.
+    size        String?
+    entry        Entry?
+    
+    @@allow('read', true)
+    @@allow('read, create, update', true)
+    
+    @@map("items")
+}
+
+
+model PurchaseOrder {
+    id              String        @id @default(uuid())
+    createdAt       DateTime      @default(now())
+    updatedAt       DateTime      @updatedAt
+    products        Product[]
+    distributor     Distributor?  @relation(fields: [distributorId], references: [id])
+    distributorId   String?       @map("distributor_id")
+    paymentType     paymentType?
+
+    @@allow('read', true)
+    @@allow('read, create, update', true)
+    
+    @@map("purchaseorders")
+}
+
+
+model Bill extends Base  {
+    createdAt       DateTime 
+    invoiceNumber   Int?  
+    subtotal        Float?    
+    discount        Float?    
+    tax             Float?    
+    grandTotal      Float?   
+    deliveryFees    Float?  
+    paymentMethod   String? 
+    paymentStatus   String    @default('pending')   
+    transactionId   String?   @unique  
+    notes           String?
+    
+    //order
+    type           OrderType?
+    status         OrderStatus? 
+    bookingDate    DateTime? // Nullable; used for 'booking' type
+    returnDeadline String? // Nullable; used for 'try_at_home' type
+
+    entries         Entry[]       
+    company         Company        @relation(fields: [companyId], references: [id])
+    companyId       String         @map("company_id")   
+    
+    account         Account?  @relation(fields: [accountId], references: [id], onDelete: Cascade)
+    accountId       String?    
+
+    client           Client? @relation(fields: [clientId], references: [id])   
+    clientId         String?  @unique 
+
+    address           Address? @relation(fields: [addressId], references: [id])   
+    addressId         String?  
+
+    @@allow("create, read, update, delete", true)
+    @@map("bills")
+}
+
+
+model TokenEntry extends Base  {
+    createdAt       DateTime 
+    tokenNo         String
+    company         Company        @relation(fields: [companyId], references: [id])
+    companyId       String         @map("company_id")   
+
+    itemId          String
+    variantId       String
+    barcode         String
+    categoryId      String
+    size            String
+    name            String
+    qty             Int
+    rate            Int
+    discount        Int
+    tax             Int
+    value           Int
+    sizes           Json
+    totalQty        Int
+           
+
+    @@allow("create, read, update, delete", true)
+    @@map("token_entries")
+}
+
+model Entry  extends Base {
+    name        String?
+    barcode     String?    
+    qty         Float?
+    rate        Float?
+    discount    Float?
+    tax         Float? 
+    value       Float?
+    size        String?
+    variant     Variant?  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+    variantId    String? 
+    outOfStock  Boolean?
+    category     Category?  @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+    categoryId   String? 
+    
+    bill         Bill?  @relation(fields: [billId], references: [id], onDelete: Cascade)
+    billId       String? 
+
+    item         Item?  @relation(fields: [itemId], references: [id], onDelete: Cascade)
+    itemId       String?  @unique
+
+    @@allow("create, read, update, delete", true)
+    @@map("entries")
+}
+
+model Account  extends Base {
+    name        String
+    phone       String
+    bill        Bill[]    
+    address     Address?
+
+    company         Company        @relation(fields: [companyId], references: [id])
+    companyId       String         @map("company_id") 
+    
+    @@allow("create, read, update, delete", true)
+    @@map("accounts")
+}
+
+
+model ExpenseCategory extends Base{
+    name        String     @length(1, 256)
+    status      Boolean    @default(true)
+    createdAt   DateTime   @default(now())
+    updatedAt   DateTime   @updatedAt
+
+    // Relations
+    expenses    Expense[]  
+
+    company         Company        @relation(fields: [companyId], references: [id])
+    companyId       String         @map("company_id")   
+
+    @@allow("create, read, update, delete", true)
+    @@map("expense_categories")
+}
+
+model Expense extends Base {
+    expenseDate     DateTime     @default(now())
+    note            String?      @length(1, 512)
+    currency        String       @default("INR")
+    paymentMode     PaymentMode    
+    status          String       @default("Pending") // Pending, Approved, Rejected
+    receipt         String?     
+    receiptName     String?
+    taxAmount       Float?       // GST/VAT
+    totalAmount     Float        // amount + tax
+    createdAt       DateTime     @default(now())
+    updatedAt       DateTime     @updatedAt
+
+    // Relations
+    expensecategory        ExpenseCategory  @relation(fields: [expensecategoryId], references: [id], onDelete: Cascade)
+    expensecategoryId      String
+
+    company         Company        @relation(fields: [companyId], references: [id])
+    companyId       String         @map("company_id")   
+
+    @@allow("create, read, update, delete", true)
+    @@map("expenses")
+}
+
+model Payment extends Base {
+
+    paymentDate      DateTime   @default(now())
+    paymentMode      String     // Cash, Card, Bank Transfer, UPI
+    paymentReference String?    // Reference number (UTR, etc.)
+    amount           Float
+    currency         String     @default("INR")
+    status           String     @default("Completed")  // Completed, Pending, Failed
+    createdAt        DateTime   @default(now())
+    updatedAt        DateTime   @updatedAt
+
+ 
+
+    company         Company        @relation(fields: [companyId], references: [id])
+    companyId       String         @map("company_id")   
+
+    
+    @@allow("create, read, update, delete", true)
+    @@map("payments")
+}
+
+
+
+
+
+
+model Address extends Base {
+    createdAt DateTime @default(now())
+    updatedAt DateTime @updatedAt
+    name       String
+    street    String
+    locality  String
+    city    String 
+    state    String 
+    pincode  String
+    active  Boolean @default(true)
+
+    user      User?     @relation(fields: [userId], references: [id])
+    userId    String?   @map('user_id') @unique
+
+    client     Client?     @relation(fields: [clientId], references: [id])
+    clientId    String?   @map('client_id')
+
+    distributor     Distributor?     @relation(fields: [distributorId], references: [id])
+    distributorId    String?   @map('distributor_id') @unique
+
+    account     Account?     @relation(fields: [accountId], references: [id])
+    accountId    String?   @map('account_id') @unique
+
+    bill     Bill[]
+
+
+    @@allow('create, read, update, delete', true)
+    @@map('addresses')
+}
+
+model Conversation extends Base{
+    createdAt       DateTime        @default(now())
+    updatedAt       DateTime        @updatedAt
+    messages        Message[]
+    users           UserConversation[]
+    clients         ClientConversation[]
+
+    @@allow('create, read, update, delete', auth() != null)
+    @@map('conversations')
+}
+
+model Message extends Base {
+    createdAt       DateTime        @default(now())
+    updatedAt       DateTime        @updatedAt
+    conversationId  String          @map('conversation_id')
+    conversation    Conversation    @relation(fields: [conversationId], references: [id])
+    senderId        String          @map('sender_id')
+    text            String
+    seen            String[]
+    replyto         String?
+    edited          Boolean          @default(false)
+    deleted         Boolean          @default(false)
+
+    @@allow('create, read, update, delete', auth() != null)
+    @@map('messages')
+}
+
+
+
+model CompanyUser {
+    companyId String  @map('company_id')
+    company   Company @relation(fields: [companyId], references: [id])
+
+    userId    String  @map('user_id')
+    user      User    @relation(fields: [userId], references: [id])
+
+    @@id([companyId, userId])
+    @@allow('read,create, update, delete', auth() != null )
+
+    @@map('companies_users')
+}
+
+model CompanyClient {
+    companyId String  @map('company_id')
+    company   Company @relation(fields: [companyId], references: [id])
+
+    clientId    String  @map('client_id')
+    client      Client    @relation(fields: [clientId], references: [id])
+
+    @@id([companyId, clientId])
+    @@allow('read,create, update, delete', true)
+
+    @@map('companies_clients')
+}
+
+
+
+
+model UserConversation {
+  userId         String
+  conversationId String
+  user           User           @relation(fields: [userId], references: [id])
+  conversation   Conversation   @relation(fields: [conversationId], references: [id])
+
+  @@id([userId, conversationId])
+    
+  @@allow('read,create, update, delete', auth() != null )
+  @@map('users_conversations')
+}
+
+model ClientConversation {
+  clientId         String
+  conversationId String
+  client           Client           @relation(fields: [clientId], references: [id])
+  conversation   Conversation   @relation(fields: [conversationId], references: [id])
+
+  @@id([clientId, conversationId])
+    
+  @@allow('read,create, update, delete', auth() != null )
+  @@map('clients_conversations')
+}
+
+
+model UserClient {
+  clientId      String
+  userId        String
+  client        Client      @relation(fields: [clientId], references: [id])
+  user          User        @relation(fields: [userId], references: [id])
+
+  @@id([clientId, userId])
+    
+  @@allow('read,create, update, delete', auth() != null )
+  @@map('users_clients')
+}
+model DistributorCompany {
+  distributorId      String
+  companyId        String
+  distributor        Distributor      @relation(fields: [distributorId], references: [id])
+  company          Company        @relation(fields: [companyId], references: [id])
+
+  @@id([distributorId, companyId])
+    
+  @@allow('read,create, update, delete', auth() != null )
+  @@map('distributor_users')
+}
+
