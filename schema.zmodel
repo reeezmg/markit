@@ -281,6 +281,8 @@ model Variant {
     items       Item[]  
     entries     Entry[]
 
+    VariantSizeBarcode VariantSizeBarcode[]
+
     @@allow('read', true)
     @@allow('update', true)
     @@allow('read, create, update, delete', product.company.users?[user == auth()])
@@ -291,7 +293,7 @@ model Variant {
 
 model Item {
     id          String  @id @default(uuid())  // Unique ID for each item
-    barcode     String? @unique @db.Text    // Ensure it can store varying barcode lengths
+    barcode     String?  @db.Text    // Ensure it can store varying barcode lengths
     createdAt   DateTime @default(now())
     updatedAt   DateTime @updatedAt
     variant     Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
@@ -626,3 +628,16 @@ model DistributorCompany {
   @@map('distributor_users')
 }
 
+model VariantSizeBarcode {
+  id         Int     @id @default(autoincrement())
+  variantId  String
+  size       String
+  barcode    String  @unique
+
+  variant    Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, size])
+  @@allow('read', true)
+  @@allow('read, create, update', true)
+  @@map("variant_size_barcodes")
+}

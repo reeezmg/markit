@@ -1,7 +1,7 @@
 
 <script setup>
 import { item } from '@unovis/ts/components/bullet-legend/style';
-import { useFindUniqueBill,useUpdateItem, useFindUniqueItem,useUpdateEntry,useUpdateBill } from '~/lib/hooks';
+import { useFindUniqueBill,useUpdateItem, useFindFirstItem,useUpdateEntry,useUpdateBill } from '~/lib/hooks';
 
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
@@ -226,7 +226,7 @@ const itemArgs = computed(() => ({
   }
 }));
 
-const { data: itemData ,refetch:itemDataRefetch} = useFindUniqueItem(itemArgs);
+const { data: itemData ,refetch:itemDataRefetch} = useFindFirstItem(itemArgs);
 
 
 const discount = ref(bill.value?.discount || 0);
