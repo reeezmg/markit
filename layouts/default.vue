@@ -192,7 +192,7 @@ watch(
 <template>
     <UDashboardLayout>
         <UDashboardPanel
-            :width="250"
+            :width="250"   
             :resizable="{ min: 200, max: 300 }"
             collapsible
         >
