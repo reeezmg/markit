@@ -1,6 +1,6 @@
 
 <script setup>
-import { useCreateBill,useCreateTokenEntry,useFindUniqueItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
+import { useCreateBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
 
 const CreateBill = useCreateBill();
 const CreateTokenEntry = useCreateTokenEntry();
@@ -254,7 +254,7 @@ const entryargs = computed(() => ({
     }
 }));
 
-const { data: itemdata ,refetch:itemRefetch} = useFindUniqueItem(itemargs);
+const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs);
 const { data: entrydata ,refetch:entryRefetch} = useFindManyTokenEntry(entryargs,{enable:false});
 
 const handleEnterBarcode = (barcode,index) => {

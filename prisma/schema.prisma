@@ -258,41 +258,43 @@ model Product {
 /// @@allow('update', true)
 /// @@allow('read, create, update, delete', product.company.users?[user == auth()])
 model Variant {
-  id        String   @id() @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt()
+  id                 String               @id() @default(uuid())
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt()
   /// @length(1, 256)
-  name      String
+  name               String
   /// @length(1, 256)
-  code      String?
-  status    Boolean  @default(true)
-  sprice    Float
-  pprice    Float?
-  qty       Int?
-  discount  Float?
-  sizes     Size[]
-  images    String[]
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId String
-  entries   Entry[]
+  code               String?
+  status             Boolean              @default(true)
+  sprice             Float
+  pprice             Float?
+  qty                Int?
+  discount           Float?
+  sizes              Json?
+  images             String[]
+  product            Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId          String
+  items              Item[]
+  entries            Entry[]
+  VariantSizeBarcode VariantSizeBarcode[]
 
   @@map("variants")
 }
 
 /// @@allow('read', true)
 /// @@allow('read, create, update', true)
-model Size {
+model Item {
   id        String   @id() @default(uuid())
-  barcode   String?  @unique() @db.Text()
-  name      String?
+  barcode   String?  @db.Text()
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt()
   variant   Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
   variantId String
   status    String   @default("in_stock")
+  size      String?
   entry     Entry?
 
-  @@map("sizes")
+  @@map("items")
 }
 
 /// @@allow('read', true)
@@ -377,6 +379,7 @@ model Entry {
   discount   Float?
   tax        Float?
   value      Float?
+  size       String?
   variant    Variant?  @relation(fields: [variantId], references: [id], onDelete: Cascade)
   variantId  String?
   outOfStock Boolean?
@@ -384,8 +387,8 @@ model Entry {
   categoryId String?
   bill       Bill?     @relation(fields: [billId], references: [id], onDelete: Cascade)
   billId     String?
-  size       Size?     @relation(fields: [sizeId], references: [id], onDelete: Cascade)
-  sizeId     String?   @unique()
+  item       Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId     String?   @unique()
 
   @@map("entries")
 }
@@ -583,4 +586,17 @@ model DistributorCompany {
 
   @@id([distributorId, companyId])
   @@map("distributor_users")
+}
+
+/// @@allow('read', true)
+/// @@allow('read, create, update', true)
+model VariantSizeBarcode {
+  id        Int     @id() @default(autoincrement())
+  variantId String
+  size      String
+  barcode   String  @unique()
+  variant   Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, size])
+  @@map("variant_size_barcodes")
 }

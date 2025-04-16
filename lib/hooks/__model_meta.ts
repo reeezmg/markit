@@ -822,10 +822,8 @@ const metadata = {
                     isOptional: true,
                 }, sizes: {
                     name: "sizes",
-                    type: "Size",
-                    isDataModel: true,
-                    isArray: true,
-                    backLink: 'variant',
+                    type: "Json",
+                    isOptional: true,
                 }, images: {
                     name: "images",
                     type: "String",
@@ -842,9 +840,21 @@ const metadata = {
                     type: "String",
                     isForeignKey: true,
                     relationField: 'product',
+                }, items: {
+                    name: "items",
+                    type: "Item",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'variant',
                 }, entries: {
                     name: "entries",
                     type: "Entry",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'variant',
+                }, VariantSizeBarcode: {
+                    name: "VariantSizeBarcode",
+                    type: "VariantSizeBarcode",
                     isDataModel: true,
                     isArray: true,
                     backLink: 'variant',
@@ -859,8 +869,8 @@ const metadata = {
             ,
         }
         ,
-        size: {
-            name: 'Size', fields: {
+        item: {
+            name: 'Item', fields: {
                 id: {
                     name: "id",
                     type: "String",
@@ -868,10 +878,6 @@ const metadata = {
                     attributes: [{ "name": "@default", "args": [] }],
                 }, barcode: {
                     name: "barcode",
-                    type: "String",
-                    isOptional: true,
-                }, name: {
-                    name: "name",
                     type: "String",
                     isOptional: true,
                 }, createdAt: {
@@ -886,7 +892,7 @@ const metadata = {
                     name: "variant",
                     type: "Variant",
                     isDataModel: true,
-                    backLink: 'sizes',
+                    backLink: 'items',
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "variantId" },
                 }, variantId: {
@@ -898,21 +904,22 @@ const metadata = {
                     name: "status",
                     type: "String",
                     attributes: [{ "name": "@default", "args": [{ "value": "in_stock" }] }],
+                }, size: {
+                    name: "size",
+                    type: "String",
+                    isOptional: true,
                 }, entry: {
                     name: "entry",
                     type: "Entry",
                     isDataModel: true,
                     isOptional: true,
-                    backLink: 'size',
+                    backLink: 'item',
                 },
             }
             , uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
-                }, barcode: {
-                    name: "barcode",
-                    fields: ["barcode"]
                 },
             }
             ,
@@ -1221,6 +1228,10 @@ const metadata = {
                     name: "value",
                     type: "Float",
                     isOptional: true,
+                }, size: {
+                    name: "size",
+                    type: "String",
+                    isOptional: true,
                 }, variant: {
                     name: "variant",
                     type: "Variant",
@@ -1267,29 +1278,29 @@ const metadata = {
                     isOptional: true,
                     isForeignKey: true,
                     relationField: 'bill',
-                }, size: {
-                    name: "size",
-                    type: "Size",
+                }, item: {
+                    name: "item",
+                    type: "Item",
                     isDataModel: true,
                     isOptional: true,
                     backLink: 'entry',
                     isRelationOwner: true,
-                    foreignKeyMapping: { "id": "sizeId" },
-                }, sizeId: {
-                    name: "sizeId",
+                    foreignKeyMapping: { "id": "itemId" },
+                }, itemId: {
+                    name: "itemId",
                     type: "String",
                     isOptional: true,
                     isForeignKey: true,
-                    relationField: 'size',
+                    relationField: 'item',
                 },
             }
             , uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
-                }, sizeId: {
-                    name: "sizeId",
-                    fields: ["sizeId"]
+                }, itemId: {
+                    name: "itemId",
+                    fields: ["itemId"]
                 },
             }
             ,
@@ -1995,6 +2006,49 @@ const metadata = {
             ,
         }
         ,
+        variantSizeBarcode: {
+            name: 'VariantSizeBarcode', fields: {
+                id: {
+                    name: "id",
+                    type: "Int",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                    isAutoIncrement: true,
+                }, variantId: {
+                    name: "variantId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'variant',
+                }, size: {
+                    name: "size",
+                    type: "String",
+                }, barcode: {
+                    name: "barcode",
+                    type: "String",
+                }, variant: {
+                    name: "variant",
+                    type: "Variant",
+                    isDataModel: true,
+                    backLink: 'VariantSizeBarcode',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "variantId" },
+                },
+            }
+            , uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
+                }, barcode: {
+                    name: "barcode",
+                    fields: ["barcode"]
+                }, variantId_size: {
+                    name: "variantId_size",
+                    fields: ["variantId", "size"]
+                },
+            }
+            ,
+        }
+        ,
     }
     ,
     deleteCascade: {
@@ -2002,8 +2056,8 @@ const metadata = {
         category: ['Product', 'Entry'],
         subcategory: ['Product'],
         product: ['Variant'],
-        variant: ['Size', 'Entry'],
-        size: ['Entry'],
+        variant: ['Item', 'Entry', 'VariantSizeBarcode'],
+        item: ['Entry'],
         purchaseOrder: ['Product'],
         bill: ['Entry'],
         account: ['Bill'],
