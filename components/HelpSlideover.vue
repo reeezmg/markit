@@ -30,19 +30,19 @@ const categories = computed(() => [
     {
         title: 'Navigation',
         items: [
-            { shortcuts: ['G', 'H'], name: 'Go to Home' },
-            { shortcuts: ['G', 'I'], name: 'Go to Inbox' },
-            { shortcuts: ['G', 'U'], name: 'Go to Users' },
-            { shortcuts: ['G', 'S'], name: 'Go to Settings' },
+        { shortcuts: ['d-a'], name: 'Go to Dashboard' },
+        { shortcuts: ['e-b'], name: 'Go to Billing' },
+        { shortcuts: ['e-s'], name: 'Go to Sales' },
+        { shortcuts: ['e-a'], name: 'Go to Accounts' },
+        { shortcuts: ['p-a'], name: 'Go to Products' },
+        { shortcuts: ['p-c'], name: 'Go to Categories' },
+        { shortcuts: ['o-a'], name: 'Go to Orders' },
+        { shortcuts: ['o-b'], name: 'Go to Bookings' },
+        { shortcuts: ['u-a'], name: 'Go to Users' },
+        { shortcuts: ['c-a'], name: 'Go to Client' },
+        { shortcuts: ['s-g'], name: 'Go to Settings' },
         ],
-    },
-    {
-        title: 'Inbox',
-        items: [
-            { shortcuts: ['↑'], name: 'Prev notification' },
-            { shortcuts: ['↓'], name: 'Next notification' },
-        ],
-    },
+    }
 ]);
 
 const filteredCategories = computed(() => {
