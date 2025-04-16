@@ -17,19 +17,7 @@ export default eventHandler(async (event) => {
         },
     });
 
-    await createAddress({
-        street: '',
-        townCity: '',
-        postcode: '',
-        county: '',
-        country: '',
-        user: {
-            connect: {
-                id: user.id,
-            },
-        },
-    });
-
+    
     await createPipeline({
         company: {
             connect: {

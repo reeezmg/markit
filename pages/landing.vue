@@ -74,7 +74,9 @@
   </template>
   
   <script setup>
-  // All UI is rendered using Nuxt UI Pro components
+ definePageMeta({
+    layout: false,
+});
   </script>
   
   <style scoped>
