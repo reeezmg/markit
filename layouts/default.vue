@@ -10,7 +10,7 @@ const auth = useAuth();
 
 const links = computed(() => {
     const baseLinks = [
-        {
+        {  
             id: 'dashboard',
             label: 'Dashboard',
             icon: 'i-heroicons-home',
