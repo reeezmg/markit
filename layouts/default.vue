@@ -12,7 +12,7 @@ const links = computed(() => {
     const baseLinks = [
         {  
             id: 'dashboard',
-            label: 'Dashboard',
+            label: 'Dashboard',    
             icon: 'i-heroicons-home',
             to: `/${auth.session.value?.companyId}/dashboard`,
             tooltip: {
