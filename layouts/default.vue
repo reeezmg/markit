@@ -21,7 +21,7 @@ const links = computed(() => {
             },
         },
         {   
-            id: 'erp',  
+            id: 'erp',     
             label: 'ERP',
             to: '/erp',
             icon: 'i-heroicons-credit-card',
