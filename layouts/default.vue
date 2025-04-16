@@ -20,7 +20,7 @@ const links = computed(() => {
                 shortcuts: ['G', 'D'],
             },
         },
-        {
+        {   
             id: 'erp',
             label: 'ERP',
             to: '/erp',
