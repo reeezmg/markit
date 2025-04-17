@@ -228,6 +228,9 @@ const handleAdd = async (e: Event) => {
               qty:variant.qty,
               images: variant.images.map((file) => file.uuid),
               sizes: variant.sizes, 
+              company: {
+                connect: { id: useAuth().session.value?.companyId },
+              },
             })),
           },
         },
@@ -367,7 +370,9 @@ const res = await UpdateProduct.mutateAsync({
         images: variant.images.map((file) => file.uuid),
         qty:variant.qty,
         sizes: variant.sizes, 
-  
+        company: {
+          connect: { id: useAuth().session.value?.companyId },
+        },
       })),
     },
   },
@@ -512,7 +517,7 @@ const printBarcodes = () => {
   window.print();
 }
 const handleSkip = () => {
- router.push(`/${useAuth().session.value?.companyId}/products`);
+ router.push(`/products`);
 }
 const handleNewProduct = () => {
   isOpenAdd.value = true

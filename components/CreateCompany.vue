@@ -49,7 +49,7 @@ const handleSubmit = async (e: Event) => {
             title: 'Company added !',
             id: 'modal-success',
         });
-        router.push(`/${useAuth().session.value?.companyId}`);
+        router.push(`/}`);
         internalIsOpen.value = false;
     } catch (err: any) {
         console.log(err.info?.message ?? err);

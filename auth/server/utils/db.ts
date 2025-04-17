@@ -31,6 +31,16 @@ export async function createCompany(company: Prisma.CompanyCreateInput) {
         data: company,
     });
 }
+export async function updateUser(id: string,companyId:string) {
+    return prisma.user.update({
+        where: { id },
+            data: {
+                companies: {
+                    create: [{ company: { connect: { id: companyId} } }],
+                },
+            },
+    });
+}
 
 export async function createAddress(address: Omit<Address, 'id'>) {
     return prisma.address.create({

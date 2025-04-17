@@ -112,12 +112,7 @@ async function onSubmit(data: any) {
                     />
                 </template>
 
-                <template #footer>
-                    By signing in, you agree to our
-                    <NuxtLink to="/" class="text-primary font-medium"
-                        >Terms of Service</NuxtLink
-                    >.
-                </template>
+               
             </UAuthForm>
         </UCard>
     </div>

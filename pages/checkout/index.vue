@@ -108,7 +108,7 @@ const handleSubmit = async (e: Event) => {
         const orderRes = await CreateOrder.mutateAsync({
             data: {
                 total: total.value.toString(),
-                paymentStatus: 'pending',
+                paymentStatus: 'PENDING',
                 company: {
                     connect: {
                         id: useAuth().session.value?.companyId,
@@ -182,7 +182,7 @@ const handleSubmit = async (e: Event) => {
             id: 'modal-success',
         });
         cartStore.clear();
-        router.push(`/${useAuth().session.value?.companyId}/checkout/${orderRes?.id}`);
+        router.push(`/checkout/${orderRes?.id}`);
     } catch (err: any) {
         console.log(err.info?.message ?? err);
     }
