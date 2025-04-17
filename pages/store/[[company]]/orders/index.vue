@@ -39,7 +39,7 @@
             <div><strong>Tax:</strong> ₹{{ bill.tax || 0 }}</div>
             <div><strong>Delivery Fees:</strong> ₹{{ bill.deliveryFees || 0 }}</div>
             <div><strong>Total:</strong> ₹{{ bill.grandTotal }}</div>
-            <div><strong>Payment Status:</strong> <UBadge :color="bill.paymentStatus === 'paid' ? 'green' : 'red'">{{ bill.paymentStatus }}</UBadge></div>
+            <div><strong>Payment Status:</strong> <UBadge :color="bill.paymentStatus === 'PAID' ? 'green' : 'red'">{{ bill.paymentStatus }}</UBadge></div>
           </div>
   
           <UDivider />
@@ -70,7 +70,7 @@
     tax: 60,
     deliveryFees: 40,
     grandTotal: 1200,
-    paymentStatus: 'paid',
+    paymentStatus: 'PAID',
     status: 'delivered',
     notes: 'Please leave at the reception.',
     entries: [
@@ -111,7 +111,7 @@
     tax: 45,
     deliveryFees: 30,
     grandTotal: 875,
-    paymentStatus: 'unpaid',
+    paymentStatus: 'PENDING',
     status: 'processing',
     notes: '',
     entries: [
@@ -143,7 +143,7 @@
     tax: 100,
     deliveryFees: 60,
     grandTotal: 2360,
-    paymentStatus: 'paid',
+    paymentStatus: 'PAID',
     status: 'cancelled',
     notes: 'Customer cancelled the order.',
     entries: [

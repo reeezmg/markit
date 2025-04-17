@@ -12,7 +12,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const loggedIn: any = computed(() => !!session.value?.email);
 
     // Create a ref to know where to redirect the user when logged in
-    const redirectTo = useState(`/${session.value?.companyId}`);
+    const redirectTo = useState(`/dashboard`);
 
     addRouteMiddleware(
         'auth',

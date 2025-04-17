@@ -68,7 +68,7 @@ const actions = computed(() => {
     <UDropdown
         v-slot="{ open }"
         mode="hover"
-        :items="[teams(companies), actions]"
+        :items="[teams(companies)]"
         class="w-full"
         :ui="{ width: 'w-full' }"
         :popper="{ strategy: 'absolute' }"
@@ -88,8 +88,4 @@ const actions = computed(() => {
         </UButton>
     </UDropdown>
 
-    <CreateCompany
-        :isOpen="isOpen"
-        @update:isOpen="(value) => (isOpen = value)"
-    />
 </template>

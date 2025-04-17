@@ -18,8 +18,6 @@ const UpdateManyCategory = useUpdateManyCategory();
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
 
-
-
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
   { label: 'Last 14 days', duration: { days: 14 } },
@@ -48,13 +46,8 @@ const columns = [
         sortable: true,
     },
     {
-        key: 'grandTotal',
-        label: 'Total',
-        sortable: true,
-    },
-    {
-        key: 'paymentStatus',
-        label: 'Payment',
+        key: 'status',
+        label: 'Status',
         sortable: true,
     },
     {
@@ -91,25 +84,10 @@ const entrycolumns = [
         sortable: true,
     },
     {
-        key: 'discount',
-        label: 'Discount',
-        sortable: true,
-    },
-    {
-        key: 'tax',
-        label: 'Tax',
-        sortable: true,
-    },
-    {
         key: 'rate',
         label: 'Rate',
         sortable: true,
-    },
-    {
-        key: 'actions',
-        label: 'Actions',
-        sortable: false,
-    },
+    }
 ];
 
 
@@ -126,31 +104,17 @@ const active = (selectedRows) => [
     ],
 ];
 
-const action = (row:any) => [
-    [
-        {
-            label: 'Edit',
-            icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`categories/edit/${row.id}`),
-        },
-    ],
-    [
-        {
-            label: 'Delete',
-            icon: 'i-heroicons-trash-20-solid',
-        },
-    ],
-];
+
 
 // Filters
 const todoStatus = [
     {
         label: 'Paid',
-        value: 'paid',
+        value: 'PAID',
     },
     {
         label: 'Pending',
-        value: 'pending',
+        value: 'PENDING',
     },
 ];
 
@@ -202,12 +166,12 @@ const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
         where: {
             AND: [
                 { companyId: useAuth().session.value?.companyId },
-                ...(search.value ? [{ invoiceNumber:search.value }] : []),  // ✅ Fixed syntax
+                ...(search.value ? [{ invoiceNumber:search.value }] : []),  
+               { type: `BOOKING`},
                 ...(selectedStatus.value.length  // ✅ Correctly checking for array content
                     ? [{ OR: selectedStatus.value.map((item) => ({ paymentStatus: item.value })) }]
                     : []
                 ),
-                {type:{in :['STANDARD','TRY_AT_HOME']}},
                 ...(selectedDate.value ? [
                     { createdAt: { gte: new Date(selectedDate.value.start).toISOString() } },  // Start date
                     { createdAt: { lte: new Date(selectedDate.value.end).toISOString() } }    // End date
@@ -400,14 +364,35 @@ const handleChange = (value:string, row:any) => {
             >
        
                 <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
                         <UButton
-                            color="gray"
-                            variant="ghost"
-                            icon="i-heroicons-ellipsis-horizontal-20-solid"
+                            label="Pack"
+                            icon= "i-heroicons-clipboard-document-check-20-solid"
+                            @click = "() => router.push(`./ready?id=${row.id}`)"
                         />
-                    </UDropdown>
                 </template>
+
+                <template #paymentStatus-data="{row}">
+                <UBadge 
+                    size="sm" 
+                    :color="row.paymentStatus === 'PAID' ? 'green' 
+                        : row.paymentStatus === 'PENDING' ? 'orange' 
+                        : row.paymentStatus === 'APPROVED' ? 'blue' 
+                        : 'red'" 
+                    variant="subtle"
+                >
+                {{ row.paymentStatus.toUpperCase() }}
+                </UBadge>
+            </template>
+
+                <template #status-data="{row}">
+                <UBadge 
+                    size="sm" 
+                    color="gray"
+                    
+                >
+                    {{ row.status }}
+                </UBadge>
+            </template>
 
                 <template #entries-data="{ row }">
                     {{ row.entries.length }}
@@ -417,9 +402,7 @@ const handleChange = (value:string, row:any) => {
                     {{ row.createdAt.toLocaleDateString('en-GB') }}
                 </template>
 
-                <template #paymentStatus-data="{ row }">
-                    {{ row.paymentStatus }}
-                </template>
+
 
                 <template #notes-data="{ row }">
                     <UPopover> 

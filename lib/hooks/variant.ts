@@ -240,7 +240,7 @@ export function useCountVariant<TArgs extends Prisma.VariantCountArgs, TQueryFnD
     return useModelQuery<TQueryFnData, TData, TError>('Variant', `${endpoint}/variant/count`, args, options, fetch);
 }
 
-export function useCheckVariant<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; code?: string; status?: boolean; qty?: number; images?: string; productId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckVariant<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; code?: string; status?: boolean; qty?: number; images?: string; productId?: string; companyId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('Variant', `${endpoint}/variant/check`, args, options, fetch);
 }

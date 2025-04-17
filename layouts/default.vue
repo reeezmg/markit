@@ -14,7 +14,7 @@ const links = computed(() => {
             id: 'dashboard',
             label: 'Dashboard',    
             icon: 'i-heroicons-home',
-            to: `/${auth.session.value?.companyId}/dashboard`,
+            to: `/dashboard`,
             tooltip: {
                 text: 'Dashboard',
                 shortcuts: ['G', 'D'],
@@ -28,7 +28,7 @@ const links = computed(() => {
             children: [
                 {
                     label: 'Billing',
-                    to: `/${auth.session.value?.companyId}/erp/billing`,
+                    to: `/erp/billing`,
                     tooltip: {
                         text: 'ERP',
                         shortcuts: ['E', 'B'],
@@ -37,7 +37,7 @@ const links = computed(() => {
                 },
                 {
                     label: 'Sales',
-                    to: `/${auth.session.value?.companyId}/erp/sales`,
+                    to: `/erp/sales`,
                     tooltip: {
                         text: 'ERP',
                         shortcuts: ['E', 'S'],
@@ -45,7 +45,7 @@ const links = computed(() => {
                 },
                 {
                     label: 'Accounts',
-                    to: `/${auth.session.value?.companyId}/erp/accounts`,
+                    to: `/erp/accounts`,
                     tooltip: {
                         text: 'ERP',
                         shortcuts: ['E', 'S'],
@@ -56,12 +56,12 @@ const links = computed(() => {
         {
             id: 'products',
             label: 'Products',
-            to: `/${auth.session.value?.companyId}/products`,
+            to: `/products`,
             icon: 'i-heroicons-squares-2x2',
             children: [
                 {
                     label: 'All Products',
-                    to: `/${auth.session.value?.companyId}/products`,
+                    to: `/products`,
                     exact: true,
                     tooltip: {
                         text: 'products',
@@ -72,7 +72,7 @@ const links = computed(() => {
                     ? [
                           {
                               label: 'Categories',
-                              to: `/${auth.session.value?.companyId}/products/categories`,
+                              to: `/products/categories`,
                               tooltip: {
                                 text: 'products',
                                 shortcuts: ['P', 'C'],
@@ -86,14 +86,14 @@ const links = computed(() => {
         {
             id: 'orders',
             label: 'Orders',
-            to: `/${auth.session.value?.companyId}/order`,
+            to: `/order`,
             icon: 'i-heroicons-shopping-bag',
             children: [
             ...(auth.session.value?.companyType === 'seller' || auth.session.value?.companyType === 'buyer'
                     ? [
                         {
                         label: 'Orders',
-                        to: `/${auth.session.value?.companyId}/order/orders`,
+                        to: `/order/orders`,
                         exact: true,
                         tooltip: {
                             text: 'Orders',
@@ -102,7 +102,7 @@ const links = computed(() => {
                         },
                         {
                         label: 'Bookings',
-                        to: `/${auth.session.value?.companyId}/order/bookings`, 
+                        to: `/order/bookings`, 
                         tooltip: {
                             text: 'Bookings',
                             shortcuts: ['O', 'B'],
@@ -119,7 +119,7 @@ const links = computed(() => {
                       id: 'users',
                       label: 'Users',
                       icon: 'i-heroicons-user-group',
-                      to: `/${auth.session.value?.companyId}/users`,
+                      to: `/users`,
                       tooltip: {
                           text: 'Users',
                           shortcuts: ['U', 'A'],
@@ -131,7 +131,7 @@ const links = computed(() => {
             id: 'client',
             label: 'Client',
             icon: 'i-heroicons-user-plus',
-            to: `/${auth.session.value?.companyId}/client`,
+            to: `/client`,
             tooltip: {
                 text: 'Client',
                 shortcuts: ['C', 'A'],
@@ -141,12 +141,12 @@ const links = computed(() => {
         {
             id: 'settings',
             label: 'Settings',
-            to: `/${auth.session.value?.companyId}/settings`,
+            to: `/settings`,
             icon: 'i-heroicons-cog-8-tooth',
             children: [
                 {
                     label: 'General',
-                    to: `/${auth.session.value?.companyId}/settings`,
+                    to: `/settings`,
                     exact: true,
                     tooltip: {
                         text: 'Settings',
@@ -181,12 +181,7 @@ const groups = computed(() => [
     },
 ]);
 
-watch(
-    () => auth.session.value?.companyId,
-    (newcompanyId) => {
-        console.log('Company ID changed:', newcompanyId);
-    },
-);
+
 </script>
 
 <template>

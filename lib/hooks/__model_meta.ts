@@ -17,6 +17,11 @@ const metadata = {
                 }, name: {
                     name: "name",
                     type: "String",
+                }, storecode: {
+                    name: "storecode",
+                    type: "Int",
+                    attributes: [{ "name": "@default", "args": [] }],
+                    isAutoIncrement: true,
                 }, logo: {
                     name: "logo",
                     type: "String",
@@ -127,6 +132,18 @@ const metadata = {
                     isDataModel: true,
                     isArray: true,
                     backLink: 'company',
+                }, variants: {
+                    name: "variants",
+                    type: "Variant",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'company',
+                }, items: {
+                    name: "items",
+                    type: "Item",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'company',
                 }, status: {
                     name: "status",
                     type: "Boolean",
@@ -172,6 +189,9 @@ const metadata = {
                 id: {
                     name: "id",
                     fields: ["id"]
+                }, storecode: {
+                    name: "storecode",
+                    fields: ["storecode"]
                 },
             }
             ,
@@ -852,6 +872,18 @@ const metadata = {
                     isDataModel: true,
                     isArray: true,
                     backLink: 'variant',
+                }, company: {
+                    name: "company",
+                    type: "Company",
+                    isDataModel: true,
+                    backLink: 'variants',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "companyId" },
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'company',
                 }, VariantSizeBarcode: {
                     name: "VariantSizeBarcode",
                     type: "VariantSizeBarcode",
@@ -914,6 +946,18 @@ const metadata = {
                     isDataModel: true,
                     isOptional: true,
                     backLink: 'item',
+                }, company: {
+                    name: "company",
+                    type: "Company",
+                    isDataModel: true,
+                    backLink: 'items',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "companyId" },
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'company',
                 },
             }
             , uniqueConstraints: {
@@ -1015,8 +1059,8 @@ const metadata = {
                     isOptional: true,
                 }, paymentStatus: {
                     name: "paymentStatus",
-                    type: "String",
-                    attributes: [{ "name": "@default", "args": [{ "value": "pending" }] }],
+                    type: "PaymentStatus",
+                    attributes: [{ "name": "@default", "args": [] }],
                 }, transactionId: {
                     name: "transactionId",
                     type: "String",
@@ -2052,7 +2096,7 @@ const metadata = {
     }
     ,
     deleteCascade: {
-        company: ['Product'],
+        company: ['Product', 'Variant', 'Item'],
         category: ['Product', 'Entry'],
         subcategory: ['Product'],
         product: ['Variant'],
