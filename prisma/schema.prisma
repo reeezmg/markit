@@ -5,7 +5,7 @@
 
 datasource db {
   provider = "postgresql"
-  url      = "postgresql://ashir:ashir@localhost:5432/markit"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -269,20 +269,6 @@ model Variant {
   /// @length(1, 256)
   name               String
   /// @length(1, 256)
-<<<<<<< HEAD
-  code      String?
-  status    Boolean  @default(true)
-  sprice    Float
-  pprice    Float?
-  qty       Int?
-  discount  Float?
-  sizes     Json?
-  images    String[]
-  product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId String
-  items     Item[]
-  entries   Entry[]
-=======
   code               String?
   status             Boolean              @default(true)
   sprice             Float                @map("s_price")
@@ -298,7 +284,6 @@ model Variant {
   company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId          String               @map("company_id")
   VariantSizeBarcode VariantSizeBarcode[]
->>>>>>> origin
 
   @@map("variants")
 }
@@ -307,15 +292,9 @@ model Variant {
 /// @@allow('read, create, update', true)
 model Item {
   id        String   @id() @default(uuid())
-<<<<<<< HEAD
-  barcode   String?  @unique() @db.Text()
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt()
-=======
   barcode   String?  @db.Text()
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt() @map("updated_at")
->>>>>>> origin
   variant   Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
   variantId String   @map("variant_id")
   status    String   @default("in_stock")
@@ -416,15 +395,9 @@ model Entry {
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
   categoryId String?   @map("category_id")
   bill       Bill?     @relation(fields: [billId], references: [id], onDelete: Cascade)
-<<<<<<< HEAD
-  billId     String?
-  item       Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
-  itemId     String?   @unique()
-=======
   billId     String?   @map("bill_id")
   item       Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   itemId     String?   @unique() @map("item_id")
->>>>>>> origin
 
   @@map("entries")
 }

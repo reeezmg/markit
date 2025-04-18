@@ -240,11 +240,7 @@ export function useCountItem<TArgs extends Prisma.ItemCountArgs, TQueryFnData = 
     return useModelQuery<TQueryFnData, TData, TError>('Item', `${endpoint}/item/count`, args, options, fetch);
 }
 
-<<<<<<< HEAD
-export function useCheckItem<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; barcode?: string; variantId?: string; status?: string; size?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
-=======
 export function useCheckItem<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; barcode?: string; variantId?: string; status?: string; size?: string; companyId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
->>>>>>> origin
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('Item', `${endpoint}/item/check`, args, options, fetch);
 }
