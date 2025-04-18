@@ -32,6 +32,7 @@ export * from './user-conversation';
 export * from './client-conversation';
 export * from './user-client';
 export * from './distributor-company';
+export * from './variant-size-barcode';
 export { getQueryKey } from '@zenstackhq/tanstack-query/runtime-v5';
 export { VueQueryContextKey, provideHooksContext } from '@zenstackhq/tanstack-query/runtime-v5/vue';
 export { default as metadata } from './__model_meta';

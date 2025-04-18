@@ -37,6 +37,7 @@ enum PaymentMode {
 enum PaymentStatus {
   PENDING
   APPROVED
+  PAID
   REJECTED
   COMPLETED
   FAILED
@@ -46,6 +47,7 @@ enum OrderType {
   STANDARD
   BOOKING
   TRY_AT_HOME
+  BILL
 }
 
 enum OrderStatus {
@@ -65,16 +67,17 @@ enum OrderStatus {
 model Company {
   id                         String               @id() @unique() @default(uuid())
   name                       String
+  storecode                  Int                  @unique() @default(autoincrement())
   logo                       String?
   description                String?
   shopifyStoreName           String?              @map("shopify_store_name")
   shopifyAccessToken         String?              @map("shopify_access_token")
-  tiktokCipher               String?
-  tiktokStoreName            String?
-  tiktokAccessToken          String?
-  tiktokAccessTokenExpireIn  Int?
-  tiktokRefreshToken         String?
-  tiktokRefreshTokenExpireIn Int?
+  tiktokCipher               String?              @map("tiktok_cipher")
+  tiktokStoreName            String?              @map("tiktok_store_name")
+  tiktokAccessToken          String?              @map("tiktok_access_token")
+  tiktokAccessTokenExpireIn  Int?                 @map("tiktok_access_token_expire_in")
+  tiktokRefreshToken         String?              @map("tiktok_refresh_token")
+  tiktokRefreshTokenExpireIn Int?                 @map("tiktok_refresh_token_expire_in")
   images                     String?
   users                      CompanyUser[]
   clients                    CompanyClient[]
@@ -87,13 +90,15 @@ model Company {
   expenseCategories          ExpenseCategory[]
   expenses                   Expense[]
   payment                    Payment[]
+  variants                   Variant[]
+  items                      Item[]
   status                     Boolean              @default(true)
   type                       CompanyType
   pipeline                   Pipeline?
-  accHolderName              String?
-  sortCode                   String?
-  accountNo                  String?
-  bankName                   String?
+  accHolderName              String?              @map("acc_holder_name")
+  sortCode                   String?              @map("sort_code")
+  accountNo                  String?              @map("account_no")
+  bankName                   String?              @map("bank_name")
   distributor                DistributorCompany[]
   billCounter                Int                  @default(0) @map("bill_counter")
 
@@ -111,10 +116,10 @@ model Distributor {
   companies      DistributorCompany[]
   purchaseorders PurchaseOrder[]
   status         Boolean              @default(true)
-  accHolderName  String?
+  accHolderName  String?              @map("acc_holder_name")
   ifsc           String?
-  accountNo      String?
-  bankName       String?
+  accountNo      String?              @map("account_no")
+  bankName       String?              @map("bank_name")
   gstin          String?
   address        Address?
 
@@ -150,22 +155,22 @@ model Client {
   password           String?
   phone              String               @unique()
   status             Boolean              @default(true)
-  pipelineStatus     String               @default("new")
+  pipelineStatus     String               @default("new") @map("pipeline_status")
   companies          CompanyClient[]
   address            Address[]
   bill               Bill?
   conversations      ClientConversation[]
   users              UserClient[]
   newPipeline        Pipeline?            @relation("PipelineNewClients", fields: [newPipelineId], references: [id])
-  newPipelineId      String?              @map("newPipeline_id")
+  newPipelineId      String?              @map("new_pipeline_id")
   prospectPipeline   Pipeline?            @relation("PipelineProspectClients", fields: [prospectPipelineId], references: [id])
-  prospectPipelineId String?              @map("prospectPipeline_id")
+  prospectPipelineId String?              @map("prospect_pipeline_id")
   viewingPipeline    Pipeline?            @relation("PipelineViewingClients", fields: [viewingPipelineId], references: [id])
-  viewingPipelineId  String?              @map("viewingPipeline_id")
+  viewingPipelineId  String?              @map("viewing_pipeline_id")
   rejectPipeline     Pipeline?            @relation("PipelineRejectClients", fields: [rejectPipelineId], references: [id])
-  rejectPipelineId   String?              @map("rejectPipeline_id")
+  rejectPipelineId   String?              @map("reject_pipeline_id")
   closePipeline      Pipeline?            @relation("PipelineCloseClients", fields: [closePipelineId], references: [id])
-  closePipelineId    String?              @map("closePipeline_id")
+  closePipelineId    String?              @map("close_pipeline_id")
 
   @@map("clients")
 }
@@ -232,8 +237,8 @@ model Subcategory {
 /// @@allow('read, create, update, delete', company.users?[user == auth()])
 model Product {
   id              String        @id() @default(uuid())
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt()
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt() @map("updated_at")
   /// @length(1, 256)
   name            String
   /// @length(1, 256)
@@ -258,12 +263,13 @@ model Product {
 /// @@allow('update', true)
 /// @@allow('read, create, update, delete', product.company.users?[user == auth()])
 model Variant {
-  id        String   @id() @default(uuid())
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt()
+  id                 String               @id() @default(uuid())
+  createdAt          DateTime             @default(now()) @map("created_at")
+  updatedAt          DateTime             @updatedAt() @map("updated_at")
   /// @length(1, 256)
-  name      String
+  name               String
   /// @length(1, 256)
+<<<<<<< HEAD
   code      String?
   status    Boolean  @default(true)
   sprice    Float
@@ -276,6 +282,23 @@ model Variant {
   productId String
   items     Item[]
   entries   Entry[]
+=======
+  code               String?
+  status             Boolean              @default(true)
+  sprice             Float                @map("s_price")
+  pprice             Float?               @map("p_price")
+  qty                Int?
+  discount           Float?
+  sizes              Json?
+  images             String[]
+  product            Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId          String               @map("product_id")
+  items              Item[]
+  entries            Entry[]
+  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String               @map("company_id")
+  VariantSizeBarcode VariantSizeBarcode[]
+>>>>>>> origin
 
   @@map("variants")
 }
@@ -284,14 +307,22 @@ model Variant {
 /// @@allow('read, create, update', true)
 model Item {
   id        String   @id() @default(uuid())
+<<<<<<< HEAD
   barcode   String?  @unique() @db.Text()
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt()
+=======
+  barcode   String?  @db.Text()
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt() @map("updated_at")
+>>>>>>> origin
   variant   Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  variantId String
+  variantId String   @map("variant_id")
   status    String   @default("in_stock")
   size      String?
   entry     Entry?
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String   @map("company_id")
 
   @@map("items")
 }
@@ -300,44 +331,44 @@ model Item {
 /// @@allow('read, create, update', true)
 model PurchaseOrder {
   id            String       @id() @default(uuid())
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt()
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt() @map("updated_at")
   products      Product[]
   distributor   Distributor? @relation(fields: [distributorId], references: [id])
   distributorId String?      @map("distributor_id")
-  paymentType   paymentType?
+  paymentType   paymentType? @map("payment_type")
 
-  @@map("purchaseorders")
+  @@map("purchase_orders")
 }
 
 /// @@allow('read, update', auth().role == 'admin')
 /// @@allow('create, read, update, delete', true)
 model Bill {
-  id             String       @id() @unique() @default(uuid())
-  createdAt      DateTime
-  invoiceNumber  Int?
+  id             String        @id() @unique() @default(uuid())
+  createdAt      DateTime      @map("created_at")
+  invoiceNumber  Int?          @map("invoice_number")
   subtotal       Float?
   discount       Float?
   tax            Float?
-  grandTotal     Float?
-  deliveryFees   Float?
-  paymentMethod  String?
-  paymentStatus  String       @default("pending")
-  transactionId  String?      @unique()
+  grandTotal     Float?        @map("grand_total")
+  deliveryFees   Float?        @map("delivery_fees")
+  paymentMethod  String?       @map("payment_method")
+  paymentStatus  PaymentStatus @default(PENDING) @map("payment_status")
+  transactionId  String?       @unique() @map("transaction_id")
   notes          String?
   type           OrderType?
   status         OrderStatus?
-  bookingDate    DateTime?
-  returnDeadline String?
+  bookingDate    DateTime?     @map("booking_date")
+  returnDeadline String?       @map("return_deadline")
   entries        Entry[]
-  company        Company      @relation(fields: [companyId], references: [id])
-  companyId      String       @map("company_id")
-  account        Account?     @relation(fields: [accountId], references: [id], onDelete: Cascade)
-  accountId      String?
-  client         Client?      @relation(fields: [clientId], references: [id])
-  clientId       String?      @unique()
-  address        Address?     @relation(fields: [addressId], references: [id])
-  addressId      String?
+  company        Company       @relation(fields: [companyId], references: [id])
+  companyId      String        @map("company_id")
+  account        Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  accountId      String?       @map("account_id")
+  client         Client?       @relation(fields: [clientId], references: [id])
+  clientId       String?       @unique() @map("client_id")
+  address        Address?      @relation(fields: [addressId], references: [id])
+  addressId      String?       @map("address_id")
 
   @@map("bills")
 }
@@ -346,14 +377,14 @@ model Bill {
 /// @@allow('create, read, update, delete', true)
 model TokenEntry {
   id         String   @id() @unique() @default(uuid())
-  createdAt  DateTime
-  tokenNo    String
+  createdAt  DateTime @map("created_at")
+  tokenNo    String   @map("token_no")
   company    Company  @relation(fields: [companyId], references: [id])
   companyId  String   @map("company_id")
-  itemId     String
-  variantId  String
+  itemId     String   @map("item_id")
+  variantId  String   @map("variant_id")
   barcode    String
-  categoryId String
+  categoryId String   @map("category_id")
   size       String
   name       String
   qty        Int
@@ -362,7 +393,7 @@ model TokenEntry {
   tax        Int
   value      Int
   sizes      Json
-  totalQty   Int
+  totalQty   Int      @map("total_qty")
 
   @@map("token_entries")
 }
@@ -380,14 +411,20 @@ model Entry {
   value      Float?
   size       String?
   variant    Variant?  @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  variantId  String?
-  outOfStock Boolean?
+  variantId  String?   @map("variant_id")
+  outOfStock Boolean?  @map("out_of_stock")
   category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
-  categoryId String?
+  categoryId String?   @map("category_id")
   bill       Bill?     @relation(fields: [billId], references: [id], onDelete: Cascade)
+<<<<<<< HEAD
   billId     String?
   item       Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
   itemId     String?   @unique()
+=======
+  billId     String?   @map("bill_id")
+  item       Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId     String?   @unique() @map("item_id")
+>>>>>>> origin
 
   @@map("entries")
 }
@@ -413,8 +450,8 @@ model ExpenseCategory {
   /// @length(1, 256)
   name      String
   status    Boolean   @default(true)
-  createdAt DateTime  @default(now())
-  updatedAt DateTime  @updatedAt()
+  createdAt DateTime  @default(now()) @map("created_at")
+  updatedAt DateTime  @updatedAt() @map("updated_at")
   expenses  Expense[]
   company   Company   @relation(fields: [companyId], references: [id])
   companyId String    @map("company_id")
@@ -426,20 +463,20 @@ model ExpenseCategory {
 /// @@allow('create, read, update, delete', true)
 model Expense {
   id                String          @id() @unique() @default(uuid())
-  expenseDate       DateTime        @default(now())
+  expenseDate       DateTime        @default(now()) @map("expense_date")
   /// @length(1, 512)
   note              String?
   currency          String          @default("INR")
-  paymentMode       PaymentMode
+  paymentMode       PaymentMode     @map("payment_mode")
   status            String          @default("Pending")
   receipt           String?
-  receiptName       String?
-  taxAmount         Float?
-  totalAmount       Float
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt()
+  receiptName       String?         @map("receipt_name")
+  taxAmount         Float?          @map("tax_amount")
+  totalAmount       Float           @map("total_amount")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt() @map("updated_at")
   expensecategory   ExpenseCategory @relation(fields: [expensecategoryId], references: [id], onDelete: Cascade)
-  expensecategoryId String
+  expensecategoryId String          @map("expense_category_id")
   company           Company         @relation(fields: [companyId], references: [id])
   companyId         String          @map("company_id")
 
@@ -450,14 +487,14 @@ model Expense {
 /// @@allow('create, read, update, delete', true)
 model Payment {
   id               String   @id() @unique() @default(uuid())
-  paymentDate      DateTime @default(now())
-  paymentMode      String
-  paymentReference String?
+  paymentDate      DateTime @default(now()) @map("payment_date")
+  paymentMode      String   @map("payment_mode")
+  paymentReference String?  @map("payment_reference")
   amount           Float
   currency         String   @default("INR")
   status           String   @default("Completed")
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt()
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt() @map("updated_at")
   company          Company  @relation(fields: [companyId], references: [id])
   companyId        String   @map("company_id")
 
@@ -468,8 +505,8 @@ model Payment {
 /// @@allow('create, read, update, delete', true)
 model Address {
   id            String       @id() @unique() @default(uuid())
-  createdAt     DateTime     @default(now())
-  updatedAt     DateTime     @updatedAt()
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt() @map("updated_at")
   name          String
   street        String
   locality      String
@@ -494,8 +531,8 @@ model Address {
 /// @@allow('create, read, update, delete', auth() != null)
 model Conversation {
   id        String               @id() @unique() @default(uuid())
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt()
+  createdAt DateTime             @default(now()) @map("created_at")
+  updatedAt DateTime             @updatedAt() @map("updated_at")
   messages  Message[]
   users     UserConversation[]
   clients   ClientConversation[]
@@ -507,14 +544,14 @@ model Conversation {
 /// @@allow('create, read, update, delete', auth() != null)
 model Message {
   id             String       @id() @unique() @default(uuid())
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt()
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt() @map("updated_at")
   conversationId String       @map("conversation_id")
   conversation   Conversation @relation(fields: [conversationId], references: [id])
   senderId       String       @map("sender_id")
   text           String
   seen           String[]
-  replyto        String?
+  replyto        String?      @map("reply_to")
   edited         Boolean      @default(false)
   deleted        Boolean      @default(false)
 
@@ -529,7 +566,7 @@ model CompanyUser {
   user      User    @relation(fields: [userId], references: [id])
 
   @@id([companyId, userId])
-  @@map("companies_users")
+  @@map("company_users")
 }
 
 /// @@allow('read,create, update, delete', true)
@@ -540,49 +577,62 @@ model CompanyClient {
   client    Client  @relation(fields: [clientId], references: [id])
 
   @@id([companyId, clientId])
-  @@map("companies_clients")
+  @@map("company_clients")
 }
 
 /// @@allow('read,create, update, delete', auth() != null)
 model UserConversation {
-  userId         String
-  conversationId String
+  userId         String       @map("user_id")
+  conversationId String       @map("conversation_id")
   user           User         @relation(fields: [userId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 
   @@id([userId, conversationId])
-  @@map("users_conversations")
+  @@map("user_conversations")
 }
 
 /// @@allow('read,create, update, delete', auth() != null)
 model ClientConversation {
-  clientId       String
-  conversationId String
+  clientId       String       @map("client_id")
+  conversationId String       @map("conversation_id")
   client         Client       @relation(fields: [clientId], references: [id])
   conversation   Conversation @relation(fields: [conversationId], references: [id])
 
   @@id([clientId, conversationId])
-  @@map("clients_conversations")
+  @@map("client_conversations")
 }
 
 /// @@allow('read,create, update, delete', auth() != null)
 model UserClient {
-  clientId String
-  userId   String
+  clientId String @map("client_id")
+  userId   String @map("user_id")
   client   Client @relation(fields: [clientId], references: [id])
   user     User   @relation(fields: [userId], references: [id])
 
   @@id([clientId, userId])
-  @@map("users_clients")
+  @@map("user_clients")
 }
 
 /// @@allow('read,create, update, delete', auth() != null)
 model DistributorCompany {
-  distributorId String
-  companyId     String
+  distributorId String      @map("distributor_id")
+  companyId     String      @map("company_id")
   distributor   Distributor @relation(fields: [distributorId], references: [id])
   company       Company     @relation(fields: [companyId], references: [id])
 
   @@id([distributorId, companyId])
-  @@map("distributor_users")
+  @@map("distributor_companies")
+}
+
+/// @@allow('read', true)
+/// @@allow('read, create, update', true)
+model VariantSizeBarcode {
+  id        Int     @id() @default(autoincrement())
+  variantId String  @map("variant_id")
+  size      String
+  barcode   String  @unique()
+  variant   Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
+
+  @@unique([variantId, size])
+  @@map("variant_size_barcodes")
 }

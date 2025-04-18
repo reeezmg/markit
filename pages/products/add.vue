@@ -2,7 +2,6 @@
 import AwsService from '~/composables/aws';
 import { useCreateProduct,useUpdateProduct,useUpdateCategory,useUpdatePurchaseOrder} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
-import printJS from "print-js";
 import { paymentType as PType } from '@prisma/client';
 
 const router = useRouter();
@@ -229,6 +228,9 @@ const handleAdd = async (e: Event) => {
               qty:variant.qty,
               images: variant.images.map((file) => file.uuid),
               sizes: variant.sizes, 
+              company: {
+                connect: { id: useAuth().session.value?.companyId },
+              },
             })),
           },
         },
@@ -368,7 +370,9 @@ const res = await UpdateProduct.mutateAsync({
         images: variant.images.map((file) => file.uuid),
         qty:variant.qty,
         sizes: variant.sizes, 
-  
+        company: {
+          connect: { id: useAuth().session.value?.companyId },
+        },
       })),
     },
   },
@@ -513,7 +517,7 @@ const printBarcodes = () => {
   window.print();
 }
 const handleSkip = () => {
- router.push(`/${useAuth().session.value?.companyId}/products`);
+ router.push(`/products`);
 }
 const handleNewProduct = () => {
   isOpenAdd.value = true
@@ -690,7 +694,7 @@ watch(selectedProduct, (newVal) => {
 
         <UModal v-model="isOpen" fullscreen>
       <UCard :ui="{
-          base: 'h-full flex flex-col',
+          base: 'h-full flex flex-col overflow-y-auto',
           rounded: '',
           divide: 'divide-y divide-gray-100 dark:divide-gray-800',
           body: {
@@ -698,27 +702,33 @@ watch(selectedProduct, (newVal) => {
           }
         }">
     
-        <template #header>
-          <div class="flex items-center justify-between">
-            
-              <UButton type="submit" block class="mb-5" @click="printBarcodes">
-                Print
-                </UButton>
-                <UButton type="submit" block class="mb-5" @click="handleSkip">
-                  Skip
-                </UButton>
-            
-            <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark-20-solid" class="-my-1" @click="isOpen = false" />
-          </div>
-        </template>
+       
 
         <BarcodeComponent v-if="barcodes.length" :barcodes="barcodes" />
       
           <!-- <PrintBarcodeComponent :barcodes="barcodes" /> -->
-
-        <template #footer>
-          <button v-if="barcodes.length" @click="printBarcodes">Print Barcodes</button>
+          <template #header>
+          <div class="flex items-end justify-end">
+          <UButton type="submit"  class="me-3 px-5" @click="printBarcodes">
+                Print
+                </UButton>
+                <UButton type="submit"  class="me-3 px-5" @click="handleSkip">
+                  Skip
+                </UButton>
+              </div>
         </template>
+        <template #footer>
+          <div class="flex items-end justify-end">
+          <UButton type="submit"  class="me-3 px-5" @click="printBarcodes">
+                Print
+                </UButton>
+                <UButton type="submit"  class="me-3 px-5" @click="handleSkip">
+                  Skip
+                </UButton>
+              </div>
+        </template>
+       
+
       </UCard>
     </UModal>
 

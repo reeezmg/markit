@@ -1,6 +1,6 @@
 
 <script setup>
-import { useCreateBill,useCreateTokenEntry,useFindUniqueItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
+import { useCreateBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
 
 const CreateBill = useCreateBill();
 const CreateTokenEntry = useCreateTokenEntry();
@@ -254,7 +254,7 @@ const entryargs = computed(() => ({
     }
 }));
 
-const { data: itemdata ,refetch:itemRefetch} = useFindUniqueItem(itemargs);
+const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs);
 const { data: entrydata ,refetch:entryRefetch} = useFindManyTokenEntry(entryargs,{enable:false});
 
 const handleEnterBarcode = (barcode,index) => {
@@ -358,7 +358,7 @@ const handleSave = async () => {
         grandTotal: grandTotal.value,
         paymentMethod: paymentMethod.value,
         createdAt: new Date(date.value).toISOString(),
-        paymentStatus: Object.keys(selected.value).length !== 0 ? 'pending' : 'paid',
+        paymentStatus: Object.keys(selected.value).length !== 0 ? 'PENDING' : 'PAID',
         ...(Object.keys(selected.value).length !== 0 && { 
           account: { connect: { id: selected.value.id } }
         }),
@@ -367,12 +367,15 @@ const handleSave = async () => {
             id: useAuth().session.value?.companyId,
           },
         },
+        type:'BILL',
         entries: {
           create: items.value.map(item => ({
             ...(item.barcode && { barcode: item.barcode }),
             qty: item.qty,
             rate: item.rate,
             discount: item.discount,
+            //variantId present only when entry is barcoded 
+            ...(item.variantId && { variantId: item.variantId || ''}),
             tax: item.tax,
             value: item.value,
             ...(item.category[0]?.id && {category: { connect: { id: item.category[0].id } }}),
@@ -386,10 +389,17 @@ const handleSave = async () => {
       },
     });
 
-    console.log('Bill created successfully:', billResponse);
+    toast.add({
+      title: 'Bill created successfully!',
+     color:'green',
+      })
 
   } catch (error) {
     console.error('Error creating bill', error);
+    toast.add({
+      title: 'Bill creation failed!',
+      color:'red',
+      })
   }
 
   // Collect all async operations in an array

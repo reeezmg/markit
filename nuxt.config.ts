@@ -38,6 +38,16 @@ export default defineNuxtConfig({
   devtools: {
       enabled: true,
   },
+  runtimeConfig: {
+   
+
+    // public variables go under public:
+    public: {
+        awsId: process.env.AWS_ID,
+        awsSecret: process.env.AWS_SECRET,
+        awsBucket: process.env.AWS_BUCKET,
+    }
+  },
 
   image: {},
   compatibilityDate: '2025-02-28',

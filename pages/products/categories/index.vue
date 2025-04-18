@@ -140,6 +140,7 @@ const queryArgs = reactive({
     where: {
         AND: [
             { name: { contains: search.value } },
+            { companyId: useAuth().session.value?.companyId },
             {
                 OR: [{ status: true }, { status: false }],
             },

@@ -1,6 +1,5 @@
 ///bills
 
-
 CREATE OR REPLACE FUNCTION generate_invoice_number()
 RETURNS TRIGGER AS $$
 DECLARE
@@ -31,37 +30,44 @@ FOR EACH ROW
 EXECUTE FUNCTION generate_invoice_number();
 
 //items
--- Step 1: Create sequence for barcode numbering
-CREATE SEQUENCE IF NOT EXISTS item_barcode_seq START 1;
-
--- Step 2: Function to generate barcode with base-26 prefixing
 CREATE OR REPLACE FUNCTION generate_item_barcode()
 RETURNS TRIGGER AS $$
 DECLARE
+    existing_barcode TEXT;
     number_part INT;
     prefix TEXT := '';
     base INT := 999999;
     temp_num INT;
 BEGIN
-    -- Get the next sequence number
-    number_part := nextval('item_barcode_seq');
+    -- Try to find an existing barcode for this variant + size
+    SELECT barcode INTO existing_barcode
+    FROM variant_size_barcodes
+    WHERE variant_id = NEW.variantId AND size = NEW.size;
 
-    -- Convert number_part to a base-26 prefix (A-Z, AA-ZZ, etc.)
-    temp_num := (number_part - 1) / base;  -- Ensure proper calculation
+    IF existing_barcode IS NOT NULL THEN
+        NEW.barcode := existing_barcode;
+        RETURN NEW;
+    END IF;
+
+    -- Generate new barcode from sequence
+    number_part := nextval('item_barcode_seq');
+    temp_num := (number_part - 1) / base;
 
     WHILE temp_num >= 0 LOOP
-        prefix := CHR(65 + (temp_num % 26)) || prefix;  -- Convert to ASCII A-Z
-        temp_num := (temp_num / 26)::INT - 1;  -- Ensure integer division
+        prefix := CHR(65 + (temp_num % 26)) || prefix;
+        temp_num := (temp_num / 26)::INT - 1;
     END LOOP;
 
-    -- Generate barcode (prefix + 6-digit number)
     NEW.barcode := prefix || LPAD((number_part % base)::TEXT, 6, '0');
+
+    -- Store new barcode for this variant + size
+    INSERT INTO variant_size_barcodes (variant_id, size, barcode)
+    VALUES (NEW.variantId, NEW.size, NEW.barcode);
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Step 3: Drop trigger only if it exists
 DO $$ 
 BEGIN
     IF EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'set_item_barcode') THEN
@@ -69,7 +75,6 @@ BEGIN
     END IF;
 END $$;
 
--- Step 4: Create trigger for item barcode generation
 CREATE TRIGGER set_item_barcode
 BEFORE INSERT ON "items"
 FOR EACH ROW EXECUTE FUNCTION generate_item_barcode();

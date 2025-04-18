@@ -145,11 +145,11 @@ const action = (row) => [
 const todoStatus = [
     {
         label: 'Paid',
-        value: 'paid',
+        value: 'PAID',
     },
     {
         label: 'Pending',
-        value: 'pending',
+        value: 'PENDING',
     },
 ];
 
@@ -418,9 +418,9 @@ const handleChange = (value:string, row:any) => {
                 <template #paymentStatus-data="{row}">
                 <UBadge 
                     size="sm" 
-                    :color="row.paymentStatus === 'paid' ? 'green' 
-                        : row.paymentStatus === 'pending' ? 'orange' 
-                        : row.paymentStatus === 'approved' ? 'blue' 
+                    :color="row.paymentStatus === 'PAID' ? 'green' 
+                        : row.paymentStatus === 'PENDING' ? 'orange' 
+                        : row.paymentStatus === 'APPROVED' ? 'blue' 
                         : 'red'" 
                     variant="subtle"
                 >

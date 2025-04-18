@@ -10,7 +10,7 @@ export const authLogin = async (email: string, password: string) => {
     await useAuth().updateSession();
     await navigateTo(
         useAuth().redirectTo.value ||
-            `/${useAuth().session.value?.companyId}`,
+            '/dashboard',
     );
     return res;
 };
@@ -42,6 +42,15 @@ export const authLogout = async () => {
     });
     await useAuth().updateSession();
     await navigateTo('/login');
+};
+export const checkEmailExist = async (email:string) => {
+    const res = await $fetch('/api/auth/existinguser', {
+        method: 'POST',
+        body: {
+            email: email
+        },
+    });
+    return res
 };
 
 export const updateCompanySession = async (

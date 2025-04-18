@@ -78,7 +78,7 @@ const handleSubmit = async (e: Event) => {
             id: 'modal-success',
         });
         router.push(
-            `/${useAuth().session.value?.companyId}/products/categories`,
+            `/products/categories`,
         );
     } catch (err: any) {
         alert(err.info?.message ?? err);

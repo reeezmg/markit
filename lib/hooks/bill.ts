@@ -239,9 +239,9 @@ export function useCountBill<TArgs extends Prisma.BillCountArgs, TQueryFnData = 
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<TQueryFnData, TData, TError>('Bill', `${endpoint}/bill/count`, args, options, fetch);
 }
-import type { OrderType, OrderStatus } from '@prisma/client';
+import type { PaymentStatus, OrderType, OrderStatus } from '@prisma/client';
 
-export function useCheckBill<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; invoiceNumber?: number; paymentMethod?: string; paymentStatus?: string; transactionId?: string; notes?: string; type?: OrderType; status?: OrderStatus; returnDeadline?: string; companyId?: string; accountId?: string; clientId?: string; addressId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckBill<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; invoiceNumber?: number; paymentMethod?: string; paymentStatus?: PaymentStatus; transactionId?: string; notes?: string; type?: OrderType; status?: OrderStatus; returnDeadline?: string; companyId?: string; accountId?: string; clientId?: string; addressId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('Bill', `${endpoint}/bill/check`, args, options, fetch);
 }
