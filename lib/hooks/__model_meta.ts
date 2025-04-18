@@ -1077,6 +1077,11 @@ const metadata = {
                     name: "status",
                     type: "OrderStatus",
                     isOptional: true,
+                }, deleted: {
+                    name: "deleted",
+                    type: "Boolean",
+                    isOptional: true,
+                    attributes: [{ "name": "@default", "args": [{ "value": false }] }],
                 }, bookingDate: {
                     name: "bookingDate",
                     type: "DateTime",

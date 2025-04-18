@@ -191,7 +191,7 @@ const billArgs = computed(() => ({
 }));
 
 
-const { data: bill ,refetch:itemRefetch} = useFindUniqueBill(billArgs);
+const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs);
 
 watch(() => bill.value, (newData) => {
   if (!newData || !newData.entries) return;
