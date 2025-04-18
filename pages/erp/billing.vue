@@ -10,7 +10,7 @@ const UpdateItem = useUpdateItem();
 const DeleteTokenEntry = useDeleteTokenEntry();
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
-
+const router = useRouter();
 
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
@@ -627,6 +627,33 @@ const submitEntryForm = async () => {
     }
 };
 
+const newBill = () => {
+  items.value = [
+    { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
+  ];
+  discount.value = 0;
+  paymentMethod.value = 'Cash';
+
+  token.value = '';
+  tokenEntries.value = [''];
+  grandTotal.value = 0;
+  returnAmt.value = 0;
+  cellNo.value = '';
+  points.value = 0;
+  name.value = '';
+  voucherNo.value = '';
+  selected.value = {};
+  account.value = {
+    name: '',
+    phone:'',
+    street: '',
+    locality: '',
+    city: '',
+    state: '',
+    pincode: '',
+  };
+
+};
 
 
 </script>
@@ -793,10 +820,10 @@ const submitEntryForm = async () => {
         </div>
 
         <div class="mt-4 w-full flex flex-wrap gap-4">
-          <UButton color="blue" class="flex-1" block>New</UButton>
+          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
-          <UButton color="red" class="flex-1" block>Delete</UButton>
+          <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
           <UButton v-if="!token" class="flex-1" block>Sales Return</UButton>
           <UButton v-if="!token" class="flex-1" block>Bill Search</UButton>

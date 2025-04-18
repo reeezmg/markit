@@ -38,18 +38,25 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             }
         });
     }
-
-    if (loggedIn.value && currentRoute.path === '/login') {
+    if (
+        loggedIn.value &&
+        ['/login', '/register', '/'].includes(currentRoute.path)
+      ) {
         // Extract query parameters and build query string
         const queryParams = currentRoute.query;
-        const queryString = Object.keys(queryParams).length > 0 
-            ? '?' + new URLSearchParams(queryParams as Record<string, string>).toString()
-            : '';
-
-        // Append query string to redirectTo.value
-        await navigateTo(`${redirectTo.value || `/`}${queryString}`);
-    }
-
+        const queryString = Object.keys(queryParams).length > 0
+          ? '?' + new URLSearchParams(queryParams as Record<string, string>).toString()
+          : '';
+      
+        // Default to dashboard or some logged-in homepage if no redirect is specified
+        const targetPath = redirectTo.value || '/dashboard';
+      
+        // Avoid redirecting to the same path
+        if (targetPath !== currentRoute.path) {
+          await navigateTo(`${targetPath}${queryString}`);
+        }
+      }
+      
     return {
         provide: {
             auth: {
