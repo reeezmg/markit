@@ -14,7 +14,7 @@ export * from './category';
 export * from './subcategory';
 export * from './product';
 export * from './variant';
-export * from './size';
+export * from './item';
 export * from './purchase-order';
 export * from './bill';
 export * from './token-entry';

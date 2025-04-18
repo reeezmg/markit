@@ -21,6 +21,16 @@ const links = computed(() => {
             },
         },
         {
+            id: 'dashboard',
+            label: 'Dashboard',
+            icon: 'i-dashicons-chart-area',
+            to: `/${auth.session.value?.companyId}/dashboard`,
+            tooltip: {
+                text: 'Dashboard',
+                shortcuts: ['G', 'H'],
+            },
+        },
+        {
             id: 'erp',
             label: 'ERP',
             to: '/erp',
@@ -150,6 +160,33 @@ const links = computed(() => {
             tooltip: {
                 text: 'CRM',
                 shortcuts: ['G', 'I'],
+            },
+        },
+        {
+            id: 'reports',
+            label: 'Reports',
+            to: '/reports',
+            icon: 'i-heroicons-chart-bar',
+            children: [
+                {
+                    label: 'Sales',
+                    to: `/${auth.session.value?.companyId}/reports/sales`,
+                    exact: true,
+                },
+                // {
+                //     label: 'Sales',
+                //     to: `/${auth.session.value?.companyId}/reports/sales`,
+                //     exact: true,
+                // },
+                // {
+                //     label: 'Accounts',
+                //     to: `/${auth.session.value?.companyId}/reports/accounts`,
+                //     exact: true,
+                // },
+            ],
+            tooltip: {
+                text: 'Settings',
+                shortcuts: ['G', 'S'],
             },
         },
         {

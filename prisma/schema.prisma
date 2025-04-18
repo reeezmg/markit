@@ -5,7 +5,7 @@
 
 datasource db {
   provider = "postgresql"
-  url      = env("DATABASE_URL")
+  url      = "postgresql://ashir:ashir@localhost:5432/markit"
 }
 
 generator client {
@@ -270,10 +270,11 @@ model Variant {
   pprice    Float?
   qty       Int?
   discount  Float?
-  sizes     Size[]
+  sizes     Json?
   images    String[]
   product   Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId String
+  items     Item[]
   entries   Entry[]
 
   @@map("variants")
@@ -281,18 +282,18 @@ model Variant {
 
 /// @@allow('read', true)
 /// @@allow('read, create, update', true)
-model Size {
+model Item {
   id        String   @id() @default(uuid())
   barcode   String?  @unique() @db.Text()
-  name      String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt()
   variant   Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
   variantId String
   status    String   @default("in_stock")
+  size      String?
   entry     Entry?
 
-  @@map("sizes")
+  @@map("items")
 }
 
 /// @@allow('read', true)
@@ -377,6 +378,7 @@ model Entry {
   discount   Float?
   tax        Float?
   value      Float?
+  size       String?
   variant    Variant?  @relation(fields: [variantId], references: [id], onDelete: Cascade)
   variantId  String?
   outOfStock Boolean?
@@ -384,8 +386,8 @@ model Entry {
   categoryId String?
   bill       Bill?     @relation(fields: [billId], references: [id], onDelete: Cascade)
   billId     String?
-  size       Size?     @relation(fields: [sizeId], references: [id], onDelete: Cascade)
-  sizeId     String?   @unique()
+  item       Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  itemId     String?   @unique()
 
   @@map("entries")
 }
