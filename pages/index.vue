@@ -1,169 +1,84 @@
-<script setup lang="ts">
-import { sub } from 'date-fns';
-import type { Period, Range } from '~/types';
-import { useFindManyCompany } from '~/lib/hooks';
-import type { Prisma } from '@prisma/client';
-import { getShopName, getToken } from '~/services/tiktokService';
-
-useHead({
-    title: 'Marketplace',
-});
-
-
-
-
-
-const useAuth = () => useNuxtApp().$auth;
-const auth = useAuth();
-const route = useRoute();
-const router = useRouter();
-const cartStore = useCartStore();
-const cartItemCount = computed(() => cartStore.cartItemCount);
-const queryParam = route.query;
-
-
-const search = ref('');
-const categories = ref<any[]>([]);
-const code = Array.isArray(route.query.code) ? route.query.code[0] : route.query.code;
-
-onBeforeMount(() => {
-    if (!useAuth().loggedIn.value) {
-        definePageMeta({
-            layout: false,
-        });
-    }else{
-        definePageMeta({
-            layout: "default",
-        });
-    }
-});
-
-
-onMounted(async () => {
-    if (code && useAuth().loggedIn.value) {
-    const res = await getToken(code, useAuth().session.value?.companyId);
-}
-
-const resp = await getShopName()
-console.log(resp)
-});
-
-
-const queryArgs = computed<Prisma.CompanyFindManyArgs>(() => {
-    const filters = [
-        { 
-            name: { contains: search.value },
-            type: "seller"
-        },
-        { status: true },
-    ] as Prisma.CompanyWhereInput[];
-
-    return {
-        where: {
-            AND: filters,
-        },
-        select: {
-            id: true,
-            name: true,
-            logo: true,
-            users: {
-                select: {
-                    userId: true, // Selecting user IDs
-                },
-            },
-        },
-    };
-});
-
-
-const {
-    data: companies,
-    isLoading,
-    error,
-    refetch,
-} = useFindManyCompany(queryArgs);
-
-
-console.log(companies)
-
-
-</script>
 <template>
-    <UDashboardPage>
-        <UDashboardPanel grow>
-            <UDashboardNavbar title=' Market Place'>
-                <template #right>
-                    <UButton v-if="!useAuth().loggedIn.value" @click="router.push('/login')"
-                        class="px-5 me-3 flex items-center justify-center rounded-md border border-transparent text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2">
-                        Login
-                    </UButton>
-                    <div v-if="useAuth().loggedIn.value" class="flex flex-row items-center justify-center">
-                       
-                    <UTooltip class="" text="Notifications" :shortcuts="['N']">
-                        <!-- <UButton
-                            color="gray"
-                            variant="ghost"
-                            square
-                            @click="isNotificationsSlideoverOpen = true"
-                          
-                        >
-                            <UChip color="red" text="0" size="2xl">
-                                <UIcon
-                                    name="i-heroicons-bell"
-                                    class="w-5 h-5"
-                                />
-                            </UChip>
-                        </UButton> -->
-                        <NuxtLink
-                            :to="`/checkout`"
-                        >
-                            <UChip :text="cartItemCount"   class="mt-2 ms-4" color="red" size="2xl">
-                                <UIcon
-                                    name="i-heroicons-shopping-cart"
-                                    class="w-5 h-5"
-                                />
-                            </UChip>
-                        </NuxtLink>
-                    </UTooltip>
-                </div>
-                </template>
-
-            </UDashboardNavbar>
-
-            <UDashboardToolbar>
-                <template #left>
-                    <UInput
-                        v-model="search"
-                        icon="i-heroicons-magnifying-glass-20-solid"
-                        placeholder="Search..."
-                    />
-                    <p v-if="queryParam.companyId"
-                        >filtered based on companyId:
-                        {{ queryParam.companyId }}</p
-                    >
-                </template>
-                <!-- <template #right>
-                    <USelectMenu
-                        v-model="selectedCategory"
-                        :options="categories"
-                        multiple
-                        placeholder="category"
-                        class="w-40"
-                    />
-                </template> -->
-            </UDashboardToolbar>
-            <UDashboardPanelContent>
-                <div
-                    class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4"
-                >
-                    <CompanyCard
-                        v-for="(item, index) in companies"
-                        :key="index"
-                        :info="item"
-                        :index="index"
-                    />
-                </div>
-            </UDashboardPanelContent>
-        </UDashboardPanel>
-    </UDashboardPage>
-</template>
+    <UDashboardPanelContent>
+    <UContainer class="py-20 space-y-24">
+      <!-- Hero Section -->
+      <UCard class="text-center space-y-6 shadow-xl">
+        <template #header>
+          <h1 class="text-4xl md:text-5xl font-bold text-primary">Smart SaaS for Indian SMEs</h1>
+        </template>
+        <p class="text-gray-600 text-lg max-w-2xl mx-auto">
+          Empower your retail or wholesale business with a platform built for inventory, billing, CRM, B2B marketplace, and hybrid shopping models like Try-at-Home and Book Online, Try in Store.
+        </p>
+        <UButton size="lg" color="primary" to="/register">Get Started for Free</UButton>
+      </UCard>
+  
+      <!-- Features Section -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+        <UCard class="text-center py-8 px-6">
+          <div class="text-4xl text-primary mb-4">
+            <UIcon name="i-heroicons-archive-box" />
+          </div>
+          <h3 class="text-xl font-semibold">Inventory Management</h3>
+          <p class="text-gray-600 mt-2">Real-time inventory tracking with automatic updates for online, offline, and trial bookings.</p>
+        </UCard>
+  
+        <UCard class="text-center py-8 px-6">
+          <div class="text-4xl text-primary mb-4">
+            <UIcon name="i-heroicons-user-group" />
+          </div>
+          <h3 class="text-xl font-semibold">Client Relationship Management (CRM)</h3>
+          <p class="text-gray-600 mt-2">Track customer and retailer relationships with insights, order history, and messaging support.</p>
+        </UCard>
+  
+        <UCard class="text-center py-8 px-6">
+          <div class="text-4xl text-primary mb-4">
+            <UIcon name="i-heroicons-banknotes" />
+          </div>
+          <h3 class="text-xl font-semibold">ERP, Billing & Accounting</h3>
+          <p class="text-gray-600 mt-2">Generate GST-compliant bills, log sales across outlets, and manage online + offline transactions.</p>
+        </UCard>
+  
+        <UCard class="text-center py-8 px-6">
+          <div class="text-4xl text-primary mb-4">
+            <UIcon name="i-heroicons-shopping-cart" />
+          </div>
+          <h3 class="text-xl font-semibold">Try-at-Home & Try in Store</h3>
+          <p class="text-gray-600 mt-2">Reduce returns and boost satisfaction by letting customers try products before buying — at home or in-store.</p>
+        </UCard>
+  
+        <UCard class="text-center py-8 px-6">
+          <div class="text-4xl text-primary mb-4">
+            <UIcon name="i-heroicons-building-storefront" />
+          </div>
+          <h3 class="text-xl font-semibold">Wholesaler Marketplace</h3>
+          <p class="text-gray-600 mt-2">Retailers can discover and order from trusted wholesalers on a built-in B2B marketplace with role-based access.</p>
+        </UCard>
+  
+        <UCard class="text-center py-8 px-6">
+          <div class="text-4xl text-primary mb-4">
+            <UIcon name="i-heroicons-chart-bar" />
+          </div>
+          <h3 class="text-xl font-semibold">Sales & Performance Analytics</h3>
+          <p class="text-gray-600 mt-2">Track product performance, return trends, and booking outcomes with insightful dashboards.</p>
+        </UCard>
+      </div>
+  
+      <!-- Call to Action -->
+      <div class="text-center space-y-4">
+        <h2 class="text-3xl font-bold">Start Your 14-Day Free Trial</h2>
+        <p class="text-gray-600">Built for Indian SMEs. No credit card required. Cancel anytime.</p>
+        <UButton size="lg" color="primary" to="/register">Launch Your Store</UButton>
+      </div>
+    </UContainer>
+</UDashboardPanelContent>
+  </template>
+  
+  <script setup>
+ definePageMeta({
+    layout: false,
+});
+  </script>
+  
+  <style scoped>
+  </style>
+  

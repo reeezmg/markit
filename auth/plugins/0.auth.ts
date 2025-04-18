@@ -47,7 +47,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
             : '';
 
         // Append query string to redirectTo.value
-        await navigateTo(`${redirectTo.value || `/${session.value?.companyId}`}${queryString}`);
+        await navigateTo(`${redirectTo.value || `/`}${queryString}`);
     }
 
     return {
