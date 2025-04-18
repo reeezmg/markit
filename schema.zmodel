@@ -4,7 +4,7 @@ generator client {
 
 datasource db {
     provider = 'postgresql'
-    url      = 'postgresql://ashir:ashir@localhost:5432/markit'
+    url      = env('DATABASE_URL')
 }
 
 plugin hooks {
