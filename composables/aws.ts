@@ -2,24 +2,10 @@ import {
     S3Client,
     GetObjectCommand,
     PutObjectCommand,
-} from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-const AWS_ID = process.env.AWS_ID;
-const AWS_SECRET = process.env.AWS_SECRET;
-const AWS_BUCKET = process.env.AWS_BUCKET;
-
-
-if (!AWS_ID || !AWS_SECRET) throw new Error('Missing AWS dotenv credentials');
-
-const s3Client = new S3Client({
-    region: 'ap-south-1',
-    credentials: {
-        accessKeyId: AWS_ID,
-        secretAccessKey: AWS_SECRET,
-    },
-});
-
-export default class AwsService {
+  } from '@aws-sdk/client-s3';
+  import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+  
+  export default class AwsService {
     s3Client: S3Client;
     awsBucket: string;
   

@@ -20,23 +20,8 @@ const links = computed(() => {
                 shortcuts: ['G', 'D'],
             },
         },
-<<<<<<< HEAD
-        {
-            id: 'dashboard',
-            label: 'Dashboard',
-            icon: 'i-dashicons-chart-area',
-            to: `/${auth.session.value?.companyId}/dashboard`,
-            tooltip: {
-                text: 'Dashboard',
-                shortcuts: ['G', 'H'],
-            },
-        },
-        {
-            id: 'erp',
-=======
         {   
             id: 'erp',     
->>>>>>> origin
             label: 'ERP',
             to: '/erp',
             icon: 'i-heroicons-credit-card',
@@ -161,7 +146,7 @@ const links = computed(() => {
             children: [
                 {
                     label: 'Sales',
-                    to: `/${auth.session.value?.companyId}/reports/sales`,
+                    to: `/reports/sales`,
                     exact: true,
                 },
                 // {
