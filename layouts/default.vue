@@ -10,42 +10,108 @@ const auth = useAuth();
 
 const links = computed(() => {
     const baseLinks = [
-        {
-            id: 'home',
-            label: 'Marketplace',
+        {  
+            id: 'dashboard',
+            label: 'Dashboard',    
             icon: 'i-heroicons-home',
-            to: `/`,
+            to: `/dashboard`,
             tooltip: {
-                text: 'Home',
-                shortcuts: ['G', 'H'],
+                text: 'Dashboard',
+                shortcuts: ['G', 'D'],
             },
         },
-        {
-            id: 'erp',
+        {   
+            id: 'erp',     
             label: 'ERP',
             to: '/erp',
             icon: 'i-heroicons-credit-card',
             children: [
                 {
                     label: 'Billing',
-                    to: `/${auth.session.value?.companyId}/erp/billing`,
+                    to: `/erp/billing`,
+                    tooltip: {
+                        text: 'ERP',
+                        shortcuts: ['E', 'B'],
+                    },
                     exact: true,
                 },
                 {
                     label: 'Sales',
-                    to: `/${auth.session.value?.companyId}/erp/sales`,
-                    exact: true,
+                    to: `/erp/sales`,
+                    tooltip: {
+                        text: 'ERP',
+                        shortcuts: ['E', 'S'],
+                    },
                 },
                 {
                     label: 'Accounts',
-                    to: `/${auth.session.value?.companyId}/erp/accounts`,
-                    exact: true,
+                    to: `/erp/accounts`,
+                    tooltip: {
+                        text: 'ERP',
+                        shortcuts: ['E', 'S'],
+                    },
                 },
             ],
-            tooltip: {
-                text: 'Settings',
-                shortcuts: ['G', 'S'],
-            },
+        },
+        {
+            id: 'products',
+            label: 'Products',
+            to: `/products`,
+            icon: 'i-heroicons-squares-2x2',
+            children: [
+                {
+                    label: 'All Products',
+                    to: `/products`,
+                    exact: true,
+                    tooltip: {
+                        text: 'products',
+                        shortcuts: ['P', 'A'],
+                    },
+                },
+                ...(auth.session.value?.role === 'admin'
+                    ? [
+                          {
+                              label: 'Categories',
+                              to: `/products/categories`,
+                              tooltip: {
+                                text: 'products',
+                                shortcuts: ['P', 'C'],
+                                },
+                          },
+                      ]
+                    : []),
+            ],
+           
+        },
+        {
+            id: 'orders',
+            label: 'Orders',
+            to: `/order`,
+            icon: 'i-heroicons-shopping-bag',
+            children: [
+            ...(auth.session.value?.companyType === 'seller' || auth.session.value?.companyType === 'buyer'
+                    ? [
+                        {
+                        label: 'Orders',
+                        to: `/order/orders`,
+                        exact: true,
+                        tooltip: {
+                            text: 'Orders',
+                            shortcuts: ['O', 'S'],
+                        },
+                        },
+                        {
+                        label: 'Bookings',
+                        to: `/order/bookings`, 
+                        tooltip: {
+                            text: 'Bookings',
+                            shortcuts: ['O', 'B'],
+                        },
+                        },
+                      ]
+                    : []),
+            ],
+           
         },
         ...(auth.session.value?.role === 'admin'
             ? [
@@ -53,121 +119,42 @@ const links = computed(() => {
                       id: 'users',
                       label: 'Users',
                       icon: 'i-heroicons-user-group',
-                      to: `/${auth.session.value?.companyId}/users`,
+                      to: `/users`,
                       tooltip: {
                           text: 'Users',
-                          shortcuts: ['G', 'U'],
+                          shortcuts: ['U', 'A'],
                       },
                   },
               ]
             : []),
         {
-            id: 'products',
-            label: 'Products',
-            to: `/${auth.session.value?.companyId}/products`,
-            icon: 'i-heroicons-squares-2x2',
-            children: [
-                {
-                    label: 'All Products',
-                    to: `/${auth.session.value?.companyId}/products`,
-                    exact: true,
-                },
-                ...(auth.session.value?.role === 'admin'
-                    ? [
-                          {
-                              label: 'Categories',
-                              to: `/${auth.session.value?.companyId}/products/categories`,
-                          },
-                      ]
-                    : []),
-            ],
-            tooltip: {
-                text: 'products',
-                shortcuts: ['G', 'P'],
-            },
-        },
-        {
-            id: 'orders',
-            label: 'Orders',
-            to: `/${auth.session.value?.companyId}/order`,
-            icon: 'i-heroicons-shopping-bag',
-            children: [
-            ...(auth.session.value?.companyType === 'seller' || auth.session.value?.companyType === 'buyer'
-                    ? [
-                        {
-                        label: 'Orders',
-                        to: `/${auth.session.value?.companyId}/order/orders`,
-                        exact: true,
-                        },
-                        {
-                        label: 'Bookings',
-                        to: `/${auth.session.value?.companyId}/order/bookings`, 
-                        },
-                      ]
-                    : []),
-            ],
-            tooltip: {
-                text: 'products',
-                shortcuts: ['G', 'O'],
-            },
-        },
-        {
             id: 'client',
             label: 'Client',
             icon: 'i-heroicons-user-plus',
-            to: `/${auth.session.value?.companyId}/client`,
+            to: `/client`,
             tooltip: {
                 text: 'Client',
-                shortcuts: ['G', 'I'],
+                shortcuts: ['C', 'A'],
             },
         },
-        {
-            id: 'marketing',
-            label: 'Marketing',
-            icon: 'i-heroicons-briefcase',
-            to: `/${auth.session.value?.companyId}/marketing`,
-            tooltip: {
-                text: 'Marketing',
-                shortcuts: ['G', 'I'],
-            },
-        },
-        {
-            id: 'inbox',
-            label: 'Inbox',
-            icon: 'i-heroicons-inbox',
-            to: `/${auth.session.value?.companyId}/inbox`,
-            tooltip: {
-                text: 'Inbox',
-                shortcuts: ['G', 'I'],
-            },
-        },
-       
-        {
-            id: 'crm',
-            label: 'CRM',
-            icon: 'i-heroicons-clipboard-document-list',
-            to: `/${auth.session.value?.companyId}/crm`,
-            tooltip: {
-                text: 'CRM',
-                shortcuts: ['G', 'I'],
-            },
-        },
+        
         {
             id: 'settings',
             label: 'Settings',
-            to: '/settings',
+            to: `/settings`,
             icon: 'i-heroicons-cog-8-tooth',
             children: [
                 {
                     label: 'General',
-                    to: '/settings',
+                    to: `/settings`,
                     exact: true,
+                    tooltip: {
+                        text: 'Settings',
+                        shortcuts: ['S', 'G'],
+                    },
                 },
             ],
-            tooltip: {
-                text: 'Settings',
-                shortcuts: ['G', 'S'],
-            },
+
         },
     ];
 
@@ -175,11 +162,7 @@ const links = computed(() => {
 });
 
 const footerLinks = [
-    {
-        label: 'Invite people',
-        icon: 'i-heroicons-plus',
-        to: '/settings/members',
-    },
+   
     {
         label: 'Help & Support',
         icon: 'i-heroicons-question-mark-circle',
@@ -198,18 +181,13 @@ const groups = computed(() => [
     },
 ]);
 
-watch(
-    () => auth.session.value?.companyId,
-    (newcompanyId) => {
-        console.log('Company ID changed:', newcompanyId);
-    },
-);
+
 </script>
 
 <template>
     <UDashboardLayout>
         <UDashboardPanel
-            :width="250"
+            :width="250"   
             :resizable="{ min: 200, max: 300 }"
             collapsible
         >

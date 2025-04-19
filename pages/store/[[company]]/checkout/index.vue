@@ -101,7 +101,10 @@ const handleSubmit = async (e?: Event) => {
         subtotal: subtotal.value,
         paymentMethod: paymentMethod.value,
         deliveryFees: deliveryFees.value,
-        paymentStatus: 'pending',
+        paymentStatus: 'PAID',
+        ...(type.value === 'BOOKING' && {
+          paymentStatus: 'PENDING',
+        }),
         address: {
           connect: { id: activeAddressId.value },
         },
@@ -219,6 +222,7 @@ const initiatePayment = async (method: string) => {
                     
                     
                 </div>
+              
             </UCard>
             </div>
 
@@ -239,6 +243,16 @@ const initiatePayment = async (method: string) => {
             </div>
 
             <div  v-if="useClientAuth().session.value?.id" class="border dark:border-gray-800 rounded-lg border-gray-200 px-4 py-6 sm:px-6">
+              
+                  <UButton 
+                  v-if="type === 'BOOKING'"
+                  class="w-full flex items:cart-center justify-center rounded-md border border-transparent px-4 py-3 text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2" 
+                  color="blue" 
+                  icon="i-mdi-qrcode-scan" 
+                  @click="() => handleSubmit()"
+                  >
+                Book Now
+                </UButton>
 
                         <UButton 
                         class="w-full flex items:cart-center justify-center rounded-md border border-transparent px-4 py-3 text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2" 

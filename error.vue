@@ -18,6 +18,8 @@ useHead({
         lang: 'en',
     },
 });
+
+
 </script>
 
 <template>
@@ -25,7 +27,8 @@ useHead({
         <UMain>
             <UContainer>
                 <UPage>
-                    <UPageError :error="error" />
+                    <UPageError :error="error" :clear-button="{ to:'/dashboard' }" />
+
                 </UPage>
             </UContainer>
         </UMain>
