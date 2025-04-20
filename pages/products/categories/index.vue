@@ -403,7 +403,7 @@ async function toggleStatus(id) {
                     <NuxtLink :to="``">
                         <div class="flex flex-row items-center">
                             <UAvatar
-                                :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.image}`"
+                                :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.image || ''}`"
                                 :alt="row.name"
                                 size="lg"
                             />

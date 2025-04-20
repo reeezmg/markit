@@ -148,27 +148,7 @@ const fileInputId = computed(() => `image-${props.index}`);
                 class="w-full"
             />
         </UFormGroup>
-
-        <UFormGroup label="Hsn" class="w-full">
-            <UInput
-                id="hsn"
-                v-model="hsn"
-                v-bind="hsnAttrs"
-                type="text"
-                class="w-full"
-            />
-        </UFormGroup>
     </div>
     </div>
 
-        <UFormGroup label="Description">
-                <UTextarea
-                    id="description"
-                    v-model="description"
-                    v-bind="descriptionAttrs"
-                    :rows="4"
-                    name="description"
-                    class="w-full"
-                />
-        </UFormGroup>
 </template>

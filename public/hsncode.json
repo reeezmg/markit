@@ -1,0 +1,159 @@
+[
+  {
+    "hsn": "6101",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6104",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6109",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6203",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6204",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6205",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "5208",
+    "thresholdAmount": 0,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 5
+  },
+  {
+    "hsn": "6207",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6110",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6107",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6108",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6111",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6115",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6116",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6214",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "4203",
+    "thresholdAmount": 0,
+    "taxBelowThreshold": 18,
+    "taxAboveThreshold": 18
+  },
+  {
+    "hsn": "6505",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "7113",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 3,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "9004",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 12,
+    "taxAboveThreshold": 18
+  },
+  {
+    "hsn": "6403",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 18
+  },
+  {
+    "hsn": "6405",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 18
+  },
+  {
+    "hsn": "4202",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 12,
+    "taxAboveThreshold": 18
+  },
+  {
+    "hsn": "6305",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6506",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 12,
+    "taxAboveThreshold": 18
+  },
+  {
+    "hsn": "6601",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 5,
+    "taxAboveThreshold": 12
+  },
+  {
+    "hsn": "6704",
+    "thresholdAmount": 1000,
+    "taxBelowThreshold": 12,
+    "taxAboveThreshold": 18
+  }
+
+]

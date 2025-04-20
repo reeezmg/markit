@@ -60,8 +60,13 @@ const variantcolumns = [
         sortable: true,
     },
     {
-        key: 'pprice',
+        key: 'sprice',
         label: 'Price',
+        sortable: true,
+    },
+    {
+        key: 'tax',
+        label: 'Tax',
         sortable: true,
     },
     {
