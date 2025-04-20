@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useCreateProduct,useUpdateProduct,useUpdateCategory,useUpdatePurchaseOrder} from '~/lib/hooks';
+import { useCreateProduct,useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import { paymentType as PType } from '@prisma/client';
 
@@ -126,8 +126,16 @@ const variants = ref<{
     images: [] 
 }]);
 
-
-
+const { data: categoryTax } = useFindUniqueCategory({
+  where: computed(() => ({ id: category.value })),
+  select: {
+    fixedTax: true,
+    taxBelowThreshold: true,
+    taxAboveThreshold: true,
+    thresholdAmount: true,
+    taxType: true,
+  }
+})
 
 
 const createValue = (data: any) => {
@@ -195,47 +203,62 @@ const handleAdd = async (e: Event) => {
 }
 
 
-    const res = await CreateProduct.mutateAsync({
-        data: {
-          name: name.value || '',
-          brand: brand.value || '',
-          description: description.value || '',
-          status: live.value ?? undefined,
-          company: {
-            connect: {
-              id: useAuth().session.value?.companyId,
-            },
-          },
-          purchaseorder: {
-            connect: {
-              id: poId, 
-            },
-          },
-          ...(category.value && {category: {
-            connect: { id:category.value }, 
-          }}),
-          ...(subcategory.value && {subcategory: {
-            connect: { id:subcategory.value }, 
-          }}),
-          
-          variants: {
-            create: variants.value.map((variant) => ({
-              name: variant.name || '',
-              ...(variant.code && {code: variant.code}),
-              sprice: variant.sprice || 0,
-              pprice: variant.pprice || 0,
-              status: true,
-              qty:variant.qty,
-              images: variant.images.map((file) => file.uuid),
-              sizes: variant.sizes, 
-              company: {
-                connect: { id: useAuth().session.value?.companyId },
-              },
-            })),
-          },
-        },
-      });
+const res = await CreateProduct.mutateAsync({
+  data: {
+    name: name.value || '',
+    brand: brand.value || '',
+    description: description.value || '',
+    status: live.value ?? undefined,
+    company: {
+      connect: {
+        id: useAuth().session.value?.companyId,
+      },
+    },
+    purchaseorder: {
+      connect: {
+        id: poId, 
+      },
+    },
+    ...(category.value && {category: {
+      connect: { id:category.value }, 
+    }}),
+    ...(subcategory.value && {subcategory: {
+      connect: { id:subcategory.value }, 
+    }}),
+    
+    variants: {
+      create: variants.value.map((variant) => {
+        // Calculate tax based on category tax type
+        let tax = 0;
+        if (categoryTax.value) {
+          if (categoryTax.value.taxType === 'FIXED') {
+            tax = categoryTax.value.fixedTax || 0;
+          } else if (categoryTax.value.taxType === 'VARIABLE') {
+            const threshold = categoryTax.value.thresholdAmount || 0;
+            tax = (variant.sprice || 0) > threshold 
+              ? (categoryTax.value.taxAboveThreshold || 0)
+              : (categoryTax.value.taxBelowThreshold || 0);
+          }
+        }
 
+        return {
+          name: variant.name || '',
+          ...(variant.code && {code: variant.code}),
+          sprice: variant.sprice || 0,
+          pprice: variant.pprice || 0,
+          status: true,
+          qty: variant.qty,
+          tax: tax, // Add the calculated tax here
+          images: variant.images.map((file) => file.uuid),
+          sizes: variant.sizes, 
+          company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
+        };
+      }),
+    },
+  },
+});
 
     // const imageData = res?.images.map((item) => (
     //      `https://unifeed.s3.ap-south-1.amazonaws.com/${item}`
@@ -339,7 +362,6 @@ const handleEdit = async (e: Event) => {
 
 // Step 3: Update product and add new categories
 const res = await UpdateProduct.mutateAsync({
-
   where: { id: productId },
   data: {
     name: name.value || '',
@@ -352,28 +374,43 @@ const res = await UpdateProduct.mutateAsync({
   
     ...(category.value && {category: {
       connect: { id:category.value }, 
-          }}),
+    }}),
 
     ...(subcategory.value && {subcategory: {
       connect: { id:subcategory.value }, 
     }}),
           
-
     variants: {
       deleteMany: {},
-      create: variants.value.map((variant) => ({
-        name: variant.name || '',
-        ...(variant.code && {code: variant.code}),
-        sprice: variant.sprice || 0,
-        pprice: variant.pprice || 0,
-        status: true,
-        images: variant.images.map((file) => file.uuid),
-        qty:variant.qty,
-        sizes: variant.sizes, 
-        company: {
-          connect: { id: useAuth().session.value?.companyId },
-        },
-      })),
+      create: variants.value.map((variant) => {
+        // Calculate tax based on category tax type
+        let tax = 0;
+        if (categoryTax.value) {
+          if (categoryTax.value.taxType === 'FIXED') {
+            tax = categoryTax.value.fixedTax || 0;
+          } else if (categoryTax.value.taxType === 'VARIABLE') {
+            const threshold = categoryTax.value.thresholdAmount || 0;
+            tax = (variant.sprice || 0) > threshold 
+              ? (categoryTax.value.taxAboveThreshold || 0)
+              : (categoryTax.value.taxBelowThreshold || 0);
+          }
+        }
+
+        return {
+          name: variant.name || '',
+          ...(variant.code && {code: variant.code}),
+          sprice: variant.sprice || 0,
+          pprice: variant.pprice || 0,
+          status: true,
+          images: variant.images.map((file) => file.uuid),
+          qty: variant.qty,
+          tax: tax, // Add the calculated tax here
+          sizes: variant.sizes, 
+          company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
+        };
+      }),
     },
   },
 });
@@ -528,8 +565,8 @@ watch(isOpenAdd, (newVal) => {
     handleReset()
   }
 });
-watch(selectedProduct, (newVal) => {
-  console.log(selectedProduct)
+watch(categoryTax, (newVal) => {
+  console.log(newVal)
 });
 
 </script>

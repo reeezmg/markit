@@ -92,8 +92,10 @@ watch(items, () => {
     } else {
       baseValue -= (baseValue * item.discount) / 100;
     }
-
-    baseValue -= (baseValue * item.tax) / 100;
+    if(!isTaxIncluded) {
+      baseValue += (baseValue * item.tax) / 100;
+    } 
+    
     
     item.value = Math.max(baseValue, 0); 
     
@@ -340,6 +342,7 @@ const fetchItemData = async (barcode, index) => {
     items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant.product.name}` || '';
     items.value[index].category = categories.value.filter(category =>category.id === categoryId);
     items.value[index].rate = itemdata.value.variant?.sprice || 0;
+    items.value[index].tax = itemdata.value.variant?.tax || 0;
     items.value[index].totalQty = itemdata.value.variant?.qty || 0;
     items.value[index].sizes = itemdata.value.variant?.sizes || null;
     items.value[index].variantId = itemdata.value.variant?.id || '';
