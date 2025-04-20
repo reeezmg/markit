@@ -130,7 +130,7 @@ import {
           const month = i + 1
           const total =
             bills.value
-              ?.filter((b) => new Date(b.createdAt).getMonth() + 1 === month).filter((b) => b.paymentStatus === 'paid')
+              ?.filter((b) => new Date(b.createdAt).getMonth() + 1 === month).filter((b) => b.paymentStatus === 'PAID')
               .reduce((sum, b) => sum + (b.grandTotal ?? 0), 0) ?? 0
           return { month: monthNames[i], total }
         })
@@ -160,7 +160,7 @@ import {
     })
 
     const unpaidBills = computed(() =>
-      bills.value?.filter((b) => b.paymentStatus !== 'paid') ?? []
+      bills.value?.filter((b) => b.paymentStatus !== 'PAID') ?? []
     )
     
     const totalUnpaid = computed(() =>
@@ -222,7 +222,7 @@ import {
       const map = new Map<string, { name: string; total: number; count: number }>()
     
       for (const bill of bills.value) {
-        if (bill.paymentStatus !== 'unpaid' ) continue
+        if (bill.paymentStatus !== 'PENDING' ) continue
     
         const key = bill.clientId ?? 'unknown Client ID'
         const name = bill.client?.name ?? 'unknown CLient Name'

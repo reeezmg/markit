@@ -1,4 +1,4 @@
-///bills
+-- bills
 
 CREATE OR REPLACE FUNCTION generate_invoice_number()
 RETURNS TRIGGER AS $$
@@ -29,7 +29,7 @@ BEFORE INSERT ON bills
 FOR EACH ROW
 EXECUTE FUNCTION generate_invoice_number();
 
-//items
+-- items
 CREATE OR REPLACE FUNCTION generate_item_barcode()
 RETURNS TRIGGER AS $$
 
@@ -88,7 +88,7 @@ CREATE TRIGGER set_item_barcode
 BEFORE INSERT ON "items"
 FOR EACH ROW EXECUTE FUNCTION generate_item_barcode();
 
-//storeuniquename
+-- storeuniquename
 CREATE OR REPLACE FUNCTION set_store_unique_name()
 RETURNS TRIGGER AS $$
 BEGIN

@@ -16,7 +16,7 @@ const auth = useAuth();
                         >
                             <UChip :text="cartItemCount" color="red" size="2xl">
                                 <UIcon
-                                    name="i-heroicons-shopping-cart"
+                                    name="i-heroicons-bell-icon"
                                     class="w-5 h-5"
                                 />
                             </UChip>

@@ -2027,16 +2027,8 @@ const metadata = {
                     name: "variantId_size",
                     fields: ["variantId", "size"]
                 },
-<<<<<<< HEAD
             },
         },
-
-    },
-=======
-            }
-            ,
-        }
-        ,
         emailOtp: {
             name: 'EmailOtp', fields: {
                 id: {
@@ -2054,8 +2046,7 @@ const metadata = {
                     name: "expiresAt",
                     type: "DateTime",
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -2063,13 +2054,10 @@ const metadata = {
                     name: "email",
                     fields: ["email"]
                 },
-            }
-            ,
-        }
-        ,
-    }
-    ,
->>>>>>> main
+            },
+        },
+
+    },
     deleteCascade: {
         company: ['Product', 'Variant', 'Item'],
         category: ['Product', 'Entry'],
