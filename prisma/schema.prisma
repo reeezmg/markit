@@ -60,6 +60,11 @@ enum OrderStatus {
   BOOKED
 }
 
+enum TaxType {
+  FIXED
+  VARIABLE
+}
+
 /// @@allow('read, update', auth().role == 'admin')
 /// @@allow('create', auth() != null && status)
 /// @@allow('update', users?[user == auth()])
@@ -68,6 +73,7 @@ model Company {
   id                         String               @id() @unique() @default(uuid())
   name                       String
   storecode                  Int                  @unique() @default(autoincrement())
+  storeUniqueName            String?              @unique() @map("store_unique_name")
   logo                       String?
   description                String?
   shopifyStoreName           String?              @map("shopify_store_name")
@@ -96,7 +102,6 @@ model Company {
   type                       CompanyType
   pipeline                   Pipeline?
   accHolderName              String?              @map("acc_holder_name")
-  sortCode                   String?              @map("sort_code")
   accountNo                  String?              @map("account_no")
   bankName                   String?              @map("bank_name")
   distributor                DistributorCompany[]
@@ -127,7 +132,8 @@ model Distributor {
 }
 
 /// @@allow('read, update', auth().role == 'admin')
-/// @@allow('all', true)
+/// @@allow('create', true)
+/// @@allow('update', id == auth().id)
 /// @@allow('read', companies?[company.users?[user == auth()]])
 model User {
   id            String             @id() @unique() @default(uuid())
@@ -141,6 +147,7 @@ model User {
   address       Address?
   conversations UserConversation[]
   clients       UserClient[]
+  image         String?
 
   @@map("users")
 }
@@ -190,23 +197,27 @@ model Pipeline {
 }
 
 /// @@allow('read', true)
-/// @@allow('create, update,delete', company.users?[user == auth()])
+/// @@allow('create, update, delete', company.users?[user == auth()])
 model Category {
-  id            String        @id() @default(uuid())
-  createdAt     DateTime      @default(now()) @map("created_at")
-  updatedAt     DateTime      @updatedAt() @map("updated_at")
+  id                String        @id() @default(uuid())
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt() @map("updated_at")
   /// @length(1, 256)
-  name          String
-  description   String?
-  status        Boolean       @default(true)
-  image         String?
-  company       Company       @relation(fields: [companyId], references: [id])
-  companyId     String        @map("company_id")
-  products      Product[]
-  subcategories Subcategory[]
-  entries       Entry[]
-  hsn           String?
-  tax           String?
+  name              String
+  description       String?
+  status            Boolean       @default(true)
+  image             String?
+  company           Company       @relation(fields: [companyId], references: [id])
+  companyId         String        @map("company_id")
+  products          Product[]
+  subcategories     Subcategory[]
+  entries           Entry[]
+  hsn               String?
+  taxType           TaxType       @default(FIXED)
+  fixedTax          Float?
+  thresholdAmount   Float?
+  taxBelowThreshold Float?
+  taxAboveThreshold Float?
 
   @@map("categories")
 }
@@ -227,8 +238,6 @@ model Subcategory {
   products    Product[]
   category    Category? @relation(fields: [categoryId], references: [id])
   categoryId  String?   @map("category_id")
-  hsn         String?
-  tax         String?
 
   @@map("subcategories")
 }
@@ -609,4 +618,17 @@ model VariantSizeBarcode {
 
   @@unique([variantId, size])
   @@map("variant_size_barcodes")
+}
+
+/// @@allow('read, update', auth().role == 'admin')
+/// @@allow('read, create, update,delete', true)
+model EmailOtp {
+  id        String   @id() @unique() @default(uuid())
+  /// @email
+  email     String   @unique()
+  otp       String
+  expiresAt DateTime
+
+  @@index([email])
+  @@map("email_otp")
 }

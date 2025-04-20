@@ -98,7 +98,6 @@ const chartOptions = computed(() => ({
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted } from 'vue'
 import { useCompanyDashboard } from '@/lib/api/useDashboardData'
-import { useEChartsSetup } from '~/composables/useEChartsSetup'
 
 onMounted(() => {
   useEChartsSetup()

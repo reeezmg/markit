@@ -70,6 +70,7 @@ enum OrderStatus {
 model Company extends Base {
     name        String
     storecode   Int    @unique @default(autoincrement()) 
+    storeUniqueName String? @unique @map("store_unique_name")
     logo        String?
     description String?
     shopifyStoreName  String? @map("shopify_store_name")
@@ -98,7 +99,7 @@ model Company extends Base {
     type        CompanyType
     pipeline    Pipeline?
     accHolderName String? @map("acc_holder_name")
-    sortCode String? @map("sort_code")
+
     accountNo String? @map("account_no")
     bankName String? @map("bank_name")
     distributor   DistributorCompany[]
@@ -141,9 +142,10 @@ model User extends Base {
     address   Address?
     conversations UserConversation[]
     clients     UserClient[]
-
+    image       String?
     // everybody can signup
-    @@allow('all', true)
+    @@allow('create', true)
+    @@allow('update', id == auth().id)
 
     @@allow('read', companies?[company.users?[user == auth()]])
 
@@ -190,27 +192,37 @@ model Pipeline extends Base {
     @@map("pipelines")
 }
 
-model Category {
-    id          String            @id @default(uuid())
-    createdAt   DateTime          @default(now()) @map('created_at')
-    updatedAt   DateTime          @updatedAt @map('updated_at')
-    name        String            @length(1, 256)
-    description String?
-    status      Boolean           @default(true)
-    image       String?
-    company     Company           @relation(fields: [companyId], references: [id])
-    companyId   String            @map('company_id')
-    products     Product[]        
-    subcategories   Subcategory[]
-    entries     Entry[]
-    hsn         String?
-    tax         String?
-
-    @@allow('read', true)
-    @@allow('create, update,delete',company.users?[user == auth()])
-
-    @@map('categories')
+enum TaxType {
+  FIXED
+  VARIABLE
 }
+
+model Category {
+  id                String          @id @default(uuid())
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  name              String          @length(1, 256)
+  description       String?
+  status            Boolean         @default(true)
+  image             String?
+  company           Company         @relation(fields: [companyId], references: [id])
+  companyId         String          @map("company_id")
+  products          Product[]
+  subcategories     Subcategory[]
+  entries           Entry[]
+
+  hsn               String?
+  taxType           TaxType         @default(FIXED)
+  fixedTax          Float?          // used if taxType == FIXED
+  thresholdAmount   Float?          // used if taxType == VARIABLE
+  taxBelowThreshold Float?          // used if taxType == VARIABLE
+  taxAboveThreshold Float?          // used if taxType == VARIABLE
+
+  @@allow("read", true)
+  @@allow("create, update, delete", company.users?[user == auth()])
+  @@map("categories")
+}
+
 
 model Subcategory {
     id          String             @id @default(uuid())
@@ -225,8 +237,7 @@ model Subcategory {
     products     Product[] 
     category     Category?           @relation(fields: [categoryId], references: [id])
     categoryId   String?             @map('category_id')
-    hsn         String?
-    tax         String?
+
     
     @@allow('read', true)
     @@allow('create, update,delete',company.users?[user == auth()])
@@ -588,4 +599,16 @@ model VariantSizeBarcode {
     @@allow('read', true)
     @@allow('read, create, update', true)
     @@map("variant_size_barcodes")
+}
+
+model EmailOtp extends Base {
+
+  email      String @unique @email
+  otp        String
+  expiresAt  DateTime
+
+  @@index([email]) 
+  @@allow('read, create, update,delete', true)
+  @@map("email_otp")
+
 }

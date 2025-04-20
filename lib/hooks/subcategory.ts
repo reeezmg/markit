@@ -240,7 +240,7 @@ export function useCountSubcategory<TArgs extends Prisma.SubcategoryCountArgs, T
     return useModelQuery<TQueryFnData, TData, TError>('Subcategory', `${endpoint}/subcategory/count`, args, options, fetch);
 }
 
-export function useCheckSubcategory<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; description?: string; status?: boolean; image?: string; companyId?: string; categoryId?: string; hsn?: string; tax?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckSubcategory<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; description?: string; status?: boolean; image?: string; companyId?: string; categoryId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('Subcategory', `${endpoint}/subcategory/check`, args, options, fetch);
 }

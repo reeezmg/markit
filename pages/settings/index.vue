@@ -1,58 +1,273 @@
 <script setup lang="ts">
 import type { FormError, FormSubmitEvent } from '#ui/types';
+import { useFindUniqueUser, useUpdateUser } from '~/lib/hooks';
+import { v4 as uuidv4 } from 'uuid';
+import AwsService from '~/composables/aws';
 
+interface ImageData {
+    file: File;
+    uuid: string;
+}
+
+const UpdateUser = useUpdateUser();
 const fileRef = ref<HTMLInputElement>();
+const awsService = new AwsService();
 const isDeleteAccountModalOpen = ref(false);
+const useAuth = () => useNuxtApp().$auth;
+const selectedFile = ref<ImageData | null>(null);
+const showOtpInput = ref(false)
+const isSendingOtp = ref(false);
+const isVerifyingOtp = ref(false);
+const isUpdatingProfile = ref(false);
+const isUpdatingPassword = ref(false);
+const isNameChanged = ref(false);
+const isEmailChanged = ref(false);
 
-const state = reactive({
-    name: 'Josh',
-    email: 'josh@freds.help',
-    username: 'joshyyy',
-    avatar: '',
-    bio: '',
-    password_current: '',
-    password_new: '',
-});
 
 const toast = useToast();
 
-function validate(state: any): FormError[] {
-    const errors = [];
-    if (!state.name)
-        errors.push({ path: 'name', message: 'Please enter your name.' });
-    if (!state.email)
-        errors.push({ path: 'email', message: 'Please enter your email.' });
-    if (
-        (state.password_current && !state.password_new) ||
-        (!state.password_current && state.password_new)
-    )
-        errors.push({
-            path: 'password',
-            message: 'Please enter a valid password.',
-        });
-    return errors;
+const state = reactive({
+    name: '',
+    email:  '',
+    image:  '',
+    password_current: '',
+    password_new: '',
+    confirm_password: '',
+    otp: '',
+});
+
+
+
+const { data: userData } = useFindUniqueUser({
+    where: {
+        id: useAuth().session.value?.id,
+    },
+    select: {
+        id: true,
+        name: true,
+        email: true,
+        image: true,
+        password: true,
+    },
 }
+);
 
-function onFileChange(e: Event) {
-    const input = e.target as HTMLInputElement;
 
-    if (!input.files?.length) {
-        return;
-    }
+watch(() => state.name, (newName) => {
+  isNameChanged.value = newName !== userData.value?.name;
+}, { immediate: true });
 
-    state.avatar = URL.createObjectURL(input.files[0]);
-}
+watch(() => state.email, (newEmail) => {
+  isEmailChanged.value = newEmail !== userData.value?.email;
+}, { immediate: true });
+
+
+watch(() => userData.value, (newVal) => {
+  if (newVal) {
+    state.name = newVal.name;
+    state.email = newVal.email;
+    state.image = newVal.image;
+  }
+},{ deep: true, immediate: true });
+
+
+
+
 
 function onFileClick() {
     fileRef.value?.click();
 }
 
-async function onSubmit(event: FormSubmitEvent<any>) {
-    // Do something with data
-    console.log(event.data);
 
-    toast.add({ title: 'Profile updated', icon: 'i-heroicons-check-circle' });
+const previewUrl = computed(() => {
+  if (selectedFile.value?.file) {
+    return URL.createObjectURL(selectedFile.value.file);
+  }
+  return null;
+});
+
+
+function handleAddImageChange(e: Event) {
+    const files = (e.target as HTMLInputElement).files;
+
+    if (files && files.length > 0) {
+        const file = files[0]; // Take only the first file
+        const uuid = uuidv4();
+        selectedFile.value = { file, uuid };
+    }
 }
+
+const onProfileUpdate = async () => {
+    try{
+    await UpdateUser.mutateAsync({
+        where: {
+            id: useAuth().session.value?.id,
+        },
+        data: {
+            name: state.name,
+            ...(selectedFile.value?.file && {
+                image: selectedFile.value?.uuid,
+            }),
+        }
+    });
+
+    
+    if (selectedFile.value) {
+        const base64 = await prepareFileForApi(selectedFile.value.file);
+        const base64file = { base64, uuid: selectedFile.value.uuid };
+
+        console.log(base64file);
+
+        await awsService.uploadBase64File(base64file.base64, base64file.uuid);
+    }
+}catch(error){
+    console.error(error);
+    toast.add({
+        title: 'Error updating profile',
+        icon: 'i-heroicons-exclamation-circle',
+        color: 'red',
+    });
+}finally {
+        isUpdatingProfile.value = false;
+        toast.add({
+            title: 'Profile updated successfully',
+            icon: 'i-heroicons-check-circle',
+            color: 'green',
+        });
+    }
+
+};
+
+const onPasswordUpdate = async () => {
+    if (!state.password_current || !state.password_new || !state.confirm_password) {
+        toast.add({
+            title: 'All fields are required',
+            icon: 'i-heroicons-exclamation-circle',
+            color: 'red',
+        });
+        return;
+    }
+
+    isUpdatingPassword.value = true;
+
+
+    if (state.password_new !== state.confirm_password) {
+        toast.add({
+            title: 'Passwords do not match',
+            icon: 'i-heroicons-exclamation-circle',
+            color: 'red',
+        });
+        return;
+    }
+
+    if (state.password_new.length < 6) {
+        toast.add({
+            title: 'Password must be at least 6 characters',
+            icon: 'i-heroicons-exclamation-circle',
+            color: 'red',
+        });
+        return;
+    }
+
+    try {
+       const res = await authForgetPassword(state.password_current,state.password_new);
+
+        toast.add({
+            title: res.message,
+            icon: 'i-heroicons-check-circle',
+            color: 'green',
+        });
+
+        // Reset form fields
+        state.password_current = '';
+        state.password_new = '';
+        state.confirm_password = '';
+    } catch (error) {
+        console.error(error);
+        if (error.statusCode === 401) {
+            toast.add({
+                title:'Incorrect passworde',
+                icon: 'i-heroicons-exclamation-circle',
+                color: 'red',
+            });
+            return;
+        }
+        toast.add({
+            title: 'Error updating password',
+            icon: 'i-heroicons-exclamation-circle',
+            color: 'red',
+        });
+    }finally {
+        isUpdatingPassword.value = false;
+    }
+};
+
+const onVerifyEmail = async () => {
+    const { email } = state;
+    if (!email) {
+        toast.add({ title: 'Please enter your email', icon: 'i-heroicons-exclamation-circle', color: 'red' });
+        return;
+    }
+
+    isSendingOtp.value = true;
+
+    try {
+        const res = await $fetch('/api/send-otp', {
+            method: 'POST',
+            body: { email },
+        });
+
+        toast.add({ title: res.message, icon: 'i-heroicons-check-circle', color: 'green' });
+        showOtpInput.value = true;
+    } catch (error: any) {
+        console.error(error);
+        toast.add({ title: 'Failed to send OTP', icon: 'i-heroicons-exclamation-circle', color: 'red' });
+    }finally {
+        isSendingOtp.value = false;
+    }
+};
+
+const onVerifyOtp = async () => {
+    if (!state.otp) {
+        toast.add({ title: 'Please enter the OTP', icon: 'i-heroicons-exclamation-circle', color: 'red' });
+        return;
+    }
+    isVerifyingOtp.value = true;
+
+    try {
+        const res = await $fetch('/api/verify-otp', {
+            method: 'POST',
+            body: {
+                email: state.email,
+                otp: state.otp,
+            },
+        });
+
+        toast.add({ title: res.message, icon: 'i-heroicons-check-circle', color: 'green' });
+        try{
+            await UpdateUser.mutateAsync({
+        where: {
+            id: useAuth().session.value?.id,
+        },
+        data: {
+            email: state.email,
+        }
+        });
+        toast.add({ title: 'Email updated successfully', icon: 'i-heroicons-check-circle', color: 'green' });
+        }catch(error){
+            console.log(error)
+        }
+        showOtpInput.value = false;
+        state.otp = '';
+    } catch (error: any) {
+        console.error(error);
+        toast.add({ title: 'OTP verification failed', icon: 'i-heroicons-exclamation-circle', color: 'red' });
+    }finally {
+        isVerifyingOtp.value = false;
+    }
+};
+
+
 </script>
 
 <template>
@@ -69,77 +284,64 @@ async function onSubmit(event: FormSubmitEvent<any>) {
 
         <UDivider class="mb-4" />
 
-        <UForm
-            :state="state"
-            :validate="validate"
-            :validate-on="['submit']"
-            @submit="onSubmit"
+       
+
+        <UFormGroup
+            name="email"
+            label="Email"
+            description="Used to sign in, for email receipts and product updates."
+            required
+            class="grid grid-cols-2 gap-2"
+            :ui="{ container: '' }"
         >
-            <UDashboardSection
-                title="Profile"
-                description="This information will be displayed publicly so be careful what you share."
+            <div class="flex items-center gap-2 w-full">
+                <UInput
+                    v-model="state.email"
+                    type="email"
+                    autocomplete="off"
+                    icon="i-heroicons-envelope"
+                    size="md"
+                    class="flex-1"
+                />
+            </div>
+
+                <UButton
+                     v-if="!showOtpInput"
+                    label="Verify Email"
+                    size="md"
+                    class="mt-4"
+                    :disabled="!state.email || !isEmailChanged"
+                     :loading="isSendingOtp"
+                    @click="onVerifyEmail"
+                />
+        </UFormGroup>
+
+        <UFormGroup
+            v-if="showOtpInput"
+            name="otp"
+            label="Enter OTP"
+            description="Check your email for the OTP"
+            class="grid grid-cols-2 gap-2 mt-4"
             >
-                <template #links>
-                    <UButton type="submit" label="Save changes" color="black" />
-                </template>
+            <UInput
+                v-model="state.otp"
+                type="text"
+                placeholder="Enter OTP"
+                icon="i-heroicons-lock-closed"
+            />
+            <UButton
+                label="Verify OTP"
+                size="md"
+                :loading="isVerifyingOtp"
+                class="mt-2"
+                @click="onVerifyOtp"
+            />
+            </UFormGroup>
 
-                <UFormGroup
-                    name="name"
-                    label="Name"
-                    description="Will appear on receipts, invoices, and other communication."
-                    required
-                    class="grid grid-cols-2 gap-2 items-center"
-                    :ui="{ container: '' }"
-                >
-                    <UInput
-                        v-model="state.name"
-                        autocomplete="off"
-                        icon="i-heroicons-user"
-                        size="md"
-                    />
-                </UFormGroup>
+        <UDivider class="my-4" />
 
-                <UFormGroup
-                    name="email"
-                    label="Email"
-                    description="Used to sign in, for email receipts and product updates."
-                    required
-                    class="grid grid-cols-2 gap-2"
-                    :ui="{ container: '' }"
-                >
-                    <UInput
-                        v-model="state.email"
-                        type="email"
-                        autocomplete="off"
-                        icon="i-heroicons-envelope"
-                        size="md"
-                    />
-                </UFormGroup>
-
-                <UFormGroup
-                    name="username"
-                    label="Username"
-                    description="Your unique username for logging in and your profile URL."
-                    required
-                    class="grid grid-cols-2 gap-2"
-                    :ui="{ container: '' }"
-                >
-                    <UInput
-                        v-model="state.username"
-                        type="username"
-                        autocomplete="off"
-                        size="md"
-                        input-class="ps-[92px]"
-                    >
-                        <template #leading>
-                            <span
-                                class="text-gray-500 dark:text-gray-400 text-sm"
-                                >bazaar.com/</span
-                            >
-                        </template>
-                    </UInput>
-                </UFormGroup>
-
+              
+                
                 <UFormGroup
                     name="avatar"
                     label="Avatar"
@@ -150,7 +352,8 @@ async function onSubmit(event: FormSubmitEvent<any>) {
                         help: 'mt-0',
                     }"
                 >
-                    <UAvatar :src="state.avatar" :alt="state.name" size="lg" />
+                    <UAvatar v-if="previewUrl" :src="previewUrl" :alt="state.name" size="lg" />
+                    <UAvatar v-else :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${state.image}`" :alt="state.name" size="lg" />
 
                     <UButton
                         label="Choose"
@@ -164,25 +367,42 @@ async function onSubmit(event: FormSubmitEvent<any>) {
                         type="file"
                         class="hidden"
                         accept=".jpg, .jpeg, .png, .gif"
-                        @change="onFileChange"
+                        @change="handleAddImageChange"
                     />
+
+                   
                 </UFormGroup>
 
                 <UFormGroup
-                    name="bio"
-                    label="Bio"
-                    description="Brief description for your profile. URLs are hyperlinked."
-                    class="grid grid-cols-2 gap-2"
+                    name="name"
+                    label="Name"
+                    description="Will appear on receipts, invoices, and other communication."
+                    required
+                    class="grid grid-cols-2 gap-2 items-center mt-4"
                     :ui="{ container: '' }"
                 >
-                    <UTextarea
-                        v-model="state.bio"
-                        :rows="5"
-                        autoresize
+                    <UInput
+                        v-model="state.name"
+                        autocomplete="off"
+                        icon="i-heroicons-user"
                         size="md"
                     />
-                </UFormGroup>
 
+                    <UButton
+                    label="Update Profile"
+                    size="md"
+                    class="mt-4"
+                    :loading="isUpdatingProfile"
+                    :disabled="!state.name || !isNameChanged "
+                    @click="onProfileUpdate"
+                />
+                </UFormGroup>
+                
+               
+               
+
+
+                <UDivider class="my-4" />
                 <UFormGroup
                     name="password"
                     label="Password"
@@ -205,11 +425,32 @@ async function onSubmit(event: FormSubmitEvent<any>) {
                         size="md"
                         class="mt-2"
                     />
-                </UFormGroup>
-            </UDashboardSection>
-        </UForm>
+                    <UInput
+                        id="confirm_password"
+                        v-model="state.confirm_password"
+                        type="password"
+                        placeholder="Confirm password"
+                        size="md"
+                        class="mt-2"
+                    />
 
-        <UDivider class="mb-4" />
+                    <UButton
+                    label="Update Password"
+                    size="md"
+                    class="mt-4"
+                    :loading="isUpdatingPassword"
+                    :disabled="!state.password_current || !state.password_new || !state.confirm_password"
+                    @click="onPasswordUpdate"
+                />
+                    
+                </UFormGroup>
+
+                
+                 
+              
+
+
+        <UDivider class="my-4" />
 
         <UDashboardSection
             title="Account"
