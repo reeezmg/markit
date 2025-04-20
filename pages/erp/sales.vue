@@ -53,6 +53,11 @@ const columns = [
         sortable: true,
     },
     {
+        key: 'paymentStatus',
+        label: 'Payment',
+        sortable: true,
+    },
+    {
         key: 'notes',
         label: 'Notes',
         sortable: true,
@@ -141,11 +146,11 @@ const action = (row:any) => [
 const todoStatus = [
     {
         label: 'Paid',
-        value: 'PAID',
+        value: 'paid',
     },
     {
         label: 'Pending',
-        value: 'PENDING',
+        value: 'pending',
     },
 ];
 
@@ -202,7 +207,7 @@ const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
                     ? [{ OR: selectedStatus.value.map((item) => ({ paymentStatus: item.value })) }]
                     : []
                 ),
-                {paymentStatus:'PAID'},
+                {type:{in :['STANDARD','TRY_AT_HOME']}},
                 ...(selectedDate.value ? [
                     { createdAt: { gte: new Date(selectedDate.value.start).toISOString() } },  // Start date
                     { createdAt: { lte: new Date(selectedDate.value.end).toISOString() } }    // End date

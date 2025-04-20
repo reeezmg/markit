@@ -139,33 +139,6 @@ const links = computed(() => {
         },
         
         {
-            id: 'reports',
-            label: 'Reports',
-            to: '/reports',
-            icon: 'i-heroicons-chart-bar',
-            children: [
-                {
-                    label: 'Sales',
-                    to: `/reports/sales`,
-                    exact: true,
-                },
-                // {
-                //     label: 'Sales',
-                //     to: `/${auth.session.value?.companyId}/reports/sales`,
-                //     exact: true,
-                // },
-                // {
-                //     label: 'Accounts',
-                //     to: `/${auth.session.value?.companyId}/reports/accounts`,
-                //     exact: true,
-                // },
-            ],
-            tooltip: {
-                text: 'Settings',
-                shortcuts: ['G', 'S'],
-            },
-        },
-        {
             id: 'settings',
             label: 'Settings',
             to: `/settings`,

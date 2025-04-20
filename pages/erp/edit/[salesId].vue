@@ -1,15 +1,21 @@
 
 <script setup>
-import { useCreateBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
+import { useUpdateBill,useFindUniqueBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateEntry, useCreateEntry,useDeleteManyEntry } from '~/lib/hooks';
 
-const CreateBill = useCreateBill();
+
+const UpdateBill = useUpdateBill();
 const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
 const UpdateVariant = useUpdateVariant();
 const UpdateItem = useUpdateItem();
+const UpdateEntry = useUpdateEntry();
+const CreateEntry = useCreateEntry();
+const DeleteManyEntry = useDeleteManyEntry();
 const DeleteTokenEntry = useDeleteTokenEntry();
 const useAuth = () => useNuxtApp().$auth;
+const route = useRoute();
 const toast = useToast();
+const salesId = route.params.salesId;
 const router = useRouter();
 
 const date = ref(new Date().toISOString().split('T')[0]);
@@ -52,7 +58,7 @@ const selected = ref({});
 
 
 const items = ref([
-  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 },
+  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 },
 ]);
 
 
@@ -84,6 +90,7 @@ watch(selected, (newSelected) => {
 })
 
 watch(items, () => {
+  console.log(items.value)
   items.value.forEach((item) => {
     let baseValue = item.qty * item.rate;
 
@@ -155,7 +162,7 @@ const addNewRow = async (index) => {
     variantId:'',
     sn: items.value.length + 1,
     barcode: '',
-    category: {},
+    category: [], 
     size:'',
     name: '',
     qty: 1,
@@ -254,7 +261,67 @@ const entryargs = computed(() => ({
     }
 }));
 
-const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs);
+
+
+
+const billArgs = computed(() => ({
+  where: { id: salesId },
+  select: {
+    createdAt:true,
+    invoiceNumber: true,
+    subtotal: true,
+    discount: true,
+    tax: true,
+    grandTotal: true,
+    deliveryFees: true,
+    paymentMethod: true,
+    paymentStatus: true,
+    notes:true,
+    returnDeadline: true,
+    type: true,
+    status: true,
+    address: {
+        select:{
+            street:true,
+            locality:true,
+            city:true,
+            state:true,
+            pincode:true
+        }
+    },
+    client: {
+        select:{
+            name:true,
+            phone:true,
+        }
+    },
+    entries: {  
+      select: {
+        id:true,
+        barcode:true,
+        name: true,
+        qty: true,
+        rate: true,
+        discount: true,
+        tax: true,
+        value: true,
+        size: true,
+        outOfStock: true,
+        categoryId:true,
+        variant: {  
+          select: {
+            id:true,
+            images: true,
+          }
+        }
+      }
+    }
+  }
+}));
+
+
+const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs);
+const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enable:false});
 const { data: entrydata ,refetch:entryRefetch} = useFindManyTokenEntry(entryargs,{enable:false});
 
 const handleEnterBarcode = (barcode,index) => {
@@ -322,6 +389,30 @@ const handleTokenDelete = (index, event) => {
 }
 
 
+
+watch(() => bill.value, (newData) => {
+  console.log(newData)
+  if (!newData || !newData.entries) return;
+  items.value = newData.entries.map((entry, index) => {
+    return {
+      id: entry.id || '',
+      variantId: entry.variant?.id || '',
+      sn: index + 1,
+      name:entry.name || '',
+      barcode: entry.barcode || '', 
+      category:  categories.value.filter(category =>category.id === entry.categoryId),
+      size: entry.size || '',
+      qty: entry.qty || 1,
+      rate: entry.rate || 0,
+      discount: entry.discount || 0,
+      tax: entry.tax || 0,
+      value: entry.value || 0,
+    };
+  });
+}, { deep: true, immediate: true });
+
+
+
 const fetchItemData = async (barcode, index) => {
   if (!barcode) return;
 
@@ -333,6 +424,7 @@ const fetchItemData = async (barcode, index) => {
   if (itemdata.value) {
     
     const categoryId = itemdata.value.variant.product.categoryId;
+
     
     items.value[index].id = itemdata.value.id || '';
     items.value[index].size = itemdata.value.size || '';
@@ -348,69 +440,126 @@ const fetchItemData = async (barcode, index) => {
 };
 
 
-const handleSave = async () => {
-  items.value = items.value.filter(item =>
-  item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
-);
 
-if (items.value.length === 0) {
-  toast.add({ title: 'No valid items to bill.', color: 'red' });
-  return;
-}
+
+const handleEdit = async () => {
+  console.log(items);
   try {
-    const billResponse = await CreateBill.mutateAsync({
+    items.value = items.value.filter(item =>
+    item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
+  );
+
+  if (items.value.length === 0) {
+    toast.add({ title: 'No valid items to bill.', color: 'red' });
+    return;
+  }
+    // Separate items into those with an ID and those without
+    const itemsWithId = items.value.filter(item => item.id);
+    const itemsWithoutId = items.value.filter(item => !item.id);
+
+    // Separate create and update logic
+
+    // Create entries for new items (itemsWithoutId)
+    const createPromises = itemsWithoutId.map(item => {
+      return CreateEntry.mutateAsync({
+        data: {
+          barcode: item.barcode || undefined,
+          qty: item.qty,
+          rate: item.rate,
+          name: item.name,
+          discount: item.discount,
+          variantId: item.variantId || undefined,
+          tax: item.tax,
+          value: item.value,
+          ...(item.category?.[0]?.id && {
+            category: { connect: { id: item.category[0].id } },
+          }),
+          ...(item.barcode && {
+            item: { connect: { barcode: item.barcode } },
+          }),
+          bill: {
+            connect: {
+              id: salesId,
+            },
+          },
+        },
+      });
+    });
+
+    // Update entries for items with an ID (itemsWithId)
+    const updatePromises = itemsWithId.map(item => {
+      return UpdateEntry.mutateAsync({
+        where: { id: item.id },
+        data: {
+          barcode: item.barcode || undefined,
+          qty: item.qty,
+          rate: item.rate,
+          name: item.name,
+          discount: item.discount,
+          variantId: item.variantId || undefined,
+          tax: item.tax,
+          value: item.value,
+          ...(item.category?.[0]?.id && {
+            category: { connect: { id: item.category[0].id } },
+          }),
+          ...(item.barcode && {
+            item: { connect: { barcode: item.barcode } },
+          }),
+          bill: {
+            connect: {
+              id: salesId,
+            },
+          },
+        },
+      });
+    });
+
+    const deletePromises = DeleteManyEntry.mutateAsync({
+  where: {
+    billId: salesId,
+    id: {
+      notIn: items.value.filter(item => item.id).map(item => item.id),
+    },
+  },
+});
+
+   
+
+    // Execute all create, update, and delete promises
+    await Promise.all([...createPromises, ...updatePromises, deletePromises]);
+
+    // Call UpdateBill mutation with the other data
+    const billResponse = await UpdateBill.mutateAsync({
+      where: { id: salesId },
       data: {
         subtotal: subtotal.value,
         discount: discount.value,
         grandTotal: grandTotal.value,
         paymentMethod: paymentMethod.value,
-        createdAt: new Date(date.value).toISOString(),
-        paymentStatus: Object.keys(selected.value).length !== 0 ? 'PENDING' : 'PAID',
-        ...(Object.keys(selected.value).length !== 0 && { 
-          account: { connect: { id: selected.value.id } }
-        }),
         company: {
           connect: {
             id: useAuth().session.value?.companyId,
           },
         },
-        type:'BILL',
-        entries: {
-          create: items.value.map(item => ({
-            ...(item.barcode && { barcode: item.barcode }),
-            qty: item.qty,
-            rate: item.rate,
-            discount: item.discount,
-            name:item.name,
-            //variantId present only when entry is barcoded 
-            ...(item.variantId && { variantId: item.variantId || ''}),
-            tax: item.tax,
-            value: item.value,
-            ...(item.category[0]?.id && {category: { connect: { id: item.category[0].id } }}),
-            ...(item.barcode && {
-              item: {
-                connect: { id: item.id },
-              },
-            }),
-          })),
-        },
       },
     });
 
+    console.log('Bill updated successfully:', billResponse);
+
     toast.add({
-      title: 'Bill created successfully!',
-     color:'green',
-      })
+      title: 'Bill edited successfully!',
+      color: 'green',
+    });
 
   } catch (error) {
-    console.error('Error creating bill', error);
+    console.error('Error updating bill', error);
     toast.add({
-      title: 'Bill creation failed!',
-      color:'red',
-      })
+      title: 'Bill update failed!',
+      color: 'red',
+    });
   }
 
-  // Collect all async operations in an array
+  // Collect all async operations in an array for items with a barcode
   const updatePromises = [];
 
   for (const item of items.value) {
@@ -427,14 +576,14 @@ if (items.value.length === 0) {
       updatePromises.push(
         UpdateVariant.mutateAsync({
           where: { id: item.variantId },
-          data: { qty: updatedQty, sizes: updatedSizes }
+          data: { qty: updatedQty, sizes: updatedSizes },
         }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
       );
 
       updatePromises.push(
         UpdateItem.mutateAsync({
           where: { id: item.id },
-          data: { status: 'sold' }
+          data: { status: 'sold' },
         }).catch(error => console.error(`Error updating item ${item.id}`, error))
       );
     }
@@ -456,12 +605,12 @@ if (items.value.length === 0) {
   }
 
   // ✅ Reset items only after all Prisma operations are complete
-  items.value = [
-    { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
-  ];
-  discount.value = 0;
-  paymentMethod.value = 'Cash';
-  tokenEntries.value = [''];
+  // items.value = [
+  //   { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
+  // ];
+  // discount.value = 0;
+  // paymentMethod.value = 'Cash';
+  // tokenEntries.value = [''];
 };
 
 
@@ -506,7 +655,22 @@ const submitForm = async () => {
   }
 };
 
+const deleteBill = async () => {
+    const res = await UpdateBill.mutateAsync({
+        where:{
+            id:salesId
+        },
+        data:{
+            deleted:true
+        }
+    })
+router.push('/erp/sales')
+    toast.add({
+        title: 'Bill Deleted !',
+        color: 'green',
+    });
 
+};
 
 const handleTokenSave = async () => {
   items.value = items.value.filter(item => item.id || item.barcode);
@@ -627,33 +791,6 @@ const submitEntryForm = async () => {
     }
 };
 
-const newBill = () => {
-  items.value = [
-    { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
-  ];
-  discount.value = 0;
-  paymentMethod.value = 'Cash';
-
-  token.value = '';
-  tokenEntries.value = [''];
-  grandTotal.value = 0;
-  returnAmt.value = 0;
-  cellNo.value = '';
-  points.value = 0;
-  name.value = '';
-  voucherNo.value = '';
-  selected.value = {};
-  account.value = {
-    name: '',
-    phone:'',
-    street: '',
-    locality: '',
-    city: '',
-    state: '',
-    pincode: '',
-  };
-
-};
 
 
 </script>
@@ -820,10 +957,10 @@ const newBill = () => {
         </div>
 
         <div class="mt-4 w-full flex flex-wrap gap-4">
-          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  v-if="!token" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton color="blue" class="flex-1" block @click="() => router.push('/erp/billing')">New</UButton>
+          <UButton  v-if="!token" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
-          <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
+          <UButton color="red" class="flex-1" block  @click="deleteBill">Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
           <UButton v-if="!token" class="flex-1" block>Sales Return</UButton>
           <UButton v-if="!token" class="flex-1" block>Bill Search</UButton>

@@ -335,6 +335,7 @@ model Bill extends Base {
     notes           String?
     type           OrderType?
     status         OrderStatus? 
+    deleted         Boolean? @default(false) 
     bookingDate    DateTime? @map("booking_date")
     returnDeadline String? @map("return_deadline")
     entries         Entry[]       

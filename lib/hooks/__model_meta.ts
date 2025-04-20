@@ -872,8 +872,15 @@ const metadata = {
                     name: "id",
                     fields: ["id"]
                 },
+<<<<<<< HEAD
             },
         },
+=======
+            }
+            ,
+        }
+        ,
+>>>>>>> main
         item: {
             name: 'Item', fields: {
                 id: {
@@ -1044,6 +1051,11 @@ const metadata = {
                     name: "status",
                     type: "OrderStatus",
                     isOptional: true,
+                }, deleted: {
+                    name: "deleted",
+                    type: "Boolean",
+                    isOptional: true,
+                    attributes: [{ "name": "@default", "args": [{ "value": false }] }],
                 }, bookingDate: {
                     name: "bookingDate",
                     type: "DateTime",
@@ -1967,8 +1979,15 @@ const metadata = {
                     name: "distributorId_companyId",
                     fields: ["distributorId", "companyId"]
                 },
+<<<<<<< HEAD
             },
         },
+=======
+            }
+            ,
+        }
+        ,
+>>>>>>> main
         variantSizeBarcode: {
             name: 'VariantSizeBarcode', fields: {
                 id: {
@@ -1996,7 +2015,12 @@ const metadata = {
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "variantId" },
                 },
+<<<<<<< HEAD
             }, uniqueConstraints: {
+=======
+            }
+            , uniqueConstraints: {
+>>>>>>> main
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -2007,10 +2031,19 @@ const metadata = {
                     name: "variantId_size",
                     fields: ["variantId", "size"]
                 },
+<<<<<<< HEAD
             },
         },
 
     },
+=======
+            }
+            ,
+        }
+        ,
+    }
+    ,
+>>>>>>> main
     deleteCascade: {
         company: ['Product', 'Variant', 'Item'],
         category: ['Product', 'Entry'],
