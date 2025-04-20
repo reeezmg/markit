@@ -5,12 +5,34 @@ import { useUpdateCompany,useFindUniqueCompany } from '~/lib/hooks';
 const fileRef = ref<HTMLInputElement>();
 const isDeleteAccountModalOpen = ref(false);
 const UpdateCompany = useUpdateCompany();
+const useAuth = () => useNuxtApp().$auth;
+
+const isNameChanged = ref(false);
+const isUpdatingName = ref(false);
+
 
 const state = reactive({
     accHolderName:'',
     sortCode: '',
     accountNo: '',
     bankName: '',
+});
+
+const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
+
+watch(() => storeUniqueName.value, (newName) => {
+  isNameChanged.value = newName !== useAuth().session.value?.storeUniqueName;
+}, { immediate: true });
+
+const {
+  data: taken,
+} = useFindUniqueCompany({
+  where: computed(() => ({
+    storeUniqueName: storeUniqueName.value
+  })),
+  select: {
+    id: true
+  }
 });
 
 const toast = useToast();
@@ -57,6 +79,31 @@ watch(info, (newInfo) => {
   }
 });
 
+async function onNameUpdate() {
+    isUpdatingName.value = true;
+    isNameChanged.value = false;
+    try {
+        const res = await UpdateCompany.mutateAsync({
+            where: {
+                id: useAuth().session.value?.companyId,
+            },
+            data: {
+                storeUniqueName: storeUniqueName.value,
+            },
+        });
+        await updateStoreUniqueName(storeUniqueName.value)
+        toast.add({ title: 'Store name updated', icon: 'i-heroicons-check-circle' });
+       
+    } catch (error) {
+        console.error(error);
+    } finally {
+        isUpdatingName.value = false;
+        
+    }
+}
+
+
+
 
 async function onSubmit(event: FormSubmitEvent<any>) {
 
@@ -84,7 +131,46 @@ async function onSubmit(event: FormSubmitEvent<any>) {
 
 <template>
     <UDashboardPanelContent class="pb-24">
-
+            <UFormGroup
+                    name="username"
+                    label="Store Unique Name"
+                    description="Unique name used for store URL."
+                    required
+                    class="grid grid-cols-2 gap-2 "
+                    :ui="{ container: '',help: `mt-2 ${taken ? 'text-red-500 dark:text-red-400':'text-green-500 dark:text-green-400'}` }"
+                    
+                    
+        
+                >
+                <template v-if="isNameChanged" #help>
+                  {{taken ? 'This store name is already taken' : 'available'}}
+                </template>
+                    <UInput
+                        v-model="storeUniqueName"
+                        type="text"
+                        autocomplete="off"
+                        size="md"
+                        input-class="ps-[128px]"
+                    >
+                        <template #leading>
+                            <span
+                                class="text-gray-500 dark:text-gray-400 text-sm"
+                                >markit.com/store/</span
+                            >
+                        </template>
+                    </UInput>
+                       
+                </UFormGroup>
+                <div class="w-full flex justify-end mb-3">
+                <UButton
+                    label="Update Name"
+                    size="md"
+                    class="mt-4"
+                    :loading="isUpdatingName"
+                    :disabled="!isNameChanged "
+                    @click="onNameUpdate"
+                />
+                </div>
         <UDivider class="mb-4" />
 
         <UForm

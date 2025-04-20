@@ -61,7 +61,8 @@ const items = computed(() => [
             >
                 <template #leading>
                     <UAvatar
-                        src="https://avatars.githubusercontent.com/u/739984?v=4"
+                        :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${useAuth().session.value?.image || ''}`" 
+                        :alt="useAuth().session.value?.name"
                         size="2xs"
                     />
                 </template>

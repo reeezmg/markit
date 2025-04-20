@@ -8,7 +8,7 @@ const auth = useAuth();
 <template>
     <UDashboardPage>
         <UDashboardPanel grow>
-            <UDashboardNavbar title="Dashboard">
+            <UDashboardNavbar title="Reports">
                 <template #right>
                     <UTooltip text="Notifications" :shortcuts="['N']">
                         <NuxtLink

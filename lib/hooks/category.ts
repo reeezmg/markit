@@ -239,8 +239,9 @@ export function useCountCategory<TArgs extends Prisma.CategoryCountArgs, TQueryF
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<TQueryFnData, TData, TError>('Category', `${endpoint}/category/count`, args, options, fetch);
 }
+import type { TaxType } from '@prisma/client';
 
-export function useCheckCategory<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; description?: string; status?: boolean; image?: string; companyId?: string; hsn?: string; tax?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckCategory<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; description?: string; status?: boolean; image?: string; companyId?: string; hsn?: string; taxType?: TaxType }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('Category', `${endpoint}/category/check`, args, options, fetch);
 }

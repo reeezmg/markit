@@ -5,11 +5,14 @@ const sessionConfig: SessionConfig = useRuntimeConfig().auth || {};
 
 export type AuthSession = {
     id: string;
-    name: string;
+    name: string | null;
     email: string;
+    image: string | null;
     companyId: string;
     companyType: string;
     companyName: string;
+    storeUniqueName: string;
+    logo?: string;
     role: string;
     pipelineId: string;
     shopifyStoreName?:string;
