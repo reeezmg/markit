@@ -1,32 +1,57 @@
 <script setup lang="ts">
 import type { FormError, FormSubmitEvent } from '#ui/types';
-import { useUpdateCompany,useFindUniqueCompany } from '~/lib/hooks';
+import { useUpdateCompany, useFindUniqueCompany, useUpsertAddress } from '~/lib/hooks';
 
-const fileRef = ref<HTMLInputElement>();
-const isDeleteAccountModalOpen = ref(false);
 const UpdateCompany = useUpdateCompany();
+const UpsertAddress = useUpsertAddress();
 const useAuth = () => useNuxtApp().$auth;
 
 const isNameChanged = ref(false);
+
 const isUpdatingName = ref(false);
+const isUpdatingAddress = ref(false);
+const isUpdatingAccount = ref(false);
 
+interface AccountState {
+  accHolderName: string;
+  ifsc: string;
+  accountNo: string;
+  bankName: string;
+  gstin: string;
+}
 
-const state = reactive({
-    accHolderName:'',
-    sortCode: '',
-    accountNo: '',
-    bankName: '',
+interface AddressState {
+  street: string;
+  locality: string;
+  city: string;
+  state: string;
+  pincode: string;
+}
+
+const accstate = reactive<AccountState>({
+  accHolderName: '',
+  ifsc: '',
+  accountNo: '',
+  bankName: '',
+  gstin: '',
+});
+
+const addstate = reactive<AddressState>({
+  street: '',
+  locality: '',
+  city: '',
+  state: '',
+  pincode: '',
 });
 
 const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
+const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
 
 watch(() => storeUniqueName.value, (newName) => {
   isNameChanged.value = newName !== useAuth().session.value?.storeUniqueName;
 }, { immediate: true });
 
-const {
-  data: taken,
-} = useFindUniqueCompany({
+const { data: taken } = useFindUniqueCompany({
   where: computed(() => ({
     storeUniqueName: storeUniqueName.value
   })),
@@ -37,226 +62,338 @@ const {
 
 const toast = useToast();
 
-function validate(state: any): FormError[] {
-    const errors = [];
-    if (!state.accHolderName)
-        errors.push({ path: 'email', message: 'Please enter your email.' });
-    if (!state.sortCode)
-        errors.push({ path: 'email', message: 'Please enter your email.' });
-    if (!state.accountNo)
-        errors.push({ path: 'email', message: 'Please enter your email.' });
-    if (!state.accountNo)
-        errors.push({ path: 'email', message: 'Please enter your email.' });
-    return errors;
+function accvalidate(state: AccountState): FormError[] {
+  const errors: FormError[] = [];
+  if (!state.accHolderName) errors.push({ path: 'accHolderName', message: 'Account holder name is required' });
+  if (!state.ifsc) errors.push({ path: 'ifsc', message: 'IFSC code is required' });
+  if (!state.accountNo) errors.push({ path: 'accountNo', message: 'Account number is required' });
+  if (!state.bankName) errors.push({ path: 'bankName', message: 'Bank name is required' });
+  if (!state.gstin) errors.push({ path: 'gstin', message: 'GSTIN is required' });
+  return errors;
 }
 
+function addvalidate(state: AddressState): FormError[] {
+  const errors: FormError[] = [];
+  if (!state.street) errors.push({ path: 'street', message: 'Street is required' });
+  if (!state.city) errors.push({ path: 'city', message: 'City is required' });
+  if (!state.locality) errors.push({ path: 'locality', message: 'Locality is required' });
+  if (!state.pincode) errors.push({ path: 'pincode', message: 'Pincode is required' });
+  return errors;
+}
 
-const {
-    data: info,
-    isLoading,
-    error,
-    refetch,
-} = useFindUniqueCompany({
-  where:{
+const { data: info, isLoading, error, refetch } = useFindUniqueCompany({
+  where: {
     id: useAuth().session.value?.companyId 
   },
-  select:{
+  select: {
     id: true,
     accHolderName: true,
-    sortCode: true,
+    ifsc: true,
     accountNo: true,
     bankName: true,
-    
-  }
+    gstin: true,
+    address: {
+      select: {
+        id: true,
+        street: true,
+        locality: true,
+        city: true,
+        state: true,
+        pincode: true,
+      },
+    },
+  },
 });
 
 watch(info, (newInfo) => {
   if (newInfo) {
-    state.accHolderName = newInfo.accHolderName || '';
-    state.sortCode = newInfo.sortCode || '';
-    state.accountNo = newInfo.accountNo || '';
-    state.bankName = newInfo.bankName || '';
+    accstate.accHolderName = newInfo.accHolderName || '';
+    accstate.ifsc = newInfo.ifsc || '';
+    accstate.accountNo = newInfo.accountNo || '';
+    accstate.bankName = newInfo.bankName || '';
+    accstate.gstin = newInfo.gstin || '';
+    
+    if (newInfo.address) {
+      addstate.street = newInfo.address.street || '';
+      addstate.locality = newInfo.address.locality || '';
+      addstate.city = newInfo.address.city || '';
+      addstate.state = newInfo.address.state || '';
+      addstate.pincode = newInfo.address.pincode || '';
+    }
   }
-});
+},{ deep: true, immediate: true });
+
+async function updateStoreUniqueName(newName: string) {
+  // Implement this function or import it if it exists elsewhere
+  // This should update the session with the new store unique name
+}
+
+async function updateIsTaxIncluded(newValue: boolean) {
+  // Implement this function or import it if it exists elsewhere
+  // This should update the session with the new tax included value
+}
 
 async function onNameUpdate() {
-    isUpdatingName.value = true;
-    isNameChanged.value = false;
-    try {
-        const res = await UpdateCompany.mutateAsync({
-            where: {
-                id: useAuth().session.value?.companyId,
-            },
-            data: {
-                storeUniqueName: storeUniqueName.value,
-            },
-        });
-        await updateStoreUniqueName(storeUniqueName.value)
-        toast.add({ title: 'Store name updated', icon: 'i-heroicons-check-circle' });
-       
-    } catch (error) {
-        console.error(error);
-    } finally {
-        isUpdatingName.value = false;
-        
-    }
-}
-
-
-
-
-async function onSubmit(event: FormSubmitEvent<any>) {
-
-    try{
-        const res  = UpdateCompany.mutateAsync({    
-    where: {
-        id:  useAuth().session.value?.companyId,
+  isUpdatingName.value = true;
+  try {
+    const res = await UpdateCompany.mutateAsync({
+      where: {
+        id: useAuth().session.value?.companyId,
       },
       data: {
-        accHolderName: state.accHolderName,
-        sortCode: state.sortCode,
-        accountNo: state.accountNo,
-        bankName: state.bankName,
+        storeUniqueName: storeUniqueName.value,
       },
     });
-    console.log(res);
-    }catch(error){
-        console.log(error)
-    }
-  
-
-    toast.add({ title: 'Profile updated', icon: 'i-heroicons-check-circle' });
+    await updateStoreUniqueName(storeUniqueName.value);
+    toast.add({ title: 'Store name updated', icon: 'i-heroicons-check-circle' });
+    isNameChanged.value = false;
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating store name', color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingName.value = false;
+  }
 }
+
+async function onaccSubmit(event: FormSubmitEvent<AccountState>) {
+    isUpdatingAccount.value = true;
+  try {
+    const res = await UpdateCompany.mutateAsync({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        accHolderName: accstate.accHolderName,
+        ifsc: accstate.ifsc,
+        accountNo: accstate.accountNo,
+        bankName: accstate.bankName,
+        gstin: accstate.gstin,
+      }
+    });
+    toast.add({ title: 'Account details updated', color: 'green', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.log(error);
+    toast.add({ title: 'Error updating account details', color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingAccount.value = false;
+  }
+}
+
+async function onaddSubmit(event: FormSubmitEvent<AddressState>) {
+    isUpdatingAddress.value = true;
+  try {
+    const res = await UpsertAddress.mutateAsync({
+      where: {
+        companyId: useAuth().session.value?.companyId,
+      },
+      create: {
+        company: { connect: { id: useAuth().session.value?.companyId } },
+        street: addstate.street,
+        locality: addstate.locality,
+        city: addstate.city,
+        state: addstate.state,
+        pincode: addstate.pincode,
+      },
+      update: {
+        street: addstate.street,
+        locality: addstate.locality,
+        city: addstate.city,
+        state: addstate.state,
+        pincode: addstate.pincode,
+      }
+    });
+    toast.add({ title: 'Address updated', color: 'green', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.log(error);
+    toast.add({ title: 'Error updating address', color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingAddress.value = false;
+  }
+}
+
+const onTaxIncludeChange = async () => {
+  try {
+    const res = await UpdateCompany.mutateAsync({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        isTaxIncluded: isTaxInclude.value,
+      },
+    });
+    await updateIsTaxIncluded(isTaxInclude.value);
+    toast.add({ title: 'Tax include updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating tax setting', color: 'red', icon: 'i-heroicons-x-circle' });
+  }
+};
 </script>
 
 <template>
-    <UDashboardPanelContent class="pb-24">
-            <UFormGroup
-                    name="username"
-                    label="Store Unique Name"
-                    description="Unique name used for store URL."
-                    required
-                    class="grid grid-cols-2 gap-2 "
-                    :ui="{ container: '',help: `mt-2 ${taken ? 'text-red-500 dark:text-red-400':'text-green-500 dark:text-green-400'}` }"
-                    
-                    
-        
-                >
-                <template v-if="isNameChanged" #help>
-                  {{taken ? 'This store name is already taken' : 'available'}}
-                </template>
-                    <UInput
-                        v-model="storeUniqueName"
-                        type="text"
-                        autocomplete="off"
-                        size="md"
-                        input-class="ps-[128px]"
-                    >
-                        <template #leading>
-                            <span
-                                class="text-gray-500 dark:text-gray-400 text-sm"
-                                >markit.com/store/</span
-                            >
-                        </template>
-                    </UInput>
-                       
-                </UFormGroup>
-                <div class="w-full flex justify-end mb-3">
-                <UButton
-                    label="Update Name"
-                    size="md"
-                    class="mt-4"
-                    :loading="isUpdatingName"
-                    :disabled="!isNameChanged "
-                    @click="onNameUpdate"
-                />
-                </div>
-        <UDivider class="mb-4" />
+  <UDashboardPanelContent class="pb-24">
+    <UFormGroup
+      name="username"
+      label="Store Unique Name"
+      description="Unique name used for store URL."
+      required
+      class="grid grid-cols-2 gap-2"
+      :ui="{ container: '', help: `mt-2 ${taken ? 'text-red-500 dark:text-red-400':'text-green-500 dark:text-green-400'}` }"
+    >
+      <template v-if="isNameChanged" #help>
+        {{ taken ? 'This store name is already taken' : 'available' }}
+      </template>
+      <UInput
+        v-model="storeUniqueName"
+        type="text"
+        autocomplete="off"
+        size="md"
+        input-class="ps-[128px]"
+      >
+        <template #leading>
+          <span class="text-gray-500 dark:text-gray-400 text-sm">markit.com/store/</span>
+        </template>
+      </UInput>
+    </UFormGroup>
+    <div class="my-4 grid grid-cols-2 gap-2">
+        <div></div>
+        <div>
+            <UButton
+                label="Update Name"
+                size="md"
+                :loading="isUpdatingName"
+                :disabled="!isNameChanged || !!taken"
+                @click="onNameUpdate"
+            />
+        </div>
+    </div>
+    
+    
+    <UDivider class="mb-4" />
 
-        <UForm
-            :state="state"
-            :validate="validate"
-            :validate-on="['submit']"
-            @submit="onSubmit"
-        >
-            <UDashboardSection
-                title="Payment"
-                description="This information is used for during your client payment"
-            >
-                <template #links>
-                    <UButton type="submit" label="Save changes" color="black" />
-                </template>
+    <UFormGroup
+      name="taxInclude"
+      label="Include Tax in Price"
+      description="Check if you want to include tax in the price."
+      required
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"    
+    >
+      <UCheckbox v-model="isTaxInclude" @change="onTaxIncludeChange" />
+    </UFormGroup>
+    
+    <UDivider class="mb-4" />
 
-                <UFormGroup
-                    name="accHolderName"
-                    label="Account holder name"
-                    description="Your bank account holder name."
-                    required
-                    class="grid grid-cols-2 gap-2"
-                    :ui="{ container: '' }"
-                >
-                    <UInput
-                        v-model="state.accHolderName"
-                        type="text"
-                        autocomplete="off"
-                        size="md"
-                        placeholder="Account Holder Name"
-                    />
-                </UFormGroup>
+    <UForm
+      :state="accstate"
+      :validate="accvalidate"
+      :validate-on="['submit']"
+      @submit="onaccSubmit"
+    >
+      <UFormGroup
+        name="accountDetails"
+        label="Account Details"
+        description="Your bank account details used for payemt settlements."
+        class="grid grid-cols-2 gap-2 mb-4"
+        :ui="{ container: '' }"
+      >
+        <UInput
+          v-model="accstate.accHolderName"
+          type="text"
+          class="mb-4"
+          autocomplete="off"
+          size="md"
+          placeholder="Account Holder Name"
+        />
+        <UInput
+          v-model="accstate.accountNo"
+          type="text"
+          class="mb-4"
+          autocomplete="off"
+          size="md"
+          placeholder="Account No"
+        />
+        <UInput
+          v-model="accstate.ifsc"
+          type="text"
+          class="mb-4"
+          autocomplete="off"
+          size="md"
+          placeholder="IFSC Code"
+        />
+        <UInput
+          v-model="accstate.bankName"
+          type="text"
+          class="mb-4"
+          autocomplete="off"
+          size="md"
+          placeholder="Bank Name"
+        />
+        <UInput
+          v-model="accstate.gstin"
+          type="text"
+          class="mb-4"
+          autocomplete="off"
+          size="md"
+          placeholder="GSTIN"
+        />
+        <UButton class="" type="submit" label="Save Account" :loading="isUpdatingAccount"/>
+      </UFormGroup>
+    </UForm>
 
-                <UFormGroup
-                    name="sortCode"
-                    label="Sort Code"
-                    description="Your bank sort code."
-                    required
-                    class="grid grid-cols-2 gap-2"
-                    :ui="{ container: '' }"
-                >
-                    <UInput
-                        v-model="state.sortCode"
-                        type="text"
-                        autocomplete="off"
-                        size="md"
-                        placeholder="Sort Code"
-                    />
-                </UFormGroup>
+    <UDivider class="mb-4" />
 
-                <UFormGroup
-                    name="accountNo"
-                    label="Account No"
-                    description="Your bank account number."
-                    required
-                    class="grid grid-cols-2 gap-2"
-                    :ui="{ container: '' }"
-                >
-                <UInput
-                        v-model="state.accountNo"
-                        type="text"
-                        autocomplete="off"
-                        size="md"
-                        placeholder="Account No"
-                    />
-                </UFormGroup>
-
-                <UFormGroup
-                    name="bankName"
-                    label="Bank Name"
-                    description="Your bank name."
-                    class="grid grid-cols-2 gap-2"
-                    :ui="{ container: '' }"
-                    required
-                >
-                    <UTextarea
-                        v-model="state.bankName"
-                        :rows="5"
-                        autoresize
-                        size="md"
-                        placeholder="Bank Name"
-                    />
-                </UFormGroup>
-            </UDashboardSection>
-        </UForm>
-
-      
-    </UDashboardPanelContent>
+    <UForm
+      :state="addstate"
+      :validate="addvalidate"
+      :validate-on="['submit']"
+      @submit="onaddSubmit"
+    >
+      <UFormGroup
+        name="addressDetails"
+        label="Address Details"
+        description="Your Store address that will be seen by clients"
+        class="grid grid-cols-2 gap-2 mb-4"
+        :ui="{ container: '' }"
+      >
+        <UInput
+          v-model="addstate.street"
+          type="text"
+          class="mb-4"
+          size="md"
+          placeholder="Street"
+        />
+        <UInput
+          v-model="addstate.locality"
+          type="text"
+          class="mb-4"
+          size="md"
+          placeholder="Locality"
+        />
+        <UInput
+          v-model="addstate.city"
+          type="text"
+          class="mb-4"
+          size="md"
+          placeholder="City"
+        />
+        <UInput
+          v-model="addstate.state"
+          type="text"
+          class="mb-4"
+          size="md"
+          placeholder="State"
+        />
+        <UInput
+          v-model="addstate.pincode"
+          type="text"
+          class="mb-4"
+          size="md"
+          placeholder="Pincode"
+        />
+        <UButton class="" type="submit" label="Save Address" :loading="isUpdatingAccount"/>
+      </UFormGroup>
+    </UForm>
+    <UDivider class="mb-4" />
+  </UDashboardPanelContent>
 </template>

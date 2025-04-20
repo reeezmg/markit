@@ -4,14 +4,25 @@ import { useForm } from 'vee-validate';
 import { toTypedSchema } from '@vee-validate/zod';
 import { v4 as uuidv4 } from 'uuid';
 
+const hsnData = ref<{ hsn: string; thresholdAmount?: number; taxBelowThreshold?: number; taxAboveThreshold?: number; fixedTax?:number }[]>([]);
+
+onMounted(async () => {
+    const res = await fetch('/hsncode.json');
+    hsnData.value = await res.json();
+});
+
+
+
 const props = defineProps<{
     editName?: string | null;
     editHsn?: string | null;
     editDescription?: string | null;
     editFile?: string | null;
+    taxType?: "FIXED" | "VARIABLE" | undefined;
     thresholdAmount?: number | null;
     taxBelowThreshold?: number | null;
     taxAboveThreshold?: number | null;
+    fixedTax?: number | null;
 }>();
 const emit = defineEmits(['update']);
 
@@ -48,6 +59,7 @@ const [taxBelowThreshold, taxBelowThresholdAttrs] = defineField('taxBelowThresho
 const [taxAboveThreshold, taxAboveThresholdAttrs] = defineField('taxAboveThreshold');
 
 
+
 watchEffect(() => {
     if (props.editName) {
         name.value = props.editName;
@@ -62,6 +74,14 @@ watchEffect(() => {
     if (props.editFile) {
         selectedFile.value = { uuid: props.editFile };
         imagePreviewUrl.value = `https://unifeed.s3.ap-south-1.amazonaws.com/${props.editFile}`;
+    }
+    if (props.taxType) {
+        taxType.value = props.taxType;
+        console.log(props.taxType);
+    }
+    if (props.fixedTax) {
+        fixedTax.value = props.fixedTax;
+        console.log(props.fixedTax);
     }
     if (props.thresholdAmount) {
         thresholdAmount.value = props.thresholdAmount;
@@ -93,6 +113,8 @@ function handleAddImageChange(e: Event) {
     }
 }
 
+
+
 watchEffect(() => {
     emit('update', {
         name: name.value,
@@ -105,6 +127,24 @@ watchEffect(() => {
         taxBelowThreshold: taxBelowThreshold.value,
         taxAboveThreshold: taxAboveThreshold.value,
     });
+});
+
+
+watch(hsn, (newVal) => {
+    console.log('HSN changed:', newVal,hsnData.value);
+    const matched = hsnData.value.find(item => item.hsn == newVal);
+    if (matched) {
+        if (matched.thresholdAmount) {
+            taxType.value = 'VARIABLE';
+            thresholdAmount.value = matched.thresholdAmount;
+            taxBelowThreshold.value = matched.taxBelowThreshold;
+            taxAboveThreshold.value = matched.taxAboveThreshold;
+        }else {
+            taxType.value = 'FIXED';
+            fixedTax.value = matched.fixedTax;
+        }
+       
+    }
 });
 
 </script>

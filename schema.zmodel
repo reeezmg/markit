@@ -67,6 +67,11 @@ enum OrderStatus {
   BOOKED
 }
 
+enum TaxType {
+  FIXED
+  VARIABLE
+}
+
 model Company extends Base {
     name        String
     storecode   Int    @unique @default(autoincrement()) 
@@ -82,6 +87,8 @@ model Company extends Base {
     tiktokRefreshToken String? @map("tiktok_refresh_token")
     tiktokRefreshTokenExpireIn Int? @map("tiktok_refresh_token_expire_in")
     images      String?
+    isTaxIncluded Boolean @default(true) @map("is_tax_included")
+
     users       CompanyUser[]
     clients     CompanyClient[]
     products    Product[]
@@ -98,10 +105,14 @@ model Company extends Base {
     status      Boolean       @default(true)
     type        CompanyType
     pipeline    Pipeline?
-    accHolderName String? @map("acc_holder_name")
 
+    accHolderName String? @map("acc_holder_name")
+    ifsc String?
     accountNo String? @map("account_no")
     bankName String? @map("bank_name")
+    gstin String?
+
+    address   Address?
     distributor   DistributorCompany[]
     billCounter Int @default(0) @map("bill_counter")
     
@@ -192,10 +203,6 @@ model Pipeline extends Base {
     @@map("pipelines")
 }
 
-enum TaxType {
-  FIXED
-  VARIABLE
-}
 
 model Category {
   id                String          @id @default(uuid())
@@ -283,6 +290,7 @@ model Variant {
     discount    Float?
     sizes       Json?
     images      String[]
+    tax         Float       @default(0.0)
     product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
     productId   String @map("product_id")
     items       Item[]  
@@ -474,7 +482,7 @@ model Payment extends Base {
 model Address extends Base {
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt @map("updated_at")
-    name       String
+    name       String?
     street    String
     locality  String
     city    String 
@@ -487,6 +495,8 @@ model Address extends Base {
     clientId    String? @map('client_id')
     distributor Distributor? @relation(fields: [distributorId], references: [id])
     distributorId String? @map('distributor_id') @unique
+    company Company? @relation(fields: [companyId], references: [id])
+    companyId String? @map('company_id') @unique
     account     Account? @relation(fields: [accountId], references: [id])
     accountId    String? @map('account_id') @unique
     bill     Bill[]

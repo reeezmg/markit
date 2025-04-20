@@ -70,6 +70,10 @@ const metadata = {
                     name: "images",
                     type: "String",
                     isOptional: true,
+                }, isTaxIncluded: {
+                    name: "isTaxIncluded",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
                 }, users: {
                     name: "users",
                     type: "CompanyUser",
@@ -165,6 +169,10 @@ const metadata = {
                     name: "accHolderName",
                     type: "String",
                     isOptional: true,
+                }, ifsc: {
+                    name: "ifsc",
+                    type: "String",
+                    isOptional: true,
                 }, accountNo: {
                     name: "accountNo",
                     type: "String",
@@ -173,6 +181,16 @@ const metadata = {
                     name: "bankName",
                     type: "String",
                     isOptional: true,
+                }, gstin: {
+                    name: "gstin",
+                    type: "String",
+                    isOptional: true,
+                }, address: {
+                    name: "address",
+                    type: "Address",
+                    isDataModel: true,
+                    isOptional: true,
+                    backLink: 'company',
                 }, distributor: {
                     name: "distributor",
                     type: "DistributorCompany",
@@ -863,6 +881,10 @@ const metadata = {
                     name: "images",
                     type: "String",
                     isArray: true,
+                }, tax: {
+                    name: "tax",
+                    type: "Float",
+                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
                 }, product: {
                     name: "product",
                     type: "Product",
@@ -1631,6 +1653,7 @@ const metadata = {
                 }, name: {
                     name: "name",
                     type: "String",
+                    isOptional: true,
                 }, street: {
                     name: "street",
                     type: "String",
@@ -1692,6 +1715,20 @@ const metadata = {
                     isOptional: true,
                     isForeignKey: true,
                     relationField: 'distributor',
+                }, company: {
+                    name: "company",
+                    type: "Company",
+                    isDataModel: true,
+                    isOptional: true,
+                    backLink: 'address',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "companyId" },
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isOptional: true,
+                    isForeignKey: true,
+                    relationField: 'company',
                 }, account: {
                     name: "account",
                     type: "Account",
@@ -1724,6 +1761,9 @@ const metadata = {
                 }, distributorId: {
                     name: "distributorId",
                     fields: ["distributorId"]
+                }, companyId: {
+                    name: "companyId",
+                    fields: ["companyId"]
                 }, accountId: {
                     name: "accountId",
                     fields: ["accountId"]

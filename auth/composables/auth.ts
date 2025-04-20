@@ -86,13 +86,26 @@ export const updateCompanySession = async (
 };
 
 export const updateStoreUniqueName = async (
-    storeUniqueName: string | undefined,
+    storeUniqueName: string,
     
 ) => {
     await $fetch('/api/auth/changeStoreUniqueName', {
         method: 'PUT',
         body: {
             storeUniqueName
+        },
+    });
+    await useAuth().updateSession();
+};
+
+export const updateIsTaxIncluded = async (
+    isTaxIncluded: boolean,
+    
+) => {
+    await $fetch('/api/auth/changeIncludeTax', {
+        method: 'PUT',
+        body: {
+            isTaxIncluded
         },
     });
     await useAuth().updateSession();

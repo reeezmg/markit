@@ -11,7 +11,7 @@ const DeleteTokenEntry = useDeleteTokenEntry();
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const router = useRouter();
-
+const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
 const subtotal = computed(() => {
@@ -236,6 +236,7 @@ const itemargs = computed(() => ({
         name: true, 
         qty:true,
         sizes:true,
+        tax:true,
         product: {
           select: {
             name: true, 
@@ -383,7 +384,7 @@ if (items.value.length === 0) {
             discount: item.discount,
             name:item.name,
             //variantId present only when entry is barcoded 
-            ...(item.variantId && { variantId: item.variantId || ''}),
+            ...(item.variantId && { variant:{ connect: { id: item.variantId } }}),
             tax: item.tax,
             value: item.value,
             ...(item.category[0]?.id && {category: { connect: { id: item.category[0].id } }}),
