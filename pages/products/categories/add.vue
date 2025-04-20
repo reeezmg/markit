@@ -31,6 +31,12 @@ const linkList = ['Create', 'live'];
 const name = ref('');
 const hsn = ref('');
 const description = ref('');
+const taxType = ref<"FIXED" | "VARIABLE"| undefined >(undefined);
+const fixedTax = ref(0);
+const thresholdAmount = ref(0);
+const taxBelowThreshold = ref(0);
+const taxAboveThreshold = ref(0);
+
 const live = ref<boolean>();
 let files = ref<ImageData | null>(null);
 const subcategory = ref<Category[]>([]);
@@ -41,6 +47,12 @@ const createValue = (data: any) => {
     hsn.value = data.hsn;
     files.value = data.file;
     description.value = data.description;
+    taxType.value = data.taxType;
+    fixedTax.value = data.fixedTax;
+    thresholdAmount.value = data.thresholdAmount;
+    taxBelowThreshold.value = data.taxBelowThreshold;
+    taxAboveThreshold.value = data.taxAboveThreshold;
+
 };
 
 const subcategoryValue = ( index:number,data: Category) => {
@@ -82,6 +94,11 @@ const handleSubmit = async (e: Event) => {
         description: description.value || '',
         status: live.value || undefined,
         image: files.value?.uuid,
+        taxType: taxType.value || undefined,
+        fixedTax: fixedTax.value || undefined,
+        thresholdAmount: thresholdAmount.value || undefined,
+        taxBelowThreshold: taxBelowThreshold.value || undefined,
+        taxAboveThreshold: taxAboveThreshold.value || undefined,
         company: {
             connect: {
                 id: useAuth().session.value?.companyId,
@@ -90,7 +107,6 @@ const handleSubmit = async (e: Event) => {
         subcategories: {
             create: subcategory.value.map((sub) => ({
                 name: sub.name,
-                hsn: sub.hsn ?? '',
                 description: sub.description ?? '',
                 image: sub.files?.uuid ?? null,
                 company: {

@@ -240,7 +240,7 @@ export function useCountAddress<TArgs extends Prisma.AddressCountArgs, TQueryFnD
     return useModelQuery<TQueryFnData, TData, TError>('Address', `${endpoint}/address/count`, args, options, fetch);
 }
 
-export function useCheckAddress<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; street?: string; locality?: string; city?: string; state?: string; pincode?: string; active?: boolean; userId?: string; clientId?: string; distributorId?: string; accountId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckAddress<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; street?: string; locality?: string; city?: string; state?: string; pincode?: string; active?: boolean; userId?: string; clientId?: string; distributorId?: string; companyId?: string; accountId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('Address', `${endpoint}/address/check`, args, options, fetch);
 }

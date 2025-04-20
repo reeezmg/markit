@@ -23,6 +23,7 @@ export default eventHandler(async (event) => {
         image: user.image || null,
         email: user.email,
         storeUniqueName: user.companies[0].company.storeUniqueName,
+        isTaxIncluded: user.companies[0].company.isTaxIncluded,
         companyId: user.companies[0].companyId,
         companyType: user.companies[0].company.type,
         companyName: user.companies[0].company.name,

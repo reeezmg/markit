@@ -64,9 +64,9 @@ watch(() => state.email, (newEmail) => {
 
 watch(() => userData.value, (newVal) => {
   if (newVal) {
-    state.name = newVal.name;
+    state.name = newVal.name || '';
     state.email = newVal.email;
-    state.image = newVal.image;
+    state.image = newVal.image || '';
   }
 },{ deep: true, immediate: true });
 
@@ -353,7 +353,7 @@ const onVerifyOtp = async () => {
                     }"
                 >
                     <UAvatar v-if="previewUrl" :src="previewUrl" :alt="state.name" size="lg" />
-                    <UAvatar v-else :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${state.image}`" :alt="state.name" size="lg" />
+                    <UAvatar v-else :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${state.image|| ''}`" :alt="state.name" size="lg" />
 
                     <UButton
                         label="Choose"

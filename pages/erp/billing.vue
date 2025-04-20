@@ -11,7 +11,7 @@ const DeleteTokenEntry = useDeleteTokenEntry();
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const router = useRouter();
-
+const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
 const subtotal = computed(() => {
@@ -92,8 +92,10 @@ watch(items, () => {
     } else {
       baseValue -= (baseValue * item.discount) / 100;
     }
-
-    baseValue -= (baseValue * item.tax) / 100;
+    if(!isTaxIncluded) {
+      baseValue += (baseValue * item.tax) / 100;
+    } 
+    
     
     item.value = Math.max(baseValue, 0); 
     
@@ -236,6 +238,7 @@ const itemargs = computed(() => ({
         name: true, 
         qty:true,
         sizes:true,
+        tax:true,
         product: {
           select: {
             name: true, 
@@ -339,6 +342,7 @@ const fetchItemData = async (barcode, index) => {
     items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant.product.name}` || '';
     items.value[index].category = categories.value.filter(category =>category.id === categoryId);
     items.value[index].rate = itemdata.value.variant?.sprice || 0;
+    items.value[index].tax = itemdata.value.variant?.tax || 0;
     items.value[index].totalQty = itemdata.value.variant?.qty || 0;
     items.value[index].sizes = itemdata.value.variant?.sizes || null;
     items.value[index].variantId = itemdata.value.variant?.id || '';
@@ -383,7 +387,7 @@ if (items.value.length === 0) {
             discount: item.discount,
             name:item.name,
             //variantId present only when entry is barcoded 
-            ...(item.variantId && { variantId: item.variantId || ''}),
+            ...(item.variantId && { variant:{ connect: { id: item.variantId } }}),
             tax: item.tax,
             value: item.value,
             ...(item.category[0]?.id && {category: { connect: { id: item.category[0].id } }}),
