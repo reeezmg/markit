@@ -44,16 +44,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
       ) {
         // Extract query parameters and build query string
         const queryParams = currentRoute.query;
-<<<<<<< HEAD
-        const queryString = Object.keys(queryParams).length > 0 
-            ? '?' + new URLSearchParams(queryParams as Record<string, string>).toString()
-            : '';
-
-        // Append query string to redirectTo.value
-        await navigateTo(`${redirectTo.value || `/`}${queryString}`);
-    }
-
-=======
         const queryString = Object.keys(queryParams).length > 0
           ? '?' + new URLSearchParams(queryParams as Record<string, string>).toString()
           : '';
@@ -67,7 +57,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         }
       }
       
->>>>>>> main
     return {
         provide: {
             auth: {
