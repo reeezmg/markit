@@ -3,23 +3,22 @@ import { createSharedComposable } from '@vueuse/core';
 const _useDashboard = () => {
     const route = useRoute();
     const router = useRouter();
-    const useAuth = () => useNuxtApp().$auth;
-    const auth = useAuth();
     const isHelpSlideoverOpen = ref(false);
     const isNotificationsSlideoverOpen = ref(false);
 
     defineShortcuts({
-        'd-a': () => router.push(`/${auth.session.value?.companyId}/dashboard`),
-        'e-b': () => router.push(`/${auth.session.value?.companyId}/erp/billing`),
-        'e-s': () => router.push(`/${auth.session.value?.companyId}/erp/sales`),
-        'e-a': () => router.push(`/${auth.session.value?.companyId}/erp/accounts`),
-        'p-a': () => router.push(`/${auth.session.value?.companyId}/products`),
-        'p-c': () => router.push(`/${auth.session.value?.companyId}/products/categories`),
-        'o-a': () => router.push(`/${auth.session.value?.companyId}/order/orders`),
-        'o-b': () => router.push(`/${auth.session.value?.companyId}/order/bookings`),
-        'u-a': () => router.push(`/${auth.session.value?.companyId}/users`),
-        'c-a': () => router.push(`/${auth.session.value?.companyId}/client`),
-        's-g': () => router.push(`/${auth.session.value?.companyId}/settings`),
+        'd-d': () => router.push(`/dashboard`),
+        'e-b': () => router.push(`/erp/billing`),
+        'e-s': () => router.push(`/erp/sales`),
+        'e-a': () => router.push(`/erp/accounts`),
+        'p-p': () => router.push(`/products`),
+        'p-c': () => router.push(`/products/categories`),
+        'o-o': () => router.push(`/order/orders`),
+        'o-b': () => router.push(`/order/bookings`),
+        'u-u': () => router.push(`/users`),
+        'c-c': () => router.push(`/client`),
+        's-g': () => router.push(`/settings`),
+        's-s': () => router.push(`/settings/store`),
         
    
 

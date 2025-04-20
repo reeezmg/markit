@@ -36,6 +36,21 @@ export const authRegister = async (
     return res;
 };
 
+export const authForgetPassword = async (
+    current_password: string,
+    password: string
+) => {
+    const res = await $fetch('/api/auth/forgetPassword', {
+        method: 'POST',
+        body: {
+            current_password,
+            password,
+            id: useAuth().session.value?.id,
+        },
+    });
+    return res;
+};
+
 export const authLogout = async () => {
     await $fetch('/api/auth/logout', {
         method: 'POST',
@@ -65,6 +80,19 @@ export const updateCompanySession = async (
             companyId,
             companyType,
             companyName,
+        },
+    });
+    await useAuth().updateSession();
+};
+
+export const updateStoreUniqueName = async (
+    storeUniqueName: string | undefined,
+    
+) => {
+    await $fetch('/api/auth/changeStoreUniqueName', {
+        method: 'PUT',
+        body: {
+            storeUniqueName
         },
     });
     await useAuth().updateSession();

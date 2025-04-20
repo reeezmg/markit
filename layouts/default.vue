@@ -17,7 +17,7 @@ const links = computed(() => {
             to: `/dashboard`,
             tooltip: {
                 text: 'Dashboard',
-                shortcuts: ['G', 'D'],
+                shortcuts: ['D', 'D'],
             },
         },
         {   
@@ -48,7 +48,7 @@ const links = computed(() => {
                     to: `/erp/accounts`,
                     tooltip: {
                         text: 'ERP',
-                        shortcuts: ['E', 'S'],
+                        shortcuts: ['E', 'A'],
                     },
                 },
             ],
@@ -65,7 +65,7 @@ const links = computed(() => {
                     exact: true,
                     tooltip: {
                         text: 'products',
-                        shortcuts: ['P', 'A'],
+                        shortcuts: ['P', 'P'],
                     },
                 },
                 ...(auth.session.value?.role === 'admin'
@@ -97,7 +97,7 @@ const links = computed(() => {
                         exact: true,
                         tooltip: {
                             text: 'Orders',
-                            shortcuts: ['O', 'S'],
+                            shortcuts: ['O', 'O'],
                         },
                         },
                         {
@@ -122,7 +122,7 @@ const links = computed(() => {
                       to: `/users`,
                       tooltip: {
                           text: 'Users',
-                          shortcuts: ['U', 'A'],
+                          shortcuts: ['U', 'U'],
                       },
                   },
               ]
@@ -134,7 +134,7 @@ const links = computed(() => {
             to: `/client`,
             tooltip: {
                 text: 'Client',
-                shortcuts: ['C', 'A'],
+                shortcuts: ['C', 'C'],
             },
         },
         
@@ -151,6 +151,15 @@ const links = computed(() => {
                     tooltip: {
                         text: 'Settings',
                         shortcuts: ['S', 'G'],
+                    },
+                },
+                {
+                    label: 'Store',
+                    to: `/settings/store`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Settings',
+                        shortcuts: ['S', 'S'],
                     },
                 },
             ],

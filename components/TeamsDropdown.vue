@@ -42,7 +42,7 @@ const teams = (items) =>
         },
         click: async () => {
             await updateCompanySession(item.id, item.type, item.name);
-            router.push(`/${item.id}`);
+            router.push(`/dashboard`);
         },
     }));
 

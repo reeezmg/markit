@@ -8,9 +8,9 @@ const links = [
             exact: true,
         },
         {
-            label: 'Payments',
+            label: 'Store',
             icon: 'i-heroicons-banknotes',
-            to: '/settings/payments',
+            to: '/settings/store',
         },
        
     ],

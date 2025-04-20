@@ -21,6 +21,12 @@ export async function findUserByEmail(email: string) {
     });
 }
 
+export async function findUserById(id: string) {
+    return prisma.user.findUnique({
+        where: { id },
+    });
+}
+
 export async function createUser(user: Prisma.UserCreateInput) {
     return prisma.user.create({
         data: user,
@@ -31,6 +37,15 @@ export async function createCompany(company: Prisma.CompanyCreateInput) {
         data: company,
     });
 }
+export async function updatePassword(id: string,password:string) {
+    return prisma.user.update({
+        where: { id },
+            data: {
+               password: password,
+            },
+    });
+}
+
 export async function updateUser(id: string,companyId:string) {
     return prisma.user.update({
         where: { id },

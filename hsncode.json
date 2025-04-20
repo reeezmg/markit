@@ -1,0 +1,267 @@
+[
+
+    {
+      "hsn": "6101",
+      "category": "Jackets",
+      "description": "Men's/boys' overcoats, suits, jackets (knitted)",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6104",
+      "category": "Kurtis/Dresses",
+      "description": "Women's/girls' dresses, skirts, suits (knitted)",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6109",
+      "category": "T-shirts",
+      "description": "T-shirts, singlets, vests (knitted)",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6203",
+      "category": "Trousers",
+      "description": "Men's/boys' suits, jackets, trousers (woven)",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6204",
+      "category": "Dresses",
+      "description": "Women's/girls' dresses, skirts (woven)",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6205",
+      "category": "Shirts",
+      "description": "Men's or boys' shirts, not knitted or crocheted",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "5208",
+      "category": "Sarees",
+      "description": "Woven fabrics of cotton, including sarees",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "flat": true, "gstRate": 5 }
+      ]
+    },
+    {
+      "hsn": "6207",
+      "category": "Pajamas",
+      "description": "Men's or boys' nightwear, not knitted",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6110",
+      "category": "Sweaters",
+      "description": "Sweaters, pullovers, knitted or crocheted",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6107",
+      "category": "Undergarments",
+      "description": "Men's/boys' undergarments, knitted",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6108",
+      "category": "Undergarments",
+      "description": "Women's/girls' undergarments, knitted",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6111",
+      "category": "Baby Garments",
+      "description": "Babies' clothing, knitted or crocheted",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+  
+    
+    {
+      "hsn": "6115",
+      "category": "Socks",
+      "description": "Pantyhose, tights, socks, knitted or crocheted",
+      "unit": "per pair",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6116",
+      "category": "Gloves",
+      "description": "Gloves, mittens, knitted or crocheted",
+      "unit": "per pair",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6214",
+      "category": "Scarves",
+      "description": "Shawls, scarves, mufflers (silk/wool/synthetic)",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "4203",
+      "category": "Belts",
+      "description": "Leather apparel accessories",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "flat": true, "gstRate": 18 }
+      ]
+    },
+    {
+      "hsn": "6505",
+      "category": "Caps/Hats",
+      "description": "Hats and headgear, knitted or textile",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "7113",
+      "category": "Imitation Jewelry",
+      "description": "Costume jewelry, artificial pearls",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 3 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "9004",
+      "category": "Sunglasses",
+      "description": "Eyewear, frames, sunglasses",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 12 },
+        { "above": 1000, "gstRate": 18 }
+      ]
+    },
+  
+  
+    {
+      "hsn": "6403",
+      "category": "Footwear (≤ ₹1000)",
+      "description": "Shoes with rubber/plastic/leather soles",
+      "unit": "per pair",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 18 }
+      ]
+    },
+    {
+      "hsn": "6405",
+      "category": "Footwear (> ₹1000)",
+      "description": "Sandals, wooden shoes, etc.",
+      "unit": "per pair",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 18 }
+      ]
+    },
+  
+
+    {
+      "hsn": "4202",
+      "category": "Bags",
+      "description": "Handbags, wallets (leather/fabric/plastic)",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 12 },
+        { "above": 1000, "gstRate": 18 }
+      ]
+    },
+    {
+      "hsn": "6305",
+      "category": "Bags",
+      "description": "Shopping bags, backpacks (jute/cotton)",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6506",
+      "category": "Fancy Headgear",
+      "description": "Bridal veils, party hats",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 12 },
+        { "above": 1000, "gstRate": 18 }
+      ]
+    },
+    {
+      "hsn": "6601",
+      "category": "Umbrellas",
+      "description": "Umbrellas, sun umbrellas",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 5 },
+        { "above": 1000, "gstRate": 12 }
+      ]
+    },
+    {
+      "hsn": "6704",
+      "category": "Artificial Flowers",
+      "description": "Hair accessories, feathers",
+      "unit": "per piece",
+      "priceSlabs": [
+        { "upto": 1000, "gstRate": 12 },
+        { "above": 1000, "gstRate": 18 }
+      ]
+    }
+  ]

@@ -22,6 +22,10 @@ const metadata = {
                     type: "Int",
                     attributes: [{ "name": "@default", "args": [] }],
                     isAutoIncrement: true,
+                }, storeUniqueName: {
+                    name: "storeUniqueName",
+                    type: "String",
+                    isOptional: true,
                 }, logo: {
                     name: "logo",
                     type: "String",
@@ -161,10 +165,6 @@ const metadata = {
                     name: "accHolderName",
                     type: "String",
                     isOptional: true,
-                }, sortCode: {
-                    name: "sortCode",
-                    type: "String",
-                    isOptional: true,
                 }, accountNo: {
                     name: "accountNo",
                     type: "String",
@@ -192,6 +192,9 @@ const metadata = {
                 }, storecode: {
                     name: "storecode",
                     fields: ["storecode"]
+                }, storeUniqueName: {
+                    name: "storeUniqueName",
+                    fields: ["storeUniqueName"]
                 },
             }
             ,
@@ -313,6 +316,10 @@ const metadata = {
                     isDataModel: true,
                     isArray: true,
                     backLink: 'user',
+                }, image: {
+                    name: "image",
+                    type: "String",
+                    isOptional: true,
                 },
             }
             , uniqueConstraints: {
@@ -600,9 +607,25 @@ const metadata = {
                     name: "hsn",
                     type: "String",
                     isOptional: true,
-                }, tax: {
-                    name: "tax",
-                    type: "String",
+                }, taxType: {
+                    name: "taxType",
+                    type: "TaxType",
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, fixedTax: {
+                    name: "fixedTax",
+                    type: "Float",
+                    isOptional: true,
+                }, thresholdAmount: {
+                    name: "thresholdAmount",
+                    type: "Float",
+                    isOptional: true,
+                }, taxBelowThreshold: {
+                    name: "taxBelowThreshold",
+                    type: "Float",
+                    isOptional: true,
+                }, taxAboveThreshold: {
+                    name: "taxAboveThreshold",
+                    type: "Float",
                     isOptional: true,
                 },
             }
@@ -677,14 +700,6 @@ const metadata = {
                     isOptional: true,
                     isForeignKey: true,
                     relationField: 'category',
-                }, hsn: {
-                    name: "hsn",
-                    type: "String",
-                    isOptional: true,
-                }, tax: {
-                    name: "tax",
-                    type: "String",
-                    isOptional: true,
                 },
             }
             , uniqueConstraints: {
@@ -2093,6 +2108,36 @@ const metadata = {
                 }, variantId_size: {
                     name: "variantId_size",
                     fields: ["variantId", "size"]
+                },
+            }
+            ,
+        }
+        ,
+        emailOtp: {
+            name: 'EmailOtp', fields: {
+                id: {
+                    name: "id",
+                    type: "String",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, email: {
+                    name: "email",
+                    type: "String",
+                }, otp: {
+                    name: "otp",
+                    type: "String",
+                }, expiresAt: {
+                    name: "expiresAt",
+                    type: "DateTime",
+                },
+            }
+            , uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
+                }, email: {
+                    name: "email",
+                    fields: ["email"]
                 },
             }
             ,
