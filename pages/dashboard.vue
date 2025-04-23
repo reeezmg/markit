@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NotificationIcon from '~/components/NotificationIcon.vue'
 const cartStore = useCartStore();
 const cartItemCount = computed(() => cartStore.cartItemCount);
 const useAuth = () => useNuxtApp().$auth;
@@ -10,18 +11,23 @@ const auth = useAuth();
         <UDashboardPanel grow>
             <UDashboardNavbar title="Dashboard">
                 <template #right>
-                    <UTooltip text="Notifications" :shortcuts="['N']">
+                    
+                    <!-- <UTooltip text="Cart" :shortcuts="['C']">
                         <NuxtLink
                             :to="`/${auth.session.value?.companyId}/checkout`"
                         >
                             <UChip :text="cartItemCount" color="red" size="2xl">
                                 <UIcon
-                                    name="i-heroicons-bell"
+                                    name="i-heroicons-shopping-cart"
                                     class="w-5 h-5"
                                 />
                             </UChip>
                         </NuxtLink>
-                    </UTooltip>
+                    </UTooltip> -->
+                    <ClientOnly>
+        <NotificationIcon />
+      </ClientOnly>
+
                 </template>
             </UDashboardNavbar>
             <NuxtPage />

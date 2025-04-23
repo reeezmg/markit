@@ -11,16 +11,9 @@ const auth = useAuth();
             <UDashboardNavbar title="ERP">
                 <template #right>
                     <UTooltip text="Notifications" :shortcuts="['N']">
-                        <NuxtLink
-                            :to="`/${auth.session.value?.companyId}/checkout`"
-                        >
-                            <UChip :text="cartItemCount" color="red" size="2xl">
-                                <UIcon
-                                    name="i-heroicons-bell-icon"
-                                    class="w-5 h-5"
-                                />
-                            </UChip>
-                        </NuxtLink>
+                        <ClientOnly>
+        <NotificationIcon />
+      </ClientOnly>
                     </UTooltip>
                 </template>
             </UDashboardNavbar>

@@ -207,6 +207,7 @@ const groups = computed(() => [
                 <template #left>
                     <TeamsDropdown />
                 </template>
+                
             </UDashboardNavbar>
 
             <UDashboardSidebar>
@@ -234,6 +235,7 @@ const groups = computed(() => [
 
         <HelpSlideover />
         <NotificationsSlideover />
+        
 
         <ClientOnly>
             <LazyUDashboardSearch :groups="groups" />

@@ -111,7 +111,7 @@ model Company extends Base {
     accountNo String? @map("account_no")
     bankName String? @map("bank_name")
     gstin String?
-
+    notifications Notification[]
     address   Address?
     distributor   DistributorCompany[]
     billCounter Int @default(0) @map("bill_counter")
@@ -461,6 +461,8 @@ model Expense extends Base {
 
     @@allow("create, read, update, delete", true)
     @@map("expenses")
+
+    
 }
 
 model Payment extends Base {
@@ -621,4 +623,34 @@ model EmailOtp extends Base {
   @@allow('read, create, update,delete', true)
   @@map("email_otp")
 
+}
+
+
+// schema.zmodel
+
+model Notification {
+  id String @id @default(cuid())
+  company Company @relation(fields: [companyId], references: [id])
+  companyId String
+  type NotificationType
+  title String
+  message String
+  read Boolean @default(false)
+  actionPath String? // e.g., "/orders/123"
+  metadata Json? // Additional structured data
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+    @@allow('read, create, update,delete', true)
+  @@map("notifications")
+}
+
+enum NotificationType {
+  ORDER_RECEIVED
+  PAYMENT_RECEIVED
+  EXPENSE_CREATED
+  INVENTORY_LOW
+  SHIPMENT_SENT
+  SYSTEM_ALERT
 }

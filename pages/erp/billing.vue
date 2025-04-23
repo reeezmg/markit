@@ -1,7 +1,7 @@
 
 <script setup>
 import { useCreateBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
-
+import { appEvents, NotificationEventTypes } from '~/server/services/eventService'
 const CreateBill = useCreateBill();
 const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
@@ -405,6 +405,17 @@ if (items.value.length === 0) {
       title: 'Bill created successfully!',
      color:'green',
       })
+      await $fetch('/api/notifications/notify', {
+      method: 'POST',
+      body: {
+        type: 'BILL',
+        companyId: useAuth().session.value?.companyId,
+        id: billResponse.id,
+        invoiceNumber: billResponse.invoiceNumber,
+        amount: billResponse.grandTotal
+      }
+    })
+
 
   } catch (error) {
     console.error('Error creating bill', error);

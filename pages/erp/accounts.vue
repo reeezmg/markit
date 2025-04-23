@@ -8,6 +8,7 @@ import {
     useUpdateExpense,
     useDeleteExpense,
 } from '~/lib/hooks';
+import { appEvents, NotificationEventTypes } from '~/server/services/eventService';
 
 const CreateExpense = useCreateExpense();
 const UpdateExpense = useUpdateExpense();
@@ -51,7 +52,13 @@ const addExpense = async (expense: any) => {
                 },
             },
         },
-    });
+        include: {
+    company: true   },
+    })
+    appEvents.emit(NotificationEventTypes.EXPENSE_CREATED, {
+    ...expense
+  })
+
 }catch(error){
     console.log(error)
 }

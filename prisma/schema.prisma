@@ -65,6 +65,15 @@ enum TaxType {
   VARIABLE
 }
 
+enum NotificationType {
+  ORDER_RECEIVED
+  PAYMENT_RECEIVED
+  EXPENSE_CREATED
+  INVENTORY_LOW
+  SHIPMENT_SENT
+  SYSTEM_ALERT
+}
+
 /// @@allow('read, update', auth().role == 'admin')
 /// @@allow('create', auth() != null && status)
 /// @@allow('update', users?[user == auth()])
@@ -107,6 +116,7 @@ model Company {
   accountNo                  String?              @map("account_no")
   bankName                   String?              @map("bank_name")
   gstin                      String?
+  notifications              Notification[]
   address                    Address?
   distributor                DistributorCompany[]
   billCounter                Int                  @default(0) @map("bill_counter")
@@ -638,4 +648,22 @@ model EmailOtp {
 
   @@index([email])
   @@map("email_otp")
+}
+
+/// @@allow('read, create, update,delete', true)
+model Notification {
+  id         String           @id() @default(cuid())
+  company    Company          @relation(fields: [companyId], references: [id])
+  companyId  String
+  type       NotificationType
+  title      String
+  message    String
+  read       Boolean          @default(false)
+  actionPath String?
+  metadata   Json?
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt()
+
+  @@index([companyId])
+  @@map("notifications")
 }

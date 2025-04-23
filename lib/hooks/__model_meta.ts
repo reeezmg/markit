@@ -185,6 +185,12 @@ const metadata = {
                     name: "gstin",
                     type: "String",
                     isOptional: true,
+                }, notifications: {
+                    name: "notifications",
+                    type: "Notification",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'company',
                 }, address: {
                     name: "address",
                     type: "Address",
@@ -2093,6 +2099,62 @@ const metadata = {
                 }, email: {
                     name: "email",
                     fields: ["email"]
+                },
+            },
+        },
+        notification: {
+            name: 'Notification', fields: {
+                id: {
+                    name: "id",
+                    type: "String",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, company: {
+                    name: "company",
+                    type: "Company",
+                    isDataModel: true,
+                    backLink: 'notifications',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "companyId" },
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'company',
+                }, type: {
+                    name: "type",
+                    type: "NotificationType",
+                }, title: {
+                    name: "title",
+                    type: "String",
+                }, message: {
+                    name: "message",
+                    type: "String",
+                }, read: {
+                    name: "read",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": false }] }],
+                }, actionPath: {
+                    name: "actionPath",
+                    type: "String",
+                    isOptional: true,
+                }, metadata: {
+                    name: "metadata",
+                    type: "Json",
+                    isOptional: true,
+                }, createdAt: {
+                    name: "createdAt",
+                    type: "DateTime",
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, updatedAt: {
+                    name: "updatedAt",
+                    type: "DateTime",
+                    attributes: [{ "name": "@updatedAt", "args": [] }],
+                },
+            }, uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
                 },
             },
         },

@@ -11,6 +11,9 @@ const auth = useAuth();
             <UDashboardNavbar title="Order">
                 <template #right>
                     <UTooltip text="Notifications" :shortcuts="['N']">
+    <NotificationIcon />
+  </UTooltip>
+                    <UTooltip text="Cart" :shortcuts="['C']">
                         <NuxtLink
                             :to="`/${auth.session.value?.companyId}/checkout`"
                         >
