@@ -1,33 +1,36 @@
-// types/notification.ts
+export const NOTIFICATION_TYPES = [
+  'ORDER_RECEIVED',
+  'BILL_CREATED',
+  'PAYMENT_RECEIVED',
+  'EXPENSE_CREATED',
+  'INVENTORY_LOW',
+  'SHIPMENT_SENT',
+  'SYSTEM_ALERT'
+] as const;
 
-export type NotificationType =
-  | 'ORDER_RECEIVED'
-  | 'PAYMENT_RECEIVED'
-  | 'EXPENSE_CREATED'
-  | 'INVENTORY_LOW'
-  | 'SHIPMENT_SENT'
-  | 'SYSTEM_ALERT'
+export type NotificationType = typeof NOTIFICATION_TYPES[number];
+export type NotificationFilter = NotificationType | 'all' | 'unread';
 
-export interface Notification {
+export interface AppNotification {
   id: string
   companyId: string
+  userId?: string
+  clientId?: string
   type: NotificationType
   title: string
   message: string
-  actionPath?: string
   read: boolean
-  createdAt: string
-  updatedAt: Date
-  metadata?: {
-    orderId?: string
-    expenseId?: string
-    productId?: string
-    [key: string]: any
-  }
+  actionPath?: string
+  metadata?: Record<string, any>
+  createdAt: Date | string
 }
 
-export type NotificationGroup = {
-  type: NotificationType
-  count: number
-  latest: Notification
+export type NotificationConfig = {
+  icon: string
+  color: string
+  label: string
+}
+
+export type NotificationConfigs = Record<NotificationType, NotificationConfig> & {
+  [key: string]: NotificationConfig
 }

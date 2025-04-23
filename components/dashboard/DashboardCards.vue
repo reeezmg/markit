@@ -17,8 +17,8 @@
 
     <ul v-if="lowStockEntries.length" class="divide-y divide-gray-200 dark:divide-zinc-700">
       <li v-for="entry in lowStockEntries" :key="entry.id" class="py-2 flex justify-between">
-        <span class="text-gray-700 dark:text-gray-200">{{ entry.variant?.name || 'Unknown' }}</span>
-        <span class="text-red-600 font-medium">{{ entry.variant?.qty }} left</span>
+        <span class="text-gray-700 dark:text-gray-200">{{ entry.name || 'Unknown' }}</span>
+        <span class="text-red-600 font-medium">{{ entry.qty }} left</span>
       </li>
     </ul>
     

@@ -2,23 +2,32 @@
 import { formatRelativeTime } from '~/utils/dates' // or your own helper
 import { useNotifications } from '~/composables/useNotifications'
 const { isNotificationsSlideoverOpen } = useDashboard()
-const { notifications, typeConfigs, getAction, markAsRead } = useNotifications()
-import type { Notification } from '~/types/notification'
+const { notifications:_notifications, typeConfigs, getAction, markAsRead } = useNotifications()
+import type { NotificationType, AppNotification } from '~/types/notification'
 
-
-const handleClick = async (notification: Notification) => {
+const notifications = toRef(_notifications)
+const handleClick = async (notification: AppNotification) => {
   await markAsRead(notification.id)
   if (notification.actionPath) {
     navigateTo(notification.actionPath)
     isNotificationsSlideoverOpen.value = false
   }
 }
+
+const notificationsVersion = ref(0)
+
+// Increment version when notifications change
+watch(
+  () => notifications.value.length,
+  () => notificationsVersion.value++
+)
 </script>
 
 <template>
   <UDashboardSlideover
     v-model="isNotificationsSlideoverOpen"
     title="Notifications"
+    :key="notificationsVersion"
   >
     <div class="p-4 space-y-3">
       <div 
@@ -40,7 +49,7 @@ const handleClick = async (notification: Notification) => {
         <div class="flex-1">
           <div class="flex justify-between text-sm">
             <span class="font-medium text-gray-900 dark:text-white">{{ notification.title }}</span>
-            <span class="text-gray-500 text-xs dark:text-gray-400">{{ formatRelativeTime(notification.createdAt)}}</span>
+            <span class="text-gray-500 text-xs dark:text-gray-400">{{ formatRelativeTime(notification.createdAt.toString())}}</span>
           </div>
           <p class="text-gray-600 text-sm dark:text-gray-300">{{ notification.message }}</p>
         </div>

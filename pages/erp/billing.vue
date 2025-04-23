@@ -1,7 +1,7 @@
 
 <script setup>
 import { useCreateBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
-import { appEvents, NotificationEventTypes } from '~/server/services/eventService'
+
 const CreateBill = useCreateBill();
 const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
@@ -408,6 +408,7 @@ if (items.value.length === 0) {
       await $fetch('/api/notifications/notify', {
       method: 'POST',
       body: {
+        userId:useAuth().session.value?.id,
         type: 'BILL',
         companyId: useAuth().session.value?.companyId,
         id: billResponse.id,
@@ -415,6 +416,14 @@ if (items.value.length === 0) {
         amount: billResponse.grandTotal
       }
     })
+    // await $trpc.notifications.create.mutate({
+    //   type: 'BILL',
+    //   companyId: useAuth().session.value?.companyId,
+    //   id: billResponse.id,
+    //   amount: billResponse.grandTotal,
+    //   invoiceNumber: billResponse.invoiceNumber || 0,
+    // });
+
 
 
   } catch (error) {
@@ -439,12 +448,62 @@ if (items.value.length === 0) {
       }) : [];
 
       // Push update promises to the array
-      updatePromises.push(
-        UpdateVariant.mutateAsync({
-          where: { id: item.variantId },
-          data: { qty: updatedQty, sizes: updatedSizes }
-        }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-      );
+      // updatePromises.push(
+      //   UpdateVariant.mutateAsync({
+      //     where: { id: item.variantId },
+      //     data: { qty: updatedQty, sizes: updatedSizes }
+      //   }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
+      // );
+      // if (updatedQty < 10 && updatedQty > 0) {
+      //   updatePromises.push(
+      //     await $fetch('/api/notifications/notify', {
+      //       method: 'POST',
+      //       body: {
+      //         type: 'LOW_STOCK',
+      //         companyId: item.companyId,
+      //         userId: useAuth().session.value?.id,
+      //         variantId: item.variantId 
+      //       }
+            
+      //     }));
+      //   }
+
+
+        updatePromises.push(
+    UpdateVariant.mutateAsync({
+      where: { id: item.variantId },
+      data: { qty: updatedQty, sizes: updatedSizes }
+    }).then(async (updatedVariant) => {
+      // 2. Check stock and send notification if needed
+      if (updatedQty < 10 && updatedQty > 0) {
+        try {
+               
+          
+          await $fetch('/api/notifications/notify', {
+            method: 'POST',
+            body: {
+              type: 'LOW_STOCK',
+              companyId: updatedVariant.companyId,
+              userId: useAuth().session.value?.id,
+              variantId: item.variantId 
+            }
+            
+          });
+          
+        } catch (error) {
+          console.error('Notification failed:', error);
+        }
+      }
+    }).catch(error => {
+      console.error(`Error updating variant ${item.variantId}`, error);
+    })
+  );
+
+
+
+
+
+
 
       updatePromises.push(
         UpdateItem.mutateAsync({
