@@ -9,7 +9,9 @@ import {
     useUpdateCategory,
     useUpdateManyCategory,
     useFindManyCategory,
+    useDeleteCategory
 } from '~/lib/hooks';
+const DeleteCategory = useDeleteCategory();
 const UpdateCategory = useUpdateCategory();
 const UpdateManyCategory = useUpdateManyCategory();
 const router = useRouter();
@@ -98,6 +100,7 @@ const action = (row) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
+            click: () => removeCategory(row.id),
         },
     ],
 ];
@@ -134,6 +137,8 @@ const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
 const pageTo = computed(() =>
     Math.min(page.value * pageCount.value, pageTotal.value),
 );
+
+
 
 // Data
 const queryArgs = reactive({
@@ -182,7 +187,13 @@ watchEffect(() => {
     refetch();
 });
 
-console.log('data', products);
+const removeCategory = async(id:string) => {
+  try {
+    await DeleteCategory.mutateAsync({ where: { id } });
+  } catch (err) {
+    console.log(err);
+  }
+};
 
 async function multiToggle(ids, status: boolean) {
     console.log(ids);

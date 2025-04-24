@@ -76,6 +76,7 @@ const handleAddSubCategory = () => {
         hsn: '',
         files: null,
         description: '',
+        isNew: true
     });
 };
 
@@ -178,35 +179,36 @@ const scrollToSection = (sectionId: string) => {
                 </UPageCard>
 
                 <!-- Force re-render by binding a unique key to the parent div -->
-                <div v-for="(subcat, index) in subcategory" :key="subcat.id">
-                    <UPageCard class="m-3" id="Create">
+                <UPageCard class="m-3" id="Subcategories">
+          <div class="text-xl mb-4">Subcategories</div>
+          
+                    <div v-for="(subcat, index) in subcategory" :key="subcat.id">
                         <AddCategorySubcategory 
-                            :id=subcat.id
-                            :index=index
-                            @update="subcategoryValue(index,$event)" 
+                        :index="index"
+                        :id="subcat.id"
+                        @update=" subcategoryValue(index, $event)"
                         />
                         <div class="mt-4 w-full text-end">
-                            <UButton
-                                label="Delete"
-                                trailing-icon="i-heroicons-x-mark"
-                                size="sm"
-                                color="red"
-                                @click="handleDeleteSubCategory(index)"
-                            />
+                        <UButton
+                            label="Delete"
+                            trailing-icon="i-heroicons-x-mark"
+                            size="sm"
+                            color="red"
+                            @click="handleDeleteSubCategory(index)"
+                        />
                         </div>
-                    </UPageCard>
-                </div>
+                        <hr class="h-px my-6 bg-gray-200 border-0 dark:bg-gray-700" />
+                    </div>
 
-                <div class="m-3">
                     <UButton
-                        label="Sub Category"
+                        label="Add Subcategory"
                         trailing-icon="i-heroicons-plus"
                         size="sm"
-                        color="green"
+                        color="primary"
                         block
                         @click="handleAddSubCategory"
                     />
-                </div>
+                    </UPageCard>
 
                 <div class="mt-5">
                     <button

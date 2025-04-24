@@ -73,10 +73,10 @@ watch(() => props.editDescription, (newDescription) => {
     description.value = newDescription ?? '';
 }, { immediate: true });
 
-watch(() => props.editCategory, (newCategory) => {
-    if (newCategory && categories.value?.length) {
-         selectedRow.value = categories.value.find(cat => cat.id === newCategory);
-     
+watch([() => props.editCategory,categories], ([newCategory,newCategories]) => {
+    if (newCategory && newCategories?.length) {
+         selectedRow.value = newCategories.find(cat => cat.id === newCategory);
+        console.log(newCategory)
     } else {
         selectedRow.value = {};
     }

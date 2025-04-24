@@ -98,6 +98,7 @@ model Company {
   expenses                   Expense[]
   payment                    Payment[]
   variants                   Variant[]
+  purchaseOrders             PurchaseOrder[]
   items                      Item[]
   status                     Boolean              @default(true)
   type                       CompanyType
@@ -110,6 +111,7 @@ model Company {
   address                    Address?
   distributor                DistributorCompany[]
   billCounter                Int                  @default(0) @map("bill_counter")
+  barcodeCounter             Int                  @default(1) @map("barcode_counter")
 
   @@map("companies")
 }
@@ -252,18 +254,16 @@ model Product {
   id              String        @id() @default(uuid())
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt() @map("updated_at")
-  /// @length(1, 256)
   name            String
-  /// @length(1, 256)
   brand           String?
   status          Boolean       @default(true)
   rating          Float?
   description     String?
   company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId       String        @map("company_id")
-  category        Category?     @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category        Category?     @relation(fields: [categoryId], references: [id])
   categoryId      String?       @map("category_id")
-  subcategory     Subcategory?  @relation(fields: [subcategoryId], references: [id], onDelete: Cascade)
+  subcategory     Subcategory?  @relation(fields: [subcategoryId], references: [id])
   subcategoryId   String?       @map("subcategory_id")
   variants        Variant[]
   purchaseorder   PurchaseOrder @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
@@ -288,6 +288,7 @@ model Variant {
   pprice             Float?               @map("p_price")
   qty                Int?
   discount           Float?
+  dprice             Float?               @map("d_price")
   sizes              Json?
   images             String[]
   tax                Float                @default(0.0)
@@ -330,6 +331,8 @@ model PurchaseOrder {
   distributor   Distributor? @relation(fields: [distributorId], references: [id])
   distributorId String?      @map("distributor_id")
   paymentType   paymentType? @map("payment_type")
+  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String       @map("company_id")
 
   @@map("purchase_orders")
 }
@@ -357,7 +360,7 @@ model Bill {
   entries        Entry[]
   company        Company       @relation(fields: [companyId], references: [id])
   companyId      String        @map("company_id")
-  account        Account?      @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  account        Account?      @relation(fields: [accountId], references: [id])
   accountId      String?       @map("account_id")
   client         Client?       @relation(fields: [clientId], references: [id])
   clientId       String?       @unique() @map("client_id")
@@ -404,14 +407,14 @@ model Entry {
   tax        Float?
   value      Float?
   size       String?
-  variant    Variant?  @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variant    Variant?  @relation(fields: [variantId], references: [id])
   variantId  String?   @map("variant_id")
   outOfStock Boolean?  @map("out_of_stock")
-  category   Category? @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  category   Category? @relation(fields: [categoryId], references: [id])
   categoryId String?   @map("category_id")
   bill       Bill?     @relation(fields: [billId], references: [id], onDelete: Cascade)
   billId     String?   @map("bill_id")
-  item       Item?     @relation(fields: [itemId], references: [id], onDelete: Cascade)
+  item       Item?     @relation(fields: [itemId], references: [id])
   itemId     String?   @unique() @map("item_id")
 
   @@map("entries")
@@ -463,7 +466,7 @@ model Expense {
   totalAmount       Float           @map("total_amount")
   createdAt         DateTime        @default(now()) @map("created_at")
   updatedAt         DateTime        @updatedAt() @map("updated_at")
-  expensecategory   ExpenseCategory @relation(fields: [expensecategoryId], references: [id], onDelete: Cascade)
+  expensecategory   ExpenseCategory @relation(fields: [expensecategoryId], references: [id])
   expensecategoryId String          @map("expense_category_id")
   company           Company         @relation(fields: [companyId], references: [id])
   companyId         String          @map("company_id")
@@ -619,7 +622,7 @@ model DistributorCompany {
 model VariantSizeBarcode {
   id        Int     @id() @default(autoincrement())
   variantId String  @map("variant_id")
-  size      String
+  size      String?
   barcode   String  @unique()
   variant   Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
 

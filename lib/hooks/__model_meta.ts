@@ -146,6 +146,12 @@ const metadata = {
                     isDataModel: true,
                     isArray: true,
                     backLink: 'company',
+                }, purchaseOrders: {
+                    name: "purchaseOrders",
+                    type: "PurchaseOrder",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'company',
                 }, items: {
                     name: "items",
                     type: "Item",
@@ -201,6 +207,10 @@ const metadata = {
                     name: "billCounter",
                     type: "Int",
                     attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
+                }, barcodeCounter: {
+                    name: "barcodeCounter",
+                    type: "Int",
+                    attributes: [{ "name": "@default", "args": [{ "value": 1 }] }],
                 },
             }
             , uniqueConstraints: {
@@ -873,6 +883,10 @@ const metadata = {
                     name: "discount",
                     type: "Float",
                     isOptional: true,
+                }, dprice: {
+                    name: "dprice",
+                    type: "Float",
+                    isOptional: true,
                 }, sizes: {
                     name: "sizes",
                     type: "Json",
@@ -1045,6 +1059,18 @@ const metadata = {
                     name: "paymentType",
                     type: "paymentType",
                     isOptional: true,
+                }, company: {
+                    name: "company",
+                    type: "Company",
+                    isDataModel: true,
+                    backLink: 'purchaseOrders',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "companyId" },
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'company',
                 },
             }
             , uniqueConstraints: {
@@ -2126,6 +2152,7 @@ const metadata = {
                 }, size: {
                     name: "size",
                     type: "String",
+                    isOptional: true,
                 }, barcode: {
                     name: "barcode",
                     type: "String",
@@ -2186,16 +2213,11 @@ const metadata = {
     }
     ,
     deleteCascade: {
-        company: ['Product', 'Variant', 'Item'],
-        category: ['Product', 'Entry'],
-        subcategory: ['Product'],
+        company: ['Product', 'Variant', 'Item', 'PurchaseOrder'],
         product: ['Variant'],
-        variant: ['Item', 'Entry', 'VariantSizeBarcode'],
-        item: ['Entry'],
+        variant: ['Item', 'VariantSizeBarcode'],
         purchaseOrder: ['Product'],
         bill: ['Entry'],
-        account: ['Bill'],
-        expenseCategory: ['Expense'],
     }
     ,
     authModel: 'User'

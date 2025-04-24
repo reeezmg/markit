@@ -241,7 +241,7 @@ export function useCountPurchaseOrder<TArgs extends Prisma.PurchaseOrderCountArg
 }
 import type { paymentType } from '@prisma/client';
 
-export function useCheckPurchaseOrder<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; distributorId?: string; paymentType?: paymentType }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckPurchaseOrder<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; distributorId?: string; paymentType?: paymentType; companyId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('PurchaseOrder', `${endpoint}/purchaseOrder/check`, args, options, fetch);
 }

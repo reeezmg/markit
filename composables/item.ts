@@ -1,8 +1,8 @@
-export const getItem = async (purchaseOrderId: string) => {
+export const getItem = async (variants: any) => {
     try {
         const res = await $fetch('/api/item', {
             method: 'POST',
-            body: { purchaseOrderId }
+            body: { variants }
         });
         
         return res;

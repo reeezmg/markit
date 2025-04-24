@@ -5,150 +5,126 @@ import { toTypedSchema } from '@vee-validate/zod';
 import { v4 as uuidv4 } from 'uuid';
 
 const props = defineProps<{
-    index:number;
-    id:number;
-    editName?: string | null;
-    editHsn?: string | null;
-    editDescription?: string | null;
-    editFile?: string | null;
+  index: number;
+  id: string;
+  editName?: string;
+  editDescription?: string;
+  editFile?: string;
+  editStatus?: boolean;
 }>();
+
 const emit = defineEmits(['update']);
 
-const schemas = z.object({
-    name: z.string().min(2),
-    hsn: z.string().optional(),
-    description: z.string(),
+// Form validation schema
+const schema = z.object({
+  name: z.string().min(2, 'Name must be at least 2 characters'),
+  description: z.string().optional(),
 });
 
-const { errors, defineField, values } = useForm({
-    validationSchema: toTypedSchema(schemas),
+const { errors, defineField, values, handleSubmit } = useForm({
+  validationSchema: toTypedSchema(schema),
+  initialValues: {
+    name: props.editName || '',
+    description: props.editDescription || '',
+  }
 });
 
-interface ImageData {
-    file?: File;
-    uuid: string;
-}
+const [name] = defineField('name');
+const [description] = defineField('description');
+const status = ref(props.editStatus !== undefined ? props.editStatus : true);
 
-const selectedFiles = ref<ImageData[]>([]);
+// Image handling
+const selectedFiles = ref<Array<{ file?: File; uuid: string }>>([]);
 const imagePreviewUrls = ref<string[]>([]);
 
-const [name, nameAttrs] = defineField('name');
-const [hsn, hsnAttrs] = defineField('hsn');
-const [description, descriptionAttrs] = defineField('description');
-
-watchEffect(() => {
-    if (props.editName) {
-        name.value = props.editName;
-    }
-    if (props.editHsn) {
-        hsn.value = props.editHsn;
-    }
-    if (props.editDescription) {
-        description.value = props.editDescription;
-        console.log(props.editDescription);
-    }
-    if (props.editFile) {
-        selectedFiles.value = [];
-        selectedFiles.value.push({ uuid: props.editFile });
-        console.log(props.editFile, selectedFiles.value);
-    }
-});
-
-async function handleAddImageChange(e: Event) {
-    selectedFiles.value = [];
-    const files = (e.target as HTMLInputElement).files;
-
-    if (files) {
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const uuid = uuidv4();
-            selectedFiles.value.push({ file, uuid });
-            console.log(selectedFiles);
-            const reader = new FileReader();
-            reader.onload = () => {
-                imagePreviewUrls.value.push(reader.result as string);
-            };
-            reader.readAsDataURL(file);
-        }
-    }
+// Initialize with existing image if available
+if (props.editFile) {
+  selectedFiles.value.push({ uuid: props.editFile });
 }
 
+// Handle image changes
+const handleAddImageChange = (e: Event) => {
+  const files = (e.target as HTMLInputElement).files;
+  if (files && files.length > 0) {
+    selectedFiles.value = [];
+    const file = files[0];
+    const uuid = uuidv4();
+    selectedFiles.value.push({ file, uuid });
+    
+    const reader = new FileReader();
+    reader.onload = () => {
+      imagePreviewUrls.value = [reader.result as string];
+    };
+    reader.readAsDataURL(file);
+  }
+};
+
+// Emit updates when values change
 watchEffect(() => {
-    emit('update', {
-        id:props.id,
-        name: name.value,
-        hsn: hsn.value,
-        description: description.value,
-        file: selectedFiles.value,
-    });
+  emit('update', {
+    id: props.id,
+    name: name.value,
+    description: description.value,
+    image: selectedFiles.value[0]?.uuid || props.editFile,
+    status: status.value
+  });
 });
 
-const fileInputId = computed(() => `image-${props.index}`);
-
+const fileInputId = computed(() => `subcategory-image-${props.index}`);
 </script>
 
-<template id="create">
-    <div class="text-xl mb-4">Sub Category {{index + 1}}</div>
-    <hr class="h-px my-8 bg-gray-200 border-0 dark:bg-gray-700" />
-<div class="flex space-x-2">
+<template>
+  <div class="flex space-x-4">
+    <!-- Image Upload -->
     <div class="mb-5">
-        <div class="block text-sm font-medium leading-6 dark:text-white mb-1"
-            >Image</div
+      <div class="block text-sm font-medium leading-6 dark:text-white mb-1">Image</div>
+      <label :for="fileInputId">
+        <div
+          class="flex justify-center items-center border border-gray-200 dark:border-gray-700 w-32 h-32 rounded-lg overflow-hidden"
         >
-        <label :for=fileInputId>
-            <div
-                v-if="imagePreviewUrls.length > 0"
-                class="flex justify-center items-center border border-gray-200 dark:border-gray-700 w-32 h-36"
-            >
-                <img
-                    :src="imagePreviewUrls[0]"
-                    alt="Selected Image"
-                    style="max-width: 100%; max-height: 100%"
-                />
-            </div>
-
-            <div
-                v-else-if="
-                    imagePreviewUrls.length == 0 && selectedFiles.length > 0
-                "
-                class="flex justify-center items-center border border-gray-200 dark:border-gray-700 w-32 h-36"
-            >
-                <img
-                    :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${selectedFiles[0].uuid}`"
-                    alt="Selected Image"
-                    style="max-width: 100%; max-height: 100%"
-                />
-            </div>
-
-            <div
-                v-else
-                class="flex justify-center items-center border border-gray-200 dark:border-gray-700 w-32 h-36"
-            >
-                <UIcon name="i-heroicons-camera" class="text-4xl" />
-            </div>
-            <input
-                :id=fileInputId
-                name="image"
-                type="file"
-                accept="image/*"
-                class="sr-only"
-                multiple
-                @change="handleAddImageChange"
-            />
-        </label>
+          <img
+            v-if="imagePreviewUrls.length > 0"
+            :src="imagePreviewUrls[0]"
+            alt="Selected Image"
+            class="object-cover w-full h-full"
+          />
+          <img
+            v-else-if="selectedFiles.length > 0"
+            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${selectedFiles[0].uuid}`"
+            alt="Current Image"
+            class="object-cover w-full h-full"
+          />
+          <div
+            v-else
+            class="flex flex-col items-center justify-center text-gray-400"
+          >
+            <UIcon name="i-heroicons-camera" class="text-3xl mb-1" />
+            <span class="text-xs">Upload Image</span>
+          </div>
+        </div>
+        <input
+          :id="fileInputId"
+          type="file"
+          accept="image/*"
+          class="sr-only"
+          @change="handleAddImageChange"
+        />
+      </label>
     </div>
 
-    <div class="w-full mt-1">
-        <UFormGroup label="Name" required :error="errors.name && errors.name" class="w-full  mb-3">
-            <UInput
-                id="name"
-                v-model="name"
-                v-bind="nameAttrs"
-                type="text"
-                class="w-full"
-            />
-        </UFormGroup>
-    </div>
-    </div>
+    <!-- Form Fields -->
+    <div class="flex-1 space-y-4">
+      <UFormGroup label="Name" required :error="errors.name">
+        <UInput v-model="name" type="text" />
+      </UFormGroup>
 
+      <UFormGroup label="Description" :error="errors.description">
+        <UTextarea v-model="description" />
+      </UFormGroup>
+
+      <UFormGroup label="Status">
+        <UToggle v-model="status" />
+      </UFormGroup>
+    </div>
+  </div>
 </template>

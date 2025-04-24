@@ -8,7 +8,9 @@ import {
     useUpdateProduct,
     useUpdateManyProduct,
     useCreatePurchaseOrder,
-    useUpdateVariant
+    useUpdateVariant,
+    useCountProduct,
+    useDeleteProduct
 } from '~/lib/hooks';
 
 definePageMeta({
@@ -16,6 +18,7 @@ definePageMeta({
 });
 
 const UpdateProduct = useUpdateProduct();
+const DeleteProduct = useDeleteProduct();
 const UpdateManyProduct = useUpdateManyProduct();
 const Updatevariant = useUpdateVariant();
 const CreatePurchaseOrder = useCreatePurchaseOrder();
@@ -65,6 +68,11 @@ const variantcolumns = [
         sortable: true,
     },
     {
+        key: 'dprice',
+        label: 'discount',
+        sortable: true,
+    },
+    {
         key: 'tax',
         label: 'Tax',
         sortable: true,
@@ -73,11 +81,6 @@ const variantcolumns = [
         key: 'status',
         label: 'Status',
         sortable: true,
-    },
-    {
-        key: 'actions',
-        label: 'Actions',
-        sortable: false,
     },
     
 ];
@@ -142,21 +145,7 @@ const action = (row) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-        },
-    ],
-];
-const variantaction = (row) => [
-    [
-        {
-            label: 'Edit',
-            icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`products/edit/${row.id}`),
-        },
-    ],
-    [
-        {
-            label: 'Delete',
-            icon: 'i-heroicons-trash-20-solid',
+            click: () => removeProduct(row.id),
         },
     ],
 ];
@@ -192,11 +181,11 @@ const resetFilters = () => {
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
-const pageCount = ref(10);
-const pageTotal = computed(() => products.value?.length); 
-const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
+const pageCount = ref('10');
+const { data: pageTotal }  = useCountProduct({where: { companyId: useAuth().session.value?.companyId }})
+const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
-    Math.min(page.value * pageCount.value, pageTotal.value),
+    Math.min(page.value * parseInt(pageCount.value), pageTotal.value),
 );
 
 // Data
@@ -224,8 +213,8 @@ const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
         orderBy: {
             [sort.value.column]: sort.value.direction,
         },
-        skip: (page.value - 1) * pageCount.value,
-        take: pageCount.value,
+        skip: (page.value - 1) * parseInt(pageCount.value),
+        take: parseInt(pageCount.value),
     };
 });
 
@@ -236,10 +225,13 @@ const {
     refetch,
 } = useFindManyProduct(queryArgs);
 
-watch(expand,(newexpand) => {
-    console.log(newexpand)
-})
-
+const removeProduct = async(id:string) => {
+  try {
+    await DeleteProduct.mutateAsync({ where: { id } });
+  } catch (err) {
+    console.log(err);
+  }
+};
 
 async function multiToggle(ids, status: boolean) {
     try {
@@ -310,7 +302,11 @@ async function toggleVariantStatus(id: string, status:boolean) {
 
 const handleAdd = async() => {
     const res = await CreatePurchaseOrder.mutateAsync({
-        data:{},
+        data:{
+            company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
+        },
         select: { id: true }
     })
     console.log(res)
@@ -367,7 +363,7 @@ const handleAdd = async() => {
                     <span class="text-sm leading-5">Rows per page:</span>
                     <USelect
                         v-model="pageCount"
-                        :options="[3, 5, 10, 20, 30, 40]"
+                        :options="[3, 5, 10, 20, 30, 40].map(num => ({ label: num, value: num }))"
                         class="me-2 w-20"
                         size="xs"
                     />
@@ -589,15 +585,6 @@ const handleAdd = async() => {
                         </span>
                     </Switch>
                 </template>
-                <template #actions-data="{ row }">
-                    <UDropdown :items="variantaction(row)">
-                        <UButton
-                            color="gray"
-                            variant="ghost"
-                            icon="i-heroicons-ellipsis-horizontal-20-solid"
-                        />
-                    </UDropdown>
-                </template>
                     </UTable>
                     </div>
                 </template>
@@ -620,7 +607,7 @@ const handleAdd = async() => {
 
                     <UPagination
                         v-model="page"
-                        :page-count="pageCount"
+                        :page-count="parseInt(pageCount)"
                         :total="pageTotal"
                         :ui="{
                             wrapper: 'flex items-center gap-1',

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useCreateProduct,useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory} from '~/lib/hooks';
+import { useCreateProduct,useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import { paymentType as PType } from '@prisma/client';
 
@@ -31,12 +31,14 @@ interface BarcodeItem {
 
 
 interface Variant {
-  id:number|string;
+  id:string;
   name: string;
   code: string;
   qty: number;
   sprice: number;
   pprice: number;
+  dprice: number;
+  discount: number;
   sizes: { size: string; qty: number; }[]; // Assuming sizes are strings, adjust if needed
   images: string[];
 }
@@ -49,6 +51,8 @@ interface Product {
   files: any[]; // Adjust type based on file structure (e.g., File[])
   category:  Record<string, any>;
   subcategory:  Record<string, any>;
+  categoryId:  string;
+  subcategoryId:  string;
   variants: Variant[];
 }
 
@@ -68,13 +72,17 @@ const selectedProduct: Ref<Product> = ref({
   files: [], 
   category: {}, 
   subcategory: {}, 
+  categoryId: '', 
+  subcategoryId: '', 
   variants: [{
-    id:0,
+    id:'',
     name: '',
     code: '',
     qty: 0,
     sprice: 0,
     pprice: 0,
+    dprice: 0,
+    discount: 0,
     sizes: [],
     images: []
   }]
@@ -107,21 +115,25 @@ const distributorId = ref('');
 const paymentType = ref('');
 
 const variants = ref<{ 
-    id:number;
+    id:string;
     name: string; 
     code: string; 
     qty: number; 
     sprice: number; 
     pprice: number; 
+    dprice: number; 
+    discount: number; 
     sizes: { size: string; qty: number }[];
     images: ImageData[];
 }[]>([{ 
-    id:0,
+    id:String(idCounter.value++),
     name: '', 
     code: '', 
     qty: 0, 
     sprice: 0, 
     pprice: 0, 
+    dprice: 0, 
+    discount: 0, 
     sizes: [], 
     images: [] 
 }]);
@@ -135,7 +147,7 @@ const { data: categoryTax } = useFindUniqueCategory({
     thresholdAmount: true,
     taxType: true,
   }
-})
+},{ enabled: computed(() => !!category.value) });
 
 
 const createValue = (data: any) => {
@@ -165,6 +177,7 @@ const fileValue = (data: any) => {
 
 const handleProductSelected = (product:any) => {
   selectedProduct.value = product;
+  console.log(selectedProduct.value)
   clearInputs.value = false;
 };
 
@@ -182,6 +195,35 @@ const handleAdd = async (e: Event) => {
 
   e.preventDefault();
   try {
+
+    if (!name.value || name.value.trim() === '') {
+      toast.add({
+        title: 'Please fill product name',
+        color: 'red',
+      });
+      return;
+    }
+    if (!category.value || category.value.trim() === '') {
+      toast.add({
+        title: 'Please fill product category',
+        color: 'red',
+      });
+      return;
+    }
+
+    // Validate variant names
+    const emptyVariantIndex = variants.value.findIndex(
+      (variant) => !variant.name || variant.name.trim() === ''
+    );
+    
+    if (emptyVariantIndex !== -1) {
+      toast.add({
+        title: `Please fill variant ${emptyVariantIndex + 1} name`,
+        color: 'red',
+      });
+      return;
+    }
+
 
     const base64files = await Promise.all(
     variants.value.flatMap((variant) =>
@@ -246,11 +288,13 @@ const res = await CreateProduct.mutateAsync({
           ...(variant.code && {code: variant.code}),
           sprice: variant.sprice || 0,
           pprice: variant.pprice || 0,
+          dprice: variant.dprice || 0,
+          discount: variant.discount || 0,
           status: true,
           qty: variant.qty,
           tax: tax, // Add the calculated tax here
           images: variant.images.map((file) => file.uuid),
-          sizes: variant.sizes, 
+          ...(variant.sizes.length > 0 && {sizes: variant.sizes}),
           company: {
             connect: { id: useAuth().session.value?.companyId },
           },
@@ -258,7 +302,19 @@ const res = await CreateProduct.mutateAsync({
       }),
     },
   },
+  select:{
+    variants:{
+      select:{
+        id:true,
+        sizes:true,
+        qty:true,
+        
+      }
+    }
+  }
 });
+      // console.log(resimage)
+      await getItem(res?.variants)
 
     // const imageData = res?.images.map((item) => (
     //      `https://unifeed.s3.ap-south-1.amazonaws.com/${item}`
@@ -317,7 +373,8 @@ const res = await CreateProduct.mutateAsync({
    
       // console.log(files[0].file)
       // const resimage = await postImage(files[0].file)
-      // console.log(resimage)
+
+
       handleReset()
       
 
@@ -333,110 +390,160 @@ const res = await CreateProduct.mutateAsync({
 };
 
 
-
-
 const handleEdit = async (e: Event) => {
-      e.preventDefault();
-      try {
+  e.preventDefault();
+  try {
+    // Validate product name
+    if (!name.value || name.value.trim() === '') {
+      toast.add({
+        title: 'Please fill product name',
+        color: 'red',
+      });
+      return;
+    }
+    if (!category.value || category.value.trim() === '') {
+      toast.add({
+        title: 'Please fill product category',
+        color: 'red',
+      });
+      return;
+    }
 
-        const base64files = await Promise.all(
-        variants.value.flatMap((variant) =>
-          variant.images
-            .filter((file) => file.file instanceof File) // Only process if file.file is a File
-            .map(async (file) => {
-              const base64 = await prepareFileForApi(file.file);
-              return { base64, uuid: file.uuid };
-            })
+    // Validate variant names
+    const emptyVariantIndex = variants.value.findIndex(
+      (variant) => !variant.name || variant.name.trim() === ''
+    );
+    
+    if (emptyVariantIndex !== -1) {
+      toast.add({
+        title: `Please fill variant ${emptyVariantIndex + 1} name`,
+        color: 'red',
+      });
+      return;
+    }
+
+    const base64files = await Promise.all(
+      variants.value.flatMap((variant) =>
+        variant.images
+          .filter((file) => file.file instanceof File) // Only process if file.file is a File
+          .map(async (file) => {
+            const base64 = await prepareFileForApi(file.file);
+            return { base64, uuid: file.uuid };
+          })
+      )
+    );
+
+    if (base64files.length > 0) {
+      const awsres = await Promise.all(
+        base64files.map((file) =>
+          awsService.uploadBase64File(file.base64, file.uuid)
         )
       );
+    }
 
-      if (base64files.length > 0) {
-        const awsres = await Promise.all(
-          base64files.map((file) =>
-            awsService.uploadBase64File(file.base64, file.uuid)
-          )
-        );
-      }
     const productId = selectedProduct.value.id;
-    console.log(variants.value)
+    console.log(variants.value);
 
-// Step 3: Update product and add new categories
-const res = await UpdateProduct.mutateAsync({
-  where: { id: productId },
-  data: {
-    name: name.value || '',
-    brand: brand.value || '',
-    description: description.value || '',
-    status: live.value ?? undefined,
-    company: {
-      connect: { id: useAuth().session.value?.companyId },
-    },
-  
-    ...(category.value && {category: {
-      connect: { id:category.value }, 
-    }}),
+    // Step 3: Update product and add new categories
+    const res = await UpdateProduct.mutateAsync({
+      where: { id: productId },
+      data: {
+        name: name.value || '',
+        brand: brand.value || '',
+        description: description.value || '',
+        status: live.value ?? undefined,
+        company: {
+          connect: { id: useAuth().session.value?.companyId },
+        },
+      
+        ...(category.value && {category: {
+          connect: { id:category.value }, 
+        }}),
 
-    ...(subcategory.value && {subcategory: {
-      connect: { id:subcategory.value }, 
-    }}),
-          
-    variants: {
-      deleteMany: {},
-      create: variants.value.map((variant) => {
-        // Calculate tax based on category tax type
-        let tax = 0;
-        if (categoryTax.value) {
-          if (categoryTax.value.taxType === 'FIXED') {
-            tax = categoryTax.value.fixedTax || 0;
-          } else if (categoryTax.value.taxType === 'VARIABLE') {
-            const threshold = categoryTax.value.thresholdAmount || 0;
-            tax = (variant.sprice || 0) > threshold 
-              ? (categoryTax.value.taxAboveThreshold || 0)
-              : (categoryTax.value.taxBelowThreshold || 0);
+        ...(subcategory.value && {subcategory: {
+          connect: { id:subcategory.value }, 
+        }}),
+              
+        variants: {
+          // Delete variants that are not in the current list
+          deleteMany: {
+            id: {
+              notIn: variants.value.filter(v => v.id).map(v => v.id)
+            }
+          },
+          // Create or update variants
+          upsert: variants.value.map((variant) => {
+            // Calculate tax based on category tax type
+            let tax = 0;
+            if (categoryTax.value) {
+              if (categoryTax.value.taxType === 'FIXED') {
+                tax = categoryTax.value.fixedTax || 0;
+              } else if (categoryTax.value.taxType === 'VARIABLE') {
+                const threshold = categoryTax.value.thresholdAmount || 0;
+                tax = (variant.sprice || 0) > threshold 
+                  ? (categoryTax.value.taxAboveThreshold || 0)
+                  : (categoryTax.value.taxBelowThreshold || 0);
+              }
+            }
+
+            const variantData = {
+              name: variant.name || '',
+              ...(variant.code && {code: variant.code}),
+              sprice: variant.sprice || 0,
+              pprice: variant.pprice || 0,
+              dprice: variant.dprice || 0,
+              discount: variant.discount || 0,
+              status: true,
+              images: variant.images.map((file) => file.uuid),
+              qty: variant.qty,
+              tax: tax,
+              ...(variant.sizes.length > 0 && {sizes: variant.sizes}),
+              company: {
+                connect: { id: useAuth().session.value?.companyId },
+              },
+            };
+
+            return {
+              where: { id: variant.id || '' }, // For new variants, this will be empty
+              create: variantData,
+              update: variantData,
+            };
+          }),
+        },
+      },
+      select: {
+        variants: {
+          select: {
+            id: true,
+            sizes: true,
+            qty: true,
           }
         }
-
-        return {
-          name: variant.name || '',
-          ...(variant.code && {code: variant.code}),
-          sprice: variant.sprice || 0,
-          pprice: variant.pprice || 0,
-          status: true,
-          images: variant.images.map((file) => file.uuid),
-          qty: variant.qty,
-          tax: tax, // Add the calculated tax here
-          sizes: variant.sizes, 
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-        };
-      }),
-    },
-  },
-});
-
-handleReset()
-
+      }
+    });
     
-      toast.add({
-        title: 'Product Edited!',
-        id: 'modal-success',
-      });
+    console.log(res?.variants);
+    await getItem(res?.variants);
+    handleReset();
+
+    toast.add({
+      title: 'Product Edited!',
+      id: 'modal-success',
+    });
     
   } catch (err: any) {
-    console.log(err.info?.message ?? err);
+    toast.add({
+        title: `Something went wrong!`,
+        color: 'red',
+      });
   }
 };
 
-
-
 const addVariant = () => {
-  if (!selectedProduct.value.id) {
-    variants.value.push({id:idCounter.value++, name: '',code:'', qty: 0, sprice: 0,pprice: 0, sizes: [], images: [] });
-  } else {
+ 
     // Create a shallow copy of the variants array to ensure it's not read-only
     const newVariants = [...selectedProduct.value.variants];
-    newVariants.push({id:idCounter.value++, name: '', code:'',qty: 0, sprice: 0,pprice: 0,  sizes: [], images: [] });
+    newVariants.push({id:String(idCounter.value++), name: '', code:'',qty: 0, sprice: 0,pprice: 0,dprice: 0,discount: 0,  sizes: [], images: [] });
     
     // Update the selectedProduct with the new variants array
     selectedProduct.value = {
@@ -444,15 +551,10 @@ const addVariant = () => {
       variants: newVariants,
     };
   }
-};
+
 
 const removeVariant = (index: number) => {
-  if (!selectedProduct.value.id) {
-    // If no product is selected, modify the local variants array
-    const newVariants = [...variants.value]; // Create a shallow copy
-    newVariants.splice(index, 1); // Remove the variant at the specified index
-    variants.value = newVariants; // Update the reactive array
-  } else {
+  
     // If a product is selected, modify its variants array
     const newVariants = [...selectedProduct.value.variants]; // Create a shallow copy
     newVariants.splice(index, 1); // Remove the variant at the specified index
@@ -462,73 +564,111 @@ const removeVariant = (index: number) => {
       ...selectedProduct.value,
       variants: newVariants,
     };
-    const newVariantss = [...variants.value]; // Create a shallow copy
-    newVariantss.splice(index, 1); // Remove the variant at the specified index
-    variants.value = newVariantss;
+
+    variants.value.splice(index, 1);
+   
+
+};
+
+
+const { data: items, refetch: itemRefetch } = useFindUniquePurchaseOrder({
+  where: computed(() => ({ id: poId })), // Ensure poId is not undefined
+  select: {
+    id: true, // select other purchase order fields if needed
+    products: {
+      select: {
+        name: true,
+        variants: {
+          select: {
+            code: true,
+            name: true,
+            sprice: true,
+            dprice: true,
+            items: {
+              select: {
+                barcode: true,
+                size: true,
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}, {
+  enabled: false
+});
+
+
+const handleSave = async () => {
+  try {
+     await itemRefetch();
+    if (!items.value?.products) {
+      throw new Error("No items found");
+    }
+
+    // Generate printable barcode format
+    barcodes.value = items.value?.products.flatMap(product => 
+      product.variants.flatMap(variant => 
+        variant.items.map(item => ({
+          barcode: item.barcode ?? '',
+          code: variant.code ?? '',
+          productName: product.name,
+          name: variant.name,
+          sprice: variant.sprice,
+          dprice: variant.dprice,
+          size: item.size,
+        }))
+      )
+    );
+
+    console.log(barcodes.value)
+
+    isOpen.value = true;
+
+    await UpdatePurchaseOrder.mutateAsync({
+      where: { id: poId }, // Use .value if poId is a ref
+      data: {
+        ...(distributorId.value && {
+          distributor: {
+            connect: {
+              id: distributorId.value
+            }
+          }
+        }),
+        ...(paymentType.value && {
+          paymentType: paymentType.value as PType
+        })
+      }
+    });
+
+  } catch (error) {
+    console.error("Failed to save purchase order", error);
+    // Consider adding user feedback here
   }
 };
 
 
-
-
-
-
-
-const handleSave = async () => {
-    try {
-        const {items} = await getItem(poId);
-        console.log(items)
-        if (!items || items.length === 0) {
-            console.warn("No items generated");
-            return;
-        }
-
-        // Generate printable barcode format
-        barcodes.value = items.map(item => ({
-          barcode: item.barcode ?? '',
-          code: item.variant.code ?? '',
-          productName:item.variant.product.name,
-          name: item.variant.name,
-          sprice:item.variant.sprice,
-          size:item.size,
-        }));
-
-        isOpen.value = true
-
-        await UpdatePurchaseOrder.mutateAsync({
-          where: { id: poId },
-          data: {
-            ...(distributorId.value && {
-              distributor: {
-              connect: {
-                id: distributorId.value
-              }
-            },
-            }),
-            ...(paymentType.value && 
-              {
-                paymentType: paymentType.value as PType
-              }
-             )
-            
-             
-          }
-        });
-
-    } catch (error) {
-        console.error("Failed to fetch items", error);
-    }
-};
-
-
-
 const handleReset = async() => {
+
   clearInputs.value = true
   createRef.value?.resetForm()
   variantRef.value.forEach((refInstance:any) => {
     refInstance?.resetForm();
   });
   mediaRefs.value.forEach((media:any) => media?.resetForm());
+  variants.value = [{
+    id:'',
+    name: '', 
+    code: '', 
+    qty: 0, 
+    sprice: 0, 
+    pprice: 0, 
+    dprice: 0, 
+    discount: 0, 
+    sizes: [], 
+    images: []
+  }];
   selectedProduct.value = {
     id:'',
     name: '',
@@ -537,13 +677,17 @@ const handleReset = async() => {
     files: [], // Reset reactive array
     category: {},
     subcategory: {},
+    categoryId: '',
+    subcategoryId: '',
     variants: [{
-        id:0,
+        id:'',
         name: '', 
         code: '', 
         qty: 0, 
         sprice: 0, 
         pprice: 0, 
+        dprice: 0, 
+        discount: 0, 
         sizes: [], 
         images: [] 
     }]
@@ -565,9 +709,9 @@ watch(isOpenAdd, (newVal) => {
     handleReset()
   }
 });
-watch(categoryTax, (newVal) => {
+watch(variants, (newVal) => {
   console.log(newVal)
-});
+},{ immediate: true ,deep: true });
 
 </script>
 
@@ -582,7 +726,7 @@ watch(categoryTax, (newVal) => {
 
         <div class="md:flex md:flex-row">
             <div class="md:w-1/2">
-              <div v-if="clearInputs" class="m-3 hidden md:block">
+              <div  class="m-3 hidden md:block">
                     <button
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleSave"
@@ -590,14 +734,7 @@ watch(categoryTax, (newVal) => {
                         Save Order
                     </button>
                 </div>
-                <div v-else class="m-3 hidden md:block">
-                    <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
-                        @click="handleReset"
-                    >
-                        Add Product
-                    </button>
-                </div>
+               
     
                 <div class="m-3 md:hidden ">
                     <button
@@ -612,7 +749,7 @@ watch(categoryTax, (newVal) => {
                 <AddProductTable @product-selected="handleProductSelected" @clicked="isOpenAdd = true"/>
               </UPageCard>
 
-              <div v-if="clearInputs" class="m-3">
+              <div class="m-3">
                     <button
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleSave"
@@ -620,34 +757,39 @@ watch(categoryTax, (newVal) => {
                         Save Order
                     </button>
                 </div>
-                <div v-else class="m-3">
-                    <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
-                        @click="handleReset"
-                    >
-                        Add Product
-                    </button>
-                </div>
+              
             </div>
             
 
             <div class="hidden md:flex md:flex-col md:w-1/2">
+              <div class="flex flex-row">
+              <div>
               <div v-if="clearInputs" class="mx-3 mt-3">
                     <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                        class="rounded-md  dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
                     >
                         Add Product
                     </button>
                 </div>
-                <div v-else class="mx-3 mt-3">
+                <div v-else class="mx-1 mt-3">
                     <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                        class="rounded-md  dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
                     >
                         Edit Product
                     </button>
                 </div>
+              </div>
+                <div class="mx-1 mt-3">
+                    <button
+                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                        @click="handleReset"
+                    >
+                       Reset form
+                    </button>
+                </div>
+              </div>
                 <UPageCard class="m-3" id="Create">
                     <AddProductCreate 
                         ref="createRef"
@@ -664,7 +806,7 @@ watch(categoryTax, (newVal) => {
                 </UPageCard> -->
 
                
-                  <div v-for="(variant, index) in ( selectedProduct?.variants[0].id ? selectedProduct?.variants : variants)" :key="variant.id" class="mb-3">
+                  <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.id" class="mb-3">
                     <UPageCard class="m-3" id="Variants">
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
@@ -678,11 +820,14 @@ watch(categoryTax, (newVal) => {
                     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
                     <AddProductVariants   
                       ref="variantRef"
-                      :editName="selectedProduct?.variants[index]?.name "
-                      :editCode="selectedProduct?.variants[index]?.code"
+                      :id="selectedProduct?.variants[index]?.id"
+                      :editName="selectedProduct?.variants[index]?.name " 
+                      :editCode="selectedProduct?.variants[index]?.code || variants[0]?.code"
                       :editQty="selectedProduct?.variants[index]?.qty"
-                      :editsPrice="selectedProduct?.variants[index]?.sprice"
-                      :editpPrice="selectedProduct?.variants[index]?.pprice"
+                      :editsPrice="selectedProduct?.variants[index]?.sprice || variants[0]?.sprice"
+                      :editpPrice="selectedProduct?.variants[index]?.pprice || variants[0]?.pprice"
+                      :editdPrice="selectedProduct?.variants[index]?.dprice || variants[0]?.dprice"
+                      :editDiscount="selectedProduct?.variants[index]?.discount || variants[0]?.discount"
                       :editSizes="selectedProduct?.variants[index]?.sizes"
           
                       @update="updateVariant(index,$event)" />
@@ -743,7 +888,6 @@ watch(categoryTax, (newVal) => {
 
         <BarcodeComponent v-if="barcodes.length" :barcodes="barcodes" />
       
-          <!-- <PrintBarcodeComponent :barcodes="barcodes" /> -->
           <template #header>
           <div class="flex items-end justify-end">
           <UButton type="submit"  class="me-3 px-5" @click="printBarcodes">

@@ -1,4 +1,4 @@
-///bills
+---bills
 
 CREATE OR REPLACE FUNCTION generate_invoice_number()
 RETURNS TRIGGER AS $$
@@ -29,10 +29,9 @@ BEFORE INSERT ON bills
 FOR EACH ROW
 EXECUTE FUNCTION generate_invoice_number();
 
-//items
+---items
 CREATE OR REPLACE FUNCTION generate_item_barcode()
 RETURNS TRIGGER AS $$
-
 DECLARE
     existing_barcode TEXT;
     number_part INT;
@@ -41,23 +40,29 @@ DECLARE
     temp_num INT;
     store_code INT;
 BEGIN
-    -- 1. Get the storeCode for the current company
-    SELECT storecode INTO store_code
+    -- 1. Get the storeCode and current counter for the company
+    SELECT storecode, barcode_counter INTO store_code, number_part
     FROM companies
-    WHERE id = NEW.company_id;
+    WHERE id = NEW.company_id
+    FOR UPDATE;
 
-    -- 2. Check if a barcode already exists for this variant and size
-    SELECT barcode INTO existing_barcode
-    FROM variant_size_barcodes
-    WHERE variant_id = NEW.variant_id AND size = NEW.size;
+    -- 2. Check if a barcode already exists
+    IF NEW.size IS NULL THEN
+        SELECT barcode INTO existing_barcode
+        FROM variant_size_barcodes
+        WHERE variant_id = NEW.variant_id AND size IS NULL;
+    ELSE
+        SELECT barcode INTO existing_barcode
+        FROM variant_size_barcodes
+        WHERE variant_id = NEW.variant_id AND size = NEW.size;
+    END IF;
 
     IF existing_barcode IS NOT NULL THEN
         NEW.barcode := store_code::TEXT || existing_barcode;
         RETURN NEW;
     END IF;
 
-    -- 3. Generate unique number part
-    number_part := nextval('item_barcode_seq');
+    -- 3. Convert number_part to letter prefix and padded number
     temp_num := (number_part - 1) / base;
 
     WHILE temp_num >= 0 LOOP
@@ -68,14 +73,19 @@ BEGIN
     -- 4. Final barcode = storeCode + letter + number
     NEW.barcode := store_code::TEXT || prefix || LPAD((number_part % base)::TEXT, 6, '0');
 
-    -- 5. Save to variant_size_barcodes table
+    -- 5. Save barcode
     INSERT INTO variant_size_barcodes (variant_id, size, barcode)
     VALUES (NEW.variant_id, NEW.size, prefix || LPAD((number_part % base)::TEXT, 6, '0'));
 
+    -- 6. Increment the company's barcode counter
+    UPDATE companies
+    SET barcode_counter = barcode_counter + 1
+    WHERE id = NEW.company_id;
+
     RETURN NEW;
 END;
-
 $$ LANGUAGE plpgsql;
+
 
 DO $$ 
 BEGIN
@@ -88,7 +98,7 @@ CREATE TRIGGER set_item_barcode
 BEFORE INSERT ON "items"
 FOR EACH ROW EXECUTE FUNCTION generate_item_barcode();
 
-//storeuniquename
+--storeuniquename
 CREATE OR REPLACE FUNCTION set_store_unique_name()
 RETURNS TRIGGER AS $$
 BEGIN
