@@ -477,7 +477,6 @@ const handleSave = async () => {
   
     toast.add({
       title: 'Bill created successfully!',
-<<<<<<< HEAD
       color: 'green',
     });
 
@@ -567,9 +566,7 @@ const handleSave = async () => {
     discount.value = 0;
     paymentMethod.value = 'Cash';
     tokenEntries.value = [''];
-=======
-     color:'green',
-      })
+ 
       await $fetch('/api/notifications/notify', {
       method: 'POST',
       body: {
@@ -581,16 +578,8 @@ const handleSave = async () => {
         amount: billResponse.grandTotal
       }
     })
-    // await $trpc.notifications.create.mutate({
-    //   type: 'BILL',
-    //   companyId: useAuth().session.value?.companyId,
-    //   id: billResponse.id,
-    //   amount: billResponse.grandTotal,
-    //   invoiceNumber: billResponse.invoiceNumber || 0,
-    // });
-
-
->>>>>>> dashboard
+  
+  
 
   } catch (error) {
     console.error('Error creating bill', error);
@@ -600,8 +589,6 @@ const handleSave = async () => {
       color: 'red',
     });
   }
-<<<<<<< HEAD
-=======
 
   // Collect all async operations in an array
   const updatePromises = [];
@@ -616,26 +603,7 @@ const handleSave = async () => {
         return sizeData;
       }) : [];
 
-      // Push update promises to the array
-      // updatePromises.push(
-      //   UpdateVariant.mutateAsync({
-      //     where: { id: item.variantId },
-      //     data: { qty: updatedQty, sizes: updatedSizes }
-      //   }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-      // );
-      // if (updatedQty < 10 && updatedQty > 0) {
-      //   updatePromises.push(
-      //     await $fetch('/api/notifications/notify', {
-      //       method: 'POST',
-      //       body: {
-      //         type: 'LOW_STOCK',
-      //         companyId: item.companyId,
-      //         userId: useAuth().session.value?.id,
-      //         variantId: item.variantId 
-      //       }
-            
-      //     }));
-      //   }
+     
 
 
         updatePromises.push(
@@ -705,7 +673,6 @@ const handleSave = async () => {
   discount.value = 0;
   paymentMethod.value = 'Cash';
   tokenEntries.value = [''];
->>>>>>> dashboard
 };
 
 
