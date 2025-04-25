@@ -1,7 +1,7 @@
 
 <script setup>
 import { useCreateBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
-
+const { printBill } = usePrintBill();
 const CreateBill = useCreateBill();
 const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
@@ -402,17 +402,19 @@ const fetchItemData = async (barcode, index) => {
   }
 };
 
-
 const handleSave = async () => {
+  // Filter out empty items
   items.value = items.value.filter(item =>
-  item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
-);
+    item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
+  );
 
-if (items.value.length === 0) {
-  toast.add({ title: 'No valid items to bill.', color: 'red' });
-  return;
-}
+  if (items.value.length === 0) {
+    toast.add({ title: 'No valid items to bill.', color: 'red' });
+    return;
+  }
+
   try {
+    // Declare billResponse with const
     const billResponse = await CreateBill.mutateAsync({
       data: {
         subtotal: subtotal.value,
@@ -429,19 +431,18 @@ if (items.value.length === 0) {
             id: useAuth().session.value?.companyId,
           },
         },
-        type:'BILL',
+        type: 'BILL',
         entries: {
           create: items.value.map(item => ({
             ...(item.barcode && { barcode: item.barcode }),
             qty: item.qty,
             rate: item.rate,
             discount: item.discount,
-            name:item.name,
-            //variantId present only when entry is barcoded 
-            ...(item.variantId && { variant:{ connect: { id: item.variantId } }}),
+            name: item.name,
+            ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
             tax: item.tax,
             value: item.value,
-            ...(item.category[0]?.id && {category: { connect: { id: item.category[0].id } }}),
+            ...(item.category[0]?.id && { category: { connect: { id: item.category[0].id } } }),
             ...(item.barcode && {
               item: {
                 connect: { id: item.id },
@@ -450,76 +451,131 @@ if (items.value.length === 0) {
           })),
         },
       },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        createdAt: true,
+        paymentMethod: true,
+        subtotal: true,
+        discount: true,
+        tax: true,
+        grandTotal: true,
+        entries: {
+          select: {
+            name: true,
+            qty: true,
+            rate: true,
+            discount: true,
+            tax: true,
+            value: true,
+            barcode: true,
+            size: true,
+          },
+        },
+      },
     });
-
+  
     toast.add({
       title: 'Bill created successfully!',
-     color:'green',
-      })
+      color: 'green',
+    });
+
+    // Print the bill
+    try {
+      const printData = {
+        invoiceNumber: billResponse.invoiceNumber || 'N/A',
+        date: billResponse.createdAt,
+        entries: billResponse.entries.map(entry => ({
+          name: entry.name,
+          qty: entry.qty,
+          rate: entry.rate,
+          discount: entry.discount,
+          tax: entry.tax,
+          value: entry.value,
+          size: entry.size,
+          barcode: entry.barcode,
+        })),
+        subtotal: billResponse.subtotal,
+        discount: billResponse.discount,
+        tax: billResponse.tax,
+        grandTotal: billResponse.grandTotal,
+        paymentMethod: billResponse.paymentMethod,
+      };
+
+   
+
+      const response = await printBill(printData);
+      console.log('✅ Printed:', response);
+    } catch (err) {
+      console.error('Printing error:', err);
+      toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'orange',
+      });
+    }
+
+    // Update inventory
+    const updatePromises = [];
+    for (const item of items.value) {
+      if (item.barcode) {
+        let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
+        let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
+          if (sizeData.size === item.size) {
+            return { ...sizeData, qty: Math.max((sizeData.qty || 0) - item.qty, 0) };
+          }
+          return sizeData;
+        }) : [];
+
+        updatePromises.push(
+          UpdateVariant.mutateAsync({
+            where: { id: item.variantId },
+            data: { qty: updatedQty, sizes: updatedSizes }
+          }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
+        );
+
+        updatePromises.push(
+          UpdateItem.mutateAsync({
+            where: { id: item.id },
+            data: { status: 'sold' }
+          }).catch(error => console.error(`Error updating item ${item.id}`, error))
+        );
+      }
+    }
+
+    // Wait for all updates to complete
+    await Promise.all(updatePromises);
+
+    // Clean up token entries
+    try {
+      tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
+      if (tokenEntries.value.length > 0) {
+        await DeleteTokenEntry.mutateAsync({
+          where: { tokenNo: { in: tokenEntries.value } }
+        });
+        console.log('Token entries deleted successfully');
+      }
+    } catch (error) {
+      console.error('Error deleting token entries', error);
+    }
+
+    // Reset form
+    items.value = [
+      { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
+    ];
+    discount.value = 0;
+    paymentMethod.value = 'Cash';
+    tokenEntries.value = [''];
 
   } catch (error) {
     console.error('Error creating bill', error);
     toast.add({
       title: 'Bill creation failed!',
-      color:'red',
-      })
+      description: error.message,
+      color: 'red',
+    });
   }
-
-  // Collect all async operations in an array
-  const updatePromises = [];
-
-  for (const item of items.value) {
-    if (item.barcode) {
-      let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
-      let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
-        if (sizeData.size === item.size) {
-          return { ...sizeData, qty: Math.max((sizeData.qty || 0) - 1, 0) };
-        }
-        return sizeData;
-      }) : [];
-
-      // Push update promises to the array
-      updatePromises.push(
-        UpdateVariant.mutateAsync({
-          where: { id: item.variantId },
-          data: { qty: updatedQty, sizes: updatedSizes }
-        }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-      );
-
-      updatePromises.push(
-        UpdateItem.mutateAsync({
-          where: { id: item.id },
-          data: { status: 'sold' }
-        }).catch(error => console.error(`Error updating item ${item.id}`, error))
-      );
-    }
-  }
-
-  // Wait for all updates to finish before proceeding
-  await Promise.all(updatePromises);
-
-  try {
-    tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
-    if (tokenEntries.value.length > 0) {
-      await DeleteTokenEntry.mutateAsync({
-        where: { tokenNo: { in: tokenEntries.value } }
-      });
-      console.log('Token entries deleted successfully');
-    }
-  } catch (error) {
-    console.error('Error deleting token entries', error);
-  }
-
-  // ✅ Reset items only after all Prisma operations are complete
-  items.value = [
-    { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
-  ];
-  discount.value = 0;
-  paymentMethod.value = 'Cash';
-  tokenEntries.value = [''];
 };
-
-
 
 
 const {
