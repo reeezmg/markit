@@ -2,7 +2,8 @@ import {
     useFindManyProduct,
     useFindManyBill,
     useFindManyExpense,
-    useFindManyEntry ,
+    useFindManyEntry, 
+    useFindManyVariant,
   } from '@/lib/hooks'
   import { computed } from 'vue'
   const useAuth = () => useNuxtApp().$auth;
@@ -13,6 +14,10 @@ import {
         AND: [
             { companyId: useAuth().session.value?.companyId },]}})
 
+    const variantsQuery = useFindManyVariant({
+      where: {
+      AND: [
+          { companyId: useAuth().session.value?.companyId },]}})
 
 
             
@@ -54,6 +59,7 @@ import {
       const bills = ref(billsQuery.data.value)
       const expenses = ref(expensesQuery.data.value)
       const entries = ref(entriesQuery.data.value)
+      const variants = ref(variantsQuery.data)
 
       watch(() => productsQuery.data.value, (newVal) => {
         products.value = newVal
@@ -70,20 +76,24 @@ import {
       watch(() => entriesQuery.data.value, (newVal) => {
         entries.value = newVal
       })
+      watch(() => variantsQuery.data.value, (newVal) => {
+        variants.value = newVal
+      })
 
       const refreshAll = async () => {
         await Promise.all([
           productsQuery.refetch(),
           billsQuery.refetch(),
           expensesQuery.refetch(),
-          entriesQuery.refetch()
+          entriesQuery.refetch(),
+          variantsQuery.refetch()
         ])
       }
 
     const lowStockEntries = computed(() => {
-    if (!entries.value) return []
+    if (!variants.value) return []
   
-    return entries.value.filter(entry => entry.outOfStock === true || (entry.qty ?? 0) < 5).sort((a, b) => (a.qty ?? 0) - (b.qty ?? 0))
+    return variants.value.filter(entry =>  (entry.qty ?? 0) < 5).sort((a, b) => (a.qty ?? 0) - (b.qty ?? 0))
     .slice(0, 6)
   })
 
@@ -122,7 +132,7 @@ import {
 
   
     const totalRevenue = computed(() =>
-        bills.value?.reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0) ?? 0
+        bills.value?.filter((bill) => bill.paymentStatus === 'PAID').reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0) ?? 0
       )
       
       const revenueGraph = computed(() => {
@@ -130,7 +140,7 @@ import {
           const month = i + 1
           const total =
             bills.value
-              ?.filter((b) => new Date(b.createdAt).getMonth() + 1 === month).filter((b) => b.paymentStatus === 'paid')
+              ?.filter((b) => new Date(b.createdAt).getMonth() + 1 === month).filter((b) => b.paymentStatus === 'PAID')
               .reduce((sum, b) => sum + (b.grandTotal ?? 0), 0) ?? 0
           return { month: monthNames[i], total }
         })
@@ -160,7 +170,7 @@ import {
     })
 
     const unpaidBills = computed(() =>
-      bills.value?.filter((b) => b.paymentStatus !== 'paid') ?? []
+      bills.value?.filter((b) => b.paymentStatus !== 'PAID') ?? []
     )
     
     const totalUnpaid = computed(() =>
@@ -222,7 +232,7 @@ import {
       const map = new Map<string, { name: string; total: number; count: number }>()
     
       for (const bill of bills.value) {
-        if (bill.paymentStatus !== 'unpaid' ) continue
+        if (bill.paymentStatus !== 'PENDING' ) continue
     
         const key = bill.clientId ?? 'unknown Client ID'
         const name = bill.client?.name ?? 'unknown CLient Name'

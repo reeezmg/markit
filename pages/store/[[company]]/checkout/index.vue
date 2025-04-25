@@ -147,6 +147,17 @@ const handleSubmit = async (e?: Event) => {
     };
 
     await CreateBill.mutateAsync({ data: billData });
+    await $fetch('/api/notifications/notify', {
+      method: 'POST',
+      body: {
+        userId:useAuth().session.value?.id,
+        type: 'ORDER',
+        companyId: useAuth().session.value?.companyId,
+        id: data.id,
+        invoiceNumber: data.invoiceNumber,
+        amount: data.grandTotal
+      }
+    })
 
     toast.add({ title: 'Order Confirmed!', id: 'modal-success' });
     cartStore.clear();

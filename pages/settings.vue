@@ -23,6 +23,13 @@ const links = [
             <UDashboardNavbar title="Settings" />
             <UDashboardToolbar class="py-0 px-1.5 overflow-x-auto">
                 <UHorizontalNavigation :links="links" />
+                                <template #right>
+
+                    <ClientOnly>
+        <NotificationIcon />
+      </ClientOnly>
+
+                </template>
             </UDashboardToolbar>
             <NuxtPage />
         </UDashboardPanel>

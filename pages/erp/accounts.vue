@@ -9,6 +9,7 @@ import {
     useDeleteExpense,
 } from '~/lib/hooks';
 
+
 const CreateExpense = useCreateExpense();
 const UpdateExpense = useUpdateExpense();
 const DeleteExpense = useDeleteExpense();
@@ -51,7 +52,22 @@ const addExpense = async (expense: any) => {
                 },
             },
         },
-    });
+        include: {
+    company: true   },
+    })
+    await $fetch('/api/notifications/notify', {
+      method: 'POST',
+      body: {
+        userId:useAuth().session.value?.id,
+        type: 'EXPENSE',
+        Note: expense.note,
+        companyId: useAuth().session.value?.companyId,
+        id: expense.id,
+        expenseCategory : expense.expensecategory.name,
+        amount: expense.totalAmount
+      }
+    })
+
 }catch(error){
     console.log(error)
 }

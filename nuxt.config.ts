@@ -1,4 +1,5 @@
 export default defineNuxtConfig({
+
   extends: [process.env.NUXT_UI_PRO_PATH || '@nuxt/ui-pro', './auth'],
 
   build: {
@@ -6,7 +7,7 @@ export default defineNuxtConfig({
     },
 
   nitro: {
-    plugins: ['~/nitro/ws']
+    plugins: ['~/nitro/ws'],
   },
 
   modules: [

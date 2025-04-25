@@ -53,6 +53,11 @@ const columns = [
         sortable: true,
     },
     {
+        key: 'paymentStatus',
+        label: 'Payment',
+        sortable: true,
+    },
+    {
         key: 'notes',
         label: 'Notes',
         sortable: true,
@@ -117,7 +122,6 @@ const active = (selectedRows) => [
             key: 'delete',
             label: 'Delete',
             icon: 'i-heroicons-trash',
-            
         },
     ],
 ];
@@ -127,14 +131,13 @@ const action = (row:any) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`./edit/${row.id}`),
+            click: () => router.push(`categories/edit/${row.id}`),
         },
     ],
     [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => deleteBill(row.id),
         },
     ],
 ];
@@ -143,11 +146,11 @@ const action = (row:any) => [
 const todoStatus = [
     {
         label: 'Paid',
-        value: 'PAID',
+        value: 'paid',
     },
     {
         label: 'Pending',
-        value: 'PENDING',
+        value: 'pending',
     },
 ];
 
@@ -199,13 +202,12 @@ const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
         where: {
             AND: [
                 { companyId: useAuth().session.value?.companyId },
-                { deleted: false },
                 ...(search.value ? [{ invoiceNumber:search.value }] : []),  // ✅ Fixed syntax
                 ...(selectedStatus.value.length  // ✅ Correctly checking for array content
                     ? [{ OR: selectedStatus.value.map((item) => ({ paymentStatus: item.value })) }]
                     : []
                 ),
-                {paymentStatus:'PAID'},
+                {type:{in :['STANDARD','TRY_AT_HOME']}},
                 ...(selectedDate.value ? [
                     { createdAt: { gte: new Date(selectedDate.value.start).toISOString() } },  // Start date
                     { createdAt: { lte: new Date(selectedDate.value.end).toISOString() } }    // End date
@@ -244,18 +246,7 @@ watch(sales, (newsales) => {
 });
 
 
-const deleteBill = async (id:string) => {
-    const res = await UpdateBill.mutateAsync({
-        where:{
-            id
-        },
-        data:{
-            deleted:true
-        }
-    })
 
-
-};
 
 
 const handleUpdate = async (id:string) => {

@@ -112,7 +112,7 @@ model Company extends Base {
     accountNo String? @map("account_no")
     bankName String? @map("bank_name")
     gstin String?
-
+    notifications Notification[]
     address   Address?
     distributor   DistributorCompany[]
     billCounter Int @default(0) @map("bill_counter")
@@ -153,6 +153,7 @@ model User extends Base {
     role      UserRole      @default(user) @map('role')
     companies CompanyUser[]
     address   Address?
+    notifications Notification[]
     conversations UserConversation[]
     clients     UserClient[]
     image       String?
@@ -187,6 +188,7 @@ model Client extends Base {
     rejectPipelineId   String?         @map("reject_pipeline_id")
     closePipeline     Pipeline?        @relation("PipelineCloseClients", fields: [closePipelineId], references: [id])
     closePipelineId   String?         @map("close_pipeline_id")
+    notifications  Notification[]
     
     @@allow('read, create, update, delete', true)
 
@@ -375,6 +377,7 @@ model Bill extends Base {
 
     @@allow("create, read, update, delete", true)
     @@map("bills")
+
 }
 
 model TokenEntry extends Base {
@@ -467,6 +470,8 @@ model Expense extends Base {
 
     @@allow("create, read, update, delete", true)
     @@map("expenses")
+
+    
 }
 
 model Payment extends Base {
@@ -627,4 +632,39 @@ model EmailOtp extends Base {
   @@allow('read, create, update,delete', true)
   @@map("email_otp")
 
+}
+
+
+// schema.zmodel
+
+model Notification {
+  id String @id @default(cuid())
+  company Company @relation(fields: [companyId], references: [id])
+  companyId String
+  user      User? @relation(fields: [userId], references: [id])
+  userId    String? @map('user_id') 
+  clientId       String? @map("client_id")
+  client         Client? @relation(fields: [clientId], references: [id])
+  type NotificationType
+  title String
+  message String
+  read Boolean @default(false)
+  actionPath String? // e.g., "/orders/123"
+  metadata Json? // Additional structured data
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId])
+    @@allow('read, create, update,delete', true)
+  @@map("notifications")
+}
+
+enum NotificationType {
+  ORDER_RECEIVED
+  BILL_CREATED
+  PAYMENT_RECEIVED
+  EXPENSE_CREATED
+  INVENTORY_LOW
+  SHIPMENT_SENT
+  SYSTEM_ALERT
 }

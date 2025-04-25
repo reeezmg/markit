@@ -99,7 +99,6 @@ const chartOptions = computed(() => ({
 import { computed, defineAsyncComponent, onMounted } from 'vue'
 import { useCompanyDashboard } from '@/lib/api/useDashboardData'
 
-
 onMounted(() => {
   useEChartsSetup()
 })

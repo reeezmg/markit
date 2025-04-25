@@ -477,6 +477,7 @@ const handleSave = async () => {
   
     toast.add({
       title: 'Bill created successfully!',
+<<<<<<< HEAD
       color: 'green',
     });
 
@@ -566,6 +567,30 @@ const handleSave = async () => {
     discount.value = 0;
     paymentMethod.value = 'Cash';
     tokenEntries.value = [''];
+=======
+     color:'green',
+      })
+      await $fetch('/api/notifications/notify', {
+      method: 'POST',
+      body: {
+        userId:useAuth().session.value?.id,
+        type: 'BILL',
+        companyId: useAuth().session.value?.companyId,
+        id: billResponse.id,
+        invoiceNumber: billResponse.invoiceNumber,
+        amount: billResponse.grandTotal
+      }
+    })
+    // await $trpc.notifications.create.mutate({
+    //   type: 'BILL',
+    //   companyId: useAuth().session.value?.companyId,
+    //   id: billResponse.id,
+    //   amount: billResponse.grandTotal,
+    //   invoiceNumber: billResponse.invoiceNumber || 0,
+    // });
+
+
+>>>>>>> dashboard
 
   } catch (error) {
     console.error('Error creating bill', error);
@@ -575,6 +600,112 @@ const handleSave = async () => {
       color: 'red',
     });
   }
+<<<<<<< HEAD
+=======
+
+  // Collect all async operations in an array
+  const updatePromises = [];
+
+  for (const item of items.value) {
+    if (item.barcode) {
+      let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
+      let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
+        if (sizeData.size === item.size) {
+          return { ...sizeData, qty: Math.max((sizeData.qty || 0) - 1, 0) };
+        }
+        return sizeData;
+      }) : [];
+
+      // Push update promises to the array
+      // updatePromises.push(
+      //   UpdateVariant.mutateAsync({
+      //     where: { id: item.variantId },
+      //     data: { qty: updatedQty, sizes: updatedSizes }
+      //   }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
+      // );
+      // if (updatedQty < 10 && updatedQty > 0) {
+      //   updatePromises.push(
+      //     await $fetch('/api/notifications/notify', {
+      //       method: 'POST',
+      //       body: {
+      //         type: 'LOW_STOCK',
+      //         companyId: item.companyId,
+      //         userId: useAuth().session.value?.id,
+      //         variantId: item.variantId 
+      //       }
+            
+      //     }));
+      //   }
+
+
+        updatePromises.push(
+    UpdateVariant.mutateAsync({
+      where: { id: item.variantId },
+      data: { qty: updatedQty, sizes: updatedSizes }
+    }).then(async (updatedVariant) => {
+      // 2. Check stock and send notification if needed
+      if (updatedQty < 10 && updatedQty > 0) {
+        try {
+               
+          
+          await $fetch('/api/notifications/notify', {
+            method: 'POST',
+            body: {
+              type: 'LOW_STOCK',
+              companyId: updatedVariant.companyId,
+              userId: useAuth().session.value?.id,
+              variantId: item.variantId 
+            }
+            
+          });
+          
+        } catch (error) {
+          console.error('Notification failed:', error);
+        }
+      }
+    }).catch(error => {
+      console.error(`Error updating variant ${item.variantId}`, error);
+    })
+  );
+
+
+
+
+
+
+
+      updatePromises.push(
+        UpdateItem.mutateAsync({
+          where: { id: item.id },
+          data: { status: 'sold' }
+        }).catch(error => console.error(`Error updating item ${item.id}`, error))
+      );
+    }
+  }
+
+  // Wait for all updates to finish before proceeding
+  await Promise.all(updatePromises);
+
+  try {
+    tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
+    if (tokenEntries.value.length > 0) {
+      await DeleteTokenEntry.mutateAsync({
+        where: { tokenNo: { in: tokenEntries.value } }
+      });
+      console.log('Token entries deleted successfully');
+    }
+  } catch (error) {
+    console.error('Error deleting token entries', error);
+  }
+
+  // ✅ Reset items only after all Prisma operations are complete
+  items.value = [
+    { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
+  ];
+  discount.value = 0;
+  paymentMethod.value = 'Cash';
+  tokenEntries.value = [''];
+>>>>>>> dashboard
 };
 
 
