@@ -9,9 +9,10 @@ datasource db {
 }
 
 generator client {
-  provider     = "prisma-client-js"
-  output       = "../prisma/generated/client"
-  moduleFormat = "esm"
+  provider      = "prisma-client-js"
+  output        = "generated"
+  moduleFormat  = "esm"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 enum UserRole {

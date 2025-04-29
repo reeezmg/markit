@@ -5,7 +5,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import type { Prisma, Company } from "../../prisma/generated/client";
+import type { Prisma, Company } from "../../prisma/generated";
 import type { UseMutationOptions, UseQueryOptions, UseInfiniteQueryOptions, InfiniteData } from '@tanstack/vue-query';
 import { getHooksContext } from '@zenstackhq/tanstack-query/runtime-v5/vue';
 import type { MaybeRefOrGetter, ComputedRef, UnwrapRef } from 'vue';
@@ -239,7 +239,7 @@ export function useCountCompany<TArgs extends Prisma.CompanyCountArgs, TQueryFnD
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<TQueryFnData, TData, TError>('Company', `${endpoint}/company/count`, args, options, fetch);
 }
-import type { CompanyType } from '../../prisma/generated/client';
+import type { CompanyType } from '../../prisma/generated';
 
 export function useCheckCompany<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; storecode?: number; storeUniqueName?: string; logo?: string; description?: string; shopifyStoreName?: string; shopifyAccessToken?: string; tiktokCipher?: string; tiktokStoreName?: string; tiktokAccessToken?: string; tiktokAccessTokenExpireIn?: number; tiktokRefreshToken?: string; tiktokRefreshTokenExpireIn?: number; images?: string; isTaxIncluded?: boolean; status?: boolean; type?: CompanyType; accHolderName?: string; ifsc?: string; accountNo?: string; bankName?: string; gstin?: string; upiId?: string; billCounter?: number; barcodeCounter?: number }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();

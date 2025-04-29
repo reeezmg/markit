@@ -5,7 +5,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import type { Prisma, Notification } from "../../prisma/generated/client";
+import type { Prisma, Notification } from "../../prisma/generated";
 import type { UseMutationOptions, UseQueryOptions, UseInfiniteQueryOptions, InfiniteData } from '@tanstack/vue-query';
 import { getHooksContext } from '@zenstackhq/tanstack-query/runtime-v5/vue';
 import type { MaybeRefOrGetter, ComputedRef, UnwrapRef } from 'vue';
@@ -239,7 +239,7 @@ export function useCountNotification<TArgs extends Prisma.NotificationCountArgs,
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<TQueryFnData, TData, TError>('Notification', `${endpoint}/notification/count`, args, options, fetch);
 }
-import type { NotificationType } from '../../prisma/generated/client';
+import type { NotificationType } from '../../prisma/generated';
 
 export function useCheckNotification<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; companyId?: string; userId?: string; clientId?: string; type?: NotificationType; title?: string; message?: string; read?: boolean; actionPath?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
