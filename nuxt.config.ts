@@ -10,7 +10,6 @@ export default defineNuxtConfig({
     plugins: ['~/nitro/ws'],
     esbuild: {
         options: {
-            format: 'esm',
           target: 'es2022'
         }
       },
