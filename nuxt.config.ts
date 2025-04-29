@@ -1,6 +1,6 @@
 export default defineNuxtConfig({
 
-  extends: [process.env.NUXT_UI_PRO_PATH || '@nuxt/ui-pro', './auth'],
+  extends: ['@nuxt/ui-pro', './auth'],
 
   build: {
       transpile: ['trpc-nuxt'],
