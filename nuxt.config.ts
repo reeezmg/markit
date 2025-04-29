@@ -15,9 +15,10 @@ export default defineNuxtConfig({
       },
     
   
-      externals: {
-        external: ['@prisma/client'],
-      },
+
+      // replace: {
+      //   'import * as process': 'import * as processUnused',
+      // },
   },
 
 
