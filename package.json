@@ -1,6 +1,7 @@
 {
     "name": "nuxt-ui-pro-template-dashboard",
     "private": true,
+    "type": "module",
     "version": "0.0.1-prealpha.1",
     "scripts": {
         "dev": "nuxt dev",
@@ -24,7 +25,7 @@
         "@nuxt/ui": "^2.21.1",
         "@nuxt/ui-pro": "^1.7.1",
         "@pinia/nuxt": "^0.5.1",
-        "@prisma/client": "^6.6.0",
+        "@prisma/client": "^5.22.0",
         "@stripe/stripe-js": "^3.4.1",
         "@tanstack/vue-query": "^5.74.3",
         "@tanstack/vue-query-devtools": "^5.40.1",
@@ -90,7 +91,7 @@
         "eslint": "^9.2.0",
         "nuxt-headlessui": "^1.2.0",
         "nuxt-icon": "^0.6.10",
-        "prisma": "^6.6.0",
+        "prisma": "^5.22.0",
         "vue-tsc": "^2.0.19",
         "wait-on": "^8.0.3"
     }
