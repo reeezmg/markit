@@ -14,11 +14,10 @@ export default defineNuxtConfig({
         }
       },
     
-  
 
-      // replace: {
-      //   'import * as process': 'import * as processUnused',
-      // },
+      replace: {
+        'import * as process': 'import * as processUnused',
+      },
   },
 
 
