@@ -14,15 +14,7 @@ export default defineNuxtConfig({
         }
       },
     
-
-      replace: {
-        'import * as process': 'import * as processUnused',
-      },
   },
-
-
-
- 
 
   modules: [
       '@nuxt/ui',
