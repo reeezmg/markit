@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { useFindManyCompany } from '~/lib/hooks';
 import type { Prisma } from '~/prisma/generated/client';
-import { getShopName, getToken } from '~/services/tiktokService';
 
 
 definePageMeta({
@@ -25,15 +24,6 @@ const categories = ref<any[]>([]);
 const code = Array.isArray(route.query.code) ? route.query.code[0] : route.query.code;
 
 
-
-onMounted(async () => {
-    if (code && useAuth().loggedIn.value) {
-    const res = await getToken(code, useAuth().session.value?.companyId);
-}
-
-const resp = await getShopName()
-console.log(resp)
-});
 
 
 const queryArgs = computed<Prisma.CompanyFindManyArgs>(() => {
