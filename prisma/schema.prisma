@@ -12,7 +12,6 @@ generator client {
   provider     = "prisma-client-js"
   output       = "../prisma/generated/client"
   moduleFormat = "esm"
-  runtime      = "nodejs"
 }
 
 enum UserRole {
