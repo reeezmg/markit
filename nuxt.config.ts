@@ -7,7 +7,6 @@ export default defineNuxtConfig({
     },
 
   nitro: {
-     preset: 'node',
     plugins: ['~/nitro/ws'],
     esbuild: {
         options: {
@@ -22,15 +21,7 @@ export default defineNuxtConfig({
       },
   },
 
-  vite: {
-    esbuild: {
-      tsconfigRaw: {
-        compilerOptions: {
-          module: "commonjs"
-        }
-      }
-    }
-  },
+
 
  
 
