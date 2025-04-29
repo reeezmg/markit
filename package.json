@@ -1,7 +1,6 @@
 {
     "name": "nuxt-ui-pro-template-dashboard",
     "private": true,
-    "type": "module",
     "version": "0.0.1-prealpha.1",
     "scripts": {
         "dev": "nuxt dev",

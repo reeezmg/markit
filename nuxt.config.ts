@@ -17,10 +17,7 @@ export default defineNuxtConfig({
     
   
       externals: {
-        external: ['@prisma/client'], // ✅ only this
-        ignore: [
-          'C:/Users/User/AppData/Roaming/Code/Network/Cookies'
-        ]
+        external: ['@prisma/client'],
       },
   },
 
