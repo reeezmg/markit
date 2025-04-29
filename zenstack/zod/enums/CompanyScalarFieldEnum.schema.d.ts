@@ -1,0 +1,2 @@
+import { z } from 'zod';
+export declare const CompanyScalarFieldEnumSchema: z.ZodEnum<["id", "name", "storecode", "storeUniqueName", "logo", "description", "shopifyStoreName", "shopifyAccessToken", "tiktokCipher", "tiktokStoreName", "tiktokAccessToken", "tiktokAccessTokenExpireIn", "tiktokRefreshToken", "tiktokRefreshTokenExpireIn", "images", "isTaxIncluded", "status", "type", "accHolderName", "ifsc", "accountNo", "bankName", "gstin", "upiId", "billCounter", "barcodeCounter"]>;

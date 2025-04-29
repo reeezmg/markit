@@ -1,7 +1,7 @@
 
 <script setup>
 import { useCreateBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
-const { printBill } = usePrintBill();
+const { printBill } = usePrint();
 const CreateBill = useCreateBill();
 const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
@@ -61,6 +61,8 @@ const items = ref([
   { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 },
 ]);
 
+
+
 watch(
   items,
   (newItems) => {
@@ -103,25 +105,56 @@ watch(selected, (newSelected) => {
   console.log(newSelected)
 })
 
-watch(items, () => {
-  items.value.forEach((item) => {
-    let baseValue = item.qty * item.rate;
+
+watch(items, async () => {
+  for (let index = 0; index < items.value.length; index++) {
+    const item = items.value[index];
+    
+    // ---------- Step 1: Calculate discounted rate ----------
+    let discountedRate = item.rate;
 
     if (item.discount < 0) {
-      baseValue -= Math.abs(item.discount);
+      discountedRate -= Math.abs(item.discount);
     } else {
-      baseValue -= (baseValue * item.discount) / 100;
+      discountedRate -= (discountedRate * item.discount) / 100;
     }
-    if(!isTaxIncluded) {
-      baseValue += (baseValue * item.tax) / 100;
-    } 
-    
-    
-    item.value = Math.max(baseValue, 0); 
-    
-  });
 
+    // ---------- Step 2: Update tax according to value/qty ----------
+
+   
+
+    if (item.category[0]?.id) {
+      const { data: category, pending, error, refresh } = await useFindCategory(item.category[0].id);
+      if(!error || category){
+        const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = category;
+
+      if (taxType === 'FIXED') {
+        item.tax = fixedTax ?? 0;
+      } else {
+        const effectiveValue = item.value / (item.qty || 1); // avoid division by zero
+
+        if (effectiveValue > thresholdAmount) {
+          item.tax = taxAboveThreshold ?? 0;
+        } else {
+          item.tax = taxBelowThreshold ?? 0;
+        }
+      }
+      }
+    }
+
+    
+    // ---------- Step 3: Calculate base value ----------
+    let baseValue = discountedRate * item.qty;
+    
+    if (!isTaxIncluded) {
+      baseValue += (baseValue * item.tax) / 100;
+    }
+
+    item.value = Math.max(baseValue, 0);
+  }
 }, { deep: true });
+
+
 
 watch([discount, subtotal], ([newDiscount, newTotal]) => {
   let baseValue = newTotal; // Use the updated total value
@@ -258,7 +291,10 @@ const {
 
 
 const itemargs = computed(() => ({
-  where: { barcode: scannedBarcode.value },
+  where: { 
+    barcode: scannedBarcode.value,
+    status:'in_stock'
+   },
   select: {
     id: true, 
     size:true,
@@ -270,16 +306,28 @@ const itemargs = computed(() => ({
         qty:true,
         sizes:true,
         tax:true,
+        discount:true,
         product: {
           select: {
             name: true, 
-            categoryId:true  
+            categoryId:true ,
+            category:{
+              select:{
+                taxType:true,
+                fixedTax:true,
+                thresholdAmount:true,
+                taxBelowThreshold:true,
+                taxAboveThreshold:true
+              }
+            } 
           }
         }
       }
     }
   }
 }));
+
+
 
 
 const entryargs = computed(() => ({
@@ -388,11 +436,13 @@ const fetchItemData = async (barcode, index) => {
     
     const categoryId = itemdata.value.variant.product.categoryId;
     
+
     items.value[index].id = itemdata.value.id || '';
     items.value[index].size = itemdata.value.size || '';
     items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant.product.name}` || '';
     items.value[index].category = categories.value.filter(category =>category.id === categoryId);
     items.value[index].rate = itemdata.value.variant?.sprice || 0;
+    items.value[index].discount = itemdata.value.variant?.discount || 0;
     items.value[index].tax = itemdata.value.variant?.tax || 0;
     items.value[index].totalQty = itemdata.value.variant?.qty || 0;
     items.value[index].sizes = itemdata.value.variant?.sizes || null;
@@ -460,6 +510,24 @@ const handleSave = async () => {
         discount: true,
         tax: true,
         grandTotal: true,
+        company:{
+          select:{
+            name:true,
+            gstin:true,
+            upiId:true,
+            accHolderName:true,
+            address:{
+              select:{
+                name:true,
+                street:true,
+                locality:true,
+                city:true,
+                state:true,
+                pincode:true
+              }
+            }
+          }
+        },
         entries: {
           select: {
             name: true,
@@ -470,10 +538,22 @@ const handleSave = async () => {
             value: true,
             barcode: true,
             size: true,
+            item:{
+              select:{
+                id:true
+              }
+            },
+            category:{
+              select:{
+                name:true,
+                hsn:true
+              }
+            }
           },
         },
       },
     });
+
   
     toast.add({
       title: 'Bill created successfully!',
@@ -483,35 +563,64 @@ const handleSave = async () => {
     // Print the bill
     try {
       const printData = {
-        invoiceNumber: billResponse.invoiceNumber || 'N/A',
-        date: billResponse.createdAt,
-        entries: billResponse.entries.map(entry => ({
-          name: entry.name,
-          qty: entry.qty,
-          rate: entry.rate,
-          discount: entry.discount,
-          tax: entry.tax,
-          value: entry.value,
-          size: entry.size,
-          barcode: entry.barcode,
-        })),
-        subtotal: billResponse.subtotal,
-        discount: billResponse.discount,
-        tax: billResponse.tax,
-        grandTotal: billResponse.grandTotal,
-        paymentMethod: billResponse.paymentMethod,
-      };
+          invoiceNumber: billResponse.invoiceNumber || 'N/A',
+          date: billResponse.createdAt,
+          entries: billResponse.entries.map(entry => {
+          let calculatedDiscount = 0;
 
+          if (entry.discount < 0) {
+            // Fixed discount
+            calculatedDiscount = Math.abs(entry.discount) * entry.qty;
+          } else {
+            // Percentage discount
+            calculatedDiscount = ((entry.rate * entry.discount) / 100) * entry.qty;
+          }
+
+          return {
+            description: entry.barcode ? entry.name : entry.category.name,
+            hsn: entry.category.hsn,
+            qty: entry.qty,
+            mrp: entry.rate,
+            discount: calculatedDiscount, // ✅ set calculated discount
+            tax: entry.tax,
+            value: entry.qty * entry.rate ,
+            size: entry.size,
+            barcode: entry.barcode,
+            tvalue:entry.value,
+          };
+        }),
+ 
+  subtotal: billResponse.subtotal,
+  discount: billResponse.discount,
+  grandTotal: billResponse.grandTotal,
+  paymentMethod: billResponse.paymentMethod,
+  companyName: billResponse.company.name || '',
+  companyAddress: billResponse.company.address || {},
+  gstin: billResponse.company.gstin || '',
+  accHolderName: billResponse.company.accHolderName || '',
+  upiId: billResponse.company.upiId || '',
+  // 🆕 Add total qty
+  tqty: billResponse.entries.reduce((sum, entry) => sum + entry.qty, 0),
+  tvalue: billResponse.entries.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+  tdiscount: billResponse.entries.reduce((sum, entry) => {
+    if (entry.discount < 0) {
+      return sum + (Math.abs(entry.discount) * entry.qty);
+    } else {
+      return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
+    }
+  }, 0),
+};
+
+   console.log(printData)
    
-
       const response = await printBill(printData);
-      console.log('✅ Printed:', response);
+      console.log('✅ Printed:', response.message);
     } catch (err) {
       console.error('Printing error:', err);
       toast.add({
         title: 'Printing failed!',
         description: err.message,
-        color: 'orange',
+        color: 'red',
       });
     }
 
@@ -526,6 +635,7 @@ const handleSave = async () => {
           }
           return sizeData;
         }) : [];
+
 
         updatePromises.push(
           UpdateVariant.mutateAsync({
@@ -579,8 +689,6 @@ const handleSave = async () => {
       }
     })
   
-  
-
   } catch (error) {
     console.error('Error creating bill', error);
     toast.add({
@@ -603,19 +711,14 @@ const handleSave = async () => {
         return sizeData;
       }) : [];
 
-     
-
-
-        updatePromises.push(
-    UpdateVariant.mutateAsync({
+      updatePromises.push(
+      UpdateVariant.mutateAsync({
       where: { id: item.variantId },
       data: { qty: updatedQty, sizes: updatedSizes }
     }).then(async (updatedVariant) => {
       // 2. Check stock and send notification if needed
       if (updatedQty < 10 && updatedQty > 0) {
         try {
-               
-          
           await $fetch('/api/notifications/notify', {
             method: 'POST',
             body: {
@@ -623,8 +726,7 @@ const handleSave = async () => {
               companyId: updatedVariant.companyId,
               userId: useAuth().session.value?.id,
               variantId: item.variantId 
-            }
-            
+            }    
           });
           
         } catch (error) {
@@ -635,11 +737,6 @@ const handleSave = async () => {
       console.error(`Error updating variant ${item.variantId}`, error);
     })
   );
-
-
-
-
-
 
 
       updatePromises.push(
@@ -1230,7 +1327,7 @@ onMounted(() => {
           <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
           <UButton v-if="!token" class="flex-1" block>Sales Return</UButton>
-          <UButton v-if="!token" class="flex-1" block>Bill Search</UButton>
+          <UButton v-if="!token" class="flex-1" block>Add Client</UButton>
         </div>
       </UCard>
     </div>

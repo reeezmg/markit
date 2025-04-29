@@ -4,7 +4,8 @@ import {
     useCreateExpenseCategory
 } from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '~/prisma/generated/client'
+
 
 const props = defineProps({
     expense: {

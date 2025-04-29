@@ -1,6 +1,8 @@
 generator client {
-    provider = 'prisma-client-js'
+  provider      = "prisma-client-js"
+  output        = "../prisma/generated/client"
 }
+
 
 datasource db {
     provider = 'postgresql'
@@ -112,6 +114,7 @@ model Company extends Base {
     accountNo String? @map("account_no")
     bankName String? @map("bank_name")
     gstin String?
+    upiId String?   @map("upi_id")
     notifications Notification[]
     address   Address?
     distributor   DistributorCompany[]

@@ -4,7 +4,7 @@ import type { Company } from '@zenstackhq/runtime/models';
 import { v4 as uuidv4 } from 'uuid';
 import AwsService from '~/composables/aws';
 import { useUpdateCompany } from '~/lib/hooks';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '~/prisma/generated/client';
 
 
 const props = defineProps<{

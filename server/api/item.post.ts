@@ -5,10 +5,12 @@ export default eventHandler(async (event) => {
     const session = await useAuthSession(event);
 
     const { variants } = body; // Now expecting variants array directly in the body
-
+  
     if (!variants || !Array.isArray(variants)) {
         throw createError({ statusCode: 400, message: "Variants array is required" });
     }
+
+ 
 
     try {
         let newItems = [];
@@ -16,13 +18,13 @@ export default eventHandler(async (event) => {
 
         for (const variant of variants) {
             if (!variant.qty || variant.qty <= 0) continue;
-            
+            console.log('newItems',variant)
             // Add variant ID to our list for deletion
             if (variant.id) {
                 variantIds.push(variant.id);
             }
 
-            if (variant.sizes) {
+            if (variant.sizes && variant.sizes.length>0) {
                 const sizes = variant.sizes;
                 for (const size of sizes) {
                     for (let i = 0; i < size.qty; i++) {
@@ -43,6 +45,8 @@ export default eventHandler(async (event) => {
                 }
             }
         }
+
+       
 
         // Add companyId to each item
         const companyId = session.data.companyId;
@@ -65,6 +69,8 @@ export default eventHandler(async (event) => {
         const res = await prisma.item.createMany({ 
             data: newItems 
         });
+
+   
 
         // Fetch created items with their related variant and product data
         const createdItems = await prisma.item.findMany({

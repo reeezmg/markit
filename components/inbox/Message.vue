@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Message } from '~/types';
 import { useUpdateMessage, useFindUniqueMessage } from '~/lib/hooks';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '~/prisma/generated/client';
 import { format, isToday } from 'date-fns';
 
 const useAuth = () => useNuxtApp().$auth;

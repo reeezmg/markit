@@ -10,7 +10,7 @@ import {
     useFindManyBill,
     useCountBill
 } from '~/lib/hooks';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '~/prisma/generated/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 
 const UpdateBill = useUpdateBill();
@@ -50,11 +50,6 @@ const columns = [
     {
         key: 'grandTotal',
         label: 'Total',
-        sortable: true,
-    },
-    {
-        key: 'paymentStatus',
-        label: 'Payment',
         sortable: true,
     },
     {
@@ -122,6 +117,7 @@ const active = (selectedRows) => [
             key: 'delete',
             label: 'Delete',
             icon: 'i-heroicons-trash',
+            
         },
     ],
 ];
@@ -131,13 +127,14 @@ const action = (row:any) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`categories/edit/${row.id}`),
+            click: () => router.push(`./edit/${row.id}`),
         },
     ],
     [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
+            click: () => deleteBill(row.id),
         },
     ],
 ];
@@ -146,11 +143,11 @@ const action = (row:any) => [
 const todoStatus = [
     {
         label: 'Paid',
-        value: 'paid',
+        value: 'PAID',
     },
     {
         label: 'Pending',
-        value: 'pending',
+        value: 'PENDING',
     },
 ];
 
@@ -175,12 +172,55 @@ const resetFilters = () => {
     selectedStatus.value = [];
 };
 
+
+
 // Pagination
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
-const pageCount = ref('3');
-const { data: pageTotal } = useCountBill({where:{companyId: useAuth().session.value?.companyId}});
+const pageCount = ref('5');
+
+const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
+return {
+    where: {
+        AND: [
+            { companyId: useAuth().session.value?.companyId },
+            { deleted: false },
+            ...(search.value ? [{ invoiceNumber:search.value }] : []),  // ✅ Fixed syntax
+            ...(selectedStatus.value.length  // ✅ Correctly checking for array content
+                ? [{ OR: selectedStatus.value.map((item) => ({ paymentStatus: item.value })) }]
+                : []
+            ),
+            {paymentStatus:'PAID'},
+            ...(selectedDate.value ? [
+                { createdAt: { gte: new Date(selectedDate.value.start).toISOString() } },  // Start date
+                { createdAt: { lte: new Date(selectedDate.value.end).toISOString() } }    // End date
+            ] : []),
+        ]
+    },
+    include:{
+        entries:{
+            include:{
+                category:{
+                    select:{
+                        name:true
+                    }
+                }
+            }
+        }
+    },
+    orderBy: {
+        [sort.value.column]: sort.value.direction,
+    },
+    skip: (page.value - 1) * parseInt(pageCount.value),
+    take: parseInt(pageCount.value),
+};
+});
+
+const { data: pageTotal } = useCountBill(computed(() => ({
+  where: queryArgs.value.where,
+})));
+
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -195,43 +235,7 @@ function selectRange(duration: Duration) {
 }
 
 // Data
-const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
 
-
-    return {
-        where: {
-            AND: [
-                { companyId: useAuth().session.value?.companyId },
-                ...(search.value ? [{ invoiceNumber:search.value }] : []),  // ✅ Fixed syntax
-                ...(selectedStatus.value.length  // ✅ Correctly checking for array content
-                    ? [{ OR: selectedStatus.value.map((item) => ({ paymentStatus: item.value })) }]
-                    : []
-                ),
-                {type:{in :['STANDARD','TRY_AT_HOME']}},
-                ...(selectedDate.value ? [
-                    { createdAt: { gte: new Date(selectedDate.value.start).toISOString() } },  // Start date
-                    { createdAt: { lte: new Date(selectedDate.value.end).toISOString() } }    // End date
-                ] : []),
-            ]
-        },
-        include:{
-            entries:{
-                include:{
-                    category:{
-                        select:{
-                            name:true
-                        }
-                    }
-                }
-            }
-        },
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
-        },
-        skip: (page.value - 1) * parseInt(pageCount.value),
-        take: parseInt(pageCount.value),
-    };
-});
 
 const {
     data: sales,
@@ -246,7 +250,18 @@ watch(sales, (newsales) => {
 });
 
 
+const deleteBill = async (id:string) => {
+    const res = await UpdateBill.mutateAsync({
+        where:{
+            id
+        },
+        data:{
+            deleted:true
+        }
+    })
 
+
+};
 
 
 const handleUpdate = async (id:string) => {

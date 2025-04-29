@@ -1,17 +1,29 @@
 
 <script setup>
-import { useUpdateBill,useFindUniqueBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateEntry, useCreateEntry,useDeleteManyEntry } from '~/lib/hooks';
-
+import {
+  useUpdateBill,
+  useFindUniqueBill,
+  useFindFirstItem,
+  useFindManyCategory,
+  useUpdateVariant,
+  useUpdateItem,
+  useCreateAccount,
+  useFindManyAccount,
+  useUpdateEntry,
+  useCreateEntry,
+  useDeleteManyEntry,
+  useUpdateManyItem,
+  useFindManyEntry,
+} from '~/lib/hooks';
 
 const UpdateBill = useUpdateBill();
-const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
 const UpdateVariant = useUpdateVariant();
 const UpdateItem = useUpdateItem();
 const UpdateEntry = useUpdateEntry();
 const CreateEntry = useCreateEntry();
 const DeleteManyEntry = useDeleteManyEntry();
-const DeleteTokenEntry = useDeleteTokenEntry();
+const UpdateManyItem = useUpdateManyItem();
 const useAuth = () => useNuxtApp().$auth;
 const route = useRoute();
 const toast = useToast();
@@ -31,20 +43,13 @@ const cellNo = ref('');
 const points = ref(0);
 const name = ref('');
 const scannedBarcode = ref("");
-const token = ref("")
-const tokenEntries = ref([])
 
 const qtyInputs = ref([]);
 const barcodeInputs = ref([]);
 const discountref = ref();
 const paymentref = ref();
 const saveref = ref();
-const savetokenref = ref();
-const addTokenRef = ref();
-const tokenInputs = ref(['']);
-
 const isOpen = ref(false);
-const isTokenOpen = ref(false);
 const account = ref({
     name: '',
     phone:'',
@@ -255,10 +260,29 @@ const itemargs = computed(() => ({
 }));
 
 
-const entryargs = computed(() => ({
-    where: {
-        tokenNo: { in: tokenEntries.value }  // Fetch all entries matching tokenNos
+const findManyEntryargs = computed(() => ({
+  
+  where: {
+    billId: salesId,
+    id: {
+      notIn: items.value
+        .filter(item => item.entryId)
+        .map(item => item.entryId),
+    },
+  },
+  select: {
+    id: true,
+    itemId: true,
+    qty: true,
+    size:true,
+    variantId: true,
+    variant:{
+      select:{
+        sizes:true
+      }
     }
+  },
+
 }));
 
 
@@ -308,6 +332,12 @@ const billArgs = computed(() => ({
         size: true,
         outOfStock: true,
         categoryId:true,
+        item:{
+          select:{
+            id:true,
+            size:true,
+          }
+        },
         variant: {  
           select: {
             id:true,
@@ -321,22 +351,23 @@ const billArgs = computed(() => ({
 
 
 const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs);
-const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enable:false});
-const { data: entrydata ,refetch:entryRefetch} = useFindManyTokenEntry(entryargs,{enable:false});
+const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enabled:false});
+const {data: entriesToDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
+
+watch(entriesToDelete, (newentriesToDelete) => {
+  
+  console.log(newentriesToDelete)
+
+})
+
 
 const handleEnterBarcode = (barcode,index) => {
   if(!barcode){
-    if(token.value){
-      const component = savetokenref.value;
-      const button = component.$el;
-      button.focus();
-    }
-    else{
     const component = discountref.value;
     const input = component.$el.querySelector("input");
     input.focus();
     input.select();
-    }
+    
   }else{
     fetchItemData(barcode, index);
   const component = qtyInputs.value[index];
@@ -360,48 +391,21 @@ const handleEnterPayment = () => {
 };
 
 
-const handleTokenInputEnter = async(index) => {
-  if(!tokenEntries.value[index]){
-    const component = addTokenRef.value;
-    const button = component.$el;
-    button.focus();
-    
-  }else{
-    addEntry()
-    await nextTick();
-    const component = tokenInputs.value[index + 1];
-    const input = component.$el.querySelector("input");
-    input.focus();
-    input.select();
-  }
-  
-}
-
-const handleTokenDelete = (index, event) => {
-  if(!tokenEntries.value[index] && tokenEntries.value.length > 1){
-    event.preventDefault()
-    tokenEntries.value.splice(index,1)
-    const component = tokenInputs.value[index-1];
-    const input = component.$el.querySelector("input");
-    input.focus();
-
-  }
-}
-
-
 
 watch(() => bill.value, (newData) => {
   console.log(newData)
   if (!newData || !newData.entries) return;
   items.value = newData.entries.map((entry, index) => {
     return {
-      id: entry.id || '',
+      entryId: entry.id || '',
+      id:entry.item?.id || '',
       variantId: entry.variant?.id || '',
       sn: index + 1,
       name:entry.name || '',
       barcode: entry.barcode || '', 
       category:  categories.value.filter(category =>category.id === entry.categoryId),
-      size: entry.size || '',
+      size: entry.item?.size || '',
+      sizes: entry.sizes || null,
       qty: entry.qty || 1,
       rate: entry.rate || 0,
       discount: entry.discount || 0,
@@ -426,7 +430,8 @@ const fetchItemData = async (barcode, index) => {
     const categoryId = itemdata.value.variant.product.categoryId;
 
     
-    items.value[index].id = itemdata.value.id || '';
+    items.value[index].entryId = itemdata.value.entry?.id || '';
+    items.value[index].id = itemdata.value.item?.id || '';
     items.value[index].size = itemdata.value.size || '';
     items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant.product.name}` || '';
     items.value[index].category = categories.value.filter(category =>category.id === categoryId);
@@ -454,8 +459,8 @@ const handleEdit = async () => {
     return;
   }
     // Separate items into those with an ID and those without
-    const itemsWithId = items.value.filter(item => item.id);
-    const itemsWithoutId = items.value.filter(item => !item.id);
+    const itemsWithId = items.value.filter(item => item.entryId);
+    const itemsWithoutId = items.value.filter(item => !item.entryId);
 
     // Separate create and update logic
 
@@ -468,14 +473,13 @@ const handleEdit = async () => {
           rate: item.rate,
           name: item.name,
           discount: item.discount,
-          variantId: item.variantId || undefined,
-          tax: item.tax,
+          ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
           value: item.value,
           ...(item.category?.[0]?.id && {
             category: { connect: { id: item.category[0].id } },
           }),
-          ...(item.barcode && {
-            item: { connect: { barcode: item.barcode } },
+          ...(item.id && {
+            item: { connect: { id: item.id } },
           }),
           bill: {
             connect: {
@@ -489,21 +493,21 @@ const handleEdit = async () => {
     // Update entries for items with an ID (itemsWithId)
     const updatePromises = itemsWithId.map(item => {
       return UpdateEntry.mutateAsync({
-        where: { id: item.id },
+        where: { id: item.entryId },
         data: {
           barcode: item.barcode || undefined,
           qty: item.qty,
           rate: item.rate,
           name: item.name,
           discount: item.discount,
-          variantId: item.variantId || undefined,
+          ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
           tax: item.tax,
           value: item.value,
           ...(item.category?.[0]?.id && {
             category: { connect: { id: item.category[0].id } },
           }),
-          ...(item.barcode && {
-            item: { connect: { barcode: item.barcode } },
+          ...(item.id && {
+            item: { connect: { id: item.id } },
           }),
           bill: {
             connect: {
@@ -514,19 +518,73 @@ const handleEdit = async () => {
       });
     });
 
-    const deletePromises = DeleteManyEntry.mutateAsync({
-  where: {
-    billId: salesId,
-    id: {
-      notIn: items.value.filter(item => item.id).map(item => item.id),
+   // Step 1: Find entries to delete
+await entriesToDeleteRefetch()
+
+// Step 2: Extract itemIds and entryIds
+const itemIds = entriesToDelete.value?.filter(e=>e.itemId).map(e => e.itemId)
+const entryIds = entriesToDelete.value?.filter(e=>e.id).map(e => e.id);
+const variantDetails = entriesToDelete.value?.map(e => ({
+  variantId: e.variantId,
+  qty: e.qty ,
+  size: e.size ?? null,
+  sizes: e?.variant?.sizes ?? [], // ✅ map in the sizes JSON from the variant
+}));
+
+
+// Step 3: Update related items to be in_stock
+if (itemIds.length > 0) {
+  await UpdateManyItem.mutateAsync({
+    where: { id: { in: itemIds } },
+    data: { 
+      status: 'in_stock' 
     },
-  },
-});
+
+  });
+}
+
+// Step 4: update the variants
+for (const { variantId, qty, size, sizes } of variantDetails) {
+  if (!variantId || !qty) continue;
+
+  // Decrement overall variant qty
+  const updateData = {
+    qty: { increment: qty },
+  };
+
+  // Update sizes only if size is not null
+  if (size) {
+    const updatedSizes = sizes.map(s => {
+      if (s.size === size) {
+        return {
+          ...s,
+          qty: Math.max((s.qty ?? 0) + qty) // Prevent negative qty
+        };
+      }
+      return s;
+    });
+
+    updateData.sizes = updatedSizes;
+  }
+
+  await UpdateVariant.mutateAsync({
+    where: { id: variantId },
+    data: updateData,
+  });
+}
+
+
+
+// Step 4: Delete the entries
+if (entryIds.length > 0) {
+  await DeleteManyEntry.mutateAsync({
+    where: { id: { in: entryIds } },
+  });
+}
 
    
-
     // Execute all create, update, and delete promises
-    await Promise.all([...createPromises, ...updatePromises, deletePromises]);
+    await Promise.all([...createPromises, ...updatePromises]);
 
     // Call UpdateBill mutation with the other data
     const billResponse = await UpdateBill.mutateAsync({
@@ -603,14 +661,6 @@ const handleEdit = async () => {
   } catch (error) {
     console.error('Error deleting token entries', error);
   }
-
-  // ✅ Reset items only after all Prisma operations are complete
-  // items.value = [
-  //   { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
-  // ];
-  // discount.value = 0;
-  // paymentMethod.value = 'Cash';
-  // tokenEntries.value = [''];
 };
 
 
@@ -741,55 +791,7 @@ const handleTokenSave = async () => {
 
 };
 
-const addEntry = () => {
-  tokenEntries.value.push('')  // Add a new empty entry
-}
 
-const removeEntry = (index) => {
-  if (tokenEntries.value.length > 1) {
-    tokenEntries.value.splice(index, 1)
-  }
-}
-
-const submitEntryForm = async () => {
-    await entryRefetch();
-
-    if (entrydata.value) {
-        // Remove existing empty item if it exists
-        items.value = items.value.filter(item => item.id || item.barcode);
-
-        // Add fetched entries to existing items
-        const newItems = entrydata.value.map((entry, index) => ({
-            id: entry.id || '',
-            variantId: entry.variantId || '',
-            barcode: entry.barcode || '',
-            category: categories.value.filter(category => category.id === entry.categoryId) || [],
-            size: entry.size || '',
-            item: entry.name || '',
-            qty: entry.qty || 0,
-            rate: entry.rate|| 0,
-            discount: entry.discount|| 0,
-            tax: entry.tax|| 0,
-            value: entry.value|| 0,
-            sizes: entry.sizes || '{}',
-            totalQty: entry.totalQty|| 0,
-        }));
-
-        // Append the new items
-        items.value = newItems;
-
-        // Add an empty item at the end
-        items.value.push({
-            id: '', variantId: '', sn: items.value.length + 1, barcode: '',
-            category: {}, size: '', item: '', qty: 1, rate: 0,
-            discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0
-        });
-
-        console.log('Items populated:', items.value);
-    } else {
-        console.warn("entrydata is undefined");
-    }
-};
 
 
 
@@ -801,9 +803,8 @@ const submitEntryForm = async () => {
     <div>
       <UCard class="max-w-[1400px] mx-auto">
         <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
-        <UInput v-if="!token" v-model="date" type="date" label="Date" class="lg:col-span-2" />
-        <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2" />
-        <UButton color="primary" label="Token Entries " block @click="isTokenOpen=true" class="lg:col-start-11 lg:col-span-2"/>
+        <UInput v-model="date" type="date" label="Date" class="lg:col-span-2" />
+
       </div>
 
 
@@ -885,7 +886,7 @@ const submitEntryForm = async () => {
         </div>
 
         <!-- Other form elements -->
-        <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Sub Total</label>
@@ -958,12 +959,11 @@ const submitEntryForm = async () => {
 
         <div class="mt-4 w-full flex flex-wrap gap-4">
           <UButton color="blue" class="flex-1" block @click="() => router.push('/erp/billing')">New</UButton>
-          <UButton  v-if="!token" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
-          <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
+          <UButton  ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
           <UButton color="red" class="flex-1" block  @click="deleteBill">Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
-          <UButton v-if="!token" class="flex-1" block>Sales Return</UButton>
-          <UButton v-if="!token" class="flex-1" block>Bill Search</UButton>
+          <UButton class="flex-1" block>Sales Return</UButton>
+          <UButton class="flex-1" block>Bill Search</UButton>
         </div>
       </UCard>
     </div>
@@ -993,28 +993,6 @@ const submitEntryForm = async () => {
       </UModal>
 
 
-      <UModal v-model="isTokenOpen">
-        <div class="p-4 space-y-4">
-          <div v-for="(entry, index) in tokenEntries" :key="index">
-            <div class="flex flex-row items-center">
-              <UInput ref="tokenInputs" v-model="tokenEntries[index]" size="sm" type="text" @keydown.enter="handleTokenInputEnter(index)"   @keydown.delete="(event) => handleTokenDelete(index, event)" />
-              <UButton 
-                icon="i-heroicons-trash" 
-                color="red" 
-                class="ms-2" 
-                @click="removeEntry(index)"
-                :disabled="tokenEntries.length === 1"
-              />
-            </div>
-          </div>
-
-          <div class="mt-4">
-            <UButton  color="green" @click="addEntry" >Add</UButton>
-          </div>
-
-          <UButton ref="addTokenRef"  @click="submitEntryForm" block class="mt-4">Submit</UButton>
-        </div>
-    </UModal>
 
 </template>
 

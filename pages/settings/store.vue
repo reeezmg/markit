@@ -13,11 +13,12 @@ const isUpdatingAddress = ref(false);
 const isUpdatingAccount = ref(false);
 
 interface AccountState {
-  accHolderName: string;
-  ifsc: string;
-  accountNo: string;
-  bankName: string;
-  gstin: string;
+  accHolderName?: string;
+  ifsc?: string;
+  accountNo?: string;
+  bankName?: string;
+  upiId?: string;
+  gstin?: string;
 }
 
 interface AddressState {
@@ -33,6 +34,7 @@ const accstate = reactive<AccountState>({
   ifsc: '',
   accountNo: '',
   bankName: '',
+  upiId:'',
   gstin: '',
 });
 
@@ -64,11 +66,7 @@ const toast = useToast();
 
 function accvalidate(state: AccountState): FormError[] {
   const errors: FormError[] = [];
-  if (!state.accHolderName) errors.push({ path: 'accHolderName', message: 'Account holder name is required' });
-  if (!state.ifsc) errors.push({ path: 'ifsc', message: 'IFSC code is required' });
-  if (!state.accountNo) errors.push({ path: 'accountNo', message: 'Account number is required' });
-  if (!state.bankName) errors.push({ path: 'bankName', message: 'Bank name is required' });
-  if (!state.gstin) errors.push({ path: 'gstin', message: 'GSTIN is required' });
+
   return errors;
 }
 
@@ -92,6 +90,7 @@ const { data: info, isLoading, error, refetch } = useFindUniqueCompany({
     accountNo: true,
     bankName: true,
     gstin: true,
+    upiId:true,
     address: {
       select: {
         id: true,
@@ -111,6 +110,7 @@ watch(info, (newInfo) => {
     accstate.ifsc = newInfo.ifsc || '';
     accstate.accountNo = newInfo.accountNo || '';
     accstate.bankName = newInfo.bankName || '';
+    accstate.upiId = newInfo.upiId || '';
     accstate.gstin = newInfo.gstin || '';
     
     if (newInfo.address) {
@@ -123,15 +123,7 @@ watch(info, (newInfo) => {
   }
 },{ deep: true, immediate: true });
 
-async function updateStoreUniqueName(newName: string) {
-  // Implement this function or import it if it exists elsewhere
-  // This should update the session with the new store unique name
-}
 
-async function updateIsTaxIncluded(newValue: boolean) {
-  // Implement this function or import it if it exists elsewhere
-  // This should update the session with the new tax included value
-}
 
 async function onNameUpdate() {
   isUpdatingName.value = true;
@@ -144,7 +136,6 @@ async function onNameUpdate() {
         storeUniqueName: storeUniqueName.value,
       },
     });
-    await updateStoreUniqueName(storeUniqueName.value);
     toast.add({ title: 'Store name updated', icon: 'i-heroicons-check-circle' });
     isNameChanged.value = false;
   } catch (error) {
@@ -168,6 +159,7 @@ async function onaccSubmit(event: FormSubmitEvent<AccountState>) {
         accountNo: accstate.accountNo,
         bankName: accstate.bankName,
         gstin: accstate.gstin,
+        upiId: accstate.upiId,
       }
     });
     toast.add({ title: 'Account details updated', color: 'green', icon: 'i-heroicons-check-circle' });
@@ -328,6 +320,14 @@ const onTaxIncludeChange = async () => {
           autocomplete="off"
           size="md"
           placeholder="Bank Name"
+        />
+        <UInput
+          v-model="accstate.upiId"
+          type="text"
+          class="mb-4"
+          autocomplete="off"
+          size="md"
+          placeholder="UPI ID"
         />
         <UInput
           v-model="accstate.gstin"

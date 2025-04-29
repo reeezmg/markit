@@ -5,7 +5,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import type { Prisma, PurchaseOrder } from "@prisma/client";
+import type { Prisma, PurchaseOrder } from "../../prisma/generated/client";
 import type { UseMutationOptions, UseQueryOptions, UseInfiniteQueryOptions, InfiniteData } from '@tanstack/vue-query';
 import { getHooksContext } from '@zenstackhq/tanstack-query/runtime-v5/vue';
 import type { MaybeRefOrGetter, ComputedRef, UnwrapRef } from 'vue';
@@ -239,7 +239,7 @@ export function useCountPurchaseOrder<TArgs extends Prisma.PurchaseOrderCountArg
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<TQueryFnData, TData, TError>('PurchaseOrder', `${endpoint}/purchaseOrder/count`, args, options, fetch);
 }
-import type { paymentType } from '@prisma/client';
+import type { paymentType } from '../../prisma/generated/client';
 
 export function useCheckPurchaseOrder<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; distributorId?: string; paymentType?: paymentType; companyId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();

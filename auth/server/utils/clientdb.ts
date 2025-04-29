@@ -1,4 +1,4 @@
-import type { User, Company, Address, Pipeline } from '@prisma/client';
+import type { User, Company, Address, Pipeline } from '~/prisma/generated/client';
 import { pipeline } from 'stream';
 import { prisma } from '~/server/prisma';
 

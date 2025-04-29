@@ -6,7 +6,7 @@ import {
     useFindManyExpenseCategory,
     useUpdateManyExpense
 } from '~/lib/hooks';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '~/prisma/generated/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { saveAs } from 'file-saver';
 

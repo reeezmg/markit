@@ -2,8 +2,8 @@
 import AwsService from '~/composables/aws';
 import { useCreateProduct,useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
-import { paymentType as PType } from '@prisma/client';
-
+import type { paymentType as PType } from '~/prisma/generated/client';
+const { printLabel } = usePrint();
 const router = useRouter();
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
@@ -599,7 +599,27 @@ const { data: items, refetch: itemRefetch } = useFindUniquePurchaseOrder({
   enabled: false
 });
 
-
+const printBarcodes = async() => {
+console.log(barcodes.value)
+  try{
+ 
+    const response = await printLabel(barcodes.value);
+    console.log(response)
+    toast.add({
+        title: 'Printing success!',
+        color: 'green',
+      });
+  }catch(err){
+    console.log(err)
+    toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+ 
+  
+}
 const handleSave = async () => {
   try {
      await itemRefetch();
@@ -613,6 +633,7 @@ const handleSave = async () => {
         variant.items.map(item => ({
           barcode: item.barcode ?? '',
           code: variant.code ?? '',
+          shopname:useAuth().session.value?.companyName,
           productName: product.name,
           name: variant.name,
           sprice: variant.sprice,
@@ -694,9 +715,7 @@ const handleReset = async() => {
 }
 }
 
-const printBarcodes = () => {
-  window.print();
-}
+
 const handleSkip = () => {
  router.push(`/products`);
 }

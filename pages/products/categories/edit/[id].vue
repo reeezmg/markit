@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
 import { useUpdateCategory, useFindUniqueCategory, useUpdateSubcategory, useCreateSubcategory, useDeleteSubcategory } from '~/lib/hooks';
-import type { Category, Subcategory } from '@prisma/client';
+import type { Category, Subcategory } from '~/prisma/generated/client';
 
 definePageMeta({
   auth: true,

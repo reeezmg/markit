@@ -1,20 +1,18 @@
 <script setup lang="ts">
-import { sub } from 'date-fns';
-import type { Period, Range } from '~/types';
 import { useFindManyCompany } from '~/lib/hooks';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '~/prisma/generated/client';
 import { getShopName, getToken } from '~/services/tiktokService';
+
+
+definePageMeta({
+  layout:  false,
+});
 
 useHead({
     title: 'Marketplace',
 });
 
-
-
-
-
 const useAuth = () => useNuxtApp().$auth;
-const auth = useAuth();
 const route = useRoute();
 const router = useRouter();
 const cartStore = useCartStore();
@@ -26,17 +24,6 @@ const search = ref('');
 const categories = ref<any[]>([]);
 const code = Array.isArray(route.query.code) ? route.query.code[0] : route.query.code;
 
-onBeforeMount(() => {
-    if (!useAuth().loggedIn.value) {
-        definePageMeta({
-            layout: false,
-        });
-    }else{
-        definePageMeta({
-            layout: "default",
-        });
-    }
-});
 
 
 onMounted(async () => {
@@ -75,7 +62,6 @@ const queryArgs = computed<Prisma.CompanyFindManyArgs>(() => {
     };
 });
 
-
 const {
     data: companies,
     isLoading,
@@ -83,10 +69,7 @@ const {
     refetch,
 } = useFindManyCompany(queryArgs);
 
-
 console.log(companies)
-
-
 </script>
 <template>
     <UDashboardPage>

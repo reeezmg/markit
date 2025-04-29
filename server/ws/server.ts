@@ -1,6 +1,6 @@
 // server/ws/server.ts
 import { WebSocketServer , WebSocket } from 'ws'
-import type { Notification } from '@prisma/client'
+import type { Notification } from '~/prisma/generated/client'
 
 const wss = new WebSocketServer({ port: 3003 })
 const clients = new Map<string, Set<WebSocket>>()

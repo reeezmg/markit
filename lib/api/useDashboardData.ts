@@ -24,7 +24,9 @@ import {
     const billsQuery = useFindManyBill({
         where: {
         AND: [
-            { companyId: useAuth().session.value?.companyId },]
+            { companyId: useAuth().session.value?.companyId },
+            { deleted:false }
+          ]
           },
           include: {
             client: true,

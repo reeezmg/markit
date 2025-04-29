@@ -12,8 +12,8 @@ const auth = useAuth();
                 <template #right>
                     <UTooltip text="Notifications" :shortcuts="['N']">
                         <ClientOnly>
-        <NotificationIcon />
-      </ClientOnly>
+                        <NotificationIcon />
+                    </ClientOnly>
                     </UTooltip>
                 </template>
             </UDashboardNavbar>

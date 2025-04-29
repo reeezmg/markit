@@ -2,7 +2,7 @@
 import AwsService from '~/composables/aws';
 import { useCreateProduct,useUpdateProduct, useFindUniqueCategory, useFindUniqueProduct} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
-import { paymentType as PType } from '@prisma/client';
+import type { paymentType as PType } from '~/prisma/generated/client';
 
 const router = useRouter();
 const toast = useToast();
@@ -352,14 +352,15 @@ const handleEdit = async (e: Event) => {
       }
     });
     console.log(res)
-    await getItem(res?.variants);
-
+    const resitem = await getItem(res?.variants);
+    console.log(resitem)
+    await handleSave()
 
     toast.add({
       title: 'Product Edited!',
       id: 'modal-success',
     });
-     await handleSave()
+    
   } catch (err: any) {
     toast.add({
         title: `Something went wrong!`,
@@ -459,22 +460,6 @@ const handleSave  = async () => {
     console.log(barcodes.value)
 
     isOpen.value = true;
-
-    await UpdatePurchaseOrder.mutateAsync({
-      where: { id: poId }, // Use .value if poId is a ref
-      data: {
-        ...(distributorId.value && {
-          distributor: {
-            connect: {
-              id: distributorId.value
-            }
-          }
-        }),
-        ...(paymentType.value && {
-          paymentType: paymentType.value as PType
-        })
-      }
-    });
 
   } catch (error) {
     console.error("Failed to save purchase order", error);

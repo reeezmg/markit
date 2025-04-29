@@ -3,12 +3,24 @@ export default defineNuxtConfig({
   extends: [process.env.NUXT_UI_PRO_PATH || '@nuxt/ui-pro', './auth'],
 
   build: {
-      transpile: ['trpc-nuxt']
+      transpile: ['trpc-nuxt'],
     },
 
   nitro: {
     plugins: ['~/nitro/ws'],
+    esbuild: {
+        options: {
+          target: 'es2022'
+        }
+      },
+      externals: {
+        external: ['@prisma/client'], // ✅ only this
+      },
   },
+
+
+
+ 
 
   modules: [
       '@nuxt/ui',

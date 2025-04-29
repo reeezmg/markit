@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useCreateDistributor,useFindManyDistributor } from '~/lib/hooks';
-import type { Prisma } from '@prisma/client';
+import type { Prisma } from '~/prisma/generated/client';
 
 const isOpen = ref(false);
 const toast = useToast();

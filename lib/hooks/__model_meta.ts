@@ -191,6 +191,10 @@ const metadata = {
                     name: "gstin",
                     type: "String",
                     isOptional: true,
+                }, upiId: {
+                    name: "upiId",
+                    type: "String",
+                    isOptional: true,
                 }, notifications: {
                     name: "notifications",
                     type: "Notification",
@@ -218,8 +222,7 @@ const metadata = {
                     type: "Int",
                     attributes: [{ "name": "@default", "args": [{ "value": 1 }] }],
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -230,10 +233,8 @@ const metadata = {
                     name: "storeUniqueName",
                     fields: ["storeUniqueName"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         distributor: {
             name: 'Distributor', fields: {
                 id: {
@@ -291,16 +292,13 @@ const metadata = {
                     isOptional: true,
                     backLink: 'distributor',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         user: {
             name: 'User', fields: {
                 id: {
@@ -361,8 +359,7 @@ const metadata = {
                     type: "String",
                     isOptional: true,
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -370,10 +367,8 @@ const metadata = {
                     name: "email",
                     fields: ["email"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         client: {
             name: 'Client', fields: {
                 id: {
@@ -510,8 +505,7 @@ const metadata = {
                     isArray: true,
                     backLink: 'client',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -522,10 +516,8 @@ const metadata = {
                     name: "phone",
                     fields: ["phone"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         pipeline: {
             name: 'Pipeline', fields: {
                 id: {
@@ -576,8 +568,7 @@ const metadata = {
                     isArray: true,
                     backLink: 'closePipeline',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -585,10 +576,8 @@ const metadata = {
                     name: "companyId",
                     fields: ["companyId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         category: {
             name: 'Category', fields: {
                 id: {
@@ -674,16 +663,13 @@ const metadata = {
                     type: "Float",
                     isOptional: true,
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         subcategory: {
             name: 'Subcategory', fields: {
                 id: {
@@ -747,16 +733,13 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'category',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         product: {
             name: 'Product', fields: {
                 id: {
@@ -850,16 +833,13 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'purchaseorder',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         variant: {
             name: 'Variant', fields: {
                 id: {
@@ -960,16 +940,13 @@ const metadata = {
                     isArray: true,
                     backLink: 'variant',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         item: {
             name: 'Item', fields: {
                 id: {
@@ -1028,16 +1005,13 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'company',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         purchaseOrder: {
             name: 'PurchaseOrder', fields: {
                 id: {
@@ -1090,16 +1064,13 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'company',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         bill: {
             name: 'Bill', fields: {
                 id: {
@@ -1232,8 +1203,7 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'address',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -1244,10 +1214,8 @@ const metadata = {
                     name: "clientId",
                     fields: ["clientId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         tokenEntry: {
             name: 'TokenEntry', fields: {
                 id: {
@@ -1313,16 +1281,13 @@ const metadata = {
                     name: "totalQty",
                     type: "Int",
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         entry: {
             name: 'Entry', fields: {
                 id: {
@@ -1423,8 +1388,7 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'item',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -1432,10 +1396,8 @@ const metadata = {
                     name: "itemId",
                     fields: ["itemId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         account: {
             name: 'Account', fields: {
                 id: {
@@ -1474,16 +1436,13 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'company',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         expenseCategory: {
             name: 'ExpenseCategory', fields: {
                 id: {
@@ -1525,16 +1484,13 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'company',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         expense: {
             name: 'Expense', fields: {
                 id: {
@@ -1609,16 +1565,13 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'company',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         payment: {
             name: 'Payment', fields: {
                 id: {
@@ -1669,16 +1622,13 @@ const metadata = {
                     isForeignKey: true,
                     relationField: 'company',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         address: {
             name: 'Address', fields: {
                 id: {
@@ -1794,8 +1744,7 @@ const metadata = {
                     isArray: true,
                     backLink: 'address',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -1812,10 +1761,8 @@ const metadata = {
                     name: "accountId",
                     fields: ["accountId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         conversation: {
             name: 'Conversation', fields: {
                 id: {
@@ -1850,16 +1797,13 @@ const metadata = {
                     isArray: true,
                     backLink: 'conversation',
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         message: {
             name: 'Message', fields: {
                 id: {
@@ -1910,16 +1854,13 @@ const metadata = {
                     type: "Boolean",
                     attributes: [{ "name": "@default", "args": [{ "value": false }] }],
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         companyUser: {
             name: 'CompanyUser', fields: {
                 companyId: {
@@ -1949,16 +1890,13 @@ const metadata = {
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "userId" },
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 companyId_userId: {
                     name: "companyId_userId",
                     fields: ["companyId", "userId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         companyClient: {
             name: 'CompanyClient', fields: {
                 companyId: {
@@ -1988,16 +1926,13 @@ const metadata = {
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "clientId" },
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 companyId_clientId: {
                     name: "companyId_clientId",
                     fields: ["companyId", "clientId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         userConversation: {
             name: 'UserConversation', fields: {
                 userId: {
@@ -2027,16 +1962,13 @@ const metadata = {
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "conversationId" },
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 userId_conversationId: {
                     name: "userId_conversationId",
                     fields: ["userId", "conversationId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         clientConversation: {
             name: 'ClientConversation', fields: {
                 clientId: {
@@ -2066,16 +1998,13 @@ const metadata = {
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "conversationId" },
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 clientId_conversationId: {
                     name: "clientId_conversationId",
                     fields: ["clientId", "conversationId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         userClient: {
             name: 'UserClient', fields: {
                 clientId: {
@@ -2105,16 +2034,13 @@ const metadata = {
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "userId" },
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 clientId_userId: {
                     name: "clientId_userId",
                     fields: ["clientId", "userId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         distributorCompany: {
             name: 'DistributorCompany', fields: {
                 distributorId: {
@@ -2144,16 +2070,13 @@ const metadata = {
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "companyId" },
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 distributorId_companyId: {
                     name: "distributorId_companyId",
                     fields: ["distributorId", "companyId"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         variantSizeBarcode: {
             name: 'VariantSizeBarcode', fields: {
                 id: {
@@ -2182,8 +2105,7 @@ const metadata = {
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "variantId" },
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -2194,10 +2116,8 @@ const metadata = {
                     name: "variantId_size",
                     fields: ["variantId", "size"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         emailOtp: {
             name: 'EmailOtp', fields: {
                 id: {
@@ -2215,8 +2135,7 @@ const metadata = {
                     name: "expiresAt",
                     type: "DateTime",
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
@@ -2224,10 +2143,8 @@ const metadata = {
                     name: "email",
                     fields: ["email"]
                 },
-            }
-            ,
-        }
-        ,
+            },
+        },
         notification: {
             name: 'Notification', fields: {
                 id: {
@@ -2305,26 +2222,24 @@ const metadata = {
                     type: "DateTime",
                     attributes: [{ "name": "@updatedAt", "args": [] }],
                 },
-            }
-            , uniqueConstraints: {
+            }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
                 },
-            }
-            ,
-        }
-        ,
-    }
-    ,
+            },
+        },
+
+    },
     deleteCascade: {
         company: ['Product', 'Variant', 'Item', 'PurchaseOrder'],
         product: ['Variant'],
         variant: ['Item', 'VariantSizeBarcode'],
         purchaseOrder: ['Product'],
         bill: ['Entry'],
-    }
-    ,
+
+    },
     authModel: 'User'
+
 };
 export default metadata;
