@@ -22,7 +22,15 @@ export default defineNuxtConfig({
       },
   },
 
-
+  vite: {
+    esbuild: {
+      tsconfigRaw: {
+        compilerOptions: {
+          module: "commonjs"
+        }
+      }
+    }
+  },
 
  
 
