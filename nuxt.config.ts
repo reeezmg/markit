@@ -7,6 +7,7 @@ export default defineNuxtConfig({
     },
 
   nitro: {
+     preset: 'node',
     plugins: ['~/nitro/ws'],
     esbuild: {
         options: {
@@ -15,6 +16,9 @@ export default defineNuxtConfig({
       },
       externals: {
         external: ['@prisma/client'], // ✅ only this
+        ignore: [
+          'C:/Users/User/AppData/Roaming/Code/Network/Cookies'
+        ]
       },
   },
 
