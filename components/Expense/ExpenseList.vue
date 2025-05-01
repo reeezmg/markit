@@ -1,12 +1,11 @@
 <script setup lang="ts">
-import { useExpense } from '~/composables/useExpense';
 import {
     useFindManyExpense,
     useCountExpense,
     useFindManyExpenseCategory,
     useUpdateManyExpense
 } from '~/lib/hooks';
-import type { Prisma } from '~/prisma/generated/client'
+import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { saveAs } from 'file-saver';
 
@@ -21,6 +20,7 @@ const selectedDate = ref({
     start: new Date(new Date().setHours(0, 0, 0, 0)) , 
     end: new Date(new Date().setHours(23, 59, 59, 999)) 
 });
+
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const page = ref(1);
 const pageCount = ref('10');

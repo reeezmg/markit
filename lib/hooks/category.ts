@@ -5,7 +5,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import type { Prisma, Category } from "../../prisma/generated";
+import type { Prisma, Category } from "@prisma/client";
 import type { UseMutationOptions, UseQueryOptions, UseInfiniteQueryOptions, InfiniteData } from '@tanstack/vue-query';
 import { getHooksContext } from '@zenstackhq/tanstack-query/runtime-v5/vue';
 import type { MaybeRefOrGetter, ComputedRef, UnwrapRef } from 'vue';
@@ -239,7 +239,7 @@ export function useCountCategory<TArgs extends Prisma.CategoryCountArgs, TQueryF
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<TQueryFnData, TData, TError>('Category', `${endpoint}/category/count`, args, options, fetch);
 }
-import type { TaxType } from '../../prisma/generated';
+import type { TaxType } from '@prisma/client';
 
 export function useCheckCategory<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; description?: string; status?: boolean; image?: string; companyId?: string; hsn?: string; taxType?: TaxType }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();

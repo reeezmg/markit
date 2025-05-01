@@ -1,6 +1,6 @@
 
 // // server/utils/prisma.ts
-// import { PrismaClient, Prisma } from '~/prisma/generated/client'
+// import { PrismaClient, Prisma } from '@prisma/client'
 // import { appEvents, NotificationEventTypes } from '~/server/services/eventService'
 
 // const base = new PrismaClient()

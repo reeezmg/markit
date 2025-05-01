@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import ExpenseForm from '~/components/ExpenseForm.vue';
-import ExpenseList from '~/components/ExpenseList.vue';
+import ExpenseForm from '~/components/Expense/ExpenseForm.vue';
+import ExpenseList from '~/components/Expense/ExpenseList.vue';
 import AwsService from '~/composables/aws';
 import {
     useCreateExpense,

@@ -255,12 +255,6 @@ const metadata = {
                     isDataModel: true,
                     isArray: true,
                     backLink: 'distributor',
-                }, purchaseorders: {
-                    name: "purchaseorders",
-                    type: "PurchaseOrder",
-                    isDataModel: true,
-                    isArray: true,
-                    backLink: 'distributor',
                 }, status: {
                     name: "status",
                     type: "Boolean",
@@ -285,12 +279,126 @@ const metadata = {
                     name: "gstin",
                     type: "String",
                     isOptional: true,
+                }, upiId: {
+                    name: "upiId",
+                    type: "String",
+                    isOptional: true,
                 }, address: {
                     name: "address",
                     type: "Address",
                     isDataModel: true,
                     isOptional: true,
                     backLink: 'distributor',
+                },
+            }, uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
+                },
+            },
+        },
+        purchaseOrder: {
+            name: 'PurchaseOrder', fields: {
+                id: {
+                    name: "id",
+                    type: "String",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, createdAt: {
+                    name: "createdAt",
+                    type: "DateTime",
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, updatedAt: {
+                    name: "updatedAt",
+                    type: "DateTime",
+                    attributes: [{ "name": "@updatedAt", "args": [] }],
+                }, products: {
+                    name: "products",
+                    type: "Product",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'purchaseorder',
+                }, company: {
+                    name: "company",
+                    type: "Company",
+                    isDataModel: true,
+                    backLink: 'purchaseOrders',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "companyId" },
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'company',
+                }, paymentType: {
+                    name: "paymentType",
+                    type: "paymentType",
+                    isOptional: true,
+                }, totalAmount: {
+                    name: "totalAmount",
+                    type: "Float",
+                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
+                }, distributorId: {
+                    name: "distributorId",
+                    type: "String",
+                    isOptional: true,
+                    isForeignKey: true,
+                    relationField: 'distributorCompany',
+                }, distributorCompany: {
+                    name: "distributorCompany",
+                    type: "DistributorCompany",
+                    isDataModel: true,
+                    isOptional: true,
+                    backLink: 'purchaseOrders',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "distributorId": "distributorId", "companyId": "companyId" },
+                },
+            }, uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
+                },
+            },
+        },
+        distributorPayment: {
+            name: 'DistributorPayment', fields: {
+                id: {
+                    name: "id",
+                    type: "String",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, createdAt: {
+                    name: "createdAt",
+                    type: "DateTime",
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, amount: {
+                    name: "amount",
+                    type: "Float",
+                }, remarks: {
+                    name: "remarks",
+                    type: "String",
+                    isOptional: true,
+                }, paymentType: {
+                    name: "paymentType",
+                    type: "paymentType",
+                    isOptional: true,
+                }, distributorId: {
+                    name: "distributorId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'distributorCompany',
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'distributorCompany',
+                }, distributorCompany: {
+                    name: "distributorCompany",
+                    type: "DistributorCompany",
+                    isDataModel: true,
+                    backLink: 'distributorPayments',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "distributorId": "distributorId", "companyId": "companyId" },
                 },
             }, uniqueConstraints: {
                 id: {
@@ -997,65 +1105,6 @@ const metadata = {
                     type: "Company",
                     isDataModel: true,
                     backLink: 'items',
-                    isRelationOwner: true,
-                    foreignKeyMapping: { "id": "companyId" },
-                }, companyId: {
-                    name: "companyId",
-                    type: "String",
-                    isForeignKey: true,
-                    relationField: 'company',
-                },
-            }, uniqueConstraints: {
-                id: {
-                    name: "id",
-                    fields: ["id"]
-                },
-            },
-        },
-        purchaseOrder: {
-            name: 'PurchaseOrder', fields: {
-                id: {
-                    name: "id",
-                    type: "String",
-                    isId: true,
-                    attributes: [{ "name": "@default", "args": [] }],
-                }, createdAt: {
-                    name: "createdAt",
-                    type: "DateTime",
-                    attributes: [{ "name": "@default", "args": [] }],
-                }, updatedAt: {
-                    name: "updatedAt",
-                    type: "DateTime",
-                    attributes: [{ "name": "@updatedAt", "args": [] }],
-                }, products: {
-                    name: "products",
-                    type: "Product",
-                    isDataModel: true,
-                    isArray: true,
-                    backLink: 'purchaseorder',
-                }, distributor: {
-                    name: "distributor",
-                    type: "Distributor",
-                    isDataModel: true,
-                    isOptional: true,
-                    backLink: 'purchaseorders',
-                    isRelationOwner: true,
-                    foreignKeyMapping: { "id": "distributorId" },
-                }, distributorId: {
-                    name: "distributorId",
-                    type: "String",
-                    isOptional: true,
-                    isForeignKey: true,
-                    relationField: 'distributor',
-                }, paymentType: {
-                    name: "paymentType",
-                    type: "paymentType",
-                    isOptional: true,
-                }, company: {
-                    name: "company",
-                    type: "Company",
-                    isDataModel: true,
-                    backLink: 'purchaseOrders',
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
@@ -2069,6 +2118,26 @@ const metadata = {
                     backLink: 'distributor',
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "companyId" },
+                }, totalAmount: {
+                    name: "totalAmount",
+                    type: "Float",
+                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
+                }, paidAmount: {
+                    name: "paidAmount",
+                    type: "Float",
+                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
+                }, distributorPayments: {
+                    name: "distributorPayments",
+                    type: "DistributorPayment",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'distributorCompany',
+                }, purchaseOrders: {
+                    name: "purchaseOrders",
+                    type: "PurchaseOrder",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'distributorCompany',
                 },
             }, uniqueConstraints: {
                 distributorId_companyId: {
@@ -2232,10 +2301,10 @@ const metadata = {
 
     },
     deleteCascade: {
-        company: ['Product', 'Variant', 'Item', 'PurchaseOrder'],
+        company: ['PurchaseOrder', 'Product', 'Variant', 'Item'],
+        purchaseOrder: ['Product'],
         product: ['Variant'],
         variant: ['Item', 'VariantSizeBarcode'],
-        purchaseOrder: ['Product'],
         bill: ['Entry'],
 
     },

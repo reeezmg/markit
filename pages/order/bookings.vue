@@ -10,7 +10,7 @@ import {
     useFindManyBill,
     useCountBill
 } from '~/lib/hooks';
-import type { Prisma } from '~/prisma/generated/client'
+import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 
 const UpdateBill = useUpdateBill();

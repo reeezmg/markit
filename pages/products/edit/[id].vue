@@ -2,7 +2,7 @@
 import AwsService from '~/composables/aws';
 import { useCreateProduct,useUpdateProduct, useFindUniqueCategory, useFindUniqueProduct} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
-import type { paymentType as PType } from '~/prisma/generated/client';
+import type { paymentType as PType } from '@prisma/client';
 
 const router = useRouter();
 const toast = useToast();

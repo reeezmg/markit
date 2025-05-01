@@ -2,7 +2,7 @@
 import { Switch } from '@headlessui/vue';
 import { sub } from 'date-fns';
 import type { Period, Range } from '~/types';
-import type { Prisma } from '~/prisma/generated/client'
+import type { Prisma } from '@prisma/client'
 
 import {
     useFindManyClient,

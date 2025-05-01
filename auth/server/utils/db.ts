@@ -1,6 +1,6 @@
-import type { User, Company, Address, Pipeline } from '~/prisma/generated/client';
+import type { User, Company, Address, Pipeline } from '@prisma/client';
 import { prisma } from '~/server/prisma';
-import type { Prisma } from '~/prisma/generated/client';
+import type { Prisma } from '@prisma/client';
 
 
 export async function findUserByEmail(email: string) {

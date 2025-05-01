@@ -84,6 +84,43 @@ const links = computed(() => {
            
         },
         {
+            id: 'distributor',
+            label: 'Distributor',
+            to: `/distributor`,
+            icon: 'i-heroicons-truck',
+            children: [
+                {
+                    label: 'All Distributor',
+                    to: `/distributor`,
+                    exact: true,
+                    tooltip: {
+                        text: 'distributors',
+                        shortcuts: ['D', 'D'],
+                    },
+                },
+                {
+                    label: 'Order',
+                    to: `/distributor/Order`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Order',
+                        shortcuts: ['D', 'O'],
+                    },
+                },
+                {
+                    label: 'Credit',
+                    to: `/distributor/credit`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Credit',
+                        shortcuts: ['D', 'C'],
+                    },
+                },
+               
+            ],
+           
+        },
+        {
             id: 'orders',
             label: 'Orders',
             to: `/order`,

@@ -5,7 +5,7 @@
 /* eslint-disable */
 // @ts-nocheck
 
-import type { Prisma, Expense } from "../../prisma/generated";
+import type { Prisma, Expense } from "@prisma/client";
 import type { UseMutationOptions, UseQueryOptions, UseInfiniteQueryOptions, InfiniteData } from '@tanstack/vue-query';
 import { getHooksContext } from '@zenstackhq/tanstack-query/runtime-v5/vue';
 import type { MaybeRefOrGetter, ComputedRef, UnwrapRef } from 'vue';
@@ -239,7 +239,7 @@ export function useCountExpense<TArgs extends Prisma.ExpenseCountArgs, TQueryFnD
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<TQueryFnData, TData, TError>('Expense', `${endpoint}/expense/count`, args, options, fetch);
 }
-import type { PaymentMode } from '../../prisma/generated';
+import type { PaymentMode } from '@prisma/client';
 
 export function useCheckExpense<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; note?: string; currency?: string; paymentMode?: PaymentMode; status?: string; receipt?: string; receiptName?: string; expensecategoryId?: string; companyId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useFindManyCompany } from '~/lib/hooks';
-import type { Prisma } from '~/prisma/generated/client';
+import type { Prisma } from '@prisma/client';
 
 
 definePageMeta({

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { format, isToday } from 'date-fns'
 import type { Mail } from '~/types'
-import type { Prisma } from '~/prisma/generated/client';
+import type { Prisma } from '@prisma/client';
 
 const { $client } = useNuxtApp()
 const onlineUsers:any = ref([]);

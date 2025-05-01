@@ -31,8 +31,10 @@ enum CompanyType {
 }
 
 enum paymentType {
-    Credit
-    Cash
+    CREDIT
+    CASH
+    UPI
+    BANK_TRANSFER
 }
 
 enum PaymentMode {
@@ -72,6 +74,14 @@ enum TaxType {
   FIXED
   VARIABLE
 }
+
+enum PayableStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
 
 model Company extends Base {
     name        String
@@ -131,13 +141,14 @@ model Distributor extends Base {
     name        String
     images      String?
     companies   DistributorCompany[]
-    purchaseorders    PurchaseOrder[]
+
     status      Boolean       @default(true)
     accHolderName String? @map("acc_holder_name")
     ifsc String?
     accountNo String? @map("account_no")
     bankName String? @map("bank_name")
     gstin String?
+    upiId String?   @map("upi_id")
     address   Address?
     
     @@allow('create', auth() != null && status)
@@ -146,6 +157,44 @@ model Distributor extends Base {
 
     @@map('distributors')
 }
+
+
+model PurchaseOrder {
+    id              String        @id @default(uuid())
+    createdAt       DateTime      @default(now()) @map("created_at")
+    updatedAt       DateTime      @updatedAt @map("updated_at")
+
+    products        Product[]
+
+    company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId       String         @map("company_id")
+    paymentType     paymentType?   @map("payment_type") // CASH, CREDIT, etc.
+    totalAmount     Float          @default(0) @map("total_amount")
+
+    distributorId   String?       @map("distributor_id")
+    distributorCompany     DistributorCompany?  @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
+
+    @@allow('read, create, update,delete', true)
+    @@map("purchase_orders")
+}
+
+
+
+model DistributorPayment {
+  id                     String              @id @default(uuid())
+  createdAt              DateTime            @default(now()) @map("created_at")
+  amount                 Float
+  remarks                String?
+  paymentType            paymentType?       @map("payment_type") // CASH, CREDIT, etc.
+  distributorId          String              @map("distributor_id")
+  companyId              String              @map("company_id")
+
+  distributorCompany     DistributorCompany  @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
+
+  @@allow('read, create, update, delete', true)
+  @@map("distributor_payments")
+}
+
 
 model User extends Base {
     email     String        @unique @email
@@ -332,23 +381,7 @@ model Item {
     @@map("items")
 }
 
-model PurchaseOrder {
-    id              String        @id @default(uuid())
-    createdAt       DateTime      @default(now()) @map("created_at")
-    updatedAt       DateTime      @updatedAt @map("updated_at")
-    products        Product[]
-    distributor     Distributor?  @relation(fields: [distributorId], references: [id])
-    distributorId   String?       @map("distributor_id")
-    paymentType     paymentType? @map("payment_type")
 
-    company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    companyId   String @map("company_id")
-
-    @@allow('read', true)
-    @@allow('read, create, update', true)
-    
-    @@map("purchase_orders")
-}
 
 model Bill extends Base {
     createdAt       DateTime @map("created_at")
@@ -605,7 +638,10 @@ model DistributorCompany {
     companyId     String @map("company_id")
     distributor   Distributor @relation(fields: [distributorId], references: [id])
     company       Company @relation(fields: [companyId], references: [id])
-
+    totalAmount     Float          @default(0) @map("total_amount")
+    paidAmount      Float          @default(0) @map("paid_amount")
+    distributorPayments DistributorPayment[]
+    purchaseOrders   PurchaseOrder[]
     @@id([distributorId, companyId])
     @@allow('read,create, update, delete', auth() != null )
     @@map('distributor_companies')

@@ -9,10 +9,7 @@ datasource db {
 }
 
 generator client {
-  provider      = "prisma-client-js"
-  output        = "generated"
-  moduleFormat  = "esm"
-  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
+  provider = "prisma-client-js"
 }
 
 enum UserRole {
@@ -26,8 +23,10 @@ enum CompanyType {
 }
 
 enum paymentType {
-  Credit
-  Cash
+  CREDIT
+  CASH
+  UPI
+  BANK_TRANSFER
 }
 
 enum PaymentMode {
@@ -66,6 +65,13 @@ enum OrderStatus {
 enum TaxType {
   FIXED
   VARIABLE
+}
+
+enum PayableStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
 }
 
 enum NotificationType {
@@ -128,20 +134,48 @@ model Company {
 }
 
 model Distributor {
-  id             String               @id() @unique() @default(uuid())
-  name           String
-  images         String?
-  companies      DistributorCompany[]
-  purchaseorders PurchaseOrder[]
-  status         Boolean              @default(true)
-  accHolderName  String?              @map("acc_holder_name")
-  ifsc           String?
-  accountNo      String?              @map("account_no")
-  bankName       String?              @map("bank_name")
-  gstin          String?
-  address        Address?
+  id            String               @id() @unique() @default(uuid())
+  name          String
+  images        String?
+  companies     DistributorCompany[]
+  status        Boolean              @default(true)
+  accHolderName String?              @map("acc_holder_name")
+  ifsc          String?
+  accountNo     String?              @map("account_no")
+  bankName      String?              @map("bank_name")
+  gstin         String?
+  upiId         String?              @map("upi_id")
+  address       Address?
 
   @@map("distributors")
+}
+
+model PurchaseOrder {
+  id                 String              @id() @default(uuid())
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt() @map("updated_at")
+  products           Product[]
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String              @map("company_id")
+  paymentType        paymentType?        @map("payment_type")
+  totalAmount        Float               @default(0) @map("total_amount")
+  distributorId      String?             @map("distributor_id")
+  distributorCompany DistributorCompany? @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
+
+  @@map("purchase_orders")
+}
+
+model DistributorPayment {
+  id                 String             @id() @default(uuid())
+  createdAt          DateTime           @default(now()) @map("created_at")
+  amount             Float
+  remarks            String?
+  paymentType        paymentType?       @map("payment_type")
+  distributorId      String             @map("distributor_id")
+  companyId          String             @map("company_id")
+  distributorCompany DistributorCompany @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
+
+  @@map("distributor_payments")
 }
 
 model User {
@@ -304,20 +338,6 @@ model Item {
   companyId String   @map("company_id")
 
   @@map("items")
-}
-
-model PurchaseOrder {
-  id            String       @id() @default(uuid())
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt() @map("updated_at")
-  products      Product[]
-  distributor   Distributor? @relation(fields: [distributorId], references: [id])
-  distributorId String?      @map("distributor_id")
-  paymentType   paymentType? @map("payment_type")
-  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String       @map("company_id")
-
-  @@map("purchase_orders")
 }
 
 model Bill {
@@ -563,10 +583,14 @@ model UserClient {
 }
 
 model DistributorCompany {
-  distributorId String      @map("distributor_id")
-  companyId     String      @map("company_id")
-  distributor   Distributor @relation(fields: [distributorId], references: [id])
-  company       Company     @relation(fields: [companyId], references: [id])
+  distributorId       String               @map("distributor_id")
+  companyId           String               @map("company_id")
+  distributor         Distributor          @relation(fields: [distributorId], references: [id])
+  company             Company              @relation(fields: [companyId], references: [id])
+  totalAmount         Float                @default(0) @map("total_amount")
+  paidAmount          Float                @default(0) @map("paid_amount")
+  distributorPayments DistributorPayment[]
+  purchaseOrders      PurchaseOrder[]
 
   @@id([distributorId, companyId])
   @@map("distributor_companies")

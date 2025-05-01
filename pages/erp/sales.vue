@@ -10,7 +10,7 @@ import {
     useFindManyBill,
     useCountBill
 } from '~/lib/hooks';
-import type { Prisma } from '~/prisma/generated/client'
+import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 
 const UpdateBill = useUpdateBill();
@@ -217,10 +217,15 @@ return {
 };
 });
 
-const { data: pageTotal } = useCountBill(computed(() => ({
-  where: queryArgs.value.where,
-})));
+const {
+    data: sales,
+    isLoading,
+    error,
+    refetch,
+} = useFindManyBill(queryArgs);
 
+
+const { data: pageTotal } = computed(() => sales.value?.length) ;
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -234,15 +239,9 @@ function selectRange(duration: Duration) {
   selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
 }
 
-// Data
 
 
-const {
-    data: sales,
-    isLoading,
-    error,
-    refetch,
-} = useFindManyBill(queryArgs);
+
 
 
 watch(sales, (newsales) => {

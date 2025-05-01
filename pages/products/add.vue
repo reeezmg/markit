@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useCreateProduct,useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder} from '~/lib/hooks';
+import { useCreateProduct,useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder,useCreateDistributorPayment, useUpdateDistributorCompany} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
-import type { paymentType as PType } from '~/prisma/generated/client';
+import type { paymentType as PType } from '@prisma/client';
 const { printLabel } = usePrint();
 const router = useRouter();
 const toast = useToast();
@@ -60,8 +60,10 @@ interface Product {
 
 const route = useRoute();
 const poId = route.query.poId as string;
+const CreateDistributorPayment = useCreateDistributorPayment();
 const CreateProduct = useCreateProduct();
 const UpdateProduct = useUpdateProduct();
+const UpdateDistributorCompany = useUpdateDistributorCompany();
 const UpdatePurchaseOrder = useUpdatePurchaseOrder();
 const awsService = new AwsService();
 const selectedProduct: Ref<Product> = ref({
@@ -113,6 +115,7 @@ const barcodes = ref<BarcodeItem[]>([]);
 
 const distributorId = ref('');
 const paymentType = ref('');
+const totalAmount = ref(0);
 
 const variants = ref<{ 
     id:string;
@@ -574,16 +577,18 @@ const removeVariant = (index: number) => {
 const { data: items, refetch: itemRefetch } = useFindUniquePurchaseOrder({
   where: computed(() => ({ id: poId })), // Ensure poId is not undefined
   select: {
-    id: true, // select other purchase order fields if needed
+    id: true,
     products: {
       select: {
         name: true,
         variants: {
           select: {
+            qty:true,
             code: true,
             name: true,
             sprice: true,
             dprice: true,
+            pprice:true,
             items: {
               select: {
                 barcode: true,
@@ -595,9 +600,24 @@ const { data: items, refetch: itemRefetch } = useFindUniquePurchaseOrder({
       }
     }
   }
-}, {
-  enabled: false
 });
+
+watch(
+  () => items.value, // Watch the fetched items
+  (val) => {
+    if (!val) return
+
+    const variants = val.products.flatMap((product) => product.variants)
+
+    totalAmount.value = variants.reduce((sum, variant) => {
+      const qty = variant.qty || 0
+      const pprice = variant.pprice || 0
+      return sum + qty * pprice
+    }, 0)
+  },
+  { immediate: true, deep: true }
+)
+
 
 const printBarcodes = async() => {
 console.log(barcodes.value)
@@ -622,10 +642,11 @@ console.log(barcodes.value)
 }
 const handleSave = async () => {
   try {
-     await itemRefetch();
     if (!items.value?.products) {
       throw new Error("No items found");
     }
+
+    console.log(items.value)
 
     // Generate printable barcode format
     barcodes.value = items.value?.products.flatMap(product => 
@@ -643,25 +664,40 @@ const handleSave = async () => {
       )
     );
 
-    console.log(barcodes.value)
-
     isOpen.value = true;
-
     await UpdatePurchaseOrder.mutateAsync({
       where: { id: poId }, // Use .value if poId is a ref
       data: {
-        ...(distributorId.value && {
-          distributor: {
-            connect: {
-              id: distributorId.value
-            }
-          }
-        }),
         ...(paymentType.value && {
           paymentType: paymentType.value as PType
-        })
+        }),
+          totalAmount:totalAmount.value,
       }
     });
+
+if(distributorId.value){
+  await UpdateDistributorCompany.mutateAsync({
+  where: {
+    distributorId_companyId: {
+      distributorId: distributorId.value,
+      companyId: useAuth().session.value?.companyId!, // Ensure this value is not undefined
+    }
+  },
+  data: {
+    totalAmount: {
+      increment: totalAmount.value,
+    },
+    purchaseOrders:{
+      connect:{id:poid}
+    },
+    ...(paymentType.value !== "CREDIT" && {
+      paidAmount: {
+        increment: totalAmount.value,
+      }
+    }),
+  }
+});
+}
 
   } catch (error) {
     console.error("Failed to save purchase order", error);
@@ -728,16 +764,13 @@ watch(isOpenAdd, (newVal) => {
     handleReset()
   }
 });
-watch(variants, (newVal) => {
-  console.log(newVal)
-},{ immediate: true ,deep: true });
 
 </script>
 
 <template>
      <UDashboardNavbar >
         <template #left>
-          <AddProductTopBar @update="handleDistributorValue"/>   
+          <AddProductTopBar @update="handleDistributorValue" :totalAmount="totalAmount"/>   
         </template>
       </UDashboardNavbar>
     <UDashboardPanelContent class="pb-24">

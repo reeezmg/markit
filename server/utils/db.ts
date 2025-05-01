@@ -1,4 +1,4 @@
-import type { User, Company, Address } from '~/prisma/generated/client';
+import type { User, Company, Address } from '@prisma/client';
 import { prisma } from '../prisma';
 
 export async function shopifyLogin(email: string) {

@@ -2,7 +2,7 @@ const enhancePath = process.env.ENHANCE_PATH!;
 const { enhance } = await import(enhancePath);
 import { createEventHandler } from '@zenstackhq/server/nuxt';
 import { prisma } from '~/server/prisma';
-import { UserRole } from '~/prisma/generated/client';
+import { UserRole } from '@prisma/client';
 
 export default createEventHandler({
     getPrisma: async (event) => {

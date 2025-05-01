@@ -61,6 +61,7 @@
         "path": "^0.12.7",
         "pinia": "^3.0.1",
         "print-js": "^1.6.0",
+        "qrcode.vue": "^3.6.0",
         "random-words": "^2.0.1",
         "razorpay": "^2.9.6",
         "stripe": "^15.8.0",
