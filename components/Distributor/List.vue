@@ -126,7 +126,7 @@ const distributors = computed(() => {
     const paidAmount = (distributor.distributorPayments || []).reduce(
       (sum, payment) => sum + (payment.amount || 0),
       0
-    )
+    )  
 
     return {
       ...distributor,
