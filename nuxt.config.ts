@@ -53,6 +53,7 @@ export default defineNuxtConfig({
         awsId: process.env.AWS_ID,
         awsSecret: process.env.AWS_SECRET,
         awsBucket: process.env.AWS_BUCKET,
+        baseUrl: process.env.BASE_URL
     }
   },
 
