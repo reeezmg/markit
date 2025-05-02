@@ -1,10 +1,16 @@
 export default defineNuxtConfig({
-  ssr: true,
   extends: ['@nuxt/ui-pro', './auth'],
 
+  ssr: true,
+  nitro: {
+    preset: 'vercel'
+  },
   build: {
-      transpile: ['trpc-nuxt'],
-    },
+    transpile: ['trpc-nuxt']
+  },
+  output: {
+    standalone: true
+  },
 
   nitro: {
     plugins: ['~/nitro/ws'],
