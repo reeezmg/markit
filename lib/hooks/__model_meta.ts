@@ -2118,14 +2118,6 @@ const metadata = {
                     backLink: 'distributor',
                     isRelationOwner: true,
                     foreignKeyMapping: { "id": "companyId" },
-                }, totalAmount: {
-                    name: "totalAmount",
-                    type: "Float",
-                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
-                }, paidAmount: {
-                    name: "paidAmount",
-                    type: "Float",
-                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
                 }, distributorPayments: {
                     name: "distributorPayments",
                     type: "DistributorPayment",
