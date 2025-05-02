@@ -1,5 +1,5 @@
 export default defineNuxtConfig({
-
+  ssr: true,
   extends: ['@nuxt/ui-pro', './auth'],
 
   build: {
