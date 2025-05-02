@@ -638,8 +638,6 @@ model DistributorCompany {
     companyId     String @map("company_id")
     distributor   Distributor @relation(fields: [distributorId], references: [id])
     company       Company @relation(fields: [companyId], references: [id])
-    totalAmount     Float          @default(0) @map("total_amount")
-    paidAmount      Float          @default(0) @map("paid_amount")
     distributorPayments DistributorPayment[]
     purchaseOrders   PurchaseOrder[]
     @@id([distributorId, companyId])

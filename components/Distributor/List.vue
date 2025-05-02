@@ -80,8 +80,6 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
     select: {
       distributorId: true,
       companyId: true,
-      totalAmount: true,
-      paidAmount: true,
       distributor: {
         select: {
           id: true,
@@ -96,6 +94,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
       purchaseOrders: {
         select: {
           id: true,
+          paymentType:true
         }
       },
       distributorPayments:{
@@ -117,7 +116,25 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
 });
 
 
-const { data: distributors, isLoading, error } = useFindManyDistributorCompany(queryArgs);
+const { data, isLoading, error } = useFindManyDistributorCompany(queryArgs);
+
+const distributors = computed(() => {
+  return data.value?.map(distributor => {
+    const creditOrders = distributor.purchaseOrders?.filter(po => po.paymentType === 'CREDIT') || []
+    const totalAmount = creditOrders.reduce((sum, po) => sum + (po.amount || 0), 0)
+
+    const paidAmount = (distributor.distributorPayments || []).reduce(
+      (sum, payment) => sum + (payment.amount || 0),
+      0
+    )
+
+    return {
+      ...distributor,
+      totalAmount,
+      paidAmount
+    }
+  })
+})
 
 watch(distributors, (newVal) => {
   if (newVal) {

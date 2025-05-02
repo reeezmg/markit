@@ -684,17 +684,11 @@ if(distributorId.value){
     }
   },
   data: {
-    totalAmount: {
-      increment: totalAmount.value,
-    },
+   
     purchaseOrders:{
       connect:{id:poid}
     },
-    ...(paymentType.value !== "CREDIT" && {
-      paidAmount: {
-        increment: totalAmount.value,
-      }
-    }),
+   
   }
 });
 }
