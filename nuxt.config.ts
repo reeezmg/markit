@@ -1,6 +1,6 @@
 export default defineNuxtConfig({
   extends: ['@nuxt/ui-pro', './auth'],
-
+  sessionSecret: process.env.SESSION_SECRET ,
   ssr: true,
 
   build: {
