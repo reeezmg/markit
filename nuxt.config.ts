@@ -2,9 +2,7 @@ export default defineNuxtConfig({
   extends: ['@nuxt/ui-pro', './auth'],
 
   ssr: true,
-  nitro: {
-    preset: 'vercel'
-  },
+
   build: {
     transpile: ['trpc-nuxt']
   },
@@ -13,6 +11,7 @@ export default defineNuxtConfig({
   },
 
   nitro: {
+     preset: 'vercel',
     plugins: ['~/nitro/ws'],
     esbuild: {
         options: {
