@@ -291,7 +291,10 @@ const res = await CreateProduct.mutateAsync({
           ...(variant.code && {code: variant.code}),
           sprice: variant.sprice || 0,
           pprice: variant.pprice || 0,
-          dprice: variant.dprice || 0,
+          ...(variant.sprice !== variant.dprice && {
+            dprice: variant.dprice || 0,
+          }),
+          
           discount: variant.discount || 0,
           status: true,
           qty: variant.qty,
@@ -494,7 +497,9 @@ const handleEdit = async (e: Event) => {
               ...(variant.code && {code: variant.code}),
               sprice: variant.sprice || 0,
               pprice: variant.pprice || 0,
-              dprice: variant.dprice || 0,
+              ...(sprice !== dprice && {
+                dprice: variant.dprice || 0,
+              }),
               discount: variant.discount || 0,
               status: true,
               images: variant.images.map((file) => file.uuid),
@@ -641,6 +646,7 @@ console.log(barcodes.value)
   
 }
 const handleSave = async () => {
+  await itemRefetch()
   try {
     if (!items.value?.products) {
       throw new Error("No items found");

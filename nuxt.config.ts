@@ -12,7 +12,6 @@ export default defineNuxtConfig({
 
   nitro: {
      preset: 'vercel',
-    plugins: ['~/nitro/ws'],
     esbuild: {
         options: {
           target: 'es2022'
