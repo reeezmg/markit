@@ -60,9 +60,7 @@ const validate = (state: any) => {
 async function onSubmit(data: any) {
     try {
         const res = await authLogin(data.email, data.password);
-        if(res){
-            $client.setOnline.mutate(res.data.id)
-        }
+
        
     } catch (error) {
         reject.value = false;

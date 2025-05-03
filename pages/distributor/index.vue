@@ -1,19 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import AwsService from '~/composables/aws';
-import {
-    useUpdatePurchaseOrder,
-    useDeletePurchaseOrder,
-} from '~/lib/hooks';
 
-const UpdatePurchaseOrder = useUpdatePurchaseOrder();
-const DeletePurchaseOrder = useDeletePurchaseOrder();
-const awsService = new AwsService();
-const useAuth = () => useNuxtApp().$auth;
+const openModal = ref(false);
 
-const isFormModalOpen = ref(false);
-
-watch(isFormModalOpen, (newVal, oldVal) => {
+watch(openModal, (newVal, oldVal) => {
   if (newVal) {
     console.log('Modal opened');
     // You can also do something like reset form here
@@ -28,9 +18,9 @@ watch(isFormModalOpen, (newVal, oldVal) => {
 <template>
     <UDashboardPanelContent class="pb-24">
             <div>
-                <DistributorList @modal-toggle="isFormModalOpen = !isFormModalOpen"/>
+                <DistributorList @modal-open="openModal = true"/>
 
-                <DistributorForm v-model="isFormModalOpen"/>
+                <DistributorForm v-model="openModal"/>
             </div>
     </UDashboardPanelContent>
 </template>

@@ -8,7 +8,11 @@ const model = defineModel({
 });
 
 
+
+
+
 const isOpen = ref(false);
+const iscreating = ref(false);
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
 const CreateDistributor = useCreateDistributor()
@@ -26,9 +30,13 @@ const supplier = ref({
     accHolderName:''
 });
 
+watch(model, (val) => {
+  isOpen.value = val; // update isOpen when model changes
+});
 
 const submitForm = async () => {
   try {
+    iscreating.value = true;
     const res = await CreateDistributor.mutateAsync({
       data: {
                 name: supplier.value.name,
@@ -57,11 +65,14 @@ const submitForm = async () => {
                 }
               }
     })
+    iscreating.value = false
+    isOpen.value = false
     toast.add({
             title: 'Distributor added !',
             id: 'modal-success',
         });
-    isOpen.value = false
+       
+    
   }catch(error){
     console.log(error)
   }
@@ -71,7 +82,7 @@ const submitForm = async () => {
 
 
 <template>
-     <UModal v-model="model">
+     <UModal v-model="isOpen">
         <div class="p-4 space-y-4">
           <h2 class="text-lg font-semibold">Enter Distributor Details</h2>
 
@@ -99,7 +110,7 @@ const submitForm = async () => {
           <UInput v-model="supplier.ifsc" label="IFSC Code" placeholder="Enter IFSC Code" required />
 
           <!-- Submit Button -->
-          <UButton @click="submitForm" block>Submit</UButton>
+          <UButton @click="submitForm" :loading="iscreating" block>Submit</UButton>
         </div>
       </UModal>
 </template>

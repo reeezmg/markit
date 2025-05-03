@@ -586,6 +586,7 @@ const { data: items, refetch: itemRefetch } = useFindUniquePurchaseOrder({
     products: {
       select: {
         name: true,
+        brand:true,
         variants: {
           select: {
             qty:true,
@@ -662,6 +663,7 @@ const handleSave = async () => {
           code: variant.code ?? '',
           shopname:useAuth().session.value?.companyName,
           productName: product.name,
+          brand: product.brand,
           name: variant.name,
           sprice: variant.sprice,
           dprice: variant.dprice,

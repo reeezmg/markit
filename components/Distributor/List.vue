@@ -2,21 +2,24 @@
 import {
 useFindManyDistributorCompany,
   useUpdateDistributorCompany,
-  useCreateDistributorPayment
+  useCreateDistributorPayment,
+  useCreateDistributorCredit
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
 
-const emit = defineEmits(['modal-toggle']);
+const emit = defineEmits(['modal-open']);
 const UpdateDistributorCompany = useUpdateDistributorCompany();
 const CreateDistributorPayment = useCreateDistributorPayment();
+const CreateDistributorCredit = useCreateDistributorCredit();
 
 const useAuth = () => useNuxtApp().$auth;
 
 const sort = ref({ column: 'distributorId', direction: 'asc' as const });
 const page = ref(1);
 const pageCount = ref('10');
-const isOpen = ref(false)
+const isOpenPay = ref(false)
+const isOpenCredit = ref(false)
 const distributorId = ref<string | null>(null)
 const companyId = ref<string | null>(null)
 const expand = ref({ openedRows: [], row: null });
@@ -24,7 +27,8 @@ const expand = ref({ openedRows: [], row: null });
 const form = ref({
   amount: 0,
   remarks: '',
-  paymentType:''
+  paymentType:'',
+  billNo:''
 })
 
 const columns = [
@@ -53,7 +57,12 @@ const action = (row:any) => [
     {
             label: 'Pay',
             icon: 'i-heroicons-banknotes-20-solid',
-            click: () => handleOpenForm(row),
+            click: () => handleOpenPayForm(row),
+        },
+    {
+            label: 'Add Credit',
+            icon: 'i-heroicons-banknotes-20-solid',
+            click: () => handleOpenCreditForm(row),
         },
     ] , 
     [
@@ -88,17 +97,22 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
           ifsc:true,
           accountNo:true,
           bankName:true,
-          upiId:true
+          upiId:true,
         }
       },
-      purchaseOrders: {
-        select: {
-          id: true,
-          paymentType:true
-        }
-      },
+      distributorCredits: {
+      select: {
+        createdAt:true,
+        id:true,
+        amount:true,
+        remarks:true,
+        billNo:true,
+      }
+    },
+
       distributorPayments:{
         select:{
+          createdAt:true,
             id:true,
             amount:true,
             remarks:true,
@@ -120,21 +134,39 @@ const { data, isLoading, error } = useFindManyDistributorCompany(queryArgs);
 
 const distributors = computed(() => {
   return data.value?.map(distributor => {
-    const creditOrders = distributor.purchaseOrders?.filter(po => po.paymentType === 'CREDIT') || []
-    const totalAmount = creditOrders.reduce((sum, po) => sum + (po.amount || 0), 0)
+    const credits = (distributor.distributorCredits || []).map(c => ({
+      ...c,
+      createdAt: new Date(c.createdAt),
+      type: 'CREDIT',
+      paymentType:c.billNo,
+      class: 'bg-red-500/50 dark:bg-red-400/50'
 
-    const paidAmount = (distributor.distributorPayments || []).reduce(
-      (sum, payment) => sum + (payment.amount || 0),
-      0
-    )  
+    }));
+
+    const payments = (distributor.distributorPayments || []).map(p => ({
+      ...p,
+      createdAt: new Date(p.createdAt),
+      type: 'PAYMENT',
+      paymentType:p.paymentType,
+       class: 'bg-green-500/50 dark:bg-green-400/50'
+    }));
+
+    const transactions = [...credits, ...payments].sort(
+      (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
+    );
+
+    const totalAmount = credits.reduce((sum, c) => sum + (c.amount || 0), 0);
+    const paidAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     return {
       ...distributor,
       totalAmount,
-      paidAmount
-    }
-  })
-})
+      paidAmount,
+      transactions
+    };
+  });
+});
+
 
 watch(distributors, (newVal) => {
   if (newVal) {
@@ -170,22 +202,36 @@ const handlePay = async () => {
       }
     });
 
-    await UpdateDistributorCompany.mutateAsync({
-  where: {
-    distributorId_companyId: {
-      distributorId: distributorId.value,
-      companyId: useAuth().session.value?.companyId!, // Ensure this value is not undefined
-    }
-  },
-  data: {
-      paidAmount: {
-        increment: form.value.amount,
-      }
-  }
-});
 
-    isOpen.value = false;
-    form.value = { amount: 0, remarks: '' };
+    isOpenPay.value = false;
+    form.value = { amount: 0, remarks: '', paymentType:'',billNo:''};
+  }
+};
+const handleAddCredit = async () => {
+  if (form.value.amount && distributorId.value && companyId.value) {
+    const res = await CreateDistributorCredit.mutateAsync({
+      data: {
+        amount: form.value.amount,
+        remarks: form.value.remarks,
+        billNo:form.value.billNo,
+        
+        distributorCompany: {
+            connect: {
+                distributorId_companyId: {
+                    distributorId: distributorId.value,
+                    companyId: companyId.value,
+                    }
+            }
+        }
+      },
+      select: {
+        id: true
+      }
+    });
+
+
+    isOpenCredit.value = false;
+    form.value = { amount: 0, remarks: '', paymentType:'',billNo:''};
   }
 };
 
@@ -206,8 +252,13 @@ const selectedDistributor = computed(() => {
 });
 
 
-const handleOpenForm = (row) => {
-  isOpen.value = true;
+const handleOpenPayForm = (row) => {
+  isOpenPay.value = true;
+  distributorId.value = row.distributorId;
+  companyId.value = row.companyId;
+};
+const handleOpenCreditForm = (row) => {
+  isOpenCredit.value = true;
   distributorId.value = row.distributorId;
   companyId.value = row.companyId;
 };
@@ -237,7 +288,7 @@ const handleOpenForm = (row) => {
                     <div class="flex flex-row">
     
                     </div>
-                    <UButton color="primary" @click=" emit('modal-toggle')">
+                    <UButton color="primary" @click=" emit('modal-open')">
                         Add Distributor
                     </UButton>
                 </div>
@@ -268,18 +319,23 @@ const handleOpenForm = (row) => {
                     {{ row.totalAmount - row.paidAmount }}
                     </template>
 
-                    <template #purchaseorders.length-data="{ row }">
-                    {{ row.purchaseOrders.length }}
+                    <template #expand="{ row }">
+                      <UTable 
+                        :rows="row.transactions"
+                        :columns="[
+                          { key: 'createdAt', label: 'Date' },
+                          { key: 'type', label: 'Type' },
+                          { key: 'amount', label: 'Amount' },
+                          { key: 'remarks', label: 'Remarks' },
+                          { key: 'paymentType', label: 'PayType/BillNO' },
+                        ]"
+                      >
+                        <template #createdAt-data="{ row }">
+                          {{ new Date(row.createdAt).toLocaleString() }}
+                        </template>
+                      </UTable>
                     </template>
 
-                    <template #expand="{ row }">
-                    <UTable 
-                        :rows="row.distributorPayments" 
-                        :columns="PaymentColumns"
-                    >
-                
-                    </UTable>
-                </template>
 
                 </UTable>
                 </template>
@@ -321,7 +377,7 @@ const handleOpenForm = (row) => {
 
     <div v-if="error" class="text-red-500">Failed to load data: {{ error.message }}</div>
   </div>
-  <UModal v-model="isOpen">
+  <UModal v-model="isOpenPay">
   <UCard>
     <div class="p-4 space-y-4">
         <!-- Amount -->
@@ -368,6 +424,33 @@ const handleOpenForm = (row) => {
         <!-- Submit -->
         <div class="pt-4">
           <UButton color="primary" @click="handlePay" block>Submit</UButton>
+        </div>
+    </div>
+  </UCard>
+</UModal>
+
+
+  <UModal v-model="isOpenCredit">
+  <UCard>
+    <div class="p-4 space-y-4">
+
+      <UFormGroup label="BillNo" name="Billno">
+          <UInput v-model="form.billNo" placeholder="BillNo" />
+        </UFormGroup>
+        <!-- Amount -->
+        <UFormGroup label="Amount" name="amount" required>
+          <UInput v-model.number="form.amount" type="number" placeholder="Enter amount" />
+        </UFormGroup>
+
+        <!-- Remarks -->
+        <UFormGroup label="Remarks" name="remarks">
+          <UInput v-model="form.remarks" placeholder="Optional remarks" />
+        </UFormGroup>
+  
+
+        <!-- Submit -->
+        <div class="pt-4">
+          <UButton color="primary" @click="handleAddCredit" block>Submit</UButton>
         </div>
     </div>
   </UCard>

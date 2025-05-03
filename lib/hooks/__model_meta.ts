@@ -407,6 +407,53 @@ const metadata = {
                 },
             },
         },
+        distributorCredit: {
+            name: 'DistributorCredit', fields: {
+                id: {
+                    name: "id",
+                    type: "String",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, createdAt: {
+                    name: "createdAt",
+                    type: "DateTime",
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, amount: {
+                    name: "amount",
+                    type: "Float",
+                }, remarks: {
+                    name: "remarks",
+                    type: "String",
+                    isOptional: true,
+                }, billNo: {
+                    name: "billNo",
+                    type: "String",
+                    isOptional: true,
+                }, distributorId: {
+                    name: "distributorId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'distributorCompany',
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'distributorCompany',
+                }, distributorCompany: {
+                    name: "distributorCompany",
+                    type: "DistributorCompany",
+                    isDataModel: true,
+                    backLink: 'distributorCredits',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "distributorId": "distributorId", "companyId": "companyId" },
+                },
+            }, uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
+                },
+            },
+        },
         user: {
             name: 'User', fields: {
                 id: {
@@ -2121,6 +2168,12 @@ const metadata = {
                 }, distributorPayments: {
                     name: "distributorPayments",
                     type: "DistributorPayment",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'distributorCompany',
+                }, distributorCredits: {
+                    name: "distributorCredits",
+                    type: "DistributorCredit",
                     isDataModel: true,
                     isArray: true,
                     backLink: 'distributorCompany',

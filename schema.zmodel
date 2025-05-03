@@ -195,6 +195,20 @@ model DistributorPayment {
   @@map("distributor_payments")
 }
 
+model DistributorCredit {
+  id                     String              @id @default(uuid())
+  createdAt              DateTime            @default(now()) @map("created_at")
+  amount                 Float
+  remarks                String?
+  billNo                 String?
+  distributorId          String              @map("distributor_id")
+  companyId              String              @map("company_id")
+  distributorCompany     DistributorCompany  @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
+
+  @@allow('read, create, update, delete', true)
+  @@map("distributor_credits")
+}
+
 
 model User extends Base {
     email     String        @unique @email
@@ -639,6 +653,7 @@ model DistributorCompany {
     distributor   Distributor @relation(fields: [distributorId], references: [id])
     company       Company @relation(fields: [companyId], references: [id])
     distributorPayments DistributorPayment[]
+    distributorCredits DistributorCredit[]
     purchaseOrders   PurchaseOrder[]
     @@id([distributorId, companyId])
     @@allow('read,create, update, delete', auth() != null )

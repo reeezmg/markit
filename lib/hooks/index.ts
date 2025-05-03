@@ -9,6 +9,7 @@ export * from './company';
 export * from './distributor';
 export * from './purchase-order';
 export * from './distributor-payment';
+export * from './distributor-credit';
 export * from './user';
 export * from './client';
 export * from './pipeline';
