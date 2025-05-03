@@ -58,6 +58,11 @@ const variantcolumns = [
         sortable: true,
     },
     {
+        key: 'code',
+        label: 'Code',
+        sortable: true,
+    },
+    {
         key: 'qty',
         label: 'Qty',
         sortable: true,
@@ -199,23 +204,35 @@ const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
               }
             : {};
 
-    return {
-        where: {
-            AND: [
-                { companyId: useAuth().session.value?.companyId },
-                { name: { contains: search.value } },
-                selectedStatusCondition,
-            ],
-        },
-        include: {
-            variants: true,
-        },
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
-        },
-        skip: (page.value - 1) * parseInt(pageCount.value),
-        take: parseInt(pageCount.value),
-    };
+            return {
+    where: {
+        AND: [
+            { companyId: useAuth().session.value?.companyId },
+            {
+                OR: [
+                    { name: { contains: search.value, mode: 'insensitive' } },
+                    {
+                        variants: {
+                            some: {
+                                code: { contains: search.value, mode: 'insensitive' }
+                            }
+                        }
+                    }
+                ]
+            },
+            selectedStatusCondition,
+        ],
+    },
+    include: {
+        variants: true,
+    },
+    orderBy: {
+        [sort.value.column]: sort.value.direction,
+    },
+    skip: (page.value - 1) * parseInt(pageCount.value),
+    take: parseInt(pageCount.value),
+};
+
 });
 
 const {
@@ -300,33 +317,18 @@ async function toggleVariantStatus(id: string, status:boolean) {
     }
 
 
-    const handleAdd = async () => {
-  const companyId = useAuth().session.value?.companyId;
-  if (!companyId) {
-    console.error("Company ID not found");
-    return;
-  }
-
-  try {
+const handleAdd = async() => {
     const res = await CreatePurchaseOrder.mutateAsync({
-      data: {
-        company: {
-          connect: { id: companyId },
+        data:{
+            company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
         },
-      },
-      select: { id: true },
-    });
-
-    if (res?.id) {
-      router.push(`products/add?poId=${res.id}`);
-    } else {
-      console.error("No ID returned in response", res);
-    }
-  } catch (error) {
-    console.error("Failed to create purchase order", error);
-  }
-};
-
+        select: { id: true }
+    })
+    console.log(res)
+    router.push(`products/add?poId=${res?.id}`)
+}
 </script>
 
 <template>

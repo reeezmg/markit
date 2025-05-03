@@ -6,6 +6,7 @@ import type { paymentType as PType } from '@prisma/client';
 
 const router = useRouter();
 const toast = useToast();
+const { printLabel } = usePrint();
 const useAuth = () => useNuxtApp().$auth;
 definePageMeta({
     auth: true,
@@ -428,8 +429,29 @@ const handleSkip = () => {
 }
 
 
-const printBarcodes = () => {
-  window.print();
+
+const printBarcodes = async() => {
+console.log(barcodes.value)
+  try{
+ 
+    const response = await printLabel(barcodes.value);
+    console.log(response)
+    toast.add({
+        title: 'Printing success!',
+        color: 'green',
+      });
+    
+
+  }catch(err){
+    console.log(err)
+    toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+ 
+  
 }
 
 
@@ -448,7 +470,9 @@ const handleSave  = async () => {
         variant.items?.map(item => ({
             barcode: item.barcode ?? '',
             code: variant.code ?? '',
+            shopname:useAuth().session.value?.companyName,
             productName: productData.value.name,
+            brand: productData.value.brand,
             name: variant.name,
             sprice: variant.sprice,
             dprice: variant.dprice,
@@ -493,12 +517,20 @@ const handleSave  = async () => {
             <div class="text-gray-900 dark:text-gray-100 font-medium">{{ variant.name }}</div>
             <div class="text-gray-500 dark:text-gray-400 text-sm">Code: {{ variant.code || '-' }}</div>
           </div>
+          <div>
           <div class="mt-2 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-300">
             <span>Price: ${{ variant.price }}</span>
             <span>Qty: {{ variant.qty }}</span>
             <span>Discount: {{ variant.discount || 0 }}%</span>
           </div>
+          <UButton
+        label='Print'
+         @click="printBarcodes"
+        />
+        </div>
         </ULink>
+       
+      
       </div>
     </template>
   </UPageCard>

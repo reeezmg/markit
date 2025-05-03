@@ -163,7 +163,6 @@ const createValue = (data: any) => {
 
 const updateVariant = (index,data: any) => {
   variants.value[index] = { ...variants.value[index], ...data };
-  console.log(variants.value)
 };
 
 
@@ -497,7 +496,7 @@ const handleEdit = async (e: Event) => {
               ...(variant.code && {code: variant.code}),
               sprice: variant.sprice || 0,
               pprice: variant.pprice || 0,
-              ...(sprice !== dprice && {
+              ...(variant.sprice !== variant.dprice && {
                 dprice: variant.dprice || 0,
               }),
               discount: variant.discount || 0,
@@ -540,6 +539,7 @@ const handleEdit = async (e: Event) => {
     });
     
   } catch (err: any) {
+    console.log(err)
     toast.add({
         title: `Something went wrong!`,
         color: 'red',
@@ -635,6 +635,7 @@ console.log(barcodes.value)
         title: 'Printing success!',
         color: 'green',
       });
+      
   }catch(err){
     console.log(err)
     toast.add({
@@ -882,7 +883,7 @@ watch(isOpenAdd, (newVal) => {
                       :editpPrice="selectedProduct?.variants[index]?.pprice || variants[0]?.pprice"
                       :editdPrice="selectedProduct?.variants[index]?.dprice || variants[0]?.dprice"
                       :editDiscount="selectedProduct?.variants[index]?.discount || variants[0]?.discount"
-                      :editSizes="selectedProduct?.variants[index]?.sizes"
+                      :editSizes="selectedProduct?.variants[index]?.sizes.length > 0 ? selectedProduct?.variants[index]?.sizes : variants[0]?.sizes"
           
                       @update="updateVariant(index,$event)" />
                       <AddProductMedia
