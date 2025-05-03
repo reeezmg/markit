@@ -300,18 +300,33 @@ async function toggleVariantStatus(id: string, status:boolean) {
     }
 
 
-const handleAdd = async() => {
+    const handleAdd = async () => {
+  const companyId = useAuth().session.value?.companyId;
+  if (!companyId) {
+    console.error("Company ID not found");
+    return;
+  }
+
+  try {
     const res = await CreatePurchaseOrder.mutateAsync({
-        data:{
-            company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
+      data: {
+        company: {
+          connect: { id: companyId },
         },
-        select: { id: true }
-    })
-    console.log(res)
-    router.push(`products/add?poId=${res?.id}`)
-}
+      },
+      select: { id: true },
+    });
+
+    if (res?.id) {
+      router.push(`products/add?poId=${res.id}`);
+    } else {
+      console.error("No ID returned in response", res);
+    }
+  } catch (error) {
+    console.error("Failed to create purchase order", error);
+  }
+};
+
 </script>
 
 <template>
