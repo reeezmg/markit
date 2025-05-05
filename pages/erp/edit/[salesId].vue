@@ -27,8 +27,10 @@ const UpdateManyItem = useUpdateManyItem();
 const useAuth = () => useNuxtApp().$auth;
 const route = useRoute();
 const toast = useToast();
-const salesId = route.params.salesId;
+const { printBill } = usePrint();
 const router = useRouter();
+const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
+
 
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
@@ -94,23 +96,54 @@ watch(selected, (newSelected) => {
   console.log(newSelected)
 })
 
-watch(items, () => {
-  console.log(items.value)
-  items.value.forEach((item) => {
-    let baseValue = item.qty * item.rate;
+
+
+watch(items, async () => {
+  for (let index = 0; index < items.value.length; index++) {
+    const item = items.value[index];
+    
+    // ---------- Step 1: Calculate discounted rate ----------
+    let discountedRate = item.rate;
 
     if (item.discount < 0) {
-      baseValue -= Math.abs(item.discount);
+      discountedRate -= Math.abs(item.discount);
     } else {
-      baseValue -= (baseValue * item.discount) / 100;
+      discountedRate -= (discountedRate * item.discount) / 100;
     }
 
-    baseValue -= (baseValue * item.tax) / 100;
-    
-    item.value = Math.max(baseValue, 0); 
-    
-  });
+    // ---------- Step 2: Update tax according to value/qty ----------
 
+   
+
+    if (item.category[0]?.id) {
+      const { data: category, pending, error, refresh } = await useFindCategory(item.category[0].id);
+      if(!error || category){
+        const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = category;
+
+      if (taxType === 'FIXED') {
+        item.tax = fixedTax ?? 0;
+      } else {
+        const effectiveValue = item.value / (item.qty || 1); // avoid division by zero
+
+        if (effectiveValue > thresholdAmount) {
+          item.tax = taxAboveThreshold ?? 0;
+        } else {
+          item.tax = taxBelowThreshold ?? 0;
+        }
+      }
+      }
+    }
+
+    
+    // ---------- Step 3: Calculate base value ----------
+    let baseValue = discountedRate * item.qty;
+    
+    if (!isTaxIncluded) {
+      baseValue += (baseValue * item.tax) / 100;
+    }
+
+    item.value = Math.max(baseValue, 0);
+  }
 }, { deep: true });
 
 watch([discount, subtotal], ([newDiscount, newTotal]) => {
@@ -263,7 +296,7 @@ const itemargs = computed(() => ({
 const findManyEntryargs = computed(() => ({
   
   where: {
-    billId: salesId,
+    billId: route.params.salesId,
     id: {
       notIn: items.value
         .filter(item => item.entryId)
@@ -289,7 +322,7 @@ const findManyEntryargs = computed(() => ({
 
 
 const billArgs = computed(() => ({
-  where: { id: salesId },
+  where: { id: route.params.salesId },
   select: {
     createdAt:true,
     invoiceNumber: true,
@@ -354,12 +387,10 @@ const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs);
 const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enabled:false});
 const {data: entriesToDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
 
-watch(entriesToDelete, (newentriesToDelete) => {
-  
-  console.log(newentriesToDelete)
 
+watch(discount, (newBill) => {
+  console.log(newBill)
 })
-
 
 const handleEnterBarcode = (barcode,index) => {
   if(!barcode){
@@ -395,6 +426,7 @@ const handleEnterPayment = () => {
 watch(() => bill.value, (newData) => {
   console.log(newData)
   if (!newData || !newData.entries) return;
+  discount.value = newData.discount
   items.value = newData.entries.map((entry, index) => {
     return {
       entryId: entry.id || '',
@@ -448,7 +480,8 @@ const fetchItemData = async (barcode, index) => {
 
 
 const handleEdit = async () => {
-  console.log(items);
+
+  const disc = discount.value;
   try {
     items.value = items.value.filter(item =>
     item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
@@ -472,7 +505,7 @@ const handleEdit = async () => {
           qty: item.qty,
           rate: item.rate,
           name: item.name,
-          discount: item.discount,
+          discount: item.discount || 0,
           ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
           value: item.value,
           ...(item.category?.[0]?.id && {
@@ -483,7 +516,7 @@ const handleEdit = async () => {
           }),
           bill: {
             connect: {
-              id: salesId,
+              id: route.params.salesId,
             },
           },
         },
@@ -499,7 +532,7 @@ const handleEdit = async () => {
           qty: item.qty,
           rate: item.rate,
           name: item.name,
-          discount: item.discount,
+          discount: item.discount || 0,
           ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
           tax: item.tax,
           value: item.value,
@@ -511,7 +544,7 @@ const handleEdit = async () => {
           }),
           bill: {
             connect: {
-              id: salesId,
+              id: route.params.salesId,
             },
           },
         },
@@ -588,15 +621,66 @@ if (entryIds.length > 0) {
 
     // Call UpdateBill mutation with the other data
     const billResponse = await UpdateBill.mutateAsync({
-      where: { id: salesId },
+      where: { id: route.params.salesId },
       data: {
         subtotal: subtotal.value,
-        discount: discount.value,
+        discount: disc,
         grandTotal: grandTotal.value,
         paymentMethod: paymentMethod.value,
         company: {
           connect: {
             id: useAuth().session.value?.companyId,
+          },
+        },
+      },
+      select: {
+        id: true,
+        invoiceNumber: true,
+        createdAt: true,
+        paymentMethod: true,
+        subtotal: true,
+        discount: true,
+        tax: true,
+        grandTotal: true,
+        company:{
+          select:{
+            name:true,
+            gstin:true,
+            upiId:true,
+            accHolderName:true,
+            address:{
+              select:{
+                name:true,
+                street:true,
+                locality:true,
+                city:true,
+                state:true,
+                pincode:true
+              }
+            }
+          }
+        },
+        entries: {
+          select: {
+            name: true,
+            qty: true,
+            rate: true,
+            discount: true,
+            tax: true,
+            value: true,
+            barcode: true,
+            size: true,
+            item:{
+              select:{
+                id:true
+              }
+            },
+            category:{
+              select:{
+                name:true,
+                hsn:true
+              }
+            }
           },
         },
       },
@@ -608,6 +692,71 @@ if (entryIds.length > 0) {
       title: 'Bill edited successfully!',
       color: 'green',
     });
+
+    try {
+      const printData = {
+          invoiceNumber: billResponse.invoiceNumber || 'N/A',
+          date: billResponse.createdAt,
+          entries: billResponse.entries.map(entry => {
+          let calculatedDiscount = 0;
+
+          if (entry.discount < 0) {
+            // Fixed discount
+            calculatedDiscount = Math.abs(entry.discount) * entry.qty;
+          } else {
+            // Percentage discount
+            calculatedDiscount = ((entry.rate * entry.discount) / 100) * entry.qty;
+          }
+
+          return {
+            description: entry.barcode ? entry.name : entry.category.name,
+            hsn: entry.category.hsn,
+            qty: entry.qty,
+            mrp: entry.rate,
+            discount: calculatedDiscount, // ✅ set calculated discount
+            tax: entry.tax,
+            value: entry.qty * entry.rate ,
+            size: entry.size,
+            barcode: entry.barcode,
+            tvalue:entry.value,
+          };
+        }),
+ 
+  subtotal: billResponse.subtotal,
+  discount: billResponse.discount,
+  grandTotal: billResponse.grandTotal,
+  paymentMethod: billResponse.paymentMethod,
+  companyName: billResponse.company.name || '',
+  companyAddress: billResponse.company.address || {},
+  gstin: billResponse.company.gstin || '',
+  accHolderName: billResponse.company.accHolderName || '',
+  upiId: billResponse.company.upiId || '',
+  // 🆕 Add total qty
+  tqty: billResponse.entries.reduce((sum, entry) => sum + entry.qty, 0),
+  tvalue: billResponse.entries.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+  tdiscount: billResponse.entries.reduce((sum, entry) => {
+    if (entry.discount < 0) {
+      return sum + (Math.abs(entry.discount) * entry.qty);
+    } else {
+      return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
+    }
+  }, 0),
+};
+
+   console.log(printData)
+   
+      const response = await printBill(printData);
+      console.log('✅ Printed:', response.message);
+    } catch (err) {
+      console.error('Printing error:', err);
+      toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+    }
+
+
 
   } catch (error) {
     console.error('Error updating bill', error);
@@ -650,17 +799,6 @@ if (entryIds.length > 0) {
   // Wait for all updates to finish before proceeding
   await Promise.all(updatePromises);
 
-  try {
-    tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
-    if (tokenEntries.value.length > 0) {
-      await DeleteTokenEntry.mutateAsync({
-        where: { tokenNo: { in: tokenEntries.value } }
-      });
-      console.log('Token entries deleted successfully');
-    }
-  } catch (error) {
-    console.error('Error deleting token entries', error);
-  }
 };
 
 
@@ -708,7 +846,7 @@ const submitForm = async () => {
 const deleteBill = async () => {
     const res = await UpdateBill.mutateAsync({
         where:{
-            id:salesId
+            id:route.params.salesId
         },
         data:{
             deleted:true

@@ -97,6 +97,7 @@ const columnsTable = computed(() =>
 
 // Selected Rows
 const selectedRows = ref([]);
+const isAdd = ref(false);
 
 
 // Actions
@@ -318,6 +319,7 @@ async function toggleVariantStatus(id: string, status:boolean) {
 
 
 const handleAdd = async() => {
+    isAdd.value =true
     const res = await CreatePurchaseOrder.mutateAsync({
         data:{
             company: {
@@ -329,6 +331,7 @@ const handleAdd = async() => {
     console.log(res)
     router.push(`products/add?poId=${res?.id}`)
 }
+isAdd.value =false
 </script>
 
 <template>
@@ -369,6 +372,7 @@ const handleAdd = async() => {
                         color="primary"
                         variant="solid"
                         label="Add Product"
+                        :loading=isAdd
                         @click="handleAdd"
                     />
                 </div>

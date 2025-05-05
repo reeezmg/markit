@@ -95,7 +95,8 @@ const createRef = ref<any>(null);
 const variantRef = ref<any>([]);
 const mediaRefs = ref<any>([]);
 const idCounter = ref(1);
-
+const isLoad = ref(false)
+const isSave = ref(false)
 
 
 const isOpen = ref(false)
@@ -194,7 +195,7 @@ const handleDistributorValue = (data:any) => {
 
 
 const handleAdd = async (e: Event) => {
-
+  isLoad.value = true
   e.preventDefault();
   try {
 
@@ -391,12 +392,16 @@ const res = await CreateProduct.mutateAsync({
    
   } catch (err: any) {
     console.log(err.info?.message ?? err);
+  }finally{
+    isLoad.value = false
   }
+ 
 };
 
 
 const handleEdit = async (e: Event) => {
   e.preventDefault();
+  isLoad.value = true
   try {
     // Validate product name
     if (!name.value || name.value.trim() === '') {
@@ -545,6 +550,9 @@ const handleEdit = async (e: Event) => {
         color: 'red',
       });
   }
+  finally{
+    isLoad.value = false
+  }
 };
 
 const addVariant = () => {
@@ -648,7 +656,9 @@ console.log(barcodes.value)
   
 }
 const handleSave = async () => {
+  isSave.value = true
   await itemRefetch()
+
   try {
     if (!items.value?.products) {
       throw new Error("No items found");
@@ -706,6 +716,10 @@ if(distributorId.value){
     console.error("Failed to save purchase order", error);
     // Consider adding user feedback here
   }
+  finally{
+    isSave.value = false
+  }
+  
 };
 
 
@@ -782,22 +796,22 @@ watch(isOpenAdd, (newVal) => {
         <div class="md:flex md:flex-row">
             <div class="md:w-1/2">
               <div  class="m-3 hidden md:block">
-                    <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
+
                         @click="handleSave"
+                        :loading = isSave
                     >
                         Save Order
-                    </button>
+                    </UButton>
                 </div>
                
     
                 <div class="m-3 md:hidden ">
-                    <button
-                        class=" rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
                         @click="handleNewProduct"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
 
               <UPageCard class="m-3">
@@ -805,12 +819,12 @@ watch(isOpenAdd, (newVal) => {
               </UPageCard>
 
               <div class="m-3">
-                    <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
                         @click="handleSave"
+                        :loading = isSave
                     >
                         Save Order
-                    </button>
+                    </UButton>
                 </div>
               
             </div>
@@ -820,29 +834,30 @@ watch(isOpenAdd, (newVal) => {
               <div class="flex flex-row">
               <div>
               <div v-if="clearInputs" class="mx-3 mt-3">
-                    <button
-                        class="rounded-md  dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
                         @click="handleAdd"
+                        :loading="isLoad"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
                 <div v-else class="mx-1 mt-3">
-                    <button
-                        class="rounded-md  dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
+                        class="rounded-md  
+                        dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
+                        :loading="isLoad"
                     >
                         Edit Product
-                    </button>
+                    </UButton>
                 </div>
               </div>
                 <div class="mx-1 mt-3">
-                    <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
                         @click="handleReset"
                     >
                        Reset form
-                    </button>
+                    </UButton>
                 </div>
               </div>
                 <UPageCard class="m-3" id="Create">
@@ -866,11 +881,12 @@ watch(isOpenAdd, (newVal) => {
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
                      
-                      <button
+                      <UButton
                         @click="removeVariant(index)"
-                        class="text-red-500 hover:text-red-700 text-sm"
+                        variant="outline"
+                        color="red"
                       >Remove
-                      </button>
+                      </UButton>
                     </div>
                     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
                     <AddProductVariants   
@@ -883,7 +899,7 @@ watch(isOpenAdd, (newVal) => {
                       :editpPrice="selectedProduct?.variants[index]?.pprice || variants[0]?.pprice"
                       :editdPrice="selectedProduct?.variants[index]?.dprice || variants[0]?.dprice"
                       :editDiscount="selectedProduct?.variants[index]?.discount || variants[0]?.discount"
-                      :editSizes="selectedProduct?.variants[index]?.sizes.length > 0 ? selectedProduct?.variants[index]?.sizes : variants[0]?.sizes"
+                      :editSizes="selectedProduct?.variants[index]?.sizes"
           
                       @update="updateVariant(index,$event)" />
                       <AddProductMedia
@@ -898,12 +914,13 @@ watch(isOpenAdd, (newVal) => {
                  
           
 
-                <button
-                    class="rounded-md bg-green-500 hover:bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm m-3"
+                <UButton
                     @click="addVariant"
+                    color="green"
+                    block
                   >
                     + Add Variant
-                  </button>
+                  </UButton>
 
 
                 <UPageCard class="m-3" id="Live">
@@ -911,20 +928,22 @@ watch(isOpenAdd, (newVal) => {
                 </UPageCard>
 
                 <div v-if="clearInputs" class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
+                          :loading="isLoad"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
                 <div v-else class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
+                          :loading="isLoad"
                     >
                         Edit Product
-                    </button>
+                    </UButton>
                 </div>
             </div>
         </div>
@@ -975,20 +994,20 @@ watch(isOpenAdd, (newVal) => {
         <template #header>
           <div class="flex items-center justify-between">
              <div v-if="clearInputs" class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
                 <div v-else class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
                     >
                         Edit Product
-                    </button>
+                    </UButton>
                 </div>
             <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark-20-solid" class="-my-1" @click="isOpenAdd = false" />
           </div>
@@ -1017,13 +1036,13 @@ watch(isOpenAdd, (newVal) => {
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
                      
-                      <button
+                      <UButton
                       v-if="!(index === 0)"
                         @click="removeVariant(index)"
                         class="text-red-500 hover:text-red-700 text-sm"
                       >
                         Remove
-                      </button>
+                      </UButton>
                     </div>
                     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
                     <AddProductVariants :key="index"
@@ -1046,12 +1065,12 @@ watch(isOpenAdd, (newVal) => {
                  
           
 
-                <button
+                <UButton
                     class="rounded-md bg-green-500 hover:bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm m-3"
                     @click="addVariant"
                   >
                     + Add Variant
-                  </button>
+                  </UButton>
 
 
                 <UPageCard class="m-3" id="Live">
@@ -1059,20 +1078,20 @@ watch(isOpenAdd, (newVal) => {
                 </UPageCard>
 
                 <div v-if="clearInputs" class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
                 <div v-else class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
                     >
                         Edit Product
-                    </button>
+                    </UButton>
                 </div>
             </div>
  

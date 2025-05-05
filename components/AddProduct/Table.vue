@@ -63,7 +63,7 @@ const columns = [
 
 const variantColumns = [
   { label: 'Variant Name', key: 'name' },
-  { label: 'Price', key: 'price' },
+  { label: 'Price', key: 'sprice' },
   { label: 'Quantity', key: 'qty' },
 ];
 

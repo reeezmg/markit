@@ -28,7 +28,11 @@ const ranges = [
   { label: 'Last 6 months', duration: { months: 6 } },
   { label: 'Last year', duration: { years: 1 } }
 ]
-const selectedDate = ref({ start: sub(new Date(), { days: 14 }), end: new Date() })
+
+const selectedDate = ref({ 
+    start: new Date() , 
+    end: new Date() 
+});
 
 // Columns
 const columns = [
@@ -175,7 +179,7 @@ const resetFilters = () => {
 
 
 // Pagination
-const sort = ref({ column: 'id', direction: 'asc' as const });
+const sort = ref({ column: 'invoiceNumber', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('5');
@@ -183,20 +187,28 @@ const pageCount = ref('5');
 const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
 return {
     where: {
-        AND: [
-            { companyId: useAuth().session.value?.companyId },
-            { deleted: false },
-            ...(search.value ? [{ invoiceNumber:search.value }] : []),  // ✅ Fixed syntax
-            ...(selectedStatus.value.length  // ✅ Correctly checking for array content
-                ? [{ OR: selectedStatus.value.map((item) => ({ paymentStatus: item.value })) }]
-                : []
-            ),
-            {paymentStatus:'PAID'},
-            ...(selectedDate.value ? [
-                { createdAt: { gte: new Date(selectedDate.value.start).toISOString() } },  // Start date
-                { createdAt: { lte: new Date(selectedDate.value.end).toISOString() } }    // End date
-            ] : []),
-        ]
+        companyId: useAuth().session.value?.companyId,
+        deleted: false,
+        ...(search.value && { invoiceNumber: search.value }),
+        ...(selectedStatus.value.length && {
+            OR: selectedStatus.value.map(item => ({ paymentStatus: item.value }))
+        }),
+        paymentStatus: 'PAID',
+        ...(selectedDate.value && (
+            selectedDate.value.start === selectedDate.value.end
+                ? {
+                    createdAt: {
+                        gte: new Date(selectedDate.value.start).setHours(0, 0, 0, 0),
+                        lt: new Date(new Date(selectedDate.value.start).setHours(23, 59, 59, 999)).toISOString(),
+                    },
+                }
+                : {
+                    createdAt: {
+                        gte: new Date(new Date(selectedDate.value.start).setHours(0, 0, 0, 0)).toISOString(),
+                        lte: new Date(new Date(selectedDate.value.end).setHours(23, 59, 59, 999)).toISOString(),
+                    },
+                }
+        )),
     },
     include:{
         entries:{
@@ -225,7 +237,7 @@ const {
 } = useFindManyBill(queryArgs);
 
 
-const { data: pageTotal } = computed(() => sales.value?.length) ;
+const  pageTotal = computed(() => sales.value?.length) ;
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),

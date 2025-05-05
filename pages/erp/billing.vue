@@ -42,6 +42,10 @@ const savetokenref = ref();
 const addTokenRef = ref();
 const tokenInputs = ref(['']);
 
+const isPrint = ref(false);
+const isSaving = ref(false);
+let printData = {}
+
 
 const isOpen = ref(false);
 const isTokenOpen = ref(false);
@@ -206,7 +210,7 @@ const stopResize = () => {
 
 const addNewRow = async (index) => {
   const hasEmptyRow = items.value.some(item => {
-    return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim();
+    return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim() && item.rate === 0;
   });
 
   if (hasEmptyRow) {
@@ -454,6 +458,7 @@ const fetchItemData = async (barcode, index) => {
 
 const handleSave = async () => {
   // Filter out empty items
+  isSaving.value = true
   items.value = items.value.filter(item =>
     item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
   );
@@ -462,6 +467,8 @@ const handleSave = async () => {
     toast.add({ title: 'No valid items to bill.', color: 'red' });
     return;
   }
+
+
 
   try {
     // Declare billResponse with const
@@ -559,10 +566,8 @@ const handleSave = async () => {
       title: 'Bill created successfully!',
       color: 'green',
     });
-
-    // Print the bill
-    try {
-      const printData = {
+    isPrint.value = true
+       printData = {
           invoiceNumber: billResponse.invoiceNumber || 'N/A',
           date: billResponse.createdAt,
           entries: billResponse.entries.map(entry => {
@@ -611,18 +616,7 @@ const handleSave = async () => {
   }, 0),
 };
 
-   console.log(printData)
-   
-      const response = await printBill(printData);
-      console.log('✅ Printed:', response.message);
-    } catch (err) {
-      console.error('Printing error:', err);
-      toast.add({
-        title: 'Printing failed!',
-        description: err.message,
-        color: 'red',
-      });
-    }
+  
 
     // Update inventory
     const updatePromises = [];
@@ -770,8 +764,26 @@ const handleSave = async () => {
   discount.value = 0;
   paymentMethod.value = 'Cash';
   tokenEntries.value = [''];
+  isSaving.value = false
 };
 
+const print = async() => {
+  try{
+  console.log(printData)
+  await printBill(printData)
+  isPrint.value = false
+  toast.add({
+        title: 'Printing Sucess!',
+        color: 'Green',
+      });
+  }catch(err){
+      toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
 
 const {
     data: accounts
@@ -934,30 +946,32 @@ const submitEntryForm = async () => {
 };
 
 const newBill = () => {
-  items.value = [
-    { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
-  ];
-  discount.value = 0;
-  paymentMethod.value = 'Cash';
+  window.open(window.location.href, '_blank');
 
-  token.value = '';
-  tokenEntries.value = [''];
-  grandTotal.value = 0;
-  returnAmt.value = 0;
-  cellNo.value = '';
-  points.value = 0;
-  name.value = '';
-  voucherNo.value = '';
-  selected.value = {};
-  account.value = {
-    name: '',
-    phone:'',
-    street: '',
-    locality: '',
-    city: '',
-    state: '',
-    pincode: '',
-  };
+  // items.value = [
+  //   { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
+  // ];
+  // discount.value = 0;
+  // paymentMethod.value = 'Cash';
+
+  // token.value = '';
+  // tokenEntries.value = [''];
+  // grandTotal.value = 0;
+  // returnAmt.value = 0;
+  // cellNo.value = '';
+  // points.value = 0;
+  // name.value = '';
+  // voucherNo.value = '';
+  // selected.value = {};
+  // account.value = {
+  //   name: '',
+  //   phone:'',
+  //   street: '',
+  //   locality: '',
+  //   city: '',
+  //   state: '',
+  //   pincode: '',
+  // };
 
 };
 
@@ -1261,7 +1275,7 @@ onMounted(() => {
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
-              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'Card']" @keydown.enter.prevent="handleEnterPayment(index)" />
+              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card']" @keydown.enter.prevent="handleEnterPayment(index)" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
@@ -1322,7 +1336,7 @@ onMounted(() => {
 
         <div class="mt-4 w-full flex flex-wrap gap-4">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  v-if="!token" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
           <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
@@ -1379,6 +1393,33 @@ onMounted(() => {
           <UButton ref="addTokenRef"  @click="submitEntryForm" block class="mt-4">Submit</UButton>
         </div>
     </UModal>
+
+    <UDashboardModal
+        v-model="isPrint"
+        title="Print Bill"
+        description="Would You Like to print?"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            },
+            footer: {
+                base: 'ml-16',
+            },
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="green"
+                label="Yes"
+                :loading="loading"
+                @click="print"
+            />
+            <UButton color="red" label="NO" @click="isPrint = false" />
+        </template>
+    </UDashboardModal>
 
 </template>
 

@@ -40,6 +40,7 @@ export interface DashboardComposable {
   
   // Computed properties
   productsCount: ComputedRef<number>
+  itemsCount: ComputedRef<number>
   totalRevenue: ComputedRef<number>
   totalExpenses: ComputedRef<number>
   revenueGraph: ComputedRef<Array<{ month: string; total: number }>>

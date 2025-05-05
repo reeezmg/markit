@@ -1,6 +1,6 @@
 <template>
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-      <KpiCard title="Products" :value="productsCount">
+      <KpiCard title="Items" :value="itemsCount">
         <template #icon><PackageIcon class="w-5 h-5 text-indigo-600" /></template>
       </KpiCard>
       <KpiCard title="Revenue" :value="formatCurrency(totalRevenue)">
@@ -58,7 +58,7 @@ PercentIcon,
   import { useCompanyDashboard } from '@/lib/api/useDashboardData'
   
   const {
-    productsCount,
+    itemsCount,
     totalRevenue,
     totalExpenses,
     lowStockEntries,

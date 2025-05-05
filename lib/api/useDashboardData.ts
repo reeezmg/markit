@@ -1,5 +1,6 @@
 import {
     useFindManyProduct,
+    useFindManyItem,
     useFindManyBill,
     useFindManyExpense,
     useFindManyEntry, 
@@ -10,6 +11,11 @@ import {
   
   export function useCompanyDashboard() {
     const productsQuery = useFindManyProduct({
+        where: {
+        AND: [
+            { companyId: useAuth().session.value?.companyId },]}})
+
+    const itemsQuery = useFindManyItem({
         where: {
         AND: [
             { companyId: useAuth().session.value?.companyId },]}})
@@ -25,7 +31,8 @@ import {
         where: {
         AND: [
             { companyId: useAuth().session.value?.companyId },
-            { deleted:false }
+            { deleted:false },
+            {paymentStatus:'PAID'}
           ]
           },
           include: {
@@ -58,6 +65,7 @@ import {
 
 
       const products = ref(productsQuery.data.value)
+      const items = ref(itemsQuery.data.value)
       const bills = ref(billsQuery.data.value)
       const expenses = ref(expensesQuery.data.value)
       const entries = ref(entriesQuery.data.value)
@@ -65,6 +73,10 @@ import {
 
       watch(() => productsQuery.data.value, (newVal) => {
         products.value = newVal
+      })
+    
+      watch(() => itemsQuery.data.value, (newVal) => {
+        items.value = newVal
       })
     
       watch(() => billsQuery.data.value, (newVal) => {
@@ -85,6 +97,7 @@ import {
       const refreshAll = async () => {
         await Promise.all([
           productsQuery.refetch(),
+          itemsQuery.refetch(),
           billsQuery.refetch(),
           expensesQuery.refetch(),
           entriesQuery.refetch(),
@@ -131,6 +144,7 @@ import {
   })
   
     const productsCount = computed(() => products.value?.length ?? 0)
+    const itemsCount = computed(() => items.value?.length ?? 0)
 
   
     const totalRevenue = computed(() =>
@@ -258,6 +272,7 @@ import {
   
     return {
       productsCount,
+      itemsCount,
       totalRevenue,
       totalExpenses,
       revenueGraph,

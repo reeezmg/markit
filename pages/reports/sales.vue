@@ -1,88 +1,3 @@
-<template>
-  <UDashboardPanelContent>
-    <ClientOnly>
-      <div class="space-y-6 p-6">
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <h1 class="text-xl font-semibold">Sales Report</h1>
-          <div class="flex flex-wrap items-center gap-3">
-            <UInput v-model="startDate" type="date" placeholder="Start Date" class="w-40" :disabled="fullReport" />
-            <UInput v-model="endDate" type="date" placeholder="End Date" class="w-40" :disabled="fullReport" />
-            <UToggle v-model="fullReport" label="Full Report" />
-            <USelectMenu
-              v-model="quickRange"
-              :options="quickRanges"
-              placeholder="Quick Ranges"
-              class="w-40"
-              :disabled="fullReport"
-            />
-            <UButton 
-              @click="downloadCSV" 
-              icon="i-heroicons-arrow-down-tray" 
-              :loading="csvLoading" 
-              :disabled="isDownloadDisabled"
-            >
-              Download CSV
-            </UButton>
-            <UButton 
-              @click="downloadPDF" 
-              icon="i-heroicons-document" 
-              :loading="pdfLoading" 
-              :disabled="isDownloadDisabled"
-            >
-              Download PDF
-            </UButton>
-          </div>
-        </div>
-
-        <div v-if="!loading && dashboard" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <KpiCard title="Total Revenue" :value="formatCurrency(dashboard.totalRevenue.value)">
-            <template #icon>
-              <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-            </template>
-          </KpiCard>
-          <KpiCard title="Total Bills" :value="filteredBills.length">
-            <template #icon>
-              <UIcon name="i-heroicons-receipt-refund" class="text-indigo-600 dark:text-white text-3xl" />
-            </template>
-          </KpiCard>
-          <KpiCard 
-            title="Avg. Bill Value" 
-            :value="formatCurrency(filteredBills.length > 0 ? dashboard.totalRevenue.value / filteredBills.length : 0)"
-          >
-            <template #icon>
-              <UIcon name="i-heroicons-chart-bar" class="text-indigo-600 dark:text-white text-3xl" />
-            </template>
-          </KpiCard>
-        </div>
-
-        <TopProducts v-if="!loading && dashboard?.topProducts" :products="dashboard.topProducts" />
-        <RevenueEChart v-if="!loading && dashboard?.revenueGraph" :data="dashboard.revenueGraph" title="Monthly Sales Overview" />
-
-        <div v-if="loading" class="text-center py-6">
-          <UIcon name="i-heroicons-arrow-path" class="animate-spin h-6 w-6 mx-auto" />
-          <p class="mt-2">Loading report data...</p>
-        </div>
-
-        <div v-if="!loading && !filteredBills.length" class="text-center py-6">
-          <UIcon name="i-heroicons-exclamation-circle" class="h-8 w-8 text-red-500 mx-auto" />
-          <p class="text-red-500 mt-2">No data available for this report</p>
-          <p class="text-sm text-gray-500 mt-1">
-            {{ (dashboard.bills.value?.length ?? 0) > 0 ? 'Filters may be too restrictive' : 'No bills found' }}
-          </p>
-          <UButton 
-            icon="i-heroicons-arrow-path" 
-            @click="refreshPage" 
-            class="mt-4"
-            :loading="loading"
-          >
-            Retry
-          </UButton>
-        </div>
-      </div>
-    </ClientOnly>
-  </UDashboardPanelContent>
-</template>
-
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import KpiCard from '@/components/dashboard/KpiCard.vue'
@@ -98,8 +13,8 @@ const dashboard = useCompanyDashboard() as DashboardComposable
 const startDate = ref('')
 const endDate = ref('')
 const fullReport = ref(false)
-const quickRange = ref('')
-const quickRanges = ['This Month', 'Last Month']
+const quickRange = ref('Today')
+const quickRanges = ['Today','This Month', 'Last Month']
 const csvLoading = ref(false)
 const pdfLoading = ref(false)
 const toast = useToast()
@@ -109,8 +24,9 @@ const setDefaultDateRange = () => {
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
-  startDate.value = new Date(year, month, 1).toISOString().split('T')[0]
-  endDate.value = new Date(year, month + 1, 0).toISOString().split('T')[0]
+  const today = now.toLocaleDateString('en-CA')
+    startDate.value = today
+    endDate.value = today
 }
 
 // Computed properties
@@ -120,21 +36,46 @@ const isDownloadDisabled = computed(() => {
 })
 
 const filteredBills = computed(() => {
-  if (!dashboard.bills.value || !dashboard.bills.value.length) return []
-  
-  if (fullReport.value) return dashboard.bills.value
-  
-  const start = startDate.value ? new Date(startDate.value) : null
-  const end = endDate.value ? new Date(endDate.value) : null
-  
+  if (!dashboard.bills.value || !dashboard.bills.value.length) return [];
+
+  if (fullReport.value) return dashboard.bills.value;
+
+  const start = startDate.value
+    ? new Date(new Date(startDate.value).setHours(0, 0, 0, 0))
+    : null;
+
+  const end = endDate.value
+    ? new Date(new Date(endDate.value).setHours(23, 59, 59, 999))
+    : null;
+
   return dashboard.bills.value.filter(b => {
+    const billDate = new Date(b.createdAt);
+    return (!start || billDate >= start) && (!end || billDate <= end);
+  });
+});
+
+
+const filteredExpenses = computed(() => {
+  if (!dashboard.expenses.value || !dashboard.expenses.value.length) return []
+  
+  if (fullReport.value) return dashboard.expenses.value
+  
+  const start = startDate.value
+    ? new Date(new Date(startDate.value).setHours(0, 0, 0, 0))
+    : null;
+
+  const end = endDate.value
+    ? new Date(new Date(endDate.value).setHours(23, 59, 59, 999))
+    : null;
+
+  return dashboard.expenses.value.filter(b => {
     const billDate = new Date(b.createdAt)
     return (!start || billDate >= start) && (!end || billDate <= end)
   })
 })
 
 const kpiArray = computed<KpiItem[]>(() => ([
-  { KPI: 'Total Revenue', Value: formatCurrency(dashboard.totalRevenue.value || 0) },
+  { KPI: 'Total Revenue', Value: formatCurrency(filteredBills.value.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0) },
   { KPI: 'Total Bills', Value: filteredBills.value.length },
   { KPI: 'Avg. Bill Value', Value: formatCurrency(filteredBills.value.length > 0 ? 
     (dashboard.totalRevenue.value || 0) / filteredBills.value.length : 0) }
@@ -250,19 +191,24 @@ const refreshPage = async () => {
 // Watch for quick range changes
 watch(quickRange, (value) => {
   if (!value) return
-  
+
   const now = new Date()
   const year = now.getFullYear()
   const month = now.getMonth()
-  
-  if (value === 'This Month') {
-    startDate.value = new Date(year, month, 1).toISOString().split('T')[0]
-    endDate.value = new Date(year, month + 1, 0).toISOString().split('T')[0]
+
+  if (value === 'Today') {
+    const today = now.toLocaleDateString('en-CA')
+    startDate.value = today
+    endDate.value = today
+  } else if (value === 'This Month') {
+    startDate.value = new Date(year, month, 1).toLocaleDateString('en-CA')
+    endDate.value = new Date(year, month + 1, 0).toLocaleDateString('en-CA')
   } else if (value === 'Last Month') {
-    startDate.value = new Date(year, month - 1, 1).toISOString().split('T')[0]
-    endDate.value = new Date(year, month, 0).toISOString().split('T')[0]
+    startDate.value = new Date(year, month - 1, 1).toLocaleDateString('en-CA')
+    endDate.value = new Date(year, month, 0).toLocaleDateString('en-CA')
   }
 })
+
 
 // Initialize
 onMounted(() => {
@@ -271,3 +217,97 @@ onMounted(() => {
   loading.value = false
 })
 </script>
+
+
+<template>
+  <UDashboardPanelContent>
+    <ClientOnly>
+      <div class="space-y-6 p-6">
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <h1 class="text-xl font-semibold">Sales Report</h1>
+          <div class="flex flex-wrap items-center gap-3">
+            <UInput v-model="startDate" type="date" placeholder="Start Date" class="w-40" :disabled="fullReport" />
+            <UInput v-model="endDate" type="date" placeholder="End Date" class="w-40" :disabled="fullReport" />
+            <!-- <UToggle v-model="fullReport" label="Full Report" /> -->
+            <USelectMenu
+              v-model="quickRange"
+              :options="quickRanges"
+              placeholder="Quick Ranges"
+              class="w-40"
+              :disabled="fullReport"
+            />
+            <UButton 
+              @click="downloadCSV" 
+              icon="i-heroicons-arrow-down-tray" 
+              :loading="csvLoading" 
+              :disabled="isDownloadDisabled"
+            >
+              Download CSV
+            </UButton>
+            <UButton 
+              @click="downloadPDF" 
+              icon="i-heroicons-document" 
+              :loading="pdfLoading" 
+              :disabled="isDownloadDisabled"
+            >
+              Download PDF
+            </UButton>
+          </div>
+        </div>
+
+        <div v-if="!loading && dashboard" class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+          <KpiCard title="Total Revenue" :value="formatCurrency(filteredBills.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0)">
+            <template #icon>
+              <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
+            </template>
+          </KpiCard>
+
+          <KpiCard title="Total Expense" :value="formatCurrency(filteredExpenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0)">
+            <template #icon>
+              <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
+            </template>
+          </KpiCard>
+
+          <KpiCard title="Total Bills" :value="filteredBills.length">
+            <template #icon>
+              <UIcon name="i-heroicons-receipt-refund" class="text-indigo-600 dark:text-white text-3xl" />
+            </template>
+          </KpiCard>
+         
+          <KpiCard 
+            title="Avg. Bill Value" 
+            :value="formatCurrency(filteredBills.length > 0 ? dashboard.totalRevenue.value / filteredBills.length : 0)"
+          >
+            <template #icon>
+              <UIcon name="i-heroicons-chart-bar" class="text-indigo-600 dark:text-white text-3xl" />
+            </template>
+          </KpiCard>
+        </div>
+
+        <TopProducts v-if="!loading && dashboard?.topProducts" :products="dashboard.topProducts" />
+        <RevenueEChart v-if="!loading && dashboard?.revenueGraph" :data="dashboard.revenueGraph" title="Monthly Sales Overview" />
+
+        <div v-if="loading" class="text-center py-6">
+          <UIcon name="i-heroicons-arrow-path" class="animate-spin h-6 w-6 mx-auto" />
+          <p class="mt-2">Loading report data...</p>
+        </div>
+
+        <div v-if="!loading && !filteredBills.length" class="text-center py-6">
+          <UIcon name="i-heroicons-exclamation-circle" class="h-8 w-8 text-red-500 mx-auto" />
+          <p class="text-red-500 mt-2">No data available for this report</p>
+          <p class="text-sm text-gray-500 mt-1">
+            {{ (dashboard.bills.value?.length ?? 0) > 0 ? 'Filters may be too restrictive' : 'No bills found' }}
+          </p>
+          <UButton 
+            icon="i-heroicons-arrow-path" 
+            @click="refreshPage" 
+            class="mt-4"
+            :loading="loading"
+          >
+            Retry
+          </UButton>
+        </div>
+      </div>
+    </ClientOnly>
+  </UDashboardPanelContent>
+</template>

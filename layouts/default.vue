@@ -44,11 +44,19 @@ const links = computed(() => {
                     },
                 },
                 {
-                    label: 'Accounts',
-                    to: `/erp/accounts`,
+                    label: 'Expenses',
+                    to: `/erp/expenses`,
                     tooltip: {
                         text: 'ERP',
-                        shortcuts: ['E', 'A'],
+                        shortcuts: ['E', 'E'],
+                    },
+                },
+                {
+                    label: 'Reports',
+                    to: `/reports/sales`,
+                    tooltip: {
+                        text: 'ERP',
+                        shortcuts: ['E', 'R'],
                     },
                 },
             ],
