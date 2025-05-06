@@ -38,6 +38,11 @@ const columns = [
         sortable: true,
     },
     {
+        key: 'note',
+        label: 'note',
+        sortable: true,
+    },
+    {
         key: 'totalAmount',
         label: 'Amount',
         sortable: true,
