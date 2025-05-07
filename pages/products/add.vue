@@ -726,7 +726,7 @@ if(distributorId.value){
 const handleReset = async() => {
 
   clearInputs.value = true
-  createRef.value?.resetForm()
+  // createRef.value?.resetForm()
   variantRef.value.forEach((refInstance:any) => {
     refInstance?.resetForm();
   });

@@ -55,6 +55,29 @@ const filteredBills = computed(() => {
 });
 
 
+const totals = computed(() => {
+  const bills = filteredBills.value;
+
+  const totalBills = bills.length;
+
+  const totalSales = bills
+    .flatMap(b => b.entries ?? [])
+    .reduce((sum, entry) => sum + ((entry.rate ?? 0) * (entry.qty ?? 0)), 0);
+
+  const totalRevenue = bills.reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
+
+  const totalDiscount = totalSales - totalRevenue;
+
+  return {
+    totalBills,
+    totalSales,
+    totalRevenue,
+    totalDiscount,
+  };
+});
+
+
+
 const filteredExpenses = computed(() => {
   if (!dashboard.expenses.value || !dashboard.expenses.value.length) return []
   
@@ -69,7 +92,7 @@ const filteredExpenses = computed(() => {
     : null;
 
   return dashboard.expenses.value.filter(b => {
-    const billDate = new Date(b.createdAt)
+    const billDate = new Date(b.expenseDate)
     return (!start || billDate >= start) && (!end || billDate <= end)
   })
 })
@@ -256,30 +279,28 @@ onMounted(() => {
         </div>
 
         <div v-if="!loading && dashboard" class="grid grid-cols-1 sm:grid-cols-4 gap-4">
-          <KpiCard title="Total Revenue" :value="formatCurrency(filteredBills.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0)">
+
+            <KpiCard title="Total Sales" :value="formatCurrency(totals.totalSales)">
+              <template #icon>
+                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
+              </template>
+            </KpiCard>
+
+             <KpiCard title="Total Discount" :value="formatCurrency(totals.totalDiscount)">
+              <template #icon>
+                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
+              </template>
+            </KpiCard>
+
+            <KpiCard title="Total Revenue" :value="formatCurrency(totals.totalRevenue)">
+              <template #icon>
+                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
+              </template>
+            </KpiCard>
+
+            <KpiCard title="Total Expense" :value="formatCurrency(filteredExpenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0)">
             <template #icon>
               <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-            </template>
-          </KpiCard>
-
-          <KpiCard title="Total Expense" :value="formatCurrency(filteredExpenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0)">
-            <template #icon>
-              <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-            </template>
-          </KpiCard>
-
-          <KpiCard title="Total Bills" :value="filteredBills.length">
-            <template #icon>
-              <UIcon name="i-heroicons-receipt-refund" class="text-indigo-600 dark:text-white text-3xl" />
-            </template>
-          </KpiCard>
-         
-          <KpiCard 
-            title="Avg. Bill Value" 
-            :value="formatCurrency(filteredBills.length > 0 ? dashboard.totalRevenue.value / filteredBills.length : 0)"
-          >
-            <template #icon>
-              <UIcon name="i-heroicons-chart-bar" class="text-indigo-600 dark:text-white text-3xl" />
             </template>
           </KpiCard>
         </div>

@@ -22,8 +22,8 @@ const useAuth = () => useNuxtApp().$auth;
 // ✅ Form Initialization with category ID
 const expenseData = computed(() => ({
     date: props.expense?.createdAt
-        ? new Date(props.expense?.createdAt).toLocaleDateString('en-CA')
-        : new Date().toLocaleDateString('en-CA'),
+        ? new Date(props.expense?.createdAt).toISOString().split('T')[0]
+        : new Date().toISOString().split('T')[0],
     category: props.expense?.expensecategory?.id || {},  // Store only ID
     amount: props.expense?.totalAmount || '',
     status: props.expense?.status || 'Paid',

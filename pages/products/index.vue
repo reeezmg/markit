@@ -184,7 +184,7 @@ const resetFilters = () => {
 };
 
 // Pagination
-const sort = ref({ column: 'id', direction: 'asc' as const });
+const sort = ref({ column: 'createdAt', direction: 'desc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('10');

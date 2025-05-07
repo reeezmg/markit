@@ -458,7 +458,7 @@ const fetchItemData = async (barcode, index) => {
 
 const handleSave = async () => {
   // Filter out empty items
-  isSaving.value = true
+  // isSaving.value = true
   items.value = items.value.filter(item =>
     item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
   );
@@ -594,27 +594,27 @@ const handleSave = async () => {
             tvalue:entry.value,
           };
         }),
- 
-  subtotal: billResponse.subtotal,
-  discount: billResponse.discount,
-  grandTotal: billResponse.grandTotal,
-  paymentMethod: billResponse.paymentMethod,
-  companyName: billResponse.company.name || '',
-  companyAddress: billResponse.company.address || {},
-  gstin: billResponse.company.gstin || '',
-  accHolderName: billResponse.company.accHolderName || '',
-  upiId: billResponse.company.upiId || '',
-  // 🆕 Add total qty
-  tqty: billResponse.entries.reduce((sum, entry) => sum + entry.qty, 0),
-  tvalue: billResponse.entries.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
-  tdiscount: billResponse.entries.reduce((sum, entry) => {
-    if (entry.discount < 0) {
-      return sum + (Math.abs(entry.discount) * entry.qty);
-    } else {
-      return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
-    }
-  }, 0),
-};
+
+      subtotal: billResponse.subtotal,
+      discount: billResponse.discount,
+      grandTotal: billResponse.grandTotal,
+      paymentMethod: billResponse.paymentMethod,
+      companyName: billResponse.company.name || '',
+      companyAddress: billResponse.company.address || {},
+      gstin: billResponse.company.gstin || '',
+      accHolderName: billResponse.company.accHolderName || '',
+      upiId: billResponse.company.upiId || '',
+      // 🆕 Add total qty
+      tqty: billResponse.entries.reduce((sum, entry) => sum + entry.qty, 0),
+      tvalue: billResponse.entries.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+      tdiscount: billResponse.entries.reduce((sum, entry) => {
+        if (entry.discount < 0) {
+          return sum + (Math.abs(entry.discount) * entry.qty);
+        } else {
+          return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
+        }
+      }, 0),
+    };
 
   
 
@@ -648,7 +648,7 @@ const handleSave = async () => {
     }
 
     // Wait for all updates to complete
-    await Promise.all(updatePromises);
+    Promise.all(updatePromises);
 
     // Clean up token entries
     try {
@@ -671,7 +671,7 @@ const handleSave = async () => {
     paymentMethod.value = 'Cash';
     tokenEntries.value = [''];
  
-      await $fetch('/api/notifications/notify', {
+      $fetch('/api/notifications/notify', {
       method: 'POST',
       body: {
         userId:useAuth().session.value?.id,

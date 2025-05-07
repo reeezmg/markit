@@ -37,7 +37,13 @@ import {
           },
           include: {
             client: true,
-            address: true
+            address: true,
+            entries:{
+              select: {
+                rate: true,
+                qty: true,
+              },
+            },
           },
         
         })
@@ -47,14 +53,20 @@ import {
         where: {
         AND: [
             { companyId: useAuth().session.value?.companyId },]}})
+
     const entriesQuery = useFindManyEntry({
         where: {
             bill: {
               companyId: useAuth().session.value?.companyId,
+              deleted:false
             },
           },
           include: {
-            variant: true,
+            variant: {
+              include: {
+                product: true,
+              },
+            },
             category: true,
             bill: true,
        
@@ -121,27 +133,27 @@ import {
   
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-    
   const topProducts = computed(() => {
     if (!entries.value) return []
-
+  
     const productMap = new Map<string, { name: string; total: number }>()
-
+  
     for (const entry of entries.value) {
-      const name = entry.variant?.name ||  'Unknown' // || entry.item?.name --> need to revisit
+      const name = entry.variant?.product?.name || 'Unknown'
       const key = name
-
+  
       if (!productMap.has(key)) {
         productMap.set(key, { name, total: 0 })
       }
-
+  
       productMap.get(key)!.total += entry.qty ?? 0
     }
-
+  
     return Array.from(productMap.values())
       .sort((a, b) => b.total - a.total)
       .slice(0, 5)
   })
+  
   
     const productsCount = computed(() => products.value?.length ?? 0)
     const itemsCount = computed(() => items.value?.length ?? 0)

@@ -28,7 +28,7 @@ const pageCount = ref('10');
 
 const columns = [
     {
-        key: 'createdAt',
+        key: 'expenseDate',
         label: 'Date',
         sortable: true,
     },
@@ -184,7 +184,7 @@ const columnsTable = computed(() =>
 
 
 watchEffect(() => {
-    console.log(sales.value?.length);
+    console.log(sales.value);
     console.log(pageTotal.value);
 
 });
@@ -384,8 +384,8 @@ const download = async (filePath:string) => {
                 </UBadge>
             </template>
 
-        <template #createdAt-data="{row}">
-            {{ format(row.createdAt, 'd MMM, yyy') }}
+        <template #expenseDate-data="{row}">
+            {{ format(row.expenseDate, 'd MMM, yyy') }}
         </template>
             <template #actions-data="{ row }">
                 <UDropdown :items="action(row)">

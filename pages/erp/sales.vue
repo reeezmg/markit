@@ -179,7 +179,7 @@ const resetFilters = () => {
 
 
 // Pagination
-const sort = ref({ column: 'invoiceNumber', direction: 'asc' as const });
+const sort = ref({ column: 'invoiceNumber', direction: 'desc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('5');

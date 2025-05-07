@@ -405,19 +405,8 @@ watch(variants, (newVal) => {
   console.log(newVal)
 },{ immediate: true ,deep: true });
 
-const variantLinks = computed(() => {
-  return selectedProduct.value?.variants?.map((variant, index) => ({
-    id: `variant-${index}`,
-    name: variant.name || `Variant ${index + 1}`,
-    price: variant.sprice,
-    qty: variant.qty,
-    index: index,
-    code: variant.code ,
-    discount: variant.discount,
-  })) || [];
-});
 
-const scrollToSection = (sectionId: number) => {
+const scrollToSection = (sectionId: any) => {
     const section = document.getElementById(sectionId);
     if (section) {
         section.scrollIntoView({ behavior: 'smooth' });
@@ -431,6 +420,41 @@ const handleSkip = () => {
 
 
 const printBarcodes = async() => {
+console.log(barcodes.value)
+  try{
+ 
+    const response = await printLabel(barcodes.value);
+    console.log(response)
+    toast.add({
+        title: 'Printing success!',
+        color: 'green',
+      });
+    
+
+  }catch(err){
+    console.log(err)
+    toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
+
+const printBarcodesVariant = async(variant:any) => {
+  barcodes.value = variant.items?.map(item => ({
+            barcode: item.barcode ?? '',
+            code: variant.code ?? '',
+            shopname:useAuth().session.value?.companyName,
+            productName: productData?.value?.name,
+            brand: productData?.value?.brand,
+            name: variant.name,
+            sprice: variant.sprice,
+            dprice: variant.dprice,
+            size: item.size,
+        })) ?? [];
+       
+
 console.log(barcodes.value)
   try{
  
@@ -502,13 +526,13 @@ const handleSave  = async () => {
   <UPageCard class="m-3">
     <div class="text-lg mb-4">Variant Links</div>
 
-    <template v-if="variantLinks.length">
+    <template v-if="selectedProduct?.variants.length">
       <div class="space-y-3">
         <ULink
-          v-for="(variant, index) in variantLinks"
+          v-for="(variant, index) in selectedProduct?.variants"
           :key="variant.id"
           :to="`#variant-${index}`"
-          @click="scrollToSection(variant.index)"
+          @click="scrollToSection(`variant-${index}`)"
           active-class="ring-2 ring-primary"
           inactive-class="hover:bg-gray-100 dark:hover:bg-gray-700"
           class="block rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition cursor-pointer"
@@ -517,7 +541,7 @@ const handleSave  = async () => {
             <div class="text-gray-900 dark:text-gray-100 font-medium">{{ variant.name }}</div>
             <div class="text-gray-500 dark:text-gray-400 text-sm">Code: {{ variant.code || '-' }}</div>
           </div>
-          <div>
+          <div  class="flex flex-col space-y-2 sm:flex-row sm:justify-between sm:space-y-0">
           <div class="mt-2 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-300">
             <span>Price: ${{ variant.price }}</span>
             <span>Qty: {{ variant.qty }}</span>
@@ -525,7 +549,7 @@ const handleSave  = async () => {
           </div>
           <UButton
         label='Print'
-         @click="printBarcodes"
+         @click="printBarcodesVariant(variant)"
         />
         </div>
         </ULink>
