@@ -2,18 +2,14 @@ import { prisma } from '~/server/prisma';
 import { defineEventHandler, getRouterParam } from 'h3';
 
 export default defineEventHandler(async (event) => {
-  const id = getRouterParam(event, 'id');
+  const session = await useAuthSession(event);
 
-  if (!id) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'Category ID is required',
-    });
-  }
-
-  const category = await prisma.category.findUnique({
-    where: { id },
+  const category = await prisma.category.findMany({
+    where: {
+      companyId: session.data.companyId ,
+    },
     select: {
+      id:true,
       fixedTax: true,
       taxBelowThreshold: true,
       taxAboveThreshold: true,

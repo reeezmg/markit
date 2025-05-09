@@ -4,6 +4,13 @@ import { VueQueryDevtools } from '@tanstack/vue-query-devtools';
 const config = useRuntimeConfig();
 // Provide tanstack-query context
 // Use an absolute endpoint so server-side fetch works too
+const categoryStore = useCategoryStore()
+
+onMounted(async () => {
+  await categoryStore.fetchAllCategories()
+  console.log('All Categories:', categoryStore.categories)
+})
+
 provideHooksContext({
     endpoint: config.public.baseUrl,
 });

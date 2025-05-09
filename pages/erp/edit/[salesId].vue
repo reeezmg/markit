@@ -30,7 +30,8 @@ const toast = useToast();
 const { printBill } = usePrint();
 const router = useRouter();
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
-
+const isPrint = ref(false);
+const isSaving = ref(false);
 
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
@@ -45,6 +46,8 @@ const cellNo = ref('');
 const points = ref(0);
 const name = ref('');
 const scannedBarcode = ref("");
+const categoryStore = useCategoryStore()
+let printData = {}
 
 const qtyInputs = ref([]);
 const barcodeInputs = ref([]);
@@ -89,13 +92,14 @@ let startX = 0;
 let startWidth = 0;
 let columnIndex = 0;
 
+
+
 watch(selected, (newSelected) => {
   if(Object.keys(newSelected).length !== 0 ){
     paymentMethod.value = 'credit'
   }
   console.log(newSelected)
 })
-
 
 
 watch(items, async () => {
@@ -116,10 +120,11 @@ watch(items, async () => {
    
 
     if (item.category[0]?.id) {
-      const { data: category, pending, error, refresh } = await useFindCategory(item.category[0].id);
-      if(!error || category){
+      const category = categoryStore.getCategoryById(item.category[0].id)
+     
+      if( category){
         const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = category;
-
+        console.log(taxType)
       if (taxType === 'FIXED') {
         item.tax = fixedTax ?? 0;
       } else {
@@ -145,6 +150,7 @@ watch(items, async () => {
     item.value = Math.max(baseValue, 0);
   }
 }, { deep: true });
+
 
 watch([discount, subtotal], ([newDiscount, newTotal]) => {
   let baseValue = newTotal; // Use the updated total value
@@ -248,7 +254,8 @@ const removeRow = (barcode,index) => {
   
 };
 
-onMounted(() => {
+onMounted(async () => {
+  await billRefetch()
   // Initialize column widths (optional)
   const ths = resizableTable.value.querySelectorAll('th');
   ths.forEach((th) => {
@@ -383,7 +390,7 @@ const billArgs = computed(() => ({
 }));
 
 
-const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs);
+const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs,{enabled:false});
 const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enabled:false});
 const {data: entriesToDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
 
@@ -480,17 +487,22 @@ const fetchItemData = async (barcode, index) => {
 
 
 const handleEdit = async () => {
-
-  const disc = discount.value;
+  isSaving.value = true
   try {
     items.value = items.value.filter(item =>
     item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
   );
 
   if (items.value.length === 0) {
-    toast.add({ title: 'No valid items to bill.', color: 'red' });
+    throw new Error(`No valid items to bill.`);
     return;
   }
+
+  items.value.forEach((item, index) => {
+    if (!item.category || !item.category[0]?.id) {
+      throw new Error(`No category in entry ${index + 1}`);
+    }
+  });
     // Separate items into those with an ID and those without
     const itemsWithId = items.value.filter(item => item.entryId);
     const itemsWithoutId = items.value.filter(item => !item.entryId);
@@ -567,7 +579,7 @@ const variantDetails = entriesToDelete.value?.map(e => ({
 
 // Step 3: Update related items to be in_stock
 if (itemIds.length > 0) {
-  await UpdateManyItem.mutateAsync({
+   UpdateManyItem.mutateAsync({
     where: { id: { in: itemIds } },
     data: { 
       status: 'in_stock' 
@@ -600,7 +612,7 @@ for (const { variantId, qty, size, sizes } of variantDetails) {
     updateData.sizes = updatedSizes;
   }
 
-  await UpdateVariant.mutateAsync({
+   UpdateVariant.mutateAsync({
     where: { id: variantId },
     data: updateData,
   });
@@ -610,83 +622,88 @@ for (const { variantId, qty, size, sizes } of variantDetails) {
 
 // Step 4: Delete the entries
 if (entryIds.length > 0) {
-  await DeleteManyEntry.mutateAsync({
+   DeleteManyEntry.mutateAsync({
     where: { id: { in: entryIds } },
   });
 }
 
    
     // Execute all create, update, and delete promises
-    await Promise.all([...createPromises, ...updatePromises]);
-
-    // Call UpdateBill mutation with the other data
-    const billResponse = await UpdateBill.mutateAsync({
-      where: { id: route.params.salesId },
-      data: {
-        subtotal: subtotal.value,
-        discount: disc,
-        grandTotal: grandTotal.value,
-        paymentMethod: paymentMethod.value,
-        company: {
-          connect: {
-            id: useAuth().session.value?.companyId,
-          },
-        },
+    const updateBillPromise = () => UpdateBill.mutateAsync({
+  where: { id: route.params.salesId },
+  data: {
+    subtotal: subtotal.value,
+    discount: discount.value,
+    grandTotal: grandTotal.value,
+    paymentMethod: paymentMethod.value,
+    company: {
+      connect: {
+        id: useAuth().session.value?.companyId,
       },
+    },
+  },
+  select: {
+    id: true,
+    invoiceNumber: true,
+    createdAt: true,
+    paymentMethod: true,
+    subtotal: true,
+    discount: true,
+    tax: true,
+    grandTotal: true,
+    company: {
       select: {
-        id: true,
-        invoiceNumber: true,
-        createdAt: true,
-        paymentMethod: true,
-        subtotal: true,
-        discount: true,
-        tax: true,
-        grandTotal: true,
-        company:{
-          select:{
-            name:true,
-            gstin:true,
-            upiId:true,
-            accHolderName:true,
-            address:{
-              select:{
-                name:true,
-                street:true,
-                locality:true,
-                city:true,
-                state:true,
-                pincode:true
-              }
-            }
-          }
-        },
-        entries: {
+        name: true,
+        gstin: true,
+        upiId: true,
+        accHolderName: true,
+        address: {
           select: {
             name: true,
-            qty: true,
-            rate: true,
-            discount: true,
-            tax: true,
-            value: true,
-            barcode: true,
-            size: true,
-            item:{
-              select:{
-                id:true
-              }
-            },
-            category:{
-              select:{
-                name:true,
-                hsn:true
-              }
-            }
+            street: true,
+            locality: true,
+            city: true,
+            state: true,
+            pincode: true,
           },
         },
       },
-    });
+    },
+    entries: {
+      select: {
+        name: true,
+        qty: true,
+        rate: true,
+        discount: true,
+        tax: true,
+        value: true,
+        barcode: true,
+        size: true,
+        item: {
+          select: {
+            id: true,
+          },
+        },
+        category: {
+          select: {
+            name: true,
+            hsn: true,
+          },
+        },
+      },
+    },
+  },
+});
 
-    console.log('Bill updated successfully:', billResponse);
+// Run all promises in parallel
+const results = await Promise.all([
+  ...createPromises,
+  ...updatePromises,
+  updateBillPromise(), // Now it will be executed only when `Promise.all` is called
+]);
+
+const billResponse = results[results.length - 1];
+console.log('Bill updated successfully:', billResponse);
 
     toast.add({
       title: 'Bill edited successfully!',
@@ -694,7 +711,8 @@ if (entryIds.length > 0) {
     });
 
     try {
-      const printData = {
+        isPrint.value = true
+      printData = {
           invoiceNumber: billResponse.invoiceNumber || 'N/A',
           date: billResponse.createdAt,
           entries: billResponse.entries.map(entry => {
@@ -743,10 +761,6 @@ if (entryIds.length > 0) {
   }, 0),
 };
 
-   console.log(printData)
-   
-      const response = await printBill(printData);
-      console.log('✅ Printed:', response.message);
     } catch (err) {
       console.error('Printing error:', err);
       toast.add({
@@ -762,9 +776,12 @@ if (entryIds.length > 0) {
     console.error('Error updating bill', error);
     toast.add({
       title: 'Bill update failed!',
+      description: error.message,
       color: 'red',
     });
-  }
+  }finally {
+      isSaving.value = false;
+    }
 
   // Collect all async operations in an array for items with a barcode
   const updatePromises = [];
@@ -797,7 +814,8 @@ if (entryIds.length > 0) {
   }
 
   // Wait for all updates to finish before proceeding
-  await Promise.all(updatePromises);
+ Promise.all(updatePromises);
+
 
 };
 
@@ -930,6 +948,24 @@ const handleTokenSave = async () => {
 };
 
 
+
+const print = async() => {
+  try{
+  console.log(printData)
+  await printBill(printData)
+  isPrint.value = false
+  toast.add({
+        title: 'Printing Sucess!',
+        color: 'Green',
+      });
+  }catch(err){
+      toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
 
 
 
@@ -1097,7 +1133,7 @@ const handleTokenSave = async () => {
 
         <div class="mt-4 w-full flex flex-wrap gap-4">
           <UButton color="blue" class="flex-1" block @click="() => router.push('/erp/billing')">New</UButton>
-          <UButton  ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
+          <UButton :loading="isSaving"  ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
           <UButton color="red" class="flex-1" block  @click="deleteBill">Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
           <UButton class="flex-1" block>Sales Return</UButton>
@@ -1130,6 +1166,32 @@ const handleTokenSave = async () => {
         </div>
       </UModal>
 
+      <UDashboardModal
+        v-model="isPrint"
+        title="Print Bill"
+        description="Would You Like to print?"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            },
+            footer: {
+                base: 'ml-16',
+            },
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="green"
+                label="Yes"
+                :loading="loading"
+                @click="print"
+            />
+            <UButton color="red" label="NO" @click="isPrint = false" />
+        </template>
+    </UDashboardModal>
 
 
 </template>
