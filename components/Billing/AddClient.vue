@@ -1,44 +1,43 @@
 <script setup>
 import { reactive, ref, computed, watch, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
-import { useToast } from '#imports'
-
 import { auth } from '~/composables/firebase'
-import {
-  useFindUniqueClient,
-  useCreateClient,
+import { 
+  useFindUniqueClient, 
+  useCreateClient, 
   useUpdateClient,
-  useFindFirstCompany,
+  useFindFirstCompany 
 } from '~/lib/hooks'
 import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth'
+import { useToast } from '#imports'
 
 const model = defineModel('model')
 const phoneNo = defineModel('phoneNo')
 const props = defineProps(['onVerify'])
+const route = useRoute()
+const toast = useToast()
 
+// State
 const issendotp = ref(false)
 const isverifyotp = ref(false)
 const showOtpInput = ref(false)
 const alreadyLinked = ref(false)
-const recaptchaReady = ref(false)
-let recaptchaVerifier = null
+const recaptchaVerifier = ref(null)
 
+// Form data
 const form = reactive({
   phone: '',
   otp: '',
   name: '',
-  email: '',
+  email: ''
 })
 
-const route = useRoute()
-const toast = useToast()
-
+// Hooks
 const CreateClient = useCreateClient()
 const UpdateClient = useUpdateClient()
 
-const { data: company } = useFindFirstCompany({
+const { data: company } = useFindFirstCompany({ 
   where: { name: route.params.company },
-  select: { id: true },
+  select: { id: true } 
 })
 
 const args = computed(() => ({
@@ -50,15 +49,11 @@ const args = computed(() => ({
   },
 }))
 
-const {
-  data: client,
-  isLoading,
-  error,
-  refetch,
-} = useFindUniqueClient(args, { enabled: false })
+const { data: client, refetch } = useFindUniqueClient(args, { enabled: false })
 
-watch(phoneNo, (newphoneNo) => {
-  form.phone = newphoneNo
+// Watchers
+watch(phoneNo, (newPhoneNo) => {
+  form.phone = newPhoneNo
 })
 
 watch([client, company], ([newClient, newCompany]) => {
@@ -69,46 +64,43 @@ watch([client, company], ([newClient, newCompany]) => {
   }
 })
 
+// Lifecycle
 onMounted(() => {
-  if (process.client) {
-    setTimeout(() => {
-      // Delay to ensure DOM element is present
-      const el = document.getElementById('recaptcha-container')
-      if (el && !recaptchaVerifier) {
-        recaptchaVerifier = new RecaptchaVerifier(auth, 'recaptcha-container', {
-          size: 'invisible',
-          callback: (response) => {
-            console.log('Recaptcha solved:', response)
-          },
-          'expired-callback': () => {
-            console.log('Recaptcha expired.')
-          },
-        })
-        recaptchaVerifier.render().then(() => {
-          recaptchaReady.value = true
-        })
-      }
-    }, 300)
-  }
+  initializeRecaptcha()
 })
 
-const login = async () => {
-  if (!client.value && form.name) {
+// Methods
+const initializeRecaptcha = () => {
+  if (!recaptchaVerifier.value && typeof window !== 'undefined') {
     try {
-      const res = await CreateClient.mutateAsync({
+      recaptchaVerifier.value = new RecaptchaVerifier('recaptcha-container', {
+        size: 'invisible',
+        callback: (response) => {
+          console.log('Recaptcha solved:', response)
+        },
+        'expired-callback': () => {
+          console.log('Recaptcha expired.')
+        }
+      }, auth)
+    } catch (error) {
+      console.error('Recaptcha initialization error:', error)
+    }
+  }
+}
+
+const login = async () => {
+  try {
+    if (!client.value && form.name) {
+      await CreateClient.mutateAsync({
         data: {
           name: form.name,
           phone: `+91${form.phone}`,
-          ...(form.email && { email: form.email }),
-        },
+          ...(form.email && { email: form.email })
+        }
       })
-    } catch (err) {
-      console.error(err)
     }
-  }
 
-  if (client.value && !alreadyLinked.value) {
-    try {
+    if (client.value && !alreadyLinked.value && company.value) {
       await UpdateClient.mutateAsync({
         where: { id: client.value.id },
         data: {
@@ -116,41 +108,44 @@ const login = async () => {
             create: {
               company: {
                 connect: { id: company.value.id },
-              },
-            },
+              }
+            }
           },
         },
       })
-    } catch (err) {
-      console.error(err)
     }
+  } catch (err) {
+    console.error('Login error:', err)
+    toast.add({
+      title: 'Error',
+      description: 'Failed to process your request',
+      color: 'red',
+    })
   }
 }
 
 const sendOtp = async () => {
   issendotp.value = true
+  
   if (!form.phone) {
-    alert('Please enter your phone number.')
+    toast.add({
+      title: 'Missing phone number',
+      description: 'Please enter your phone number.',
+      color: 'red',
+    })
     issendotp.value = false
     return
   }
 
   try {
-    if (!recaptchaVerifier) {
-      toast.add({
-        title: 'Error',
-        description: 'reCAPTCHA not ready. Please refresh the page.',
-        color: 'red',
-      })
-      issendotp.value = false
-      return
-    }
-
+    await initializeRecaptcha()
+    
     const confirmation = await signInWithPhoneNumber(
-      auth,
-      `+91${form.phone}`,
-      recaptchaVerifier
+      auth, 
+      `+91${form.phone}`, 
+      recaptchaVerifier.value
     )
+    
     window.confirmationResult = confirmation
     await refetch()
 
@@ -159,9 +154,11 @@ const sendOtp = async () => {
       id: 'otp-success',
       color: 'green',
     })
+    
     showOtpInput.value = true
   } catch (error) {
     console.error('Error sending OTP:', error)
+    
     let message = 'Something went wrong while sending the OTP.'
     switch (error.code) {
       case 'auth/invalid-phone-number':
@@ -173,7 +170,10 @@ const sendOtp = async () => {
       case 'auth/too-many-requests':
         message = 'Too many attempts. Please try again later.'
         break
+      default:
+        break
     }
+    
     toast.add({
       title: 'Failed to send OTP',
       description: message,
@@ -186,6 +186,7 @@ const sendOtp = async () => {
 
 const verifyOtp = async () => {
   isverifyotp.value = true
+  
   if (!form.otp) {
     toast.add({
       title: 'Missing OTP',
@@ -197,19 +198,21 @@ const verifyOtp = async () => {
   }
 
   try {
-    const result = await window.confirmationResult.confirm(form.otp)
+    await window.confirmationResult.confirm(form.otp)
     await login()
-
+    
     toast.add({
       title: 'Client added successfully',
       id: 'login-success',
       color: 'green',
     })
-    props.onVerify()
+    
+    props.onVerify?.()
     model.value = false
     showOtpInput.value = false
   } catch (error) {
     console.error('OTP verification failed:', error)
+    
     let message = 'Something went wrong during OTP verification.'
     switch (error.code) {
       case 'auth/invalid-verification-code':
@@ -218,7 +221,10 @@ const verifyOtp = async () => {
       case 'auth/code-expired':
         message = 'The OTP has expired. Please request a new one.'
         break
+      default:
+        break
     }
+    
     toast.add({
       title: 'OTP verification failed',
       description: message,
@@ -232,60 +238,118 @@ const verifyOtp = async () => {
 
 <template>
   <UModal v-model="model">
-    <UCard :ui="{ base: 'h-full flex flex-col', body: { base: 'grow' } }">
-      <template #header></template>
+    <UCard
+      :ui="{
+        base: 'h-full flex flex-col',
+        rounded: '',
+        divide: 'divide-y divide-gray-100 dark:divide-gray-800',
+        body: {
+          base: 'grow'
+        }
+      }"
+    >
+      <template #header>
+        <h2 class="text-lg font-semibold">
+          {{ showOtpInput ? 'Verify OTP' : 'Phone Verification' }}
+        </h2>
+      </template>
 
-      <UForm
-        v-if="!showOtpInput"
-        :state="form"
-        @submit.prevent="sendOtp"
-        class="space-y-4 flex flex-col items-center justify-center w-full"
-      >
-        <div class="w-full max-w-md">
-          <UFormGroup label="Phone Number" name="phone" class="w-full">
+      <div class="space-y-4 w-full">
+        <!-- Phone Input Form -->
+        <UForm
+          v-if="!showOtpInput"
+          :state="form"
+          @submit.prevent="sendOtp"
+          class="space-y-4"
+        >
+          <UFormGroup label="Phone Number" name="phone" required>
             <UInput
               v-model="phoneNo"
               type="tel"
               placeholder="Enter your phone number"
-              class="w-full"
+              size="lg"
             >
               <template #leading>+91</template>
             </UInput>
           </UFormGroup>
 
-          <div id="recaptcha-container" class="my-4" />
+          <div id="recaptcha-container" class="my-4" style="display: none;" />
 
-          <div class="text-end w-full">
-            <UButton :loading="issendotp" type="submit">Send OTP</UButton>
-          </div>
+          <UButton
+            type="submit"
+            block
+            size="lg"
+            :loading="issendotp"
+            :disabled="!form.phone"
+          >
+            Send OTP
+          </UButton>
+        </UForm>
+
+        <!-- OTP Verification Form -->
+        <UForm
+          v-if="showOtpInput"
+          @submit.prevent="verifyOtp"
+          class="space-y-4"
+        >
+          <UFormGroup 
+            v-if="!client" 
+            label="Full Name" 
+            name="name"
+            required
+          >
+            <UInput
+              v-model="form.name"
+              type="text"
+              placeholder="Enter your name"
+              size="lg"
+            />
+          </UFormGroup>
+
+          <UFormGroup 
+            v-if="!client" 
+            label="Email" 
+            name="email"
+            hint="Optional"
+          >
+            <UInput
+              v-model="form.email"
+              type="email"
+              placeholder="Enter your email"
+              size="lg"
+            />
+          </UFormGroup>
+
+          <UFormGroup label="OTP" name="otp" required>
+            <UInput
+              v-model="form.otp"
+              type="text"
+              placeholder="Enter the 6-digit OTP"
+              size="lg"
+            />
+          </UFormGroup>
+
+          <UButton
+            type="submit"
+            block
+            size="lg"
+            :loading="isverifyotp"
+            :disabled="!form.otp || (!client && !form.name)"
+          >
+            Verify OTP
+          </UButton>
+        </UForm>
+      </div>
+
+      <template #footer>
+        <div class="text-center text-sm text-gray-500 dark:text-gray-400">
+          {{
+            showOtpInput 
+              ? 'Enter the OTP sent to your phone' 
+              : 'We will send you a verification code'
+          }}
         </div>
-      </UForm>
-
-      <UForm
-        v-else
-        @submit.prevent="verifyOtp"
-        class="space-y-4 flex flex-col items-center justify-center w-full"
-      >
-        <div class="w-full">
-          <UFormGroup v-if="!client" label="Enter Name" name="name">
-            <UInput v-model="form.name" type="text" placeholder="Enter your name" class="w-full mb-3" />
-          </UFormGroup>
-
-          <UFormGroup v-if="!client" label="Enter Email" name="email" hint="Optional">
-            <UInput v-model="form.email" type="email" placeholder="Enter your email" class="w-full mb-3" />
-          </UFormGroup>
-
-          <UFormGroup label="Enter OTP" name="otp">
-            <UInput v-model="form.otp" type="text" placeholder="Enter the OTP" class="w-full mb-3" />
-          </UFormGroup>
-
-          <div class="text-end w-full mt-4">
-            <UButton :loading="isverifyotp" type="submit">Verify OTP</UButton>
-          </div>
-        </div>
-      </UForm>
-
-      <template #footer></template>
+      </template>
     </UCard>
   </UModal>
 </template>
