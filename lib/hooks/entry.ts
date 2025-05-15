@@ -240,7 +240,7 @@ export function useCountEntry<TArgs extends Prisma.EntryCountArgs, TQueryFnData 
     return useModelQuery<TQueryFnData, TData, TError>('Entry', `${endpoint}/entry/count`, args, options, fetch);
 }
 
-export function useCheckEntry<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; barcode?: string; size?: string; variantId?: string; outOfStock?: boolean; categoryId?: string; billId?: string; itemId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckEntry<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; barcode?: string; size?: string; variantId?: string; outOfStock?: boolean; categoryId?: string; billId?: string; itemId?: string; return?: boolean }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('Entry', `${endpoint}/entry/check`, args, options, fetch);
 }

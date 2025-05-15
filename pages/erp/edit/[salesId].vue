@@ -277,7 +277,12 @@ const {
 
 
 const itemargs = computed(() => ({
-  where: { barcode: scannedBarcode.value },
+  where: { 
+    barcode: scannedBarcode.value,
+    status:'in_stock',
+    companyId:useAuth().session.value?.companyId || ''
+
+   },
   select: {
     id: true, 
     size:true,
@@ -316,6 +321,7 @@ const findManyEntryargs = computed(() => ({
     qty: true,
     size:true,
     variantId: true,
+    return:true,
     variant:{
       select:{
         sizes:true
@@ -395,7 +401,7 @@ const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enable
 const {data: entriesToDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
 
 
-watch(discount, (newBill) => {
+watch(entriesToDelete, (newBill) => {
   console.log(newBill)
 })
 
@@ -434,6 +440,7 @@ watch(() => bill.value, (newData) => {
   console.log(newData)
   if (!newData || !newData.entries) return;
   discount.value = newData.discount
+   date.value = new Date(newData.createdAt).toISOString().split('T')[0]
   items.value = newData.entries.map((entry, index) => {
     return {
       entryId: entry.id || '',
@@ -565,34 +572,48 @@ const handleEdit = async () => {
 
    // Step 1: Find entries to delete
 await entriesToDeleteRefetch()
+console.log(entriesToDelete)
+const entryIds = entriesToDelete.value?.filter(e=>e.id).map(e => e.id);
 
 // Step 2: Extract itemIds and entryIds
-const itemIds = entriesToDelete.value?.filter(e=>e.itemId).map(e => e.itemId)
-const entryIds = entriesToDelete.value?.filter(e=>e.id).map(e => e.id);
-const variantDetails = entriesToDelete.value?.map(e => ({
+// Filter entries with return === true
+const entriesReturned = entriesToDelete.value?.filter(e => e.return === true) ?? [];
+const returnedItemIds = entriesReturned.filter(e => e.itemId).map(e => e.itemId);
+const returnedVariantDetails = entriesReturned.map(e => ({
   variantId: e.variantId,
-  qty: e.qty ,
+  qty: e.qty,
   size: e.size ?? null,
-  sizes: e?.variant?.sizes ?? [], // ✅ map in the sizes JSON from the variant
+  sizes: e?.variant?.sizes ?? [],
+}));
+
+// Filter entries with return === false
+const entriesNotReturned = entriesToDelete.value?.filter(e => e.return === false) ?? [];
+const notReturnedItemIds = entriesNotReturned.filter(e => e.itemId).map(e => e.itemId);
+const notReturnedVariantDetails = entriesNotReturned.map(e => ({
+  variantId: e.variantId,
+  qty: e.qty,
+  size: e.size ?? null,
+  sizes: e?.variant?.sizes ?? [],
 }));
 
 
+
 // Step 3: Update related items to be in_stock
-if (itemIds.length > 0) {
+if (notReturnedItemIds.length > 0) {
    UpdateManyItem.mutateAsync({
-    where: { id: { in: itemIds } },
+    where: { id: { in: notReturnedItemIds } },
     data: { 
       status: 'in_stock' 
     },
 
   });
-}
+
 
 // Step 4: update the variants
-for (const { variantId, qty, size, sizes } of variantDetails) {
+for (const { variantId, qty, size, sizes } of notReturnedVariantDetails) {
   if (!variantId || !qty) continue;
 
-  // Decrement overall variant qty
+  // increment overall variant qty
   const updateData = {
     qty: { increment: qty },
   };
@@ -618,7 +639,50 @@ for (const { variantId, qty, size, sizes } of variantDetails) {
   });
 }
 
+}
 
+
+if (returnedItemIds.length > 0) {
+   UpdateManyItem.mutateAsync({
+    where: { id: { in: returnedItemIds } },
+    data: { 
+      status: 'sold' 
+    },
+
+  });
+
+
+// Step 4: update the variants
+for (const { variantId, qty, size, sizes } of returnedVariantDetails) {
+  if (!variantId || !qty) continue;
+
+  // increment overall variant qty
+  const updateData = {
+    qty: { decrement: qty },
+  };
+
+  // Update sizes only if size is not null
+  if (size) {
+    const updatedSizes = sizes.map(s => {
+      if (s.size === size) {
+        return {
+          ...s,
+          qty: Math.max((s.qty ?? 0) - qty) // Prevent negative qty
+        };
+      }
+      return s;
+    });
+
+    updateData.sizes = updatedSizes;
+  }
+
+   UpdateVariant.mutateAsync({
+    where: { id: variantId },
+    data: updateData,
+  });
+}
+
+}
 
 // Step 4: Delete the entries
 if (entryIds.length > 0) {
@@ -636,6 +700,7 @@ if (entryIds.length > 0) {
     discount: discount.value,
     grandTotal: grandTotal.value,
     paymentMethod: paymentMethod.value,
+    createdAt: new Date(date.value).toISOString(),
     company: {
       connect: {
         id: useAuth().session.value?.companyId,
@@ -699,7 +764,7 @@ if (entryIds.length > 0) {
 const results = await Promise.all([
   ...createPromises,
   ...updatePromises,
-  updateBillPromise(), // Now it will be executed only when `Promise.all` is called
+  updateBillPromise(),
 ]);
 
 const billResponse = results[results.length - 1];
@@ -877,76 +942,6 @@ router.push('/erp/sales')
     });
 
 };
-
-const handleTokenSave = async () => {
-  items.value = items.value.filter(item => item.id || item.barcode);
-  try {
-    // Create the bill first
-    const billResponse = await Promise.all(
-    items.value.map(item => 
-        CreateTokenEntry.mutateAsync({
-            data: {
-                tokenNo: token.value,
-                createdAt: new Date().toISOString(),
-                company: {
-                    connect: {
-                        id: useAuth().session.value?.companyId,
-                    },
-                },
-                itemId: item.id || '',
-                variantId: item.variantId || '',
-                barcode: item.barcode || '',
-                categoryId: item.category[0]?.id || '', 
-                size: item.size || '',
-                name: item.name || '',
-                qty: item.qty,
-                rate: item.rate,
-                discount: item.discount,
-                tax: item.tax,
-                value: item.value,
-                sizes: item.sizes, 
-                totalQty: item.totalQty,
-            }
-        })
-    )
-);
-
-
-
-    console.log('Bill created successfully:', billResponse);
-    
-  } catch (error) {
-    console.error('Error creating bill', error);
-  }
-
-
-  try {
-   
-    for (const item of items.value) {
-          await UpdateItem.mutateAsync({
-            where: { id: item.id },
-            data: {
-              status: 'tokened',
-            },
-          });
-
-         
-        }
-    } catch (error) {
-    console.error('Error updating item and variant', error);
-  }
-    
-
-    // Optionally, you can reset the form or perform other actions after successful creation
-    items.value = [
-    { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
-    ];
-    token.value = '';
-    discount.value = 0;
-    paymentMethod.value = 'Cash';
-
-};
-
 
 
 const print = async() => {

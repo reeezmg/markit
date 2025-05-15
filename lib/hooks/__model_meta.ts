@@ -569,7 +569,7 @@ const metadata = {
                     name: "bill",
                     type: "Bill",
                     isDataModel: true,
-                    isOptional: true,
+                    isArray: true,
                     backLink: 'client',
                 }, conversations: {
                     name: "conversations",
@@ -1145,7 +1145,7 @@ const metadata = {
                     name: "entry",
                     type: "Entry",
                     isDataModel: true,
-                    isOptional: true,
+                    isArray: true,
                     backLink: 'item',
                 }, company: {
                     name: "company",
@@ -1195,6 +1195,10 @@ const metadata = {
                     isOptional: true,
                 }, grandTotal: {
                     name: "grandTotal",
+                    type: "Float",
+                    isOptional: true,
+                }, returnAmt: {
+                    name: "returnAmt",
                     type: "Float",
                     isOptional: true,
                 }, deliveryFees: {
@@ -1306,9 +1310,6 @@ const metadata = {
                 }, transactionId: {
                     name: "transactionId",
                     fields: ["transactionId"]
-                }, clientId: {
-                    name: "clientId",
-                    fields: ["clientId"]
                 },
             },
         },
@@ -1483,14 +1484,15 @@ const metadata = {
                     isOptional: true,
                     isForeignKey: true,
                     relationField: 'item',
+                }, return: {
+                    name: "return",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": false }] }],
                 },
             }, uniqueConstraints: {
                 id: {
                     name: "id",
                     fields: ["id"]
-                }, itemId: {
-                    name: "itemId",
-                    fields: ["itemId"]
                 },
             },
         },

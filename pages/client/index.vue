@@ -8,7 +8,8 @@ import {
     useFindManyClient,
     useUpdateClient,
     useUpdateManyClient,
-    useUpdatePipeline
+    useUpdatePipeline,
+    useUpdateBill,
 } from '~/lib/hooks';
 
 definePageMeta({
@@ -18,15 +19,27 @@ definePageMeta({
 const UpdateClient = useUpdateClient();
 const UpdatePipeline = useUpdatePipeline();
 const UpdateManyClient = useUpdateManyClient();
+const UpdateBill = useUpdateBill();
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
+const notes = ref<any>({})
 
 // Columns
 const columns = [
     {
         key: 'name',
         label: 'name',
+        sortable: true,
+    },
+    {
+        key: 'phone',
+        label: 'Phone No',
+        sortable: true,
+    },
+    {
+        key: 'email',
+        label: 'Email',
         sortable: true,
     },
     {
@@ -45,6 +58,43 @@ const columns = [
         sortable: false,
     },
 ];
+
+const billColumns = [
+    {
+        key: 'invoiceNumber',
+        label: 'Inv#',
+        sortable: true,
+    },
+    {
+        key: 'createdAt',
+        label: 'Date',
+        sortable: true,
+    },
+    {
+        key: 'entries',
+        label: 'Entries',
+        sortable: true,
+    },
+    {
+        key: 'grandTotal',
+        label: 'Total',
+        sortable: true,
+    },
+    {
+        key: 'notes',
+        label: 'Notes',
+        sortable: true,
+    },
+    {
+        key: 'actions',
+        label: 'Actions',
+        sortable: false,
+    },
+];
+
+
+
+
 
 const selectedColumns = ref(columns);
 const columnsTable = computed(() =>
@@ -109,6 +159,24 @@ const action = (row) => [
     ],
 ];
 
+const billAction = (row:any) => [
+    [
+        {
+            label: 'Edit',
+            icon: 'i-heroicons-pencil-square-20-solid',
+            click: () => router.push(`./erp/edit/${row.id}`),
+        },
+    ],
+    [
+        {
+            label: 'Delete',
+            icon: 'i-heroicons-trash-20-solid',
+            click: () => deleteBill(row.id),
+        },
+    ],
+];
+
+
 
 
 const pipelineStatus = (row) => [
@@ -153,6 +221,19 @@ const pipelineStatus = (row) => [
     ],
     
 ];
+
+
+const deleteBill = async (id:string) => {
+    const res = await UpdateBill.mutateAsync({
+        where:{
+            id
+        },
+        data:{
+            deleted:true
+        }
+    })
+};
+
 
 
 const changePipeline = async(pipelineId:string | undefined,fromPipeline:string,toPipeline:string,clientId:string) => {
@@ -217,6 +298,7 @@ const resetFilters = () => {
 
 // Pagination
 const sort = ref({ column: 'id', direction: 'asc' as const });
+const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref(10);
 const pageTotal = ref(0); // This value should be dynamic coming from the API
@@ -239,20 +321,50 @@ const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
     return {
         where: {
             AND: [
-                { companies: {
+                {
+                    companies: {
                         some: {
-                            companyId:  useAuth().session.value?.companyId,
+                            companyId: useAuth().session.value?.companyId,
                         },
-                    }, },
-                { name: { contains: search.value } },
+                    },
+                },
+                {
+                    OR: [
+                        {
+                            name: {
+                                contains: search.value,
+                                mode: 'insensitive',
+                            },
+                        },
+                        {
+                            email: {
+                                contains: search.value,
+                                mode: 'insensitive',
+                            },
+                        },
+                        {
+                            phone: {
+                                contains: search.value
+                            },
+                        },
+                    ],
+                },
                 selectedStatusCondition,
             ],
         },
+
         orderBy: {
             [sort.value.column]: sort.value.direction,
         },
         skip: (page.value - 1) * pageCount.value,
         take: pageCount.value,
+        include:{
+            bill:{
+               include:{
+                 entries:true
+               }
+            }
+        },
     };
 });
 
@@ -296,6 +408,24 @@ async function toggleStatus(id: string) {
         }
     }
 }
+
+const handleUpdate = async (id:string) => {
+    const res = await UpdateBill.mutateAsync({
+        where:{
+            id
+        },
+        data:{
+            notes:notes.value[id]
+        }
+    })
+
+    console.log(res)
+
+};
+
+const handleChange = (value:string, row:any) => {
+    notes.value[row.id] = value;
+};
 </script>
 
 <template>
@@ -399,9 +529,11 @@ async function toggleStatus(id: string) {
             <UTable
                 v-model="selectedRows"
                 v-model:sort="sort"
+                v-model:expand="expand"
                 :rows="clients"
                 :columns="columnsTable"
                 :loading="isLoading"
+                :multiple-expand="false"
                 sort-asc-icon="i-heroicons-arrow-up"
                 sort-desc-icon="i-heroicons-arrow-down"
                 sort-mode="manual"
@@ -491,6 +623,67 @@ async function toggleStatus(id: string) {
                         <div class="ms-3">{{ row.name }}</div>
                     </div>
                 </template>
+                 <template #expand="{ row }">
+                    <UTable 
+                        :rows="row.bill" 
+                        :columns="billColumns"
+                    >
+                      <template #actions-data="{ row }">
+                    <UDropdown :items="billAction(row)">
+                        <UButton
+                            color="gray"
+                            variant="ghost"
+                            icon="i-heroicons-ellipsis-horizontal-20-solid"
+                        />
+                    </UDropdown>
+                </template>
+
+                <template #entries-data="{ row }">
+                    {{ row.entries.length }}
+                </template>
+
+                <template #createdAt-data="{ row }">
+                    {{ row.createdAt.toLocaleDateString('en-GB') }}
+                </template>
+
+                <template #paymentStatus-data="{ row }">
+                    {{ row.paymentStatus }}
+                </template>
+
+                 <template #notes-data="{ row }">
+                    <UPopover> 
+                        <UButton 
+                            color="white" 
+                            :label="row.notes ? 'Open' : 'Add'" 
+                            trailing-icon="i-heroicons-chevron-down-20-solid" 
+                        />
+                        <template #panel>
+                            <div class="p-4">
+                                <UTextarea 
+                                    :model-value="row.notes" 
+                                    color="white" 
+                                    variant="outline" 
+                                    placeholder="Notes..." 
+                                    :autoresize="true" 
+                                    @update:modelValue="handleChange($event, row)"
+                                />
+                                <UButton
+                                    trailingIcon="i-heroicons-cloud-arrow-up"
+                                    size="sm"
+                                    color="green"
+                                    variant="solid"
+                                    label="Update"
+                                    :trailing="false"
+                                    class="mt-3"
+                                    @click="handleUpdate(row.id)"
+                                />
+                            </div>
+                        </template>
+                    </UPopover>
+                </template>
+
+                    </UTable>
+                    </template>
             </UTable>
 
             <!-- Number of rows & Pagination -->

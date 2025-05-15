@@ -9,6 +9,9 @@ import {
     useDeleteExpense,
 } from '~/lib/hooks';
 
+definePageMeta({
+    auth: true,
+});
 
 const CreateExpense = useCreateExpense();
 const UpdateExpense = useUpdateExpense();

@@ -1,12 +1,20 @@
 
 <script setup>
-import { useCreateBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
+import { BillingAddClient } from '#components';
+import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateManyItem } from '~/lib/hooks';
+
+definePageMeta({
+    auth: true,
+});
+
+
 const { printBill } = usePrint();
 const CreateBill = useCreateBill();
 const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
 const UpdateVariant = useUpdateVariant();
 const UpdateItem = useUpdateItem();
+const UpdateManyItem = useUpdateManyItem();
 const DeleteTokenEntry = useDeleteTokenEntry();
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
@@ -21,9 +29,10 @@ const grandTotal = ref(0);
 const returnAmt = ref(0);
 const paymentMethod = ref('Cash');
 const voucherNo = ref('');
-const cellNo = ref('');
+const phoneNo = ref('');
 const points = ref(0);
-const name = ref('');
+const clientName = ref('');
+const clientId = ref('');
 const scannedBarcode = ref("");
 const token = ref("")
 const tokenEntries = ref([])
@@ -47,13 +56,13 @@ const isPrint = ref(false);
 const isSaving = ref(false);
 let printData = {}
 
-definePageMeta({
-    auth: true,
-});
+
 
 
 const isOpen = ref(false);
 const isTokenOpen = ref(false);
+const issalesReturnModelOpen = ref(false);
+const isClientAddModelOpen = ref(false);
 const account = ref({
     name: '',
     phone:'',
@@ -67,7 +76,7 @@ const selected = ref({});
 
 
 const items = ref([
-  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 },
+  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 ,return:false},
 ]);
 
 
@@ -160,7 +169,7 @@ watch(items, async () => {
       baseValue += (baseValue * item.tax) / 100;
     }
 
-    item.value = Math.max(baseValue, 0);
+    item.value = baseValue;
   }
 }, { deep: true });
 
@@ -175,7 +184,8 @@ watch([discount, subtotal], ([newDiscount, newTotal]) => {
     baseValue -= (baseValue * newDiscount) / 100;
   }
 
-  grandTotal.value = parseFloat(Math.max(baseValue, 0).toFixed(2));
+  grandTotal.value = parseFloat(baseValue.toFixed(2)); // keeps it float
+
   // Prevent negative values
 });
 
@@ -241,7 +251,8 @@ const addNewRow = async (index) => {
     tax: 0,
     value: 0,
     sizes: {},
-    totalQty: 0
+    totalQty: 0,
+    return:false
   });
 
   await nextTick();
@@ -287,6 +298,29 @@ onMounted(() => {
   });
 });
 
+const args = computed(() => ({
+  where: {
+    phone: `+91${phoneNo.value}`,
+    companies: {
+      some: {
+        companyId: useAuth().session.value?.companyId,
+      },
+    },
+  },
+}));
+
+
+ const {
+  data: client,
+  isLoading:isClientLoading,
+  error,
+  refetch:refetchClient,
+} = useFindUniqueClient(
+  args,
+  { enabled: false } // disabled by default
+);
+
+
 const {
     data: categories,
 } = useFindManyCategory(
@@ -303,7 +337,9 @@ const {
 const itemargs = computed(() => ({
   where: { 
     barcode: scannedBarcode.value,
-    status:'in_stock'
+    status:'in_stock',
+    companyId:useAuth().session.value?.companyId || ''
+
    },
   select: {
     id: true, 
@@ -466,6 +502,9 @@ const fetchItemData = async (barcode, index) => {
 const handleSave = async () => {
     // Filter out empty items
     isSaving.value = true
+    let billResponse = {}
+    let itemIds = []
+    let variantDetails = []
     try {
     items.value = items.value.filter(item =>
       item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
@@ -487,7 +526,15 @@ const handleSave = async () => {
     }
   });
   
-  
+   const returnedItems = items.value.filter(item => item.return);
+     itemIds = returnedItems.map(item => item.id);
+     variantDetails = returnedItems.map(e => ({
+      variantId: e.variantId,
+      qty: e.qty ,
+      size: e.size ?? null,
+      sizes: e.sizes ?? [], // ✅ map in the sizes JSON from the variant
+    }));
+
 const entriesData = items.value.map(item => {
   const entry = {
     name: item.name,
@@ -496,6 +543,9 @@ const entriesData = items.value.map(item => {
     discount: item.discount,
     tax: item.tax,
     value: item.value,
+    return:item.return,
+    ...(item.size && { size:item.size} )
+   
   };
 
   if (item.barcode) {
@@ -520,12 +570,20 @@ const payload = {
   grandTotal: grandTotal.value,
   paymentMethod: paymentMethod.value,
   createdAt: new Date(date.value).toISOString(),
+  returnAmt:returnAmt.value,
   paymentStatus: Object.keys(selected.value).length !== 0 ? 'PENDING' : 'PAID',
   company: {
     connect: {
       id: useAuth().session.value?.companyId,
     },
   },
+  ...(clientId.value && {
+  client:{
+      connect:{
+        id:clientId.value
+      }
+    },
+  }),
   type: 'BILL',
   entries: {
     create: entriesData,
@@ -535,7 +593,7 @@ const payload = {
   }),
 };
 
-const billResponse = await CreateBill.mutateAsync({
+billResponse = await CreateBill.mutateAsync({
   data: payload,
   select: {
         id: true,
@@ -590,7 +648,7 @@ const billResponse = await CreateBill.mutateAsync({
       },
     });
 
-    
+    console.log(billResponse)
       
         toast.add({
           title: 'Bill created successfully!',
@@ -646,11 +704,6 @@ const billResponse = await CreateBill.mutateAsync({
           }, 0),
         };
     
-
-console.log('Bill created successfully:', billResponse);
-  
-      
- 
    
         $fetch('/api/notifications/notify', {
         method: 'POST',
@@ -674,11 +727,9 @@ console.log('Bill created successfully:', billResponse);
     }finally {
       isSaving.value = false;
     }
-
-    // Update inventory
-    const updatePromises = [];
+    if(billResponse){
       for (const item of items.value) {
-        if (item.barcode) {
+        if (item.barcode && item.return === false) {
           let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
           let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
             if (sizeData.size === item.size) {
@@ -688,25 +739,67 @@ console.log('Bill created successfully:', billResponse);
           }) : [];
   
   
-          updatePromises.push(
             UpdateVariant.mutateAsync({
               where: { id: item.variantId },
               data: { qty: updatedQty, sizes: updatedSizes }
             }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-          );
+         
   
-          updatePromises.push(
+ 
             UpdateItem.mutateAsync({
               where: { id: item.id },
               data: { status: 'sold' }
             }).catch(error => console.error(`Error updating item ${item.id}`, error))
-          );
+          }
         }
+
+        if (itemIds.length > 0) {
+            UpdateManyItem.mutateAsync({
+              where: { id: { in: itemIds } },
+              data: { 
+                status: 'in_stock' 
+              },
+            });
+             // Step 4: update the variants
+            for (const { variantId, qty, size, sizes } of variantDetails) {
+            if (!variantId || !qty) continue;
+
+            // Decrement overall variant qty
+            const updateData = {
+              qty: { increment: qty },
+            };
+
+            // Update sizes only if size is not null
+            if (size) {
+              const updatedSizes = sizes.map(s => {
+                if (s.size === size) {
+                  return {
+                    ...s,
+                    qty: Math.max((s.qty ?? 0) + qty) // Prevent negative qty
+                  };
+                }
+                return s;
+              });
+
+              updateData.sizes = updatedSizes;
+                console.log(updatedSizes)
+            }
+            UpdateVariant.mutateAsync({
+              where: { id: variantId },
+              data: updateData,
+            });
+          }
+
+         
+          
+          }
+
+
+
       }
   
       // Wait for all updates to complete
-      Promise.all(updatePromises);
-
+      
            // Reset form
       items.value = [
       { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
@@ -714,6 +807,8 @@ console.log('Bill created successfully:', billResponse);
       discount.value = 0;
       paymentMethod.value = 'Cash';
       tokenEntries.value = [''];
+        const input = barcodeInputs.value[0]?.$el?.querySelector('input');
+    input?.focus();
   
   
     try {
@@ -924,7 +1019,7 @@ const newBill = () => {
   // tokenEntries.value = [''];
   // grandTotal.value = 0;
   // returnAmt.value = 0;
-  // cellNo.value = '';
+  // phoneNo.value = '';
   // points.value = 0;
   // name.value = '';
   // voucherNo.value = '';
@@ -943,7 +1038,7 @@ const newBill = () => {
 
 
 const moveFocus = (currentRowIndex, currentField, direction) => {
-  const fieldOrder = ['barcode', 'category', 'name', 'qty', 'rate', 'discount', 'tax'];
+  const fieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
   const currentFieldIndex = fieldOrder.indexOf(currentField);
   
   let nextRowIndex = currentRowIndex;
@@ -1069,14 +1164,40 @@ onMounted(() => {
   });
 });
 
+const handleReturnData = ({ totalreturnvalue, items: returnedItems }) => {
+  items.value = items.value.filter(item =>
+      item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
+    );
+  returnAmt.value = totalreturnvalue;
+  items.value.push(...returnedItems);
+};
+
+
+const handleEnterPhone = async() => {
+const { data } = await refetchClient()
+console.log(data)
+clientName.value = data?.name
+clientId.value = data?.id
+if(!data){
+  isClientAddModelOpen.value = true
+}
+}
+
 
 </script>
 
 
 <template>
   <UDashboardPanelContent class="p-1">
-    <div>
-      <UCard class="max-w-[1400px] mx-auto">
+      <UCard 
+       :ui="{
+          base: 'h-100 flex flex-col',
+          rounded: '',
+          divide: 'divide-y divide-gray-100 dark:divide-gray-800',
+          body: {
+            base: 'grow'
+          }
+        }">
         <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
         <UInput v-if="!token" v-model="date" type="date" label="Date" class="lg:col-span-2" />
         <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2" />
@@ -1227,7 +1348,7 @@ onMounted(() => {
           </table>
           
         </div>
-
+  <template #footer>
         <!-- Other form elements -->
         <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
           <div>
@@ -1255,7 +1376,7 @@ onMounted(() => {
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Total Redeemed AMT</label>
-              <UInput v-model="returnAmt" />
+              <UInput  />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Grand Total</label>
@@ -1284,11 +1405,11 @@ onMounted(() => {
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
-              <UInput v-model="cellNo" :loading="false" icon="i-heroicons-magnifying-glass-20-solid" />
+              <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
-              <UInput v-model="name" />
+              <UInput v-model="clientName" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Points</label>
@@ -1306,11 +1427,11 @@ onMounted(() => {
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
           <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
-          <UButton v-if="!token" class="flex-1" block>Sales Return</UButton>
-          <UButton v-if="!token" class="flex-1" block>Add Client</UButton>
+          <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
+          <UButton v-if="!token" class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
         </div>
+        </template>
       </UCard>
-    </div>
   </UDashboardPanelContent>
 
   <UModal v-model="isOpen">
@@ -1337,7 +1458,20 @@ onMounted(() => {
       </UModal>
 
 
-      <UModal v-model="isTokenOpen">
+     
+<!-- sales return -->
+<BillingSalesReturn
+  v-model="issalesReturnModelOpen"
+  @totalreturnvalue="handleReturnData"
+/>
+<BillingAddClient
+  v-model:model="isClientAddModelOpen"
+  v-model:phoneNo="phoneNo"
+  :onVerify="handleEnterPhone"
+/>
+
+<!-- token modal -->
+    <UModal v-model="isTokenOpen">
         <div class="p-4 space-y-4">
           <div v-for="(entry, index) in tokenEntries" :key="index">
             <div class="flex flex-row items-center">
@@ -1380,7 +1514,6 @@ onMounted(() => {
             <UButton
                 color="green"
                 label="Yes"
-                :loading="loading"
                 @click="print"
             />
             <UButton color="red" label="NO" @click="isPrint = false" />
