@@ -522,7 +522,7 @@ isAdd.value =false
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
                         <UAvatar
-                            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.variants[0].images[0]}`"
+                            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.variants[0]?.images[0]}`"
                             :alt="row.name"
                             size="lg"
                         />
