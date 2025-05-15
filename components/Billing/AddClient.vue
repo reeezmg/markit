@@ -71,21 +71,29 @@ onMounted(() => {
 
 // Methods
 const initializeRecaptcha = () => {
-  if (!recaptchaVerifier.value && typeof window !== 'undefined') {
-    try {
-      recaptchaVerifier.value = new RecaptchaVerifier('recaptcha-container', {
-        size: 'invisible',
-        callback: (response) => {
-          console.log('Recaptcha solved:', response)
-        },
-        'expired-callback': () => {
-          console.log('Recaptcha expired.')
-        }
-      }, auth)
-    } catch (error) {
-      console.error('Recaptcha initialization error:', error)
+  return new Promise((resolve) => {
+    if (!recaptchaVerifier.value && typeof window !== 'undefined') {
+      try {
+        recaptchaVerifier.value = new RecaptchaVerifier('recaptcha-container', {
+          size: 'invisible',
+          callback: (response) => {
+            console.log('Recaptcha solved:', response)
+            resolve()
+          },
+          'expired-callback': () => {
+            console.log('Recaptcha expired.')
+          }
+        }, auth)
+        
+        recaptchaVerifier.value.render().then(() => resolve())
+      } catch (error) {
+        console.error('Recaptcha initialization error:', error)
+        resolve()
+      }
+    } else {
+      resolve()
     }
-  }
+  })
 }
 
 const login = async () => {
