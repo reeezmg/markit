@@ -2,25 +2,30 @@
 import { ref } from 'vue';
 
 const openModal = ref(false);
+const selectedSupplier = ref<any | null>(null);
 
-watch(openModal, (newVal, oldVal) => {
-  if (newVal) {
-    console.log('Modal opened');
-    // You can also do something like reset form here
-  } else {
-    console.log('Modal closed');
-    // Or trigger refetch or cleanup
-  }
-});
+const openForm = (supplier = null) => {
+    selectedSupplier.value = supplier;
+    openModal.value = true;
+    console.log(supplier)
+};
+
+const closeForm = () => {
+    openModal.value = false;
+    selectedSupplier.value = null;
+};
+
 
 </script>
 
 <template>
     <UDashboardPanelContent class="pb-24">
             <div>
-                <DistributorList @modal-open="openModal = true"/>
-
-                <DistributorForm v-model="openModal"/>
+                <DistributorDlist @modal-open="openForm" @edit="openForm"/>
+                <UModal v-model="openModal">
+                   <DistributorForm :selectedSupplier = "selectedSupplier"/>
+                </UModal>
+               
             </div>
     </UDashboardPanelContent>
 </template>

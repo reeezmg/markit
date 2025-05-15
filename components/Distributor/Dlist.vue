@@ -73,18 +73,6 @@ const PaymentColumns = [
 const action = (row:any) => [
 
     [
-    {
-            label: 'Pay',
-            icon: 'i-heroicons-banknotes-20-solid',
-            click: () => handleOpenPayForm(row),
-        },
-    {
-            label: 'Add Credit',
-            icon: 'i-heroicons-banknotes-20-solid',
-            click: () => handleOpenCreditForm(row),
-        },
-    ] , 
-    [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
@@ -127,6 +115,7 @@ const deleteDistributor = async(id) => {
         }
 )};
 
+
 const payFormEdit = async(row) => {
   form.value = row
   if(form.value.type === 'CREDIT'){
@@ -139,16 +128,16 @@ const payFormEdit = async(row) => {
 }
 
 const payDelete = async(row) => {
-  if(row.type === 'CREDIT'){
+  if(form.value.type === 'CREDIT'){
   const res = await DeleteDistributorCredit.mutateAsync({
           where:{
-            id:row.id
+            id
           },
         })
       }else{
          const res = await DeleteDistributorCredit.mutateAsync({
           where:{
-            id:row.id
+            id
           },
         })
       }
@@ -446,13 +435,13 @@ const handleOpenCreditForm = (row) => {
 
             <template #default="{ row }">
                 <UTable
-                    v-model:expand="expand"
+                  
                     v-model:sort="sort"
                     :rows="distributors"
                     :columns="columns"
                     :loading="isLoading"
                     sort-mode="manual"
-                    :multiple-expand="false"
+                    
                 >
 
                     <template #actions-data="{ row }">
@@ -469,26 +458,7 @@ const handleOpenCreditForm = (row) => {
                     {{ row.totalAmount - row.paidAmount }}
                     </template>
 
-                    <template #expand="{ row }">
-                      <UTable 
-                        :rows="row.transactions"
-                        :columns="PaymentColumns"
-                      >
-                        <template #createdAt-data="{ row }">
-                          {{ new Date(row.createdAt).toLocaleString() }}
-                        </template>
-
-                        <template #actions-data="{ row }">
-                    <UDropdown :items="creditaction(row)">
-                        <UButton
-                        color="gray"
-                        variant="ghost"
-                        icon="i-heroicons-ellipsis-horizontal-20-solid"
-                        />
-                    </UDropdown>
-                    </template>
-                      </UTable>
-                    </template>
+                  
 
 
                 </UTable>

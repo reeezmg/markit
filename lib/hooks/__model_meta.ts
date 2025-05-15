@@ -2348,7 +2348,8 @@ const metadata = {
 
     },
     deleteCascade: {
-        company: ['PurchaseOrder', 'Product', 'Variant', 'Item'],
+        company: ['PurchaseOrder', 'Product', 'Variant', 'Item', 'DistributorCompany'],
+        distributor: ['DistributorCompany'],
         purchaseOrder: ['Product'],
         product: ['Variant'],
         variant: ['Item', 'VariantSizeBarcode'],

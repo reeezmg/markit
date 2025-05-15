@@ -1,36 +1,31 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import AwsService from '~/composables/aws';
-import {
-    useUpdatePurchaseOrder,
-    useDeletePurchaseOrder,
-} from '~/lib/hooks';
 
-const UpdatePurchaseOrder = useUpdatePurchaseOrder();
-const DeletePurchaseOrder = useDeletePurchaseOrder();
-const awsService = new AwsService();
-const useAuth = () => useNuxtApp().$auth;
+const openModal = ref(false);
+const selectedSupplier = ref<any | null>(null);
 
-const isFormModalOpen = ref(false);
+const openForm = (supplier = null) => {
+    selectedSupplier.value = supplier;
+    openModal.value = true;
+    console.log(supplier)
+};
 
-watch(isFormModalOpen, (newVal, oldVal) => {
-  if (newVal) {
-    console.log('Modal opened');
-    // You can also do something like reset form here
-  } else {
-    console.log('Modal closed');
-    // Or trigger refetch or cleanup
-  }
-});
+const closeForm = () => {
+    openModal.value = false;
+    selectedSupplier.value = null;
+};
+
 
 </script>
 
 <template>
     <UDashboardPanelContent class="pb-24">
             <div>
-                <DistributorList @modal-toggle="isFormModalOpen = !isFormModalOpen"/>
-
-                <DistributorForm v-model="isFormModalOpen"/>
+                <DistributorList @modal-open="openForm" @edit="openForm"/>
+                <UModal v-model="openModal">
+                   <DistributorForm :selectedSupplier = "selectedSupplier"/>
+                </UModal>
+               
             </div>
     </UDashboardPanelContent>
 </template>
