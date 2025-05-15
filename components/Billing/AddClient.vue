@@ -3,7 +3,7 @@
   import { auth } from '~/composables/firebase'
   import { useFindUniqueClient, useCreateClient, useUpdateClient,useFindFirstCompany } from '~/lib/hooks';
   import { RecaptchaVerifier, signInWithPhoneNumber } from 'firebase/auth'
-  
+  const useAuth = () => useNuxtApp().$auth;
 const model = defineModel('model');        // maps to v-model:model
 const phoneNo = defineModel('phoneNo');    // maps to v-model:phoneNo
 const props = defineProps(['onVerify']);
@@ -20,11 +20,7 @@ const isverifyotp = ref(false)
     name:'',
     email:''
   })
-  const alreadyLinked = ref()
 
-  const {
-    data: company,
-} = useFindFirstCompany({ where: { name: route.params.company },select:{id:true} });
 
      
   let recaptchaVerifier = null
@@ -50,25 +46,21 @@ const isverifyotp = ref(false)
 );
 
 watch(phoneNo, (newphoneNo) => {
-    console.log(newphoneNo)
+  
  form.phone = newphoneNo
 })
-
-
-watch([client, company], ([newClient, newCompany]) => {
-  if(newClient && newCompany){
-    alreadyLinked.value = newClient.companies.some(
-    (item) => newCompany.id === item.companyId
-  )
-  }
+watch(client, (newphoneNo) => {
+    console.log(newphoneNo)
  
-  console.log('Already linked:', alreadyLinked.value)
-  console.log('Client:', newClient)
-  console.log('Company:', newCompany)
 })
 
+
+
+
 const login = async() => {
-  if(!client.value && form.name){
+  const {data:clientres} = await refetch()
+  console.log(clientres)
+  if(!clientres && form.name){
       try{
        const res = await CreateClient.mutateAsync({
           data:{
@@ -82,16 +74,15 @@ const login = async() => {
         console.error(err)
       }
     }
-
-  if(client.value && !alreadyLinked.value ){
-      try{
+      if(clientres ){
+       try{
         const res = await UpdateClient.mutateAsync({
-          where: { id: client.value.id },
+          where: { id: clientres.id },
           data: {
             companies: {
               create:{
                company:{
-                connect: { id: company.value.id },
+                connect: { id: useAuth().session.value?.companyId },
                }
               }
             },
@@ -102,8 +93,8 @@ const login = async() => {
         console.error(err)
       }
     }
+    }
 
-}
 
 
   const setupRecaptcha = () => {
@@ -180,7 +171,7 @@ const login = async() => {
   try {
     const result = await window.confirmationResult.confirm(form.otp);
     console.log('Phone number verified!', result.user);
-    login();
+    await login();
     toast.add({
       title: 'Client added successfully',
       id: 'login-success',

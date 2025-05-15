@@ -23,7 +23,7 @@ const UpdateBill = useUpdateBill();
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
-const notes = ref<any>({})
+
 
 // Columns
 const columns = [
@@ -164,7 +164,7 @@ const billAction = (row:any) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`./erp/edit/${row.id}`),
+            click: () => router.push(`./edit/${row.id}`),
         },
     ],
     [
