@@ -494,7 +494,10 @@ const fetchItemData = async (barcode, index) => {
     items.value[index].sizes = itemdata.value.variant?.sizes || null;
     items.value[index].variantId = itemdata.value.variant?.id || '';
   } else {
-    console.warn("itemdata is undefined");
+     toast.add({
+          title: 'Barcode is invalid or item is empty!',
+          color: 'red',
+        });
   }
 };
 
@@ -502,7 +505,7 @@ const fetchItemData = async (barcode, index) => {
 const handleSave = async () => {
     // Filter out empty items
     isSaving.value = true
-    let billResponse = {}
+    let billResponse = null
     let itemIds = []
     let variantDetails = []
     try {
@@ -728,6 +731,7 @@ billResponse = await CreateBill.mutateAsync({
       isSaving.value = false;
     }
     if(billResponse){
+      console.log(billResponse)
       for (const item of items.value) {
         if (item.barcode && item.return === false) {
           let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
@@ -788,20 +792,10 @@ billResponse = await CreateBill.mutateAsync({
               where: { id: variantId },
               data: updateData,
             });
+          } 
           }
 
-         
-          
-          }
-
-
-
-      }
-  
-      // Wait for all updates to complete
-      
-           // Reset form
-      items.value = [
+           items.value = [
       { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
       ];
       discount.value = 0;
@@ -822,8 +816,8 @@ billResponse = await CreateBill.mutateAsync({
     } catch (error) {
       console.error('Error deleting token entries', error);
     }
-  
-    // ✅ Reset items only after all Prisma operations are complete
+      }
+
   };
 
 
