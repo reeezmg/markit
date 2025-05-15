@@ -12,7 +12,7 @@ import {
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
-
+const toast = useToast();
 const UpdateBill = useUpdateBill();
 const UpdateManyCategory = useUpdateManyCategory();
 const router = useRouter();
@@ -54,6 +54,11 @@ const columns = [
     {
         key: 'grandTotal',
         label: 'Total',
+        sortable: true,
+    },
+    {
+        key: 'paymentStatus',
+        label: 'Payment',
         sortable: true,
     },
     {
@@ -193,7 +198,6 @@ return {
         ...(selectedStatus.value.length && {
             OR: selectedStatus.value.map(item => ({ paymentStatus: item.value }))
         }),
-        paymentStatus: 'PAID',
         ...(selectedDate.value && (
             selectedDate.value.start === selectedDate.value.end
                 ? {
@@ -285,13 +289,34 @@ const handleUpdate = async (id:string) => {
         }
     })
 
-    console.log(res)
 
 };
 
 const handleChange = (value:string, row:any) => {
     notes.value[row.id] = value;
 };
+
+const onPaymentStatusChange = async (id:string, status:string, billNo) => {
+    try{
+    const res = await UpdateBill.mutateAsync({
+        where:{
+            id
+        },
+        data:{
+            paymentStatus:status
+        }
+    })
+     toast.add({
+          title: `Bill ${billNo} status changed to ${status}`,
+          color: 'green',
+        });
+    }catch(err){
+         toast.add({
+          title: 'Error while changing the bill status',
+          color: 'red',
+        });
+    }
+}
 
 </script>
 
@@ -443,9 +468,16 @@ const handleChange = (value:string, row:any) => {
                     {{ row.createdAt.toLocaleDateString('en-GB') }}
                 </template>
 
-                <template #paymentStatus-data="{ row }">
-                    {{ row.paymentStatus }}
-                </template>
+               <template #paymentStatus-data="{ row }">
+                    <USelect
+                        v-model="row.paymentStatus"
+                        :options="['PAID', 'PENDING']"
+                        @update:model-value="status => onPaymentStatusChange(row.id, status,row.invoiceNumber)"
+                        size="xs"
+                        class="w-28"
+                    />
+                    </template>
+
 
                 <template #notes-data="{ row }">
                     <UPopover> 
