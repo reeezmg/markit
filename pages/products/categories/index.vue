@@ -9,10 +9,12 @@ import {
     useUpdateCategory,
     useUpdateManyCategory,
     useFindManyCategory,
-    useDeleteCategory
+    useDeleteCategory,
+    useDeleteProduct
 } from '~/lib/hooks';
 const DeleteCategory = useDeleteCategory();
 const UpdateCategory = useUpdateCategory();
+const DeleteProduct = useDeleteProduct();
 const UpdateManyCategory = useUpdateManyCategory();
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
@@ -40,6 +42,31 @@ const columns = [
         sortable: false,
     },
 ];
+
+
+const productcolumns = [
+    {
+        key: 'name',
+        label: 'name',
+        sortable: true,
+    },
+    {
+        key: 'variants',
+        label: 'Variants',
+        sortable: false,
+    },
+    {
+        key: 'status',
+        label: 'Status',
+        sortable: true,
+    },
+    {
+        key: 'actions',
+        label: 'Actions',
+        sortable: false,
+    },
+];
+
 
 const selectedColumns = ref(columns);
 const columnsTable = computed(() =>
@@ -105,6 +132,23 @@ const action = (row) => [
     ],
 ];
 
+const productAction = (row) => [
+    [
+        {
+            label: 'Edit',
+            icon: 'i-heroicons-pencil-square-20-solid',
+            click: () => router.push(`/products/edit/${row.id}`),
+        },
+    ],
+    [
+        {
+            label: 'Delete',
+            icon: 'i-heroicons-trash-20-solid',
+            click: () => removeProduct(row.id),
+        },
+    ],
+];
+
 // Filters
 const todoStatus = [
     {
@@ -130,6 +174,7 @@ const resetFilters = () => {
 
 // Pagination
 const sort = ref({ column: 'id', direction: 'asc' as const });
+const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref(10);
 const pageTotal = ref(0); // This value should be dynamic coming from the API
@@ -156,8 +201,24 @@ const queryArgs = reactive({
     },
     skip: (page.value - 1) * pageCount.value,
     take: pageCount.value,
-    include: {
-        products: true,
+    select: {
+        name:true,
+        status:true,
+        image:true,  
+        products: {
+            select:{
+                id:true,
+                name:true,
+                status:true,
+
+                variants:{
+                    select:{
+                        qty:true,
+                        images:true
+                    }
+                }
+            }
+        },
     },
 });
 
@@ -194,6 +255,15 @@ const removeCategory = async(id:string) => {
     console.log(err);
   }
 };
+
+const removeProduct = async(id:string) => {
+  try {
+    await DeleteProduct.mutateAsync({ where: { id } });
+  } catch (err) {
+    console.log(err);
+  }
+};
+
 
 async function multiToggle(ids, status: boolean) {
     console.log(ids);
@@ -326,6 +396,7 @@ async function toggleStatus(id) {
             <UTable
                 v-model="selectedRows"
                 v-model:sort="sort"
+                v-model:expand="expand"
                 :rows="products"
                 :columns="columnsTable"
                 :loading="isLoading"
@@ -425,6 +496,47 @@ async function toggleStatus(id) {
 
                 <template #products-data="{ row }">
                     {{ row.products.length }}
+                </template>
+
+                <template #expand="{ row }">
+                    <div class="ps-4">
+                    <UTable 
+                        :rows="row.products" 
+                        :columns="productcolumns"
+                    >
+
+                      
+
+                <template #name-data="{ row }">
+                    <div class="flex flex-row items-center">
+                        <UAvatar
+                            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.variants[0]?.images[0]}`"
+                            :alt="row.name"
+                            size="lg"
+                        />
+                        <div class="ms-3">{{ row.name }}</div>
+                    </div>
+                </template>
+
+                <template #variants-data="{ row }">
+                    {{ row.variants.reduce((total,variant) => total + (variant.qty || 0),0)}}
+                </template>
+
+                  <template #actions-data="{ row }">
+                    <UDropdown :items="productAction(row)">
+                        <UButton
+                            color="gray"
+                            variant="ghost"
+                            icon="i-heroicons-ellipsis-horizontal-20-solid"
+                        />
+                    </UDropdown>
+                </template>
+
+
+                
+                    
+                    </UTable>
+                    </div>
                 </template>
             </UTable>
 
