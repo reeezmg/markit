@@ -540,13 +540,13 @@ const handleSave = async () => {
 
 const entriesData = items.value.map(item => {
   const entry = {
-    name: item.name,
-    qty: item.qty,
-    rate: item.rate,
-    discount: item.discount,
-    tax: item.tax,
-    value: item.value,
-    return:item.return,
+    name: item.name || '',
+    qty: item.qty || 1,
+    rate: item.rate || 0,
+    discount: item.discount || 0,
+    tax: item.tax || 0,
+    value: item.value || 0,
+    return:item.return || false,
     ...(item.size && { size:item.size} )
    
   };
