@@ -569,11 +569,11 @@ const entriesData = items.value.map(item => {
 
 const payload = {
   subtotal: subtotal.value,
-  discount: discount.value,
+  discount: discount.value || 0,
   grandTotal: grandTotal.value,
   paymentMethod: paymentMethod.value,
   createdAt: new Date(date.value).toISOString(),
-  returnAmt:returnAmt.value,
+  returnAmt:returnAmt.value || 0,
   paymentStatus: Object.keys(selected.value).length !== 0 ? 'PENDING' : 'PAID',
   company: {
     connect: {
