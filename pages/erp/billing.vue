@@ -25,7 +25,17 @@ const discount = ref(0);
 const subtotal = computed(() => {
   return items.value.reduce((sum, item) => sum + (item.qty * item.rate || 0), 0);
 });
-const grandTotal = ref(0);
+const grandTotal = computed(() => {
+  const baseTotal = items.value.reduce((sum, item) => sum + (item.value || 0), 0);
+
+  if (discount.value < 0) {
+    return parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
+  } else {
+    const discounted = baseTotal - (baseTotal * discount.value) / 100;
+    return parseFloat(discounted.toFixed(2));
+  }
+});
+
 const returnAmt = ref(0);
 const paymentMethod = ref('Cash');
 const voucherNo = ref('');
@@ -174,20 +184,6 @@ watch(items, async () => {
 }, { deep: true });
 
 
-
-watch([discount, subtotal], ([newDiscount, newTotal]) => {
-  let baseValue = newTotal; // Use the updated total value
-
-  if (newDiscount < 0) {
-    baseValue -= Math.abs(newDiscount);
-  } else {
-    baseValue -= (baseValue * newDiscount) / 100;
-  }
-
-  grandTotal.value = parseFloat(baseValue.toFixed(2)); // keeps it float
-
-  // Prevent negative values
-});
 
 
 const startResize = (index, event) => {
@@ -1350,7 +1346,7 @@ if(!data){
 
         <!-- Discount Input -->
         <div class="mb-6">
-          <label class="block text-gray-700 font-medium">Discount(+) / Round Off (-)</label>
+          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
             ref="discountref"
             type="number"
@@ -1395,10 +1391,9 @@ if(!data){
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
               <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
-            </div>
-            
-            
+            </div>    
           </div>
+
           <div>
             <div class="mb-4 mt-5">
               <UButton color="primary" block>Add Voucher</UButton>
@@ -1415,6 +1410,7 @@ if(!data){
               <UButton color="primary" block @click="isOpen=true">Add Account</UButton>
             </div>
           </div>
+          
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
