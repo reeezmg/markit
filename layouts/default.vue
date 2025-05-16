@@ -88,6 +88,14 @@ const links = computed(() => {
                           },
                       ]
                     : []),
+                     {
+                    label: 'Stocks',
+                    to: `/products/stocks`,
+                    tooltip: {
+                        text: 'stocks',
+                        shortcuts: ['P', 'S'],
+                    },
+                },
             ],
            
         },

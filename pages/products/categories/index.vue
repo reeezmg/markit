@@ -32,6 +32,11 @@ const columns = [
         sortable: true,
     },
     {
+        key: 'stocks',
+        label: 'Stocks',
+        sortable: true,
+    },
+    {
         key: 'status',
         label: 'Status',
         sortable: true,
@@ -54,6 +59,11 @@ const productcolumns = [
         key: 'variants',
         label: 'Variants',
         sortable: false,
+    },
+     {
+        key: 'stocks',
+        label: 'Stocks',
+        sortable: true,
     },
     {
         key: 'status',
@@ -214,7 +224,8 @@ const queryArgs = reactive({
                 variants:{
                     select:{
                         qty:true,
-                        images:true
+                        images:true,
+                        sprice:true,
                     }
                 }
             }
@@ -301,7 +312,7 @@ async function toggleStatus(id) {
             class="w-full"
             :ui="{
                 base: '',
-                ring: '',
+            
                 divide: 'divide-y divide-gray-200 dark:divide-gray-700',
                 header: { padding: 'px-4 py-5' },
                 body: {
@@ -494,6 +505,18 @@ async function toggleStatus(id) {
                     </NuxtLink>
                 </template>
 
+                <template #stocks-data="{ row }">
+                    {{
+                        row.products?.reduce((productTotal, product) => {
+                        const variantStock = product.variants?.reduce((variantTotal, variant) => {
+                            return variantTotal + ((variant.sprice || 0) * (variant.qty || 0));
+                        }, 0);
+                        return productTotal + variantStock;
+                        }, 0) || 0
+                    }}
+                    </template>
+
+
                 <template #products-data="{ row }">
                     {{ row.products.length }}
                 </template>
@@ -521,6 +544,11 @@ async function toggleStatus(id) {
                 <template #variants-data="{ row }">
                     {{ row.variants.reduce((total,variant) => total + (variant.qty || 0),0)}}
                 </template>
+
+                 <template #stocks-data="{ row }">
+                    {{ row.variants.reduce((total,variant) => total + (variant.sprice * variant.qty || 0),0)}}
+                </template>
+
 
                   <template #actions-data="{ row }">
                     <UDropdown :items="productAction(row)">

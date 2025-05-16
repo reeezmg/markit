@@ -34,8 +34,13 @@ const columns = [
         sortable: true,
     },
     {
-        key: 'qty',
-        label: 'Qty',
+        key: 'variants',
+        label: 'Variants',
+        sortable: false,
+    },
+    {
+        key: 'stocks',
+        label: 'Stocks',
         sortable: false,
     },
     {
@@ -340,7 +345,6 @@ isAdd.value =false
             class="w-full"
             :ui="{
                 base: '',
-                ring: '',
                 divide: 'divide-y divide-gray-200 dark:divide-gray-700',
                 header: { padding: 'px-4 py-5' },
                 body: {
@@ -453,8 +457,11 @@ isAdd.value =false
                     </UDropdown>
                 </template>
 
-                <template #qty-data="{ row }">
+                <template #variants-data="{ row }">
                     {{ row.variants.reduce((total,variant) => total + (variant.qty || 0),0)}}
+                </template>
+                <template #stocks-data="{ row }">
+                    {{ row.variants.reduce((total,variant) => total + (variant.sprice * variant.qty || 0),0)}}
                 </template>
 
                 <template #status-data="{ row }">
