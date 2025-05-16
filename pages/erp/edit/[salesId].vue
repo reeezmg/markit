@@ -440,6 +440,7 @@ watch(() => bill.value, (newData) => {
   console.log(newData)
   if (!newData || !newData.entries) return;
   discount.value = newData.discount
+  paymentMethod.value = newData.paymentMethod
    date.value = new Date(newData.createdAt).toISOString().split('T')[0]
   items.value = newData.entries.map((entry, index) => {
     return {
