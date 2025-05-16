@@ -1056,7 +1056,7 @@ const print = async() => {
           <div>
             <!-- Discount Input -->
         <div class="mb-6">
-          <label class="block text-gray-700 font-medium">Discount(+) / Round Off (-)</label>
+          <label class="block text-gray-700 font-medium">Dis %(+) / Round Off (-)</label>
           <UInput
             ref="discountref"
             type="number"
