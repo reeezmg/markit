@@ -66,6 +66,14 @@ const totals = computed(() => {
 
   const totalRevenue = bills.reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
 
+  const totalRevenueInCash = bills
+    .filter(bill => bill.paymentMethod === 'Cash')
+    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0)
+
+  const totalRevenueInUPI = bills
+    .filter(bill => bill.paymentMethod === 'UPI')
+    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0)
+
   const totalDiscount = totalSales - totalRevenue;
 
   return {
@@ -73,6 +81,8 @@ const totals = computed(() => {
     totalSales,
     totalRevenue,
     totalDiscount,
+    totalRevenueInCash,
+    totalRevenueInUPI
   };
 });
 
@@ -96,6 +106,28 @@ const filteredExpenses = computed(() => {
     return (!start || billDate >= start) && (!end || billDate <= end)
   })
 })
+
+const totalsExpense = computed(() => {
+     const expenses = filteredExpenses.value;
+
+     const totalExpense = expenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0
+
+     const totalExpensesInCash = expenses
+    .filter(expense => expense.paymentMode === 'CASH')
+    .reduce((sum, expense) => sum + (expense.totalAmount ?? 0), 0)
+
+     const totalExpensesInUPI = expenses
+    .filter(expense => expense.paymentMode === 'UPI')
+    .reduce((sum, expense) => sum + (expense.totalAmount ?? 0), 0)
+    return {
+      totalExpense,
+      totalExpensesInCash,
+      totalExpensesInUPI,
+    
+  };
+})
+
+
 
 const kpiArray = computed<KpiItem[]>(() => ([
   { KPI: 'Total Revenue', Value: formatCurrency(filteredBills.value.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0) },
@@ -280,29 +312,46 @@ onMounted(() => {
 
         <div v-if="!loading && dashboard" class="grid grid-cols-1 sm:grid-cols-4 gap-4">
 
-            <KpiCard title="Total Sales" :value="formatCurrency(totals.totalSales)">
+            <UPopover mode="hover">
+            <KpiCard class="w-full"  title="Total Revenue" :value="formatCurrency(totals.totalRevenue)">
               <template #icon>
                 <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
               </template>
             </KpiCard>
 
-             <KpiCard title="Total Discount" :value="formatCurrency(totals.totalDiscount)">
-              <template #icon>
-                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-              </template>
-            </KpiCard>
+            <template #panel>
+            <div class="p-4 flex flex-col">
+              <div>Revenue in Cash: {{ totals.totalRevenueInCash }}</div>
+              <div>Revenue in UPI: {{ totals.totalRevenueInUPI }}</div>
+            </div>
+          </template>
+          </UPopover>
 
-            <KpiCard title="Total Revenue" :value="formatCurrency(totals.totalRevenue)">
-              <template #icon>
-                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-              </template>
-            </KpiCard>
-
-            <KpiCard title="Total Expense" :value="formatCurrency(filteredExpenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0)">
+            <UPopover mode="hover">
+            <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(totalsExpense.totalExpense)">
             <template #icon>
               <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
             </template>
           </KpiCard>
+           <template #panel>
+            <div class="p-4 flex flex-col">
+              <div>Expense in Cash: {{ totalsExpense.totalExpensesInCash }}</div>
+              <div>Expense in UPI: {{ totalsExpense.totalExpensesInUPI }}</div>
+            </div>
+          </template>
+        </UPopover>
+
+            <KpiCard title="Amount in Drawer" :value="formatCurrency(totals.totalRevenueInCash - totalsExpense.totalExpensesInCash)">
+              <template #icon>
+                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
+              </template>
+            </KpiCard>
+
+              <KpiCard title="Amount in Bank" :value="formatCurrency(totals.totalRevenueInUPI - totalsExpense.totalExpensesInUPI)">
+              <template #icon>
+                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
+              </template>
+            </KpiCard>
         </div>
 
         <TopProducts v-if="!loading && dashboard?.topProducts" :products="dashboard.topProducts" />
