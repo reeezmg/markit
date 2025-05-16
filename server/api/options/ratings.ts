@@ -1,6 +1,10 @@
-export default defineEventHandler(async () => {
+export default defineEventHandler(async (event) => {
+  const session = await useAuthSession(event);
   const ratings = await prisma.product.findMany({
-    where: { status: true },
+     where: { 
+      status: true,
+      companyId: session.data.companyId, 
+    },
     select: { rating: true },
     distinct: ['rating'],
     orderBy: { rating: 'asc' }

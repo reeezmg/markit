@@ -14,9 +14,12 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
+    const session = await useAuthSession(event);
+
   const { filters, groupBy } = bodySchema.parse(await readBody(event))
 
   const where: any = {
+    companyId: session.data.companyId,
     status: true,
     product: {
       status: true,

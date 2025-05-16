@@ -1,5 +1,19 @@
 <template>
 <UDashboardPanelContent class="pb-24">
+  <div class="mb-4 flex flex-row gap-4">
+    <UDashboardCard
+    class="w-1/2"
+    :title="totals.qty"
+    description="Total Quantity"
+    icon="i-heroicons-archive-box"
+  />
+    <UDashboardCard
+     class="w-1/2"
+   :title="totals.stock"
+    description="Total Stock"
+    icon="i-heroicons-banknotes"
+  />
+  </div>
    <UCard
             class="w-full"
             :ui="{
@@ -110,6 +124,16 @@ const filteredStockData = computed(() => {
 })
 
 
+const totals = computed(() => {
+  return filteredStockData.value.reduce(
+    (acc, item) => {
+      acc.qty += item.qty || 0
+      acc.stock += item.stock || 0
+      return acc
+    },
+    { qty: 0, stock: 0 }
+  )
+})
 
 
 const columns = computed(() => {
