@@ -23,7 +23,7 @@ const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
 const subtotal = computed(() => {
-  return items.value.reduce((sum, item) => sum + (item.value || 0), 0);
+  return items.value.reduce((sum, item) => sum + (item.qty * item.rate || 0), 0);
 });
 const grandTotal = ref(0);
 const returnAmt = ref(0);
@@ -1345,24 +1345,40 @@ if(!data){
   <template #footer>
         <!-- Other form elements -->
         <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
-          <div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Sub Total</label>
-              <UInput :model-value="subtotal"  disabled />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Discount %</label>
-              <UInput ref="discountref"  type="number" v-model="discount" @keydown.enter.prevent="handleEnterMainDiscount()" />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Payment Method</label>
-              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card']" @keydown.enter.prevent="handleEnterPayment(index)" />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Account Name</label>
-              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
-            </div>
-          </div>
+
+          <div class="">
+
+        <!-- Discount Input -->
+        <div class="mb-6">
+          <label class="block text-gray-700 font-medium">Discount(+) / Round Off (-)</label>
+          <UInput
+            ref="discountref"
+            type="number"
+            v-model="discount"
+            @keydown.enter.prevent="handleEnterMainDiscount()"
+            placeholder="Enter discount"
+          />
+        </div>
+
+  <!-- Subtotal Display -->
+  <div class="border border-primary-300 rounded-md mb-7">
+  <div class="flex flex-col items-center justify-center py-3">
+    <div class="text-s">Sub Total</div>
+    <div class="text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
+  </div>
+</div>
+    
+
+  <!-- Grand Total Display -->
+   <div class="border border-green-300 rounded-md">
+  <div class="flex flex-col items-center justify-center py-3">
+    <div class="text-s">Grand Total</div>
+    <div class="text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+  </div>
+</div>
+
+</div>
+
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Sales Return AMT</label>
@@ -1372,13 +1388,16 @@ if(!data){
               <label class="block text-gray-700 font-medium">Total Redeemed AMT</label>
               <UInput  />
             </div>
+             <div class="mb-4">
+              <label class="block text-gray-700 font-medium">Payment Method</label>
+              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card']" @keydown.enter.prevent="handleEnterPayment(index)" />
+            </div>
             <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Grand Total</label>
-              <UInput v-model="grandTotal" type="number" disabled class="font-bold rounded-md border-2 border-primary-300" />
+              <label class="block text-gray-700 font-medium">Account Name</label>
+              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
             </div>
-            <div class="mt-8">
-              <UButton color="primary" block @click="isOpen=true">Add Account</UButton>
-            </div>
+            
+            
           </div>
           <div>
             <div class="mb-4 mt-5">
@@ -1392,8 +1411,8 @@ if(!data){
               <label class="block text-gray-700 font-medium">Total Value</label>
               <UInput v-model="voucherNo" />
             </div>
-            <div>
-              <UButton color="green" class="mt-9" block>Redeem Voucher</UButton>
+            <div class="mt-9">
+              <UButton color="primary" block @click="isOpen=true">Add Account</UButton>
             </div>
           </div>
           <div>
