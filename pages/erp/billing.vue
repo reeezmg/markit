@@ -1183,12 +1183,13 @@ if(!data){
        :ui="{
           base: 'h-100 flex flex-col',
           rounded: '',
-          divide: 'divide-y divide-gray-100 dark:divide-gray-800',
+         divide: 'divide-y divide-gray-200 dark:divide-gray-700',
           body: {
-            base: 'grow'
+            padding: '',
+            base: 'grow divide-y divide-gray-200 dark:divide-gray-700'
           }
         }">
-        <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
+        <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm p-3">
         <UInput v-if="!token" v-model="date" type="date" label="Date" class="lg:col-span-2" />
         <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2" />
         <UButton color="primary" label="Token Entries " block @click="isTokenOpen=true" class="lg:col-start-11 lg:col-span-2"/>
@@ -1197,7 +1198,7 @@ if(!data){
 
         <!-- Responsive table wrapper -->
          
-        <div class="overflow-x-auto mt-2 h-48">
+        <div class="overflow-x-auto mt-2 h-48 p-3">
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
@@ -1338,6 +1339,14 @@ if(!data){
           </table>
           
         </div>
+
+        
+          <div class="p-3">
+            <div>
+              Qty: {{ items.reduce((sum, item)=> sum + item.qty,0) }}
+            </div>
+          </div>
+
   <template #footer>
         <!-- Other form elements -->
         <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
@@ -1357,19 +1366,19 @@ if(!data){
         </div>
 
   <!-- Subtotal Display -->
-  <div class="border border-primary-300 rounded-md mb-7">
+  <div class="border border-primary-700 dark:border-primary-300 rounded-md mb-7">
   <div class="flex flex-col items-center justify-center py-3">
     <div class="text-s">Sub Total</div>
-    <div class="text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
+    <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
   </div>
 </div>
     
 
   <!-- Grand Total Display -->
-   <div class="border border-green-300 rounded-md">
+   <div class="border border-green-700 dark:border-green-300 rounded-md">
   <div class="flex flex-col items-center justify-center py-3">
     <div class="text-s">Grand Total</div>
-    <div class="text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+    <div class="text-green-700 dark:text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
   </div>
 </div>
 
