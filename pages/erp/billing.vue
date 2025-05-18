@@ -828,10 +828,14 @@ const {
 const submitForm = async () => {
   isSavingAcc.value = true
   try {
+    
+    if (!account.value.name) {
+        throw new Error(`Plase Fill name`);
+      }
     const res = await CreateAccount.mutateAsync({
       data: {
                 name: account.value.name,
-                phone: account.value.name,
+                phone: account.value.phone,
                 address: {
                     create: {
                         street: account.value.street,
@@ -854,7 +858,11 @@ const submitForm = async () => {
         });
     isOpen.value = false
   }catch(error){
-    console.log(error)
+     toast.add({
+        title: 'Account creation failed!',
+        description: error.message,
+        color: 'red',
+      });
   }finally{
     isSavingAcc.value = false
   }
@@ -1492,7 +1500,7 @@ function submitSplitPayment() {
           <!-- Name -->
           <h3 class="text-md font-semibold">Personal Details</h3>
           <UInput v-model="account.name" label="Name" placeholder="Enter full name" required />
-          <UInput v-model="account.phone" label="Phone No" placeholder="Enter full name" required />
+          <UInput v-model="account.phone" label="Phone No" placeholder="Enter Phone Number" required />
 
           <!-- Address -->
           <h3 class="text-md font-semibold mt-4">Address Details</h3>
@@ -1504,7 +1512,7 @@ function submitSplitPayment() {
 
 
           <!-- Submit Button -->
-          <UButton @click="submitForm" block>Submit</UButton>
+          <UButton @click="submitForm" :disabled="isSavingAcc" block>Submit</UButton>
         </div>
       </UModal>
 

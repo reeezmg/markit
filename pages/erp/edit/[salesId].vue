@@ -941,13 +941,17 @@ const {
       where: { companyId: useAuth().session.value?.companyId},
 });
 
-
 const submitForm = async () => {
+  isSavingAcc.value = true
   try {
+    
+    if (!account.value.name) {
+        throw new Error(`Plase Fill name`);
+      }
     const res = await CreateAccount.mutateAsync({
       data: {
                 name: account.value.name,
-                phone: account.value.name,
+                phone: account.value.phone,
                 address: {
                     create: {
                         street: account.value.street,
@@ -970,25 +974,14 @@ const submitForm = async () => {
         });
     isOpen.value = false
   }catch(error){
-    console.log(error)
+     toast.add({
+        title: 'Account creation failed!',
+        description: error.message,
+        color: 'red',
+      });
+  }finally{
+    isSavingAcc.value = false
   }
-};
-
-const deleteBill = async () => {
-    const res = await UpdateBill.mutateAsync({
-        where:{
-            id:route.params.salesId
-        },
-        data:{
-            deleted:true
-        }
-    })
-router.push('/erp/sales')
-    toast.add({
-        title: 'Bill Deleted !',
-        color: 'green',
-    });
-
 };
 
 
@@ -1243,7 +1236,7 @@ if(!data){
               <UInput v-model="voucherNo" />
             </div>
             <div class="mt-9">
-              <UButton color="primary" block @click="isOpen=true">Add Account</UButton>
+              <UButton color="primary" block @click="isOpen=true" :disabled="isSavingAcc" >Add Account</UButton>
             </div>
           </div>
 
@@ -1298,7 +1291,7 @@ if(!data){
 
 
           <!-- Submit Button -->
-          <UButton @click="submitForm" block>Submit</UButton>
+          <UButton @click="submitForm" :disabled="isSavingAcc"  block>Submit</UButton>
         </div>
       </UModal>
 
