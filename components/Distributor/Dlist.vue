@@ -1,29 +1,14 @@
 <script setup lang="ts">
 import {
 useFindManyDistributorCompany,
-  useUpdateDistributorCompany,
-  useCreateDistributorPayment,
-  useUpdateDistributorPayment,
-  useCreateDistributorCredit,
-  useUpdateDistributorCredit,
-  useDeleteDistributorCredit,
-  useDeleteDistributorPayment,
-  useDeleteDistributor
+  useDeleteDistributorCompany
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
 const toast = useToast();
 const emit = defineEmits(['modal-open','edit']);
-const UpdateDistributorCompany = useUpdateDistributorCompany();
-const CreateDistributorPayment = useCreateDistributorPayment();
-const UpdateDistributorPayment = useUpdateDistributorPayment();
-const DeleteDistributorPayment = useDeleteDistributorPayment();
 
-const CreateDistributorCredit = useCreateDistributorCredit();
-const UpdateDistributorCredit = useUpdateDistributorCredit();
-const DeleteDistributorCredit = useDeleteDistributorCredit();
-
-const DeleteDistributor = useDeleteDistributor()
+const DeleteDistributorCompany = useDeleteDistributorCompany()
 const useAuth = () => useNuxtApp().$auth;
 const isSaving = ref(false)
 
@@ -34,14 +19,8 @@ const isOpenPay = ref(false)
 const isOpenCredit = ref(false)
 const distributorId = ref<string | null>(null)
 const companyId = ref<string | null>(null)
-const expand = ref({ openedRows: [], row: null });
 
-const form = ref({
-  amount: 0,
-  remarks: '',
-  paymentType:'',
-  billNo:''
-})
+
 
 const columns = [
   { key: 'distributor.name', label: 'Distributor Name', sortable: true },
@@ -56,18 +35,7 @@ const columns = [
 
 ];
 
-const PaymentColumns = [
-   
-    { key: 'createdAt', label: 'Date' },
-    { key: 'type', label: 'Type' },
-    { key: 'amount', label: 'Amount' },
-    { key: 'remarks', label: 'Remarks' },
-    { key: 'paymentType', label: 'PayType/BillNO' },
-    {
-        key: 'actions',
-        label: 'Actions',
-    },
-];
+
 
 
 const action = (row:any) => [
@@ -88,60 +56,21 @@ const action = (row:any) => [
     
 ];
 
-const creditaction = (row:any) => [
-
-    [
-        {
-            label: 'Edit',
-            icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => payFormEdit(row),
-        },
-    
-        {
-            label: 'Delete',
-            icon: 'i-heroicons-trash-20-solid',
-            click: () => payDelete(row),
-        },
-    ],
-    
-];
 
 
-const deleteDistributor = async(id) => {
-   const res = await DeleteDistributor.mutateAsync({
+const deleteDistributor = async(id:string) => {
+   const res = await DeleteDistributorCompany.mutateAsync({
           where:{
-            id
+            distributorId_companyId: {
+              distributorId:id,
+              companyId:useAuth().session.value?.companyId as string,
+            },
           },
         }
 )};
 
 
-const payFormEdit = async(row) => {
-  form.value = row
-  if(form.value.type === 'CREDIT'){
-     isOpenCredit.value = true
-    
-  }else{
-    isOpenPay.value = true
-  }
- 
-}
 
-const payDelete = async(row) => {
-  if(form.value.type === 'CREDIT'){
-  const res = await DeleteDistributorCredit.mutateAsync({
-          where:{
-            id
-          },
-        })
-      }else{
-         const res = await DeleteDistributorCredit.mutateAsync({
-          where:{
-            id
-          },
-        })
-      }
-}
 
 const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
   return {
@@ -241,12 +170,6 @@ const distributors = computed(() => {
 });
 
 
-watch(distributors, (newVal) => {
-  if (newVal) {
-    console.log(newVal)
-  }
-});
-
  
 const  pageTotal = computed(() => distributors.value?.length) ;
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
@@ -254,153 +177,15 @@ const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
 );
 
-const resetForm = () => {
-  form.value = {
-    amount: 0,
-    remarks: '',
-    paymentType: '',
-    billNo: ''
-  };
-};
-
-const showToast = (title: string, color: string, description?: string) => {
-  toast.add({
-    title,
-    color,
-    description,
-  });
-};
-
-const handlePay = async () => {
-  isSaving.value = true;
-
-  try {
-    if (!form.value.amount) {
-      showToast('Please enter Amount', 'red');
-      return;
-    }
-
-    if (form.value.id) {
-      await UpdateDistributorPayment.mutateAsync({
-        where: { id: form.value.id },
-        data: {
-          amount: form.value.amount,
-          remarks: form.value.remarks,
-          paymentType: form.value.paymentType,
-        },
-        select: { id: true }
-      });
-
-      showToast('Payment edited successfully', 'green');
-    } else {
-      await CreateDistributorPayment.mutateAsync({
-        data: {
-          amount: form.value.amount,
-          remarks: form.value.remarks,
-          paymentType: form.value.paymentType,
-          distributorCompany: {
-            connect: {
-              distributorId_companyId: {
-                distributorId: distributorId.value,
-                companyId: companyId.value,
-              }
-            }
-          }
-        },
-        select: { id: true }
-      });
-
-      showToast('Payment added successfully', 'green');
-    }
-
-    isOpenPay.value = false;
-    resetForm();
-  } catch (err) {
-    showToast('Error', 'red', err.message);
-  } finally {
-    isSaving.value = false;
-  }
-};
-
-const handleAddCredit = async () => {
-  isSaving.value = true;
-
-  try {
-    if (!form.value.amount) {
-      showToast('Please enter Amount', 'red');
-      return;
-    }
-
-    if (form.value.id) {
-      await UpdateDistributorCredit.mutateAsync({
-        where: { id: form.value.id },
-        data: {
-          amount: form.value.amount,
-          remarks: form.value.remarks,
-          billNo: form.value.billNo,
-        },
-        select: { id: true }
-      });
-
-      showToast('Credit edited successfully', 'green');
-    } else {
-      await CreateDistributorCredit.mutateAsync({
-        data: {
-          amount: form.value.amount,
-          remarks: form.value.remarks,
-          billNo: form.value.billNo,
-          distributorCompany: {
-            connect: {
-              distributorId_companyId: {
-                distributorId: distributorId.value,
-                companyId: companyId.value,
-              }
-            }
-          }
-        },
-        select: { id: true }
-      });
-
-      showToast('Credit added successfully', 'green');
-    }
-
-    isOpenCredit.value = false;
-    resetForm();
-  } catch (err) {
-    showToast('Error', 'red', err.message);
-  } finally {
-    isSaving.value = false;
-  }
-};
 
 
-const upiLink = computed(() => {
-  const distributor = distributors.value?.find(d => d.distributorId === distributorId.value);
-  if (!distributor|| !distributor.distributor.upiId || !form.value.amount || form.value.paymentType !== 'UPI') return '';
 
-  const upiId = distributor.distributor.upiId;
-  const name = encodeURIComponent(distributor.distributor.name || '');
-  const amount = form.value.amount.toFixed(2);
-  const remarks = encodeURIComponent(form.value.remarks || 'Payment');
 
-  return `upi://pay?pa=${upiId}&pn=${name}&am=${amount}&cu=INR&tn=${remarks}`;
-});
+
 
 const selectedDistributor = computed(() => {
   return distributors.value?.find(d => d.distributorId === distributorId.value);
 });
-
-
-const handleOpenPayForm = (row) => {
-  isOpenPay.value = true;
-  distributorId.value = row.distributorId;
-  companyId.value = row.companyId;
-};
-const handleOpenCreditForm = (row) => {
-  isOpenCredit.value = true;
-  distributorId.value = row.distributorId;
-  companyId.value = row.companyId;
-};
 
 
 
@@ -501,86 +286,6 @@ const handleOpenCreditForm = (row) => {
 
     <div v-if="error" class="text-red-500">Failed to load data: {{ error.message }}</div>
   </div>
-  <UModal v-model="isOpenPay">
-  <UCard>
-    <div class="p-4 space-y-4">
-        <!-- Amount -->
-        <UFormGroup label="Amount" name="amount" required>
-          <UInput v-model.number="form.amount" type="number" placeholder="Enter amount" />
-        </UFormGroup>
-
-        <!-- Remarks -->
-       
-
-        <UFormGroup label="Payment Type" name="paymentType">
-            <USelect
-                v-model="form.paymentType"
-                :options="[
-                    { label: 'Cash', value: 'CASH' },
-                    { label: 'UPI', value: 'UPI' },
-                    { label: 'Cheque', value: 'CHEQUE' },
-                    { label: 'Bank Transfer', value: 'BANK_TRANSFER' }
-                ]"
-                option-attribute="label"
-                value-attribute="value"
-                placeholder="Payment Type"
-                />
-        </UFormGroup>
-
-         <UFormGroup label="Remarks" name="remarks">
-          <UInput v-model="form.remarks" placeholder="Optional remarks" />
-        </UFormGroup>
-
-        <div class="flex flex-col items-center" v-if="form.paymentType === 'UPI'">
-        <p v-if="upiLink" class="mb-2 text-sm font-medium">Scan to Pay via UPI</p>
-        <QrcodeVue v-if="upiLink" :value="upiLink" :size="160"  @click="window.open(upiLink, '_blank')" />
-            <div v-if="upiLink">
-                {{ upiLink }}
-            </div>
-            <div v-if="!upiLink">UPI ID is not stored for this distributor</div>
-        </div>
-
-        <div class="flex flex-col items-center" v-if="form.paymentType === 'BANK_TRANSFER' && selectedDistributor">
-        <p><strong>Account Holder Name:</strong> {{ selectedDistributor.distributor.accHolderName }}</p>
-        <p><strong>Bank Name:</strong> {{ selectedDistributor.distributor.bankName }}</p>
-        <p><strong>Account Number:</strong> {{ selectedDistributor.distributor.accountNo }}</p>
-        <p><strong>IFSC Code:</strong> {{ selectedDistributor.distributor.ifsc }}</p>
-        </div>
-
-
-        <!-- Submit -->
-        <div class="pt-4">
-          <UButton color="primary" :loading="isSaving" @click="handlePay" block>Submit</UButton>
-        </div>
-    </div>
-  </UCard>
-</UModal>
-
-
-  <UModal v-model="isOpenCredit">
-  <UCard>
-    <div class="p-4 space-y-4">
-
-      <UFormGroup label="BillNo" name="Billno">
-          <UInput v-model="form.billNo" placeholder="BillNo" />
-        </UFormGroup>
-        <!-- Amount -->
-        <UFormGroup label="Amount" name="amount" required>
-          <UInput v-model.number="form.amount" type="number" placeholder="Enter amount" />
-        </UFormGroup>
-
-        <!-- Remarks -->
-        <UFormGroup label="Remarks" name="remarks">
-          <UInput v-model="form.remarks" placeholder="Optional remarks" />
-        </UFormGroup>
   
-
-        <!-- Submit -->
-        <div class="pt-4">
-          <UButton color="primary" :loading="isSaving" @click="handleAddCredit" block>Submit</UButton>
-        </div>
-    </div>
-  </UCard>
-</UModal>
 
 </template>

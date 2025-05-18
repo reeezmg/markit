@@ -2358,6 +2358,7 @@ const metadata = {
         product: ['Variant'],
         variant: ['Item', 'VariantSizeBarcode'],
         bill: ['Entry'],
+        distributorCompany: ['PurchaseOrder', 'DistributorPayment', 'DistributorCredit'],
 
     },
     authModel: 'User'

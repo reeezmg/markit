@@ -1,20 +1,18 @@
 <script setup lang="ts">
 import {
-useFindManyDistributorCompany,
-  useUpdateDistributorCompany,
+  useFindManyDistributorCompany,
   useCreateDistributorPayment,
   useUpdateDistributorPayment,
   useCreateDistributorCredit,
   useUpdateDistributorCredit,
   useDeleteDistributorCredit,
   useDeleteDistributorPayment,
-  useDeleteDistributor
+  useDeleteDistributorCompany
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
 const toast = useToast();
 const emit = defineEmits(['modal-open','edit']);
-const UpdateDistributorCompany = useUpdateDistributorCompany();
 const CreateDistributorPayment = useCreateDistributorPayment();
 const UpdateDistributorPayment = useUpdateDistributorPayment();
 const DeleteDistributorPayment = useDeleteDistributorPayment();
@@ -23,7 +21,7 @@ const CreateDistributorCredit = useCreateDistributorCredit();
 const UpdateDistributorCredit = useUpdateDistributorCredit();
 const DeleteDistributorCredit = useDeleteDistributorCredit();
 
-const DeleteDistributor = useDeleteDistributor()
+const DeleteDistributorCompany = useDeleteDistributorCompany()
 const useAuth = () => useNuxtApp().$auth;
 const isSaving = ref(false)
 
@@ -40,7 +38,8 @@ const form = ref({
   amount: 0,
   remarks: '',
   paymentType:'',
-  billNo:''
+  billNo:'',
+  type:''
 })
 
 const columns = [
@@ -119,15 +118,18 @@ const creditaction = (row:any) => [
 ];
 
 
-const deleteDistributor = async(id) => {
-   const res = await DeleteDistributor.mutateAsync({
+const deleteDistributor = async(id:string) => {
+   const res = await DeleteDistributorCompany.mutateAsync({
           where:{
-            id
+            distributorId_companyId: {
+              distributorId:id,
+              companyId:useAuth().session.value?.companyId as string,
+            },
           },
         }
 )};
 
-const payFormEdit = async(row) => {
+const payFormEdit = async(row:any) => {
   form.value = row
   if(form.value.type === 'CREDIT'){
      isOpenCredit.value = true
@@ -138,7 +140,7 @@ const payFormEdit = async(row) => {
  
 }
 
-const payDelete = async(row) => {
+const payDelete = async(row:any) => {
   if(row.type === 'CREDIT'){
   const res = await DeleteDistributorCredit.mutateAsync({
           where:{
@@ -146,7 +148,7 @@ const payDelete = async(row) => {
           },
         })
       }else{
-         const res = await DeleteDistributorCredit.mutateAsync({
+         const res = await DeleteDistributorPayment.mutateAsync({
           where:{
             id:row.id
           },
