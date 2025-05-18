@@ -1,7 +1,7 @@
 
 <script setup>
 import { BillingAddClient } from '#components';
-import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateManyItem } from '~/lib/hooks';
+import { useUpdateCompany,useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateManyItem } from '~/lib/hooks';
 
 definePageMeta({
     auth: true,
@@ -13,6 +13,7 @@ const CreateBill = useCreateBill();
 const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
 const UpdateVariant = useUpdateVariant();
+const UpdateCompany = useUpdateCompany();
 const UpdateItem = useUpdateItem();
 const UpdateManyItem = useUpdateManyItem();
 const DeleteTokenEntry = useDeleteTokenEntry();
@@ -324,7 +325,8 @@ const {
     where:{companyId:useAuth().session.value?.companyId},
     select:{
       id:true,
-      name:true
+      name:true,
+      hsn:true,
     }
 }
 );
@@ -500,8 +502,8 @@ const fetchItemData = async (barcode, index) => {
 
 const handleSave = async () => {
     // Filter out empty items
+    console.log(items)
     isSaving.value = true
-    let billResponse = null
     let itemIds = []
     let variantDetails = []
     try {
@@ -534,6 +536,25 @@ const handleSave = async () => {
       sizes: e.sizes ?? [], // ✅ map in the sizes JSON from the variant
     }));
 
+    const billid = await UpdateCompany.mutateAsync({
+      where:{
+        id:useAuth().session.value?.companyId
+      },
+    data: {
+        billCounter: {
+          increment: 1, 
+      },
+    },
+    select:{
+        billCounter:true,
+        address:true,
+        gstin:true,
+        accHolderName:true,
+        upiId:true
+      }
+    })
+
+
 const entriesData = items.value.map(item => {
   const entry = {
     name: item.name || '',
@@ -564,6 +585,7 @@ const entriesData = items.value.map(item => {
 });
 
 const payload = {
+  invoiceNumber:billid.billCounter,
   subtotal: subtotal.value,
   discount: discount.value || 0,
   grandTotal: grandTotal.value,
@@ -592,72 +614,20 @@ const payload = {
   }),
 };
 
-billResponse = await CreateBill.mutateAsync({
-  data: payload,
-  select: {
-        id: true,
-        invoiceNumber: true,
-        createdAt: true,
-        paymentMethod: true,
-        subtotal: true,
-        discount: true,
-        tax: true,
-        grandTotal: true,
-        company:{
-          select:{
-            name:true,
-            gstin:true,
-            upiId:true,
-            accHolderName:true,
-            address:{
-              select:{
-                name:true,
-                street:true,
-                locality:true,
-                city:true,
-                state:true,
-                pincode:true
-              }
-            }
-          }
-        },
-        entries: {
-          select: {
-            name: true,
-            qty: true,
-            rate: true,
-            discount: true,
-            tax: true,
-            value: true,
-            barcode: true,
-            size: true,
-            item:{
-              select:{
-                id:true
-              }
-            },
-            category:{
-              select:{
-                name:true,
-                hsn:true
-              }
-            }
-          },
-        },
-      },
+ CreateBill.mutateAsync({
+  data: payload
     });
 
-    console.log(billResponse)
-      
+   
         toast.add({
           title: 'Bill created successfully!',
           color: 'green',
         });
         isPrint.value = true
            printData = {
-              invoiceNumber: billResponse.invoiceNumber || 'N/A',
-              date: billResponse.createdAt,
-              entries: billResponse.entries.map(entry => {
+              invoiceNumber: billid.billCounter,
+              date: new Date(date.value).toISOString(),
+              entries: items.value.map(entry => {
               let calculatedDiscount = 0;
     
               if (entry.discount < 0) {
@@ -669,8 +639,8 @@ billResponse = await CreateBill.mutateAsync({
               }
     
               return {
-                description: entry.barcode ? entry.name : entry.category.name,
-                hsn: entry.category.hsn,
+                description: entry.barcode ? entry.name : entry.category[0].name,
+                hsn: entry.category[0].hsn,
                 qty: entry.qty,
                 mrp: entry.rate,
                 discount: calculatedDiscount, // ✅ set calculated discount
@@ -682,19 +652,19 @@ billResponse = await CreateBill.mutateAsync({
               };
             }),
     
-          subtotal: billResponse.subtotal,
-          discount: billResponse.discount,
-          grandTotal: billResponse.grandTotal,
-          paymentMethod: billResponse.paymentMethod,
-          companyName: billResponse.company.name || '',
-          companyAddress: billResponse.company.address || {},
-          gstin: billResponse.company.gstin || '',
-          accHolderName: billResponse.company.accHolderName || '',
-          upiId: billResponse.company.upiId || '',
+          subtotal: subtotal.value,
+          discount: discount.value,
+          grandTotal: grandTotal.value,
+          paymentMethod: paymentMethod.value,
+          companyName: useAuth().session.value?.companyName || '',
+          companyAddress: billid.address || {},
+          gstin: billid.gstin || '',
+          accHolderName: billid.accHolderName || '',
+          upiId: billid.upiId || '',
           // 🆕 Add total qty
-          tqty: billResponse.entries.reduce((sum, entry) => sum + entry.qty, 0),
-          tvalue: billResponse.entries.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
-          tdiscount: billResponse.entries.reduce((sum, entry) => {
+          tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
+          tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+          tdiscount: items.value.reduce((sum, entry) => {
             if (entry.discount < 0) {
               return sum + (Math.abs(entry.discount) * entry.qty);
             } else {
@@ -702,32 +672,30 @@ billResponse = await CreateBill.mutateAsync({
             }
           }, 0),
         };
-    
-   
+    isSaving.value = false;
+   console.log(printData)
         $fetch('/api/notifications/notify', {
         method: 'POST',
         body: {
           userId:useAuth().session.value?.id,
           type: 'BILL',
           companyId: useAuth().session.value?.companyId,
-          id: billResponse.id,
-          invoiceNumber: billResponse.invoiceNumber,
-          amount: billResponse.grandTotal
+          // id: billResponse.id,
+          invoiceNumber: billid.billCounter,
+          amount: grandTotal.value
         }
       })
     
     } catch (error) {
+      isSaving.value = false;
       console.error('Error creating bill', error);
       toast.add({
         title: 'Bill creation failed!',
         description: error.message,
         color: 'red',
       });
-    }finally {
-      isSaving.value = false;
     }
-    if(billResponse){
-      console.log(billResponse)
+   
       for (const item of items.value) {
         if (item.barcode && item.return === false) {
           let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
@@ -804,7 +772,7 @@ billResponse = await CreateBill.mutateAsync({
     try {
       tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
       if (tokenEntries.value.length > 0) {
-        await DeleteTokenEntry.mutateAsync({
+         DeleteTokenEntry.mutateAsync({
           where: { tokenNo: { in: tokenEntries.value } }
         });
         console.log('Token entries deleted successfully');
@@ -812,7 +780,7 @@ billResponse = await CreateBill.mutateAsync({
     } catch (error) {
       console.error('Error deleting token entries', error);
     }
-      }
+      
 
   };
 
@@ -1343,7 +1311,7 @@ if(!data){
         
           <div class="p-3">
             <div>
-              Qty: {{ items.reduce((sum, item)=> sum + item.qty,0) }}
+              Qty: {{ items.reduce((sum, item)=> sum + item.qty,0) - 1 }}
             </div>
           </div>
 
