@@ -38,6 +38,7 @@ const grandTotal = computed(() => {
 });
 
 const returnAmt = ref(0);
+const paymentOptions = ['Cash', 'UPI', 'Card']
 const paymentMethod = ref('Cash');
 const voucherNo = ref('');
 const phoneNo = ref('');
@@ -47,7 +48,10 @@ const clientId = ref('');
 const scannedBarcode = ref("");
 const token = ref("")
 const tokenEntries = ref([])
-
+const showSplitModal = ref(false)
+const splitPayments = ref([
+  { method: '', amount: 0 }
+])
 const barcodeInputs = ref([]);
 const categoryInputs = ref([]);
 const nameInputs = ref([]);
@@ -1142,6 +1146,54 @@ if(!data){
 }
 
 
+watch(paymentMethod, (val) => {
+  if (val === 'Split') {
+    showSplitModal.value = true
+  }
+})
+
+// Add a new split row
+function addSplitEntry() {
+  splitPayments.value.push({ method: '', amount: 0 })
+}
+
+// Remove a row
+function removeSplitEntry(index) {
+  if (splitPayments.value.length > 1) {
+    splitPayments.value.splice(index, 1)
+  }
+}
+
+// Total calculation
+const totalSplitAmount = computed(() =>
+  splitPayments.value.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
+)
+
+function getAvailableOptions(index) {
+  const selectedMethods = splitPayments.value.map((e) => e.method)
+  const currentMethod = splitPayments.value[index].method
+
+  // Allow current row to still show its existing selection
+  const options = paymentOptions.filter(
+    (opt) => !selectedMethods.includes(opt) || opt === currentMethod
+  )
+
+  return options
+}
+
+
+// Final submission
+function submitSplitPayment() {
+  if (totalSplitAmount.value !== grandTotal.value) {
+    alert(`Total split amount must be exactly ${grandTotal.value}`)
+    return
+  }
+
+  // Process splitPayments here
+  console.log('Final Split:', splitPayments.value)
+  showSplitModal.value = false
+}
+
 </script>
 
 
@@ -1363,7 +1415,7 @@ if(!data){
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
-              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card']" @keydown.enter.prevent="handleEnterPayment(index)" />
+              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card','Split']" @keydown.enter.prevent="handleEnterPayment(index)" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
@@ -1479,6 +1531,61 @@ if(!data){
           <UButton ref="addTokenRef"  @click="submitEntryForm" block class="mt-4">Submit</UButton>
         </div>
     </UModal>
+
+   <!-- split payment method modal -->
+   <UModal v-model="showSplitModal">
+    <div class="p-4 space-y-4">
+      <h2 class="text-lg font-semibold">Split Payment</h2>
+
+      <div v-for="(entry, index) in splitPayments" :key="index" class="flex gap-2 items-center">
+        <USelect
+          v-model="entry.method"
+           :options="getAvailableOptions(index)"
+          class="w-1/2"
+          placeholder="Select Method"
+        />
+        <UInput
+          v-model.number="entry.amount"
+          type="number"
+          placeholder="Amount"
+          class="w-1/2"
+        />
+        <UButton
+          icon="i-heroicons-trash"
+          color="red"
+          size="sm"
+          @click="removeSplitEntry(index)"
+          :disabled="splitPayments.length === 1"
+        />
+      </div>
+
+      <UButton @click="addSplitEntry" color="gray" variant="outline">Add More</UButton>
+
+      <div class="mt-4">
+        <p class="text-sm font-medium">Total Entered: ₹{{ totalSplitAmount }}</p>
+        <p
+          class="text-sm"
+          :class="{
+            'text-green-600': totalSplitAmount === grandTotal,
+            'text-red-600': totalSplitAmount !== grandTotal
+          }"
+        >
+          Grand Total: ₹{{ grandTotal }}
+        </p>
+      </div>
+
+      <UButton
+        :disabled="totalSplitAmount !== grandTotal"
+        color="green"
+        block
+        class="mt-4"
+        @click="submitSplitPayment"
+      >
+        Submit Split Payment
+      </UButton>
+    </div>
+  </UModal>
+
 
     <UDashboardModal
         v-model="isPrint"

@@ -410,14 +410,17 @@ model Bill extends Base {
     returnAmt       Float? @map("return_Amt")  
     deliveryFees    Float? @map("delivery_fees")  
     paymentMethod   String? @map("payment_method") 
+    cash            String? 
+    card            String? 
+    upi             String? 
     paymentStatus   PaymentStatus @default(PENDING) @map("payment_status")  
     transactionId   String? @unique @map("transaction_id")  
     notes           String?
-    type           OrderType?
-    status         OrderStatus? 
+    type            OrderType?
+    status          OrderStatus? 
     deleted         Boolean? @default(false) 
-    bookingDate    DateTime? @map("booking_date")
-    returnDeadline String? @map("return_deadline")
+    bookingDate     DateTime? @map("booking_date")
+    returnDeadline  String? @map("return_deadline")
     entries         Entry[]       
     company         Company @relation(fields: [companyId], references: [id])
     companyId       String @map("company_id")   
