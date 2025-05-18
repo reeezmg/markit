@@ -9,6 +9,7 @@ import {
   useUpdateItem,
   useCreateAccount,
   useFindManyAccount,
+  useFindUniqueClient,
   useUpdateEntry,
   useCreateEntry,
   useDeleteManyEntry,
@@ -32,9 +33,10 @@ const router = useRouter();
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const isPrint = ref(false);
 const isSaving = ref(false);
-
+const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
+const accountLoaded = ref(false);
 const subtotal = computed(() => {
   return items.value.reduce((sum, item) => sum + (item.qty * item.rate || 0), 0);
 });
@@ -50,15 +52,19 @@ const grandTotal = computed(() => {
 });
 
 const returnAmt = ref(0);
-const paymentMethod = ref('Cash');
+const paymentMethod = ref(null);
 const voucherNo = ref('');
-const cellNo = ref('');
+const phoneNo = ref('');
+const clientName = ref('');
 const points = ref(0);
-const name = ref('');
+const clientId = ref('');
 const scannedBarcode = ref("");
 const categoryStore = useCategoryStore()
 let printData = {}
-
+const showSplitModal = ref(false)
+const splitPayments = ref([
+  { method: '', amount: 0 }
+])
 const qtyInputs = ref([]);
 const barcodeInputs = ref([]);
 const discountref = ref();
@@ -74,7 +80,7 @@ const account = ref({
     state: '',
     pincode: '',
 });
-const selected = ref({});
+const selected = ref(null);
 
 
 const items = ref([
@@ -105,10 +111,13 @@ let columnIndex = 0;
 
 
 watch(selected, (newSelected) => {
-  if(Object.keys(newSelected).length !== 0 ){
-    paymentMethod.value = 'credit'
+  if(newSelected && accountLoaded.value){
+    paymentMethod.value = 'Credit'
   }
-  console.log(newSelected)
+  else{
+     accountLoaded.value = true
+  }
+
 })
 
 
@@ -259,6 +268,28 @@ onMounted(async () => {
   });
 });
 
+const args = computed(() => ({
+  where: {
+    phone: `+91${phoneNo.value}`,
+    companies: {
+      some: {
+        companyId: useAuth().session.value?.companyId,
+      },
+    },
+  },
+}));
+
+
+ const {
+  data: client,
+  isLoading:isClientLoading,
+  error,
+  refetch:refetchClient,
+} = useFindUniqueClient(
+  args,
+  { enabled: false } // disabled by default
+);
+
 const {
     data: categories,
 } = useFindManyCategory(
@@ -344,6 +375,7 @@ const billArgs = computed(() => ({
     paymentStatus: true,
     notes:true,
     returnDeadline: true,
+    accountId:true,
     type: true,
     status: true,
     address: {
@@ -359,6 +391,7 @@ const billArgs = computed(() => ({
         select:{
             name:true,
             phone:true,
+            id:true,
         }
     },
     entries: {  
@@ -436,6 +469,10 @@ watch(() => bill.value, (newData) => {
   console.log(newData)
   if (!newData || !newData.entries) return;
   discount.value = newData.discount
+    selected.value = newData.accountId
+    clientId.value = newData.client.id
+    clientName.value = newData.client.name
+    phoneNo.value = newData.client.phone
   paymentMethod.value = newData.paymentMethod
    date.value = new Date(newData.createdAt).toISOString().split('T')[0]
   items.value = newData.entries.map((entry, index) => {
@@ -697,6 +734,20 @@ if (entryIds.length > 0) {
     discount: discount.value,
     grandTotal: grandTotal.value,
     paymentMethod: paymentMethod.value,
+    paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
+    ...(paymentMethod.value === 'Split' && {
+      splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
+    }),
+    ...(selected.value && {
+    account: { connect: { id: selected.value } },
+    }),
+    ...(clientId.value && {
+    client: {
+      connect: {
+        id: clientId.value,
+      },
+    },
+  }),
     createdAt: new Date(date.value).toISOString(),
     company: {
       connect: {
@@ -961,13 +1012,82 @@ const print = async() => {
 
 
 
+watch(paymentMethod, (val) => {
+
+  if (val === 'Split') {
+    showSplitModal.value = true
+  }
+})
+
+// Add a new split row
+function addSplitEntry() {
+  splitPayments.value.push({ method: '', amount: 0 })
+}
+
+// Remove a row
+function removeSplitEntry(index) {
+  if (splitPayments.value.length > 1) {
+    splitPayments.value.splice(index, 1)
+  }
+}
+
+// Total calculation
+const totalSplitAmount = computed(() =>
+  splitPayments.value.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
+)
+
+function getAvailableOptions(index) {
+  const selectedMethods = splitPayments.value.map((e) => e.method)
+  const currentMethod = splitPayments.value[index].method
+
+  // Allow current row to still show its existing selection
+  const options = paymentOptions.filter(
+    (opt) => !selectedMethods.includes(opt) || opt === currentMethod
+  )
+
+  return options
+}
+
+
+// Final submission
+function submitSplitPayment() {
+  if (totalSplitAmount.value !== grandTotal.value) {
+    alert(`Total split amount must be exactly ${grandTotal.value}`)
+    return
+  }
+
+  // Process splitPayments here
+  console.log('Final Split:', splitPayments.value)
+  showSplitModal.value = false
+}
+
+const handleEnterPhone = async() => {
+const { data } = await refetchClient()
+console.log(data)
+clientName.value = data?.name
+clientId.value = data?.id
+if(!data){
+  isClientAddModelOpen.value = true
+}
+}
+
+
 </script>
 
 
 <template>
   <UDashboardPanelContent class="p-1">
-    <div>
-      <UCard class="max-w-[1400px] mx-auto">
+    <UCard 
+       :ui="{
+          base: 'h-100 flex flex-col',
+          rounded: '',
+         divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+          body: {
+            padding: '',
+            base: 'grow divide-y divide-gray-200 dark:divide-gray-700'
+          }
+        }">
+
         <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
         <UInput v-model="date" type="date" label="Date" class="lg:col-span-2" />
 
@@ -1051,6 +1171,13 @@ const print = async() => {
           
         </div>
 
+         <div class="p-3">
+            <div>
+              Qty: {{ items.reduce((sum, item)=> sum + item.qty,0) }}
+            </div>
+          </div>
+
+  <template #footer>
         <!-- Other form elements -->
         <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
           <div>
@@ -1095,7 +1222,7 @@ const print = async() => {
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
-              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card','Split']" @keydown.enter.prevent="handleEnterPayment(index)" />
+              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card','Split','Credit']" @keydown.enter.prevent="handleEnterPayment(index)" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
@@ -1123,11 +1250,11 @@ const print = async() => {
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
-              <UInput v-model="cellNo" :loading="false" icon="i-heroicons-magnifying-glass-20-solid" />
+              <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
             </div>
-            <div class="mb-4">
+           <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
-              <UInput v-model="name" />
+              <UInput v-model="clientName" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Points</label>
@@ -1147,8 +1274,9 @@ const print = async() => {
           <UButton class="flex-1" block>Sales Return</UButton>
           <UButton class="flex-1" block>Bill Search</UButton>
         </div>
-      </UCard>
-    </div>
+
+    </template>
+     </UCard>
   </UDashboardPanelContent>
 
   <UModal v-model="isOpen">
@@ -1200,6 +1328,67 @@ const print = async() => {
             <UButton color="red" label="NO" @click="isPrint = false" />
         </template>
     </UDashboardModal>
+
+    <BillingAddClient
+  v-model:model="isClientAddModelOpen"
+  v-model:phoneNo="phoneNo"
+  :onVerify="handleEnterPhone"
+/>
+
+     <!-- split payment method modal -->
+   <UModal v-model="showSplitModal">
+    <div class="p-4 space-y-4">
+      <h2 class="text-lg font-semibold">Split Payment</h2>
+
+      <div v-for="(entry, index) in splitPayments" :key="index" class="flex gap-2 items-center">
+        <USelect
+          v-model="entry.method"
+           :options="getAvailableOptions(index)"
+          class="w-1/2"
+          placeholder="Select Method"
+        />
+        <UInput
+          v-model.number="entry.amount"
+          type="number"
+          placeholder="Amount"
+          class="w-1/2"
+        />
+        <UButton
+          icon="i-heroicons-trash"
+          color="red"
+          size="sm"
+          @click="removeSplitEntry(index)"
+          :disabled="splitPayments.length === 1"
+        />
+      </div>
+
+      <UButton @click="addSplitEntry" color="gray" variant="outline">Add More</UButton>
+
+      <div class="mt-4">
+        <p class="text-sm font-medium">Total Entered: ₹{{ totalSplitAmount }}</p>
+        <p
+          class="text-sm"
+          :class="{
+            'text-green-600': totalSplitAmount === grandTotal,
+            'text-red-600': totalSplitAmount !== grandTotal
+          }"
+        >
+          Grand Total: ₹{{ grandTotal }}
+        </p>
+      </div>
+
+      <UButton
+        :disabled="totalSplitAmount !== grandTotal"
+        color="green"
+        block
+        class="mt-4"
+        @click="submitSplitPayment"
+      >
+        Submit Split Payment
+      </UButton>
+    </div>
+  </UModal>
+
 
 
 </template>

@@ -38,7 +38,7 @@ const grandTotal = computed(() => {
 });
 
 const returnAmt = ref(0);
-const paymentOptions = ['Cash', 'UPI', 'Card']
+const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
 const paymentMethod = ref('Cash');
 const voucherNo = ref('');
 const phoneNo = ref('');
@@ -88,7 +88,7 @@ const account = ref({
     state: '',
     pincode: '',
 });
-const selected = ref();
+const selected = ref(null);
 
 
 const items = ref([
@@ -598,7 +598,7 @@ const payload = {
   returnAmt: Number(returnAmt.value) || 0,
   paymentMethod: paymentMethod.value || 'Cash',
   createdAt: new Date(date.value).toISOString(),
-  paymentStatus: selected.value? 'PENDING' : 'PAID',
+  paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
   type: 'BILL',
   entries: {
     create: entriesData,
@@ -671,6 +671,9 @@ const payload = {
           companyAddress: billid.address || {},
           gstin: billid.gstin || '',
           accHolderName: billid.accHolderName || '',
+          ...(paymentMethod.value === 'Split' && {
+            splitPayments: splitPayments.value,
+          }),
           upiId: billid.upiId || '',
           // 🆕 Add total qty
           tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
@@ -1425,7 +1428,7 @@ function submitSplitPayment() {
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
-              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card','Split']" @keydown.enter.prevent="handleEnterPayment(index)" />
+              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card','Split','Credit']" @keydown.enter.prevent="handleEnterPayment(index)" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>

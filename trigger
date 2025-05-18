@@ -75,7 +75,7 @@ BEGIN
 
     -- 5. Save barcode
     INSERT INTO variant_size_barcodes (variant_id, size, barcode)
-    VALUES (NEW.variant_id, NEW.size, prefix || LPAD((number_part % base)::TEXT, 6, '0'));
+    VALUES (NEW.variant_id, NEW.size, NEW.barcode);
 
     -- 6. Increment the company's barcode counter
     UPDATE companies
