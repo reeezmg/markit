@@ -71,7 +71,7 @@ export default eventHandler(async (event) => {
         });
 
    
-
+        console.log(res)
         // Fetch created items with their related variant and product data
         const createdItems = await prisma.item.findMany({
             where: {

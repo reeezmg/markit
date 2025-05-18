@@ -1209,6 +1209,10 @@ const metadata = {
                     name: "paymentMethod",
                     type: "String",
                     isOptional: true,
+                }, splitPayments: {
+                    name: "splitPayments",
+                    type: "Json",
+                    isOptional: true,
                 }, paymentStatus: {
                     name: "paymentStatus",
                     type: "PaymentStatus",

@@ -75,6 +75,7 @@ let printData = {}
 
 
 const isOpen = ref(false);
+const isSavingAcc = ref(false)
 const isTokenOpen = ref(false);
 const issalesReturnModelOpen = ref(false);
 const isClientAddModelOpen = ref(false);
@@ -587,36 +588,44 @@ const entriesData = items.value.map(item => {
 
   return entry;
 });
-
+console.log(selected.value)
 const payload = {
-  invoiceNumber:billid.billCounter,
-  subtotal: subtotal.value,
-  discount: discount.value || 0,
-  grandTotal: grandTotal.value,
-  paymentMethod: paymentMethod.value,
+  invoiceNumber: billid.billCounter,
+  subtotal: Number(subtotal.value) || 0,
+  discount: Number(discount.value) || 0,
+  grandTotal: Number(grandTotal.value) || 0,
+  returnAmt: Number(returnAmt.value) || 0,
+  paymentMethod: paymentMethod.value || 'Cash',
   createdAt: new Date(date.value).toISOString(),
-  returnAmt:returnAmt.value || 0,
   paymentStatus: Object.keys(selected.value).length !== 0 ? 'PENDING' : 'PAID',
+  type: 'BILL',
+  entries: {
+    create: entriesData,
+  },
   company: {
     connect: {
       id: useAuth().session.value?.companyId,
     },
   },
   ...(clientId.value && {
-  client:{
-      connect:{
-        id:clientId.value
-      }
+    client: {
+      connect: {
+        id: clientId.value,
+      },
     },
   }),
-  type: 'BILL',
-  entries: {
-    create: entriesData,
-  },
   ...(Object.keys(selected.value).length !== 0 && {
-    account: { connect: { id: selected.value.id } },
+    account: {
+      connect: {
+        id: selected.value.id,
+      },
+    },
+  }),
+  ...(paymentMethod.value === 'Split' && {
+    splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
   }),
 };
+
 
  CreateBill.mutateAsync({
   data: payload
@@ -816,6 +825,7 @@ const {
 
 
 const submitForm = async () => {
+  isSavingAcc.value = true
   try {
     const res = await CreateAccount.mutateAsync({
       data: {
@@ -844,6 +854,8 @@ const submitForm = async () => {
     isOpen.value = false
   }catch(error){
     console.log(error)
+  }finally{
+    isSavingAcc.value = false
   }
 };
 
@@ -1436,7 +1448,7 @@ function submitSplitPayment() {
               <UInput v-model="voucherNo" />
             </div>
             <div class="mt-9">
-              <UButton color="primary" block @click="isOpen=true">Add Account</UButton>
+              <UButton color="primary" block @click="isOpen=true" :disabled="isSavingAcc">Add Account</UButton>
             </div>
           </div>
           

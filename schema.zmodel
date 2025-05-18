@@ -410,9 +410,7 @@ model Bill extends Base {
     returnAmt       Float? @map("return_Amt")  
     deliveryFees    Float? @map("delivery_fees")  
     paymentMethod   String? @map("payment_method") 
-    cash            String? 
-    card            String? 
-    upi             String? 
+    splitPayments   Json?   @map("split_payments") 
     paymentStatus   PaymentStatus @default(PENDING) @map("payment_status")  
     transactionId   String? @unique @map("transaction_id")  
     notes           String?

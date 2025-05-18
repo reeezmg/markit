@@ -464,6 +464,28 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                     {{ row.entries.length }}
                 </template>
 
+                <template #grandTotal-data="{ row }">
+                    <UPopover mode="hover">
+                        {{ row.grandTotal }}
+                        <template #panel>
+                        <div class="p-4 space-y-1">
+                            <div class="font-semibold">Payment Method:</div>
+                            <div v-if="row.paymentMethod === 'Split'">
+                            <ul class="list-disc list-inside">
+                                <li v-for="(payment, idx) in row.splitPayments" :key="idx">
+                                {{ payment.method }} – ₹{{ payment.amount }}
+                                </li>
+                            </ul>
+                            </div>
+                            <div v-else>
+                            {{ row.paymentMethod }}
+                            </div>
+                        </div>
+                        </template>
+                    </UPopover>
+                    </template>
+
+
                 <template #createdAt-data="{ row }">
                     {{ row.createdAt.toLocaleDateString('en-GB') }}
                 </template>
