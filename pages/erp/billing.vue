@@ -88,7 +88,7 @@ const account = ref({
     state: '',
     pincode: '',
 });
-const selected = ref({});
+const selected = ref();
 
 
 const items = ref([
@@ -133,8 +133,8 @@ let startWidth = 0;
 let columnIndex = 0;
 
 watch(selected, (newSelected) => {
-  if(Object.keys(newSelected).length !== 0 ){
-    paymentMethod.value = 'credit'
+  if(newSelected){
+    paymentMethod.value = 'Credit'
   }
   console.log(newSelected)
 })
@@ -497,6 +497,7 @@ const fetchItemData = async (barcode, index) => {
     items.value[index].sizes = itemdata.value.variant?.sizes || null;
     items.value[index].variantId = itemdata.value.variant?.id || '';
   } else {
+    items.value[index].barcode = ''
      toast.add({
           title: 'Barcode is invalid or item is empty!',
           color: 'red',
@@ -597,7 +598,7 @@ const payload = {
   returnAmt: Number(returnAmt.value) || 0,
   paymentMethod: paymentMethod.value || 'Cash',
   createdAt: new Date(date.value).toISOString(),
-  paymentStatus: Object.keys(selected.value).length !== 0 ? 'PENDING' : 'PAID',
+  paymentStatus: selected.value? 'PENDING' : 'PAID',
   type: 'BILL',
   entries: {
     create: entriesData,
@@ -614,13 +615,10 @@ const payload = {
       },
     },
   }),
-  ...(Object.keys(selected.value).length !== 0 && {
-    account: {
-      connect: {
-        id: selected.value.id,
-      },
-    },
+  ...(selected.value && {
+    account: { connect: { id: selected.value } },
   }),
+
   ...(paymentMethod.value === 'Split' && {
     splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
   }),
