@@ -470,9 +470,9 @@ watch(() => bill.value, (newData) => {
   if (!newData || !newData.entries) return;
   discount.value = newData.discount
     selected.value = newData.accountId
-    clientId.value = newData.client.id
-    clientName.value = newData.client.name
-    phoneNo.value = newData.client.phone
+    clientId.value = newData.client?.id
+    clientName.value = newData.client?.name
+    phoneNo.value = newData.client?.phone
   paymentMethod.value = newData.paymentMethod
    date.value = new Date(newData.createdAt).toISOString().split('T')[0]
   items.value = newData.entries.map((entry, index) => {
