@@ -25,6 +25,7 @@ const CreatePurchaseOrder = useCreatePurchaseOrder();
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
+const isAddPhotoModelOpen = ref(false)
 
 // Columns
 const columns = [
@@ -379,6 +380,15 @@ isAdd.value =false
                         :loading=isAdd
                         @click="handleAdd"
                     />
+                    <UButton
+                        class="ms-5"
+                        icon="i-heroicons-camera"
+                        size="sm"
+                        color="primary"
+                        variant="solid"
+                        label="Add Photo"
+                        @click="isAddPhotoModelOpen = true"
+                    />
                 </div>
             </div>
 
@@ -651,5 +661,15 @@ isAdd.value =false
                 </div>
             </template>
         </UCard>
+
+        
     </UDashboardPanelContent>
+
+    
+    <UModal v-model="isAddPhotoModelOpen">
+      <UCard >
+        
+       
+      </UCard>
+    </UModal>
 </template>

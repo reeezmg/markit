@@ -69,13 +69,30 @@ const totals = computed(() => {
 
   const totalRevenue = bills.reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
 
-  const totalRevenueInCash = bills
-    .filter(bill => bill.paymentMethod === 'Cash')
-    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0)
+  let totalRevenueInCash = 0;
+let totalRevenueInUPI = 0;
 
-  const totalRevenueInUPI = bills
-    .filter(bill => bill.paymentMethod === 'UPI')
-    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0)
+bills.forEach(bill => {
+  if (bill.splitPayments && Array.isArray(bill.splitPayments)) {
+    bill.splitPayments.forEach(payment => {
+      if (payment.method === 'Cash') {
+        totalRevenueInCash += payment.amount ?? 0;
+      } else if (payment.method === 'UPI') {
+        totalRevenueInUPI += payment.amount ?? 0;
+      }
+    });
+  } else {
+    // Fallback for non-split payments
+    const method = bill.paymentMethod;
+    const amount = bill.grandTotal ?? 0;
+    if (method === 'Cash') {
+      totalRevenueInCash += amount;
+    } else if (method === 'UPI') {
+      totalRevenueInUPI += amount;
+    }
+  }
+});
+
 
   const totalRevenueInCredit = bills
     .filter(bill => bill.paymentMethod === 'Credit')
