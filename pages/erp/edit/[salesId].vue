@@ -71,6 +71,7 @@ const discountref = ref();
 const paymentref = ref();
 const saveref = ref();
 const isOpen = ref(false);
+const isClientAddModelOpen = ref(false);
 const account = ref({
     name: '',
     phone:'',
@@ -1282,7 +1283,8 @@ if(!data){
           <UButton color="red" class="flex-1" block  @click="deleteBill">Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
           <UButton class="flex-1" block>Sales Return</UButton>
-          <UButton class="flex-1" block>Bill Search</UButton>
+          <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
+
         </div>
 
     </template>
