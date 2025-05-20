@@ -241,7 +241,12 @@ const {
 } = useFindManyBill(queryArgs);
 
 
-const  pageTotal = computed(() => sales.value?.length) ;
+const countArgs = computed(() => ({
+  where: queryArgs.value.where,
+}));
+
+const { data: pageTotal } = useCountBill(countArgs);
+
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -260,7 +265,7 @@ function selectRange(duration: Duration) {
 
 
 
-watch(sales, (newsales) => {
+watch(queryArgs, (newsales) => {
     console.log( newsales);
 });
 

@@ -409,7 +409,10 @@ const handleEnterBarcode = (barcode,index) => {
     input.select();
     }
   }else{
-    const existingItemIndex = items.value.findIndex(item => item.barcode === barcode);
+    const existingItemIndex = items.value.findIndex(
+  (item, i) => item.barcode === barcode && !item.return && i !== index
+);
+
     console.log(existingItemIndex)
     if(existingItemIndex != -1 && existingItemIndex !== index){
       items.value[existingItemIndex].qty += 1;
@@ -1156,12 +1159,19 @@ onMounted(() => {
   });
 });
 
-const handleReturnData = ({ totalreturnvalue, items: returnedItems }) => {
+const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
   items.value = items.value.filter(item =>
       item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
     );
-  returnAmt.value = totalreturnvalue;
-  items.value.push(...returnedItems);
+    const baseIndex = items.value.length;
+
+    returnedItems.forEach((item, i) => {
+      item.sn = baseIndex + i + 1; // Ensure sn = position in array (1-based)
+    });
+
+    items.value.push(...returnedItems);
+    addNewRow(items.value.length - 1);
+
 };
 
 

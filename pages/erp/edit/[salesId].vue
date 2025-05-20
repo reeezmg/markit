@@ -33,6 +33,7 @@ const router = useRouter();
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const isPrint = ref(false);
 const isSaving = ref(false);
+const issalesReturnModelOpen = ref(false);
 const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
@@ -85,7 +86,7 @@ const selected = ref(null);
 
 
 const items = ref([
-  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 },
+  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false },
 ]);
 
 
@@ -167,7 +168,7 @@ watch(items, async () => {
       baseValue += (baseValue * item.tax) / 100;
     }
 
-    item.value = Math.max(baseValue, 0);
+    item.value = baseValue;
   }
 }, { deep: true });
 
@@ -1077,6 +1078,22 @@ if(!data){
 }
 }
 
+const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
+  items.value = items.value.filter(item =>
+      item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
+    );
+    const baseIndex = items.value.length;
+
+    returnedItems.forEach((item, i) => {
+      item.sn = baseIndex + i + 1; // Ensure sn = position in array (1-based)
+    });
+
+    items.value.push(...returnedItems);
+    addNewRow(items.value.length - 1);
+
+};
+
+
 
 </script>
 
@@ -1204,22 +1221,23 @@ if(!data){
           />
         </div>
 
-        <!-- Subtotal Display -->
-        <div class="border border-primary-300 rounded-md mb-7">
+         <!-- Subtotal Display -->
+        <div class="border border-primary-700 dark:border-primary-300 rounded-md mb-7">
         <div class="flex flex-col items-center justify-center py-3">
           <div class="text-s">Sub Total</div>
-          <div class="text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
+          <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
         </div>
       </div>
           
 
-        <!-- Grand Total Display -->
-        <div class="border border-green-300 rounded-md">
-        <div class="flex flex-col items-center justify-center py-3">
-          <div class="text-s">Grand Total</div>
-          <div class="text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+         <!-- Grand Total Display -->
+          <div class="border border-green-700 dark:border-green-300 rounded-md">
+          <div class="flex flex-col items-center justify-center py-3">
+            <div class="text-s">Grand Total</div>
+            <div class="text-green-700 dark:text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+          </div>
         </div>
-      </div>
+
           </div>
 
           <div>
@@ -1282,7 +1300,7 @@ if(!data){
           <UButton :loading="isSaving"  ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
           <UButton color="red" class="flex-1" block  @click="deleteBill">Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
-          <UButton class="flex-1" block>Sales Return</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
           <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
 
         </div>
@@ -1345,6 +1363,11 @@ if(!data){
   v-model:model="isClientAddModelOpen"
   v-model:phoneNo="phoneNo"
   :onVerify="handleEnterPhone"
+/>
+
+<BillingSalesReturn
+  v-model="issalesReturnModelOpen"
+  @totalreturnvalue="handleReturnData"
 />
 
      <!-- split payment method modal -->

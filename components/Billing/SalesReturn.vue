@@ -3,13 +3,13 @@ import { useFindFirstEntry,useFindManyCategory } from '~/lib/hooks';
 
 const model = defineModel();
 const emit = defineEmits(['totalreturnvalue']);
-const barcodeInputs = ref([]);
-const categoryInputs = ref([]);
-const nameInputs = ref([]);
-const qtyInputs = ref([]);
-const rateInputs = ref([]);
-const discountInputs = ref([]);
-const taxInputs = ref([]);
+const barcodeCInputs = ref([]);
+const categoryCInputs = ref([]);
+const nameCInputs = ref([]);
+const qtyCInputs = ref([]);
+const rateCInputs = ref([]);
+const discountCInputs = ref([]);
+const taxCInputs = ref([]);
 const invoiceNumber = ref(null);
 const loadingStates = ref([]);
 const categoryStore = useCategoryStore()
@@ -17,7 +17,7 @@ const scannedBarcode = ref("");
 const useAuth = () => useNuxtApp().$auth;
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 
-const items = ref([
+const returnedItems = ref([
   { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0, return:true },
 ]);
 
@@ -56,13 +56,13 @@ const {
 );
 
 watch(
-  items,
-  (newItems) => {
-    newItems.forEach((item, index) => {
+  returnedItems,
+  (newreturnedItems) => {
+    newreturnedItems.forEach((item, index) => {
       if (item.category.length > 1) {
         // Keep only the latest selected category
         const lastCategory = item.category[item.category.length - 1];
-        items.value[index].category = [lastCategory];
+        returnedItems.value[index].category = [lastCategory];
       }
     });
   },
@@ -71,9 +71,10 @@ watch(
 
 
 
-watch(items, async () => {
-  for (let index = 0; index < items.value.length; index++) {
-    const item = items.value[index];
+watch(returnedItems, async () => {
+  console.log(returnedItems)
+  for (let index = 0; index < returnedItems.value.length; index++) {
+    const item = returnedItems.value[index];
     
     // ---------- Step 1: Calculate discounted rate ----------
     let discountedRate = item.rate;
@@ -132,9 +133,9 @@ const entryArgs = computed(() => ({
       invoiceNumber: invoiceNumber.value, // integer, not string
       companyId: useAuth().session.value?.companyId,
     },
-    item:{
-      status:'sold'
-    }
+    // item:{
+    //   status:'sold'
+    // }
 
   },
   include:{
@@ -155,8 +156,8 @@ const fetchItemData = async (barcode, index) => {
 
   if (data) {
 
-    items.value[index] = {
-      ...items.value[index],
+    returnedItems.value[index] = {
+      ...returnedItems.value[index],
       entryId: data.id || '',
       id: data?.itemId || '',
       size: data?.size || '',
@@ -212,7 +213,9 @@ const stopResize = () => {
 };
 
 watch(model, (val) => {
-  console.log(val)
+  returnedItems.value =[
+  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0, return:true },
+];
   if (val) {
     nextTick(() => {
       const ths = resizableTable.value?.querySelectorAll('th');
@@ -224,7 +227,7 @@ watch(model, (val) => {
 });
 
 const selectAllText = (index) => {
-  const component = barcodeInputs.value[index];
+  const component = barcodeCInputs.value[index];
   if (component?.$el) {
     const input = component.$el.querySelector("input");
     if (input) {
@@ -238,46 +241,44 @@ const removeRow = (event,barcode,index) => {
   const inputValue = event.target.value;
   if (!inputValue) {
     event.preventDefault();
-    if (items.value.length > 1) {
-    items.value.splice(index, 1);
+    if (returnedItems.value.length > 1) {
+    returnedItems.value.splice(index, 1);
     // Reorder serial numbers after deletion
-    items.value.forEach((item, i) => {
+    returnedItems.value.forEach((item, i) => {
       item.sn = i + 1;
     });
   }
-  const component = barcodeInputs.value[index - 1 ];
+  const component = barcodeCInputs.value[index - 1 ];
   if (component?.$el) {
     const input = component.$el.querySelector("input");
     if (input) {
       input.focus();
     } else {
-      console.warn("Input element not found inside barcodeInputs:", component.$el);
+      console.warn("Input element not found inside barcodeCInputs:", component.$el);
     }
   } else {
     console.warn("Barcode input component is not available:", component);
   }
   }
-
-  
 };
 
 const addNewRow = async (index) => {
-  const hasEmptyRow = items.value.some(item => {
+  const hasEmptyRow = returnedItems.value.some(item => {
     return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim() && item.rate === 0;
   });
 
   if (hasEmptyRow) {
-  const component = barcodeInputs.value[index + 1];
+  const component = barcodeCInputs.value[index + 1];
   const input = component?.$el?.querySelector("input");
   input.focus();
   input.select();
   return;
   };
 
-  items.value.push({
+  returnedItems.value.push({
     id: '',
     variantId: '',
-    sn: items.value.length + 1,
+    sn: returnedItems.value.length + 1,
     barcode: '',
     category: {},
     size: '',
@@ -293,7 +294,7 @@ const addNewRow = async (index) => {
 
   await nextTick();
 
-  const component = barcodeInputs.value[index + 1];
+  const component = barcodeCInputs.value[index + 1];
   const input = component?.$el?.querySelector("input");
   if (input) input.focus();
 };
@@ -314,14 +315,14 @@ const handleEnterBarcode = (barcode,index) => {
     input.select();
     }
   }else{
-    const existingItemIndex = items.value.findIndex(item => item.barcode === barcode);
+    const existingItemIndex = returnedItems.value.findIndex(item => item.barcode === barcode);
     console.log(existingItemIndex)
     if(existingItemIndex != -1 && existingItemIndex !== index){
-      items.value[existingItemIndex].qty += 1;
-      const component = barcodeInputs.value[index];
+      returnedItems.value[existingItemIndex].qty += 1;
+      const component = barcodeCInputs.value[index];
       const input = component.$el.querySelector("input");
       input.select();
-      items.value[index].barcode = '';
+      returnedItems.value[index].barcode = '';
 
     }else{
       fetchItemData(barcode, index);
@@ -345,7 +346,7 @@ const moveFocus = (currentRowIndex, currentField, direction) => {
       nextRowIndex = Math.max(0, currentRowIndex - 1);
       break;
     case 'down':
-      nextRowIndex = Math.min(items.value.length - 1, currentRowIndex + 1);
+      nextRowIndex = Math.min(returnedItems.value.length - 1, currentRowIndex + 1);
       break;
     case 'left':
       nextFieldIndex = Math.max(0, currentFieldIndex - 1);
@@ -368,38 +369,38 @@ const focusInput = async (rowIndex, field) => {
   try {
     switch (field) {
       case 'barcode':
-        if (barcodeInputs.value[rowIndex]?.$el) {
-          barcodeInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        if (barcodeCInputs.value[rowIndex]?.$el) {
+          barcodeCInputs.value[rowIndex].$el.querySelector('input')?.focus();
         }
         break;
       case 'category':
-      const td = categoryInputs.value[rowIndex]
+      const td = categoryCInputs.value[rowIndex]
       const button = td?.querySelector('button')
       button.focus()                                            
         break;
       case 'name':
-        if (nameInputs.value[rowIndex]?.$el) {
-          nameInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        if (nameCInputs.value[rowIndex]?.$el) {
+          nameCInputs.value[rowIndex].$el.querySelector('input')?.focus();
         }
         break;
       case 'qty':
-        if (qtyInputs.value[rowIndex]?.$el) {
-          qtyInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        if (qtyCInputs.value[rowIndex]?.$el) {
+          qtyCInputs.value[rowIndex].$el.querySelector('input')?.focus();
         }
         break;
       case 'rate':
-        if (rateInputs.value[rowIndex]?.$el) {
-          rateInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        if (rateCInputs.value[rowIndex]?.$el) {
+          rateCInputs.value[rowIndex].$el.querySelector('input')?.focus();
         }
         break;
       case 'discount':
-        if (discountInputs.value[rowIndex]?.$el) {
-          discountInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        if (discountCInputs.value[rowIndex]?.$el) {
+          discountCInputs.value[rowIndex].$el.querySelector('input')?.focus();
         }
         break;
       case 'tax':
-        if (taxInputs.value[rowIndex]?.$el) {
-          taxInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        if (taxCInputs.value[rowIndex]?.$el) {
+          taxCInputs.value[rowIndex].$el.querySelector('input')?.focus();
         }
         break;
     }
@@ -409,7 +410,7 @@ const focusInput = async (rowIndex, field) => {
 };
 
 const movecatgeory = (rowIndex) => {
-  const td = categoryInputs.value[rowIndex];
+  const td = categoryCInputs.value[rowIndex];
   if (!td) return;
 
   const button = td.querySelector('button');
@@ -434,7 +435,7 @@ const movecatgeory = (rowIndex) => {
     ul.addEventListener('keydown', function handler(e) {
       if (e.key === 'ArrowRight') {
         button.click(); 
-        nameInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        nameCInputs.value[rowIndex].$el.querySelector('input')?.focus();
        
       
       }
@@ -442,9 +443,9 @@ const movecatgeory = (rowIndex) => {
     ul.addEventListener('keydown', function handler(e) {
       if (e.key === 'ArrowLeft') {
         button.click(); 
-        barcodeInputs.value[rowIndex].$el.querySelector('input').focus();
+        barcodeCInputs.value[rowIndex].$el.querySelector('input').focus();
         requestAnimationFrame(() => {
-          barcodeInputs.value[rowIndex].$el.querySelector('input').select();
+          barcodeCInputs.value[rowIndex].$el.querySelector('input').select();
         });
               
       
@@ -455,26 +456,31 @@ const movecatgeory = (rowIndex) => {
 
 onMounted(() => {
   nextTick(() => {
-    const input = barcodeInputs.value[0]?.$el?.querySelector('input');
+    const input = barcodeCInputs.value[0]?.$el?.querySelector('input');
     input?.focus();
   });
+  
+ 
+
 });
 
 
 const sendReturnValue = () => {
   // Make all values negative
-  items.value = items.value.map((item) => ({
+  returnedItems.value = returnedItems.value.map((item) => ({
     ...item,
     rate: -Math.abs(item.rate) 
   }));
-console.log(items.value)
+console.log(returnedItems.value)
   // Calculate total
-  const totalreturnvalue = items.value.reduce((acc, item) => acc + item.value, 0);
-
-  // Emit with updated items
+  const totalreturnvalue = returnedItems.value.reduce((acc, item) => acc + item.value, 0);
+  returnedItems.value = returnedItems.value.filter(item =>
+      item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
+    );
+  // Emit with updated returnedItems
   emit('totalreturnvalue', {
     totalreturnvalue,
-    items: items.value
+    returnedItems: returnedItems.value
   });
 
   model.value = false;
@@ -531,7 +537,7 @@ console.log(items.value)
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
-  <tr v-for="(row, index) in items" :key="row.sn">
+  <tr v-for="(row, index) in returnedItems" :key="row.sn">
     <td class="py-1 whitespace-nowrap">
       {{ row.sn }}
     </td>
@@ -539,7 +545,7 @@ console.log(items.value)
       <UInput
         v-model="row.barcode"
          :loading="loadingStates[index] || false"
-        ref="barcodeInputs"
+        ref="barcodeCInputs"
         size="sm"
         @focus="selectAllText(index)"
         @blur="fetchItemData(row.barcode, index)"
@@ -551,7 +557,7 @@ console.log(items.value)
         @keydown.right.prevent="moveFocus(index, 'barcode', 'right')"
       />
     </td>
-    <td class="py-1 whitespace-nowrap"  ref="categoryInputs">
+    <td class="py-1 whitespace-nowrap"  ref="categoryCInputs">
       <USelectMenu  
         v-model="row.category" 
         
@@ -582,7 +588,7 @@ console.log(items.value)
     <td class="py-1 whitespace-nowrap">
       <UInput 
         v-model="row.name" 
-          ref="nameInputs"
+          ref="nameCInputs"
         size="sm"  
         @keydown.enter="addNewRow(index)"
         @keydown.up.prevent="moveFocus(index, 'name', 'up')"
@@ -595,7 +601,7 @@ console.log(items.value)
       <UInput 
         v-model="row.rate" 
         type="number" 
-        ref="rateInputs"
+        ref="rateCInputs"
         size="sm"  
         @keydown.enter="addNewRow(index)"
         @keydown.up.prevent="moveFocus(index, 'rate', 'up')"
@@ -607,7 +613,7 @@ console.log(items.value)
     <td class="py-1 whitespace-nowrap">
       <UInput 
         v-model="row.qty"  
-        ref="qtyInputs" 
+        ref="qtyCInputs" 
         type="number" 
         size="sm"  
         @keydown.enter="addNewRow(index)"
@@ -621,7 +627,7 @@ console.log(items.value)
       <UInput 
         v-model="row.discount" 
         type="number"
-        ref="discountInputs" 
+        ref="discountCInputs" 
         size="sm"  
         @keydown.enter="addNewRow(index)"
         @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
@@ -633,7 +639,7 @@ console.log(items.value)
     <td class="py-1 whitespace-nowrap">
       <UInput 
         v-model="row.tax" 
-          ref="taxInputs"
+          ref="taxCInputs"
         type="number" 
         size="sm" 
         @keydown.enter="addNewRow(index)"

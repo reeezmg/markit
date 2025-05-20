@@ -66,7 +66,7 @@ const addExpense = async (expense: any) => {
         Note: expense.note,
         companyId: useAuth().session.value?.companyId,
         id: expense.id,
-        expenseCategory : expense.expensecategory.name,
+        // expenseCategory : expense.expensecategory.name,
         amount: expense.totalAmount
       }
     })
