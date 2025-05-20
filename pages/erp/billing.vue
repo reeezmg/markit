@@ -675,6 +675,8 @@ const payload = {
             splitPayments: splitPayments.value,
           }),
           upiId: billid.upiId || '',
+          clientName:clientName.value,
+          clientPhone:phoneNo.value,
           // 🆕 Add total qty
           tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
           tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
@@ -1222,7 +1224,7 @@ function submitSplitPayment() {
   <UDashboardPanelContent class="p-1">
       <UCard 
        :ui="{
-          base: 'h-100 flex flex-col',
+          base: 'h-full flex flex-col',
           rounded: '',
          divide: 'divide-y divide-gray-200 dark:divide-gray-700',
           body: {

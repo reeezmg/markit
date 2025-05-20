@@ -17,6 +17,24 @@ export const usePrint = () => {
     }
   };
 
+  const printReport = async (printData: any) => {
+    try {
+      const data = await $fetch('/api/print-report', {
+        method: 'POST',
+        body: printData,
+        baseURL: 'http://localhost:3001',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
+
+      return data;
+    } catch (err: any) {
+      console.error('🛑 Print Bill error:', err.message || err);
+      throw err;
+    }
+  };
+
   const printLabel = async (labelData: any) => {
     try {
       const data = await $fetch('/api/print-label', {
@@ -38,5 +56,6 @@ export const usePrint = () => {
   return {
     printBill,
     printLabel,
+    printReport
   };
 };

@@ -862,6 +862,8 @@ console.log('Bill updated successfully:', billResponse);
   gstin: billResponse.company.gstin || '',
   accHolderName: billResponse.company.accHolderName || '',
   upiId: billResponse.company.upiId || '',
+   clientName:clientName.value,
+    clientPhone:phoneNo.value,
   // 🆕 Add total qty
   tqty: billResponse.entries.reduce((sum, entry) => sum + entry.qty, 0),
   tvalue: billResponse.entries.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),

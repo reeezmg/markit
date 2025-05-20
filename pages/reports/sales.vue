@@ -8,7 +8,10 @@ import { exportToCSV } from '~/utils/export-csv'
 import type { DashboardComposable, BillWithRelations, KpiItem, PdfReportMeta } from '~/types/dashboard'
 
 // Refs
+const useAuth = () => useNuxtApp().$auth;
 const loading = ref(true)
+const { printReport } = usePrint();
+let printData = {}
 const dashboard = useCompanyDashboard() as DashboardComposable
 const startDate = ref('')
 const endDate = ref('')
@@ -74,6 +77,10 @@ const totals = computed(() => {
     .filter(bill => bill.paymentMethod === 'UPI')
     .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0)
 
+  const totalRevenueInCredit = bills
+    .filter(bill => bill.paymentMethod === 'Credit')
+    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0)
+
   const totalDiscount = totalSales - totalRevenue;
 
   return {
@@ -82,7 +89,8 @@ const totals = computed(() => {
     totalRevenue,
     totalDiscount,
     totalRevenueInCash,
-    totalRevenueInUPI
+    totalRevenueInUPI,
+    totalRevenueInCredit
   };
 });
 
@@ -271,6 +279,31 @@ onMounted(() => {
   // Data is automatically loaded by the composable
   loading.value = false
 })
+
+const printReportHandle = async() => {
+  try{
+    printData = {
+      companyName: useAuth().session.value?.companyName || '',
+       companyAddress: dashboard.company.value.address || {},
+       expenses: dashboard.expenses.value || [],
+       dateRange: startDate.value === endDate.value
+        ? `${startDate.value || 'Start'}`
+        : `${startDate.value || 'Start'} to ${endDate.value || 'End'}`,
+        totalRevenue:totals.value.totalRevenue,
+        totalRevenueInCash:totals.value.totalRevenueInCash,
+        totalRevenueInUPI:totals.value.totalRevenueInUPI,
+        totalExpense:totalsExpense.value.totalExpense,
+        totalExpensesInUPI:totalsExpense.value.totalExpensesInUPI,
+        totalExpensesInCash:totalsExpense.value.totalExpensesInCash,
+        amountInUPI:totals.value.totalRevenueInUPI - totalsExpense.value.totalExpensesInUPI,
+        amountInDrawer:totals.value.totalRevenueInCash - totalsExpense.value.totalExpensesInCash,
+    }
+    printReport(printData)
+console.log(printData)
+  }catch(err){
+console.log(err)
+  }
+}
 </script>
 
 
@@ -306,6 +339,14 @@ onMounted(() => {
               :disabled="isDownloadDisabled"
             >
               Download PDF
+            </UButton>
+            <UButton 
+              @click="printReportHandle" 
+              icon="i-heroicons-document" 
+              :loading="pdfLoading" 
+              :disabled="isDownloadDisabled"
+            >
+             Print Report
             </UButton>
           </div>
         </div>

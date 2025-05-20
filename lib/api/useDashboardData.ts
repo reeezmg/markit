@@ -1,5 +1,6 @@
 import {
     useFindManyProduct,
+    useFindUniqueCompany,
     useFindManyItem,
     useFindManyBill,
     useFindManyExpense,
@@ -10,6 +11,14 @@ import {
   const useAuth = () => useNuxtApp().$auth;
   
   export function useCompanyDashboard() {
+    const companyQuery = useFindUniqueCompany({
+        where: { id: useAuth().session.value?.companyId },
+        select:{
+          address:true
+        }
+      }
+      )
+
     const productsQuery = useFindManyProduct({
         where: {
         AND: [
@@ -52,7 +61,12 @@ import {
     const expensesQuery = useFindManyExpense({
         where: {
         AND: [
-            { companyId: useAuth().session.value?.companyId },]}})
+            { companyId: useAuth().session.value?.companyId },]},
+            include:{
+              expensecategory:true
+            }
+          }
+          )
 
     const entriesQuery = useFindManyEntry({
         where: {
@@ -76,6 +90,7 @@ import {
 
 
 
+      const company = ref(companyQuery.data.value)
       const products = ref(productsQuery.data.value)
       const items = ref(itemsQuery.data.value)
       const bills = ref(billsQuery.data.value)
@@ -83,6 +98,11 @@ import {
       const entries = ref(entriesQuery.data.value)
       const variants = ref(variantsQuery.data)
 
+      watch(() => companyQuery.data.value, (newVal) => {
+        console.log(newVal)
+        company.value = newVal
+      })
+    
       watch(() => productsQuery.data.value, (newVal) => {
         products.value = newVal
       })
@@ -97,6 +117,7 @@ import {
     
       watch(() => expensesQuery.data.value, (newVal) => {
         expenses.value = newVal
+        console.log(newVal)
       })
     
       watch(() => entriesQuery.data.value, (newVal) => {
@@ -108,6 +129,7 @@ import {
 
       const refreshAll = async () => {
         await Promise.all([
+          companyQuery.refetch(),
           productsQuery.refetch(),
           itemsQuery.refetch(),
           billsQuery.refetch(),
@@ -283,6 +305,7 @@ import {
 
   
     return {
+      company:company,
       productsCount,
       itemsCount,
       totalRevenue,
