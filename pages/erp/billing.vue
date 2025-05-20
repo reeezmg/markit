@@ -190,7 +190,14 @@ watch(items, async () => {
 }, { deep: true });
 
 
-
+const tQty = computed(() =>
+  items.value.reduce((sum, item) => {
+    if (item.barcode || item.name || item.category.length > 0) {
+      return sum + item.qty
+    }
+    return sum
+  }, 0)
+)
 
 const startResize = (index, event) => {
   isResizing = true;
@@ -1230,6 +1237,10 @@ function submitSplitPayment() {
           body: {
             padding: '',
             base: 'grow divide-y divide-gray-200 dark:divide-gray-700'
+          },
+          footer: {
+            base: ' divide-y divide-gray-200 dark:divide-gray-700',
+            padding:''
           }
         }">
         <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm p-3">
@@ -1384,15 +1395,16 @@ function submitSplitPayment() {
         </div>
 
         
-          <div class="p-3">
-            <div>
-              Qty: {{ items.reduce((sum, item)=> sum + item.qty,0) - 1 }}
-            </div>
-          </div>
+         
 
   <template #footer>
+   <div class="px-3 py-2">
+            <div>
+           Qty: {{ tQty }}
+            </div>
+          </div>
         <!-- Other form elements -->
-        <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
+        <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
 
           <div class="">
 
@@ -1482,7 +1494,7 @@ function submitSplitPayment() {
           </div>
         </div>
 
-        <div class="mt-4 w-full flex flex-wrap gap-4">
+        <div class="w-full flex flex-wrap gap-4  px-3 py-3">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>

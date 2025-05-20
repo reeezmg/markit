@@ -170,6 +170,16 @@ watch(items, async () => {
   }
 }, { deep: true });
 
+const tQty = computed(() =>
+  items.value.reduce((sum, item) => {
+    if (item.barcode || item.name || item.category.length > 0) {
+      return sum + item.qty
+    }
+    return sum
+  }, 0)
+)
+
+
 
 const startResize = (index, event) => {
   isResizing = true;
@@ -1074,16 +1084,20 @@ if(!data){
   <UDashboardPanelContent class="p-1">
     <UCard 
        :ui="{
-          base: 'h-100 flex flex-col',
+          base: 'h-full flex flex-col',
           rounded: '',
          divide: 'divide-y divide-gray-200 dark:divide-gray-700',
           body: {
             padding: '',
             base: 'grow divide-y divide-gray-200 dark:divide-gray-700'
+          },
+          footer: {
+            base: ' divide-y divide-gray-200 dark:divide-gray-700',
+            padding:''
           }
         }">
 
-        <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
+        <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
         <UInput v-model="date" type="date" label="Date" class="lg:col-span-2" />
 
       </div>
@@ -1091,7 +1105,7 @@ if(!data){
 
         <!-- Responsive table wrapper -->
          
-        <div class="overflow-x-auto mt-2 h-48">
+        <div class="overflow-x-auto px-3 py-3 h-48">
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
@@ -1166,15 +1180,16 @@ if(!data){
           
         </div>
 
-         <div class="p-3">
-            <div>
-              Qty: {{ items.reduce((sum, item)=> sum + item.qty,0) }}
-            </div>
-          </div>
+        
 
   <template #footer>
+   <div class="px-3 py-2">
+            <div>
+              Qty: {{ tQty }}
+            </div>
+          </div>
         <!-- Other form elements -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
           <div>
             <!-- Discount Input -->
         <div class="mb-6">
@@ -1261,7 +1276,7 @@ if(!data){
           </div>
         </div>
 
-        <div class="mt-4 w-full flex flex-wrap gap-4">
+        <div class="w-full flex flex-wrap gap-4 px-3 py-3">
           <UButton color="blue" class="flex-1" block @click="() => router.push('/erp/billing')">New</UButton>
           <UButton :loading="isSaving"  ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
           <UButton color="red" class="flex-1" block  @click="deleteBill">Delete</UButton>
