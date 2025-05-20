@@ -77,6 +77,7 @@ const addExpense = async (expense: any) => {
 };
 
 const editExpense = async (id: string, editExpense: any) => {
+    console.log(id,editExpense)
     await UpdateExpense.mutateAsync({
         where: {
             id,
