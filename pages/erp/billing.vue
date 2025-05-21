@@ -682,6 +682,9 @@ const payload = {
           companyName: useAuth().session.value?.companyName || '',
           companyAddress: billid.address || {},
           gstin: billid.gstin || '',
+          ...(paymentMethod.value === 'Split' && {
+            splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
+          }),
           accHolderName: billid.accHolderName || '',
           ...(paymentMethod.value === 'Split' && {
             splitPayments: splitPayments.value,
@@ -1223,13 +1226,6 @@ const handleSplit = () => {
   paymentMethod.value = 'Split'
 }
 
-function handlePaymentSelect(value) {
-  // You can handle logic like:
-  if (value === 'Split') {
-    showSplitModal.value = true
-  }
-}
-
 
 
 // Final submission
@@ -1470,15 +1466,26 @@ function submitSplitPayment() {
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
+              <div class="w-full flex flex-row gap-2">
                 <USelect
                   ref="paymentref"
                   v-model="paymentMethod"
                   :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
-                  @update:modelValue="handlePaymentSelect"
                   @keydown.enter.prevent="handleEnterPayment(index)"
                   class="flex-1"
                 />
+                <UButton
+                  icon="i-heroicons-pencil-square"
+                  size="sm"
+                  color="primary"
+                  square
+                  variant="solid"
+                  class="w-auto"
+                  @click="handleSplit"
+                />
+              </div>
             </div>
+
 
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>

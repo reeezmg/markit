@@ -871,6 +871,9 @@ console.log('Bill updated successfully:', billResponse);
   discount: billResponse.discount,
   grandTotal: billResponse.grandTotal,
   paymentMethod: billResponse.paymentMethod,
+  ...(paymentMethod.value === 'Split' && {
+            splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
+          }),
   companyName: billResponse.company.name || '',
   companyAddress: billResponse.company.address || {},
   gstin: billResponse.company.gstin || '',
@@ -1061,6 +1064,13 @@ function handlePaymentSelect(value) {
     showSplitModal.value = true
   }
 }
+
+
+const handleSplit = () => {
+  showSplitModal.value = true
+  paymentMethod.value = 'Split'
+}
+
 
 // Final submission
 function submitSplitPayment() {
@@ -1257,14 +1267,24 @@ const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
-             <USelect
+              <div class="w-full flex flex-row gap-2">
+                <USelect
                   ref="paymentref"
                   v-model="paymentMethod"
                   :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
-                  @update:modelValue="handlePaymentSelect"
                   @keydown.enter.prevent="handleEnterPayment(index)"
                   class="flex-1"
                 />
+                <UButton
+                  icon="i-heroicons-pencil-square"
+                  size="sm"
+                  color="primary"
+                  square
+                  variant="solid"
+                  class="w-auto"
+                  @click="handleSplit"
+                />
+              </div>
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
