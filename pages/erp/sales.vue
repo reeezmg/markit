@@ -1,8 +1,5 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue';
-definePageMeta({
-    auth: true,
-});
 import type { Period, Range } from '~/types';
 import {
     useUpdateBill,
@@ -198,21 +195,23 @@ return {
         ...(selectedStatus.value.length && {
             OR: selectedStatus.value.map(item => ({ paymentStatus: item.value }))
         }),
-        ...(selectedDate.value && (
-            selectedDate.value.start === selectedDate.value.end
-                ? {
-                    createdAt: {
-                        gte: new Date(selectedDate.value.start).setHours(0, 0, 0, 0),
-                        lt: new Date(new Date(selectedDate.value.start).setHours(23, 59, 59, 999)).toISOString(),
-                    },
-                }
-                : {
-                    createdAt: {
-                        gte: new Date(new Date(selectedDate.value.start).setHours(0, 0, 0, 0)).toISOString(),
-                        lte: new Date(new Date(selectedDate.value.end).setHours(23, 59, 59, 999)).toISOString(),
-                    },
-                }
-        )),
+        ...(selectedDate.value && {
+  createdAt: {
+    gte: new Date(Date.UTC(
+      selectedDate.value.start.getFullYear(),
+      selectedDate.value.start.getMonth(),
+      selectedDate.value.start.getDate(),
+      0, 0, 0, 0
+    )).toISOString(),
+    lte: new Date(Date.UTC(
+      selectedDate.value.end.getFullYear(),
+      selectedDate.value.end.getMonth(),
+      selectedDate.value.end.getDate(),
+      23, 59, 59, 999
+    )).toISOString()
+  }
+})
+
     },
     include:{
         entries:{
@@ -308,7 +307,10 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
             id
         },
         data:{
-            paymentStatus:status
+            paymentStatus:status,
+            ...(status === 'PAID' && {
+                createdAt: new Date().toISOString()
+            })
         }
     })
      toast.add({

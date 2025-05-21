@@ -49,9 +49,11 @@ const scannedBarcode = ref("");
 const token = ref("")
 const tokenEntries = ref([])
 const showSplitModal = ref(false)
-const splitPayments = ref([
-  { method: '', amount: 0 }
-])
+const tempSplits = ref(
+  Object.fromEntries(paymentOptions.map(method => [method, { method, amount: null }]))
+)
+
+const splitPayments = ref([])
 const barcodeInputs = ref([]);
 const categoryInputs = ref([]);
 const nameInputs = ref([]);
@@ -1192,34 +1194,42 @@ watch(paymentMethod, (val) => {
   }
 })
 
-// Add a new split row
-function addSplitEntry() {
-  splitPayments.value.push({ method: '', amount: 0 })
-}
+const handleAmountEntry = (method) => {
+  const entry = tempSplits.value[method]
+  const exists = splitPayments.value.find(p => p.method === method)
 
-// Remove a row
-function removeSplitEntry(index) {
-  if (splitPayments.value.length > 1) {
-    splitPayments.value.splice(index, 1)
+  if (entry.amount && !exists) {
+    splitPayments.value.push({ method, amount: entry.amount })
+  } else if (!entry.amount && exists) {
+    // If amount cleared, remove from list
+    splitPayments.value = splitPayments.value.filter(p => p.method !== method)
+  } else if (entry.amount && exists) {
+    // Update amount if already present
+    exists.amount = entry.amount
   }
 }
+
+
 
 // Total calculation
 const totalSplitAmount = computed(() =>
   splitPayments.value.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
 )
 
-function getAvailableOptions(index) {
-  const selectedMethods = splitPayments.value.map((e) => e.method)
-  const currentMethod = splitPayments.value[index].method
 
-  // Allow current row to still show its existing selection
-  const options = paymentOptions.filter(
-    (opt) => !selectedMethods.includes(opt) || opt === currentMethod
-  )
 
-  return options
+const handleSplit = () => {
+  showSplitModal.value = true
+  paymentMethod.value = 'Split'
 }
+
+function handlePaymentSelect(value) {
+  // You can handle logic like:
+  if (value === 'Split') {
+    showSplitModal.value = true
+  }
+}
+
 
 
 // Final submission
@@ -1460,8 +1470,16 @@ function submitSplitPayment() {
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
-              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'UPI','Card','Split','Credit']" @keydown.enter.prevent="handleEnterPayment(index)" />
+                <USelect
+                  ref="paymentref"
+                  v-model="paymentMethod"
+                  :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
+                  @update:modelValue="handlePaymentSelect"
+                  @keydown.enter.prevent="handleEnterPayment(index)"
+                  class="flex-1"
+                />
             </div>
+
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
               <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
@@ -1579,57 +1597,53 @@ function submitSplitPayment() {
 
    <!-- split payment method modal -->
    <UModal v-model="showSplitModal">
-    <div class="p-4 space-y-4">
-      <h2 class="text-lg font-semibold">Split Payment</h2>
+  <div class="p-4 space-y-4">
+    <h2 class="text-lg font-semibold">Split Payment</h2>
 
-      <div v-for="(entry, index) in splitPayments" :key="index" class="flex gap-2 items-center">
-        <USelect
-          v-model="entry.method"
-           :options="getAvailableOptions(index)"
-          class="w-1/2"
-          placeholder="Select Method"
-        />
-        <UInput
-          v-model.number="entry.amount"
-          type="number"
-          placeholder="Amount"
-          class="w-1/2"
-        />
-        <UButton
-          icon="i-heroicons-trash"
-          color="red"
-          size="sm"
-          @click="removeSplitEntry(index)"
-          :disabled="splitPayments.length === 1"
-        />
-      </div>
-
-      <UButton @click="addSplitEntry" color="gray" variant="outline">Add More</UButton>
-
-      <div class="mt-4">
-        <p class="text-sm font-medium">Total Entered: ₹{{ totalSplitAmount }}</p>
-        <p
-          class="text-sm"
-          :class="{
-            'text-green-600': totalSplitAmount === grandTotal,
-            'text-red-600': totalSplitAmount !== grandTotal
-          }"
-        >
-          Grand Total: ₹{{ grandTotal }}
-        </p>
-      </div>
-
-      <UButton
-        :disabled="totalSplitAmount !== grandTotal"
-        color="green"
-        block
-        class="mt-4"
-        @click="submitSplitPayment"
-      >
-        Submit Split Payment
-      </UButton>
+    <div
+      v-for="(method, index) in paymentOptions"
+      :key="method"
+      class="flex gap-2 items-center"
+    >
+      <USelect
+        v-model="tempSplits[method].method"
+        :options="[method]"
+        disabled
+        class="w-1/2"
+      />
+      <UInput
+        v-model.number="tempSplits[method].amount"
+        type="number"
+        placeholder="Enter amount"
+        class="w-1/2"
+        @update:modelValue="() => handleAmountEntry(method)"
+      />
     </div>
-  </UModal>
+
+    <div class="mt-4">
+      <p class="text-sm font-medium">Total Entered: ₹{{ totalSplitAmount }}</p>
+      <p
+        class="text-sm"
+        :class="{
+          'text-green-600': totalSplitAmount === grandTotal,
+          'text-red-600': totalSplitAmount !== grandTotal
+        }"
+      >
+        Grand Total: ₹{{ grandTotal }}
+      </p>
+    </div>
+
+    <UButton
+      :disabled="totalSplitAmount !== grandTotal"
+      color="green"
+      block
+      class="mt-4"
+      @click="submitSplitPayment"
+    >
+      Submit Split Payment
+    </UButton>
+  </div>
+</UModal>
 
 
     <UDashboardModal
