@@ -67,7 +67,7 @@ export default defineEventHandler(async (event) => {
                 },
               type: 'EXPENSE_CREATED',
               title: 'New Expense Recorded',
-              message: `Expense: ${body.expenseCategory || 'N/A'} (${body.amount}) \nNote :${body.Note}`,
+              message: `Expense: ${body.expenseCategory || 'N/A'} Rs:${body.amount} \nNote :${body.Note}`,
               actionPath: `/erp/accounts/`,
               metadata: {
                 expenseId: body.id,
@@ -80,11 +80,6 @@ export default defineEventHandler(async (event) => {
           case 'ORDER':
           notification = await prisma.notification.create({
             data: {
-              user:{
-                connect:{
-                    id: body.userId
-                }
-              } ,
               company: {
                 connect: {
                     id: body.companyId,

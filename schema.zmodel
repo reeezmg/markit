@@ -90,11 +90,13 @@ model Company extends Base {
     isTaxIncluded Boolean @default(true) @map("is_tax_included")
 
     users       CompanyUser[]
+    promoCodes  PromoCode[]
     clients     CompanyClient[]
     products    Product[]
     categories  Category[]
     subcategories  Subcategory[]
     bills       Bill[]
+    carts       CartCompanyClient[]
     tokenbills  TokenEntry[]
     accounts    Account[]
     expenseCategories   ExpenseCategory[]
@@ -174,8 +176,10 @@ model Client extends Base {
     status    Boolean       @default(true)
     pipelineStatus    String       @default('new') @map("pipeline_status")
     companies CompanyClient[]
+    clientPromoCodes ClientPromoCode[]
+    cart CartCompanyClient[]
     address   Address[]
-    bill      Bill?
+    bills      Bill[]
     conversations ClientConversation[]
     users     UserClient[]
     newPipeline     Pipeline?        @relation("PipelineNewClients", fields: [newPipelineId], references: [id])
@@ -303,6 +307,7 @@ model Variant {
     company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
     companyId   String            @map('company_id')
     VariantSizeBarcode VariantSizeBarcode[]
+    sold        Int?
 
     @@allow('read', true)
     @@allow('update', true)
@@ -371,7 +376,7 @@ model Bill extends Base {
     account         Account? @relation(fields: [accountId], references: [id])
     accountId       String? @map("account_id")   
     client          Client? @relation(fields: [clientId], references: [id])   
-    clientId        String? @unique @map("client_id") 
+    clientId        String?  @map("client_id") 
     address         Address? @relation(fields: [addressId], references: [id])   
     addressId       String? @map("address_id")  
 
@@ -635,7 +640,6 @@ model EmailOtp extends Base {
 }
 
 
-// schema.zmodel
 
 model Notification {
   id String @id @default(cuid())
@@ -668,3 +672,61 @@ enum NotificationType {
   SHIPMENT_SENT
   SYSTEM_ALERT
 }
+
+model PromoCode {
+  id              String   @id @default(cuid())
+  code            String   @unique
+  discountPercent Int
+  minAmount       Float
+  expiresAt       DateTime
+  isActive        Boolean  @default(true)
+  company         Company  @relation(fields: [companyId], references: [id])
+  companyId       String
+  usageLimit      Int?
+  usageCount      Int?
+  clientsUsed     ClientPromoCode[] @relation("PromoCodeToClientPromoCode") // <-- fix here
+
+  @@index([companyId])
+  @@allow('read, create, update, delete', true)
+  @@map("promo_codes")
+}
+
+model ClientPromoCode {
+  id          String   @id @default(cuid())
+  clientId    String
+  promoCodeId String
+  usedAt      DateTime @default(now())
+  client      Client   @relation(fields: [clientId], references: [id])
+  promoCode   PromoCode @relation("PromoCodeToClientPromoCode", fields: [promoCodeId], references: [id]) // <-- fix here
+  @@index([promoCodeId])
+  @@allow('read, create, update, delete', true)
+  @@map("client_promo_code")
+}
+
+model Cart extends Base {
+   items     Json?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // One-to-one relationship with CartCompanyClient
+  clientCompany CartCompanyClient?
+
+  @@allow('read, create, update, delete', true)
+  @@map("cart")
+}
+
+model CartCompanyClient {
+  clientId  String
+  companyId String
+  cartId    String @unique
+
+  // Relations
+  client  Client  @relation(fields: [clientId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+  cart    Cart    @relation(fields: [cartId], references: [id])
+
+  // Composite unique constraint ensuring one cart per client-company pair
+  @@unique([clientId, companyId])
+  @@allow('read, create, update, delete', true)
+  @@map("cart_company_client")
+} 

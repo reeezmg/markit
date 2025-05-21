@@ -97,11 +97,13 @@ model Company {
   images                     String?
   isTaxIncluded              Boolean              @default(true) @map("is_tax_included")
   users                      CompanyUser[]
+  promoCodes                 PromoCode[]
   clients                    CompanyClient[]
   products                   Product[]
   categories                 Category[]
   subcategories              Subcategory[]
   bills                      Bill[]
+  carts                      CartCompanyClient[]
   tokenbills                 TokenEntry[]
   accounts                   Account[]
   expenseCategories          ExpenseCategory[]
@@ -182,8 +184,10 @@ model Client {
   status             Boolean              @default(true)
   pipelineStatus     String               @default("new") @map("pipeline_status")
   companies          CompanyClient[]
+  clientPromoCodes   ClientPromoCode[]
+  cart               CartCompanyClient[]
   address            Address[]
-  bill               Bill?
+  bills              Bill[]
   conversations      ClientConversation[]
   users              UserClient[]
   newPipeline        Pipeline?            @relation("PipelineNewClients", fields: [newPipelineId], references: [id])
@@ -376,7 +380,7 @@ model Bill {
   account        Account?      @relation(fields: [accountId], references: [id])
   accountId      String?       @map("account_id")
   client         Client?       @relation(fields: [clientId], references: [id])
-  clientId       String?       @unique() @map("client_id")
+  clientId       String?       @map("client_id")
   address        Address?      @relation(fields: [addressId], references: [id])
   addressId      String?       @map("address_id")
 
@@ -676,4 +680,60 @@ model Notification {
 
   @@index([companyId])
   @@map("notifications")
+}
+
+/// @@allow('read, create, update, delete', true)
+model PromoCode {
+  id              String            @id() @default(cuid())
+  code            String            @unique()
+  discountPercent Int
+  minAmount       Float
+  expiresAt       DateTime
+  isActive        Boolean           @default(true)
+  company         Company           @relation(fields: [companyId], references: [id])
+  companyId       String
+  usageLimit      Int?
+  usageCount      Int?
+  clientsUsed     ClientPromoCode[] @relation("PromoCodeToClientPromoCode")
+
+  @@index([companyId])
+  @@map("promo_codes")
+}
+
+/// @@allow('read, create, update, delete', true)
+model ClientPromoCode {
+  id          String    @id() @default(cuid())
+  clientId    String
+  promoCodeId String
+  usedAt      DateTime  @default(now())
+  client      Client    @relation(fields: [clientId], references: [id])
+  promoCode   PromoCode @relation("PromoCodeToClientPromoCode", fields: [promoCodeId], references: [id])
+
+  @@index([promoCodeId])
+  @@map("client_promo_code")
+}
+
+/// @@allow('read, update', auth().role == 'admin')
+/// @@allow('read, create, update, delete', true)
+model Cart {
+  id            String             @id() @unique() @default(uuid())
+  items         Json?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt()
+  clientCompany CartCompanyClient?
+
+  @@map("cart")
+}
+
+/// @@allow('read, create, update, delete', true)
+model CartCompanyClient {
+  clientId  String
+  companyId String
+  cartId    String  @unique()
+  client    Client  @relation(fields: [clientId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id])
+  cart      Cart    @relation(fields: [cartId], references: [id])
+
+  @@unique([clientId, companyId])
+  @@map("cart_company_client")
 }

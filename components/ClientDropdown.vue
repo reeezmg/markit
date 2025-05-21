@@ -4,10 +4,13 @@ const { isDashboardSearchModalOpen } = useUIState();
 const { metaSymbol } = useShortcuts();
 const useClientAuth = () => useNuxtApp().$authClient;
 const { $client } = useNuxtApp()
+const cartStore = useCartStore();
 
 const onLogout = async() => {
     $client.setOffline.mutate(useAuth().session.value?.id)
     await authClientLogout();
+    cartStore.clear()
+
 }
 
 const items = computed(() => [

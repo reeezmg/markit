@@ -1,37 +1,4 @@
 
-// // server/utils/prisma.ts
-// import { PrismaClient, Prisma } from '@prisma/client'
-// import { appEvents, NotificationEventTypes } from '~/server/services/eventService'
-
-// const base = new PrismaClient()
-
-// export const prisma = base.$extends({
-//   model: {
-//     bill: {
-//       // original is the “base.bill.create” method
-//       async create (
-//         original: typeof base.bill.create,
-//         args: Prisma.BillCreateArgs
-//       ) {
-//         // run the normal create
-//         const bill = await original.call(base, args)
-//         // then emit
-//         appEvents.emit(NotificationEventTypes.BILL_CREATED, bill)
-//         return bill
-//       },
-//     },
-//     expense: {
-//       async create (
-//         original: typeof base.expense.create,
-//         args: Prisma.ExpenseCreateArgs
-//       ) {
-//         const exp = await original.call(base, args)
-//         appEvents.emit(NotificationEventTypes.EXPENSE_CREATED, exp)
-//         return exp
-//       },
-//     },
-//   }
-// })
 
 // server/utils/prisma.ts
 import { PrismaClient } from '@prisma/client'

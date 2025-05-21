@@ -2,6 +2,7 @@
 import { provideHooksContext } from './lib/hooks';
 import { VueQueryDevtools } from '@tanstack/vue-query-devtools';
 
+
 // Provide tanstack-query context
 // Use an absolute endpoint so server-side fetch works too
 provideHooksContext({

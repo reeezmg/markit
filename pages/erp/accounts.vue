@@ -53,7 +53,8 @@ const addExpense = async (expense: any) => {
             },
         },
         include: {
-    company: true   },
+
+    company: true , expensecategory: true  },
     })
     await $fetch('/api/notifications/notify', {
       method: 'POST',
@@ -63,8 +64,8 @@ const addExpense = async (expense: any) => {
         Note: expense.note,
         companyId: useAuth().session.value?.companyId,
         id: expense.id,
-        expenseCategory : expense.expensecategory.name,
-        amount: expense.totalAmount
+        expenseCategory : expense.category.name,
+        amount: expense.amount
       }
     })
 

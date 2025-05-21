@@ -17,7 +17,7 @@ export default eventHandler(async (event) => {
     await session.update({
         id: client.id,
         name: client.name,
-        email: client.email,
+        email: client.email || '',
         phone: client.phone,
         type:'CLIENT'
     });
