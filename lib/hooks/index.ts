@@ -7,6 +7,9 @@
 
 export * from './company';
 export * from './distributor';
+export * from './purchase-order';
+export * from './distributor-payment';
+export * from './distributor-credit';
 export * from './user';
 export * from './client';
 export * from './pipeline';
@@ -15,7 +18,6 @@ export * from './subcategory';
 export * from './product';
 export * from './variant';
 export * from './item';
-export * from './purchase-order';
 export * from './bill';
 export * from './token-entry';
 export * from './entry';

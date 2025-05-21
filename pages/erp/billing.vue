@@ -1,12 +1,21 @@
 
 <script setup>
-import { useCreateBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry } from '~/lib/hooks';
-const { printBill } = usePrintBill();
+import { BillingAddClient } from '#components';
+import { useUpdateCompany,useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateManyItem } from '~/lib/hooks';
+
+definePageMeta({
+    auth: true,
+});
+
+
+const { printBill } = usePrint();
 const CreateBill = useCreateBill();
 const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
 const UpdateVariant = useUpdateVariant();
+const UpdateCompany = useUpdateCompany();
 const UpdateItem = useUpdateItem();
+const UpdateManyItem = useUpdateManyItem();
 const DeleteTokenEntry = useDeleteTokenEntry();
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
@@ -15,19 +24,36 @@ const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
 const subtotal = computed(() => {
-  return items.value.reduce((sum, item) => sum + (item.value || 0), 0);
+  return items.value.reduce((sum, item) => sum + (item.qty * item.rate || 0), 0);
 });
-const grandTotal = ref(0);
+const grandTotal = computed(() => {
+  const baseTotal = items.value.reduce((sum, item) => sum + (item.value || 0), 0);
+
+  if (discount.value < 0) {
+    return parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
+  } else {
+    const discounted = baseTotal - (baseTotal * discount.value) / 100;
+    return parseFloat(discounted.toFixed(2));
+  }
+});
+
 const returnAmt = ref(0);
+const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
 const paymentMethod = ref('Cash');
 const voucherNo = ref('');
-const cellNo = ref('');
+const phoneNo = ref('');
 const points = ref(0);
-const name = ref('');
+const clientName = ref('');
+const clientId = ref('');
 const scannedBarcode = ref("");
 const token = ref("")
 const tokenEntries = ref([])
+const showSplitModal = ref(false)
+const tempSplits = ref(
+  Object.fromEntries(paymentOptions.map(method => [method, { method, amount: null }]))
+)
 
+const splitPayments = ref([])
 const barcodeInputs = ref([]);
 const categoryInputs = ref([]);
 const nameInputs = ref([]);
@@ -41,10 +67,20 @@ const saveref = ref();
 const savetokenref = ref();
 const addTokenRef = ref();
 const tokenInputs = ref(['']);
+const categoryStore = useCategoryStore()
+
+const isPrint = ref(false);
+const isSaving = ref(false);
+let printData = {}
+
+
 
 
 const isOpen = ref(false);
+const isSavingAcc = ref(false)
 const isTokenOpen = ref(false);
+const issalesReturnModelOpen = ref(false);
+const isClientAddModelOpen = ref(false);
 const account = ref({
     name: '',
     phone:'',
@@ -54,12 +90,14 @@ const account = ref({
     state: '',
     pincode: '',
 });
-const selected = ref({});
+const selected = ref(null);
 
 
 const items = ref([
-  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 },
+  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 ,return:false},
 ]);
+
+
 
 watch(
   items,
@@ -81,8 +119,8 @@ const columns = ref([
   { key: 'barcode', label: 'BAR CODE' },
   { key: 'category', label: 'CATEGORY' },
   { key: 'name', label: 'NAME' },
-  { key: 'qty', label: 'QTY' },
   { key: 'rate', label: 'RATE' },
+  { key: 'qty', label: 'QTY' },
   { key: 'discount', label: 'DISC %' },
   { key: 'tax', label: 'TAX%' },
   { key: 'value', label: 'VALUE' },
@@ -97,45 +135,71 @@ let startWidth = 0;
 let columnIndex = 0;
 
 watch(selected, (newSelected) => {
-  if(Object.keys(newSelected).length !== 0 ){
-    paymentMethod.value = 'credit'
+  if(newSelected){
+    paymentMethod.value = 'Credit'
   }
   console.log(newSelected)
 })
 
-watch(items, () => {
-  items.value.forEach((item) => {
-    let baseValue = item.qty * item.rate;
+
+watch(items, async () => {
+  for (let index = 0; index < items.value.length; index++) {
+    const item = items.value[index];
+    
+    // ---------- Step 1: Calculate discounted rate ----------
+    let discountedRate = item.rate;
 
     if (item.discount < 0) {
-      baseValue -= Math.abs(item.discount);
+      discountedRate -= Math.abs(item.discount);
     } else {
-      baseValue -= (baseValue * item.discount) / 100;
+      discountedRate -= (discountedRate * item.discount) / 100;
     }
-    if(!isTaxIncluded) {
-      baseValue += (baseValue * item.tax) / 100;
-    } 
-    
-    
-    item.value = Math.max(baseValue, 0); 
-    
-  });
 
+    // ---------- Step 2: Update tax according to value/qty ----------
+
+   
+
+    if (item.category[0]?.id) {
+      const category = categoryStore.getCategoryById(item.category[0].id)
+     
+      if( category){
+        const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = category;
+        console.log(taxType)
+      if (taxType === 'FIXED') {
+        item.tax = fixedTax ?? 0;
+      } else {
+        const effectiveValue = item.value / (item.qty || 1); // avoid division by zero
+
+        if (effectiveValue > thresholdAmount) {
+          item.tax = taxAboveThreshold ?? 0;
+        } else {
+          item.tax = taxBelowThreshold ?? 0;
+        }
+      }
+      }
+    }
+
+    
+    // ---------- Step 3: Calculate base value ----------
+    let baseValue = discountedRate * item.qty;
+    
+    if (!isTaxIncluded) {
+      baseValue += (baseValue * item.tax) / 100;
+    }
+
+    item.value = baseValue;
+  }
 }, { deep: true });
 
-watch([discount, subtotal], ([newDiscount, newTotal]) => {
-  let baseValue = newTotal; // Use the updated total value
 
-  if (newDiscount < 0) {
-    baseValue -= Math.abs(newDiscount);
-  } else {
-    baseValue -= (baseValue * newDiscount) / 100;
-  }
-
-  grandTotal.value = parseFloat(Math.max(baseValue, 0).toFixed(2));
-  // Prevent negative values
-});
-
+const tQty = computed(() =>
+  items.value.reduce((sum, item) => {
+    if (item.barcode || item.name || item.category.length > 0) {
+      return sum + item.qty
+    }
+    return sum
+  }, 0)
+)
 
 const startResize = (index, event) => {
   isResizing = true;
@@ -173,7 +237,7 @@ const stopResize = () => {
 
 const addNewRow = async (index) => {
   const hasEmptyRow = items.value.some(item => {
-    return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim();
+    return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim() && item.rate === 0;
   });
 
   if (hasEmptyRow) {
@@ -198,7 +262,8 @@ const addNewRow = async (index) => {
     tax: 0,
     value: 0,
     sizes: {},
-    totalQty: 0
+    totalQty: 0,
+    return:false
   });
 
   await nextTick();
@@ -244,6 +309,29 @@ onMounted(() => {
   });
 });
 
+const args = computed(() => ({
+  where: {
+    phone: `+91${phoneNo.value}`,
+    companies: {
+      some: {
+        companyId: useAuth().session.value?.companyId,
+      },
+    },
+  },
+}));
+
+
+ const {
+  data: client,
+  isLoading:isClientLoading,
+  error,
+  refetch:refetchClient,
+} = useFindUniqueClient(
+  args,
+  { enabled: false } // disabled by default
+);
+
+
 const {
     data: categories,
 } = useFindManyCategory(
@@ -251,14 +339,20 @@ const {
     where:{companyId:useAuth().session.value?.companyId},
     select:{
       id:true,
-      name:true
+      name:true,
+      hsn:true,
     }
 }
 );
 
 
 const itemargs = computed(() => ({
-  where: { barcode: scannedBarcode.value },
+  where: { 
+    barcode: scannedBarcode.value,
+    status:'in_stock',
+    companyId:useAuth().session.value?.companyId || ''
+
+   },
   select: {
     id: true, 
     size:true,
@@ -270,16 +364,28 @@ const itemargs = computed(() => ({
         qty:true,
         sizes:true,
         tax:true,
+        discount:true,
         product: {
           select: {
             name: true, 
-            categoryId:true  
+            categoryId:true ,
+            category:{
+              select:{
+                taxType:true,
+                fixedTax:true,
+                thresholdAmount:true,
+                taxBelowThreshold:true,
+                taxAboveThreshold:true
+              }
+            } 
           }
         }
       }
     }
   }
 }));
+
+
 
 
 const entryargs = computed(() => ({
@@ -305,7 +411,10 @@ const handleEnterBarcode = (barcode,index) => {
     input.select();
     }
   }else{
-    const existingItemIndex = items.value.findIndex(item => item.barcode === barcode);
+    const existingItemIndex = items.value.findIndex(
+  (item, i) => item.barcode === barcode && !item.return && i !== index
+);
+
     console.log(existingItemIndex)
     if(existingItemIndex != -1 && existingItemIndex !== index){
       items.value[existingItemIndex].qty += 1;
@@ -388,169 +497,313 @@ const fetchItemData = async (barcode, index) => {
     
     const categoryId = itemdata.value.variant.product.categoryId;
     
+
     items.value[index].id = itemdata.value.id || '';
     items.value[index].size = itemdata.value.size || '';
     items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant.product.name}` || '';
     items.value[index].category = categories.value.filter(category =>category.id === categoryId);
     items.value[index].rate = itemdata.value.variant?.sprice || 0;
+    items.value[index].discount = itemdata.value.variant?.discount || 0;
     items.value[index].tax = itemdata.value.variant?.tax || 0;
     items.value[index].totalQty = itemdata.value.variant?.qty || 0;
     items.value[index].sizes = itemdata.value.variant?.sizes || null;
     items.value[index].variantId = itemdata.value.variant?.id || '';
   } else {
-    console.warn("itemdata is undefined");
+    items.value[index].barcode = ''
+     toast.add({
+          title: 'Barcode is invalid or item is empty!',
+          color: 'red',
+        });
   }
 };
 
-const handleSave = async () => {
-  // Filter out empty items
-  items.value = items.value.filter(item =>
-    item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
-  );
 
-  if (items.value.length === 0) {
-    toast.add({ title: 'No valid items to bill.', color: 'red' });
-    return;
+const handleSave = async () => {
+    // Filter out empty items
+    console.log(items)
+    isSaving.value = true
+    let itemIds = []
+    let variantDetails = []
+    try {
+    items.value = items.value.filter(item =>
+      item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
+    );
+  
+    if (items.value.length === 0) {
+        items.value = [
+          { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
+        ];
+        discount.value = 0;
+        paymentMethod.value = 'Cash';
+        tokenEntries.value = [''];
+        throw new Error(`No valid items to bill.`);
+      }
+  
+   items.value.forEach((item, index) => {
+    if (!item.category || !item.category[0]?.id) {
+      throw new Error(`No category in entry ${index + 1}`);
+    }
+  });
+  
+   const returnedItems = items.value.filter(item => item.return);
+     itemIds = returnedItems.map(item => item.id);
+     variantDetails = returnedItems.map(e => ({
+      variantId: e.variantId,
+      qty: e.qty ,
+      size: e.size ?? null,
+      sizes: e.sizes ?? [], // ✅ map in the sizes JSON from the variant
+    }));
+
+    const billid = await UpdateCompany.mutateAsync({
+      where:{
+        id:useAuth().session.value?.companyId
+      },
+    data: {
+        billCounter: {
+          increment: 1, 
+      },
+    },
+    select:{
+        billCounter:true,
+        address:true,
+        gstin:true,
+        accHolderName:true,
+        upiId:true
+      }
+    })
+
+
+const entriesData = items.value.map(item => {
+  const entry = {
+    name: item.name || '',
+    qty: item.qty || 1,
+    rate: item.rate || 0,
+    discount: item.discount || 0,
+    tax: item.tax || 0,
+    value: item.value || 0,
+    return:item.return || false,
+    ...(item.size && { size:item.size} )
+   
+  };
+
+  if (item.barcode) {
+    entry.barcode = item.barcode;
+    entry.item = { connect: { id: item.id } };
   }
 
-  try {
-    // Declare billResponse with const
-    const billResponse = await CreateBill.mutateAsync({
-      data: {
-        subtotal: subtotal.value,
-        discount: discount.value,
-        grandTotal: grandTotal.value,
-        paymentMethod: paymentMethod.value,
-        createdAt: new Date(date.value).toISOString(),
-        paymentStatus: Object.keys(selected.value).length !== 0 ? 'PENDING' : 'PAID',
-        ...(Object.keys(selected.value).length !== 0 && { 
-          account: { connect: { id: selected.value.id } }
-        }),
-        company: {
-          connect: {
-            id: useAuth().session.value?.companyId,
-          },
-        },
-        type: 'BILL',
-        entries: {
-          create: items.value.map(item => ({
-            ...(item.barcode && { barcode: item.barcode }),
-            qty: item.qty,
-            rate: item.rate,
-            discount: item.discount,
-            name: item.name,
-            ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
-            tax: item.tax,
-            value: item.value,
-            ...(item.category[0]?.id && { category: { connect: { id: item.category[0].id } } }),
-            ...(item.barcode && {
-              item: {
-                connect: { id: item.id },
-              },
-            }),
-          })),
-        },
-      },
-      select: {
-        id: true,
-        invoiceNumber: true,
-        createdAt: true,
-        paymentMethod: true,
-        subtotal: true,
-        discount: true,
-        tax: true,
-        grandTotal: true,
-        entries: {
-          select: {
-            name: true,
-            qty: true,
-            rate: true,
-            discount: true,
-            tax: true,
-            value: true,
-            barcode: true,
-            size: true,
-          },
-        },
-      },
-    });
-  
-    toast.add({
-      title: 'Bill created successfully!',
-      color: 'green',
-    });
+  if (item.variantId) {
+    entry.variant = { connect: { id: item.variantId } };
+  }
 
-    // Print the bill
-    try {
-      const printData = {
-        invoiceNumber: billResponse.invoiceNumber || 'N/A',
-        date: billResponse.createdAt,
-        entries: billResponse.entries.map(entry => ({
-          name: entry.name,
-          qty: entry.qty,
-          rate: entry.rate,
-          discount: entry.discount,
-          tax: entry.tax,
-          value: entry.value,
-          size: entry.size,
-          barcode: entry.barcode,
-        })),
-        subtotal: billResponse.subtotal,
-        discount: billResponse.discount,
-        tax: billResponse.tax,
-        grandTotal: billResponse.grandTotal,
-        paymentMethod: billResponse.paymentMethod,
-      };
+  if (item.category?.[0]?.id) {
+    entry.category = { connect: { id: item.category[0].id } };
+  }
+
+  return entry;
+});
+console.log(selected.value)
+const payload = {
+  invoiceNumber: billid.billCounter,
+  subtotal: Number(subtotal.value) || 0,
+  discount: Number(discount.value) || 0,
+  grandTotal: Number(grandTotal.value) || 0,
+  returnAmt: Number(returnAmt.value) || 0,
+  paymentMethod: paymentMethod.value || 'Cash',
+  createdAt: new Date(date.value).toISOString(),
+  paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
+  type: 'BILL',
+  entries: {
+    create: entriesData,
+  },
+  company: {
+    connect: {
+      id: useAuth().session.value?.companyId,
+    },
+  },
+  ...(clientId.value && {
+    client: {
+      connect: {
+        id: clientId.value,
+      },
+    },
+  }),
+  ...(selected.value && {
+    account: { connect: { id: selected.value } },
+  }),
+
+  ...(paymentMethod.value === 'Split' && {
+    splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
+  }),
+};
+
+
+ CreateBill.mutateAsync({
+  data: payload
+    });
 
    
-
-      const response = await printBill(printData);
-      console.log('✅ Printed:', response);
-    } catch (err) {
-      console.error('Printing error:', err);
+        toast.add({
+          title: 'Bill created successfully!',
+          color: 'green',
+        });
+        isPrint.value = true
+           printData = {
+              invoiceNumber: billid.billCounter,
+              date: new Date(date.value).toISOString(),
+              entries: items.value.map(entry => {
+              let calculatedDiscount = 0;
+    
+              if (entry.discount < 0) {
+                // Fixed discount
+                calculatedDiscount = Math.abs(entry.discount) * entry.qty;
+              } else {
+                // Percentage discount
+                calculatedDiscount = ((entry.rate * entry.discount) / 100) * entry.qty;
+              }
+    
+              return {
+                description: entry.barcode ? entry.name : entry.category[0].name,
+                hsn: entry.category[0].hsn,
+                qty: entry.qty,
+                mrp: entry.rate,
+                discount: calculatedDiscount, // ✅ set calculated discount
+                tax: entry.tax,
+                value: entry.qty * entry.rate ,
+                size: entry.size,
+                barcode: entry.barcode,
+                tvalue:entry.value,
+              };
+            }),
+    
+          subtotal: subtotal.value,
+          discount: discount.value,
+          grandTotal: grandTotal.value,
+          paymentMethod: paymentMethod.value,
+          companyName: useAuth().session.value?.companyName || '',
+          companyAddress: billid.address || {},
+          gstin: billid.gstin || '',
+          ...(paymentMethod.value === 'Split' && {
+            splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
+          }),
+          accHolderName: billid.accHolderName || '',
+          ...(paymentMethod.value === 'Split' && {
+            splitPayments: splitPayments.value,
+          }),
+          upiId: billid.upiId || '',
+          clientName:clientName.value,
+          clientPhone:phoneNo.value,
+          // 🆕 Add total qty
+          tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
+          tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+          tdiscount: items.value.reduce((sum, entry) => {
+            if (entry.discount < 0) {
+              return sum + (Math.abs(entry.discount) * entry.qty);
+            } else {
+              return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
+            }
+          }, 0),
+        };
+    isSaving.value = false;
+   console.log(printData)
+        $fetch('/api/notifications/notify', {
+        method: 'POST',
+        body: {
+          userId:useAuth().session.value?.id,
+          type: 'BILL',
+          companyId: useAuth().session.value?.companyId,
+          // id: billResponse.id,
+          invoiceNumber: billid.billCounter,
+          amount: grandTotal.value
+        }
+      })
+    
+    } catch (error) {
+      isSaving.value = false;
+      console.error('Error creating bill', error);
       toast.add({
-        title: 'Printing failed!',
-        description: err.message,
-        color: 'orange',
+        title: 'Bill creation failed!',
+        description: error.message,
+        color: 'red',
       });
     }
-
-    // Update inventory
-    const updatePromises = [];
-    for (const item of items.value) {
-      if (item.barcode) {
-        let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
-        let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
-          if (sizeData.size === item.size) {
-            return { ...sizeData, qty: Math.max((sizeData.qty || 0) - item.qty, 0) };
+   
+      for (const item of items.value) {
+        if (item.barcode && item.return === false) {
+          let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
+          let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
+            if (sizeData.size === item.size) {
+              return { ...sizeData, qty: Math.max((sizeData.qty || 0) - item.qty, 0) };
+            }
+            return sizeData;
+          }) : [];
+  
+  
+            UpdateVariant.mutateAsync({
+              where: { id: item.variantId },
+              data: { qty: updatedQty, sizes: updatedSizes }
+            }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
+         
+  
+ 
+            UpdateItem.mutateAsync({
+              where: { id: item.id },
+              data: { status: 'sold' }
+            }).catch(error => console.error(`Error updating item ${item.id}`, error))
           }
-          return sizeData;
-        }) : [];
+        }
 
-        updatePromises.push(
-          UpdateVariant.mutateAsync({
-            where: { id: item.variantId },
-            data: { qty: updatedQty, sizes: updatedSizes }
-          }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-        );
+        if (itemIds.length > 0) {
+            UpdateManyItem.mutateAsync({
+              where: { id: { in: itemIds } },
+              data: { 
+                status: 'in_stock' 
+              },
+            });
+             // Step 4: update the variants
+            for (const { variantId, qty, size, sizes } of variantDetails) {
+            if (!variantId || !qty) continue;
 
-        updatePromises.push(
-          UpdateItem.mutateAsync({
-            where: { id: item.id },
-            data: { status: 'sold' }
-          }).catch(error => console.error(`Error updating item ${item.id}`, error))
-        );
-      }
-    }
+            // Decrement overall variant qty
+            const updateData = {
+              qty: { increment: qty },
+            };
 
-    // Wait for all updates to complete
-    await Promise.all(updatePromises);
+            // Update sizes only if size is not null
+            if (size) {
+              const updatedSizes = sizes.map(s => {
+                if (s.size === size) {
+                  return {
+                    ...s,
+                    qty: Math.max((s.qty ?? 0) + qty) // Prevent negative qty
+                  };
+                }
+                return s;
+              });
 
-    // Clean up token entries
+              updateData.sizes = updatedSizes;
+                console.log(updatedSizes)
+            }
+            UpdateVariant.mutateAsync({
+              where: { id: variantId },
+              data: updateData,
+            });
+          } 
+          }
+
+           items.value = [
+      { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
+      ];
+      discount.value = 0;
+      paymentMethod.value = 'Cash';
+      tokenEntries.value = [''];
+        const input = barcodeInputs.value[0]?.$el?.querySelector('input');
+    input?.focus();
+  
+  
     try {
       tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
       if (tokenEntries.value.length > 0) {
-        await DeleteTokenEntry.mutateAsync({
+         DeleteTokenEntry.mutateAsync({
           where: { tokenNo: { in: tokenEntries.value } }
         });
         console.log('Token entries deleted successfully');
@@ -558,122 +811,28 @@ const handleSave = async () => {
     } catch (error) {
       console.error('Error deleting token entries', error);
     }
+      
 
-    // Reset form
-    items.value = [
-      { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
-    ];
-    discount.value = 0;
-    paymentMethod.value = 'Cash';
-    tokenEntries.value = [''];
- 
-      await $fetch('/api/notifications/notify', {
-      method: 'POST',
-      body: {
-        userId:useAuth().session.value?.id,
-        type: 'BILL',
-        companyId: useAuth().session.value?.companyId,
-        id: billResponse.id,
-        invoiceNumber: billResponse.invoiceNumber,
-        amount: billResponse.grandTotal
-      }
-    })
-  
-  
-
-  } catch (error) {
-    console.error('Error creating bill', error);
-    toast.add({
-      title: 'Bill creation failed!',
-      description: error.message,
-      color: 'red',
-    });
-  }
-
-  // Collect all async operations in an array
-  const updatePromises = [];
-
-  for (const item of items.value) {
-    if (item.barcode) {
-      let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
-      let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
-        if (sizeData.size === item.size) {
-          return { ...sizeData, qty: Math.max((sizeData.qty || 0) - 1, 0) };
-        }
-        return sizeData;
-      }) : [];
-
-     
+  };
 
 
-        updatePromises.push(
-    UpdateVariant.mutateAsync({
-      where: { id: item.variantId },
-      data: { qty: updatedQty, sizes: updatedSizes }
-    }).then(async (updatedVariant) => {
-      // 2. Check stock and send notification if needed
-      if (updatedQty < 10 && updatedQty > 0) {
-        try {
-               
-          
-          await $fetch('/api/notifications/notify', {
-            method: 'POST',
-            body: {
-              type: 'LOW_STOCK',
-              companyId: updatedVariant.companyId,
-              userId: useAuth().session.value?.id,
-              variantId: item.variantId 
-            }
-            
-          });
-          
-        } catch (error) {
-          console.error('Notification failed:', error);
-        }
-      }
-    }).catch(error => {
-      console.error(`Error updating variant ${item.variantId}`, error);
-    })
-  );
-
-
-
-
-
-
-
-      updatePromises.push(
-        UpdateItem.mutateAsync({
-          where: { id: item.id },
-          data: { status: 'sold' }
-        }).catch(error => console.error(`Error updating item ${item.id}`, error))
-      );
-    }
-  }
-
-  // Wait for all updates to finish before proceeding
-  await Promise.all(updatePromises);
-
-  try {
-    tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
-    if (tokenEntries.value.length > 0) {
-      await DeleteTokenEntry.mutateAsync({
-        where: { tokenNo: { in: tokenEntries.value } }
+const print = async() => {
+  try{
+  console.log(printData)
+  await printBill(printData)
+  isPrint.value = false
+  toast.add({
+        title: 'Printing Sucess!',
+        color: 'Green',
       });
-      console.log('Token entries deleted successfully');
-    }
-  } catch (error) {
-    console.error('Error deleting token entries', error);
+  }catch(err){
+      toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
   }
-
-  // ✅ Reset items only after all Prisma operations are complete
-  items.value = [
-    { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
-  ];
-  discount.value = 0;
-  paymentMethod.value = 'Cash';
-  tokenEntries.value = [''];
-};
+}
 
 
 const {
@@ -684,11 +843,16 @@ const {
 
 
 const submitForm = async () => {
+  isSavingAcc.value = true
   try {
+    
+    if (!account.value.name) {
+        throw new Error(`Plase Fill name`);
+      }
     const res = await CreateAccount.mutateAsync({
       data: {
                 name: account.value.name,
-                phone: account.value.name,
+                phone: account.value.phone,
                 address: {
                     create: {
                         street: account.value.street,
@@ -711,7 +875,13 @@ const submitForm = async () => {
         });
     isOpen.value = false
   }catch(error){
-    console.log(error)
+     toast.add({
+        title: 'Account creation failed!',
+        description: error.message,
+        color: 'red',
+      });
+  }finally{
+    isSavingAcc.value = false
   }
 };
 
@@ -837,36 +1007,38 @@ const submitEntryForm = async () => {
 };
 
 const newBill = () => {
-  items.value = [
-    { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
-  ];
-  discount.value = 0;
-  paymentMethod.value = 'Cash';
+  window.open(window.location.href, '_blank');
 
-  token.value = '';
-  tokenEntries.value = [''];
-  grandTotal.value = 0;
-  returnAmt.value = 0;
-  cellNo.value = '';
-  points.value = 0;
-  name.value = '';
-  voucherNo.value = '';
-  selected.value = {};
-  account.value = {
-    name: '',
-    phone:'',
-    street: '',
-    locality: '',
-    city: '',
-    state: '',
-    pincode: '',
-  };
+  // items.value = [
+  //   { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
+  // ];
+  // discount.value = 0;
+  // paymentMethod.value = 'Cash';
+
+  // token.value = '';
+  // tokenEntries.value = [''];
+  // grandTotal.value = 0;
+  // returnAmt.value = 0;
+  // phoneNo.value = '';
+  // points.value = 0;
+  // name.value = '';
+  // voucherNo.value = '';
+  // selected.value = {};
+  // account.value = {
+  //   name: '',
+  //   phone:'',
+  //   street: '',
+  //   locality: '',
+  //   city: '',
+  //   state: '',
+  //   pincode: '',
+  // };
 
 };
 
 
 const moveFocus = (currentRowIndex, currentField, direction) => {
-  const fieldOrder = ['barcode', 'category', 'name', 'qty', 'rate', 'discount', 'tax'];
+  const fieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
   const currentFieldIndex = fieldOrder.indexOf(currentField);
   
   let nextRowIndex = currentRowIndex;
@@ -992,15 +1164,102 @@ onMounted(() => {
   });
 });
 
+const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
+  items.value = items.value.filter(item =>
+      item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
+    );
+    const baseIndex = items.value.length;
+
+    returnedItems.forEach((item, i) => {
+      item.sn = baseIndex + i + 1; // Ensure sn = position in array (1-based)
+    });
+
+    items.value.push(...returnedItems);
+    addNewRow(items.value.length - 1);
+
+};
+
+
+const handleEnterPhone = async() => {
+const { data } = await refetchClient()
+console.log(data)
+clientName.value = data?.name
+clientId.value = data?.id
+if(!data){
+  isClientAddModelOpen.value = true
+}
+}
+
+
+watch(paymentMethod, (val) => {
+  if (val === 'Split') {
+    showSplitModal.value = true
+  }
+})
+
+const handleAmountEntry = (method) => {
+  const entry = tempSplits.value[method]
+  const exists = splitPayments.value.find(p => p.method === method)
+
+  if (entry.amount && !exists) {
+    splitPayments.value.push({ method, amount: entry.amount })
+  } else if (!entry.amount && exists) {
+    // If amount cleared, remove from list
+    splitPayments.value = splitPayments.value.filter(p => p.method !== method)
+  } else if (entry.amount && exists) {
+    // Update amount if already present
+    exists.amount = entry.amount
+  }
+}
+
+
+
+// Total calculation
+const totalSplitAmount = computed(() =>
+  splitPayments.value.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
+)
+
+
+
+const handleSplit = () => {
+  showSplitModal.value = true
+  paymentMethod.value = 'Split'
+}
+
+
+
+// Final submission
+function submitSplitPayment() {
+  if (totalSplitAmount.value !== grandTotal.value) {
+    alert(`Total split amount must be exactly ${grandTotal.value}`)
+    return
+  }
+
+  // Process splitPayments here
+  console.log('Final Split:', splitPayments.value)
+  showSplitModal.value = false
+}
 
 </script>
 
 
 <template>
   <UDashboardPanelContent class="p-1">
-    <div>
-      <UCard class="max-w-[1400px] mx-auto">
-        <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
+      <UCard 
+       :ui="{
+          base: 'h-full flex flex-col',
+          rounded: '',
+         divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+          body: {
+            padding: '',
+            base: 'grow divide-y divide-gray-200 dark:divide-gray-700'
+          },
+          footer: {
+            base: ' divide-y divide-gray-200 dark:divide-gray-700',
+            padding:''
+          }
+        }">
+        <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm p-3">
         <UInput v-if="!token" v-model="date" type="date" label="Date" class="lg:col-span-2" />
         <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2" />
         <UButton color="primary" label="Token Entries " block @click="isTokenOpen=true" class="lg:col-start-11 lg:col-span-2"/>
@@ -1009,7 +1268,7 @@ onMounted(() => {
 
         <!-- Responsive table wrapper -->
          
-        <div class="overflow-x-auto mt-2 h-48">
+        <div class="overflow-x-auto mt-2 h-48 p-3">
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
@@ -1090,19 +1349,6 @@ onMounted(() => {
     </td>
     <td class="py-1 whitespace-nowrap">
       <UInput 
-        v-model="row.qty"  
-        ref="qtyInputs" 
-        type="number" 
-        size="sm"  
-        @keydown.enter="addNewRow(index)"
-        @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
-        @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
-        @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
-        @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
-      />
-    </td>
-    <td class="py-1 whitespace-nowrap">
-      <UInput 
         v-model="row.rate" 
         type="number" 
         ref="rateInputs"
@@ -1112,6 +1358,19 @@ onMounted(() => {
         @keydown.down.prevent="moveFocus(index, 'rate', 'down')"
         @keydown.left.prevent="moveFocus(index, 'rate', 'left')"
         @keydown.right.prevent="moveFocus(index, 'rate', 'right')"
+      />
+    </td>
+    <td class="py-1 whitespace-nowrap">
+      <UInput 
+        v-model="row.qty"  
+        ref="qtyInputs" 
+        type="number" 
+        size="sm"  
+        @keydown.enter="addNewRow(index)"
+        @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
+        @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
+        @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
+        @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
       />
     </td>
     <td class="py-1 whitespace-nowrap">
@@ -1151,26 +1410,51 @@ onMounted(() => {
           
         </div>
 
-        <!-- Other form elements -->
-        <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
-          <div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Sub Total</label>
-              <UInput :model-value="subtotal"  disabled />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Discount %</label>
-              <UInput ref="discountref"  type="number" v-model="discount" @keydown.enter.prevent="handleEnterMainDiscount()" />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Payment Method</label>
-              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'Card']" @keydown.enter.prevent="handleEnterPayment(index)" />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Account Name</label>
-              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
+        
+         
+
+  <template #footer>
+   <div class="px-3 py-2">
+            <div>
+           Qty: {{ tQty }}
             </div>
           </div>
+        <!-- Other form elements -->
+        <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
+
+          <div class="">
+
+        <!-- Discount Input -->
+        <div class="mb-6">
+          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
+          <UInput
+            ref="discountref"
+            type="number"
+            v-model="discount"
+            @keydown.enter.prevent="handleEnterMainDiscount()"
+            placeholder="Enter discount"
+          />
+        </div>
+
+  <!-- Subtotal Display -->
+  <div class="border border-primary-700 dark:border-primary-300 rounded-md mb-7">
+  <div class="flex flex-col items-center justify-center py-3">
+    <div class="text-s">Sub Total</div>
+    <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
+  </div>
+</div>
+    
+
+  <!-- Grand Total Display -->
+   <div class="border border-green-700 dark:border-green-300 rounded-md">
+  <div class="flex flex-col items-center justify-center py-3">
+    <div class="text-s">Grand Total</div>
+    <div class="text-green-700 dark:text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+  </div>
+</div>
+
+</div>
+
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Sales Return AMT</label>
@@ -1178,16 +1462,37 @@ onMounted(() => {
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Total Redeemed AMT</label>
-              <UInput v-model="returnAmt" />
+              <UInput  />
             </div>
+             <div class="mb-4">
+              <label class="block text-gray-700 font-medium">Payment Method</label>
+              <div class="w-full flex flex-row gap-2">
+                <USelect
+                  ref="paymentref"
+                  v-model="paymentMethod"
+                  :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
+                  @keydown.enter.prevent="handleEnterPayment(index)"
+                  class="flex-1"
+                />
+                <UButton
+                  icon="i-heroicons-pencil-square"
+                  size="sm"
+                  color="primary"
+                  square
+                  variant="solid"
+                  class="w-auto"
+                  @click="handleSplit"
+                />
+              </div>
+            </div>
+
+
             <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Grand Total</label>
-              <UInput v-model="grandTotal" type="number" disabled class="font-bold rounded-md border-2 border-primary-300" />
-            </div>
-            <div class="mt-8">
-              <UButton color="primary" block @click="isOpen=true">Add Account</UButton>
-            </div>
+              <label class="block text-gray-700 font-medium">Account Name</label>
+              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
+            </div>    
           </div>
+
           <div>
             <div class="mb-4 mt-5">
               <UButton color="primary" block>Add Voucher</UButton>
@@ -1200,18 +1505,19 @@ onMounted(() => {
               <label class="block text-gray-700 font-medium">Total Value</label>
               <UInput v-model="voucherNo" />
             </div>
-            <div>
-              <UButton color="green" class="mt-9" block>Redeem Voucher</UButton>
+            <div class="mt-9">
+              <UButton color="primary" block @click="isOpen=true" :disabled="isSavingAcc">Add Account</UButton>
             </div>
           </div>
+          
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
-              <UInput v-model="cellNo" :loading="false" icon="i-heroicons-magnifying-glass-20-solid" />
+              <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
-              <UInput v-model="name" />
+              <UInput v-model="clientName" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Points</label>
@@ -1223,17 +1529,17 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="mt-4 w-full flex flex-wrap gap-4">
+        <div class="w-full flex flex-wrap gap-4  px-3 py-3">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  v-if="!token" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
           <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
-          <UButton v-if="!token" class="flex-1" block>Sales Return</UButton>
-          <UButton v-if="!token" class="flex-1" block>Bill Search</UButton>
+          <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
+          <UButton v-if="!token" class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
         </div>
+        </template>
       </UCard>
-    </div>
   </UDashboardPanelContent>
 
   <UModal v-model="isOpen">
@@ -1243,7 +1549,7 @@ onMounted(() => {
           <!-- Name -->
           <h3 class="text-md font-semibold">Personal Details</h3>
           <UInput v-model="account.name" label="Name" placeholder="Enter full name" required />
-          <UInput v-model="account.phone" label="Phone No" placeholder="Enter full name" required />
+          <UInput v-model="account.phone" label="Phone No" placeholder="Enter Phone Number" required />
 
           <!-- Address -->
           <h3 class="text-md font-semibold mt-4">Address Details</h3>
@@ -1255,12 +1561,25 @@ onMounted(() => {
 
 
           <!-- Submit Button -->
-          <UButton @click="submitForm" block>Submit</UButton>
+          <UButton @click="submitForm" :disabled="isSavingAcc" block>Submit</UButton>
         </div>
       </UModal>
 
 
-      <UModal v-model="isTokenOpen">
+     
+<!-- sales return -->
+<BillingSalesReturn
+  v-model="issalesReturnModelOpen"
+  @totalreturnvalue="handleReturnData"
+/>
+<BillingAddClient
+  v-model:model="isClientAddModelOpen"
+  v-model:phoneNo="phoneNo"
+  :onVerify="handleEnterPhone"
+/>
+
+<!-- token modal -->
+    <UModal v-model="isTokenOpen">
         <div class="p-4 space-y-4">
           <div v-for="(entry, index) in tokenEntries" :key="index">
             <div class="flex flex-row items-center">
@@ -1283,6 +1602,83 @@ onMounted(() => {
         </div>
     </UModal>
 
+   <!-- split payment method modal -->
+   <UModal v-model="showSplitModal">
+  <div class="p-4 space-y-4">
+    <h2 class="text-lg font-semibold">Split Payment</h2>
+
+    <div
+      v-for="(method, index) in paymentOptions"
+      :key="method"
+      class="flex gap-2 items-center"
+    >
+      <USelect
+        v-model="tempSplits[method].method"
+        :options="[method]"
+        disabled
+        class="w-1/2"
+      />
+      <UInput
+        v-model.number="tempSplits[method].amount"
+        type="number"
+        placeholder="Enter amount"
+        class="w-1/2"
+        @update:modelValue="() => handleAmountEntry(method)"
+      />
+    </div>
+
+    <div class="mt-4">
+      <p class="text-sm font-medium">Total Entered: ₹{{ totalSplitAmount }}</p>
+      <p
+        class="text-sm"
+        :class="{
+          'text-green-600': totalSplitAmount === grandTotal,
+          'text-red-600': totalSplitAmount !== grandTotal
+        }"
+      >
+        Grand Total: ₹{{ grandTotal }}
+      </p>
+    </div>
+
+    <UButton
+      :disabled="totalSplitAmount !== grandTotal"
+      color="green"
+      block
+      class="mt-4"
+      @click="submitSplitPayment"
+    >
+      Submit Split Payment
+    </UButton>
+  </div>
+</UModal>
+
+
+    <UDashboardModal
+        v-model="isPrint"
+        title="Print Bill"
+        description="Would You Like to print?"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            },
+            footer: {
+                base: 'ml-16',
+            },
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="green"
+                label="Yes"
+                @click="print"
+            />
+            <UButton color="red" label="NO" @click="isPrint = false" />
+        </template>
+    </UDashboardModal>
+
 </template>
 
 
@@ -1303,3 +1699,4 @@ onMounted(() => {
   width:1px;
 }
 </style>
+

@@ -23,8 +23,11 @@ enum CompanyType {
 }
 
 enum paymentType {
-  Credit
-  Cash
+  CREDIT
+  CASH
+  UPI
+  BANK_TRANSFER
+  CHEQUE
 }
 
 enum PaymentMode {
@@ -32,6 +35,7 @@ enum PaymentMode {
   CARD
   BANK_TRANSFER
   UPI
+  CHEQUE
 }
 
 enum PaymentStatus {
@@ -65,6 +69,13 @@ enum TaxType {
   VARIABLE
 }
 
+enum PayableStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
 enum NotificationType {
   ORDER_RECEIVED
   BILL_CREATED
@@ -75,10 +86,6 @@ enum NotificationType {
   SYSTEM_ALERT
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create', auth() != null && status)
-/// @@allow('update', users?[user == auth()])
-/// @@allow('read', true)
 model Company {
   id                         String               @id() @unique() @default(uuid())
   name                       String
@@ -120,6 +127,7 @@ model Company {
   accountNo                  String?              @map("account_no")
   bankName                   String?              @map("bank_name")
   gstin                      String?
+  upiId                      String?              @map("upi_id")
   notifications              Notification[]
   address                    Address?
   distributor                DistributorCompany[]
@@ -129,34 +137,66 @@ model Company {
   @@map("companies")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create', auth() != null && status)
-/// @@allow('update', true)
-/// @@allow('read', true)
 model Distributor {
-  id             String               @id() @unique() @default(uuid())
-  name           String
-  images         String?
-  companies      DistributorCompany[]
-  purchaseorders PurchaseOrder[]
-  status         Boolean              @default(true)
-  accHolderName  String?              @map("acc_holder_name")
-  ifsc           String?
-  accountNo      String?              @map("account_no")
-  bankName       String?              @map("bank_name")
-  gstin          String?
-  address        Address?
+  id            String               @id() @unique() @default(uuid())
+  name          String
+  images        String?
+  companies     DistributorCompany[]
+  status        Boolean              @default(true)
+  accHolderName String?              @map("acc_holder_name")
+  ifsc          String?
+  accountNo     String?              @map("account_no")
+  bankName      String?              @map("bank_name")
+  gstin         String?
+  upiId         String?              @map("upi_id")
+  address       Address?
 
   @@map("distributors")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create', true)
-/// @@allow('update', id == auth().id)
-/// @@allow('read', companies?[company.users?[user == auth()]])
+model PurchaseOrder {
+  id                 String              @id() @default(uuid())
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt() @map("updated_at")
+  products           Product[]
+  company            Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String              @map("company_id")
+  paymentType        paymentType?        @map("payment_type")
+  totalAmount        Float               @default(0) @map("total_amount")
+  distributorId      String?             @map("distributor_id")
+  distributorCompany DistributorCompany? @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+
+  @@map("purchase_orders")
+}
+
+model DistributorPayment {
+  id                 String             @id() @default(uuid())
+  createdAt          DateTime           @default(now()) @map("created_at")
+  amount             Float
+  remarks            String?
+  paymentType        paymentType?       @map("payment_type")
+  distributorId      String             @map("distributor_id")
+  companyId          String             @map("company_id")
+  distributorCompany DistributorCompany @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+
+  @@map("distributor_payments")
+}
+
+model DistributorCredit {
+  id                 String             @id() @default(uuid())
+  createdAt          DateTime           @default(now()) @map("created_at")
+  amount             Float
+  remarks            String?
+  billNo             String?
+  distributorId      String             @map("distributor_id")
+  companyId          String             @map("company_id")
+  distributorCompany DistributorCompany @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+
+  @@map("distributor_credits")
+}
+
 model User {
   id            String             @id() @unique() @default(uuid())
-  /// @email
   email         String             @unique()
   name          String?
   password      String
@@ -172,11 +212,8 @@ model User {
   @@map("users")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('read, create, update, delete', true)
 model Client {
   id                 String               @id() @unique() @default(uuid())
-  /// @email
   email              String?              @unique()
   name               String
   password           String?
@@ -205,7 +242,6 @@ model Client {
   @@map("clients")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
 model Pipeline {
   id              String   @id() @unique() @default(uuid())
   company         Company  @relation(fields: [companyId], references: [id])
@@ -219,13 +255,10 @@ model Pipeline {
   @@map("pipelines")
 }
 
-/// @@allow('read', true)
-/// @@allow('create, update, delete', company.users?[user == auth()])
 model Category {
   id                String        @id() @default(uuid())
   createdAt         DateTime      @default(now()) @map("created_at")
   updatedAt         DateTime      @updatedAt() @map("updated_at")
-  /// @length(1, 256)
   name              String
   description       String?
   status            Boolean       @default(true)
@@ -245,13 +278,10 @@ model Category {
   @@map("categories")
 }
 
-/// @@allow('read', true)
-/// @@allow('create, update,delete', company.users?[user == auth()])
 model Subcategory {
   id          String    @id() @default(uuid())
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt() @map("updated_at")
-  /// @length(1, 256)
   name        String
   description String?
   status      Boolean   @default(true)
@@ -265,8 +295,6 @@ model Subcategory {
   @@map("subcategories")
 }
 
-/// @@allow('read', true)
-/// @@allow('read, create, update, delete', company.users?[user == auth()])
 model Product {
   id              String        @id() @default(uuid())
   createdAt       DateTime      @default(now()) @map("created_at")
@@ -289,16 +317,11 @@ model Product {
   @@map("products")
 }
 
-/// @@allow('read', true)
-/// @@allow('update', true)
-/// @@allow('read, create, update, delete', product.company.users?[user == auth()])
 model Variant {
   id                 String               @id() @default(uuid())
   createdAt          DateTime             @default(now()) @map("created_at")
   updatedAt          DateTime             @updatedAt() @map("updated_at")
-  /// @length(1, 256)
   name               String
-  /// @length(1, 256)
   code               String?
   status             Boolean              @default(true)
   sprice             Float                @map("s_price")
@@ -316,12 +339,11 @@ model Variant {
   company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId          String               @map("company_id")
   VariantSizeBarcode VariantSizeBarcode[]
+  sold               Int?
 
   @@map("variants")
 }
 
-/// @@allow('read', true)
-/// @@allow('read, create, update', true)
 model Item {
   id        String   @id() @default(uuid())
   barcode   String?  @db.Text()
@@ -331,31 +353,13 @@ model Item {
   variantId String   @map("variant_id")
   status    String   @default("in_stock")
   size      String?
-  entry     Entry?
+  entry     Entry[]
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId String   @map("company_id")
 
   @@map("items")
 }
 
-/// @@allow('read', true)
-/// @@allow('read, create, update', true)
-model PurchaseOrder {
-  id            String       @id() @default(uuid())
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt() @map("updated_at")
-  products      Product[]
-  distributor   Distributor? @relation(fields: [distributorId], references: [id])
-  distributorId String?      @map("distributor_id")
-  paymentType   paymentType? @map("payment_type")
-  company       Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String       @map("company_id")
-
-  @@map("purchase_orders")
-}
-
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', true)
 model Bill {
   id             String        @id() @unique() @default(uuid())
   createdAt      DateTime      @map("created_at")
@@ -364,8 +368,10 @@ model Bill {
   discount       Float?
   tax            Float?
   grandTotal     Float?        @map("grand_total")
+  returnAmt      Float?        @map("return_Amt")
   deliveryFees   Float?        @map("delivery_fees")
   paymentMethod  String?       @map("payment_method")
+  splitPayments  Json?         @map("split_payments")
   paymentStatus  PaymentStatus @default(PENDING) @map("payment_status")
   transactionId  String?       @unique() @map("transaction_id")
   notes          String?
@@ -387,8 +393,6 @@ model Bill {
   @@map("bills")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', true)
 model TokenEntry {
   id         String   @id() @unique() @default(uuid())
   createdAt  DateTime @map("created_at")
@@ -412,8 +416,6 @@ model TokenEntry {
   @@map("token_entries")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', true)
 model Entry {
   id         String    @id() @unique() @default(uuid())
   name       String?
@@ -432,13 +434,12 @@ model Entry {
   bill       Bill?     @relation(fields: [billId], references: [id], onDelete: Cascade)
   billId     String?   @map("bill_id")
   item       Item?     @relation(fields: [itemId], references: [id])
-  itemId     String?   @unique() @map("item_id")
+  itemId     String?   @map("item_id")
+  return     Boolean   @default(false) @map("return")
 
   @@map("entries")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', true)
 model Account {
   id        String   @id() @unique() @default(uuid())
   name      String
@@ -451,11 +452,8 @@ model Account {
   @@map("accounts")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', true)
 model ExpenseCategory {
   id        String    @id() @unique() @default(uuid())
-  /// @length(1, 256)
   name      String
   status    Boolean   @default(true)
   createdAt DateTime  @default(now()) @map("created_at")
@@ -467,12 +465,9 @@ model ExpenseCategory {
   @@map("expense_categories")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', true)
 model Expense {
   id                String          @id() @unique() @default(uuid())
   expenseDate       DateTime        @default(now()) @map("expense_date")
-  /// @length(1, 512)
   note              String?
   currency          String          @default("INR")
   paymentMode       PaymentMode     @map("payment_mode")
@@ -491,8 +486,6 @@ model Expense {
   @@map("expenses")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', true)
 model Payment {
   id               String   @id() @unique() @default(uuid())
   paymentDate      DateTime @default(now()) @map("payment_date")
@@ -509,8 +502,6 @@ model Payment {
   @@map("payments")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', true)
 model Address {
   id            String       @id() @unique() @default(uuid())
   createdAt     DateTime     @default(now()) @map("created_at")
@@ -537,8 +528,6 @@ model Address {
   @@map("addresses")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', auth() != null)
 model Conversation {
   id        String               @id() @unique() @default(uuid())
   createdAt DateTime             @default(now()) @map("created_at")
@@ -550,8 +539,6 @@ model Conversation {
   @@map("conversations")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('create, read, update, delete', auth() != null)
 model Message {
   id             String       @id() @unique() @default(uuid())
   createdAt      DateTime     @default(now()) @map("created_at")
@@ -568,7 +555,6 @@ model Message {
   @@map("messages")
 }
 
-/// @@allow('read,create, update, delete', auth() != null)
 model CompanyUser {
   companyId String  @map("company_id")
   company   Company @relation(fields: [companyId], references: [id])
@@ -579,7 +565,6 @@ model CompanyUser {
   @@map("company_users")
 }
 
-/// @@allow('read,create, update, delete', true)
 model CompanyClient {
   companyId String  @map("company_id")
   company   Company @relation(fields: [companyId], references: [id])
@@ -590,7 +575,6 @@ model CompanyClient {
   @@map("company_clients")
 }
 
-/// @@allow('read,create, update, delete', auth() != null)
 model UserConversation {
   userId         String       @map("user_id")
   conversationId String       @map("conversation_id")
@@ -601,7 +585,6 @@ model UserConversation {
   @@map("user_conversations")
 }
 
-/// @@allow('read,create, update, delete', auth() != null)
 model ClientConversation {
   clientId       String       @map("client_id")
   conversationId String       @map("conversation_id")
@@ -612,7 +595,6 @@ model ClientConversation {
   @@map("client_conversations")
 }
 
-/// @@allow('read,create, update, delete', auth() != null)
 model UserClient {
   clientId String @map("client_id")
   userId   String @map("user_id")
@@ -623,19 +605,19 @@ model UserClient {
   @@map("user_clients")
 }
 
-/// @@allow('read,create, update, delete', auth() != null)
 model DistributorCompany {
-  distributorId String      @map("distributor_id")
-  companyId     String      @map("company_id")
-  distributor   Distributor @relation(fields: [distributorId], references: [id])
-  company       Company     @relation(fields: [companyId], references: [id])
+  distributorId       String               @map("distributor_id")
+  companyId           String               @map("company_id")
+  distributor         Distributor          @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  distributorPayments DistributorPayment[]
+  distributorCredits  DistributorCredit[]
+  purchaseOrders      PurchaseOrder[]
 
   @@id([distributorId, companyId])
   @@map("distributor_companies")
 }
 
-/// @@allow('read', true)
-/// @@allow('read, create, update', true)
 model VariantSizeBarcode {
   id        Int     @id() @default(autoincrement())
   variantId String  @map("variant_id")
@@ -647,11 +629,8 @@ model VariantSizeBarcode {
   @@map("variant_size_barcodes")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('read, create, update,delete', true)
 model EmailOtp {
   id        String   @id() @unique() @default(uuid())
-  /// @email
   email     String   @unique()
   otp       String
   expiresAt DateTime
@@ -660,7 +639,6 @@ model EmailOtp {
   @@map("email_otp")
 }
 
-/// @@allow('read, create, update,delete', true)
 model Notification {
   id         String           @id() @default(cuid())
   company    Company          @relation(fields: [companyId], references: [id])
@@ -682,7 +660,6 @@ model Notification {
   @@map("notifications")
 }
 
-/// @@allow('read, create, update, delete', true)
 model PromoCode {
   id              String            @id() @default(cuid())
   code            String            @unique()
@@ -700,7 +677,6 @@ model PromoCode {
   @@map("promo_codes")
 }
 
-/// @@allow('read, create, update, delete', true)
 model ClientPromoCode {
   id          String    @id() @default(cuid())
   clientId    String
@@ -713,8 +689,6 @@ model ClientPromoCode {
   @@map("client_promo_code")
 }
 
-/// @@allow('read, update', auth().role == 'admin')
-/// @@allow('read, create, update, delete', true)
 model Cart {
   id            String             @id() @unique() @default(uuid())
   items         Json?
@@ -725,7 +699,6 @@ model Cart {
   @@map("cart")
 }
 
-/// @@allow('read, create, update, delete', true)
 model CartCompanyClient {
   clientId  String
   companyId String

@@ -1,5 +1,7 @@
 import {
     useFindManyProduct,
+    useFindUniqueCompany,
+    useFindManyItem,
     useFindManyBill,
     useFindManyExpense,
     useFindManyEntry, 
@@ -9,7 +11,20 @@ import {
   const useAuth = () => useNuxtApp().$auth;
   
   export function useCompanyDashboard() {
+    const companyQuery = useFindUniqueCompany({
+        where: { id: useAuth().session.value?.companyId },
+        select:{
+          address:true
+        }
+      }
+      )
+
     const productsQuery = useFindManyProduct({
+        where: {
+        AND: [
+            { companyId: useAuth().session.value?.companyId },]}})
+
+    const itemsQuery = useFindManyItem({
         where: {
         AND: [
             { companyId: useAuth().session.value?.companyId },]}})
@@ -24,11 +39,20 @@ import {
     const billsQuery = useFindManyBill({
         where: {
         AND: [
-            { companyId: useAuth().session.value?.companyId },]
+            { companyId: useAuth().session.value?.companyId },
+            { deleted:false },
+            {paymentStatus:'PAID'}
+          ]
           },
           include: {
             client: true,
-            address: true
+            address: true,
+            entries:{
+              select: {
+                rate: true,
+                qty: true,
+              },
+            },
           },
         
         })
@@ -37,15 +61,26 @@ import {
     const expensesQuery = useFindManyExpense({
         where: {
         AND: [
-            { companyId: useAuth().session.value?.companyId },]}})
+            { companyId: useAuth().session.value?.companyId },]},
+            include:{
+              expensecategory:true
+            }
+          }
+          )
+
     const entriesQuery = useFindManyEntry({
         where: {
             bill: {
               companyId: useAuth().session.value?.companyId,
+              deleted:false
             },
           },
           include: {
-            variant: true,
+            variant: {
+              include: {
+                product: true,
+              },
+            },
             category: true,
             bill: true,
        
@@ -55,14 +90,25 @@ import {
 
 
 
+      const company = ref(companyQuery.data.value)
       const products = ref(productsQuery.data.value)
+      const items = ref(itemsQuery.data.value)
       const bills = ref(billsQuery.data.value)
       const expenses = ref(expensesQuery.data.value)
       const entries = ref(entriesQuery.data.value)
       const variants = ref(variantsQuery.data)
 
+      watch(() => companyQuery.data.value, (newVal) => {
+        console.log(newVal)
+        company.value = newVal
+      })
+    
       watch(() => productsQuery.data.value, (newVal) => {
         products.value = newVal
+      })
+    
+      watch(() => itemsQuery.data.value, (newVal) => {
+        items.value = newVal
       })
     
       watch(() => billsQuery.data.value, (newVal) => {
@@ -71,6 +117,7 @@ import {
     
       watch(() => expensesQuery.data.value, (newVal) => {
         expenses.value = newVal
+        console.log(newVal)
       })
     
       watch(() => entriesQuery.data.value, (newVal) => {
@@ -82,7 +129,9 @@ import {
 
       const refreshAll = async () => {
         await Promise.all([
+          companyQuery.refetch(),
           productsQuery.refetch(),
+          itemsQuery.refetch(),
           billsQuery.refetch(),
           expensesQuery.refetch(),
           entriesQuery.refetch(),
@@ -106,29 +155,30 @@ import {
   
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
 
-    
   const topProducts = computed(() => {
     if (!entries.value) return []
-
+  
     const productMap = new Map<string, { name: string; total: number }>()
-
+  
     for (const entry of entries.value) {
-      const name = entry.variant?.name ||  'Unknown' // || entry.item?.name --> need to revisit
+      const name = entry.variant?.product?.name || 'Unknown'
       const key = name
-
+  
       if (!productMap.has(key)) {
         productMap.set(key, { name, total: 0 })
       }
-
+  
       productMap.get(key)!.total += entry.qty ?? 0
     }
-
+  
     return Array.from(productMap.values())
       .sort((a, b) => b.total - a.total)
       .slice(0, 5)
   })
   
+  
     const productsCount = computed(() => products.value?.length ?? 0)
+    const itemsCount = computed(() => items.value?.length ?? 0)
 
   
     const totalRevenue = computed(() =>
@@ -255,7 +305,9 @@ import {
 
   
     return {
+      company:company,
       productsCount,
+      itemsCount,
       totalRevenue,
       totalExpenses,
       revenueGraph,

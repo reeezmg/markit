@@ -1,12 +1,18 @@
 <script setup lang="ts">
 import { provideHooksContext } from './lib/hooks';
 import { VueQueryDevtools } from '@tanstack/vue-query-devtools';
-
-
+const config = useRuntimeConfig();
 // Provide tanstack-query context
 // Use an absolute endpoint so server-side fetch works too
+const categoryStore = useCategoryStore()
+
+onMounted(async () => {
+  await categoryStore.fetchAllCategories()
+  console.log('All Categories:', categoryStore.categories)
+})
+
 provideHooksContext({
-    endpoint: 'http://localhost:3000/api/model',
+    endpoint: config.public.baseUrl,
 });
 const colorMode = useColorMode();
 

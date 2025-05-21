@@ -1,8 +1,5 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue';
-definePageMeta({
-    auth: true,
-});
 import type { Period, Range } from '~/types';
 import {
     useUpdateBill,
@@ -10,9 +7,9 @@ import {
     useFindManyBill,
     useCountBill
 } from '~/lib/hooks';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
-
+const toast = useToast();
 const UpdateBill = useUpdateBill();
 const UpdateManyCategory = useUpdateManyCategory();
 const router = useRouter();
@@ -28,7 +25,11 @@ const ranges = [
   { label: 'Last 6 months', duration: { months: 6 } },
   { label: 'Last year', duration: { years: 1 } }
 ]
-const selectedDate = ref({ start: sub(new Date(), { days: 14 }), end: new Date() })
+
+const selectedDate = ref({ 
+    start: new Date() , 
+    end: new Date() 
+});
 
 // Columns
 const columns = [
@@ -122,6 +123,7 @@ const active = (selectedRows) => [
             key: 'delete',
             label: 'Delete',
             icon: 'i-heroicons-trash',
+            
         },
     ],
 ];
@@ -131,13 +133,14 @@ const action = (row:any) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`categories/edit/${row.id}`),
+            click: () => router.push(`./edit/${row.id}`),
         },
     ],
     [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
+            click: () => deleteBill(row.id),
         },
     ],
 ];
@@ -146,11 +149,11 @@ const action = (row:any) => [
 const todoStatus = [
     {
         label: 'Paid',
-        value: 'paid',
+        value: 'PAID',
     },
     {
         label: 'Pending',
-        value: 'pending',
+        value: 'PENDING',
     },
 ];
 
@@ -175,12 +178,74 @@ const resetFilters = () => {
     selectedStatus.value = [];
 };
 
+
+
 // Pagination
-const sort = ref({ column: 'id', direction: 'asc' as const });
+const sort = ref({ column: 'invoiceNumber', direction: 'desc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
-const pageCount = ref('3');
-const { data: pageTotal } = useCountBill({where:{companyId: useAuth().session.value?.companyId}});
+const pageCount = ref('5');
+
+const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
+return {
+    where: {
+        companyId: useAuth().session.value?.companyId,
+        deleted: false,
+        ...(search.value && { invoiceNumber: search.value }),
+        ...(selectedStatus.value.length && {
+            OR: selectedStatus.value.map(item => ({ paymentStatus: item.value }))
+        }),
+        ...(selectedDate.value && {
+  createdAt: {
+    gte: new Date(Date.UTC(
+      selectedDate.value.start.getFullYear(),
+      selectedDate.value.start.getMonth(),
+      selectedDate.value.start.getDate(),
+      0, 0, 0, 0
+    )).toISOString(),
+    lte: new Date(Date.UTC(
+      selectedDate.value.end.getFullYear(),
+      selectedDate.value.end.getMonth(),
+      selectedDate.value.end.getDate(),
+      23, 59, 59, 999
+    )).toISOString()
+  }
+})
+
+    },
+    include:{
+        entries:{
+            include:{
+                category:{
+                    select:{
+                        name:true
+                    }
+                }
+            }
+        }
+    },
+    orderBy: {
+        [sort.value.column]: sort.value.direction,
+    },
+    skip: (page.value - 1) * parseInt(pageCount.value),
+    take: parseInt(pageCount.value),
+};
+});
+
+const {
+    data: sales,
+    isLoading,
+    error,
+    refetch,
+} = useFindManyBill(queryArgs);
+
+
+const countArgs = computed(() => ({
+  where: queryArgs.value.where,
+}));
+
+const { data: pageTotal } = useCountBill(countArgs);
+
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -194,59 +259,28 @@ function selectRange(duration: Duration) {
   selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
 }
 
-// Data
-const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
 
 
-    return {
-        where: {
-            AND: [
-                { companyId: useAuth().session.value?.companyId },
-                ...(search.value ? [{ invoiceNumber:search.value }] : []),  // ✅ Fixed syntax
-                ...(selectedStatus.value.length  // ✅ Correctly checking for array content
-                    ? [{ OR: selectedStatus.value.map((item) => ({ paymentStatus: item.value })) }]
-                    : []
-                ),
-                {type:{in :['STANDARD','TRY_AT_HOME']}},
-                ...(selectedDate.value ? [
-                    { createdAt: { gte: new Date(selectedDate.value.start).toISOString() } },  // Start date
-                    { createdAt: { lte: new Date(selectedDate.value.end).toISOString() } }    // End date
-                ] : []),
-            ]
-        },
-        include:{
-            entries:{
-                include:{
-                    category:{
-                        select:{
-                            name:true
-                        }
-                    }
-                }
-            }
-        },
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
-        },
-        skip: (page.value - 1) * parseInt(pageCount.value),
-        take: parseInt(pageCount.value),
-    };
-});
-
-const {
-    data: sales,
-    isLoading,
-    error,
-    refetch,
-} = useFindManyBill(queryArgs);
 
 
-watch(sales, (newsales) => {
+
+watch(queryArgs, (newsales) => {
     console.log( newsales);
 });
 
 
+const deleteBill = async (id:string) => {
+    const res = await UpdateBill.mutateAsync({
+        where:{
+            id
+        },
+        data:{
+            deleted:true
+        }
+    })
 
+
+};
 
 
 const handleUpdate = async (id:string) => {
@@ -259,13 +293,37 @@ const handleUpdate = async (id:string) => {
         }
     })
 
-    console.log(res)
 
 };
 
 const handleChange = (value:string, row:any) => {
     notes.value[row.id] = value;
 };
+
+const onPaymentStatusChange = async (id:string, status:string, billNo) => {
+    try{
+    const res = await UpdateBill.mutateAsync({
+        where:{
+            id
+        },
+        data:{
+            paymentStatus:status,
+            ...(status === 'PAID' && {
+                createdAt: new Date().toISOString()
+            })
+        }
+    })
+     toast.add({
+          title: `Bill ${billNo} status changed to ${status}`,
+          color: 'green',
+        });
+    }catch(err){
+         toast.add({
+          title: 'Error while changing the bill status',
+          color: 'red',
+        });
+    }
+}
 
 </script>
 
@@ -413,13 +471,42 @@ const handleChange = (value:string, row:any) => {
                     {{ row.entries.length }}
                 </template>
 
+                <template #grandTotal-data="{ row }">
+                    <UPopover mode="hover">
+                        {{ row.grandTotal }}
+                        <template #panel>
+                        <div class="p-4 space-y-1">
+                            <div class="font-semibold">Payment Method:</div>
+                            <div v-if="row.paymentMethod === 'Split'">
+                            <ul class="list-disc list-inside">
+                                <li v-for="(payment, idx) in row.splitPayments" :key="idx">
+                                {{ payment.method }} – ₹{{ payment.amount }}
+                                </li>
+                            </ul>
+                            </div>
+                            <div v-else>
+                            {{ row.paymentMethod }}
+                            </div>
+                        </div>
+                        </template>
+                    </UPopover>
+                    </template>
+
+
                 <template #createdAt-data="{ row }">
                     {{ row.createdAt.toLocaleDateString('en-GB') }}
                 </template>
 
-                <template #paymentStatus-data="{ row }">
-                    {{ row.paymentStatus }}
-                </template>
+               <template #paymentStatus-data="{ row }">
+                    <USelect
+                        v-model="row.paymentStatus"
+                        :options="['PAID', 'PENDING']"
+                        @update:model-value="status => onPaymentStatusChange(row.id, status,row.invoiceNumber)"
+                        size="xs"
+                        class="w-28"
+                    />
+                    </template>
+
 
                 <template #notes-data="{ row }">
                     <UPopover> 

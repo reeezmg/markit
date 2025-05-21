@@ -1,14 +1,13 @@
 <script setup lang="ts">
-import { useExpense } from '~/composables/useExpense';
 import {
     useFindManyExpense,
     useCountExpense,
     useFindManyExpenseCategory,
     useUpdateManyExpense
 } from '~/lib/hooks';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
-import { saveAs } from 'file-saver';
+// import { saveAs } from 'file-saver';
 
 
 const emit = defineEmits(['edit','delete','open']);
@@ -21,6 +20,7 @@ const selectedDate = ref({
     start: new Date(new Date().setHours(0, 0, 0, 0)) , 
     end: new Date(new Date().setHours(23, 59, 59, 999)) 
 });
+
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const page = ref(1);
 const pageCount = ref('10');
@@ -28,13 +28,18 @@ const pageCount = ref('10');
 
 const columns = [
     {
-        key: 'createdAt',
+        key: 'expenseDate',
         label: 'Date',
         sortable: true,
     },
     {
         key: 'expensecategory.name',
         label: 'Category',
+        sortable: true,
+    },
+    {
+        key: 'note',
+        label: 'note',
         sortable: true,
     },
     {
@@ -68,15 +73,15 @@ const action = (row:any) => [
             click: () => emit('delete',row.id),
         },
     ],
-    ...(row.receipt ?
-        [
-            {
-                label: 'Download',
-                icon: 'i-heroicons-arrow-down-tray-20-solid',
-                click: () =>download(row.receipt),
-            },
-        ] : []
-    )
+    // ...(row.receipt ?
+    //     [
+    //         {
+    //             label: 'Download',
+    //             icon: 'i-heroicons-arrow-down-tray-20-solid',
+    //             click: () =>download(row.receipt),
+    //         },
+    //     ] : []
+    // )
     
 ];
 
@@ -179,7 +184,7 @@ const columnsTable = computed(() =>
 
 
 watchEffect(() => {
-    console.log(sales.value?.length);
+    console.log(sales.value);
     console.log(pageTotal.value);
 
 });
@@ -213,30 +218,30 @@ const multiUpdate = async(status:string,ids:any) => {
     })
 }
 
-const download = async (filePath:string) => {
-    if (!filePath) {
-        console.error('No file path provided');
-        return;
-    }
+// const download = async (filePath:string) => {
+//     if (!filePath) {
+//         console.error('No file path provided');
+//         return;
+//     }
 
-    const baseUrl = 'https://unifeed.s3.ap-south-1.amazonaws.com/';
-    const fileUrl = `${baseUrl}${filePath}`;
+//     const baseUrl = 'https://unifeed.s3.ap-south-1.amazonaws.com/';
+//     const fileUrl = `${baseUrl}${filePath}`;
 
-    try {
-        const response = await fetch(fileUrl);
-        if (!response.ok) {
-            throw new Error(`Failed to fetch file: ${response.statusText}`);
-        }
+//     try {
+//         const response = await fetch(fileUrl);
+//         if (!response.ok) {
+//             throw new Error(`Failed to fetch file: ${response.statusText}`);
+//         }
 
-        const blob = await response.blob();
-        const filename = filePath;
+//         const blob = await response.blob();
+//         const filename = filePath;
         
-        saveAs(blob, filename);
+//         saveAs(blob, filename);
 
-    } catch (error) {
-        console.error('Error downloading file:', error);
-    }
-};
+//     } catch (error) {
+//         console.error('Error downloading file:', error);
+//     }
+// };
 
 </script>
 
@@ -379,8 +384,8 @@ const download = async (filePath:string) => {
                 </UBadge>
             </template>
 
-        <template #createdAt-data="{row}">
-            {{ format(row.createdAt, 'd MMM, yyy') }}
+        <template #expenseDate-data="{row}">
+            {{ format(row.expenseDate, 'd MMM, yyy') }}
         </template>
             <template #actions-data="{ row }">
                 <UDropdown :items="action(row)">

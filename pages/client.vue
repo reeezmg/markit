@@ -11,11 +11,11 @@ const auth = useAuth();
             <UDashboardNavbar title="Client">
                 <template #right>
 
-<ClientOnly>
-<NotificationIcon />
-</ClientOnly>
+                <ClientOnly>
+                <NotificationIcon />
+                </ClientOnly>
 
-</template>
+                </template>
             </UDashboardNavbar>
             <NuxtPage />
         </UDashboardPanel>

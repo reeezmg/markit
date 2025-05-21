@@ -19,11 +19,10 @@ const {
   where: { id: poId },
   include: {
     products: { include: { variants: true } },
-    distributor: true,
   },
 });
 
-// 🟢 Define the useFindUniqueProduct() at the top level
+
 const queryArgs = computed(() => ({
   where: { id: selectedProductId.value || '' }, // Provide a default empty string
   include: {
@@ -58,13 +57,13 @@ const products = computed(() => {
 // Table columns
 const columns = [
   { label: 'Name', key: 'name' },
-  { label: 'QTY', key: 'quantity' },
+  { label: 'QTY', key: 'qty' },
   { label: 'Action', key: 'action' }
 ];
 
 const variantColumns = [
   { label: 'Variant Name', key: 'name' },
-  { label: 'Price', key: 'price' },
+  { label: 'Price', key: 'sprice' },
   { label: 'Quantity', key: 'qty' },
 ];
 
@@ -97,6 +96,10 @@ const editProductsm = async(id:string) => {
 <template>
   <div>
     <UTable class="w-full table-auto"  v-model:expand="expand" :rows="products" :columns="columns">
+      <template #qty-data="{ row }">
+        {{ row.variants?.reduce((sum, v) => sum + (v.qty || 0), 0) }}
+      </template>
+
       <template #action-data="{ row }">
         <div class="hidden md:block">
         <UButton

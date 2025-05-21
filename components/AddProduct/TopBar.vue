@@ -2,6 +2,13 @@
 import { useCreateDistributor,useFindManyDistributor } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client';
 
+const props = withDefaults(defineProps<{
+  totalAmount:number
+}>(), {
+  totalAmount: 0
+})
+
+
 const isOpen = ref(false);
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
@@ -16,11 +23,13 @@ const supplier = ref({
     gstin: '',
     bankName: '',
     accountNo: '',
+    upiId:'',
     ifsc: '',
+
     accHolderName:''
 });
 
-const paymentTypes = ['Credit', 'Cash/Prepaid']
+
 const paymentType = ref('')
 
 const emit = defineEmits(['update']);
@@ -35,6 +44,7 @@ const submitForm = async () => {
                 accountNo: supplier.value.accountNo,
                 bankName: supplier.value.bankName,
                 gstin: supplier.value.gstin,
+                upiId: supplier.value.upiId,
                 address: {
                     create: {
                         street: supplier.value.street,
@@ -84,7 +94,7 @@ const selected = ref<Prisma.DistributorFieldRefs>({} as Prisma.DistributorFieldR
 const emitUpdatedValues = () => {
   emit('update', {
     distributorId: selected.value?.id || null,
-    paymentType: paymentType.value
+    paymentType: paymentType.value,
   });
 };
 
@@ -116,14 +126,29 @@ watch([selected, paymentType], emitUpdatedValues, { deep: true });
 </div>
 
 <UDivider class="mx-3" orientation="vertical"/>
-<USelect v-model="paymentType" :options="paymentTypes"  placeholder="Payment Type"/>
+<USelect
+      v-model="paymentType"
+      :options="[
+          { label: 'Credit', value: 'CREDIT' },
+          { label: 'Cash', value: 'CASH' },
+          { label: 'UPI', value: 'UPI' },
+      ]"
+      option-attribute="label"
+      value-attribute="value"
+      placeholder="Payment Type"
+      />
+<UDivider v-if="paymentType==='CREDIT'" class="mx-3" orientation="vertical"/>
+<UDivider class="mx-3" orientation="vertical"/>
+<div class="h-full flex items-center">
+ Total: ₹{{ totalAmount.toFixed(2) }}
+</div >
 </div>
 
   <template>
     <div>
       <UModal v-model="isOpen">
         <div class="p-4 space-y-4">
-          <h2 class="text-lg font-semibold">Enter Supplier Details</h2>
+          <h2 class="text-lg font-semibold">Enter Distributor Details</h2>
 
           <!-- Name -->
           <h3 class="text-md font-semibold">Personal Details</h3>
@@ -131,22 +156,23 @@ watch([selected, paymentType], emitUpdatedValues, { deep: true });
 
           <!-- Address -->
           <h3 class="text-md font-semibold mt-4">Address Details</h3>
-          <UInput v-model="supplier.street" label="Street" placeholder="Enter street name" required />
-          <UInput v-model="supplier.locality" label="Locality" placeholder="Enter locality" required />
-          <UInput v-model="supplier.city" label="City" placeholder="Enter city name" required />
-          <UInput v-model="supplier.state" label="State" placeholder="Enter state name" required />
-          <UInput v-model="supplier.pincode" label="Pincode" placeholder="Enter pincode" required />
+          <UInput v-model="supplier.street" label="Street" placeholder="Enter street name"  />
+          <UInput v-model="supplier.locality" label="Locality" placeholder="Enter locality"  />
+          <UInput v-model="supplier.city" label="City" placeholder="Enter city name"  />
+          <UInput v-model="supplier.state" label="State" placeholder="Enter state name"  />
+          <UInput v-model="supplier.pincode" label="Pincode" placeholder="Enter pincode"  />
 
           <!-- GSTIN -->
           <h3 class="text-md font-semibold mt-4">Tax Information</h3>
-          <UInput v-model="supplier.gstin" label="GSTIN" placeholder="Enter 15-digit GST Number" required />
+          <UInput v-model="supplier.gstin" label="GSTIN" placeholder="Enter 15-digit GST Number"  />
 
           <!-- Bank Account Details -->
           <h3 class="text-md font-semibold mt-4">Bank Account Details</h3>
-          <UInput v-model="supplier.accHolderName" label="Account Holder Name" placeholder="Enter bank name" required />
-          <UInput v-model="supplier.bankName" label="Bank Name" placeholder="Enter bank name" required />
-          <UInput v-model="supplier.accountNo" label="Account Number" placeholder="Enter account number" required />
-          <UInput v-model="supplier.ifsc" label="IFSC Code" placeholder="Enter IFSC Code" required />
+          <UInput v-model="supplier.accHolderName" label="Account Holder Name" placeholder="Enter bank name"  />
+          <UInput v-model="supplier.bankName" label="Bank Name" placeholder="Enter bank name"  />
+          <UInput v-model="supplier.accountNo" label="Account Number" placeholder="Enter account number"  />
+          <UInput v-model="supplier.ifsc" label="IFSC Code" placeholder="Enter IFSC Code"  />
+          <UInput v-model="supplier.upiId" label="UPI ID" placeholder="Enter UPI ID"  />
 
           <!-- Submit Button -->
           <UButton @click="submitForm" block>Submit</UButton>

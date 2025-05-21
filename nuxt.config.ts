@@ -1,13 +1,23 @@
 export default defineNuxtConfig({
-
-  extends: [process.env.NUXT_UI_PRO_PATH || '@nuxt/ui-pro', './auth'],
+  extends: ['@nuxt/ui-pro', './auth'],
+  sessionSecret: process.env.SESSION_SECRET ,
+  ssr: true,
 
   build: {
-      transpile: ['trpc-nuxt']
-    },
+    transpile: ['trpc-nuxt']
+  },
+  output: {
+    standalone: true
+  },
 
   nitro: {
-    plugins: ['~/nitro/ws'],
+     preset: 'vercel',
+    esbuild: {
+        options: {
+          target: 'es2022'
+        }
+      },
+    
   },
 
   modules: [
@@ -47,6 +57,7 @@ export default defineNuxtConfig({
         awsId: process.env.AWS_ID,
         awsSecret: process.env.AWS_SECRET,
         awsBucket: process.env.AWS_BUCKET,
+        baseUrl: process.env.BASE_URL
     }
   },
 

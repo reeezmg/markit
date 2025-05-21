@@ -240,7 +240,7 @@ export function useCountDistributor<TArgs extends Prisma.DistributorCountArgs, T
     return useModelQuery<TQueryFnData, TData, TError>('Distributor', `${endpoint}/distributor/count`, args, options, fetch);
 }
 
-export function useCheckDistributor<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; images?: string; status?: boolean; accHolderName?: string; ifsc?: string; accountNo?: string; bankName?: string; gstin?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckDistributor<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; images?: string; status?: boolean; accHolderName?: string; ifsc?: string; accountNo?: string; bankName?: string; gstin?: string; upiId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('Distributor', `${endpoint}/distributor/check`, args, options, fetch);
 }

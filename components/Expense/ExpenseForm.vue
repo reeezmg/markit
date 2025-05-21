@@ -4,7 +4,8 @@ import {
     useCreateExpenseCategory
 } from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client'
+
 
 const props = defineProps({
     expense: {
@@ -23,7 +24,7 @@ const expenseData = computed(() => ({
     date: props.expense?.createdAt
         ? new Date(props.expense?.createdAt).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
-    category: props.expense?.expensecategory?.id || {},  // Store only ID
+    category: props.expense?.expensecategory || {},  // Store only ID
     amount: props.expense?.totalAmount || '',
     status: props.expense?.status || 'Paid',
     paymentMode: props.expense?.paymentMode || 'CASH',

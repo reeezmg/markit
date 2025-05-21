@@ -44,11 +44,19 @@ const links = computed(() => {
                     },
                 },
                 {
-                    label: 'Accounts',
-                    to: `/erp/accounts`,
+                    label: 'Expenses',
+                    to: `/erp/expenses`,
                     tooltip: {
                         text: 'ERP',
-                        shortcuts: ['E', 'A'],
+                        shortcuts: ['E', 'E'],
+                    },
+                },
+                {
+                    label: 'Reports',
+                    to: `/reports/sales`,
+                    tooltip: {
+                        text: 'ERP',
+                        shortcuts: ['E', 'R'],
                     },
                 },
             ],
@@ -80,6 +88,51 @@ const links = computed(() => {
                           },
                       ]
                     : []),
+                     {
+                    label: 'Stocks',
+                    to: `/products/stocks`,
+                    tooltip: {
+                        text: 'stocks',
+                        shortcuts: ['P', 'S'],
+                    },
+                },
+            ],
+           
+        },
+        {
+            id: 'distributor',
+            label: 'Distributor',
+            to: `/distributor`,
+            icon: 'i-heroicons-truck',
+            children: [
+                {
+                    label: 'All Distributor',
+                    to: `/distributor`,
+                    exact: true,
+                    tooltip: {
+                        text: 'distributors',
+                        shortcuts: ['D', 'D'],
+                    },
+                },
+                // {
+                //     label: 'Order',
+                //     to: `/distributor/Order`,
+                //     exact: true,
+                //     tooltip: {
+                //         text: 'Order',
+                //         shortcuts: ['D', 'O'],
+                //     },
+                // },
+                {
+                    label: 'Credit',
+                    to: `/distributor/credit`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Credit',
+                        shortcuts: ['D', 'C'],
+                    },
+                },
+               
             ],
            
         },

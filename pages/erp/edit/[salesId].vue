@@ -1,50 +1,80 @@
 
 <script setup>
-import { useUpdateBill,useFindUniqueBill,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateEntry, useCreateEntry,useDeleteManyEntry } from '~/lib/hooks';
-
+import {
+  useUpdateBill,
+  useFindUniqueBill,
+  useFindFirstItem,
+  useFindManyCategory,
+  useUpdateVariant,
+  useUpdateItem,
+  useCreateAccount,
+  useFindManyAccount,
+  useFindUniqueClient,
+  useUpdateEntry,
+  useCreateEntry,
+  useDeleteManyEntry,
+  useUpdateManyItem,
+  useFindManyEntry,
+} from '~/lib/hooks';
 
 const UpdateBill = useUpdateBill();
-const CreateTokenEntry = useCreateTokenEntry();
 const CreateAccount = useCreateAccount();
 const UpdateVariant = useUpdateVariant();
 const UpdateItem = useUpdateItem();
 const UpdateEntry = useUpdateEntry();
 const CreateEntry = useCreateEntry();
 const DeleteManyEntry = useDeleteManyEntry();
-const DeleteTokenEntry = useDeleteTokenEntry();
+const UpdateManyItem = useUpdateManyItem();
 const useAuth = () => useNuxtApp().$auth;
 const route = useRoute();
 const toast = useToast();
-const salesId = route.params.salesId;
+const { printBill } = usePrint();
 const router = useRouter();
-
+const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
+const isPrint = ref(false);
+const isSaving = ref(false);
+const issalesReturnModelOpen = ref(false);
+const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
+const accountLoaded = ref(false);
 const subtotal = computed(() => {
-  return items.value.reduce((sum, item) => sum + (item.value || 0), 0);
+  return items.value.reduce((sum, item) => sum + (item.qty * item.rate || 0), 0);
 });
-const grandTotal = ref(0);
-const returnAmt = ref(0);
-const paymentMethod = ref('Cash');
-const voucherNo = ref('');
-const cellNo = ref('');
-const points = ref(0);
-const name = ref('');
-const scannedBarcode = ref("");
-const token = ref("")
-const tokenEntries = ref([])
+const grandTotal = computed(() => {
+  const baseTotal = items.value.reduce((sum, item) => sum + (item.value || 0), 0);
 
+  if (discount.value < 0) {
+    return parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
+  } else {
+    const discounted = baseTotal - (baseTotal * discount.value) / 100;
+    return parseFloat(discounted.toFixed(2));
+  }
+});
+
+const returnAmt = ref(0);
+const paymentMethod = ref(null);
+const voucherNo = ref('');
+const phoneNo = ref('');
+const clientName = ref('');
+const points = ref(0);
+const clientId = ref('');
+const scannedBarcode = ref("");
+const categoryStore = useCategoryStore()
+let printData = {}
+const showSplitModal = ref(false)
+const tempSplits = ref(
+  Object.fromEntries(paymentOptions.map(method => [method, { method, amount: null }]))
+)
+
+const splitPayments = ref([])
 const qtyInputs = ref([]);
 const barcodeInputs = ref([]);
 const discountref = ref();
 const paymentref = ref();
 const saveref = ref();
-const savetokenref = ref();
-const addTokenRef = ref();
-const tokenInputs = ref(['']);
-
 const isOpen = ref(false);
-const isTokenOpen = ref(false);
+const isClientAddModelOpen = ref(false);
 const account = ref({
     name: '',
     phone:'',
@@ -54,11 +84,11 @@ const account = ref({
     state: '',
     pincode: '',
 });
-const selected = ref({});
+const selected = ref(null);
 
 
 const items = ref([
-  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 },
+  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false },
 ]);
 
 
@@ -82,44 +112,77 @@ let startX = 0;
 let startWidth = 0;
 let columnIndex = 0;
 
+
+
 watch(selected, (newSelected) => {
-  if(Object.keys(newSelected).length !== 0 ){
-    paymentMethod.value = 'credit'
+  if(newSelected && accountLoaded.value){
+    paymentMethod.value = 'Credit'
   }
-  console.log(newSelected)
+  else{
+     accountLoaded.value = true
+  }
+
 })
 
-watch(items, () => {
-  console.log(items.value)
-  items.value.forEach((item) => {
-    let baseValue = item.qty * item.rate;
+
+watch(items, async () => {
+  for (let index = 0; index < items.value.length; index++) {
+    const item = items.value[index];
+    
+    // ---------- Step 1: Calculate discounted rate ----------
+    let discountedRate = item.rate;
 
     if (item.discount < 0) {
-      baseValue -= Math.abs(item.discount);
+      discountedRate -= Math.abs(item.discount);
     } else {
-      baseValue -= (baseValue * item.discount) / 100;
+      discountedRate -= (discountedRate * item.discount) / 100;
     }
 
-    baseValue -= (baseValue * item.tax) / 100;
-    
-    item.value = Math.max(baseValue, 0); 
-    
-  });
+    // ---------- Step 2: Update tax according to value/qty ----------
 
+   
+
+    if (item.category[0]?.id) {
+      const category = categoryStore.getCategoryById(item.category[0].id)
+     
+      if( category){
+        const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = category;
+        console.log(taxType)
+      if (taxType === 'FIXED') {
+        item.tax = fixedTax ?? 0;
+      } else {
+        const effectiveValue = item.value / (item.qty || 1); // avoid division by zero
+
+        if (effectiveValue > thresholdAmount) {
+          item.tax = taxAboveThreshold ?? 0;
+        } else {
+          item.tax = taxBelowThreshold ?? 0;
+        }
+      }
+      }
+    }
+
+    
+    // ---------- Step 3: Calculate base value ----------
+    let baseValue = discountedRate * item.qty;
+    
+    if (!isTaxIncluded) {
+      baseValue += (baseValue * item.tax) / 100;
+    }
+
+    item.value = baseValue;
+  }
 }, { deep: true });
 
-watch([discount, subtotal], ([newDiscount, newTotal]) => {
-  let baseValue = newTotal; // Use the updated total value
+const tQty = computed(() =>
+  items.value.reduce((sum, item) => {
+    if (item.barcode || item.name || item.category.length > 0) {
+      return sum + item.qty
+    }
+    return sum
+  }, 0)
+)
 
-  if (newDiscount < 0) {
-    baseValue -= Math.abs(newDiscount);
-  } else {
-    baseValue -= (baseValue * newDiscount) / 100;
-  }
-
-  grandTotal.value = parseFloat(Math.max(baseValue, 0).toFixed(2));
-  // Prevent negative values
-});
 
 
 const startResize = (index, event) => {
@@ -210,13 +273,36 @@ const removeRow = (barcode,index) => {
   
 };
 
-onMounted(() => {
+onMounted(async () => {
+  await billRefetch()
   // Initialize column widths (optional)
   const ths = resizableTable.value.querySelectorAll('th');
   ths.forEach((th) => {
     th.style.width = `${th.offsetWidth}px`;
   });
 });
+
+const args = computed(() => ({
+  where: {
+    phone: `+91${phoneNo.value}`,
+    companies: {
+      some: {
+        companyId: useAuth().session.value?.companyId,
+      },
+    },
+  },
+}));
+
+
+ const {
+  data: client,
+  isLoading:isClientLoading,
+  error,
+  refetch:refetchClient,
+} = useFindUniqueClient(
+  args,
+  { enabled: false } // disabled by default
+);
 
 const {
     data: categories,
@@ -232,7 +318,12 @@ const {
 
 
 const itemargs = computed(() => ({
-  where: { barcode: scannedBarcode.value },
+  where: { 
+    barcode: scannedBarcode.value,
+    status:'in_stock',
+    companyId:useAuth().session.value?.companyId || ''
+
+   },
   select: {
     id: true, 
     size:true,
@@ -255,17 +346,37 @@ const itemargs = computed(() => ({
 }));
 
 
-const entryargs = computed(() => ({
-    where: {
-        tokenNo: { in: tokenEntries.value }  // Fetch all entries matching tokenNos
+const findManyEntryargs = computed(() => ({
+  
+  where: {
+    billId: route.params.salesId,
+    id: {
+      notIn: items.value
+        .filter(item => item.entryId)
+        .map(item => item.entryId),
+    },
+  },
+  select: {
+    id: true,
+    itemId: true,
+    qty: true,
+    size:true,
+    variantId: true,
+    return:true,
+    variant:{
+      select:{
+        sizes:true
+      }
     }
+  },
+
 }));
 
 
 
 
 const billArgs = computed(() => ({
-  where: { id: salesId },
+  where: { id: route.params.salesId },
   select: {
     createdAt:true,
     invoiceNumber: true,
@@ -278,6 +389,7 @@ const billArgs = computed(() => ({
     paymentStatus: true,
     notes:true,
     returnDeadline: true,
+    accountId:true,
     type: true,
     status: true,
     address: {
@@ -293,6 +405,7 @@ const billArgs = computed(() => ({
         select:{
             name:true,
             phone:true,
+            id:true,
         }
     },
     entries: {  
@@ -308,6 +421,12 @@ const billArgs = computed(() => ({
         size: true,
         outOfStock: true,
         categoryId:true,
+        item:{
+          select:{
+            id:true,
+            size:true,
+          }
+        },
         variant: {  
           select: {
             id:true,
@@ -320,23 +439,22 @@ const billArgs = computed(() => ({
 }));
 
 
-const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs);
-const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enable:false});
-const { data: entrydata ,refetch:entryRefetch} = useFindManyTokenEntry(entryargs,{enable:false});
+const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs,{enabled:false});
+const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enabled:false});
+const {data: entriesToDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
+
+
+watch(entriesToDelete, (newBill) => {
+  console.log(newBill)
+})
 
 const handleEnterBarcode = (barcode,index) => {
   if(!barcode){
-    if(token.value){
-      const component = savetokenref.value;
-      const button = component.$el;
-      button.focus();
-    }
-    else{
     const component = discountref.value;
     const input = component.$el.querySelector("input");
     input.focus();
     input.select();
-    }
+    
   }else{
     fetchItemData(barcode, index);
   const component = qtyInputs.value[index];
@@ -360,48 +478,28 @@ const handleEnterPayment = () => {
 };
 
 
-const handleTokenInputEnter = async(index) => {
-  if(!tokenEntries.value[index]){
-    const component = addTokenRef.value;
-    const button = component.$el;
-    button.focus();
-    
-  }else{
-    addEntry()
-    await nextTick();
-    const component = tokenInputs.value[index + 1];
-    const input = component.$el.querySelector("input");
-    input.focus();
-    input.select();
-  }
-  
-}
-
-const handleTokenDelete = (index, event) => {
-  if(!tokenEntries.value[index] && tokenEntries.value.length > 1){
-    event.preventDefault()
-    tokenEntries.value.splice(index,1)
-    const component = tokenInputs.value[index-1];
-    const input = component.$el.querySelector("input");
-    input.focus();
-
-  }
-}
-
-
 
 watch(() => bill.value, (newData) => {
   console.log(newData)
   if (!newData || !newData.entries) return;
+  discount.value = newData.discount
+    selected.value = newData.accountId
+    clientId.value = newData.client?.id
+    clientName.value = newData.client?.name
+    phoneNo.value = newData.client?.phone
+  paymentMethod.value = newData.paymentMethod
+   date.value = new Date(newData.createdAt).toISOString().split('T')[0]
   items.value = newData.entries.map((entry, index) => {
     return {
-      id: entry.id || '',
+      entryId: entry.id || '',
+      id:entry.item?.id || '',
       variantId: entry.variant?.id || '',
       sn: index + 1,
       name:entry.name || '',
       barcode: entry.barcode || '', 
       category:  categories.value.filter(category =>category.id === entry.categoryId),
-      size: entry.size || '',
+      size: entry.item?.size || '',
+      sizes: entry.sizes || null,
       qty: entry.qty || 1,
       rate: entry.rate || 0,
       discount: entry.discount || 0,
@@ -426,7 +524,8 @@ const fetchItemData = async (barcode, index) => {
     const categoryId = itemdata.value.variant.product.categoryId;
 
     
-    items.value[index].id = itemdata.value.id || '';
+    items.value[index].entryId = itemdata.value.entry?.id || '';
+    items.value[index].id = itemdata.value.item?.id || '';
     items.value[index].size = itemdata.value.size || '';
     items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant.product.name}` || '';
     items.value[index].category = categories.value.filter(category =>category.id === categoryId);
@@ -443,19 +542,25 @@ const fetchItemData = async (barcode, index) => {
 
 
 const handleEdit = async () => {
-  console.log(items);
+  isSaving.value = true
   try {
     items.value = items.value.filter(item =>
     item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
   );
 
   if (items.value.length === 0) {
-    toast.add({ title: 'No valid items to bill.', color: 'red' });
+    throw new Error(`No valid items to bill.`);
     return;
   }
+
+  items.value.forEach((item, index) => {
+    if (!item.category || !item.category[0]?.id) {
+      throw new Error(`No category in entry ${index + 1}`);
+    }
+  });
     // Separate items into those with an ID and those without
-    const itemsWithId = items.value.filter(item => item.id);
-    const itemsWithoutId = items.value.filter(item => !item.id);
+    const itemsWithId = items.value.filter(item => item.entryId);
+    const itemsWithoutId = items.value.filter(item => !item.entryId);
 
     // Separate create and update logic
 
@@ -467,19 +572,18 @@ const handleEdit = async () => {
           qty: item.qty,
           rate: item.rate,
           name: item.name,
-          discount: item.discount,
-          variantId: item.variantId || undefined,
-          tax: item.tax,
+          discount: item.discount || 0,
+          ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
           value: item.value,
           ...(item.category?.[0]?.id && {
             category: { connect: { id: item.category[0].id } },
           }),
-          ...(item.barcode && {
-            item: { connect: { barcode: item.barcode } },
+          ...(item.id && {
+            item: { connect: { id: item.id } },
           }),
           bill: {
             connect: {
-              id: salesId,
+              id: route.params.salesId,
             },
           },
         },
@@ -489,75 +593,327 @@ const handleEdit = async () => {
     // Update entries for items with an ID (itemsWithId)
     const updatePromises = itemsWithId.map(item => {
       return UpdateEntry.mutateAsync({
-        where: { id: item.id },
+        where: { id: item.entryId },
         data: {
           barcode: item.barcode || undefined,
           qty: item.qty,
           rate: item.rate,
           name: item.name,
-          discount: item.discount,
-          variantId: item.variantId || undefined,
+          discount: item.discount || 0,
+          ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
           tax: item.tax,
           value: item.value,
           ...(item.category?.[0]?.id && {
             category: { connect: { id: item.category[0].id } },
           }),
-          ...(item.barcode && {
-            item: { connect: { barcode: item.barcode } },
+          ...(item.id && {
+            item: { connect: { id: item.id } },
           }),
           bill: {
             connect: {
-              id: salesId,
+              id: route.params.salesId,
             },
           },
         },
       });
     });
 
-    const deletePromises = DeleteManyEntry.mutateAsync({
-  where: {
-    billId: salesId,
-    id: {
-      notIn: items.value.filter(item => item.id).map(item => item.id),
+   // Step 1: Find entries to delete
+await entriesToDeleteRefetch()
+console.log(entriesToDelete)
+const entryIds = entriesToDelete.value?.filter(e=>e.id).map(e => e.id);
+
+// Step 2: Extract itemIds and entryIds
+// Filter entries with return === true
+const entriesReturned = entriesToDelete.value?.filter(e => e.return === true) ?? [];
+const returnedItemIds = entriesReturned.filter(e => e.itemId).map(e => e.itemId);
+const returnedVariantDetails = entriesReturned.map(e => ({
+  variantId: e.variantId,
+  qty: e.qty,
+  size: e.size ?? null,
+  sizes: e?.variant?.sizes ?? [],
+}));
+
+// Filter entries with return === false
+const entriesNotReturned = entriesToDelete.value?.filter(e => e.return === false) ?? [];
+const notReturnedItemIds = entriesNotReturned.filter(e => e.itemId).map(e => e.itemId);
+const notReturnedVariantDetails = entriesNotReturned.map(e => ({
+  variantId: e.variantId,
+  qty: e.qty,
+  size: e.size ?? null,
+  sizes: e?.variant?.sizes ?? [],
+}));
+
+
+
+// Step 3: Update related items to be in_stock
+if (notReturnedItemIds.length > 0) {
+   UpdateManyItem.mutateAsync({
+    where: { id: { in: notReturnedItemIds } },
+    data: { 
+      status: 'in_stock' 
+    },
+
+  });
+
+
+// Step 4: update the variants
+for (const { variantId, qty, size, sizes } of notReturnedVariantDetails) {
+  if (!variantId || !qty) continue;
+
+  // increment overall variant qty
+  const updateData = {
+    qty: { increment: qty },
+  };
+
+  // Update sizes only if size is not null
+  if (size) {
+    const updatedSizes = sizes.map(s => {
+      if (s.size === size) {
+        return {
+          ...s,
+          qty: Math.max((s.qty ?? 0) + qty) // Prevent negative qty
+        };
+      }
+      return s;
+    });
+
+    updateData.sizes = updatedSizes;
+  }
+
+   UpdateVariant.mutateAsync({
+    where: { id: variantId },
+    data: updateData,
+  });
+}
+
+}
+
+
+if (returnedItemIds.length > 0) {
+   UpdateManyItem.mutateAsync({
+    where: { id: { in: returnedItemIds } },
+    data: { 
+      status: 'sold' 
+    },
+
+  });
+
+
+// Step 4: update the variants
+for (const { variantId, qty, size, sizes } of returnedVariantDetails) {
+  if (!variantId || !qty) continue;
+
+  // increment overall variant qty
+  const updateData = {
+    qty: { decrement: qty },
+  };
+
+  // Update sizes only if size is not null
+  if (size) {
+    const updatedSizes = sizes.map(s => {
+      if (s.size === size) {
+        return {
+          ...s,
+          qty: Math.max((s.qty ?? 0) - qty) // Prevent negative qty
+        };
+      }
+      return s;
+    });
+
+    updateData.sizes = updatedSizes;
+  }
+
+   UpdateVariant.mutateAsync({
+    where: { id: variantId },
+    data: updateData,
+  });
+}
+
+}
+
+// Step 4: Delete the entries
+if (entryIds.length > 0) {
+   DeleteManyEntry.mutateAsync({
+    where: { id: { in: entryIds } },
+  });
+}
+
+   
+    // Execute all create, update, and delete promises
+    const updateBillPromise = () => UpdateBill.mutateAsync({
+  where: { id: route.params.salesId },
+  data: {
+    subtotal: subtotal.value,
+    discount: discount.value,
+    grandTotal: grandTotal.value,
+    paymentMethod: paymentMethod.value,
+    paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
+    ...(paymentMethod.value === 'Split' && {
+      splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
+    }),
+    ...(selected.value && {
+    account: { connect: { id: selected.value } },
+    }),
+    ...(clientId.value && {
+    client: {
+      connect: {
+        id: clientId.value,
+      },
+    },
+  }),
+    createdAt: new Date(date.value).toISOString(),
+    company: {
+      connect: {
+        id: useAuth().session.value?.companyId,
+      },
+    },
+  },
+  select: {
+    id: true,
+    invoiceNumber: true,
+    createdAt: true,
+    paymentMethod: true,
+    subtotal: true,
+    discount: true,
+    tax: true,
+    grandTotal: true,
+    company: {
+      select: {
+        name: true,
+        gstin: true,
+        upiId: true,
+        accHolderName: true,
+        address: {
+          select: {
+            name: true,
+            street: true,
+            locality: true,
+            city: true,
+            state: true,
+            pincode: true,
+          },
+        },
+      },
+    },
+    entries: {
+      select: {
+        name: true,
+        qty: true,
+        rate: true,
+        discount: true,
+        tax: true,
+        value: true,
+        barcode: true,
+        size: true,
+        item: {
+          select: {
+            id: true,
+          },
+        },
+        category: {
+          select: {
+            name: true,
+            hsn: true,
+          },
+        },
+      },
     },
   },
 });
 
-   
+// Run all promises in parallel
+const results = await Promise.all([
+  ...createPromises,
+  ...updatePromises,
+  updateBillPromise(),
+]);
 
-    // Execute all create, update, and delete promises
-    await Promise.all([...createPromises, ...updatePromises, deletePromises]);
-
-    // Call UpdateBill mutation with the other data
-    const billResponse = await UpdateBill.mutateAsync({
-      where: { id: salesId },
-      data: {
-        subtotal: subtotal.value,
-        discount: discount.value,
-        grandTotal: grandTotal.value,
-        paymentMethod: paymentMethod.value,
-        company: {
-          connect: {
-            id: useAuth().session.value?.companyId,
-          },
-        },
-      },
-    });
-
-    console.log('Bill updated successfully:', billResponse);
+const billResponse = results[results.length - 1];
+console.log('Bill updated successfully:', billResponse);
 
     toast.add({
       title: 'Bill edited successfully!',
       color: 'green',
     });
 
+    try {
+        isPrint.value = true
+      printData = {
+          invoiceNumber: billResponse.invoiceNumber || 'N/A',
+          date: billResponse.createdAt,
+          entries: billResponse.entries.map(entry => {
+          let calculatedDiscount = 0;
+
+          if (entry.discount < 0) {
+            // Fixed discount
+            calculatedDiscount = Math.abs(entry.discount) * entry.qty;
+          } else {
+            // Percentage discount
+            calculatedDiscount = ((entry.rate * entry.discount) / 100) * entry.qty;
+          }
+
+          return {
+            description: entry.barcode ? entry.name : entry.category.name,
+            hsn: entry.category.hsn,
+            qty: entry.qty,
+            mrp: entry.rate,
+            discount: calculatedDiscount, // ✅ set calculated discount
+            tax: entry.tax,
+            value: entry.qty * entry.rate ,
+            size: entry.size,
+            barcode: entry.barcode,
+            tvalue:entry.value,
+          };
+        }),
+ 
+  subtotal: billResponse.subtotal,
+  discount: billResponse.discount,
+  grandTotal: billResponse.grandTotal,
+  paymentMethod: billResponse.paymentMethod,
+  ...(paymentMethod.value === 'Split' && {
+            splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
+          }),
+  companyName: billResponse.company.name || '',
+  companyAddress: billResponse.company.address || {},
+  gstin: billResponse.company.gstin || '',
+  accHolderName: billResponse.company.accHolderName || '',
+  upiId: billResponse.company.upiId || '',
+   clientName:clientName.value,
+    clientPhone:phoneNo.value,
+  // 🆕 Add total qty
+  tqty: billResponse.entries.reduce((sum, entry) => sum + entry.qty, 0),
+  tvalue: billResponse.entries.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+  tdiscount: billResponse.entries.reduce((sum, entry) => {
+    if (entry.discount < 0) {
+      return sum + (Math.abs(entry.discount) * entry.qty);
+    } else {
+      return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
+    }
+  }, 0),
+};
+
+    } catch (err) {
+      console.error('Printing error:', err);
+      toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+    }
+
+
+
   } catch (error) {
     console.error('Error updating bill', error);
     toast.add({
       title: 'Bill update failed!',
+      description: error.message,
       color: 'red',
     });
-  }
+  }finally {
+      isSaving.value = false;
+    }
 
   // Collect all async operations in an array for items with a barcode
   const updatePromises = [];
@@ -590,27 +946,9 @@ const handleEdit = async () => {
   }
 
   // Wait for all updates to finish before proceeding
-  await Promise.all(updatePromises);
+ Promise.all(updatePromises);
 
-  try {
-    tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
-    if (tokenEntries.value.length > 0) {
-      await DeleteTokenEntry.mutateAsync({
-        where: { tokenNo: { in: tokenEntries.value } }
-      });
-      console.log('Token entries deleted successfully');
-    }
-  } catch (error) {
-    console.error('Error deleting token entries', error);
-  }
 
-  // ✅ Reset items only after all Prisma operations are complete
-  // items.value = [
-  //   { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
-  // ];
-  // discount.value = 0;
-  // paymentMethod.value = 'Cash';
-  // tokenEntries.value = [''];
 };
 
 
@@ -622,13 +960,17 @@ const {
       where: { companyId: useAuth().session.value?.companyId},
 });
 
-
 const submitForm = async () => {
+  isSavingAcc.value = true
   try {
+    
+    if (!account.value.name) {
+        throw new Error(`Plase Fill name`);
+      }
     const res = await CreateAccount.mutateAsync({
       data: {
                 name: account.value.name,
-                phone: account.value.name,
+                phone: account.value.phone,
                 address: {
                     create: {
                         street: account.value.street,
@@ -651,144 +993,120 @@ const submitForm = async () => {
         });
     isOpen.value = false
   }catch(error){
-    console.log(error)
+     toast.add({
+        title: 'Account creation failed!',
+        description: error.message,
+        color: 'red',
+      });
+  }finally{
+    isSavingAcc.value = false
   }
 };
 
-const deleteBill = async () => {
-    const res = await UpdateBill.mutateAsync({
-        where:{
-            id:salesId
-        },
-        data:{
-            deleted:true
-        }
-    })
-router.push('/erp/sales')
-    toast.add({
-        title: 'Bill Deleted !',
-        color: 'green',
+
+const print = async() => {
+  try{
+  console.log(printData)
+  await printBill(printData)
+  isPrint.value = false
+  toast.add({
+        title: 'Printing Sucess!',
+        color: 'Green',
+      });
+  }catch(err){
+      toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
+
+
+
+watch(paymentMethod, (val) => {
+
+  if (val === 'Split') {
+    showSplitModal.value = true
+  }
+})
+
+// 
+const handleAmountEntry = (method) => {
+  const entry = tempSplits.value[method]
+  const exists = splitPayments.value.find(p => p.method === method)
+
+  if (entry.amount && !exists) {
+    splitPayments.value.push({ method, amount: entry.amount })
+  } else if (!entry.amount && exists) {
+    // If amount cleared, remove from list
+    splitPayments.value = splitPayments.value.filter(p => p.method !== method)
+  } else if (entry.amount && exists) {
+    // Update amount if already present
+    exists.amount = entry.amount
+  }
+}
+
+
+
+
+// Total calculation
+const totalSplitAmount = computed(() =>
+  splitPayments.value.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
+)
+
+
+
+function handlePaymentSelect(value) {
+
+  // You can handle logic like:
+  if (value === 'Split') {
+    showSplitModal.value = true
+  }
+}
+
+
+const handleSplit = () => {
+  showSplitModal.value = true
+  paymentMethod.value = 'Split'
+}
+
+
+// Final submission
+function submitSplitPayment() {
+  if (totalSplitAmount.value !== grandTotal.value) {
+    alert(`Total split amount must be exactly ${grandTotal.value}`)
+    return
+  }
+
+  // Process splitPayments here
+  console.log('Final Split:', splitPayments.value)
+  showSplitModal.value = false
+}
+
+const handleEnterPhone = async() => {
+const { data } = await refetchClient()
+console.log(data)
+clientName.value = data?.name
+clientId.value = data?.id
+if(!data){
+  isClientAddModelOpen.value = true
+}
+}
+
+const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
+  items.value = items.value.filter(item =>
+      item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
+    );
+    const baseIndex = items.value.length;
+
+    returnedItems.forEach((item, i) => {
+      item.sn = baseIndex + i + 1; // Ensure sn = position in array (1-based)
     });
 
-};
+    items.value.push(...returnedItems);
+    addNewRow(items.value.length - 1);
 
-const handleTokenSave = async () => {
-  items.value = items.value.filter(item => item.id || item.barcode);
-  try {
-    // Create the bill first
-    const billResponse = await Promise.all(
-    items.value.map(item => 
-        CreateTokenEntry.mutateAsync({
-            data: {
-                tokenNo: token.value,
-                createdAt: new Date().toISOString(),
-                company: {
-                    connect: {
-                        id: useAuth().session.value?.companyId,
-                    },
-                },
-                itemId: item.id || '',
-                variantId: item.variantId || '',
-                barcode: item.barcode || '',
-                categoryId: item.category[0]?.id || '', 
-                size: item.size || '',
-                name: item.name || '',
-                qty: item.qty,
-                rate: item.rate,
-                discount: item.discount,
-                tax: item.tax,
-                value: item.value,
-                sizes: item.sizes, 
-                totalQty: item.totalQty,
-            }
-        })
-    )
-);
-
-
-
-    console.log('Bill created successfully:', billResponse);
-    
-  } catch (error) {
-    console.error('Error creating bill', error);
-  }
-
-
-  try {
-   
-    for (const item of items.value) {
-          await UpdateItem.mutateAsync({
-            where: { id: item.id },
-            data: {
-              status: 'tokened',
-            },
-          });
-
-         
-        }
-    } catch (error) {
-    console.error('Error updating item and variant', error);
-  }
-    
-
-    // Optionally, you can reset the form or perform other actions after successful creation
-    items.value = [
-    { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
-    ];
-    token.value = '';
-    discount.value = 0;
-    paymentMethod.value = 'Cash';
-
-};
-
-const addEntry = () => {
-  tokenEntries.value.push('')  // Add a new empty entry
-}
-
-const removeEntry = (index) => {
-  if (tokenEntries.value.length > 1) {
-    tokenEntries.value.splice(index, 1)
-  }
-}
-
-const submitEntryForm = async () => {
-    await entryRefetch();
-
-    if (entrydata.value) {
-        // Remove existing empty item if it exists
-        items.value = items.value.filter(item => item.id || item.barcode);
-
-        // Add fetched entries to existing items
-        const newItems = entrydata.value.map((entry, index) => ({
-            id: entry.id || '',
-            variantId: entry.variantId || '',
-            barcode: entry.barcode || '',
-            category: categories.value.filter(category => category.id === entry.categoryId) || [],
-            size: entry.size || '',
-            item: entry.name || '',
-            qty: entry.qty || 0,
-            rate: entry.rate|| 0,
-            discount: entry.discount|| 0,
-            tax: entry.tax|| 0,
-            value: entry.value|| 0,
-            sizes: entry.sizes || '{}',
-            totalQty: entry.totalQty|| 0,
-        }));
-
-        // Append the new items
-        items.value = newItems;
-
-        // Add an empty item at the end
-        items.value.push({
-            id: '', variantId: '', sn: items.value.length + 1, barcode: '',
-            category: {}, size: '', item: '', qty: 1, rate: 0,
-            discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0
-        });
-
-        console.log('Items populated:', items.value);
-    } else {
-        console.warn("entrydata is undefined");
-    }
 };
 
 
@@ -798,18 +1116,30 @@ const submitEntryForm = async () => {
 
 <template>
   <UDashboardPanelContent class="p-1">
-    <div>
-      <UCard class="max-w-[1400px] mx-auto">
-        <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
-        <UInput v-if="!token" v-model="date" type="date" label="Date" class="lg:col-span-2" />
-        <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2" />
-        <UButton color="primary" label="Token Entries " block @click="isTokenOpen=true" class="lg:col-start-11 lg:col-span-2"/>
+    <UCard 
+       :ui="{
+          base: 'h-full flex flex-col',
+          rounded: '',
+         divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+          body: {
+            padding: '',
+            base: 'grow divide-y divide-gray-200 dark:divide-gray-700'
+          },
+          footer: {
+            base: ' divide-y divide-gray-200 dark:divide-gray-700',
+            padding:''
+          }
+        }">
+
+        <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
+        <UInput v-model="date" type="date" label="Date" class="lg:col-span-2" />
+
       </div>
 
 
         <!-- Responsive table wrapper -->
          
-        <div class="overflow-x-auto mt-2 h-48">
+        <div class="overflow-x-auto px-3 py-3 h-48">
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
@@ -884,26 +1214,48 @@ const submitEntryForm = async () => {
           
         </div>
 
-        <!-- Other form elements -->
-        <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm mt-4">
-          <div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Sub Total</label>
-              <UInput :model-value="subtotal"  disabled />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Discount %</label>
-              <UInput ref="discountref"  type="number" v-model="discount" @keydown.enter.prevent="handleEnterMainDiscount()" />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Payment Method</label>
-              <USelect ref="paymentref" v-model="paymentMethod" :options="['Cash', 'Card']" @keydown.enter.prevent="handleEnterPayment(index)" />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Account Name</label>
-              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
+        
+
+  <template #footer>
+   <div class="px-3 py-2">
+            <div>
+              Qty: {{ tQty }}
             </div>
           </div>
+        <!-- Other form elements -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
+          <div>
+            <!-- Discount Input -->
+        <div class="mb-6">
+          <label class="block text-gray-700 font-medium">Dis %(+) / Round Off (-)</label>
+          <UInput
+            ref="discountref"
+            type="number"
+            v-model="discount"
+            @keydown.enter.prevent="handleEnterMainDiscount()"
+            placeholder="Enter discount"
+          />
+        </div>
+
+         <!-- Subtotal Display -->
+        <div class="border border-primary-700 dark:border-primary-300 rounded-md mb-7">
+        <div class="flex flex-col items-center justify-center py-3">
+          <div class="text-s">Sub Total</div>
+          <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
+        </div>
+      </div>
+          
+
+         <!-- Grand Total Display -->
+          <div class="border border-green-700 dark:border-green-300 rounded-md">
+          <div class="flex flex-col items-center justify-center py-3">
+            <div class="text-s">Grand Total</div>
+            <div class="text-green-700 dark:text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+          </div>
+        </div>
+
+          </div>
+
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Sales Return AMT</label>
@@ -911,16 +1263,35 @@ const submitEntryForm = async () => {
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Total Redeemed AMT</label>
-              <UInput v-model="returnAmt" />
+              <UInput  />
+            </div>
+             <div class="mb-4">
+              <label class="block text-gray-700 font-medium">Payment Method</label>
+              <div class="w-full flex flex-row gap-2">
+                <USelect
+                  ref="paymentref"
+                  v-model="paymentMethod"
+                  :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
+                  @keydown.enter.prevent="handleEnterPayment(index)"
+                  class="flex-1"
+                />
+                <UButton
+                  icon="i-heroicons-pencil-square"
+                  size="sm"
+                  color="primary"
+                  square
+                  variant="solid"
+                  class="w-auto"
+                  @click="handleSplit"
+                />
+              </div>
             </div>
             <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Grand Total</label>
-              <UInput v-model="grandTotal" type="number" disabled class="font-bold rounded-md border-2 border-primary-300" />
-            </div>
-            <div class="mt-8">
-              <UButton color="primary" block @click="isOpen=true">Add Account</UButton>
+              <label class="block text-gray-700 font-medium">Account Name</label>
+              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
             </div>
           </div>
+
           <div>
             <div class="mb-4 mt-5">
               <UButton color="primary" block>Add Voucher</UButton>
@@ -933,18 +1304,19 @@ const submitEntryForm = async () => {
               <label class="block text-gray-700 font-medium">Total Value</label>
               <UInput v-model="voucherNo" />
             </div>
-            <div>
-              <UButton color="green" class="mt-9" block>Redeem Voucher</UButton>
+            <div class="mt-9">
+              <UButton color="primary" block @click="isOpen=true" :disabled="isSavingAcc" >Add Account</UButton>
             </div>
           </div>
+
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
-              <UInput v-model="cellNo" :loading="false" icon="i-heroicons-magnifying-glass-20-solid" />
+              <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
             </div>
-            <div class="mb-4">
+           <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
-              <UInput v-model="name" />
+              <UInput v-model="clientName" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Points</label>
@@ -956,17 +1328,18 @@ const submitEntryForm = async () => {
           </div>
         </div>
 
-        <div class="mt-4 w-full flex flex-wrap gap-4">
+        <div class="w-full flex flex-wrap gap-4 px-3 py-3">
           <UButton color="blue" class="flex-1" block @click="() => router.push('/erp/billing')">New</UButton>
-          <UButton  v-if="!token" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
-          <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
+          <UButton :loading="isSaving"  ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
           <UButton color="red" class="flex-1" block  @click="deleteBill">Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
-          <UButton v-if="!token" class="flex-1" block>Sales Return</UButton>
-          <UButton v-if="!token" class="flex-1" block>Bill Search</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
+          <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
+
         </div>
-      </UCard>
-    </div>
+
+    </template>
+     </UCard>
   </UDashboardPanelContent>
 
   <UModal v-model="isOpen">
@@ -988,33 +1361,104 @@ const submitEntryForm = async () => {
 
 
           <!-- Submit Button -->
-          <UButton @click="submitForm" block>Submit</UButton>
+          <UButton @click="submitForm" :disabled="isSavingAcc"  block>Submit</UButton>
         </div>
       </UModal>
 
+      <UDashboardModal
+        v-model="isPrint"
+        title="Print Bill"
+        description="Would You Like to print?"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            },
+            footer: {
+                base: 'ml-16',
+            },
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="green"
+                label="Yes"
+                :loading="loading"
+                @click="print"
+            />
+            <UButton color="red" label="NO" @click="isPrint = false" />
+        </template>
+    </UDashboardModal>
 
-      <UModal v-model="isTokenOpen">
-        <div class="p-4 space-y-4">
-          <div v-for="(entry, index) in tokenEntries" :key="index">
-            <div class="flex flex-row items-center">
-              <UInput ref="tokenInputs" v-model="tokenEntries[index]" size="sm" type="text" @keydown.enter="handleTokenInputEnter(index)"   @keydown.delete="(event) => handleTokenDelete(index, event)" />
-              <UButton 
-                icon="i-heroicons-trash" 
-                color="red" 
-                class="ms-2" 
-                @click="removeEntry(index)"
-                :disabled="tokenEntries.length === 1"
-              />
-            </div>
-          </div>
+    <BillingAddClient
+  v-model:model="isClientAddModelOpen"
+  v-model:phoneNo="phoneNo"
+  :onVerify="handleEnterPhone"
+/>
 
-          <div class="mt-4">
-            <UButton  color="green" @click="addEntry" >Add</UButton>
-          </div>
+<BillingSalesReturn
+  v-model="issalesReturnModelOpen"
+  @totalreturnvalue="handleReturnData"
+/>
 
-          <UButton ref="addTokenRef"  @click="submitEntryForm" block class="mt-4">Submit</UButton>
-        </div>
-    </UModal>
+     <!-- split payment method modal -->
+   <UModal v-model="showSplitModal">
+    <div class="p-4 space-y-4">
+      <h2 class="text-lg font-semibold">Split Payment</h2>
+
+      <div v-for="(entry, index) in splitPayments" :key="index" class="flex gap-2 items-center">
+        <USelect
+          v-model="entry.method"
+           :options="getAvailableOptions(index)"
+          class="w-1/2"
+          placeholder="Select Method"
+        />
+        <UInput
+          v-model.number="entry.amount"
+          type="number"
+          placeholder="Amount"
+          class="w-1/2"
+          @update:modelValue="() => handleAmountEntry(method)"
+        />
+        <UButton
+          icon="i-heroicons-trash"
+          color="red"
+          size="sm"
+          @click="removeSplitEntry(index)"
+          :disabled="splitPayments.length === 1"
+        />
+      </div>
+
+      <UButton @click="addSplitEntry" color="gray" variant="outline">Add More</UButton>
+
+      <div class="mt-4">
+        <p class="text-sm font-medium">Total Entered: ₹{{ totalSplitAmount }}</p>
+        <p
+          class="text-sm"
+          :class="{
+            'text-green-600': totalSplitAmount === grandTotal,
+            'text-red-600': totalSplitAmount !== grandTotal
+          }"
+        >
+          Grand Total: ₹{{ grandTotal }}
+        </p>
+      </div>
+
+      <UButton
+        :disabled="totalSplitAmount !== grandTotal"
+        color="green"
+        block
+        class="mt-4"
+        @click="submitSplitPayment"
+      >
+        Submit Split Payment
+      </UButton>
+    </div>
+  </UModal>
+
+
 
 </template>
 
