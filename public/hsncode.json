@@ -154,6 +154,10 @@
     "thresholdAmount": 1000,
     "taxBelowThreshold": 12,
     "taxAboveThreshold": 18
+  },
+  {
+    "hsn": "5208",
+    "fixedTax": 5
   }
 
 ]

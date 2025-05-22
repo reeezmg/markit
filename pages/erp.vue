@@ -3,6 +3,9 @@ const cartStore = useCartStore();
 const cartItemCount = computed(() => cartStore.cartItemCount);
 const useAuth = () => useNuxtApp().$auth;
 const auth = useAuth();
+definePageMeta({
+    auth: true,
+});
 </script>
 
 <template>
@@ -12,8 +15,8 @@ const auth = useAuth();
                 <template #right>
                     <UTooltip text="Notifications" :shortcuts="['N']">
                         <ClientOnly>
-        <NotificationIcon />
-      </ClientOnly>
+                        <NotificationIcon />
+                    </ClientOnly>
                     </UTooltip>
                 </template>
             </UDashboardNavbar>

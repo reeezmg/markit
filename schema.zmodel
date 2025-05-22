@@ -1,6 +1,7 @@
 generator client {
-    provider = 'prisma-client-js'
-}
+     provider      = "prisma-client-js"
+   }
+
 
 datasource db {
     provider = 'postgresql'
@@ -30,8 +31,11 @@ enum CompanyType {
 }
 
 enum paymentType {
-    Credit
-    Cash
+    CREDIT
+    CASH
+    UPI
+    BANK_TRANSFER
+    CHEQUE
 }
 
 enum PaymentMode {
@@ -39,6 +43,7 @@ enum PaymentMode {
     CARD
     BANK_TRANSFER
     UPI
+    CHEQUE
 }
 
 enum PaymentStatus {
@@ -71,6 +76,14 @@ enum TaxType {
   FIXED
   VARIABLE
 }
+
+enum PayableStatus {
+  PENDING
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
 
 model Company extends Base {
     name        String
@@ -114,6 +127,7 @@ model Company extends Base {
     accountNo String? @map("account_no")
     bankName String? @map("bank_name")
     gstin String?
+    upiId String?   @map("upi_id")
     notifications Notification[]
     address   Address?
     distributor   DistributorCompany[]
@@ -131,21 +145,75 @@ model Distributor extends Base {
     name        String
     images      String?
     companies   DistributorCompany[]
-    purchaseorders    PurchaseOrder[]
+
     status      Boolean       @default(true)
     accHolderName String? @map("acc_holder_name")
     ifsc String?
     accountNo String? @map("account_no")
     bankName String? @map("bank_name")
     gstin String?
+    upiId String?   @map("upi_id")
     address   Address?
     
     @@allow('create', auth() != null && status)
     @@allow('update',true)
     @@allow('read', true)
+    @@allow('delete', true)
 
     @@map('distributors')
 }
+
+
+model PurchaseOrder {
+    id              String        @id @default(uuid())
+    createdAt       DateTime      @default(now()) @map("created_at")
+    updatedAt       DateTime      @updatedAt @map("updated_at")
+
+    products        Product[]
+
+    company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId       String         @map("company_id")
+    paymentType     paymentType?   @map("payment_type") // CASH, CREDIT, etc.
+    totalAmount     Float          @default(0) @map("total_amount")
+
+    distributorId   String?       @map("distributor_id")
+    distributorCompany     DistributorCompany?  @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+
+    @@allow('read, create, update,delete', true)
+    @@map("purchase_orders")
+}
+
+
+
+model DistributorPayment {
+  id                     String              @id @default(uuid())
+  createdAt              DateTime            @default(now()) @map("created_at")
+  amount                 Float
+  remarks                String?
+  paymentType            paymentType?       @map("payment_type") // CASH, CREDIT, etc.
+  distributorId          String              @map("distributor_id")
+  companyId              String              @map("company_id")
+
+  distributorCompany     DistributorCompany  @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+
+  @@allow('read, create, update, delete', true)
+  @@map("distributor_payments")
+}
+
+model DistributorCredit {
+  id                     String              @id @default(uuid())
+  createdAt              DateTime            @default(now()) @map("created_at")
+  amount                 Float
+  remarks                String?
+  billNo                 String?
+  distributorId          String              @map("distributor_id")
+  companyId              String              @map("company_id")
+  distributorCompany     DistributorCompany  @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+
+  @@allow('read, create, update, delete', true)
+  @@map("distributor_credits")
+}
+
 
 model User extends Base {
     email     String        @unique @email
@@ -325,7 +393,7 @@ model Item {
     variantId   String @map("variant_id")
     status      String @default("in_stock")
     size        String?
-    entry        Entry?
+    entry        Entry[]
     company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
     companyId   String @map("company_id")
     
@@ -335,23 +403,7 @@ model Item {
     @@map("items")
 }
 
-model PurchaseOrder {
-    id              String        @id @default(uuid())
-    createdAt       DateTime      @default(now()) @map("created_at")
-    updatedAt       DateTime      @updatedAt @map("updated_at")
-    products        Product[]
-    distributor     Distributor?  @relation(fields: [distributorId], references: [id])
-    distributorId   String?       @map("distributor_id")
-    paymentType     paymentType? @map("payment_type")
 
-    company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    companyId   String @map("company_id")
-
-    @@allow('read', true)
-    @@allow('read, create, update', true)
-    
-    @@map("purchase_orders")
-}
 
 model Bill extends Base {
     createdAt       DateTime @map("created_at")
@@ -360,16 +412,18 @@ model Bill extends Base {
     discount        Float?    
     tax             Float?    
     grandTotal      Float? @map("grand_total")  
+    returnAmt       Float? @map("return_Amt")  
     deliveryFees    Float? @map("delivery_fees")  
     paymentMethod   String? @map("payment_method") 
+    splitPayments   Json?   @map("split_payments") 
     paymentStatus   PaymentStatus @default(PENDING) @map("payment_status")  
     transactionId   String? @unique @map("transaction_id")  
     notes           String?
-    type           OrderType?
-    status         OrderStatus? 
+    type            OrderType?
+    status          OrderStatus? 
     deleted         Boolean? @default(false) 
-    bookingDate    DateTime? @map("booking_date")
-    returnDeadline String? @map("return_deadline")
+    bookingDate     DateTime? @map("booking_date")
+    returnDeadline  String? @map("return_deadline")
     entries         Entry[]       
     company         Company @relation(fields: [companyId], references: [id])
     companyId       String @map("company_id")   
@@ -425,8 +479,8 @@ model Entry extends Base {
     bill         Bill? @relation(fields: [billId], references: [id], onDelete: Cascade)
     billId       String? @map("bill_id")
     item         Item? @relation(fields: [itemId], references: [id])
-    itemId       String? @map("item_id") @unique
-
+    itemId       String? @map("item_id") 
+    return          Boolean @default(false) @map("return")
     @@allow("create, read, update, delete", true)
     @@map("entries")
 }
@@ -606,9 +660,11 @@ model UserClient {
 model DistributorCompany {
     distributorId String @map("distributor_id")
     companyId     String @map("company_id")
-    distributor   Distributor @relation(fields: [distributorId], references: [id])
-    company       Company @relation(fields: [companyId], references: [id])
-
+    distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+    company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    distributorPayments DistributorPayment[]
+    distributorCredits DistributorCredit[]
+    purchaseOrders   PurchaseOrder[]
     @@id([distributorId, companyId])
     @@allow('read,create, update, delete', auth() != null )
     @@map('distributor_companies')

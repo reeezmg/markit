@@ -6,7 +6,6 @@ const useAuth = () => useNuxtApp().$auth;
 const { $client } = useNuxtApp()
 
 const onLogout = async() => {
-    $client.setOffline.mutate(useAuth().session.value?.id)
     await authLogout();
 }
 

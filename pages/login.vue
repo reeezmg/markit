@@ -4,7 +4,6 @@ definePageMeta({
 });
 import { z } from 'zod';
 import type { FormError } from '#ui/types';
-import { getToken } from '~/services/tiktokService';
 const { $client } = useNuxtApp()
 const reject = ref(true);
 const route = useRoute();
@@ -61,12 +60,7 @@ const validate = (state: any) => {
 async function onSubmit(data: any) {
     try {
         const res = await authLogin(data.email, data.password);
-        if(res){
-            $client.setOnline.mutate(res.data.id)
-            if (code && useAuth().loggedIn.value) {
-                const res = await getToken(code, useAuth().session.value?.companyId);
-            }
-        }
+
        
     } catch (error) {
         reject.value = false;

@@ -139,26 +139,18 @@ const handleViewAll = () => {
 </script>
 
 <template>
-  <div class="relative">
-    <button
-      @click.stop="isOpen = !isOpen"
-      class="p-2 rounded-full relative hover:bg-gray-100 dark:hover:bg-gray-700"
-      aria-label="Notifications"
-    >
-      <UIcon name="i-heroicons-bell" class="w-5 h-5" />
-      <span
-        v-if="unreadCount > 0"
-        class="absolute top-0 right-0 inline-flex items-center justify-center px-1.5 py-1 text-xs font-bold leading-none text-white transform translate-x-1/2 -translate-y-1/2 bg-red-500 rounded-full"
-      >
-        {{ unreadCount > 9 ? '9+' : unreadCount }}
-      </span>
-    </button>
+  <div>
+    <UPopover>
+    <UChip :text="unreadCount" color="red" size="2xl">
+        <UIcon
+            name="i-heroicons-bell"
+            class="w-5 h-5"
+        />
+     </UChip>
 
-    <div
-      v-if="isOpen"
-      class="absolute right-0 mt-2 w-96 bg-white dark:bg-gray-800 rounded-lg shadow-xl z-50 border border-gray-200 dark:border-gray-700"
-      @click.stop
-    >
+     <template #panel>
+    <div class="p-4 w-96">
+  
       <!-- Header -->
       <div class="p-3 border-b border-gray-200 dark:border-gray-700 flex justify-between items-center">
         <div class="flex items-center gap-2">
@@ -283,5 +275,7 @@ const handleViewAll = () => {
         </button>
       </div>
     </div>
+  </template>
+</UPopover>
   </div>
 </template>

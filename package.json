@@ -4,8 +4,8 @@
     "type": "module",
     "version": "0.0.1-prealpha.1",
     "scripts": {
-        "build": "nuxt build",
         "dev": "nuxt dev",
+        "build": "zenstack generate --output ./zenstack && nuxt build",
         "generate": "nuxt generate",
         "preview": "nuxt preview",
         "postinstall": "nuxt prepare",
@@ -25,7 +25,7 @@
         "@nuxt/ui": "^2.21.1",
         "@nuxt/ui-pro": "^1.7.1",
         "@pinia/nuxt": "^0.5.1",
-        "@prisma/client": "^5.13.0",
+        "@prisma/client": "^5.22.0",
         "@stripe/stripe-js": "^3.4.1",
         "@tanstack/vue-query": "^5.74.6",
         "@tanstack/vue-query-devtools": "^5.40.1",
@@ -41,6 +41,7 @@
         "@zenstackhq/tanstack-query": "^2.14.0",
         "axios": "^1.8.4",
         "chart.js": "^4.4.9",
+        "cross-env": "^7.0.3",
         "crypto": "^1.0.1",
         "date-fns": "^3.6.0",
         "dayjs": "^1.11.13",
@@ -60,6 +61,7 @@
         "path": "^0.12.7",
         "pinia": "^3.0.1",
         "print-js": "^1.6.0",
+        "qrcode.vue": "^3.6.0",
         "random-words": "^2.0.1",
         "razorpay": "^2.9.6",
         "stripe": "^15.8.0",
@@ -88,11 +90,13 @@
         "@types/uuid": "^9.0.8",
         "@types/vue-tel-input": "^2.1.7",
         "@types/ws": "^8.5.10",
+        "concurrently": "^9.1.2",
         "cypress": "^14.3.0",
         "eslint": "^9.2.0",
         "nuxt-headlessui": "^1.2.0",
         "nuxt-icon": "^0.6.10",
-        "prisma": "^5.13.0",
-        "vue-tsc": "^2.0.19"
+        "prisma": "^5.22.0",
+        "vue-tsc": "^2.0.19",
+        "wait-on": "^8.0.3"
     }
 }

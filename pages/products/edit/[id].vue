@@ -2,10 +2,11 @@
 import AwsService from '~/composables/aws';
 import { useCreateProduct,useUpdateProduct, useFindUniqueCategory, useFindUniqueProduct} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
-import { paymentType as PType } from '@prisma/client';
+import type { paymentType as PType } from '@prisma/client';
 
 const router = useRouter();
 const toast = useToast();
+const { printLabel } = usePrint();
 const useAuth = () => useNuxtApp().$auth;
 definePageMeta({
     auth: true,
@@ -352,14 +353,15 @@ const handleEdit = async (e: Event) => {
       }
     });
     console.log(res)
-    await getItem(res?.variants);
-
+    const resitem = await getItem(res?.variants);
+    console.log(resitem)
+    await handleSave()
 
     toast.add({
       title: 'Product Edited!',
       id: 'modal-success',
     });
-     await handleSave()
+    
   } catch (err: any) {
     toast.add({
         title: `Something went wrong!`,
@@ -403,19 +405,8 @@ watch(variants, (newVal) => {
   console.log(newVal)
 },{ immediate: true ,deep: true });
 
-const variantLinks = computed(() => {
-  return selectedProduct.value?.variants?.map((variant, index) => ({
-    id: `variant-${index}`,
-    name: variant.name || `Variant ${index + 1}`,
-    price: variant.sprice,
-    qty: variant.qty,
-    index: index,
-    code: variant.code ,
-    discount: variant.discount,
-  })) || [];
-});
 
-const scrollToSection = (sectionId: number) => {
+const scrollToSection = (sectionId: any) => {
     const section = document.getElementById(sectionId);
     if (section) {
         section.scrollIntoView({ behavior: 'smooth' });
@@ -427,8 +418,64 @@ const handleSkip = () => {
 }
 
 
-const printBarcodes = () => {
-  window.print();
+
+const printBarcodes = async() => {
+console.log(barcodes.value)
+  try{
+ 
+    const response = await printLabel(barcodes.value);
+    console.log(response)
+    toast.add({
+        title: 'Printing success!',
+        color: 'green',
+      });
+    
+
+  }catch(err){
+    console.log(err)
+    toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
+
+const printBarcodesVariant = async(variant:any) => {
+  barcodes.value = variant.items?.map(item => ({
+            barcode: item.barcode ?? '',
+            code: variant.code ?? '',
+            shopname:useAuth().session.value?.companyName,
+            productName: productData?.value?.name,
+            brand: productData?.value?.brand,
+            name: variant.name,
+            sprice: variant.sprice,
+            dprice: variant.dprice,
+            size: item.size,
+        })) ?? [];
+       
+
+console.log(barcodes.value)
+  try{
+ 
+    const response = await printLabel(barcodes.value);
+    console.log(response)
+    toast.add({
+        title: 'Printing success!',
+        color: 'green',
+      });
+    
+
+  }catch(err){
+    console.log(err)
+    toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+ 
+  
 }
 
 
@@ -447,7 +494,9 @@ const handleSave  = async () => {
         variant.items?.map(item => ({
             barcode: item.barcode ?? '',
             code: variant.code ?? '',
+            shopname:useAuth().session.value?.companyName,
             productName: productData.value.name,
+            brand: productData.value.brand,
             name: variant.name,
             sprice: variant.sprice,
             dprice: variant.dprice,
@@ -459,22 +508,6 @@ const handleSave  = async () => {
     console.log(barcodes.value)
 
     isOpen.value = true;
-
-    await UpdatePurchaseOrder.mutateAsync({
-      where: { id: poId }, // Use .value if poId is a ref
-      data: {
-        ...(distributorId.value && {
-          distributor: {
-            connect: {
-              id: distributorId.value
-            }
-          }
-        }),
-        ...(paymentType.value && {
-          paymentType: paymentType.value as PType
-        })
-      }
-    });
 
   } catch (error) {
     console.error("Failed to save purchase order", error);
@@ -493,13 +526,13 @@ const handleSave  = async () => {
   <UPageCard class="m-3">
     <div class="text-lg mb-4">Variant Links</div>
 
-    <template v-if="variantLinks.length">
+    <template v-if="selectedProduct?.variants.length">
       <div class="space-y-3">
         <ULink
-          v-for="(variant, index) in variantLinks"
+          v-for="(variant, index) in selectedProduct?.variants"
           :key="variant.id"
           :to="`#variant-${index}`"
-          @click="scrollToSection(variant.index)"
+          @click="scrollToSection(`variant-${index}`)"
           active-class="ring-2 ring-primary"
           inactive-class="hover:bg-gray-100 dark:hover:bg-gray-700"
           class="block rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition cursor-pointer"
@@ -508,12 +541,20 @@ const handleSave  = async () => {
             <div class="text-gray-900 dark:text-gray-100 font-medium">{{ variant.name }}</div>
             <div class="text-gray-500 dark:text-gray-400 text-sm">Code: {{ variant.code || '-' }}</div>
           </div>
+          <div  class="flex flex-col space-y-2 sm:flex-row sm:justify-between sm:space-y-0">
           <div class="mt-2 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-300">
             <span>Price: ${{ variant.price }}</span>
             <span>Qty: {{ variant.qty }}</span>
             <span>Discount: {{ variant.discount || 0 }}%</span>
           </div>
+          <UButton
+        label='Print'
+         @click="printBarcodesVariant(variant)"
+        />
+        </div>
         </ULink>
+       
+      
       </div>
     </template>
   </UPageCard>

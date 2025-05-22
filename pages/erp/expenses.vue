@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import ExpenseForm from '~/components/ExpenseForm.vue';
-import ExpenseList from '~/components/ExpenseList.vue';
+import ExpenseForm from '~/components/Expense/ExpenseForm.vue';
+import ExpenseList from '~/components/Expense/ExpenseList.vue';
 import AwsService from '~/composables/aws';
 import {
     useCreateExpense,
@@ -9,6 +9,9 @@ import {
     useDeleteExpense,
 } from '~/lib/hooks';
 
+definePageMeta({
+    auth: true,
+});
 
 const CreateExpense = useCreateExpense();
 const UpdateExpense = useUpdateExpense();
@@ -64,8 +67,8 @@ const addExpense = async (expense: any) => {
         Note: expense.note,
         companyId: useAuth().session.value?.companyId,
         id: expense.id,
-        expenseCategory : expense.category.name,
-        amount: expense.amount
+        // expenseCategory : expense.expensecategory.name,
+        amount: expense.totalAmount
       }
     })
 
@@ -75,6 +78,7 @@ const addExpense = async (expense: any) => {
 };
 
 const editExpense = async (id: string, editExpense: any) => {
+    console.log(id,editExpense)
     await UpdateExpense.mutateAsync({
         where: {
             id,

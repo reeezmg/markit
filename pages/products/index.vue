@@ -2,7 +2,7 @@
 import { Switch } from '@headlessui/vue';
 import { sub } from 'date-fns';
 import type { Period, Range } from '~/types';
-import { Prisma } from '@prisma/client';
+import type { Prisma } from '@prisma/client'
 import {
     useFindManyProduct,
     useUpdateProduct,
@@ -25,6 +25,7 @@ const CreatePurchaseOrder = useCreatePurchaseOrder();
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
+const isAddPhotoModelOpen = ref(false)
 
 // Columns
 const columns = [
@@ -34,8 +35,13 @@ const columns = [
         sortable: true,
     },
     {
-        key: 'qty',
-        label: 'Qty',
+        key: 'variants',
+        label: 'Variants',
+        sortable: false,
+    },
+    {
+        key: 'stocks',
+        label: 'Stocks',
         sortable: false,
     },
     {
@@ -55,6 +61,11 @@ const variantcolumns = [
     {
         key: 'name',
         label: 'Name',
+        sortable: true,
+    },
+    {
+        key: 'code',
+        label: 'Code',
         sortable: true,
     },
     {
@@ -92,6 +103,7 @@ const columnsTable = computed(() =>
 
 // Selected Rows
 const selectedRows = ref([]);
+const isAdd = ref(false);
 
 
 // Actions
@@ -178,7 +190,7 @@ const resetFilters = () => {
 };
 
 // Pagination
-const sort = ref({ column: 'id', direction: 'asc' as const });
+const sort = ref({ column: 'createdAt', direction: 'desc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('10');
@@ -199,23 +211,35 @@ const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
               }
             : {};
 
-    return {
-        where: {
-            AND: [
-                { companyId: useAuth().session.value?.companyId },
-                { name: { contains: search.value } },
-                selectedStatusCondition,
-            ],
-        },
-        include: {
-            variants: true,
-        },
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
-        },
-        skip: (page.value - 1) * parseInt(pageCount.value),
-        take: parseInt(pageCount.value),
-    };
+            return {
+    where: {
+        AND: [
+            { companyId: useAuth().session.value?.companyId },
+            {
+                OR: [
+                    { name: { contains: search.value, mode: 'insensitive' } },
+                    {
+                        variants: {
+                            some: {
+                                code: { contains: search.value, mode: 'insensitive' }
+                            }
+                        }
+                    }
+                ]
+            },
+            selectedStatusCondition,
+        ],
+    },
+    include: {
+        variants: true,
+    },
+    orderBy: {
+        [sort.value.column]: sort.value.direction,
+    },
+    skip: (page.value - 1) * parseInt(pageCount.value),
+    take: parseInt(pageCount.value),
+};
+
 });
 
 const {
@@ -301,6 +325,7 @@ async function toggleVariantStatus(id: string, status:boolean) {
 
 
 const handleAdd = async() => {
+    isAdd.value =true
     const res = await CreatePurchaseOrder.mutateAsync({
         data:{
             company: {
@@ -312,6 +337,7 @@ const handleAdd = async() => {
     console.log(res)
     router.push(`products/add?poId=${res?.id}`)
 }
+isAdd.value =false
 </script>
 
 <template>
@@ -320,7 +346,6 @@ const handleAdd = async() => {
             class="w-full"
             :ui="{
                 base: '',
-                ring: '',
                 divide: 'divide-y divide-gray-200 dark:divide-gray-700',
                 header: { padding: 'px-4 py-5' },
                 body: {
@@ -352,7 +377,17 @@ const handleAdd = async() => {
                         color="primary"
                         variant="solid"
                         label="Add Product"
+                        :loading=isAdd
                         @click="handleAdd"
+                    />
+                    <UButton
+                        class="ms-5"
+                        icon="i-heroicons-camera"
+                        size="sm"
+                        color="primary"
+                        variant="solid"
+                        label="Add Photo"
+                        @click="isAddPhotoModelOpen = true"
                     />
                 </div>
             </div>
@@ -432,8 +467,11 @@ const handleAdd = async() => {
                     </UDropdown>
                 </template>
 
-                <template #qty-data="{ row }">
+                <template #variants-data="{ row }">
                     {{ row.variants.reduce((total,variant) => total + (variant.qty || 0),0)}}
+                </template>
+                <template #stocks-data="{ row }">
+                    {{ row.variants.reduce((total,variant) => total + (variant.sprice * variant.qty || 0),0)}}
                 </template>
 
                 <template #status-data="{ row }">
@@ -501,7 +539,7 @@ const handleAdd = async() => {
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
                         <UAvatar
-                            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.variants[0].images[0]}`"
+                            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.variants[0]?.images[0]}`"
                             :alt="row.name"
                             size="lg"
                         />
@@ -623,5 +661,15 @@ const handleAdd = async() => {
                 </div>
             </template>
         </UCard>
+
+        
     </UDashboardPanelContent>
+
+    
+    <UModal v-model="isAddPhotoModelOpen">
+      <UCard >
+        
+       
+      </UCard>
+    </UModal>
 </template>

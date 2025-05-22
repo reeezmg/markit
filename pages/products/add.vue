@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useCreateProduct,useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder} from '~/lib/hooks';
+import { useCreateProduct,useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder,useCreateDistributorPayment, useUpdateDistributorCompany} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
-import { paymentType as PType } from '@prisma/client';
-
+import type { paymentType as PType } from '@prisma/client';
+const { printLabel } = usePrint();
 const router = useRouter();
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
@@ -60,8 +60,10 @@ interface Product {
 
 const route = useRoute();
 const poId = route.query.poId as string;
+const CreateDistributorPayment = useCreateDistributorPayment();
 const CreateProduct = useCreateProduct();
 const UpdateProduct = useUpdateProduct();
+const UpdateDistributorCompany = useUpdateDistributorCompany();
 const UpdatePurchaseOrder = useUpdatePurchaseOrder();
 const awsService = new AwsService();
 const selectedProduct: Ref<Product> = ref({
@@ -93,7 +95,8 @@ const createRef = ref<any>(null);
 const variantRef = ref<any>([]);
 const mediaRefs = ref<any>([]);
 const idCounter = ref(1);
-
+const isLoad = ref(false)
+const isSave = ref(false)
 
 
 const isOpen = ref(false)
@@ -113,6 +116,7 @@ const barcodes = ref<BarcodeItem[]>([]);
 
 const distributorId = ref('');
 const paymentType = ref('');
+const totalAmount = ref(0);
 
 const variants = ref<{ 
     id:string;
@@ -160,7 +164,6 @@ const createValue = (data: any) => {
 
 const updateVariant = (index,data: any) => {
   variants.value[index] = { ...variants.value[index], ...data };
-  console.log(variants.value)
 };
 
 
@@ -192,7 +195,7 @@ const handleDistributorValue = (data:any) => {
 
 
 const handleAdd = async (e: Event) => {
-
+  isLoad.value = true
   e.preventDefault();
   try {
 
@@ -288,7 +291,10 @@ const res = await CreateProduct.mutateAsync({
           ...(variant.code && {code: variant.code}),
           sprice: variant.sprice || 0,
           pprice: variant.pprice || 0,
-          dprice: variant.dprice || 0,
+          ...(variant.sprice !== variant.dprice && {
+            dprice: variant.dprice || 0,
+          }),
+          
           discount: variant.discount || 0,
           status: true,
           qty: variant.qty,
@@ -386,12 +392,16 @@ const res = await CreateProduct.mutateAsync({
    
   } catch (err: any) {
     console.log(err.info?.message ?? err);
+  }finally{
+    isLoad.value = false
   }
+ 
 };
 
 
 const handleEdit = async (e: Event) => {
   e.preventDefault();
+  isLoad.value = true
   try {
     // Validate product name
     if (!name.value || name.value.trim() === '') {
@@ -491,7 +501,9 @@ const handleEdit = async (e: Event) => {
               ...(variant.code && {code: variant.code}),
               sprice: variant.sprice || 0,
               pprice: variant.pprice || 0,
-              dprice: variant.dprice || 0,
+              ...(variant.sprice !== variant.dprice && {
+                dprice: variant.dprice || 0,
+              }),
               discount: variant.discount || 0,
               status: true,
               images: variant.images.map((file) => file.uuid),
@@ -532,10 +544,14 @@ const handleEdit = async (e: Event) => {
     });
     
   } catch (err: any) {
+    console.log(err)
     toast.add({
         title: `Something went wrong!`,
         color: 'red',
       });
+  }
+  finally{
+    isLoad.value = false
   }
 };
 
@@ -574,16 +590,19 @@ const removeVariant = (index: number) => {
 const { data: items, refetch: itemRefetch } = useFindUniquePurchaseOrder({
   where: computed(() => ({ id: poId })), // Ensure poId is not undefined
   select: {
-    id: true, // select other purchase order fields if needed
+    id: true,
     products: {
       select: {
         name: true,
+        brand:true,
         variants: {
           select: {
+            qty:true,
             code: true,
             name: true,
             sprice: true,
             dprice: true,
+            pprice:true,
             items: {
               select: {
                 barcode: true,
@@ -595,17 +614,57 @@ const { data: items, refetch: itemRefetch } = useFindUniquePurchaseOrder({
       }
     }
   }
-}, {
-  enabled: false
 });
 
+watch(
+  () => items.value, // Watch the fetched items
+  (val) => {
+    if (!val) return
 
+    const variants = val.products.flatMap((product) => product.variants)
+
+    totalAmount.value = variants.reduce((sum, variant) => {
+      const qty = variant.qty || 0
+      const pprice = variant.pprice || 0
+      return sum + qty * pprice
+    }, 0)
+  },
+  { immediate: true, deep: true }
+)
+
+
+const printBarcodes = async() => {
+console.log(barcodes.value)
+  try{
+ 
+    const response = await printLabel(barcodes.value);
+    console.log(response)
+    toast.add({
+        title: 'Printing success!',
+        color: 'green',
+      });
+      
+  }catch(err){
+    console.log(err)
+    toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+ 
+  
+}
 const handleSave = async () => {
+  isSave.value = true
+  await itemRefetch()
+
   try {
-     await itemRefetch();
     if (!items.value?.products) {
       throw new Error("No items found");
     }
+
+    console.log(items.value)
 
     // Generate printable barcode format
     barcodes.value = items.value?.products.flatMap(product => 
@@ -613,7 +672,9 @@ const handleSave = async () => {
         variant.items.map(item => ({
           barcode: item.barcode ?? '',
           code: variant.code ?? '',
+          shopname:useAuth().session.value?.companyName,
           productName: product.name,
+          brand: product.brand,
           name: variant.name,
           sprice: variant.sprice,
           dprice: variant.dprice,
@@ -622,37 +683,50 @@ const handleSave = async () => {
       )
     );
 
-    console.log(barcodes.value)
-
     isOpen.value = true;
-
     await UpdatePurchaseOrder.mutateAsync({
       where: { id: poId }, // Use .value if poId is a ref
       data: {
-        ...(distributorId.value && {
-          distributor: {
-            connect: {
-              id: distributorId.value
-            }
-          }
-        }),
         ...(paymentType.value && {
           paymentType: paymentType.value as PType
-        })
+        }),
+          totalAmount:totalAmount.value,
       }
     });
+
+if(distributorId.value){
+  await UpdateDistributorCompany.mutateAsync({
+  where: {
+    distributorId_companyId: {
+      distributorId: distributorId.value,
+      companyId: useAuth().session.value?.companyId!, // Ensure this value is not undefined
+    }
+  },
+  data: {
+   
+    purchaseOrders:{
+      connect:{id:poid}
+    },
+   
+  }
+});
+}
 
   } catch (error) {
     console.error("Failed to save purchase order", error);
     // Consider adding user feedback here
   }
+  finally{
+    isSave.value = false
+  }
+  
 };
 
 
 const handleReset = async() => {
 
   clearInputs.value = true
-  createRef.value?.resetForm()
+  // createRef.value?.resetForm()
   variantRef.value.forEach((refInstance:any) => {
     refInstance?.resetForm();
   });
@@ -694,9 +768,7 @@ const handleReset = async() => {
 }
 }
 
-const printBarcodes = () => {
-  window.print();
-}
+
 const handleSkip = () => {
  router.push(`/products`);
 }
@@ -709,16 +781,13 @@ watch(isOpenAdd, (newVal) => {
     handleReset()
   }
 });
-watch(variants, (newVal) => {
-  console.log(newVal)
-},{ immediate: true ,deep: true });
 
 </script>
 
 <template>
      <UDashboardNavbar >
         <template #left>
-          <AddProductTopBar @update="handleDistributorValue"/>   
+          <AddProductTopBar @update="handleDistributorValue" :totalAmount="totalAmount"/>   
         </template>
       </UDashboardNavbar>
     <UDashboardPanelContent class="pb-24">
@@ -727,22 +796,22 @@ watch(variants, (newVal) => {
         <div class="md:flex md:flex-row">
             <div class="md:w-1/2">
               <div  class="m-3 hidden md:block">
-                    <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
+
                         @click="handleSave"
+                        :loading = isSave
                     >
                         Save Order
-                    </button>
+                    </UButton>
                 </div>
                
     
                 <div class="m-3 md:hidden ">
-                    <button
-                        class=" rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
                         @click="handleNewProduct"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
 
               <UPageCard class="m-3">
@@ -750,12 +819,12 @@ watch(variants, (newVal) => {
               </UPageCard>
 
               <div class="m-3">
-                    <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
                         @click="handleSave"
+                        :loading = isSave
                     >
                         Save Order
-                    </button>
+                    </UButton>
                 </div>
               
             </div>
@@ -765,29 +834,30 @@ watch(variants, (newVal) => {
               <div class="flex flex-row">
               <div>
               <div v-if="clearInputs" class="mx-3 mt-3">
-                    <button
-                        class="rounded-md  dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
                         @click="handleAdd"
+                        :loading="isLoad"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
                 <div v-else class="mx-1 mt-3">
-                    <button
-                        class="rounded-md  dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
+                        class="rounded-md  
+                        dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
+                        :loading="isLoad"
                     >
                         Edit Product
-                    </button>
+                    </UButton>
                 </div>
               </div>
                 <div class="mx-1 mt-3">
-                    <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                    <UButton
                         @click="handleReset"
                     >
                        Reset form
-                    </button>
+                    </UButton>
                 </div>
               </div>
                 <UPageCard class="m-3" id="Create">
@@ -811,11 +881,12 @@ watch(variants, (newVal) => {
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
                      
-                      <button
+                      <UButton
                         @click="removeVariant(index)"
-                        class="text-red-500 hover:text-red-700 text-sm"
+                        variant="outline"
+                        color="red"
                       >Remove
-                      </button>
+                      </UButton>
                     </div>
                     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
                     <AddProductVariants   
@@ -843,12 +914,13 @@ watch(variants, (newVal) => {
                  
           
 
-                <button
-                    class="rounded-md bg-green-500 hover:bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm m-3"
+                <UButton
                     @click="addVariant"
+                    color="green"
+                    block
                   >
                     + Add Variant
-                  </button>
+                  </UButton>
 
 
                 <UPageCard class="m-3" id="Live">
@@ -856,20 +928,22 @@ watch(variants, (newVal) => {
                 </UPageCard>
 
                 <div v-if="clearInputs" class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
+                          :loading="isLoad"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
                 <div v-else class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
+                          :loading="isLoad"
                     >
                         Edit Product
-                    </button>
+                    </UButton>
                 </div>
             </div>
         </div>
@@ -920,20 +994,20 @@ watch(variants, (newVal) => {
         <template #header>
           <div class="flex items-center justify-between">
              <div v-if="clearInputs" class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
                 <div v-else class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
                     >
                         Edit Product
-                    </button>
+                    </UButton>
                 </div>
             <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark-20-solid" class="-my-1" @click="isOpenAdd = false" />
           </div>
@@ -962,13 +1036,13 @@ watch(variants, (newVal) => {
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
                      
-                      <button
+                      <UButton
                       v-if="!(index === 0)"
                         @click="removeVariant(index)"
                         class="text-red-500 hover:text-red-700 text-sm"
                       >
                         Remove
-                      </button>
+                      </UButton>
                     </div>
                     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
                     <AddProductVariants :key="index"
@@ -991,12 +1065,12 @@ watch(variants, (newVal) => {
                  
           
 
-                <button
+                <UButton
                     class="rounded-md bg-green-500 hover:bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm m-3"
                     @click="addVariant"
                   >
                     + Add Variant
-                  </button>
+                  </UButton>
 
 
                 <UPageCard class="m-3" id="Live">
@@ -1004,20 +1078,20 @@ watch(variants, (newVal) => {
                 </UPageCard>
 
                 <div v-if="clearInputs" class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
                     >
                         Add Product
-                    </button>
+                    </UButton>
                 </div>
                 <div v-else class="m-3">
-                    <button
+                    <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
                     >
                         Edit Product
-                    </button>
+                    </UButton>
                 </div>
             </div>
  
