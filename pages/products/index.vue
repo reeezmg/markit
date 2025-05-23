@@ -3,6 +3,7 @@ import { Switch } from '@headlessui/vue';
 import { sub } from 'date-fns';
 import type { Period, Range } from '~/types';
 import type { Prisma } from '@prisma/client'
+import AwsService from '~/composables/aws';
 import {
     useFindManyProduct,
     useUpdateProduct,
@@ -10,13 +11,21 @@ import {
     useCreatePurchaseOrder,
     useUpdateVariant,
     useCountProduct,
-    useDeleteProduct
+    useDeleteProduct,
+    useFindFirstItem
 } from '~/lib/hooks';
 
 definePageMeta({
     auth: true,
 });
 
+interface ImageData {
+    file: File;
+    uuid: string;
+}
+
+const awsService = new AwsService();
+const toast = useToast();
 const UpdateProduct = useUpdateProduct();
 const DeleteProduct = useDeleteProduct();
 const UpdateManyProduct = useUpdateManyProduct();
@@ -26,7 +35,7 @@ const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
 const isAddPhotoModelOpen = ref(false)
-
+let images = reactive<ImageData[]>([]);
 // Columns
 const columns = [
     {
@@ -104,6 +113,8 @@ const columnsTable = computed(() =>
 // Selected Rows
 const selectedRows = ref([]);
 const isAdd = ref(false);
+const itemBarcode = ref('');
+const isPhotoSaving = ref(false);
 
 
 // Actions
@@ -249,6 +260,19 @@ const {
     refetch,
 } = useFindManyProduct(queryArgs);
 
+const {
+    data:items,
+    isLoading:isItemLoading,
+    refetch:imageRefetch
+} = useFindFirstItem({
+    where: computed(() => ({
+        barcode: itemBarcode.value,
+    })),
+    include: {
+      variant: true,
+    },
+},{enabled:false})
+
 const removeProduct = async(id:string) => {
   try {
     await DeleteProduct.mutateAsync({ where: { id } });
@@ -336,8 +360,62 @@ const handleAdd = async() => {
     })
     console.log(res)
     router.push(`products/add?poId=${res?.id}`)
+    isAdd.value =false
 }
-isAdd.value =false
+
+const fileValue = (data: any) => {
+   console.log(data)
+    images = data.files
+};
+
+const handleGetItemInfo = async() => {
+    const {data} = await imageRefetch()
+    console.log(data)
+}
+const handleAddPhoto = async() => {  
+try{
+isPhotoSaving.value = true
+    const res = await Updatevariant.mutateAsync({
+        where: { id:items.value?.variant.id },
+        data: { images: images.map((image) => image.uuid) },
+    });
+    console.log(res)
+    if(images.length > 0 && res){
+        console.log(images)
+   const base64files = await Promise.all(
+      images
+        .filter((file) => file.file instanceof File) // Only process if file.file is a File
+        .map(async (file) => {
+          const base64 = await prepareFileForApi(file.file);
+          return { base64, uuid: file.uuid };
+        }
+    )
+  );
+console.log(base64files)
+  if (base64files.length > 0) {
+    const awsres = await Promise.all(
+      base64files.map((file) =>
+        awsService.uploadBase64File(file.base64, file.uuid)
+      )
+    );
+    console.log(awsres)
+}
+    }
+}catch(err:any){
+    console.log(err)
+     toast.add({
+            title: 'Photo Attached !',
+            color: 'red',
+            description: err.message
+        });
+}finally{
+isPhotoSaving.value = false
+isAddPhotoModelOpen.value = false
+}
+
+}
+
+
 </script>
 
 <template>
@@ -539,7 +617,7 @@ isAdd.value =false
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
                         <UAvatar
-                            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.variants[0]?.images[0]}`"
+                            :src="`https://images.markit.co.in/${row.variants[0]?.images[0]}`"
                             :alt="row.name"
                             size="lg"
                         />
@@ -555,7 +633,7 @@ isAdd.value =false
                     <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
                         <UAvatar
-                            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.images[0]}`"
+                            :src="`https://images.markit.co.in/${row.images[0]}`"
                             :alt="row.name"
                             size="lg"
                         />
@@ -668,8 +746,37 @@ isAdd.value =false
     
     <UModal v-model="isAddPhotoModelOpen">
       <UCard >
+        <div>
+            <UFormGroup label="Enter Barcode">
+                <UInput
+                placeholder="Enter Barcode"
+                v-model="itemBarcode"
+                @keydown.enter.prevent="handleGetItemInfo()"
+                />
+            </UFormGroup>
+            <div>
+            <div class="my-3" v-if="items?.variant">
+            <p><strong>Name:</strong> {{ items.variant.name }}</p>
+            <p><strong>Code:</strong> {{ items.variant.code }}</p>
+            <p><strong>Selling Price:</strong> ₹{{ items.variant.sprice }}</p>
+            </div>
+
+            <AddProductMedia
+            ref="mediaRefs"
+            :editFile="items?.variant?.images"
+            :index="0" 
+            @update="fileValue"
+            />
+
+            <UButton
+                class="mt-3"
+                label="Add Photo"
+                :loading="isPhotoSaving"
+                @click="handleAddPhoto"
+            />
+        </div>
+        </div>
         
-       
       </UCard>
     </UModal>
 </template>

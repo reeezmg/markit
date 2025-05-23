@@ -79,7 +79,7 @@
              <div v-for="entry in bill.entries" :key="entry.id" class="flex gap-4 items-start">
               <img
                   v-if="entry.variant?.images?.[0]"
-                  :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${entry.variant.images[0]}`"
+                  :src="`https://images.markit.co.in/${entry.variant.images[0]}`"
                   alt="Product Image"
                   class="w-20 h-20 rounded-md border"
                 />

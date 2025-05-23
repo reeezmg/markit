@@ -246,7 +246,7 @@ const showSuccessToast = (description: string) => {
         <template v-for="(variant, idx) in variants" :key="variant.id">
           <img
             v-if="variant.images?.[0]"
-            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}`"
+            :src="`https://images.markit.co.in/${variant.images[0]}`"
             :class="['absolute inset-0 w-full h-full object-cover transition-opacity duration-300', currentVariantIndex === idx ? 'opacity-100' : 'opacity-0']"
             :alt="`${product.name} - ${variant.name}`"
             loading="lazy"

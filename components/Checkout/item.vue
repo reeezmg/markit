@@ -240,7 +240,7 @@ function n(value: { id: string; name: string; sprice: number; qty: number | null
         <ul role="list" class="divide-y dark:divide-gray-800 divide-gray-200">
             <li v-for="cartItem in items" :key="`${cartItem.variantId}-${cartItem.size}`" class="flex py-6">
                 <div class="flex-shrink-0">
-                    <img v-if="variants" :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${variants.find((p) => p.id === cartItem.variantId)?.images[0]}`" class="w-20 h-20 rounded-md" />
+                    <img v-if="variants" :src="`https://images.markit.co.in/${variants.find((p) => p.id === cartItem.variantId)?.images[0]}`" class="w-20 h-20 rounded-md" />
                 </div>
                 <div class="ml-6 flex flex-1 flex-col">
                     <div class="flex justify-between">

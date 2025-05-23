@@ -113,7 +113,7 @@ const addToLike = () => {
       <!-- Image -->
       <div class="relative w-full aspect-w-16 aspect-h-15">
         <img
-          :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${info.images[0]}`"
+          :src="`https://images.markit.co.in/${info.images[0]}`"
           class="absolute inset-0 w-full h-full object-cover transition-opacity duration-500 opacity-100"
           alt="Product Image"
         />

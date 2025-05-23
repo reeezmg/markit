@@ -167,7 +167,7 @@ const flatVariants = computed(() => {
       ...variant,
       product,
       availableQty: variant.items?.length || 0,
-      mainImage: variant.images?.[0] ? `https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}` : null
+      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
     }))
   ) || []
 
@@ -188,7 +188,7 @@ const trendingVariants = computed<VariantWithProduct[]>(() => {
       ...variant,
       product,
       availableQty: variant.items?.length || 0,
-      mainImage: variant.images?.[0] ? `https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}` : null
+      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
     }))
   ) || []
 })
@@ -226,7 +226,7 @@ const clearCategoryFilter = () => {
 const openQuickView = (variant: VariantWithProduct) => {
   quickViewProduct.value = {
     ...variant,
-    mainImage: variant.images?.[0] ? `https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}` : null
+    mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
   }
   showQuickView.value = true
 }
@@ -995,7 +995,7 @@ const flatVariants = computed(() => {
       product,
       availableQty: variant.items?.length || 0,
       isOutOfStock: (variant.qty || 0) <= 0, // Add out-of-stock flag
-      mainImage: variant.images?.[0] ? `https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}` : null,
+      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null,
       discountPercentage: variant.discount || 
         (variant.dprice && variant.sprice ? 
           Math.round((1 - variant.dprice / variant.sprice) * 100) : 0)
@@ -1035,7 +1035,7 @@ const trendingVariants = computed<VariantWithProduct[]>(() => {
       ...variant,
       product,
       availableQty: variant.items?.length || 0,
-      mainImage: variant.images?.[0] ? `https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}` : null
+      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
     }))
   ) || []
 })
@@ -1109,7 +1109,7 @@ const clearAllFilters = () => {
 const openQuickView = (variant: VariantWithProduct) => {
   quickViewProduct.value = {
     ...variant,
-    mainImage: variant.images?.[0] ? `https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}` : null
+    mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
   }
   showQuickView.value = true
 }

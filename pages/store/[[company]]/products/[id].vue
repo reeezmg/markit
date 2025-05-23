@@ -210,7 +210,7 @@ const formatPrice = (price) => {
                         >
                             <template #default="{ item }">
                                 <img
-                                    :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${item}`"
+                                    :src="`https://images.markit.co.in/${item}`"
                                     class="w-full h-[500px] object-contain"
                                     draggable="false"
                                 />
@@ -218,7 +218,7 @@ const formatPrice = (price) => {
 
                             <template #indicator="{ onClick, page, active }">
                                 <UAvatar
-                                    :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${
+                                    :src="`https://images.markit.co.in/${
                                         product.variants[selectedVariant]?.images[page - 1] || ''
                                     }`"
                                     size="xl"
@@ -299,7 +299,7 @@ const formatPrice = (price) => {
                                     @click="selectedVariant = index"
                                 >
                                     <UAvatar
-                                        :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}`"
+                                        :src="`https://images.markit.co.in/${variant.images[0]}`"
                                         size="xl"
                                         :ui="{ rounded: 'rounded-md' }"
                                         class="border-2 border-gray-200 dark:border-gray-700"

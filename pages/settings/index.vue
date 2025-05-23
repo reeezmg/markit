@@ -353,7 +353,7 @@ const onVerifyOtp = async () => {
                     }"
                 >
                     <UAvatar v-if="previewUrl" :src="previewUrl" :alt="state.name" size="lg" />
-                    <UAvatar v-else :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${state.image|| ''}`" :alt="state.name" size="lg" />
+                    <UAvatar v-else :src="`https://images.markit.co.in/${state.image|| ''}`" :alt="state.name" size="lg" />
 
                     <UButton
                         label="Choose"
