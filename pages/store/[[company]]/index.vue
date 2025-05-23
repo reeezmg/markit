@@ -951,6 +951,9 @@ const { data: trendingData } = useFindManyProduct({
   include: { 
     company: true, 
     variants: {
+       where: {
+        images: { isEmpty: false }
+      },
       include: {
         items: {
           where: { status: 'in_stock' },
@@ -1073,6 +1076,7 @@ const loadMore = async () => {
 watch(productsData, (newData) => {
   if (!newData) return
   hasMore.value = newData.length >= pageSize
+  console.log(newData)
 })
 
 // Watch flatVariants and initialize visibility state
