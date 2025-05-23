@@ -263,18 +263,19 @@ const showSuccessToast = (description: string) => {
 
       <!-- Quick View Button -->
       <div 
-        class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/10"
+      class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/10"
+    >
+      <UButton
+        icon="i-heroicons-eye"
+        color="white"
+        variant="solid"
+        size="xs"
+        label="Quick View"
+        class="z-10 scale-90 group-hover:scale-100 transition-transform duration-200"
         @click.stop="triggerQuickView"
-      >
-        <UButton
-          icon="i-heroicons-eye"
-          color="white"
-          variant="solid"
-          size="xs"
-          label="Quick View"
-          class="z-10 scale-90 group-hover:scale-100 transition-transform duration-200"
-        />
-      </div>
+      />
+    </div>
+
     </div>
 
     <!-- Product Info (Compact but readable) -->

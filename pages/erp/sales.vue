@@ -15,8 +15,6 @@ const UpdateManyCategory = useUpdateManyCategory();
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
 
-
-
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
   { label: 'Last 14 days', duration: { days: 14 } },
