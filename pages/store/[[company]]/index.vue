@@ -911,6 +911,10 @@ const getQueryArgs = () => {
     include: {
       company: true,
       variants: {
+        where: {
+        images: { isEmpty: false }
+      },
+
         include: {
           items: {
             where: { status: 'in_stock' },
