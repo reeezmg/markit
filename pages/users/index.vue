@@ -4,8 +4,10 @@ import { hash } from '~/composables/hash';
 import {
     useFindManyUser,
     useUpdateUser,
+    useDeleteUser,
     useUpdateManyUser,
     useCreateUser,
+    useFindUniqueUser
 } from '~/lib/hooks';
 const toast = useToast();
 definePageMeta({
@@ -13,6 +15,7 @@ definePageMeta({
 });
 const CreateUser = useCreateUser();
 const UpdateUser = useUpdateUser();
+const DeleteUser = useDeleteUser();
 const UpdateManyUser = useUpdateManyUser();
 const router = useRouter();
 const route = useRoute();
@@ -106,6 +109,7 @@ const action = (row) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
+            click:() => deleteUser(row.id)
         },
     ],
 ];
@@ -143,6 +147,13 @@ const resetFilters = () => {
     selectedStatus.value = [];
 };
 
+
+const { data: existingUser, refetch: refetchUser } = useFindUniqueUser(
+  () => ({ where: { email: formData.email } }),
+  { enabled: false }
+);
+
+
 // Pagination
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const page = ref(1);
@@ -152,6 +163,28 @@ const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
 const pageTo = computed(() =>
     Math.min(page.value * pageCount.value, pageTotal.value),
 );
+
+const deleteUser = async (id: string) => {
+  const res = await UpdateUser.mutateAsync({
+    where: {
+      id,
+    },
+    data: {
+    companies: {
+      deleteMany: {
+        companyId: useAuth().session.value?.companyId!, // 👈 add `!` if you're sure it's always defined
+              userId: id,
+      },
+    },
+}
+  });
+  console.log(res)
+
+  if (id === useAuth().session.value?.id) {
+    await authLogout();
+  }
+};
+
 
 // Data
 const queryArgs = computed(() => {
@@ -228,7 +261,19 @@ async function toggleStatus(id: string) {
 
 const handleSubmit = async (e: Event) => {
     try {
-        const res = await CreateUser.mutateAsync({
+        const { data } = await refetchUser();
+         if (data) {
+         await UpdateUser.mutateAsync({
+                where: { id:data.id },
+                data: {
+                name: formData.name || '',
+                companies: {
+                    create: [{ company: { connect: { id: useAuth().session.value?.companyId} } }],
+                },
+            },
+            });
+        } else {
+            const res = await CreateUser.mutateAsync({
             data: {
                 name: formData.name || '',
                 email: formData.email || '',
@@ -245,6 +290,8 @@ const handleSubmit = async (e: Event) => {
                 },
             },
         });
+        }
+        
         toast.add({
             title: 'user added !',
             id: 'modal-success',
@@ -444,7 +491,7 @@ const handleSubmit = async (e: Event) => {
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
                         <!-- <UAvatar
-                            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.images[0]}`"
+                            :src="`https://images.markit.co.in/${row.images[0]}`"
                             :alt="row.name"
                             size="lg"
                         /> -->

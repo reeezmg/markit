@@ -157,11 +157,11 @@ watchEffect(() => {
                 </template>
                 <template #leading>
                     <UIcon v-if="!selectedRow.image" name="i-heroicons-user-circle" class="w-5 h-5" />
-                    <UAvatar v-else :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${selectedRow.image}`" size="2xs" />
+                    <UAvatar v-else :src="`https://images.markit.co.in/${selectedRow.image}`" size="2xs" />
                 </template>
                 <template #option="{ option: category }">
                     <UIcon v-if="!category.image" name="i-heroicons-user-circle" class="w-5 h-5" />
-                    <UAvatar v-else :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${category.image}`" size="2xs" />
+                    <UAvatar v-else :src="`https://images.markit.co.in/${category.image}`" size="2xs" />
                     <span class="truncate">{{ category.name }}</span>
                 </template>
             </USelectMenu>
@@ -184,11 +184,11 @@ watchEffect(() => {
                 </template>
                 <template #leading>
                     <UIcon v-if="!subselectedRow.image" name="i-heroicons-user-circle" class="w-5 h-5" />
-                    <UAvatar v-else :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${subselectedRow.image}`" size="2xs" />
+                    <UAvatar v-else :src="`https://images.markit.co.in/${subselectedRow.image}`" size="2xs" />
                 </template>
                 <template #option="{ option: subcategory }">
                     <UIcon v-if="!subcategory.image" name="i-heroicons-user-circle" class="w-5 h-5" />
-                    <UAvatar v-else :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${subcategory.image}`" size="2xs" />
+                    <UAvatar v-else :src="`https://images.markit.co.in/${subcategory.image}`" size="2xs" />
                     <span class="truncate">{{ subcategory.name }}</span>
                 </template>
             </USelectMenu>

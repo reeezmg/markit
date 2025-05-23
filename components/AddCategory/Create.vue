@@ -73,7 +73,7 @@ watchEffect(() => {
     }
     if (props.editFile) {
         selectedFile.value = { uuid: props.editFile };
-        imagePreviewUrl.value = `https://unifeed.s3.ap-south-1.amazonaws.com/${props.editFile}`;
+        imagePreviewUrl.value = `https://images.markit.co.in/${props.editFile}`;
     }
     if (props.taxType) {
         taxType.value = props.taxType;
@@ -173,7 +173,7 @@ watch(hsn, (newVal) => {
               class="flex justify-center items-center border border-gray-200 dark:border-gray-700 w-32 h-36"
             >
               <img
-                :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${selectedFile.uuid}`"
+                :src="`https://images.markit.co.in/${selectedFile.uuid}`"
                 alt="Selected Image"
                 style="max-width: 100%; max-height: 100%"
               />

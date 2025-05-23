@@ -62,12 +62,20 @@ const totals = computed(() => {
   const bills = filteredBills.value;
 
   const totalBills = bills.length;
+         {paymentStatus:'PAID'}
 
   const totalSales = bills
     .flatMap(b => b.entries ?? [])
     .reduce((sum, entry) => sum + ((entry.rate ?? 0) * (entry.qty ?? 0)), 0);
 
-  const totalRevenue = bills.reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
+  const totalRevenue = bills
+  .filter(bill => bill.paymentStatus === 'PAID')
+  .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
+
+  const totalCredit = bills
+  .filter(bill => bill.paymentStatus === 'PENDING')
+  .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
+
 
   let totalRevenueInCash = 0;
 let totalRevenueInUPI = 0;
@@ -102,6 +110,7 @@ bills.forEach(bill => {
 
   return {
     totalBills,
+    totalCredit,
     totalSales,
     totalRevenue,
     totalDiscount,
@@ -368,7 +377,7 @@ console.log(err)
           </div>
         </div>
 
-        <div v-if="!loading && dashboard" class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+        <div v-if="!loading && dashboard" class="grid grid-cols-1 sm:grid-cols-5 gap-4">
 
             <UPopover mode="hover">
             <KpiCard class="w-full"  title="Total Revenue" :value="formatCurrency(totals.totalRevenue)">
@@ -377,6 +386,7 @@ console.log(err)
               </template>
             </KpiCard>
 
+           
             <template #panel>
             <div class="p-4 flex flex-col">
               <div>Revenue in Cash: {{ totals.totalRevenueInCash }}</div>
@@ -384,6 +394,13 @@ console.log(err)
             </div>
           </template>
           </UPopover>
+
+           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(totals.totalCredit)">
+              <template #icon>
+                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
+              </template>
+            </KpiCard>
+
 
             <UPopover mode="hover">
             <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(totalsExpense.totalExpense)">
@@ -398,6 +415,7 @@ console.log(err)
             </div>
           </template>
         </UPopover>
+        
 
             <KpiCard title="Amount in Drawer" :value="formatCurrency(totals.totalRevenueInCash - totalsExpense.totalExpensesInCash)">
               <template #icon>
