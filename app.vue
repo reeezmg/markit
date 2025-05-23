@@ -25,14 +25,22 @@ const color = computed(() =>
 useHead({
     meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
-        { key: 'theme-color', name: 'theme-color', content: color },
+        {
+            name: 'viewport',
+            content: 'width=device-width, initial-scale=1, viewport-fit=cover',
+        },
+        {
+            key: 'theme-color',
+            name: 'theme-color',
+            content: color,
+        },
     ],
     link: [{ rel: 'icon', href: '/favicon.ico' }],
     htmlAttrs: {
         lang: 'en',
     },
 });
+
 
 const title = 'Bazaar - a new hospitality trade marketplace.';
 const description = '';
@@ -63,3 +71,14 @@ useSeoMeta({
     </div>
     <VueQueryDevtools />
 </template>
+
+<style>
+html, body {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+  box-sizing: border-box;
+}
+</style>
+
