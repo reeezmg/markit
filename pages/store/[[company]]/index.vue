@@ -824,6 +824,7 @@ const categories = ref<any[]>([])
 const showQuickView = ref(false)
 const quickViewProduct = ref<any>(null)
 const isVisible = ref<boolean[]>([])
+const isOpen = ref(false);
 
 // Mobile UI
 const isMobileFiltersOpen = ref(false)
@@ -1235,8 +1236,7 @@ onUnmounted(() => {
         <template #right>
           <div class="flex flex-row items-end justify-end">
             <UButton 
-              v-if="!$authClient.session.value?.id" 
-              @click="$authClient.updateSession()"
+             v-if="useClientAuth().session.value?.type === 'USER' || !useClientAuth().session.value?.id"  @click="isOpen = true"
               class="px-5 me-3 flex items-center justify-center rounded-md border border-transparent text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
             >
               Login
@@ -1761,6 +1761,17 @@ onUnmounted(() => {
       </UCard>
     </UModal>
   </UDashboardPage>
+
+  <UModal v-model="isOpen">
+    <UCard>
+    <template #header>
+        <div class="font-semibold text-center">Login</div>
+    </template>
+    <div class="p-4">
+      <CheckoutLogin @close="isOpen = false"/>
+    </div>
+    </UCard>
+    </UModal>
 </template>
 
 <style>
