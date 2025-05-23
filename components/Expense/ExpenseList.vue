@@ -224,7 +224,7 @@ const multiUpdate = async(status:string,ids:any) => {
 //         return;
 //     }
 
-//     const baseUrl = 'https://unifeed.s3.ap-south-1.amazonaws.com/';
+//     const baseUrl = 'https://images.markit.co.in/';
 //     const fileUrl = `${baseUrl}${filePath}`;
 
 //     try {

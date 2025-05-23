@@ -8,17 +8,19 @@ export const useLikeStore = defineStore({
   }),
 
   actions: {
-    toggleLike(product: LikedProduct) {
-      const index = this.liked.findIndex(
-        (item) => item.variantId === product.variantId
-      );
+    toggleLike(product: LikedProduct): boolean {
+  const index = this.liked.findIndex(
+    (item) => item.variantId === product.variantId
+  );
 
-      if (index >= 0) {
-        this.liked.splice(index, 1); // Remove if already liked
-      } else {
-        this.liked.push(product); // Add if not liked
-      }
-    },
+  if (index >= 0) {
+    this.liked.splice(index, 1); // Remove if already liked
+    return false; // Now unliked
+  } else {
+    this.liked.push(product); // Add if not liked
+    return true; // Now liked
+  }
+},
 
     isLiked(product: LikedProduct): boolean {
       return this.liked.some(

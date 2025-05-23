@@ -4,8 +4,9 @@ import type { Period, Range } from '~/types';
 import {
     useUpdateBill,
     useUpdateManyCategory,
-    useFindManyBill,
-    useCountBill
+    useFindManyAccount,
+    useCountBill,
+    useCountAccount
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
@@ -14,6 +15,8 @@ const UpdateBill = useUpdateBill();
 const UpdateManyCategory = useUpdateManyCategory();
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
+
+
 
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
@@ -30,7 +33,7 @@ const selectedDate = ref({
 });
 
 // Columns
-const columns = [
+const billColumns = [
     {
         key: 'invoiceNumber',
         label: 'Inv#',
@@ -68,40 +71,21 @@ const columns = [
     },
 ];
 
-const entrycolumns = [
-    {
-        key: 'barcode',
-        label: 'Barcode',
-        sortable: true,
-    },
-    {
-        key: 'category.name',
-        label: 'Category',
-        sortable: true,
-    },
+// Columns
+const columns = [
     {
         key: 'name',
         label: 'Name',
         sortable: true,
     },
     {
-        key: 'qty',
-        label: 'Quantity',
+        key: 'phone',
+        label: 'Phone',
         sortable: true,
     },
     {
-        key: 'discount',
-        label: 'Discount',
-        sortable: true,
-    },
-    {
-        key: 'tax',
-        label: 'Tax',
-        sortable: true,
-    },
-    {
-        key: 'rate',
-        label: 'Rate',
+        key: 'pending',
+        label: 'Pending',
         sortable: true,
     },
     {
@@ -110,7 +94,6 @@ const entrycolumns = [
         sortable: false,
     },
 ];
-
 
 
 
@@ -158,11 +141,6 @@ const todoStatus = [
 
 
 
-const selectedColumns = ref(columns);
-const columnsTable = computed(() =>
-    columns.filter((column) => selectedColumns.value.includes(column)),
-);
-
 // Selected Rows
 const selectedRows = ref([]);
 const notes = ref<any>({})
@@ -179,70 +157,57 @@ const resetFilters = () => {
 
 
 // Pagination
-const sort = ref({ column: 'invoiceNumber', direction: 'desc' as const });
+const sort = ref({ column: 'name', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('5');
 
-const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
-return {
+const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
+  return {
     where: {
-        companyId: useAuth().session.value?.companyId,
-        deleted: false,
-        ...(search.value && { invoiceNumber: search.value }),
-        ...(selectedStatus.value.length && {
-            OR: selectedStatus.value.map(item => ({ paymentStatus: item.value }))
-        }),
-        ...(selectedDate.value && {
-  createdAt: {
-    gte: new Date(Date.UTC(
-      selectedDate.value.start.getFullYear(),
-      selectedDate.value.start.getMonth(),
-      selectedDate.value.start.getDate(),
-      0, 0, 0, 0
-    )).toISOString(),
-    lte: new Date(Date.UTC(
-      selectedDate.value.end.getFullYear(),
-      selectedDate.value.end.getMonth(),
-      selectedDate.value.end.getDate(),
-      23, 59, 59, 999
-    )).toISOString()
-  }
-})
-
+      companyId: useAuth().session.value?.companyId,
+      ...(search.value && { name: { contains: search.value, mode: 'insensitive' } }),
     },
-    include:{
-        entries:{
-            include:{
-                category:{
-                    select:{
-                        name:true
-                    }
-                }
-            }
-        }
+    include: {
+      bill: {
+        where: {
+          deleted: false,
+        },
+        include: {
+          entries: {
+            include: {
+              category: {
+                select: {
+                  name: true,
+                },
+              },
+            },
+          },
+        },
+      },
     },
     orderBy: {
-        [sort.value.column]: sort.value.direction,
+      [sort.value.column]: sort.value.direction,
     },
     skip: (page.value - 1) * parseInt(pageCount.value),
     take: parseInt(pageCount.value),
-};
+  };
 });
 
+
 const {
-    data: sales,
+    data: accounts,
     isLoading,
     error,
     refetch,
-} = useFindManyBill(queryArgs);
+} = useFindManyAccount(queryArgs);
 
 
 const countArgs = computed(() => ({
   where: queryArgs.value.where,
 }));
 
-const { data: pageTotal } = useCountBill(countArgs);
+const { data: pageTotal } = useCountAccount(countArgs);
 
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
@@ -324,14 +289,12 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
 }
 
 </script>
-
 <template>
     <UDashboardPanelContent class="pb-24">
         <UCard
             class="w-full"
             :ui="{
                 base: '',
-                
                 divide: 'divide-y divide-gray-200 dark:divide-gray-700',
                 header: { padding: 'px-4 py-5' },
                 body: {
@@ -343,51 +306,50 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
         >
             <!-- Filters -->
             <template #header>
-            <div class="flex items-center justify-between gap-3">
-                <div class="flex flex-row">
-                <UInput
-                    v-model="search"
-                    icon="i-heroicons-magnifying-glass-20-solid"
-                    type="number"
-                    placeholder="Search Invoice"
-                    class="me-3"
-                />
-          
-                    <UPopover :popper="{ placement: 'bottom-start' }" class=" z-10">
-                        <UButton icon="i-heroicons-calendar-days-20-solid">
-                        {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
-                        </UButton>
+                <div class="flex items-center justify-between gap-3">
+                    <div class="flex flex-row">
+                        <UInput
+                            v-model="search"
+                            icon="i-heroicons-magnifying-glass-20-solid"
+                            type="number"
+                            placeholder="Search Invoice"
+                            class="me-3"
+                        />
+                        <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+                            <UButton icon="i-heroicons-calendar-days-20-solid">
+                                {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
+                            </UButton>
 
-                        <template #panel="{ close }">
-                        <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
-                            <div class="hidden sm:flex flex-col py-4">
-                            <UButton
-                                v-for="(range, index) in ranges"
-                                :key="index"
-                                :label="range.label"
-                                color="gray"
-                                variant="ghost"
-                                class="rounded-none px-6"
-                                :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
-                                truncate
-                                @click="selectRange(range.duration)"
-                            />
-                            </div>
-
-                            <DatePicker v-model="selectedDate" @close="close" />
-                        </div>
-                        </template>
-                    </UPopover>
+                            <template #panel="{ close }">
+                                <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                                    <div class="hidden sm:flex flex-col py-4">
+                                        <UButton
+                                            v-for="(range, index) in ranges"
+                                            :key="index"
+                                            :label="range.label"
+                                            color="gray"
+                                            variant="ghost"
+                                            class="rounded-none px-6"
+                                            :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                                            truncate
+                                            @click="selectRange(range.duration)"
+                                        />
+                                    </div>
+                                    <DatePicker v-model="selectedDate" @close="close" />
+                                </div>
+                            </template>
+                        </UPopover>
+                    </div>
+                    <USelectMenu
+                        v-model="selectedStatus"
+                        :options="todoStatus"
+                        multiple
+                        placeholder="Status"
+                        class="w-40"
+                    />
                 </div>
-                <USelectMenu
-                    v-model="selectedStatus"
-                    :options="todoStatus"
-                    multiple
-                    placeholder="Status"
-                    class="w-40"
-                />
-            </div>
-        </template>
+            </template>
+
             <!-- Header and Action buttons -->
             <div class="flex justify-between items-center w-full px-4 py-3">
                 <div class="flex items-center gap-1.5">
@@ -447,115 +409,109 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                 v-model="selectedRows"
                 v-model:sort="sort"
                 v-model:expand="expand"
-                :rows="sales"
-                :columns="columnsTable"
+                :rows="accounts"
+                :columns="columns"
                 :loading="isLoading"
                 :multiple-expand="false"
                 sort-mode="manual"
                 class="w-full"
             >
-       
-                <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
-                        <UButton
-                            color="gray"
-                            variant="ghost"
-                            icon="i-heroicons-ellipsis-horizontal-20-solid"
-                        />
-                    </UDropdown>
+                <template #pending-data="{ row }">
+                    {{
+                        row.bill
+                            ?.filter(b => b.paymentStatus === 'PENDING')
+                            .reduce((sum, b) => sum + (b.grandTotal ?? 0), 0)
+                            .toFixed(2)
+                    }}
                 </template>
 
-                <template #entries-data="{ row }">
-                    {{ row.entries.length }}
-                </template>
-
-                <template #grandTotal-data="{ row }">
-                    <UPopover mode="hover">
-                        {{ row.grandTotal }}
-                        <template #panel>
-                        <div class="p-4 space-y-1">
-                            <div class="font-semibold">Payment Method:</div>
-                            <div v-if="row.paymentMethod === 'Split'">
-                            <ul class="list-disc list-inside">
-                                <li v-for="(payment, idx) in row.splitPayments" :key="idx">
-                                {{ payment.method }} – ₹{{ payment.amount }}
-                                </li>
-                            </ul>
-                            </div>
-                            <div v-else>
-                            {{ row.paymentMethod }}
-                            </div>
-                        </div>
-                        </template>
-                    </UPopover>
-                    </template>
-
-
-                <template #createdAt-data="{ row }">
-                    {{ row.createdAt.toLocaleDateString('en-GB') }}
-                </template>
-
-               <template #paymentStatus-data="{ row }">
-                    <USelect
-                        v-model="row.paymentStatus"
-                        :options="['PAID', 'PENDING']"
-                        @update:model-value="status => onPaymentStatusChange(row.id, status,row.invoiceNumber)"
-                        size="xs"
-                        class="w-28"
-                    />
-                    </template>
-
-
-                <template #notes-data="{ row }">
-                    <UPopover> 
-                        <UButton 
-                            color="white" 
-                            :label="row.notes ? 'Open' : 'Add'" 
-                            trailing-icon="i-heroicons-chevron-down-20-solid" 
-                        />
-                        <template #panel>
-                            <div class="p-4">
-                                <UTextarea 
-                                    :model-value="row.notes" 
-                                    color="white" 
-                                    variant="outline" 
-                                    placeholder="Notes..." 
-                                    :autoresize="true" 
-                                    @update:modelValue="handleChange($event, row)"
-                                />
-                                <UButton
-                                    trailingIcon="i-heroicons-cloud-arrow-up"
-                                    size="sm"
-                                    color="green"
-                                    variant="solid"
-                                    label="Update"
-                                    :trailing="false"
-                                    class="mt-3"
-                                    @click="handleUpdate(row.id)"
-                                />
-                            </div>
-                        </template>
-                    </UPopover>
-                </template>
-
-                
                 <template #expand="{ row }">
                     <UTable 
-                        :rows="row.entries" 
-                        :columns="entrycolumns"
+                        :rows="row.bill" 
+                        :columns="billColumns"
                     >
-                    <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
-                        <UButton
-                            color="gray"
-                            variant="ghost"
-                            icon="i-heroicons-ellipsis-horizontal-20-solid"
-                        />
-                    </UDropdown>
-                </template>
+                        <template #actions-data="{ row }">
+                            <UDropdown :items="action(row)">
+                                <UButton
+                                    color="gray"
+                                    variant="ghost"
+                                    icon="i-heroicons-ellipsis-horizontal-20-solid"
+                                />
+                            </UDropdown>
+                        </template>
+
+                        <template #entries-data="{ row }">
+                            {{ row.entries.length }}
+                        </template>
+
+                        <template #grandTotal-data="{ row }">
+                            <UPopover mode="hover">
+                                {{ row.grandTotal }}
+                                <template #panel>
+                                    <div class="p-4 space-y-1">
+                                        <div class="font-semibold">Payment Method:</div>
+                                        <div v-if="row.paymentMethod === 'Split'">
+                                            <ul class="list-disc list-inside">
+                                                <li v-for="(payment, idx) in row.splitPayments" :key="idx">
+                                                    {{ payment.method }} – ₹{{ payment.amount }}
+                                                </li>
+                                            </ul>
+                                        </div>
+                                        <div v-else>
+                                            {{ row.paymentMethod }}
+                                        </div>
+                                    </div>
+                                </template>
+                            </UPopover>
+                        </template>
+
+                        <template #createdAt-data="{ row }">
+                            {{ row.createdAt.toLocaleDateString('en-GB') }}
+                        </template>
+
+                        <template #paymentStatus-data="{ row }">
+                            <USelect
+                                v-model="row.paymentStatus"
+                                :options="['PAID', 'PENDING']"
+                                @update:model-value="status => onPaymentStatusChange(row.id, status, row.invoiceNumber)"
+                                size="xs"
+                                class="w-28"
+                            />
+                        </template>
+
+                        <template #notes-data="{ row }">
+                            <UPopover> 
+                                <UButton 
+                                    color="white" 
+                                    :label="row.notes ? 'Open' : 'Add'" 
+                                    trailing-icon="i-heroicons-chevron-down-20-solid" 
+                                />
+                                <template #panel>
+                                    <div class="p-4">
+                                        <UTextarea 
+                                            :model-value="row.notes" 
+                                            color="white" 
+                                            variant="outline" 
+                                            placeholder="Notes..." 
+                                            :autoresize="true" 
+                                            @update:modelValue="handleChange($event, row)"
+                                        />
+                                        <UButton
+                                            trailingIcon="i-heroicons-cloud-arrow-up"
+                                            size="sm"
+                                            color="green"
+                                            variant="solid"
+                                            label="Update"
+                                            :trailing="false"
+                                            class="mt-3"
+                                            @click="handleUpdate(row.id)"
+                                        />
+                                    </div>
+                                </template>
+                            </UPopover>
+                        </template>
                     </UTable>
                 </template>
-
             </UTable>
 
             <template #footer>
@@ -578,8 +534,7 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                         :total="pageTotal"
                         :ui="{
                             wrapper: 'flex items-center gap-1',
-                            rounded:
-                                '!rounded-full min-w-[32px] justify-center',
+                            rounded: '!rounded-full min-w-[32px] justify-center',
                             default: {
                                 activeButton: {
                                     variant: 'outline',
@@ -591,7 +546,4 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
             </template>
         </UCard>
     </UDashboardPanelContent>
-    
 </template>
-
-

@@ -107,7 +107,7 @@ defineExpose({ resetForm });
             />
             <img
                 v-else
-                :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${file.uuid}`"
+                :src="`https://images.markit.co.in/${file.uuid}`"
                 alt="Selected Image"
                 class="w-32 h-36 flex-none"
             />
