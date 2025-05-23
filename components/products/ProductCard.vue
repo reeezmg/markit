@@ -169,14 +169,15 @@ const addToCart = async (e?: Event) => {
 const toggleLike = (e: Event) => {
   e.stopPropagation();
   const likedItem = { variantId: props.variant.id };
-  const isLiked = likeStore.toggleLike(likedItem) ?? false;
+  const isLiked = likeStore.toggleLike(likedItem);
+  console.log(isLiked)
 
   toast.add({
     title: isLiked ? 'Liked' : 'Unliked',
     description: isLiked
       ? `${product.value.name} added to your likes.`
       : `${product.value.name} removed from your likes.`,
-    color: isLiked ? 'primary' : 'red',
+    color: isLiked ? 'green' : 'red',
     icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
   });
 };
@@ -329,7 +330,7 @@ const showSuccessToast = (description: string) => {
         <UIcon
           :name="likeStore.isLiked({ variantId: props.variant.id }) ? 'i-heroicons-heart-solid' : 'i-heroicons-heart'"
           class="w-4 h-4"
-          :class="likeStore.isLiked({ variantId: props.variant.id }) ? 'text-red-500' : 'text-gray-400 group-hover:text-red-500'"
+          :class="likeStore.isLiked({ variantId: props.variant.id }) ? 'text-red-500' : 'text-gray-400 md:group-hover:text-red-500'"
         />
       </button>
       <button
@@ -338,7 +339,7 @@ const showSuccessToast = (description: string) => {
       >
         <UIcon
           name="i-heroicons-shopping-cart"
-          class="w-4 h-4 text-gray-400 group-hover:text-primary-600 dark:group-hover:text-primary-400"
+          class="w-4 h-4 text-gray-400 md:group-hover:text-primary-600 md:dark:group-hover:text-primary-400"
         />
       </button>
     </div>
