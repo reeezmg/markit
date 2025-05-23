@@ -370,7 +370,6 @@ const fileValue = (data: any) => {
 
 const handleGetItemInfo = async() => {
     const {data} = await imageRefetch()
-    console.log(data)
 }
 const handleAddPhoto = async() => {  
 try{
@@ -762,6 +761,7 @@ isAddPhotoModelOpen.value = false
             </div>
 
             <AddProductMedia
+            v-if="items?.variant"
             ref="mediaRefs"
             :editFile="items?.variant?.images"
             :index="0" 
