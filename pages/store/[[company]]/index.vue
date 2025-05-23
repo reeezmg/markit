@@ -959,27 +959,39 @@ const { data: trendingData } = useFindManyProduct({
 })
 
 const { data: categoriesData } = useFindManyCategory({
-  where: { 
+  where: {
     company: { name: { equals: getCompanyName() } },
-    status: true 
+    status: true,
+    products: {
+      some: {
+        status: true,
+        variants: {
+          some: {
+            images: { isEmpty: false }
+          }
+        }
+      }
+    }
   },
   include: {
     products: {
-      where: { status: true },
-      include: { 
+      where: {
+        status: true,
         variants: {
-          include: {
-            items: {
-              where: { status: 'in_stock' },
-              select: { id: true }
-            }
+          some: {
+            images: { isEmpty: false }
           }
-        } 
+        }
+      },
+      include: {
+        _count: {
+          select: { variants: true }
+        }
       },
       take: 4
     }
   }
-})
+});
 
 // Reactive data
 const allProducts = computed(() => productsData.value || [])
@@ -1442,9 +1454,9 @@ onUnmounted(() => {
       </UModal>
 
       <UDashboardPanelContent>
-        <div class="w-full">
+        <!-- <div class="w-full">
           <StoreBanner />
-        </div>
+        </div> -->
 
         <!-- Active Filter Indicators -->
         <div v-if="search || selectedCategory || inStockOnly || priceRange[0] > 0 || priceRange[1] < 50000 || discountRange[0] > 0 || discountRange[1] < 100" class="flex flex-wrap gap-2 mb-4 px-4">
@@ -1546,7 +1558,7 @@ onUnmounted(() => {
                     />
                     <h3 class="mt-3 font-bold text-gray-900 dark:text-white">{{ category.name }}</h3>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ category.products?.length || 0 }} items
+                      {{ category.products.reduce((sum, p) => sum + p._count.variants, 0) }} products
                     </p>
                   </div>
                 </div>
