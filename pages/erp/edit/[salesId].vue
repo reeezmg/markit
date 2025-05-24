@@ -69,8 +69,13 @@ const tempSplits = ref(
 )
 
 const splitPayments = ref([])
-const qtyInputs = ref([]);
 const barcodeInputs = ref([]);
+const categoryInputs = ref([]);
+const nameInputs = ref([]);
+const qtyInputs = ref([]);
+const rateInputs = ref([]);
+const discountInputs = ref([]);
+const taxInputs = ref([]);
 const discountref = ref();
 const paymentref = ref();
 const saveref = ref();
@@ -455,13 +460,24 @@ const handleEnterBarcode = (barcode,index) => {
     const input = component.$el.querySelector("input");
     input.focus();
     input.select();
-    
   }else{
-    fetchItemData(barcode, index);
-  const component = qtyInputs.value[index];
-  const input = component.$el.querySelector("input");
-  input.focus();
-  input.select();
+    const existingItemIndex = items.value.findIndex(
+  (item, i) => item.barcode === barcode && !item.return && i !== index
+);
+
+    console.log(existingItemIndex)
+    if(existingItemIndex != -1 && existingItemIndex !== index){
+      items.value[existingItemIndex].qty += 1;
+      const component = barcodeInputs.value[index];
+      const input = component.$el.querySelector("input");
+      input.select();
+      items.value[index].barcode = '';
+
+    }else{
+      fetchItemData(barcode, index);
+    addNewRow(index);
+    }
+    
   }
  
 };
@@ -1111,6 +1127,134 @@ const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
 };
 
 
+const moveFocus = (currentRowIndex, currentField, direction) => {
+  const fieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
+  const currentFieldIndex = fieldOrder.indexOf(currentField);
+  
+  let nextRowIndex = currentRowIndex;
+  let nextFieldIndex = currentFieldIndex;
+  
+  switch (direction) {
+    case 'up':
+      nextRowIndex = Math.max(0, currentRowIndex - 1);
+      break;
+    case 'down':
+      nextRowIndex = Math.min(items.value.length - 1, currentRowIndex + 1);
+      break;
+    case 'left':
+      nextFieldIndex = Math.max(0, currentFieldIndex - 1);
+      break;
+    case 'right':
+      nextFieldIndex = Math.min(fieldOrder.length - 1, currentFieldIndex + 1);
+      break;
+  }
+  
+  // If we changed rows, keep the same column
+  if (direction === 'up' || direction === 'down') {
+    nextFieldIndex = currentFieldIndex;
+  }
+  
+  focusInput(nextRowIndex, fieldOrder[nextFieldIndex]);
+};
+
+const focusInput = async (rowIndex, field) => {
+  await nextTick();
+  try {
+    switch (field) {
+      case 'barcode':
+        if (barcodeInputs.value[rowIndex]?.$el) {
+          barcodeInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        }
+        break;
+      case 'category':
+      const td = categoryInputs.value[rowIndex]
+      const button = td?.querySelector('button')
+      button.focus()                                            
+        break;
+      case 'name':
+        if (nameInputs.value[rowIndex]?.$el) {
+          nameInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        }
+        break;
+      case 'qty':
+        if (qtyInputs.value[rowIndex]?.$el) {
+          qtyInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        }
+        break;
+      case 'rate':
+        if (rateInputs.value[rowIndex]?.$el) {
+          rateInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        }
+        break;
+      case 'discount':
+        if (discountInputs.value[rowIndex]?.$el) {
+          discountInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        }
+        break;
+      case 'tax':
+        if (taxInputs.value[rowIndex]?.$el) {
+          taxInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        }
+        break;
+    }
+  } catch (e) {
+    console.error('Error focusing input:', e);
+  }
+};
+
+const movecatgeory = (rowIndex) => {
+  const td = categoryInputs.value[rowIndex];
+  if (!td) return;
+
+  const button = td.querySelector('button');
+  if (!button) return;
+
+  button.focus();
+  button.click(); // Open the dropdown
+
+  setTimeout(() => {
+    const ul = td.querySelector('ul[role="listbox"]');
+    if (!ul) return;
+
+    // Set focus to the input inside the dropdown if available
+    const comboInput = ul.querySelector('input[role="combobox"]');
+    if (comboInput) {
+      comboInput.focus();
+    } else {
+      ul.focus(); // fallback
+    }
+
+    // Add key listener to ul
+    ul.addEventListener('keydown', function handler(e) {
+      if (e.key === 'ArrowRight') {
+        button.click(); 
+        nameInputs.value[rowIndex].$el.querySelector('input')?.focus();
+       
+      
+      }
+    });
+    ul.addEventListener('keydown', function handler(e) {
+      if (e.key === 'ArrowLeft') {
+        button.click(); 
+        barcodeInputs.value[rowIndex].$el.querySelector('input').focus();
+        requestAnimationFrame(() => {
+          barcodeInputs.value[rowIndex].$el.querySelector('input').select();
+        });
+              
+      
+      }
+    });
+  }, 100); // enough time for dropdown to render
+};
+
+onMounted(() => {
+  nextTick(() => {
+    const input = barcodeInputs.value[0]?.$el?.querySelector('input');
+    input?.focus();
+  });
+});
+
+
 
 </script>
 
@@ -1140,7 +1284,7 @@ const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
 
         <!-- Responsive table wrapper -->
          
-        <div class="overflow-x-auto px-3 py-3 h-48">
+        <div class="overflow-x-auto mt-2 h-48 p-3">
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
@@ -1160,60 +1304,129 @@ const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
-              <tr v-for="(row, index) in items" :key="row.sn">
-                <td class="py-1 whitespace-nowrap">
-                 {{ row.sn }}
-                </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.barcode" ref="barcodeInputs"  size="sm" @blur="fetchItemData(row.barcode, index)" @keydown.delete="removeRow(row.barcode,index)" @keydown.enter.prevent="handleEnterBarcode(row.barcode,index)"/>
-                </td>
-                <td class="py-1 whitespace-nowrap">
-                  <USelectMenu  
-                    v-model="row.category" 
-                    :options="categories" 
-                    option-attribute="name"  
-                    option-key="id" 
-                    track-by="id"
-                    multiple 
-                    searchable
-                    searchable-placeholder="Search a Category..."
+            <tr v-for="(row, index) in items" :key="row.sn">
+              <td class="py-1 whitespace-nowrap">
+                {{ row.sn }}
+              </td>
+              <td class="py-1 whitespace-nowrap">
+                <UInput
+                  v-model="row.barcode"
+                  ref="barcodeInputs"
+                  size="sm"
+                  @focus="selectAllText(index)"
+                  @blur="fetchItemData(row.barcode, index)"
+                  @keydown.delete="removeRow($event, row.barcode, index)"
+                  @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+                  @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
+                  @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
+                  @keydown.left.prevent="moveFocus(index, 'barcode', 'left')"
+                  @keydown.right.prevent="moveFocus(index, 'barcode', 'right')"
+                />
+              </td>
+              <td class="py-1 whitespace-nowrap"  ref="categoryInputs">
+                <USelectMenu  
+                  v-model="row.category" 
+                  
+                  :options="categories" 
+                  option-attribute="name"  
+                  option-key="id" 
+                  track-by="id"
+                  multiple 
+                  searchable
+                  searchable-placeholder="Search a Category..."
+                  @keydown.up.prevent="moveFocus(index, 'category', 'up')"
+                  @keydown.down.prevent="moveFocus(index, 'category', 'down')"
+                  @keydown.left.prevent="movecatgeory(index)"
+                  @keydown.right.prevent="movecatgeory(index)"
+                  @keydown.enter.prevent="movecatgeory(index)"
                 >
-                <template #label>
+                  <template #label>
                     <span v-if="row.category.length" class="truncate">
-                        {{ row.category.map(item => item.name).join(', ') }}
+                      {{ row.category.map(item => item.name).join(', ') }}
                     </span>
                     <span v-else>Select Category</span>
-                </template>
-                <template #option="{ option: category }">
+                  </template>
+                  <template  #option="{ option: category }">
                     <span class="truncate">{{ category.name }}</span>
-                </template>
-            </USelectMenu>
-                </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.name" size="sm"  @keydown.enter="addNewRow(index)"/>
-                </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.qty"  ref="qtyInputs" type="number" size="sm"  @keydown.enter="addNewRow(index)"/>
-                </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.rate" type="number" size="sm"  @keydown.enter="addNewRow(index)"/>
-                </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.discount" type="number" size="sm"  @keydown.enter="addNewRow(index)"/>
-                </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.tax" type="number" size="sm" @keydown.enter="addNewRow(index)" />
-                </td>
-                <td class="py-1 ps-2 whitespace-nowrap">
-                  {{ row.value }}
-                </td>
-              </tr>
-            </tbody>
+                  </template>
+                </USelectMenu>
+              </td>
+              <td class="py-1 whitespace-nowrap">
+                <UInput 
+                  v-model="row.name" 
+                    ref="nameInputs"
+                  size="sm"  
+                  @keydown.enter="addNewRow(index)"
+                  @keydown.up.prevent="moveFocus(index, 'name', 'up')"
+                  @keydown.down.prevent="moveFocus(index, 'name', 'down')"
+                  @keydown.left.prevent="moveFocus(index, 'name', 'left')"
+                  @keydown.right.prevent="moveFocus(index, 'name', 'right')"
+                />
+              </td>
+              <td class="py-1 whitespace-nowrap">
+                <UInput 
+                  v-model="row.rate" 
+                  type="number" 
+                  ref="rateInputs"
+                  size="sm"  
+                  @keydown.enter="addNewRow(index)"
+                  @keydown.up.prevent="moveFocus(index, 'rate', 'up')"
+                  @keydown.down.prevent="moveFocus(index, 'rate', 'down')"
+                  @keydown.left.prevent="moveFocus(index, 'rate', 'left')"
+                  @keydown.right.prevent="moveFocus(index, 'rate', 'right')"
+                />
+              </td>
+              <td class="py-1 whitespace-nowrap">
+                <UInput 
+                  v-model="row.qty"  
+                  ref="qtyInputs" 
+                  type="number" 
+                  size="sm"  
+                  @keydown.enter="addNewRow(index)"
+                  @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
+                  @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
+                  @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
+                  @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
+                />
+              </td>
+              <td class="py-1 whitespace-nowrap">
+                <UInput 
+                  v-model="row.discount" 
+                  type="number"
+                  ref="discountInputs" 
+                  size="sm"  
+                  @keydown.enter="addNewRow(index)"
+                  @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
+                  @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
+                  @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
+                  @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
+                />
+              </td>
+              <td class="py-1 whitespace-nowrap">
+                <UInput 
+                  v-model="row.tax" 
+                    ref="taxInputs"
+                  type="number" 
+                  size="sm" 
+                  @keydown.enter="addNewRow(index)"
+                  @keydown.up.prevent="moveFocus(index, 'tax', 'up')"
+                  @keydown.down.prevent="moveFocus(index, 'tax', 'down')"
+                  @keydown.left.prevent="moveFocus(index, 'tax', 'left')"
+                  @keydown.right.prevent="moveFocus(index, 'tax', 'right')"
+                />
+              </td>
+              <td class="py-1 ps-2 whitespace-nowrap">
+                {{ row.value }}
+              </td>
+            </tr>
+          </tbody>
 
 
           </table>
           
         </div>
+
+        
 
         
 
