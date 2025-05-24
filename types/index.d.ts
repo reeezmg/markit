@@ -48,6 +48,7 @@ export interface CartState {
     isMerging: boolean;
     isLoading: boolean;
     sessionId: string;
+    lastSynced: number;
 }
 
 export interface CartItem {
