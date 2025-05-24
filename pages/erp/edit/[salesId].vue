@@ -253,6 +253,16 @@ const addNewRow = async (index) => {
   
 };
 
+const selectAllText = (index) => {
+  const component = barcodeInputs.value[index];
+  if (component?.$el) {
+    const input = component.$el.querySelector("input");
+    if (input) {
+      input.select();
+    }
+  }
+};
+
 
 const removeRow = (barcode,index) => {
   if (!barcode){

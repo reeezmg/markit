@@ -3,6 +3,7 @@ import {
   GetObjectCommand,
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
+import sharp from 'sharp';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 export default class CloudflareService {
@@ -58,31 +59,38 @@ export default class CloudflareService {
   }
 
   public async uploadBase64File(base64String: string, key: string) {
-    try {
-      const prefixRegex = /^data:(.+);base64,/;
-      const match = base64String.match(prefixRegex);
-      if (!match) throw new Error('Invalid Base64 String');
+  try {
+    const prefixRegex = /^data:(.+);base64,/;
+    const match = base64String.match(prefixRegex);
+    if (!match) throw new Error('Invalid Base64 String');
 
-      const base64Data = Uint8Array.from(
-        atob(base64String.replace(prefixRegex, '')),
-        (c) => c.charCodeAt(0),
-      );
+    const mimeType = match[1]; // original type
+    const imageBuffer = Buffer.from(
+      base64String.replace(prefixRegex, ''),
+      'base64',
+    );
 
-      const uploadResult = await this.s3Client.send(
-        new PutObjectCommand({
-          Bucket: this.r2Bucket,
-          Key: key,
-          Body: base64Data,
-          ContentEncoding: 'base64',
-          ContentType: match[1],
-          ACL: 'public-read', // Optional, if you want public access
-        }),
-      );
+    // Convert image to WebP format and compress
+    const webpBuffer = await sharp(imageBuffer)
+      .webp({ quality: 75 }) // adjust quality as needed
+      .toBuffer();
 
-      return uploadResult;
-    } catch (error) {
-      console.error('Upload error', error);
-      throw new Error('Upload File Failed');
-    }
+    const webpKey = key.replace(/\.[^/.]+$/, '') + '.webp'; // ensure key ends with .webp
+
+    const uploadResult = await this.s3Client.send(
+      new PutObjectCommand({
+        Bucket: this.r2Bucket,
+        Key: webpKey,
+        Body: webpBuffer,
+        ContentType: 'image/webp',
+        ACL: 'public-read', // Optional
+      }),
+    );
+
+    return uploadResult;
+  } catch (error) {
+    console.error('Upload error', error);
+    throw new Error('Upload File Failed');
   }
+}
 }

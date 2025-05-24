@@ -64,6 +64,7 @@
         "qrcode.vue": "^3.6.0",
         "random-words": "^2.0.1",
         "razorpay": "^2.9.6",
+        "sharp": "^0.34.2",
         "stripe": "^15.8.0",
         "trpc-nuxt": "^0.10.22",
         "uncrypto": "^0.1.3",
