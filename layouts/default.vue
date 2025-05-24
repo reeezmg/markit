@@ -60,7 +60,7 @@ const links = computed(() => {
                     },
                 },
                 {
-                    label: 'Accunts',
+                    label: 'Accounts',
                     to: `/erp/accounts`,
                     tooltip: {
                         text: 'Accounts',

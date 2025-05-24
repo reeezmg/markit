@@ -1403,61 +1403,55 @@ const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
   @totalreturnvalue="handleReturnData"
 />
 
-     <!-- split payment method modal -->
+      <!-- split payment method modal -->
    <UModal v-model="showSplitModal">
-    <div class="p-4 space-y-4">
-      <h2 class="text-lg font-semibold">Split Payment</h2>
+  <div class="p-4 space-y-4">
+    <h2 class="text-lg font-semibold">Split Payment</h2>
 
-      <div v-for="(entry, index) in splitPayments" :key="index" class="flex gap-2 items-center">
-        <USelect
-          v-model="entry.method"
-           :options="getAvailableOptions(index)"
-          class="w-1/2"
-          placeholder="Select Method"
-        />
-        <UInput
-          v-model.number="entry.amount"
-          type="number"
-          placeholder="Amount"
-          class="w-1/2"
-          @update:modelValue="() => handleAmountEntry(method)"
-        />
-        <UButton
-          icon="i-heroicons-trash"
-          color="red"
-          size="sm"
-          @click="removeSplitEntry(index)"
-          :disabled="splitPayments.length === 1"
-        />
-      </div>
-
-      <UButton @click="addSplitEntry" color="gray" variant="outline">Add More</UButton>
-
-      <div class="mt-4">
-        <p class="text-sm font-medium">Total Entered: ₹{{ totalSplitAmount }}</p>
-        <p
-          class="text-sm"
-          :class="{
-            'text-green-600': totalSplitAmount === grandTotal,
-            'text-red-600': totalSplitAmount !== grandTotal
-          }"
-        >
-          Grand Total: ₹{{ grandTotal }}
-        </p>
-      </div>
-
-      <UButton
-        :disabled="totalSplitAmount !== grandTotal"
-        color="green"
-        block
-        class="mt-4"
-        @click="submitSplitPayment"
-      >
-        Submit Split Payment
-      </UButton>
+    <div
+      v-for="(method, index) in paymentOptions"
+      :key="method"
+      class="flex gap-2 items-center"
+    >
+      <USelect
+        v-model="tempSplits[method].method"
+        :options="[method]"
+        disabled
+        class="w-1/2"
+      />
+      <UInput
+        v-model.number="tempSplits[method].amount"
+        type="number"
+        placeholder="Enter amount"
+        class="w-1/2"
+        @update:modelValue="() => handleAmountEntry(method)"
+      />
     </div>
-  </UModal>
 
+    <div class="mt-4">
+      <p class="text-sm font-medium">Total Entered: ₹{{ totalSplitAmount }}</p>
+      <p
+        class="text-sm"
+        :class="{
+          'text-green-600': totalSplitAmount === grandTotal,
+          'text-red-600': totalSplitAmount !== grandTotal
+        }"
+      >
+        Grand Total: ₹{{ grandTotal }}
+      </p>
+    </div>
+
+    <UButton
+      :disabled="totalSplitAmount !== grandTotal"
+      color="green"
+      block
+      class="mt-4"
+      @click="submitSplitPayment"
+    >
+      Submit Split Payment
+    </UButton>
+  </div>
+</UModal>
 
 
 </template>
