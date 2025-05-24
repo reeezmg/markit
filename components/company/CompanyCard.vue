@@ -97,7 +97,7 @@ const handleSave = async () => {
             <img
                 v-if="info?.logo"
                 class="aspect-content object-cover w-full h-full"
-                :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${info?.logo}`"
+                :src="`https://images.markit.co.in/${info?.logo}`"
                 alt="Company Image"
             />
            <div 

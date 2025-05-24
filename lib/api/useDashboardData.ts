@@ -41,7 +41,7 @@ import {
         AND: [
             { companyId: useAuth().session.value?.companyId },
             { deleted:false },
-            {paymentStatus:'PAID'}
+   
           ]
           },
           include: {

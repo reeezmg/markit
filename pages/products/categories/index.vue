@@ -496,7 +496,7 @@ async function toggleStatus(id) {
                     <NuxtLink :to="``">
                         <div class="flex flex-row items-center">
                             <UAvatar
-                                :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.image || ''}`"
+                                :src="`https://images.markit.co.in/${row.image || ''}`"
                                 :alt="row.name"
                                 size="lg"
                             />
@@ -533,7 +533,7 @@ async function toggleStatus(id) {
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
                         <UAvatar
-                            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${row.variants[0]?.images[0]}`"
+                            :src="`https://images.markit.co.in/${row.variants[0]?.images[0]}`"
                             :alt="row.name"
                             size="lg"
                         />

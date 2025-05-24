@@ -190,10 +190,6 @@ const handleDistributorValue = (data:any) => {
   console.log(data)
 };
 
-
-
-
-
 const handleAdd = async (e: Event) => {
   isLoad.value = true
   e.preventDefault();
@@ -323,7 +319,7 @@ const res = await CreateProduct.mutateAsync({
       await getItem(res?.variants)
 
     // const imageData = res?.images.map((item) => (
-    //      `https://unifeed.s3.ap-south-1.amazonaws.com/${item}`
+    //      `https://images.markit.co.in/${item}`
     //   ))
 
   //   const productData: any = {
@@ -652,8 +648,6 @@ console.log(barcodes.value)
         color: 'red',
       });
   }
- 
-  
 }
 const handleSave = async () => {
   isSave.value = true
@@ -719,7 +713,6 @@ if(distributorId.value){
   finally{
     isSave.value = false
   }
-  
 };
 
 
@@ -1093,10 +1086,7 @@ watch(isOpenAdd, (newVal) => {
                         Edit Product
                     </UButton>
                 </div>
-            </div>
- 
-    
-       
+            </div>   
       </UCard>
     </UModal>
        

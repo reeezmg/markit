@@ -90,7 +90,7 @@ const fileInputId = computed(() => `subcategory-image-${props.index}`);
           />
           <img
             v-else-if="selectedFiles.length > 0"
-            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${selectedFiles[0].uuid}`"
+            :src="`https://images.markit.co.in/${selectedFiles[0].uuid}`"
             alt="Current Image"
             class="object-cover w-full h-full"
           />

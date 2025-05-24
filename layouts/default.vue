@@ -59,6 +59,14 @@ const links = computed(() => {
                         shortcuts: ['E', 'R'],
                     },
                 },
+                {
+                    label: 'Accunts',
+                    to: `/erp/accounts`,
+                    tooltip: {
+                        text: 'Accounts',
+                        shortcuts: ['E', 'A'],
+                    },
+                },
             ],
         },
         {

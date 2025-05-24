@@ -60,7 +60,7 @@ const items = computed(() => [
             >
                 <template #leading>
                     <UAvatar
-                        :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${useAuth().session.value?.image || ''}`" 
+                        :src="`https://images.markit.co.in/${useAuth().session.value?.image || ''}`" 
                         :alt="useAuth().session.value?.name"
                         size="2xs"
                     />

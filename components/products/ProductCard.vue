@@ -169,14 +169,15 @@ const addToCart = async (e?: Event) => {
 const toggleLike = (e: Event) => {
   e.stopPropagation();
   const likedItem = { variantId: props.variant.id };
-  const isLiked = likeStore.toggleLike(likedItem) ?? false;
+  const isLiked = likeStore.toggleLike(likedItem);
+  console.log(isLiked)
 
   toast.add({
     title: isLiked ? 'Liked' : 'Unliked',
     description: isLiked
       ? `${product.value.name} added to your likes.`
       : `${product.value.name} removed from your likes.`,
-    color: isLiked ? 'primary' : 'red',
+    color: isLiked ? 'green' : 'red',
     icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
   });
 };
@@ -246,7 +247,7 @@ const showSuccessToast = (description: string) => {
         <template v-for="(variant, idx) in variants" :key="variant.id">
           <img
             v-if="variant.images?.[0]"
-            :src="`https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}`"
+            :src="`https://images.markit.co.in/${variant.images[0]}`"
             :class="['absolute inset-0 w-full h-full object-cover transition-opacity duration-300', currentVariantIndex === idx ? 'opacity-100' : 'opacity-0']"
             :alt="`${product.name} - ${variant.name}`"
             loading="lazy"
@@ -263,18 +264,19 @@ const showSuccessToast = (description: string) => {
 
       <!-- Quick View Button -->
       <div 
-        class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/10"
+      class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-black/10"
+    >
+      <UButton
+        icon="i-heroicons-eye"
+        color="white"
+        variant="solid"
+        size="xs"
+        label="Quick View"
+        class="z-10 scale-90 group-hover:scale-100 transition-transform duration-200"
         @click.stop="triggerQuickView"
-      >
-        <UButton
-          icon="i-heroicons-eye"
-          color="white"
-          variant="solid"
-          size="xs"
-          label="Quick View"
-          class="z-10 scale-90 group-hover:scale-100 transition-transform duration-200"
-        />
-      </div>
+      />
+    </div>
+
     </div>
 
     <!-- Product Info (Compact but readable) -->
@@ -328,7 +330,7 @@ const showSuccessToast = (description: string) => {
         <UIcon
           :name="likeStore.isLiked({ variantId: props.variant.id }) ? 'i-heroicons-heart-solid' : 'i-heroicons-heart'"
           class="w-4 h-4"
-          :class="likeStore.isLiked({ variantId: props.variant.id }) ? 'text-red-500' : 'text-gray-400 group-hover:text-red-500'"
+          :class="likeStore.isLiked({ variantId: props.variant.id }) ? 'text-red-500' : 'text-gray-400 md:group-hover:text-red-500'"
         />
       </button>
       <button
@@ -337,7 +339,7 @@ const showSuccessToast = (description: string) => {
       >
         <UIcon
           name="i-heroicons-shopping-cart"
-          class="w-4 h-4 text-gray-400 group-hover:text-primary-600 dark:group-hover:text-primary-400"
+          class="w-4 h-4 text-gray-400 md:group-hover:text-primary-600 md:dark:group-hover:text-primary-400"
         />
       </button>
     </div>

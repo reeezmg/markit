@@ -41,6 +41,7 @@ const categories = ref<any[]>([])
 const showQuickView = ref(false)
 const quickViewProduct = ref<any>(null)
 const isVisible = ref<boolean[]>([])
+const isOpen = ref(false);
 
 // Mobile UI
 const isMobileFiltersOpen = ref(false)
@@ -129,6 +130,10 @@ const getQueryArgs = () => {
     include: {
       company: true,
       variants: {
+        where: {
+        images: { isEmpty: false }
+      },
+
         include: {
           items: {
             where: { status: 'in_stock' },
@@ -165,6 +170,9 @@ const { data: trendingData } = useFindManyProduct({
   include: { 
     company: true, 
     variants: {
+       where: {
+        images: { isEmpty: false }
+      },
       include: {
         items: {
           where: { status: 'in_stock' },
@@ -178,27 +186,39 @@ const { data: trendingData } = useFindManyProduct({
 })
 
 const { data: categoriesData } = useFindManyCategory({
-  where: { 
+  where: {
     company: { name: { equals: getCompanyName() } },
-    status: true 
+    status: true,
+    products: {
+      some: {
+        status: true,
+        variants: {
+          some: {
+            images: { isEmpty: false }
+          }
+        }
+      }
+    }
   },
   include: {
     products: {
-      where: { status: true },
-      include: { 
+      where: {
+        status: true,
         variants: {
-          include: {
-            items: {
-              where: { status: 'in_stock' },
-              select: { id: true }
-            }
+          some: {
+            images: { isEmpty: false }
           }
-        } 
+        }
+      },
+      include: {
+        _count: {
+          select: { variants: true }
+        }
       },
       take: 4
     }
   }
-})
+});
 
 // Reactive data
 const allProducts = computed(() => productsData.value || [])
@@ -214,7 +234,7 @@ const flatVariants = computed(() => {
       product,
       availableQty: variant.items?.length || 0,
       isOutOfStock: (variant.qty || 0) <= 0, // Add out-of-stock flag
-      mainImage: variant.images?.[0] ? `https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}` : null,
+      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null,
       discountPercentage: variant.discount || 
         (variant.dprice && variant.sprice ? 
           Math.round((1 - variant.dprice / variant.sprice) * 100) : 0)
@@ -254,7 +274,7 @@ const trendingVariants = computed<VariantWithProduct[]>(() => {
       ...variant,
       product,
       availableQty: variant.items?.length || 0,
-      mainImage: variant.images?.[0] ? `https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}` : null
+      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
     }))
   ) || []
 })
@@ -275,6 +295,7 @@ const loadMore = async () => {
 watch(productsData, (newData) => {
   if (!newData) return
   hasMore.value = newData.length >= pageSize
+  console.log(newData)
 })
 
 // Watch flatVariants and initialize visibility state
@@ -328,7 +349,7 @@ const clearAllFilters = () => {
 const openQuickView = (variant: VariantWithProduct) => {
   quickViewProduct.value = {
     ...variant,
-    mainImage: variant.images?.[0] ? `https://unifeed.s3.ap-south-1.amazonaws.com/${variant.images[0]}` : null
+    mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
   }
   showQuickView.value = true
 }
@@ -442,8 +463,7 @@ onUnmounted(() => {
         <template #right>
           <div class="flex flex-row items-end justify-end">
             <UButton 
-              v-if="!$authClient.session.value?.id" 
-              @click="$authClient.updateSession()"
+             v-if="useClientAuth().session.value?.type === 'USER' || !useClientAuth().session.value?.id"  @click="isOpen = true"
               class="px-5 me-3 flex items-center justify-center rounded-md border border-transparent text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
             >
               Login
@@ -661,9 +681,9 @@ onUnmounted(() => {
       </UModal>
 
       <UDashboardPanelContent>
-        <div class="w-full">
+        <!-- <div class="w-full">
           <StoreBanner />
-        </div>
+        </div> -->
 
         <!-- Active Filter Indicators -->
         <div v-if="search || selectedCategory || inStockOnly || priceRange[0] > 0 || priceRange[1] < 50000 || discountRange[0] > 0 || discountRange[1] < 100" class="flex flex-wrap gap-2 mb-4 px-4">
@@ -765,7 +785,7 @@ onUnmounted(() => {
                     />
                     <h3 class="mt-3 font-bold text-gray-900 dark:text-white">{{ category.name }}</h3>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ category.products?.length || 0 }} items
+                      {{ category.products.reduce((sum, p) => sum + p._count.variants, 0) }} products
                     </p>
                   </div>
                 </div>
@@ -968,6 +988,17 @@ onUnmounted(() => {
       </UCard>
     </UModal>
   </UDashboardPage>
+
+  <UModal v-model="isOpen">
+    <UCard>
+    <template #header>
+        <div class="font-semibold text-center">Login</div>
+    </template>
+    <div class="p-4">
+      <CheckoutLogin @close="isOpen = false"/>
+    </div>
+    </UCard>
+    </UModal>
 </template>
 
 <style>
