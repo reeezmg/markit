@@ -625,7 +625,7 @@ const handleChange = (value:string, row:any) => {
                 </template>
                  <template #expand="{ row }">
                     <UTable 
-                        :rows="row.bill" 
+                        :rows="row.bills" 
                         :columns="billColumns"
                     >
                       <template #actions-data="{ row }">

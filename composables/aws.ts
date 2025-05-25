@@ -85,4 +85,4 @@ export default class CloudflareService {
       throw new Error('Upload File Failed');
     }
   }
-}
+}  
