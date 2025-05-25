@@ -359,7 +359,7 @@ const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
         skip: (page.value - 1) * pageCount.value,
         take: pageCount.value,
         include:{
-            bill:{
+            bills:{
                include:{
                  entries:true
                }
