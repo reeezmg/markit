@@ -86,6 +86,19 @@ enum NotificationType {
   SYSTEM_ALERT
 }
 
+model DistributorCompany {
+  distributorId       String               @map("distributor_id")
+  companyId           String               @map("company_id")
+  distributor         Distributor          @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  distributorPayments DistributorPayment[]
+  distributorCredits  DistributorCredit[]
+  purchaseOrders      PurchaseOrder[]
+
+  @@id([distributorId, companyId])
+  @@map("distributor_companies")
+}
+
 model Company {
   id                         String               @id() @unique() @default(uuid())
   name                       String
@@ -603,19 +616,6 @@ model UserClient {
 
   @@id([clientId, userId])
   @@map("user_clients")
-}
-
-model DistributorCompany {
-  distributorId       String               @map("distributor_id")
-  companyId           String               @map("company_id")
-  distributor         Distributor          @relation(fields: [distributorId], references: [id], onDelete: Cascade)
-  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  distributorPayments DistributorPayment[]
-  distributorCredits  DistributorCredit[]
-  purchaseOrders      PurchaseOrder[]
-
-  @@id([distributorId, companyId])
-  @@map("distributor_companies")
 }
 
 model VariantSizeBarcode {

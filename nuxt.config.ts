@@ -27,6 +27,7 @@ export default defineNuxtConfig({
       '@nuxt/image',
       'nuxt-icon',
       'nuxt-headlessui',
+
       '@nuxtjs/tailwindcss',
       [
           '@pinia/nuxt',
@@ -45,6 +46,7 @@ export default defineNuxtConfig({
       icons: ['heroicons', 'simple-icons'],
       safelistColors: ['primary', 'red', 'orange', 'green'],
   },
+
 
   devtools: {
       enabled: true,

@@ -84,6 +84,18 @@ enum PayableStatus {
   CANCELLED
 }
 
+model DistributorCompany {
+    distributorId String @map("distributor_id")
+    companyId     String @map("company_id")
+    distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+    company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    distributorPayments DistributorPayment[]
+    distributorCredits DistributorCredit[]
+    purchaseOrders   PurchaseOrder[]
+    @@id([distributorId, companyId])
+    @@allow('read,create, update, delete', auth() != null )
+    @@map('distributor_companies')
+}
 
 model Company extends Base {
     name        String
@@ -140,6 +152,8 @@ model Company extends Base {
 
     @@map('companies')
 }
+
+
 
 model Distributor extends Base {
     name        String
@@ -657,18 +671,6 @@ model UserClient {
     @@map('user_clients')
 }
 
-model DistributorCompany {
-    distributorId String @map("distributor_id")
-    companyId     String @map("company_id")
-    distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
-    company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    distributorPayments DistributorPayment[]
-    distributorCredits DistributorCredit[]
-    purchaseOrders   PurchaseOrder[]
-    @@id([distributorId, companyId])
-    @@allow('read,create, update, delete', auth() != null )
-    @@map('distributor_companies')
-}
 
 model VariantSizeBarcode {
     id         Int @id @default(autoincrement())

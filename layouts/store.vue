@@ -1,55 +1,57 @@
+
 <script setup lang="ts">
 import { ref, onMounted, onBeforeUnmount } from 'vue';
 
 const route = useRoute();
-const useClientAuth = () => useNuxtApp().$authClient;
+const clientAuth = useNuxtApp().$authClient; // Avoid multiple calls
 
 // Mobile detection
 const isMobile = ref(false);
 
+const checkMobile = () => {
+  isMobile.value = window.innerWidth < 768;
+};
+
 onMounted(() => {
-  const checkMobile = () => {
-    isMobile.value = window.innerWidth < 768;
-  };
-  
   checkMobile();
   window.addEventListener('resize', checkMobile);
-  
-  onBeforeUnmount(() => {
-    window.removeEventListener('resize', checkMobile);
-  });
 });
+
+onBeforeUnmount(() => {
+  window.removeEventListener('resize', checkMobile);
+});
+
 
 const navLinks = [
   {
     id: 'store',
     label: 'Store',
     icon: 'i-heroicons-home',
-    to: `/store/${route.params.company}`,
+    to: formatStoreRoute(route.params.company, ''),
   },
   {
     id: 'orders',
     label: 'Orders',
     icon: 'i-heroicons-shopping-bag',
-    to: `/store/${route.params.company}/orders`,
+    to: formatStoreRoute(route.params.company, 'orders'),
   },
   {
     id: 'wishlist',
     label: 'Wishlist',
     icon: 'i-heroicons-heart',
-    to: `/store/${route.params.company}/wishlist`,
+    to: formatStoreRoute(route.params.company,'wishlist'),
   },
   {
     id: 'checkout',
     label: 'Cart',
     icon: 'i-heroicons-shopping-cart',
-    to: `/store/${route.params.company}/checkout`,
+    to: formatStoreRoute(route.params.company,'checkout'),
   },
   {
     id: 'settings',
-    label: 'Settings',
-    icon: 'i-heroicons-cog-8-tooth',
-    to: `/store/${route.params.company}/settings`,
+    label: 'You', // Changed from "Settings"
+    icon: 'i-heroicons-user',
+    to: formatStoreRoute(route.params.company,'settings'),
   },
 ];
 </script>
@@ -78,10 +80,18 @@ const navLinks = [
       </UDashboardSidebar>
     </UDashboardPanel>
 
-    <!-- Main Content -->
-    <slot />
+    <div
+      :class="[
+        'flex flex-col flex-1 w-full overflow-y-auto',
+        isMobile ? 'pb-20' : '',
+        'min-h-screen'
+      ]"
+    >
+      <slot />
+    </div>
 
-    <!-- Mobile Bottom Navigation - No Menu Button -->
+
+    <!-- Mobile Bottom Navigation -->
     <div 
       v-if="isMobile"
       class="fixed bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-800 z-50"
@@ -103,20 +113,18 @@ const navLinks = [
 </template>
 
 
-/* Content padding for mobile */
 <style lang="postcss">
-/* Content padding for mobile */
+/* Ensure enough bottom space on mobile for the nav */
 body {
-  padding-bottom: 60px;
+  padding-bottom: 0; /* Reset any old settings */
 }
 
-@media (min-width: 768px) {
+@media (max-width: 767px) {
   body {
-    padding-bottom: 0;
+    padding-bottom: 60px;
   }
 }
 
-/* Active link styling */
 .router-link-active {
   color: var(--color-primary-500);
 }

@@ -5,6 +5,7 @@ const cartItemCount = computed(() => cartStore.cartItemCount);
 const likeItemCount = computed(() => likeStore.likedCount);
 const useAuth = () => useNuxtApp().$authClient;
 const auth = useAuth();
+const route = useRoute();
 const router = useRouter();
 const isOpen = ref(false);
 const useClientAuth = () => useNuxtApp().$authClient;
@@ -28,18 +29,15 @@ definePageMeta({
                         class="px-5 me-3 flex items-center justify-center rounded-md border border-transparenttext-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2">
                         Login
                     </UButton>
-                    <UTooltip class="me-3 " text="Cart" :shortcuts="['C']">
-                        <NuxtLink
-                            :to="`../checkout`"
-                        >
-                            <UChip :text="cartItemCount" color="red" size="2xl">
-                                <UIcon
-                                    name="i-heroicons-shopping-cart"
-                                    class="w-5 h-5"
-                                />
-                            </UChip>
-                        </NuxtLink>
-                    </UTooltip>
+<UTooltip class="me-3" text="Cart" :shortcuts="['C']">
+  <NuxtLink :to="formatStoreRoute(route.params.company, 'checkout')">
+    <ClientOnly>
+      <UChip :text="cartItemCount" color="red" size="2xl">
+        <UIcon name="i-heroicons-shopping-cart" class="w-5 h-5" />
+      </UChip>
+    </ClientOnly>
+  </NuxtLink>
+</UTooltip>
                     <UTooltip class="me-3" text="Wishlist" :shortcuts="['W']">
                         <NuxtLink
                             :to="`../wishlist`"

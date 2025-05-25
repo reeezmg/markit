@@ -6,10 +6,9 @@ const useClientAuth = () => useNuxtApp().$authClient;
 const { $client } = useNuxtApp()
 const cartStore = useCartStore();
 
-const onLogout = async() => {
+const onLogout = async(): Promise<void> => {
     await authClientLogout();
-    cartStore.clear()
-
+    cartStore.clearCart();
 }
 
 const items = computed(() => [
@@ -22,24 +21,20 @@ const items = computed(() => [
     ],
     [
         {
-            label: 'Settings',
-            icon: 'i-heroicons-cog-8-tooth',
-            to: '/settings',
-        },
-        {
             label: 'Help & Support',
             icon: 'i-heroicons-question-mark-circle',
             shortcuts: ['?'],
-            click: () => (isHelpSlideoverOpen.value = true),
+            click: (): void => {
+                isHelpSlideoverOpen.value = true;
+            },
         },
     ],
     [
         {
             label: 'Sign out',
             icon: 'i-heroicons-arrow-left-on-rectangle',
-            click: async () => {
-                onLogout()
-
+            click: async (): Promise<void> => {
+                await onLogout();
             },
         },
     ],

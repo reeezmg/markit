@@ -1,4 +1,4 @@
-<script setup lang="ts">
+<!-- <script setup lang="ts">
 import type { VariantWithProduct } from '~/types/store';
 import type { CartItem } from '~/types/cart';
 
@@ -171,6 +171,212 @@ const toggleLike = (e: Event) => {
   const likedItem = { variantId: props.variant.id };
   const isLiked = likeStore.toggleLike(likedItem);
   console.log(isLiked)
+
+  toast.add({
+    title: isLiked ? 'Liked' : 'Unliked',
+    description: isLiked
+      ? `${product.value.name} added to your likes.`
+      : `${product.value.name} removed from your likes.`,
+    color: isLiked ? 'green' : 'red',
+    icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
+  });
+};
+
+// Toast
+const showSuccessToast = (description: string) => {
+  toast.add({
+    title: 'Added to Cart',
+    description,
+    color: 'green',
+    icon: 'i-heroicons-check-circle',
+    timeout: 2000,
+    actions: [{
+      label: 'View Cart',
+      click: () => router.push(`${cleanFullPath}/checkout`)
+    }]
+  });
+};
+</script> -->
+
+<script setup lang="ts">
+import type { VariantWithProduct } from '~/types/store';
+import type { CartItem } from '~/types/cart';
+
+interface ProductCardProps {
+  index: number;
+  variant: VariantWithProduct;
+}
+
+const props = defineProps<ProductCardProps>();
+const emit = defineEmits(['quick-view']);
+
+const route = useRoute();
+const router = useRouter();
+const cartStore = useCartStore();
+const likeStore = useLikeStore();
+const toast = useToast();
+
+// Current product data
+const product = computed(() => props.variant.product);
+const variants = computed(() => product.value.variants);
+const currentVariantIndex = ref(variants.value.findIndex(v => v.id === props.variant.id) || 0);
+const selectedSize = ref<number | null>(null);
+const isHovered = ref(false);
+
+// Product status
+const isNewProduct = computed(() => {
+  const createdAt = new Date(product.value.createdAt);
+  const now = new Date();
+  const diffTime = Math.abs(now.getTime() - createdAt.getTime()); 
+  const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+  return diffDays <= 14;
+});
+
+const isLowStock = computed(() => {
+  const qty = props.variant.qty ?? 0;
+  return qty > 0 && qty <= 5;
+});
+
+const isOutOfStock = computed(() => {
+  const qty = props.variant.qty ?? 0;
+  return qty === 0;
+});
+
+// Price calculations
+const hasDiscount = computed(() => {
+  return props.variant.discount != null &&
+         props.variant.dprice != null &&
+         props.variant.dprice > 0 &&
+         props.variant.dprice < props.variant.sprice;
+});
+
+const discountPercentage = computed(() => {
+  if (props.variant.discount != null) {
+    return props.variant.discount;
+  }
+  if (props.variant.dprice != null && props.variant.sprice) {
+    return Math.round((1 - props.variant.dprice / props.variant.sprice) * 100);
+  }
+  return 0;
+});
+
+const currentPrice = computed(() => {
+  return hasDiscount.value ? props.variant.dprice! : props.variant.sprice;
+});
+
+const formatPrice = (price: number) => {
+  return price % 1 === 0 ? `₹${price.toFixed(0)}` : `₹${price.toFixed(2)}`;
+};
+
+// Size handling
+type VariantSize = { size: string; qty: number };
+
+function parseSizes(sizes: unknown): VariantSize[] {
+  if (Array.isArray(sizes)) {
+    return sizes.map(size => ({
+      size: size.size || size,
+      qty: size.qty || (isOutOfStock.value ? 0 : 1)
+    }));
+  }
+  return [];
+}
+
+const availableSizes = computed(() => {
+  return parseSizes(props.variant.sizes).filter(size => size.qty > 0);
+});
+
+// Navigation
+const cleanFullPath = route.fullPath.replace(/\/$/, '');
+const navigateToProduct = () => {
+  router.push({
+    path: `${cleanFullPath}/products/${product.value.id}`,
+    query: { variant: props.variant.id }
+  });
+};
+
+// Variant carousel
+const showNextVariant = (e: Event) => {
+  e.stopPropagation();
+  currentVariantIndex.value = (currentVariantIndex.value + 1) % variants.value.length;
+};
+
+const showPrevVariant = (e: Event) => {
+  e.stopPropagation();
+  currentVariantIndex.value = (currentVariantIndex.value - 1 + variants.value.length) % variants.value.length;
+};
+
+// Quick view
+const triggerQuickView = (e: Event) => {
+  e.stopPropagation();
+  emit('quick-view', props.variant, selectedSize.value !== null 
+    ? availableSizes.value[selectedSize.value].size 
+    : null);
+};
+
+// Cart actions
+const addToCart = async (e?: Event) => {
+  if (e) e.stopPropagation();
+  
+  if (isOutOfStock.value) {
+    toast.add({
+      title: 'Out of Stock',
+      description: 'This product is currently out of stock',
+      color: 'red',
+      icon: 'i-heroicons-exclamation-triangle'
+    });
+    return;
+  }
+
+  const variant = variants.value[currentVariantIndex.value];
+  const sizes = parseSizes(variant.sizes);
+  const companyId = variant.companyId;
+  const qty = 1;
+
+  if (sizes.length > 0) {
+    if (selectedSize.value === null) {
+      toast.add({
+        title: 'Size Missing',
+        description: 'Please select a size before adding to cart.',
+        color: 'red',
+        icon: 'i-heroicons-exclamation-triangle',
+        actions: availableSizes.value.map((size, index) => ({
+          label: `Size: ${size.size}`,
+          click: () => {
+            selectedSize.value = index;
+            addToCart();
+          },
+          class: 'hover:bg-gray-100 dark:hover:bg-gray-800'
+        })),
+        ui: { actions: 'flex flex-wrap items-center gap-2 mt-3' }
+      });
+      return;
+    }
+
+    const selected = sizes[selectedSize.value];
+
+    await cartStore.addToCart(
+      { variantId: variant.id, size: selected.size, qty } as CartItem,
+      companyId,
+      useClientAuth().session.value?.id
+    );
+
+    showSuccessToast(`Size: ${selected.size} added to cart.`);
+    selectedSize.value = null;
+  } else {
+    await cartStore.addToCart(
+      { variantId: variant.id, size: null, qty } as CartItem,
+      companyId,
+      useClientAuth().session.value?.id
+    );
+    showSuccessToast(`Added to cart.`);
+  }
+};
+
+// Like
+const toggleLike = (e: Event) => {
+  e.stopPropagation();
+  const likedItem = { variantId: props.variant.id };
+  const isLiked = likeStore.toggleLike(likedItem);
 
   toast.add({
     title: isLiked ? 'Liked' : 'Unliked',
