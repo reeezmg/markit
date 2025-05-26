@@ -64,6 +64,11 @@ export type LikedProduct = {
   
   export type LikeState = {
     liked: LikedProduct[];
+    companyId: string;
+    isLoading: boolean;
+    sessionId: string;
+    lastSynced: number;
+    isHydrated: boolean;
   };
 
 export interface Message {

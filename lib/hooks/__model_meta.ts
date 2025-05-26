@@ -289,6 +289,12 @@ const metadata = {
                     name: "barcodeCounter",
                     type: "Int",
                     attributes: [{ "name": "@default", "args": [{ "value": 1 }] }],
+                }, likeCompanies: {
+                    name: "likeCompanies",
+                    type: "LikeCompanyClient",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'company',
                 },
             }, uniqueConstraints: {
                 id: {
@@ -740,6 +746,12 @@ const metadata = {
                 }, notifications: {
                     name: "notifications",
                     type: "Notification",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'client',
+                }, likeCompanies: {
+                    name: "likeCompanies",
+                    type: "LikeCompanyClient",
                     isDataModel: true,
                     isArray: true,
                     backLink: 'client',
@@ -2571,6 +2583,90 @@ const metadata = {
                 cartId: {
                     name: "cartId",
                     fields: ["cartId"]
+                }, clientId_companyId: {
+                    name: "clientId_companyId",
+                    fields: ["clientId", "companyId"]
+                },
+            },
+        },
+        like: {
+            name: 'Like', fields: {
+                id: {
+                    name: "id",
+                    type: "String",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, variantIds: {
+                    name: "variantIds",
+                    type: "String",
+                    isArray: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, createdAt: {
+                    name: "createdAt",
+                    type: "DateTime",
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, updatedAt: {
+                    name: "updatedAt",
+                    type: "DateTime",
+                    attributes: [{ "name": "@updatedAt", "args": [] }],
+                }, clientCompany: {
+                    name: "clientCompany",
+                    type: "LikeCompanyClient",
+                    isDataModel: true,
+                    isOptional: true,
+                    backLink: 'like',
+                },
+            }, uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
+                },
+            },
+        },
+        likeCompanyClient: {
+            name: 'LikeCompanyClient', fields: {
+                clientId: {
+                    name: "clientId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'client',
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'company',
+                }, likeId: {
+                    name: "likeId",
+                    type: "String",
+                    isId: true,
+                    isForeignKey: true,
+                    relationField: 'like',
+                }, client: {
+                    name: "client",
+                    type: "Client",
+                    isDataModel: true,
+                    backLink: 'likeCompanies',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "clientId" },
+                }, company: {
+                    name: "company",
+                    type: "Company",
+                    isDataModel: true,
+                    backLink: 'likeCompanies',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "companyId" },
+                }, like: {
+                    name: "like",
+                    type: "Like",
+                    isDataModel: true,
+                    backLink: 'clientCompany',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "likeId" },
+                },
+            }, uniqueConstraints: {
+                likeId: {
+                    name: "likeId",
+                    fields: ["likeId"]
                 }, clientId_companyId: {
                     name: "clientId_companyId",
                     fields: ["clientId", "companyId"]

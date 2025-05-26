@@ -75,6 +75,7 @@ const companyName = computed(() => {
 const cartStore = useCartStore()
 const likeStore = useLikeStore()
 
+
 // Query Arguments
 const getQueryArgs = () => {
   const companyName = getCompanyName()
@@ -378,19 +379,36 @@ const stopImageRotation = () => {
   }
 }
 
-const toggleLikeInQuickView = (variant: VariantWithProduct) => {
-  const likedItem = { variantId: variant.id }
-  const isLiked = likeStore.toggleLike(likedItem) ?? false
+const toggleLikeInQuickView = async (variant: VariantWithProduct) => {
+  const companyId = variant.companyId;
+  const sessionId = useClientAuth().session.value?.id;
+  
+  const likedItem = { variantId: variant.id };
+  
+  try {
+    const isLiked = await likeStore.toggleLike(likedItem, companyId, sessionId);
 
-  toast.add({
-    title: isLiked ? 'Liked' : 'Unliked',
-    description: isLiked
-      ? `${variant.product.name} added to your likes.`
-      : `${variant.product.name} removed from your likes.`,
-    color: isLiked ? 'primary' : 'red',
-    icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
-  })
-}
+    toast.add({
+      title: isLiked ? 'Liked' : 'Unliked',
+      description: isLiked
+        ? `${variant.product.name} added to your likes.`
+        : `${variant.product.name} removed from your likes.`,
+      color: isLiked ? 'primary' : 'red',
+      icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
+    });
+
+    return isLiked;
+  } catch (error) {
+    console.error('Failed to toggle like:', error);
+    toast.add({
+      title: 'Error',
+      description: 'Failed to update like status',
+      color: 'red',
+      icon: 'i-heroicons-exclamation-triangle',
+    });
+    return false;
+  }
+};
 
 const addToCartFromQuickView = async () => {
   if (!quickViewProduct.value) return

@@ -36,6 +36,10 @@ export default defineNuxtConfig({
           },
       ],
   ],
+  plugins: [
+    '~/plugins/like.client.ts',
+    '~/plugins/cart.client.ts'
+  ],
 
   imports: {
       dirs: ['stores'],

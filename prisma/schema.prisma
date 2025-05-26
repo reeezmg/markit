@@ -146,6 +146,7 @@ model Company {
   distributor                DistributorCompany[]
   billCounter                Int                  @default(0) @map("bill_counter")
   barcodeCounter             Int                  @default(1) @map("barcode_counter")
+  likeCompanies              LikeCompanyClient[]
 
   @@map("companies")
 }
@@ -251,6 +252,7 @@ model Client {
   closePipeline      Pipeline?            @relation("PipelineCloseClients", fields: [closePipelineId], references: [id])
   closePipelineId    String?              @map("close_pipeline_id")
   notifications      Notification[]
+  likeCompanies      LikeCompanyClient[]
 
   @@map("clients")
 }
@@ -709,4 +711,27 @@ model CartCompanyClient {
 
   @@unique([clientId, companyId])
   @@map("cart_company_client")
+}
+
+model Like {
+  id            String             @id() @unique() @default(uuid())
+  variantIds    String[]           @default([])
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt()
+  clientCompany LikeCompanyClient?
+
+  @@index([variantIds], type: Gin)
+  @@map("likes")
+}
+
+model LikeCompanyClient {
+  clientId  String
+  companyId String
+  likeId    String  @unique()
+  client    Client  @relation(fields: [clientId], references: [id])
+  company   Company @relation(fields: [companyId], references: [id])
+  like      Like    @relation(fields: [likeId], references: [id])
+
+  @@unique([clientId, companyId])
+  @@map("like_company_client")
 }

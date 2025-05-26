@@ -1,166 +1,246 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-
+import type { WishlistVariant } from '~/types/store'
+import type { CartItem } from '~/types/cart'
 
 const props = defineProps<{
-  index: number;
-  info: any; // Variant with product info
-}>();
+  variant: WishlistVariant
+  isLiked?: boolean
+}>()
 
-const router = useRouter();
-const route = useRoute();
-const cartStore = useCartStore();
-const likeStore = useLikeStore();
-const toast = useToast();
+const emit = defineEmits(['remove'])
 
-const selectedSize = ref<number | null>(null);
+const removeItem = (e: Event) => {
+  e.stopPropagation()
+  emit('remove')
+}
 
-const actions = computed(() => {
-  if (!props.info.sizes) return [];
+const cartStore = useCartStore()
+const toast = useToast()
+const router = useRouter()
+const auth = useClientAuth()
+const route = useRoute()
 
-  return props.info.sizes.map((size, index) => ({
-    label: `Size: ${size.size}`,
-    click: () => {
-      if (size.qty > 0) {
-        selectedSize.value = index;
-        addToCart();
-      }
-    },
-    disabled: size.qty === 0,
-    class: size.qty === 0 ? 'line-through opacity-50 cursor-not-allowed' : ''
-  }));
-});
+// Size handling
+const selectedSize = ref<number | null>(null)
+const isHovered = ref(false)
 
+// Product status
+const isOutOfStock = computed(() => props.variant.isOutOfStock || false)
+const isLowStock = computed(() => {
+  const qty = props.variant.availableQty || 0
+  return qty > 0 && qty <= 5
+})
+
+// Price calculations
+const hasDiscount = computed(() => props.variant.dprice && props.variant.dprice < props.variant.sprice)
+const currentPrice = computed(() => hasDiscount.value ? props.variant.dprice! : props.variant.sprice)
+const discountPercentage = computed(() => {
+  if (props.variant.discount) return props.variant.discount
+  return Math.round((1 - props.variant.dprice! / props.variant.sprice) * 100)
+})
+
+// Size handling
+type VariantSize = { size: string; qty: number }
+
+function parseSizes(sizes: unknown): VariantSize[] {
+  if (Array.isArray(sizes)) {
+    return sizes.map(size => ({
+      size: size.size || size,
+      qty: size.qty || (isOutOfStock.value ? 0 : 1)
+    }))
+  }
+  return []
+}
+
+const availableSizes = computed(() => {
+  return parseSizes(props.variant.sizes).filter(size => size.qty > 0)
+})
+
+// Navigation
+const cleanFullPath = route.fullPath.replace(/\/$/, '')
 const navigateToProduct = () => {
-  router.push({
-    path: `./products/${props.info.product.id}`,
-    query: { variant: props.info.id }
-  });
-};
+  router.push(`/store/${props.variant.product.company.name}/products/${props.variant.product.id}`)
+}
 
-const addToCart = () => {
-  if (props.info.sizes && props.info.sizes.length > 0) {
+// Cart actions
+const addToCart = async (e?: Event) => {
+  if (e) e.stopPropagation()
+  
+  if (isOutOfStock.value) {
+    toast.add({
+      title: 'Out of Stock',
+      description: 'This product is currently out of stock',
+      color: 'red',
+      icon: 'i-heroicons-exclamation-triangle'
+    })
+    return
+  }
+
+  const sizes = parseSizes(props.variant.sizes)
+  const companyId = props.variant.product.company.id
+  const qty = 1
+
+  if (sizes.length > 0) {
     if (selectedSize.value === null) {
       toast.add({
         title: 'Size Missing',
         description: 'Please select a size before adding to cart.',
         color: 'red',
         icon: 'i-heroicons-exclamation-triangle',
-        actions: actions.value,
-        ui: {
-          actions: 'flex flex-wrap items-center gap-2 mt-3'
-        }
-      });
-      return;
+        actions: availableSizes.value.map((size, index) => ({
+          label: `Size: ${size.size}`,
+          click: () => {
+            selectedSize.value = index
+            addToCart()
+          },
+          class: 'hover:bg-gray-100 dark:hover:bg-gray-800'
+        })),
+        ui: { actions: 'flex flex-wrap items-center gap-2 mt-3' }
+      })
+      return
     }
 
-    const selectedItem = {
-      variantId: props.info.id,
-      size: props.info.sizes[selectedSize.value].size
-    };
+    const selected = sizes[selectedSize.value]
 
-    cartStore.addToCart(selectedItem);
+    await cartStore.addToCart(
+      { variantId: props.variant.id, size: selected.size, qty } as CartItem,
+      companyId,
+      auth.session.value?.id
+    )
 
-    toast.add({
-      title: 'Added to Cart',
-      description: `Size: ${selectedItem.size} added to cart.`,
-      color: 'green',
-      icon: 'i-heroicons-check-circle'
-    });
-
-    selectedSize.value = null;
+    showSuccessToast(`Size: ${selected.size} added to cart.`)
+    selectedSize.value = null
   } else {
-    cartStore.addToCart({
-      variantId: props.info.id,
-      size: null
-    });
-
-    toast.add({
-      title: 'Added to Cart',
-      description: `Variant: ${props.info.name} added to cart.`,
-      color: 'green',
-      icon: 'i-heroicons-check-circle'
-    });
+    await cartStore.addToCart(
+      { variantId: props.variant.id, size: null, qty } as CartItem,
+      companyId,
+      auth.session.value?.id
+    )
+    showSuccessToast(`Added to cart.`)
   }
-};
+}
 
-const addToLike = () => {
-  const likedItem = {
-    variantId: props.info.id
-  };
-
-  likeStore.toggleLike(likedItem);
-
+// Toast
+const showSuccessToast = (description: string) => {
   toast.add({
-    title: likeStore.isLiked(likedItem) ? 'Liked' : 'Unliked',
-    description: likeStore.isLiked(likedItem)
-      ? `${props.info.product.name} added to your likes.`
-      : `${props.info.product.name} removed from your likes.`,
-    color: likeStore.isLiked(likedItem) ? 'primary' : 'red',
-    icon: likeStore.isLiked(likedItem)
-      ? 'i-heroicons-heart-solid'
-      : 'i-heroicons-heart'
-  });
-};
+    title: 'Added to Cart',
+    description,
+    color: 'green',
+    icon: 'i-heroicons-check-circle',
+    timeout: 2000,
+    actions: [{
+      label: 'View Cart',
+      click: () => router.push(`${cleanFullPath}/checkout`)
+    }]
+  })
+}
 </script>
 
-
 <template>
-    <li
-      class="col-span-1 flex flex-col divide-y-2 divide-gray-200 dark:divide-gray-800 border-2 border-gray-200 dark:border-gray-800 rounded-lg shadow overflow-hidden cursor-pointer"
-      @click="navigateToProduct"
-    >
-      <!-- Image -->
-      <div class="relative w-full aspect-w-16 aspect-h-15">
-        <img
-          :src="`https://images.markit.co.in/${info.images[0]}`"
-          class="absolute inset-0 w-full h-full object-cover transition-opacity duration-500 opacity-100"
-          alt="Product Image"
-        />
+  <div 
+    class="group relative border rounded-lg overflow-hidden hover:shadow-md transition-shadow bg-white dark:bg-gray-800 h-full flex flex-col"
+    @mouseenter="isHovered = true"
+    @mouseleave="isHovered = false"
+  >
+    <!-- Product Image -->
+    <div @click="navigateToProduct" class="aspect-square bg-gray-100 dark:bg-gray-700 cursor-pointer relative overflow-hidden">
+      <img 
+        v-if="variant.mainImage" 
+        :src="variant.mainImage" 
+        :alt="variant.product.name"
+        class="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+      />
+      <div v-else class="w-full h-full flex items-center justify-center text-gray-400">
+        <UIcon name="i-heroicons-photo" class="w-12 h-12" />
       </div>
-  
-      <!-- Product Info -->
-      <div class="flex flex-1 flex-col p-3">
-        <h3 class="text-sm">
-          {{ info.product.name }}
-        </h3>
-        <h3 class="text-md font-medium">
-          $ {{ info.pprice }}
-        </h3>
+      
+      <!-- Badges -->
+      <div class="absolute top-2 left-2 flex flex-col items-start gap-1">
+        <span 
+          v-if="hasDiscount"
+          class="bg-red-500 text-white text-xs font-bold px-2 py-1 rounded"
+        >
+          {{ discountPercentage }}% OFF
+        </span>
+        <span 
+          v-if="isLowStock"
+          class="bg-amber-500 text-white text-xs font-bold px-2 py-1 rounded"
+        >
+          Low Stock
+        </span>
       </div>
-  
-      <!-- Action Buttons -->
-      <div>
-        <div class="-mt-px flex divide-x-2 divide-gray-200 dark:divide-gray-800">
-          <div class="-ml-px flex w-0 flex-1">
-            <div
-              class="relative inline-flex w-0 flex-1 items-center justify-center gap-x-3 rounded-br-lg border border-transparent py-2 text-sm font-semibold text-gray-900"
-              @click.stop="addToLike"
-            >
-              <Icon
-                :name="likeStore.isLiked({ variantId: info.id }) 
-                        ? 'heroicons:heart-solid' 
-                        : 'heroicons:heart'"
-                class="h-5 w-5 text-primary transition duration-300"
-                aria-hidden="true"
-              />
-            </div>
-          </div>
-  
-          <div class="-ml-px flex w-0 flex-1">
-            <div
-              class="relative inline-flex w-0 flex-1 items-center justify-center gap-x-3 rounded-br-lg border border-transparent py-2 text-sm font-semibold text-gray-900"
-              @click.stop="addToCart"
-            >
-              <Icon
-                name="heroicons:plus"
-                class="h-5 w-5 text-gray-400 text-primary"
-                aria-hidden="true"
-              />
-            </div>
+      
+      <!-- Out of Stock -->
+      <div 
+        v-if="isOutOfStock"
+        class="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center"
+      >
+        <span class="text-white font-bold text-sm bg-red-500 px-2 py-1 rounded">
+          Out of Stock
+        </span>
+      </div>
+    </div>
+
+    <!-- Product Info -->
+    <div class="p-4 flex-grow flex flex-col">
+      <h3 @click="navigateToProduct" class="font-medium cursor-pointer hover:text-primary line-clamp-2 mb-2">
+        {{ variant.product.name }}
+      </h3>
+      
+      <div class="mt-auto">
+        <!-- Price -->
+        <div class="flex justify-between items-center mb-3">
+          <div class="flex items-center gap-2">
+            <span class="font-bold text-primary">
+              ₹{{ currentPrice.toFixed(2) }}
+            </span>
+            <span v-if="hasDiscount" class="text-sm text-gray-500 dark:text-gray-400 line-through">
+              ₹{{ variant.sprice.toFixed(2) }}
+            </span>
           </div>
         </div>
+
+        <!-- Size Selection -->
+        <div v-if="availableSizes.length > 0" class="mb-3">
+          <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Select Size</div>
+          <div class="flex flex-wrap gap-1">
+            <UButton
+              v-for="(size, index) in availableSizes"
+              :key="size.size"
+              :label="size.size"
+              :variant="selectedSize === index ? 'solid' : 'outline'"
+              size="xs"
+              :ui="{ rounded: 'rounded-full' }"
+              @click.stop="selectedSize = index"
+            />
+          </div>
+        </div>
+
+        <!-- Add to Cart -->
+        <UButton
+          block
+          :label="isOutOfStock ? 'Out of Stock' : 'Add to Cart'"
+          :disabled="isOutOfStock"
+          @click.stop="addToCart"
+          class="mt-2"
+          :ui="{ 
+            disabled: 'cursor-not-allowed',
+            base: isOutOfStock ? 'bg-gray-300 dark:bg-gray-600' : ''
+          }"
+        />
       </div>
-    </li>
-  </template>
-  
+    </div>
+
+    <!-- Remove button (only shown when isLiked) -->
+    <UButton
+      v-if="isLiked"
+      icon="i-heroicons-trash"
+      color="red"
+      variant="solid"
+      size="xs"
+      :ui="{ rounded: 'rounded-full' }"
+      class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity z-10 shadow"
+      @click.stop="removeItem"
+    />
+  </div>
+</template>

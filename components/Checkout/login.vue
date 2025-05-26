@@ -2,7 +2,7 @@
    <script setup lang="ts">
 import { reactive, ref, computed, watch, onMounted, type Ref } from 'vue'
 import { auth } from '~/composables/firebase'
-import { useFindUniqueClient, useCreateClient, useUpdateClient, useFindFirstCompany, useFindFirstCartCompanyClient, useCreateCartCompanyClient } from '~/lib/hooks'
+import { useFindUniqueClient, useCreateClient, useUpdateClient, useFindFirstCompany, useFindFirstCartCompanyClient, useCreateCartCompanyClient, useFindFirstLikeCompanyClient, useCreateLikeCompanyClient } from '~/lib/hooks'
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from 'firebase/auth'
 import { getCountryCallingCode } from 'libphonenumber-js'
 import { useNuxtApp, useRoute } from 'nuxt/app'
@@ -31,6 +31,7 @@ const toast = useToast()
 const CreateClient = useCreateClient()
 const UpdateClient = useUpdateClient()
 const CreateCart = useCreateCartCompanyClient()
+const CreateLike = useCreateLikeCompanyClient()
 // const findCart = useFindFirstCartCompanyClient()
 const emit = defineEmits(['close'])
 
@@ -48,6 +49,7 @@ const recaptchaVerifier = ref<RecaptchaVerifier | null>(null)
 const resendCooldown = ref(0)
 const resendTimer = ref<NodeJS.Timeout | null>(null)
 const cartStore = useCartStore();
+const likeStore = useLikeStore();
 
 onMounted(async () => {
   try {
@@ -98,183 +100,14 @@ const findCart = useFindFirstCartCompanyClient({
   include: { cart: true }
 });
 
-// const login = async () => {
-//   if (!client.value && form.name) {
-//     try {
-//       await CreateClient.mutateAsync({
-//         data: {
-//           name: form.name,
-//           phone: form.phone,
-//           ...(form.email && { email: form.email })
-//         }
-//       })
-      
-//     } catch (err) {
-//       console.error(err)
-//       toast.add({
-//         title: 'Error creating client',
-//         description: 'Failed to create client account',
-//         color: 'red',
-//       })
-//     }
-//   }
+const findlike = useFindFirstLikeCompanyClient({
+  where: { 
+    companyId: company.value?.id,
+    clientId: client.value?.id 
+  },
+  include: { like: true }
+});
 
-//   if (client.value && !alreadyLinked.value && company.value) {
-//     try {
-//       await UpdateClient.mutateAsync({
-//         where: { id: client.value.id },
-//         data: {
-//           companies: {
-//             create: {
-//               company: {
-//                 connect: { id: company.value.id },
-//               }
-//             },
-//           },
-//         },
-//       })
-//     } catch (err) {
-//       console.error(err)
-//       toast.add({
-//         title: 'Error updating client',
-//         description: 'Failed to link client to company',
-//         color: 'red',
-//       })
-//     }
-//   }
-
-//   try {
-//     const res = await authClientLogin(form.phone)
-//     console.log(res)
-
-//     const { data: existingCart } = await findCart.refetch();
-
-//     if (!existingCart && company.value?.id && client.value?.id) {
-//       await CreateCart.mutateAsync({
-//         data: {
-//           client: {
-//             connect: { id: client.value.id }
-//           },
-//           company: {
-//             connect: { id: company.value.id }
-//           },
-//           cart: {
-//             create: {
-//               items: [] // Empty array for items
-//             }
-//           }
-//         }
-//       });
-//       console.log('Cart created successfully!');
-//       cartStore.mergeWithServerCart(client.value.id)
-//     } else {
-//       if (client.value?.id) {
-//         cartStore.mergeWithServerCart(client.value.id)
-//       }
-
-//       console.log('Cart already exists');
-//     }
-//   } catch (err) {
-//     console.error(err)
-//     toast.add({
-//       title: 'Login failed',
-//       description: 'Failed to authenticate',
-//       color: 'red',
-//     })
-//   }
-// }
-
-// const login = async () => {
-//   // Create client if needed
-//   if (!client.value && form.name) {
-//     try {
-//       await CreateClient.mutateAsync({
-//         data: {
-//           name: form.name,
-//           phone: form.phone,
-//           ...(form.email && { email: form.email })
-//         }
-//       });
-//       await refetch(); 
-//     } catch (err) {
-//       console.error(err);
-//       toast.add({
-//         title: 'Error creating client',
-//         description: 'Failed to create client account',
-//         color: 'red',
-//       });
-//       return; 
-//     }
-//   }
-
-//   // Link to company if needed
-//   if (client.value && !alreadyLinked.value && company.value) {
-//     try {
-//       await UpdateClient.mutateAsync({
-//         where: { id: client.value.id },
-//         data: {
-//           companies: {
-//             create: {
-//               company: {
-//                 connect: { id: company.value.id },
-//               }
-//             },
-//           },
-//         },
-//       });
-//     } catch (err) {
-//       console.error(err);
-//       toast.add({
-//         title: 'Error updating client',
-//         description: 'Failed to link client to company',
-//         color: 'red',
-//       });
-//     }
-//   }
-
-//   try {
-//     // Authenticate
-//     await authClientLogin(form.phone);
-    
-//     // Handle cart only if we have a valid client and company
-//     if (client.value?.id && company.value?.id) {
-//       const { data: existingCart } = await findCart.refetch();
-      
-//       if (!existingCart) {
-//         // Create new cart if none exists
-//         await CreateCart.mutateAsync({
-//           data: {
-//             client: { connect: { id: client.value.id } },
-//             company: { connect: { id: company.value.id } },
-//             cart: { create: { items: [] } }
-//           }
-//         });
-//       }
-      
-//       // Merge carts only if we have items in local cart
-//       if (cartStore.items.length > 0) {
-//         await cartStore.mergeWithServerCart(client.value.id);
-//       } else {
-//         // If no local items, fetch server cart
-//         await cartStore._fetchCart(company.value.id);
-//       }
-//     }
-    
-//     emit('close');
-//     toast.add({
-//       title: 'Login successful',
-//       id: 'login-success',
-//       color: 'green',
-//     });
-//   } catch (err) {
-//     console.error(err);
-//     toast.add({
-//       title: 'Login failed',
-//       description: 'Failed to authenticate',
-//       color: 'red',
-//     });
-//   }
-// };
 
 const login = async () => {
   // Create client if needed
@@ -332,6 +165,7 @@ const login = async () => {
     if (client.value?.id && company.value?.id) {
       // Check for existing cart
       const { data: existingCart } = await findCart.refetch();
+      const { data: existingLike } = await findlike.refetch();
       
       if (!existingCart) {
         // Create new cart if none exists
@@ -342,11 +176,50 @@ const login = async () => {
             cart: { create: { items: [] } }
           }
         });
-      }
+      } else {if(!existingLike){
+          await CreateLike.mutateAsync({
+          data: {
+            client: { connect: { id: client.value.id } },
+            company: { connect: { id: company.value.id } },
+            like: { create: {  } }
+          }
+        });
+      }}
       
-     
-        await cartStore._mergeWithServerCart(client.value.id,company.value?.id);
-      
+try {
+  // Merge likes first
+  await likeStore._mergeWithServerLikes(client.value.id, company.value?.id);
+  
+  // Then merge cart
+  await cartStore._mergeWithServerCart(client.value.id, company.value?.id);
+  
+  toast.add({
+    title: 'Sync successful',
+    description: 'Your likes and cart have been synced with the server',
+    color: 'green',
+    icon: 'i-heroicons-check-circle',
+  });
+} catch (error) {
+  console.error('Sync failed:', error);
+  
+  toast.add({
+    title: 'Sync error',
+    description: 'Failed to sync your data with the server',
+    color: 'red',
+    icon: 'i-heroicons-exclamation-triangle',
+  });
+  
+  // Optionally add more specific error handling
+  if (error instanceof Error) {
+    toast.add({
+      title: 'Error details',
+      description: error.message,
+      color: 'orange',
+      icon: 'i-heroicons-information-circle',
+      timeout: 5000,
+    });
+  }
+}
     }
     
     emit('close');

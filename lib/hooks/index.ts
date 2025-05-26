@@ -41,6 +41,8 @@ export * from './promo-code';
 export * from './client-promo-code';
 export * from './cart';
 export * from './cart-company-client';
+export * from './like';
+export * from './like-company-client';
 export { getQueryKey } from '@zenstackhq/tanstack-query/runtime-v5';
 export { VueQueryContextKey, provideHooksContext } from '@zenstackhq/tanstack-query/runtime-v5/vue';
 export { default as metadata } from './__model_meta';
