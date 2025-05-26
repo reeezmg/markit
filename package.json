@@ -16,7 +16,7 @@
         "electron:build-app": "cross-env ELECTRON=true NODE_ENV=production nuxt build",
         "electron:build-binary": "electron-builder",
         "electron:serve": "cross-env ELECTRON=true NODE_ENV=production nuxt build && electron .",
-        "postinstall": "electron-builder install-app-deps"
+         "postinstall": "nuxt prepare"
 
     },
     "dependencies": {
