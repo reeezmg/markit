@@ -2,15 +2,22 @@
     "name": "nuxt-ui-pro-template-dashboard",
     "private": true,
     "type": "module",
+    "main": "electron/main.js",
     "version": "0.0.1-prealpha.1",
     "scripts": {
         "dev": "nuxt dev",
         "build": "zenstack generate --output ./zenstack && nuxt build",
         "generate": "nuxt generate",
         "preview": "nuxt preview",
-        "postinstall": "nuxt prepare",
         "lint": "eslint .",
-        "typecheck": "nuxt typecheck"
+        "typecheck": "nuxt typecheck",
+        "electron:dev": "cross-env ELECTRON=true NODE_ENV=development nuxt dev & electron .",
+        "electron:build": "npm run electron:build-app && npm run electron:build-binary",
+        "electron:build-app": "cross-env ELECTRON=true NODE_ENV=production nuxt build",
+        "electron:build-binary": "electron-builder",
+        "electron:serve": "cross-env ELECTRON=true NODE_ENV=production nuxt build && electron .",
+        "postinstall": "electron-builder install-app-deps"
+
     },
     "dependencies": {
         "@aws-sdk/client-s3": "^3.577.0",
@@ -46,7 +53,6 @@
         "date-fns": "^3.6.0",
         "dayjs": "^1.11.13",
         "echarts": "^5.6.0",
-        "electric-sql": "^0.12.1",
         "file-saver": "^2.0.5",
         "firebase": "^11.6.0",
         "form-data": "^4.0.0",
@@ -100,5 +106,42 @@
         "prisma": "^5.22.0",
         "vue-tsc": "^2.0.19",
         "wait-on": "^8.0.3"
+    },
+
+    "build": {
+    "appId": "com.yourcompany.markit",
+    "productName": "Markit",
+    "copyright": "Copyright © 2023 Your Company",
+    "files": [
+      "dist/**/*",
+      "electron/**/*",
+      ".output/**/*",
+      "node_modules/**/*"
+    ],
+    "directories": {
+      "output": "release"
+    },
+    "extraResources": [
+      {
+        "from": ".output/server",
+        "to": "app/server"
+      },
+      {
+        "from": ".output/public",
+        "to": "app/public"
+      }
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": "dmg",
+      "icon": "assets/icon.icns"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "assets/icon.png"
     }
+  }
 }
