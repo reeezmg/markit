@@ -33,12 +33,12 @@ const isNewProduct = computed(() => {
 });
 
 const isLowStock = computed(() => {
-  const qty = props.variant.qty ?? 0; // Provide default value if null
+  const qty = props.variant.qty ?? 0;
   return qty > 0 && qty <= 5;
 });
 
 const isOutOfStock = computed(() => {
-  const qty = props.variant.qty ?? 0; // Provide default value if null
+  const qty = props.variant.qty ?? 0;
   return qty === 0;
 });
 
@@ -75,7 +75,7 @@ function parseSizes(sizes: unknown): VariantSize[] {
   if (Array.isArray(sizes)) {
     return sizes.map(size => ({
       size: size.size || size,
-      qty: size.qty || (isOutOfStock.value ? 0 : 1) // Default to 1 if in stock, 0 if out of stock
+      qty: size.qty || (isOutOfStock.value ? 0 : 1)
     }));
   }
   return [];
@@ -95,17 +95,22 @@ const navigateToProduct = () => {
 };
 
 // Variant carousel
-const showNextVariant = () => {
+const showNextVariant = (e: Event) => {
+  e.stopPropagation();
   currentVariantIndex.value = (currentVariantIndex.value + 1) % variants.value.length;
 };
-const showPrevVariant = () => {
+
+const showPrevVariant = (e: Event) => {
+  e.stopPropagation();
   currentVariantIndex.value = (currentVariantIndex.value - 1 + variants.value.length) % variants.value.length;
 };
 
 // Quick view
 const triggerQuickView = (e: Event) => {
   e.stopPropagation();
-  emit('quick-view', props.variant);
+  emit('quick-view', props.variant, selectedSize.value !== null 
+    ? availableSizes.value[selectedSize.value].size 
+    : null);
 };
 
 // Cart actions
@@ -151,7 +156,8 @@ const addToCart = async (e?: Event) => {
 
     await cartStore.addToCart(
       { variantId: variant.id, size: selected.size, qty } as CartItem,
-      companyId
+      companyId,
+      useClientAuth().session.value?.id
     );
 
     showSuccessToast(`Size: ${selected.size} added to cart.`);
@@ -159,27 +165,43 @@ const addToCart = async (e?: Event) => {
   } else {
     await cartStore.addToCart(
       { variantId: variant.id, size: null, qty } as CartItem,
-      companyId
+      companyId,
+      useClientAuth().session.value?.id
     );
     showSuccessToast(`Added to cart.`);
   }
 };
 
 // Like
-const toggleLike = (e: Event) => {
+const toggleLike = async (e: Event) => {
   e.stopPropagation();
   const likedItem = { variantId: props.variant.id };
-  const isLiked = likeStore.toggleLike(likedItem);
-  console.log(isLiked)
+  const companyId = props.variant.companyId;
+  
+  try {
+    const isLiked = await likeStore.toggleLike(
+      likedItem, 
+      companyId,
+      useClientAuth().session.value?.id
+    );
 
-  toast.add({
-    title: isLiked ? 'Liked' : 'Unliked',
-    description: isLiked
-      ? `${product.value.name} added to your likes.`
-      : `${product.value.name} removed from your likes.`,
-    color: isLiked ? 'green' : 'red',
-    icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
-  });
+    toast.add({
+      title: isLiked ? 'Liked' : 'Unliked',
+      description: isLiked
+        ? `${product.value.name} added to your likes.`
+        : `${product.value.name} removed from your likes.`,
+      color: isLiked ? 'green' : 'red',
+      icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
+    });
+  } catch (error) {
+    console.error('Failed to toggle like:', error);
+    toast.add({
+      title: 'Error',
+      description: 'Failed to update like status',
+      color: 'red',
+      icon: 'i-heroicons-exclamation-triangle',
+    });
+  }
 };
 
 // Toast

@@ -45,15 +45,17 @@ export interface Range {
 export interface CartState {
     items: CartItem[];     
     companyId: string;
-    isMerging: boolean;
     isLoading: boolean;
     sessionId: string;
+    lastSynced: number;
+    isHydrated: boolean;
 }
 
 export interface CartItem {
     variantId: string;
     size: string | null;
     qty: number;
+
 }
 
 export type LikedProduct = {
@@ -62,6 +64,11 @@ export type LikedProduct = {
   
   export type LikeState = {
     liked: LikedProduct[];
+    companyId: string;
+    isLoading: boolean;
+    sessionId: string;
+    lastSynced: number;
+    isHydrated: boolean;
   };
 
 export interface Message {

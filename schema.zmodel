@@ -84,6 +84,18 @@ enum PayableStatus {
   CANCELLED
 }
 
+model DistributorCompany {
+    distributorId String @map("distributor_id")
+    companyId     String @map("company_id")
+    distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
+    company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    distributorPayments DistributorPayment[]
+    distributorCredits DistributorCredit[]
+    purchaseOrders   PurchaseOrder[]
+    @@id([distributorId, companyId])
+    @@allow('read,create, update, delete', auth() != null )
+    @@map('distributor_companies')
+}
 
 model Company extends Base {
     name        String
@@ -133,6 +145,7 @@ model Company extends Base {
     distributor   DistributorCompany[]
     billCounter Int @default(0) @map("bill_counter")
     barcodeCounter Int @default(1) @map("barcode_counter") 
+    likeCompanies LikeCompanyClient[]
     
     @@allow('create', auth() != null && status)
     @@allow('update', users?[user == auth()])
@@ -140,6 +153,8 @@ model Company extends Base {
 
     @@map('companies')
 }
+
+
 
 model Distributor extends Base {
     name        String
@@ -261,6 +276,7 @@ model Client extends Base {
     closePipeline     Pipeline?        @relation("PipelineCloseClients", fields: [closePipelineId], references: [id])
     closePipelineId   String?         @map("close_pipeline_id")
     notifications  Notification[]
+    likeCompanies LikeCompanyClient[]
     
     @@allow('read, create, update, delete', true)
 
@@ -657,18 +673,6 @@ model UserClient {
     @@map('user_clients')
 }
 
-model DistributorCompany {
-    distributorId String @map("distributor_id")
-    companyId     String @map("company_id")
-    distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
-    company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-    distributorPayments DistributorPayment[]
-    distributorCredits DistributorCredit[]
-    purchaseOrders   PurchaseOrder[]
-    @@id([distributorId, companyId])
-    @@allow('read,create, update, delete', auth() != null )
-    @@map('distributor_companies')
-}
 
 model VariantSizeBarcode {
     id         Int @id @default(autoincrement())
@@ -786,3 +790,32 @@ model CartCompanyClient {
   @@allow('read, create, update, delete', true)
   @@map("cart_company_client")
 } 
+
+model Like extends Base{
+  variantIds String[] @default([])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Many-to-one relationship with LikeCompanyClient
+  clientCompany LikeCompanyClient?
+
+  @@allow('read, create, update, delete', true)
+  @@map("likes")
+   @@index([variantIds], type: Gin)
+}
+
+model LikeCompanyClient {
+  clientId  String
+  companyId String
+  likeId    String @unique
+
+  // Relations
+  client  Client  @relation(fields: [clientId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+  like    Like    @relation(fields: [likeId], references: [id])
+
+  // Composite unique constraint ensuring one like collection per client-company pair
+  @@unique([clientId, companyId])
+  @@allow('read, create, update, delete', true)
+  @@map("like_company_client")
+}

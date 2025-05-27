@@ -27,6 +27,7 @@ export default defineNuxtConfig({
       '@nuxt/image',
       'nuxt-icon',
       'nuxt-headlessui',
+
       '@nuxtjs/tailwindcss',
       [
           '@pinia/nuxt',
@@ -34,6 +35,10 @@ export default defineNuxtConfig({
               autoImports: ['defineStore', 'acceptHMRUpdate'],
           },
       ],
+  ],
+  plugins: [
+    '~/plugins/like.client.ts',
+    '~/plugins/cart.client.ts'
   ],
 
   imports: {
@@ -45,6 +50,7 @@ export default defineNuxtConfig({
       icons: ['heroicons', 'simple-icons'],
       safelistColors: ['primary', 'red', 'orange', 'green'],
   },
+
 
   devtools: {
       enabled: true,

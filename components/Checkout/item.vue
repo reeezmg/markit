@@ -1,4 +1,3 @@
-
 <script setup lang="ts">
 import { useFindManyVariant } from '~/lib/hooks';
 import { storeToRefs } from 'pinia';
@@ -6,21 +5,15 @@ import { ref, computed, watchEffect } from 'vue';
 import dayjs from 'dayjs';
 import type { CartItem } from '~/types';
 import { useToast } from '#imports'
-
 import type { JsonValue } from '@prisma/client/runtime/library';
 
 const loading = ref(false)
 const toast = useToast()
-
-
 const cartStore = useCartStore();
 const { items } = storeToRefs(cartStore) as { items: Ref<CartItem[]> }
 const emit = defineEmits(['update']);
 
 const variantIds = [...new Set(items.value.map((item) => item.variantId))];
-
-
-
 
 const {
     data: variants,
@@ -52,6 +45,11 @@ const {
                 },
             },
         },
+        company: {
+            select: {
+                id: true
+            }
+        }
     },
 });
 
@@ -70,15 +68,14 @@ const shipping = computed(() => {
 const subtotal = computed(() => {
     if (!variants.value) return 0.0;
     if (checkoutOption.value.value === 'TRY_AT_HOME' || checkoutOption.value.value === 'BOOKING') return 0.0;
+    
     const total = items.value.reduce((acc, cartItem) => {
         const product = variants.value.find((p) => p.id === cartItem.variantId);
-
         if (product) {
             const qty = cartItem.qty || 1;
             const price = product.sprice || 0;
             acc += price * qty;
         }
-
         return acc;
     }, 0);
 
@@ -101,58 +98,87 @@ const totalDiscount = computed(() => {
 
 const total = computed(() => {
     if (!variants.value) return 0.0;
-
-    const totalValue = subtotal.value + shipping.value - totalDiscount.value;
-    return parseFloat(totalValue.toFixed(2));
+    return parseFloat((subtotal.value + shipping.value - totalDiscount.value).toFixed(2));
 });
 
 const applyPromoCode = async () => {
-  if (!promoCode.value.trim()) {
-    return toast.add({ title: 'Enter a promo code', color: 'red' })
-  }
-
-  loading.value = true
-  const toastId = toast.add({ title: 'Verifying promo code…', color: 'blue', timeout: 0 })
-
-  try {
-    const res = await $fetch<{ discountPercent?: number; error?: string }>(
-      '/api/applyPromoCode',
-      {
-        method: 'POST',
-        body: { code: promoCode.value.trim()  },
-      }
-    )
-
-    toast.remove(toastId.id)
-
-    if (res.error) {
-      toast.add({ title: res.error, color: 'red' })
-    } else {
-      toast.add({
-        title: `Promo applied! ${res.discountPercent}% off`,
-        color: 'green',
-      })
-      // apply the discount to your cart total…
+    if (!promoCode.value.trim()) {
+        return toast.add({ title: 'Enter a promo code', color: 'red' })
     }
-  } catch (err) {
-    toast.remove(toastId.id)
-    toast.add({ title: 'Network error', color: 'red' })
-  } finally {
-    loading.value = false
-  }
-}
 
+    loading.value = true
+    const toastId = toast.add({ title: 'Verifying promo code...', color: 'blue', timeout: 0 })
+
+    try {
+        const res = await $fetch<{ discountPercent?: number; error?: string }>(
+            '/api/applyPromoCode',
+            {
+                method: 'POST',
+                body: { code: promoCode.value.trim() },
+            }
+        )
+
+        toast.remove(toastId.id)
+
+        if (res.error) {
+            toast.add({ title: res.error, color: 'red' })
+        } else {
+            toast.add({
+                title: `Promo applied! ${res.discountPercent}% off`,
+                color: 'green',
+            })
+            discount.value = res.discountPercent || 0;
+        }
+    } catch (err) {
+        toast.remove(toastId.id)
+        toast.add({ title: 'Network error', color: 'red' })
+    } finally {
+        loading.value = false
+    }
+}
 
 const removeAll = (cartItem: CartItem) => {
     cartStore.removeFromCart(cartItem);
 };
 
 const increment = (cartItem: CartItem) => {
-    cartStore.incrementQty(cartItem);
+    const companyId = variants.value?.find(v => v.id === cartItem.variantId)?.company?.id;
+    if (!companyId) {
+        toast.add({ title: 'Could not determine company', color: 'red' });
+        return;
+    }
+    cartStore.addToCart(
+        { 
+            ...cartItem,
+            qty: 1
+        },
+        companyId
+    );
 };
 
 const decrement = (cartItem: CartItem) => {
-    cartStore.decrementQty(cartItem);
+    const companyId = variants.value?.find(v => v.id === cartItem.variantId)?.company?.id;
+    if (!companyId) {
+        toast.add({ title: 'Could not determine company', color: 'red' });
+        return;
+    }
+    
+    // Find existing item to check quantity
+    const existingItem = cartStore.items.find(
+        i => i.variantId === cartItem.variantId && i.size === cartItem.size
+    );
+    
+    if (existingItem && (existingItem.qty || 1) > 1) {
+        cartStore.addToCart(
+            { 
+                ...cartItem,
+                qty: -1
+            },
+            companyId
+        );
+    } else {
+        cartStore.removeFromCart(cartItem);
+    }
 };
 
 const availableDates = computed(() => [
@@ -201,10 +227,10 @@ const orderItems = computed(() => {
             vName,
             pName,
             qty,
-            sprice,
+            sprice: parseFloat(sprice.toFixed(2)),
             discount,
             tax,
-            value,
+            value: parseFloat(value.toFixed(2)),
             categoryId,
             variantId,
             sizes,
@@ -221,17 +247,13 @@ watchEffect(() => {
             subtotal: subtotal.value,
             discount: totalDiscount.value,
             deliveryFees: shipping.value,
-            paymentMethod: paymentMethod.value.value ,
+            paymentMethod: paymentMethod.value.value,
             checkoutOption: checkoutOption.value.value,
             bookingDate: checkoutOption.value.value === 'BOOKING' ? selectedDate.value : null,
             items: orderItems.value
         });
     }
 });
-
-function n(value: { id: string; name: string; sprice: number; qty: number | null; discount: number | null; dprice: number | null; sizes: JsonValue; images: string[]; product: { name: string; category: { id: string; } | null; }; company: { id: string; }; } & { $optimistic?: boolean | undefined; }, index: number, array: ({ id: string; name: string; sprice: number; qty: number | null; discount: number | null; dprice: number | null; sizes: JsonValue; images: string[]; product: { name: string; category: { id: string; } | null; }; company: { id: string; }; } & { $optimistic?: boolean | undefined; })[]): value is { id: string; name: string; sprice: number; qty: number | null; discount: number | null; dprice: number | null; sizes: JsonValue; images: string[]; product: { name: string; category: { id: string; } | null; }; company: { id: string; }; } & { $optimistic?: boolean | undefined; } {
-    throw new Error('Function not implemented.');
-}
 </script>
 
 <template>
@@ -261,15 +283,16 @@ function n(value: { id: string; name: string; sprice: number; qty: number | null
                     <div class="flex items-center justify-between pt-2">
                         <div>
                             <p class="text-sm font-medium">
-                                    <span v-if="variants?.find((p) => p.id === cartItem.variantId)?.discount">
-                                          <del class="text-gray-400">₹{{ variants?.find((p) => p.id === cartItem.variantId)?.sprice }}</del>
-                                          <span class="ml-1 text-green-500">
-                                            ₹{{ (variants?.find((p) => p.id === cartItem.variantId)?.sprice || 0) * (1 - ((variants?.find((p) => p.id === cartItem.variantId)?.discount || 0) / 100)) }}
-                                          </span>
-                                        </span>
-
+                                <span v-if="variants?.find((p) => p.id === cartItem.variantId)?.discount">
+                                    <del class="text-gray-400">₹{{ (variants?.find((p) => p.id === cartItem.variantId)?.sprice || 0).toFixed(2) }}</del>
+                                    <span class="ml-1 text-green-500">
+                                        ₹{{ ((variants?.find((p) => p.id === cartItem.variantId)?.sprice || 0) * 
+                                            (1 - ((variants?.find((p) => p.id === cartItem.variantId)?.discount || 0) / 100))
+                                        ).toFixed(2) }}
+                                    </span>
+                                </span>
                                 <span v-else>
-                                    ₹{{ variants?.find((p) => p.id === cartItem.variantId)?.sprice }}
+                                    ₹{{ (variants?.find((p) => p.id === cartItem.variantId)?.sprice || 0).toFixed(2) }}
                                 </span>
                             </p>
                         </div>
@@ -294,23 +317,21 @@ function n(value: { id: string; name: string; sprice: number; qty: number | null
         </div>
 
         <div v-if="checkoutOption.value !== 'BOOKING'" class="flex items-end mb-5">
-  <UFormGroup class="flex-grow" label="Promo Code" name="promoCode">
-    <UInput
-      v-model="promoCode"
-      placeholder="Enter Promo Code"
-      @keydown.enter.prevent="applyPromoCode"
-    />
-  </UFormGroup>
-
-  <UButton
-    class="ml-3"
-    :label="loading ? 'Applying...' : 'Apply'"
-    :disabled="!promoCode || loading"
-    :loading="loading"
-    @click="applyPromoCode"
-  />
-</div>
-
+            <UFormGroup class="flex-grow" label="Promo Code" name="promoCode">
+                <UInput
+                    v-model="promoCode"
+                    placeholder="Enter Promo Code"
+                    @keydown.enter.prevent="applyPromoCode"
+                />
+            </UFormGroup>
+            <UButton
+                class="ml-3"
+                :label="loading ? 'Applying...' : 'Apply'"
+                :disabled="!promoCode || loading"
+                :loading="loading"
+                @click="applyPromoCode"
+            />
+        </div>
 
         <UFormGroup v-if="checkoutOption.value !== 'BOOKING'" label="Payment" name="paymentMethods" class="mb-5">
             <USelectMenu v-model="paymentMethod" :options="paymentMethods" />
@@ -319,19 +340,19 @@ function n(value: { id: string; name: string; sprice: number; qty: number | null
         <dl v-if="checkoutOption.value !== 'BOOKING'" class="rounded-lg border dark:border-gray-800 border-gray-200 space-y-6 border-t px-4 py-6 sm:px-6 mt-5">
             <div class="flex items-center justify-between">
                 <dt class="text-sm">Subtotal</dt>
-                <dd class="text-sm font-medium">₹{{ subtotal }}</dd>
+                <dd class="text-sm font-medium">₹{{ subtotal.toFixed(2) }}</dd>
             </div>
             <div class="flex items-center justify-between">
                 <dt class="text-sm">Shipping</dt>
-                <dd class="text-sm font-medium">₹{{ shipping }}</dd>
+                <dd class="text-sm font-medium">₹{{ shipping.toFixed(2) }}</dd>
             </div>
             <div class="flex items-center justify-between">
                 <dt class="text-sm">Discount</dt>
-                <dd class="text-sm font-medium">- ₹{{ totalDiscount }}</dd>
+                <dd class="text-sm font-medium">- ₹{{ totalDiscount.toFixed(2) }}</dd>
             </div>
             <div class="flex items-center justify-between border-t pt-6">
                 <dt class="text-base font-medium">Total</dt>
-                <dd class="text-base font-medium">₹{{ total }}</dd>
+                <dd class="text-base font-medium">₹{{ total.toFixed(2) }}</dd>
             </div>
         </dl>
     </div>

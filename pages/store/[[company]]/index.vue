@@ -1,787 +1,3 @@
-<!-- <script setup lang="ts">
-import { ref, computed, watch } from 'vue'
-import { useDebounceFn } from '@vueuse/core'
-import type { VariantWithProduct } from '~/types/store'
-import type { CartItem } from '~/types'
-
-// Lazy load hooks to ensure client-side only
-const { useFindManyProduct, useFindManyCategory } = await import('~/lib/hooks')
-
-definePageMeta({
-  auth: false,
-  layout: 'store',
-})
-
-useHead({ 
-  title: 'Store Home',
-  link: [
-    { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap' }
-  ]
-})
-
-// Initialization
-const route = useRoute()
-const router = useRouter()
-const cartStore = useCartStore()
-const likeStore = useLikeStore()
-const toast = useToast()
-
-// State
-const search = ref('')
-const sortOrder = ref('newest')
-const selectedCategory = ref<any>(null)
-const page = ref(1)
-const pageSize = 12
-const loadingMore = ref(false)
-const hasMore = ref(true)
-const categories = ref<any[]>([])
-const showQuickView = ref(false)
-const quickViewProduct = ref<any>(null)
-
-//for mobile
-const isMobileFiltersOpen = ref(false)
-const isMobileMenuOpen = ref(false)
-
-// Sort options
-const sortOptions = ref([
-  { value: 'newest', label: 'Newest' },
-  { value: 'price-low', label: 'Price: Low to High' },
-  { value: 'price-high', label: 'Price: High to Low' }
-])
-
-// Helper functions
-const getCompanyName = (): string => {
-  if (!route.params.company) return ''
-  return Array.isArray(route.params.company) ? route.params.company[0] : route.params.company
-}
-
-const getQueryArgs = () => {
-  const companyName = getCompanyName()
-  
-  const baseConditions: any[] = [
-    { status: true },
-    { company: { name: { equals: companyName || '' } } },
-    { variants: { some: { images: { isEmpty: false } } } }
-  ]
-
-  if (search.value) baseConditions.push({ name: { contains: search.value } })
-  if (selectedCategory.value) baseConditions.push({ category: { id: selectedCategory.value.id } })
-
-  let orderBy = {}
-  switch (sortOrder.value) {
-    case 'price-low':
-      orderBy = { createdAt: 'desc' }
-      break
-    case 'price-high':
-      orderBy = { createdAt: 'desc' }
-      break
-    default:
-      orderBy = { createdAt: 'desc' }
-  }
-
-  return {
-    where: { AND: baseConditions },
-    include: {
-      company: true,
-      variants: {
-        include: {
-          items: {
-            where: { status: 'in_stock' },
-            select: { id: true }
-          }
-        }
-      },
-      category: true
-    },
-    skip: (page.value - 1) * pageSize,
-    take: pageSize,
-    orderBy
-  }
-}
-
-const queryArgs = computed(() => getQueryArgs())
-
-// Product queries
-const { 
-  data: productsData, 
-  isLoading, 
-  error,
-  refetch
-} = useFindManyProduct(queryArgs)
-
-const { data: trendingData } = useFindManyProduct({
-  where: {
-    AND: [
-      { status: true },
-      { company: { name: { equals: getCompanyName() } } },
-      { variants: { some: { images: { isEmpty: false } } } }
-    ]
-  },
-  include: { 
-    company: true, 
-    variants: {
-      include: {
-        items: {
-          where: { status: 'in_stock' },
-          select: { id: true }
-        }
-      }
-    } 
-  },
-  take: 8,
-  orderBy: { createdAt: 'desc' }
-})
-
-const { data: categoriesData } = useFindManyCategory({
-  where: { 
-    company: { name: { equals: getCompanyName() } },
-    status: true 
-  },
-  include: {
-    products: {
-      where: { status: true },
-      include: { 
-        variants: {
-          include: {
-            items: {
-              where: { status: 'in_stock' },
-              select: { id: true }
-            }
-          }
-        } 
-      },
-      take: 4
-    }
-  }
-})
-
-// Reactive data
-const allProducts = computed(() => productsData.value || [])
-const trendingProducts = computed(() => trendingData.value || [])
-const allCategories = computed(() => categoriesData.value || [])
-
-// Enhanced flat variants with client-side sorting
-const flatVariants = computed(() => {
-  let variants = allProducts.value.flatMap(product =>
-    product.variants.map((variant: any) => ({
-      ...variant,
-      product,
-      availableQty: variant.items?.length || 0,
-      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
-    }))
-  ) || []
-
-  // Client-side sorting
-  switch (sortOrder.value) {
-    case 'price-low':
-      return variants.slice().sort((a, b) => (a.dprice || a.sprice || 0) - (b.dprice || b.sprice || 0))
-    case 'price-high':
-      return variants.slice().sort((a, b) => (b.dprice || b.sprice || 0) - (a.dprice || a.sprice || 0))
-    default:
-      return variants
-  }
-})
-
-const trendingVariants = computed<VariantWithProduct[]>(() => {
-  return trendingProducts.value.flatMap(product => 
-    product.variants.map((variant: any) => ({
-      ...variant,
-      product,
-      availableQty: variant.items?.length || 0,
-      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
-    }))
-  ) || []
-})
-
-// Load more function
-const loadMore = async () => {
-  if (loadingMore.value || !hasMore.value) return
-  loadingMore.value = true
-  page.value += 1
-  try {
-    await refetch()
-  } finally {
-    loadingMore.value = false
-  }
-}
-
-// Watch for changes
-watch(productsData, (newData) => {
-  if (!newData) return
-  hasMore.value = newData.length >= pageSize
-})
-
-// Filter logic
-const filterByCategory = (category: any) => {
-  selectedCategory.value = category
-  page.value = 1
-}
-
-const clearCategoryFilter = () => {
-  selectedCategory.value = null
-  page.value = 1
-}
-
-// Quick view
-const openQuickView = (variant: VariantWithProduct) => {
-  quickViewProduct.value = {
-    ...variant,
-    mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
-  }
-  showQuickView.value = true
-}
-
-const toggleLikeInQuickView = (variant: VariantWithProduct) => {
-  const likedItem = { variantId: variant.id }
-  const isLiked = likeStore.toggleLike(likedItem) ?? false
-
-  toast.add({
-    title: isLiked ? 'Liked' : 'Unliked',
-    description: isLiked
-      ? `${variant.product.name} added to your likes.`
-      : `${variant.product.name} removed from your likes.`,
-    color: isLiked ? 'primary' : 'red',
-    icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
-  })
-}
-
-const addToCartFromQuickView = async (variant: VariantWithProduct) => {
-  const qty = variant.qty ?? 0
-  if (qty === 0) {
-    toast.add({
-      title: 'Out of Stock',
-      description: 'This product is currently out of stock',
-      color: 'red',
-      icon: 'i-heroicons-exclamation-triangle'
-    })
-    return
-  }
-
-  const companyId = variant.companyId
-  await cartStore.addToCart(
-    { variantId: variant.id, size: null, qty: 1 } as CartItem,
-    companyId
-  )
-
-  showQuickView.value = false
-  toast.add({
-    title: 'Added to Cart',
-    description: `${variant.product.name} added to your cart.`,
-    color: 'green',
-    icon: 'i-heroicons-check-circle',
-    timeout: 2000,
-    actions: [{
-      label: 'View Cart',
-      click: () => router.push(`${route.fullPath.replace(/\/$/, '')}/checkout`)
-    }]
-  })
-}
-
-// Scroll handler
-const handleScroll = useDebounceFn(() => {
-  const scrollPosition = window.innerHeight + window.scrollY
-  const pageHeight = document.documentElement.scrollHeight - 500
-  if (scrollPosition >= pageHeight && !loadingMore.value) loadMore()
-}, 200)
-
-onMounted(() => {
-  window.addEventListener('scroll', handleScroll)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('scroll', handleScroll)
-})
-</script>
-
-<template>
-  <UDashboardPage>
-    <UDashboardPanel grow>
-      
-
-      <UDashboardNavbar :title="getCompanyName()">
-        <template #right>
-          <div class="flex flex-row items-end justify-end">
-            <UButton 
-              v-if="!$authClient.session.value?.id" 
-              @click="$authClient.updateSession()"
-              class="px-5 me-3 flex items-center justify-center rounded-md border border-transparent text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
-            >
-              Login
-            </UButton>
-            <UTooltip class="me-3" text="Cart" :shortcuts="['C']">
-              <NuxtLink :to="`${route.fullPath}/checkout`">
-                <UChip :text="cartStore.cartItemCount" color="red" size="2xl">
-                  <UIcon name="i-heroicons-shopping-cart" class="w-5 h-5" />
-                </UChip>
-              </NuxtLink>
-            </UTooltip>
-            <UTooltip class="me-3" text="Wishlist" :shortcuts="['W']">
-              <NuxtLink :to="`${route.fullPath}/wishlist`">
-                <UChip :text="likeStore.likedCount" color="red" size="2xl">
-                  <UIcon name="i-heroicons-heart" class="w-5 h-5" />
-                </UChip>
-              </NuxtLink>
-            </UTooltip>
-          </div>
-        </template>
-      </UDashboardNavbar>
-
-      <UDashboardToolbar class="sticky top-0 z-10 bg-white/80 dark:bg-gray-900/80 backdrop-blur-sm">
-  <template #left>
-   
-    <UButton
-      icon="i-heroicons-bars-3"
-      color="gray"
-      variant="ghost"
-      class="md:hidden mr-2"
-      @click="isMobileMenuOpen = !isMobileMenuOpen"
-    />
-
-   
-    <UInput
-      v-model="search"
-      icon="i-heroicons-magnifying-glass-20-solid"
-      placeholder="Search products..."
-      trailing
-      class="w-full md:w-64"
-      @keyup.enter="page = 1"
-    >
-      <template #trailing>
-        <UButton
-          v-if="search"
-          color="gray"
-          variant="link"
-          icon="i-heroicons-x-mark-20-solid"
-          :padded="false"
-          @click="search = ''; page = 1"
-        />
-      </template>
-    </UInput>
-  </template>
-
-  <template #right>
-
-    <div class="hidden md:flex items-center gap-2">
-      <USelectMenu
-        v-model="sortOrder"
-        :options="sortOptions"
-        option-attribute="label"
-        value-attribute="value"
-        placeholder="Sort"
-        class="w-32"
-      />
-      
-      <UButton
-        v-if="selectedCategory"
-        color="gray"
-        variant="soft"
-        @click="clearCategoryFilter"
-      >
-        Clear
-      </UButton>
-    </div>
-
-    
-    <UButton
-      icon="i-heroicons-funnel"
-      color="gray"
-      variant="ghost"
-      class="md:hidden"
-      @click="isMobileFiltersOpen = true"
-    />
-  </template>
-</UDashboardToolbar>
-
-
-<UModal v-model="isMobileFiltersOpen">
-  <UCard>
-    <template #header>
-      <div class="flex items-center justify-between">
-        <h3 class="text-lg font-medium">Filters</h3>
-        <UButton
-          color="gray"
-          variant="ghost"
-          icon="i-heroicons-x-mark-20-solid"
-          @click="isMobileFiltersOpen = false"
-        />
-      </div>
-    </template>
-
-    <div class="space-y-4">
-  
-      <div>
-        <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">Sort By</h4>
-        <USelect
-          v-model="sortOrder"
-          :options="sortOptions"
-          option-attribute="label"
-          value-attribute="value"
-          placeholder="Sort by"
-          class="w-full"
-        />
-      </div>
-
-     
-      <UButton
-        v-if="selectedCategory"
-        color="gray"
-        variant="soft"
-        block
-        @click="clearCategoryFilter(); isMobileFiltersOpen = false"
-        class="mt-4"
-      >
-        Clear Filter: {{ selectedCategory.name }}
-      </UButton>
-    </div>
-  </UCard>
-</UModal>
-
-<UModal v-model="isMobileMenuOpen">
-  <UCard>
-    <template #header>
-      <div class="flex items-center justify-between">
-        <h3 class="text-lg font-medium">Categories</h3>
-        <UButton
-          color="gray"
-          variant="ghost"
-          icon="i-heroicons-x-mark-20-solid"
-          @click="isMobileMenuOpen = false"
-        />
-      </div>
-    </template>
-
-    <div class="space-y-2">
-      <UButton
-        v-for="category in allCategories"
-        :key="category.id"
-        color="gray"
-        variant="ghost"
-        block
-        @click="filterByCategory(category); isMobileMenuOpen = false"
-        class="justify-start"
-      >
-        {{ category.name }}
-      </UButton>
-    </div>
-  </UCard>
-</UModal>
-
-
-
-      <UDashboardPanelContent>
-        <div class="w-full">
-    <StoreBanner />
-  </div>
-    
-        <div v-if="isLoading && page === 1" class="w-full flex justify-center my-12">
-          <UButton
-            loading
-            color="primary"
-            variant="ghost"
-            label="Loading store data..."
-          />
-        </div>
-        
-      
-        <div v-else-if="error" class="w-full text-center py-12">
-          <UAlert
-            title="Failed to load store data"
-            :description="error.message || String(error)"
-            color="red"
-            variant="solid"
-            icon="i-heroicons-exclamation-triangle"
-            class="mb-4"
-          />
-        </div>
-        
-   
-        <template v-else>
-         
-         
-          <section v-if="allCategories.length > 0" class="mb-12 px-4">
-            <h2 class="text-2xl font-bold mb-6 font-serif">Shop by Category</h2>
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              <div 
-                v-for="category in allCategories"
-                :key="category.id"
-                class="group relative rounded-xl overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 h-40 cursor-pointer border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900"
-                @click="filterByCategory(category)"
-              >
-                <div class="absolute inset-0 flex items-center justify-center p-4 text-center">
-                  <div>
-                    <UIcon 
-                      name="i-heroicons-tag" 
-                      class="w-10 h-10 text-primary-600 dark:text-primary-400 group-hover:scale-110 transition-transform" 
-                    />
-                    <h3 class="mt-3 font-bold text-gray-900 dark:text-white">{{ category.name }}</h3>
-                    <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ category.products?.length || 0 }} items
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </section>
-
-          
-          <section v-if="trendingVariants.length > 0" class="mb-12 px-4">
-            <h2 class="text-2xl font-bold mb-6 font-serif">Trending Now</h2>
-            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              <ProductsProductCard
-                v-for="(variant, index) in trendingVariants.slice(0, 6)"
-                :key="`trending-${variant.id}`"
-                :variant="variant"
-                :index="index"
-                @quick-view="openQuickView"
-              />
-            </div>
-          </section>
-
-      
-          <section class="px-4">
-            <div class="flex justify-between items-center mb-6">
-              <h2 class="text-2xl font-bold font-serif">All Products</h2>
-              <span class="text-sm text-gray-500 dark:text-gray-400">
-                Showing {{ flatVariants.length }} products
-              </span>
-            </div>
-
-       
-            <div v-if="isLoading && page === 1" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              <div v-for="n in 12" :key="n" class="animate-pulse">
-                <div class="bg-gray-200 dark:bg-gray-700 rounded-lg aspect-[3/4]"></div>
-                <div class="mt-2 space-y-2">
-                  <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded"></div>
-                  <div class="h-4 bg-gray-200 dark:bg-gray-700 rounded w-3/4"></div>
-                </div>
-              </div>
-            </div>
-
-           
-            <div v-else-if="flatVariants.length > 0" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
-              <ProductsProductCard
-                v-for="(variant, index) in flatVariants"
-                :key="variant.id"
-                :variant="variant"
-                :index="index"
-                class="hover:scale-[1.02] transition-transform duration-200"
-                @quick-view="openQuickView"
-              />
-            </div>
-            <div v-else class="w-full text-center py-12 text-gray-500 dark:text-gray-400">
-              <UIcon name="i-heroicons-magnifying-glass" class="w-12 h-12 mx-auto mb-4" />
-              <h3 class="text-xl font-medium">No products found</h3>
-              <p class="mt-2">Try adjusting your search or filter criteria</p>
-              <UButton
-                v-if="search || selectedCategory"
-                color="primary"
-                variant="ghost"
-                label="Clear filters"
-                @click="search = ''; selectedCategory = null"
-                class="mt-4"
-              />
-            </div>
-            
-          
-            <div v-if="loadingMore" class="w-full flex justify-center my-8">
-              <UButton
-                loading
-                color="primary"
-                variant="ghost"
-                label="Loading more products..."
-                icon="i-heroicons-arrow-path"
-                class="animate-spin"
-              />
-            </div>
-            
-       
-            <div v-if="!hasMore && flatVariants.length > 0" class="w-full text-center py-8 text-gray-500 dark:text-gray-400">
-              <UIcon name="i-heroicons-check-circle" class="w-8 h-8 mx-auto mb-2 text-primary-500" />
-              <p>You've reached the end of products</p>
-            </div>
-          </section>
-        </template>
-      </UDashboardPanelContent>
-    </UDashboardPanel>
-
-  
-    <UModal v-model="showQuickView">
-      <UCard v-if="quickViewProduct">
-        <template #header>
-          <div class="flex justify-between items-center">
-            <h3 class="text-lg font-semibold font-serif">{{ quickViewProduct.product.name }}</h3>
-            <UButton 
-              color="gray" 
-              variant="ghost" 
-              icon="i-heroicons-x-mark-20-solid" 
-              @click="showQuickView = false"
-            />
-          </div>
-        </template>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div class="relative aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
-            <template v-if="quickViewProduct.mainImage">
-              <img
-                :src="quickViewProduct.mainImage"
-                :alt="quickViewProduct.product.name"
-                class="w-full h-full object-cover"
-              />
-            </template>
-            <template v-else>
-              <div class="absolute inset-0 flex items-center justify-center">
-                <UIcon name="i-heroicons-shopping-bag" class="w-16 h-16 text-gray-400" />
-              </div>
-            </template>
-          </div>
-
-          <div>
-            <div class="space-y-4">
-              <div>
-                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Description</h4>
-                <p class="mt-1 text-gray-900 dark:text-gray-100">
-                  {{ quickViewProduct.product.description || 'No description available' }}
-                </p>
-              </div>
-
-              <div>
-                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Price</h4>
-                <div v-if="quickViewProduct.dprice && quickViewProduct.dprice < quickViewProduct.sprice" class="flex items-center space-x-2">
-                  <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                    ₹{{ quickViewProduct.dprice.toFixed(2) }}
-                  </span>
-                  <span class="text-lg text-gray-500 dark:text-gray-400 line-through">
-                    ₹{{ quickViewProduct.sprice.toFixed(2) }}
-                  </span>
-                  <span class="text-sm font-medium text-red-600 dark:text-red-400">
-                    {{ Math.round((1 - quickViewProduct.dprice / quickViewProduct.sprice) * 100) }}% OFF
-                  </span>
-                </div>
-                <span v-else class="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  ₹{{ quickViewProduct.sprice.toFixed(2) }}
-                </span>
-              </div>
-
-              <div v-if="quickViewProduct.sizes && quickViewProduct.sizes.length">
-                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Sizes</h4>
-                <div class="flex flex-wrap gap-2 mt-2">
-                  <UBadge
-                    v-for="(size, index) in quickViewProduct.sizes"
-                    :key="index"
-                    :color="size.qty > 0 ? 'primary' : 'gray'"
-                    variant="outline"
-                    size="lg"
-                    class="cursor-pointer"
-                    :class="size.qty === 0 ? 'opacity-50 line-through' : ''"
-                  >
-                    {{ size.size }}
-                  </UBadge>
-                </div>
-              </div>
-            </div>
-
-            <div class="mt-6 flex space-x-3">
-              <UButton
-                icon="i-heroicons-heart"
-                color="gray"
-                variant="outline"
-                :class="{ 'text-red-500': likeStore.isLiked({ variantId: quickViewProduct.id }) }"
-                @click="toggleLikeInQuickView(quickViewProduct)"
-              >
-                {{ likeStore.isLiked({ variantId: quickViewProduct.id }) ? 'Liked' : 'Wishlist' }}
-              </UButton>
-              <UButton
-                icon="i-heroicons-shopping-cart"
-                color="primary"
-                @click="addToCartFromQuickView(quickViewProduct)"
-              >
-                Add to Cart
-              </UButton>
-            </div>
-          </div>
-        </div>
-      </UCard>
-    </UModal>
-  </UDashboardPage>
-</template>
-
-<style>
-/* Font styles */
-body {
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-}
-
-.font-serif {
-  font-family: 'Playfair Display', serif;
-}
-
-/* Typography scale */
-h1 {
-  font-size: 2.5rem;
-  font-weight: 700;
-  line-height: 1.2;
-}
-
-h2 {
-  font-size: 2rem;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-h3 {
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.4;
-}
-
-/* Product card hover effects */
-.hover-scale {
-  transition: transform 0.3s ease, box-shadow 0.3s ease;
-}
-
-.hover-scale:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
-}
-
-/* Image container styles */
-.aspect-square {
-  position: relative;
-  overflow: hidden;
-}
-
-.aspect-square::before {
-  content: "";
-  display: block;
-  padding-bottom: 100%;
-}
-
-.aspect-square img {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-}
-
-.group:hover .aspect-square img {
-  transform: scale(1.05);
-}
-
-/* Smooth transitions */
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.5s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-</style> -->
-
 <script setup lang="ts">
 import type { VariantWithProduct } from '~/types/store'
 import type { CartItem } from '~/types/cart'
@@ -804,8 +20,7 @@ useHead({
 // Initialization
 const route = useRoute()
 const router = useRouter()
-const cartStore = useCartStore()
-const likeStore = useLikeStore()
+
 const toast = useToast()
 
 // State
@@ -822,9 +37,16 @@ const loadingMore = ref(false)
 const hasMore = ref(true)
 const categories = ref<any[]>([])
 const showQuickView = ref(false)
-const quickViewProduct = ref<any>(null)
+const quickViewProduct = ref<{
+  variant: VariantWithProduct
+  images: string[]
+  currentImageIndex: number
+  selectedSize: string | null
+  availableSizes: {size: string; qty: number}[]
+} | null>(null)
 const isVisible = ref<boolean[]>([])
-const isOpen = ref(false);
+const isOpen = ref(false)
+const imageInterval = ref<NodeJS.Timeout | null>(null)
 
 // Mobile UI
 const isMobileFiltersOpen = ref(false)
@@ -843,7 +65,18 @@ const getCompanyName = (): string => {
   return Array.isArray(route.params.company) ? route.params.company[0] : route.params.company
 }
 
-//Query Arguments
+const companyName = computed(() => {
+  if (!route.params.company) return ''
+  return Array.isArray(route.params.company) 
+    ? route.params.company[0] 
+    : route.params.company
+})
+
+const cartStore = useCartStore()
+const likeStore = useLikeStore()
+
+
+// Query Arguments
 const getQueryArgs = () => {
   const companyName = getCompanyName()
   
@@ -857,29 +90,26 @@ const getQueryArgs = () => {
   if (selectedCategory.value) baseConditions.push({ category: { id: selectedCategory.value.id } })
   if (inStockOnly.value) baseConditions.push({ variants: { some: { items: { some: { status: 'in_stock' } } } }})
 
-  // Price range filter - simplified approach
-  baseConditions.push({
-    variants: {
-      some: {
-        OR: [
-          { 
-            AND: [
-              { dprice: { not: null } },
-              { dprice: { gte: priceRange.value[0], lte: priceRange.value[1] } }
-            ]
-          },
-          { 
-            AND: [
-              { dprice: null },
-              { sprice: { gte: priceRange.value[0], lte: priceRange.value[1] } }
-            ]
-          }
+  // Price range filter - simplified
+  const priceConditions = {
+    OR: [
+      { 
+        AND: [
+          { dprice: { not: null } },
+          { dprice: { gte: priceRange.value[0], lte: priceRange.value[1] } }
+        ]
+      },
+      { 
+        AND: [
+          { dprice: null },
+          { sprice: { gte: priceRange.value[0], lte: priceRange.value[1] } }
         ]
       }
-    }
-  })
+    ]
+  }
+  baseConditions.push({ variants: { some: priceConditions } })
 
-  // Discount filter - simplified to only use explicit discount field
+  // Discount filter
   if (discountRange.value[0] > 0 || discountRange.value[1] < 100) {
     baseConditions.push({
       variants: {
@@ -912,9 +142,8 @@ const getQueryArgs = () => {
       company: true,
       variants: {
         where: {
-        images: { isEmpty: false }
-      },
-
+          images: { isEmpty: false }
+        },
         include: {
           items: {
             where: { status: 'in_stock' },
@@ -951,7 +180,7 @@ const { data: trendingData } = useFindManyProduct({
   include: { 
     company: true, 
     variants: {
-       where: {
+      where: {
         images: { isEmpty: false }
       },
       include: {
@@ -999,22 +228,21 @@ const { data: categoriesData } = useFindManyCategory({
       take: 4
     }
   }
-});
+})
 
 // Reactive data
 const allProducts = computed(() => productsData.value || [])
 const trendingProducts = computed(() => trendingData.value || [])
 const allCategories = computed(() => categoriesData.value || [])
 
-
-// Enhanced flat variants with client-side sorting ONLY
+// Enhanced flat variants with client-side sorting
 const flatVariants = computed(() => {
   let variants = allProducts.value.flatMap(product =>
     product.variants.map((variant: any) => ({
       ...variant,
       product,
       availableQty: variant.items?.length || 0,
-      isOutOfStock: (variant.qty || 0) <= 0, // Add out-of-stock flag
+      isOutOfStock: (variant.qty || 0) <= 0,
       mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null,
       discountPercentage: variant.discount || 
         (variant.dprice && variant.sprice ? 
@@ -1022,7 +250,7 @@ const flatVariants = computed(() => {
     }))
   ) || []
 
-  // Client-side discount filter if needed
+  // Client-side filters
   variants = variants.filter(variant => {
     const discount = variant.discountPercentage
     return discount >= discountRange.value[0] && discount <= discountRange.value[1]
@@ -1038,14 +266,12 @@ const flatVariants = computed(() => {
       sortedVariants.sort((a, b) => (b.dprice || b.sprice || 0) - (a.dprice || a.sprice || 0))
       break
     default:
-      // Default sort by newest (createdAt)
       sortedVariants.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
 
-  // Move out-of-stock items to end while preserving their sort order
   return [
-    ...sortedVariants.filter(v => !v.isOutOfStock), // In-stock items first
-    ...sortedVariants.filter(v => v.isOutOfStock)   // Out-of-stock items last
+    ...sortedVariants.filter(v => !v.isOutOfStock),
+    ...sortedVariants.filter(v => v.isOutOfStock)
   ]
 })
 
@@ -1076,15 +302,10 @@ const loadMore = async () => {
 watch(productsData, (newData) => {
   if (!newData) return
   hasMore.value = newData.length >= pageSize
-  console.log(newData)
 })
 
-// Watch flatVariants and initialize visibility state
 watch(flatVariants, (newVariants) => {
-  // Reset visibility state when variants change
   isVisible.value = new Array(newVariants.length).fill(false)
-  
-  // Trigger visibility check for all items after a small delay
   nextTick(() => {
     newVariants.forEach((_, index) => {
       handleIntersection(index)
@@ -1092,13 +313,14 @@ watch(flatVariants, (newVariants) => {
   })
 }, { immediate: true })
 
-// Watch for filter changes and reset pagination
 watch([search, selectedCategory, inStockOnly, priceRange, discountRange], () => {
   page.value = 1
   hasMore.value = true
   loadingMore.value = false
   refetch()
 }, { deep: true })
+
+
 
 // Filter logic
 const filterByCategory = (category: any) => {
@@ -1121,37 +343,93 @@ const clearAllFilters = () => {
   page.value = 1
   hasMore.value = true
   loadingMore.value = false
-  // Force a complete refresh
   productsData.value = []
   refetch()
 }
 
-// Quick view
-const openQuickView = (variant: VariantWithProduct) => {
+// Quick view functions
+const openQuickView = (variant: VariantWithProduct, selectedSize: string | null = null) => {
   quickViewProduct.value = {
-    ...variant,
-    mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
+    variant,
+    images: variant.images?.map(img => `https://images.markit.co.in/${img}`) || [],
+    currentImageIndex: 0,
+    selectedSize,
+    availableSizes: parseSizes(variant.sizes)
   }
   showQuickView.value = true
+  startImageRotation()
 }
 
-const toggleLikeInQuickView = (variant: VariantWithProduct) => {
-  const likedItem = { variantId: variant.id }
-  const isLiked = likeStore.toggleLike(likedItem) ?? false
-
-  toast.add({
-    title: isLiked ? 'Liked' : 'Unliked',
-    description: isLiked
-      ? `${variant.product.name} added to your likes.`
-      : `${variant.product.name} removed from your likes.`,
-    color: isLiked ? 'primary' : 'red',
-    icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
-  })
+const startImageRotation = () => {
+  if (!quickViewProduct.value || quickViewProduct.value.images.length <= 1) return
+  
+  stopImageRotation()
+  imageInterval.value = setInterval(() => {
+    if (quickViewProduct.value) {
+      quickViewProduct.value.currentImageIndex = 
+        (quickViewProduct.value.currentImageIndex + 1) % quickViewProduct.value.images.length
+    }
+  }, 3000)
 }
 
-const addToCartFromQuickView = async (variant: VariantWithProduct) => {
-  const qty = variant.qty ?? 0
-  if (qty === 0) {
+const stopImageRotation = () => {
+  if (imageInterval.value) {
+    clearInterval(imageInterval.value)
+    imageInterval.value = null
+  }
+}
+
+const toggleLikeInQuickView = async (variant: VariantWithProduct) => {
+  const companyId = variant.companyId;
+  const sessionId = useClientAuth().session.value?.id;
+  
+  const likedItem = { variantId: variant.id };
+  
+  try {
+    const isLiked = await likeStore.toggleLike(likedItem, companyId, sessionId);
+
+    toast.add({
+      title: isLiked ? 'Liked' : 'Unliked',
+      description: isLiked
+        ? `${variant.product.name} added to your likes.`
+        : `${variant.product.name} removed from your likes.`,
+      color: isLiked ? 'primary' : 'red',
+      icon: isLiked ? 'i-heroicons-heart-solid' : 'i-heroicons-heart',
+    });
+
+    return isLiked;
+  } catch (error) {
+    console.error('Failed to toggle like:', error);
+    toast.add({
+      title: 'Error',
+      description: 'Failed to update like status',
+      color: 'red',
+      icon: 'i-heroicons-exclamation-triangle',
+    });
+    return false;
+  }
+};
+
+const addToCartFromQuickView = async () => {
+  if (!quickViewProduct.value) return
+  
+  // Size validation
+  if (quickViewProduct.value.availableSizes.length > 0 && !quickViewProduct.value.selectedSize) {
+    toast.add({
+      title: 'Size Required',
+      description: 'Please select a size before adding to cart',
+      color: 'orange',
+      icon: 'i-heroicons-exclamation-triangle'
+    })
+    return
+  }
+
+  const selectedSize = quickViewProduct.value.selectedSize
+  const sizeQty = selectedSize 
+    ? quickViewProduct.value.availableSizes.find(s => s.size === selectedSize)?.qty || 0
+    : quickViewProduct.value.variant.qty || 0
+
+  if (sizeQty === 0) {
     toast.add({
       title: 'Out of Stock',
       description: 'This product is currently out of stock',
@@ -1161,16 +439,25 @@ const addToCartFromQuickView = async (variant: VariantWithProduct) => {
     return
   }
 
-  const companyId = variant.companyId
   await cartStore.addToCart(
-    { variantId: variant.id, size: null, qty: 1 } as CartItem,
-    companyId
+    
+    { 
+      variantId: quickViewProduct.value.variant.id, 
+      size: selectedSize,
+      qty: 1,
+      name: quickViewProduct.value.variant.product.name,
+      price: quickViewProduct.value.variant.dprice || quickViewProduct.value.variant.sprice
+    } as CartItem,
+    quickViewProduct.value.variant.companyId,
+    useClientAuth().session.value?.id
   )
 
   showQuickView.value = false
+  stopImageRotation()
+  
   toast.add({
     title: 'Added to Cart',
-    description: `${variant.product.name} added to your cart.`,
+    description: `${quickViewProduct.value.variant.product.name} added to your cart.`,
     color: 'green',
     icon: 'i-heroicons-check-circle',
     timeout: 2000,
@@ -1196,19 +483,17 @@ const handleIntersection = (index: number) => {
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {
         if (entry.isIntersecting) {
-          // Immediately set to visible without delay for testing
           isVisible.value[index] = true
           observer.unobserve(entry.target)
         }
       })
     }, { 
       threshold: 0.1,
-      rootMargin: '0px 0px 100px 0px' // Trigger slightly before element is in view
+      rootMargin: '0px 0px 100px 0px'
     })
 
     observer.observe(element)
     
-    // Fallback: Set to visible after 1 second if observer fails
     setTimeout(() => {
       if (!isVisible.value[index]) {
         isVisible.value[index] = true
@@ -1217,7 +502,6 @@ const handleIntersection = (index: number) => {
   })
 }
 
-// Add this to your script setup
 const parseSizes = (sizes: unknown): { size: string; qty: number }[] => {
   if (Array.isArray(sizes)) {
     return sizes.map(size => ({
@@ -1234,7 +518,9 @@ onMounted(() => {
 
 onUnmounted(() => {
   window.removeEventListener('scroll', handleScroll)
+  stopImageRotation()
 })
+const cartItemCount =computed(() => cartStore.cartItemCount);
 </script>
 
 <template>
@@ -1250,14 +536,16 @@ onUnmounted(() => {
               Login
             </UButton>
             <UTooltip class="me-3" text="Cart" :shortcuts="['C']">
-              <NuxtLink :to="`${route.fullPath}/checkout`">
-                <UChip :text="cartStore.cartItemCount" color="red" size="2xl">
-                  <UIcon name="i-heroicons-shopping-cart" class="w-5 h-5" />
-                </UChip>
+              <NuxtLink :to="formatStoreRoute(route.params.company, 'checkout')">
+                <ClientOnly>
+                  <UChip :text="cartItemCount" color="red" size="2xl">
+                    <UIcon name="i-heroicons-shopping-cart" class="w-5 h-5" />
+                  </UChip>
+                </ClientOnly>
               </NuxtLink>
             </UTooltip>
             <UTooltip class="me-3" text="Wishlist" :shortcuts="['W']">
-              <NuxtLink :to="`${route.fullPath}/wishlist`">
+              <NuxtLink :to="formatStoreRoute(route.params.company,'wishlist')">
                 <UChip :text="likeStore.likedCount" color="red" size="2xl">
                   <UIcon name="i-heroicons-heart" class="w-5 h-5" />
                 </UChip>
@@ -1575,7 +863,7 @@ onUnmounted(() => {
           </section>
 
           <!-- Trending Products -->
-          <section v-if="trendingVariants.length > 0 && !search && !selectedCategory" class="mb-12 px-4">
+          <!-- <section v-if="trendingVariants.length > 0 && !search && !selectedCategory" class="mb-12 px-4">
             <h2 class="text-2xl font-bold mb-6 font-serif">Trending Now</h2>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
               <ProductsProductCard
@@ -1585,6 +873,38 @@ onUnmounted(() => {
                 :index="index"
                 @quick-view="openQuickView"
               />
+            </div>
+          </section> -->
+
+          
+          
+          <section v-if="trendingVariants.length > 0 && !search && !selectedCategory" class="mb-12 px-4">
+            <div class="flex justify-between items-center mb-4">
+              <h2 class="text-2xl font-bold font-serif">Trending Now</h2>
+              <UButton
+                v-if="trendingVariants.length > 6"
+                color="gray"
+                variant="ghost"
+                size="sm"
+                label="View all"
+                trailing-icon="i-heroicons-arrow-right-20-solid"
+                @click="selectedCategory = null"
+              />
+            </div>
+          
+            <div class="relative">
+              <div class="flex overflow-x-auto pb-4 -mx-4 px-4 hide-scrollbar">
+                <div class="flex gap-4">
+                  <ProductsProductCard
+                    v-for="(variant, index) in trendingVariants"
+                    :key="`trending-${variant.id}`"
+                    :variant="variant"
+                    :index="index"
+                    class="min-w-[200px] flex-shrink-0"
+                    @quick-view="openQuickView"
+                  />
+                </div>
+              </div>
             </div>
           </section>
 
@@ -1664,110 +984,155 @@ onUnmounted(() => {
     </UDashboardPanel>
 
     <!-- Quick View Modal -->
-    <UModal v-model="showQuickView" :transition="true">
-      <UCard 
-        v-if="quickViewProduct"
-        class="relative overflow-hidden"
-        :ui="{ 
-          base: 'transition-all duration-300 ease-out',
-          ring: 'ring-2 ring-primary-500/10',
-          shadow: 'shadow-xl'
-        }"
-      >
-        <!-- Add a subtle background pattern -->
-        <div class="absolute inset-0 -z-10 opacity-5 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBmaWxsPSJub25lIiBzdHJva2U9IiM4ODgiIG9wYWNpdHk9IjAuMiIgc3Ryb2tlLXdpZHRoPSIxIj48cGF0aCBkPSJNMCAwaDQwdjQwSDB6Ii8+PC9zdmc+')]"></div>
-        
-        <template #header>
-          <div class="flex justify-between items-center">
-            <h3 class="text-lg font-semibold font-serif">{{ quickViewProduct.product.name }}</h3>
-            <UButton 
-              color="gray" 
-              variant="ghost" 
-              icon="i-heroicons-x-mark-20-solid" 
-              @click="showQuickView = false"
+    <UModal v-model="showQuickView" :transition="true" @close="stopImageRotation">
+  <UCard 
+    v-if="quickViewProduct"
+    class="relative overflow-hidden"
+    :ui="{ 
+      base: 'transition-all duration-300 ease-out',
+      ring: 'ring-2 ring-primary-500/10',
+      shadow: 'shadow-xl'
+    }"
+  >
+    <!-- Background pattern -->
+    <div class="absolute inset-0 -z-10 opacity-5 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiBmaWxsPSJub25lIiBzdHJva2U9IiM4ODgiIG9wYWNpdHk9IjAuMiIgc3Ryb2tlLXdpZHRoPSIxIj48cGF0aCBkPSJNMCAwaDQwdjQwSDB6Ii8+PC9zdmc+')]"></div>
+    
+    <template #header>
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold font-serif">{{ quickViewProduct.variant.product.name }}</h3>
+        <UButton 
+          color="gray" 
+          variant="ghost" 
+          icon="i-heroicons-x-mark-20-solid" 
+          @click="showQuickView = false"
+        />
+      </div>
+    </template>
+
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <!-- Image Carousel - Fixed Height Container -->
+      <div class="relative">
+        <div class="relative aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden flex items-center justify-center">
+          <img
+            :src="quickViewProduct.images[quickViewProduct.currentImageIndex]"
+            :alt="quickViewProduct.variant.product.name"
+            class="w-full h-full object-contain"
+            style="max-height: 100%; max-width: 100%"
+          />
+          
+          <!-- Navigation Arrows -->
+          <div v-if="quickViewProduct.images.length > 1" class="absolute inset-0 flex items-center justify-between px-2">
+            <UButton
+              icon="i-heroicons-chevron-left-20-solid"
+              color="white"
+              variant="ghost"
+              size="sm"
+              :ui="{ rounded: 'rounded-full' }"
+              @click="quickViewProduct.currentImageIndex = (quickViewProduct.currentImageIndex - 1 + quickViewProduct.images.length) % quickViewProduct.images.length"
+            />
+            <UButton
+              icon="i-heroicons-chevron-right-20-solid"
+              color="white"
+              variant="ghost"
+              size="sm"
+              :ui="{ rounded: 'rounded-full' }"
+              @click="quickViewProduct.currentImageIndex = (quickViewProduct.currentImageIndex + 1) % quickViewProduct.images.length"
             />
           </div>
-        </template>
-
-        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <!-- Image with floating animation -->
-          <div class="relative aspect-square bg-gray-100 dark:bg-gray-800 rounded-lg overflow-hidden">
-            <img
-              :src="quickViewProduct.mainImage"
-              :alt="quickViewProduct.product.name"
-              class="w-full h-full object-cover animate-float"
+          
+          <!-- Image Indicators -->
+          <div v-if="quickViewProduct.images.length > 1" class="absolute bottom-2 left-0 right-0 flex justify-center gap-1">
+            <div 
+              v-for="(_, index) in quickViewProduct.images"
+              :key="index"
+              class="w-2 h-2 rounded-full transition-all cursor-pointer"
+              :class="{
+                'bg-primary-500 w-4': quickViewProduct.currentImageIndex === index,
+                'bg-gray-300 dark:bg-gray-600': quickViewProduct.currentImageIndex !== index
+              }"
+              @click="quickViewProduct.currentImageIndex = index"
             />
           </div>
+        </div>
+      </div>
 
-          <!-- Product details -->
+      <!-- Product Details -->
+      <div>
+        <div class="space-y-4">
           <div>
-            <div class="space-y-4">
-              <div>
-                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Description</h4>
-                <p class="mt-1 text-gray-900 dark:text-gray-100">
-                  {{ quickViewProduct.product.description || 'No description available' }}
-                </p>
-              </div>
+            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Description</h4>
+            <p class="mt-1 text-gray-900 dark:text-gray-100">
+              {{ quickViewProduct.variant.product.description || 'No description available' }}
+            </p>
+          </div>
 
-              <div>
-                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Price</h4>
-                <div v-if="quickViewProduct.dprice && quickViewProduct.dprice < quickViewProduct.sprice" class="flex items-center space-x-2">
-                  <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">
-                    ₹{{ quickViewProduct.dprice.toFixed(2) }}
-                  </span>
-                  <span class="text-lg text-gray-500 dark:text-gray-400 line-through">
-                    ₹{{ quickViewProduct.sprice.toFixed(2) }}
-                  </span>
-                  <span class="text-sm font-medium text-red-600 dark:text-red-400">
-                    {{ Math.round((1 - quickViewProduct.dprice / quickViewProduct.sprice) * 100) }}% OFF
-                  </span>
-                </div>
-                <span v-else class="text-2xl font-bold text-gray-900 dark:text-gray-100">
-                  ₹{{ quickViewProduct.sprice.toFixed(2) }}
-                </span>
-              </div>
-
-              <div v-if="quickViewProduct.sizes && quickViewProduct.sizes.length">
-                <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Sizes</h4>
-                <div class="flex flex-wrap gap-2 mt-2">
-                  <UBadge
-                    v-for="(size, index) in parseSizes(quickViewProduct.sizes)"
-                    :key="index"
-                    :color="size.qty > 0 ? 'primary' : 'gray'"
-                    variant="outline"
-                    size="lg"
-                    class="cursor-pointer"
-                    :class="size.qty === 0 ? 'opacity-50 line-through' : ''"
-                  >
-                    {{ size.size }}
-                  </UBadge>
-                </div>
-              </div>
+          <div>
+            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400">Price</h4>
+            <div v-if="quickViewProduct.variant.dprice && quickViewProduct.variant.dprice < quickViewProduct.variant.sprice" class="flex items-center space-x-2">
+              <span class="text-2xl font-bold text-primary-600 dark:text-primary-400">
+                ₹{{ quickViewProduct.variant.dprice.toFixed(2) }}
+              </span>
+              <span class="text-lg text-gray-500 dark:text-gray-400 line-through">
+                ₹{{ quickViewProduct.variant.sprice.toFixed(2) }}
+              </span>
+              <span class="text-sm font-medium text-red-600 dark:text-red-400">
+                {{ Math.round((1 - quickViewProduct.variant.dprice / quickViewProduct.variant.sprice) * 100) }}% OFF
+              </span>
             </div>
+            <span v-else class="text-2xl font-bold text-gray-900 dark:text-gray-100">
+              ₹{{ quickViewProduct.variant.sprice.toFixed(2) }}
+            </span>
+          </div>
 
-            <div class="mt-6 flex space-x-3">
-              <UButton
-                icon="i-heroicons-heart"
-                color="gray"
+          <!-- Size Selection -->
+          <div v-if="quickViewProduct.availableSizes.length > 0">
+            <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
+              Sizes
+              <span v-if="!quickViewProduct.selectedSize" class="text-red-500 text-xs ml-1">* Required</span>
+            </h4>
+            <div class="flex flex-wrap gap-2">
+              <UBadge
+                v-for="(size, index) in quickViewProduct.availableSizes"
+                :key="index"
+                :color="quickViewProduct.selectedSize === size.size ? 'primary' : 'gray'"
                 variant="outline"
-                :class="{ 'text-red-500': likeStore.isLiked({ variantId: quickViewProduct.id }) }"
-                @click="toggleLikeInQuickView(quickViewProduct)"
+                size="lg"
+                class="cursor-pointer transition-all"
+                :class="{
+                  'ring-2 ring-primary-500': quickViewProduct.selectedSize === size.size,
+                  'opacity-50 line-through': size.qty === 0
+                }"
+                @click="size.qty > 0 && (quickViewProduct.selectedSize = size.size)"
               >
-                {{ likeStore.isLiked({ variantId: quickViewProduct.id }) ? 'Liked' : 'Wishlist' }}
-              </UButton>
-              <UButton
-                icon="i-heroicons-shopping-cart"
-                color="primary"
-                @click="addToCartFromQuickView(quickViewProduct)"
-                class="animate-pulse hover:animate-none"
-              >
-                Add to Cart
-              </UButton>
+                {{ size.size }}
+              </UBadge>
             </div>
           </div>
         </div>
-      </UCard>
-    </UModal>
+
+        <div class="mt-6 flex space-x-3">
+          <UButton
+            icon="i-heroicons-heart"
+            color="gray"
+            variant="outline"
+            :class="{ 'text-red-500': likeStore.isLiked({ variantId: quickViewProduct.variant.id }) }"
+            @click="toggleLikeInQuickView(quickViewProduct.variant)"
+          >
+            {{ likeStore.isLiked({ variantId: quickViewProduct.variant.id }) ? 'Liked' : 'Wishlist' }}
+          </UButton>
+          <UButton
+            icon="i-heroicons-shopping-cart"
+            color="primary"
+            @click="addToCartFromQuickView"
+            :disabled="quickViewProduct.availableSizes.length > 0 && !quickViewProduct.selectedSize"
+          >
+            Add to Cart
+          </UButton>
+        </div>
+      </div>
+    </div>
+  </UCard>
+</UModal>
   </UDashboardPage>
 
   <UModal v-model="isOpen">
@@ -1833,6 +1198,13 @@ body {
 .fade-enter-from,
 .fade-leave-to {
   opacity: 0;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Custom scrollbar */
