@@ -220,21 +220,21 @@ const { data: addresses } = useFindManyAddress({
         <template #right>
           <div class="flex flex-row items-end justify-end">
             <UButton 
-              v-if="!useClientAuth().session.value?.id" 
+              v-if="!authClient.session.value?.id" 
               @click="isLoginModalOpen = true"
-              class="px-5 me-3 flex items-center justify-center rounded-md border border-transparent text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2"
+              class="px-5 me-3"
             >
               Login
             </UButton>
-<UTooltip class="me-3" text="Cart" :shortcuts="['C']">
-  <NuxtLink :to="formatStoreRoute(route.params.company, 'checkout')">
-    <ClientOnly>
-      <UChip :text="cartItemCount" color="red" size="2xl">
-        <UIcon name="i-heroicons-shopping-cart" class="w-5 h-5" />
-      </UChip>
-    </ClientOnly>
-  </NuxtLink>
-</UTooltip>
+            <UTooltip class="me-3" text="Cart" :shortcuts="['C']">
+              <NuxtLink :to="formatStoreRoute(route.params.company, 'checkout')">
+                <ClientOnly>
+                  <UChip :text="cartItemCount" color="red" size="2xl">
+                    <UIcon name="i-heroicons-shopping-cart" class="w-5 h-5" />
+                  </UChip>
+                </ClientOnly>
+              </NuxtLink>
+            </UTooltip>
             <UTooltip class="me-3" text="Wishlist" :shortcuts="['W']">
               <NuxtLink to="./wishlist">
                 <UChip :text="likeItemCount" color="red" size="2xl">
@@ -247,14 +247,13 @@ const { data: addresses } = useFindManyAddress({
       </UDashboardNavbar>
 
       <UDashboardPanelContent>
-        
-        <div v-if="authClient.session.value?.id" class="min-h-screen bg-gray-50">
+        <div v-if="authClient.session.value?.id" class="min-h-screen">
           <UContainer class="py-8">
             <div class="flex flex-col md:flex-row gap-8">
-             
+              <!-- Sidebar -->
               <div class="w-full md:w-64 flex-shrink-0">
-                <div class="bg-white rounded-lg shadow p-4 sticky top-8">
-                  <div class="flex flex-col items-center py-4 border-b">
+                <UCard class="sticky top-8">
+                  <div class="flex flex-col items-center py-4 border-b dark:border-gray-700">
                     <UAvatar 
                       :alt="client?.name || 'User'" 
                       size="lg" 
@@ -262,52 +261,53 @@ const { data: addresses } = useFindManyAddress({
                       :ui="{ size: { lg: 'w-16 h-16' } }"
                     />
                     <h3 class="font-semibold text-lg text-center">{{ client?.name }}</h3>
-                    <p class="text-gray-500 text-sm text-center">{{ client?.email }}</p>
-                    <p class="text-gray-500 text-sm mt-1">{{ client?.phone }}</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm text-center">{{ client?.email }}</p>
+                    <p class="text-gray-500 dark:text-gray-400 text-sm mt-1">{{ client?.phone }}</p>
                   </div>
                   
                   <UVerticalNavigation 
                     :links="[
                       { label: 'My Profile', icon: 'i-heroicons-user', to: '#profile' },
                       { label: 'My Addresses', icon: 'i-heroicons-map-pin', to: '#addresses' },
-                      // { label: 'My Companies', icon: 'i-heroicons-building-office', to: '#companies' },
                       { label: 'Logout', icon: 'i-heroicons-arrow-left-on-rectangle', click: handleLogout }
                     ]" 
                     class="mt-4"
                   />
-                </div>
+                </UCard>
               </div>
 
-       
+              <!-- Main Content -->
               <div class="flex-1">
-              
-                <div id="profile" class="bg-white rounded-lg shadow p-6 mb-6">
-                  <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold">My Profile</h2>
-                    <UButton
-                      v-if="!editMode"
-                      variant="outline"
-                      @click="editMode = true"
-                      icon="i-heroicons-pencil-square"
-                    >
-                      Edit
-                    </UButton>
-                    <div v-else class="space-x-2">
+                <!-- Profile Section -->
+                <UCard id="profile" class="mb-6">
+                  <template #header>
+                    <div class="flex justify-between items-center">
+                      <h2 class="text-xl font-bold">My Profile</h2>
                       <UButton
+                        v-if="!editMode"
                         variant="outline"
-                        color="gray"
-                        @click="editMode = false"
+                        @click="editMode = true"
+                        icon="i-heroicons-pencil-square"
                       >
-                        Cancel
+                        Edit
                       </UButton>
-                      <UButton
-                        @click="handleUpdateProfile"
-                        icon="i-heroicons-check"
-                      >
-                        Save
-                      </UButton>
+                      <div v-else class="space-x-2">
+                        <UButton
+                          variant="outline"
+                          color="gray"
+                          @click="editMode = false"
+                        >
+                          Cancel
+                        </UButton>
+                        <UButton
+                          @click="handleUpdateProfile"
+                          icon="i-heroicons-check"
+                        >
+                          Save
+                        </UButton>
+                      </div>
                     </div>
-                  </div>
+                  </template>
 
                   <div class="space-y-4">
                     <UFormGroup label="Full Name">
@@ -321,60 +321,38 @@ const { data: addresses } = useFindManyAddress({
                     <UFormGroup label="Phone Number">
                       <UInput v-model="form.phone" type="tel" disabled />
                       <template #help>
-                        <span class="text-xs text-gray-500">Contact support to change your phone number</span>
+                        <span class="text-xs text-gray-500 dark:text-gray-400">Contact support to change your phone number</span>
                       </template>
                     </UFormGroup>
                   </div>
-                </div>
+                </UCard>
 
-           
-                <!-- <div id="companies" class="bg-white rounded-lg shadow p-6 mb-6" v-if="client?.companies?.length">
-                  <h2 class="text-xl font-bold mb-6">My Companies</h2>
-                  <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div 
-                      v-for="company in client.companies" 
-                      :key="company.company.id"
-                      class="border rounded-lg p-4 hover:border-primary-500 transition-colors"
-                    >
-                      <h3 class="font-medium">{{ company.company.name }}</h3>
-                      <div class="mt-4">
-                        <UButton 
-                          size="xs"
-                          variant="outline"
-                          icon="i-heroicons-arrow-right"
-                          @click="navigateTo(`/${company.company.name}`)"
-                        >
-                          Visit Store
-                        </UButton>
-                      </div>
+                <!-- Addresses Section -->
+                <UCard id="addresses">
+                  <template #header>
+                    <div class="flex justify-between items-center">
+                      <h2 class="text-xl font-bold">My Addresses</h2>
+                      <UButton
+                        @click="openAddressModal(null)"
+                        icon="i-heroicons-plus"
+                      >
+                        Add New Address
+                      </UButton>
                     </div>
-                  </div>
-                </div> -->
-
-                
-                <div id="addresses" class="bg-white rounded-lg shadow p-6">
-                  <div class="flex justify-between items-center mb-6">
-                    <h2 class="text-xl font-bold">My Addresses</h2>
-                    <UButton
-                      @click="openAddressModal(null)"
-                      icon="i-heroicons-plus"
-                    >
-                      Add New Address
-                    </UButton>
-                  </div>
+                  </template>
 
                   <div v-if="client?.address?.length" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div
+                    <UCard
                       v-for="addr in client.address"
                       :key="addr.id"
-                      class="border rounded-lg p-4 hover:border-primary-500 transition-colors relative"
+                      class="hover:ring-1 hover:ring-primary-500 dark:hover:ring-primary-400 transition-all"
                     >
                       <div class="flex justify-between items-start">
                         <div>
                           <h3 class="font-medium">{{ addr.name || 'My Address' }}</h3>
-                          <p class="text-gray-600 text-sm mt-1">{{ addr.street }}</p>
-                          <p class="text-gray-600 text-sm" v-if="addr.locality">{{ addr.locality }}</p>
-                          <p class="text-gray-600 text-sm">
+                          <p class="text-gray-600 dark:text-gray-300 text-sm mt-1">{{ addr.street }}</p>
+                          <p class="text-gray-600 dark:text-gray-300 text-sm" v-if="addr.locality">{{ addr.locality }}</p>
+                          <p class="text-gray-600 dark:text-gray-300 text-sm">
                             {{ addr.city }}, {{ addr.state }} - {{ addr.pincode }}
                           </p>
                         </div>
@@ -405,23 +383,23 @@ const { data: addresses } = useFindManyAddress({
                           Delete
                         </UButton>
                       </div>
-                    </div>
+                    </UCard>
                   </div>
-                  <div v-else class="text-center py-8 text-gray-500">
-                    <UIcon name="i-heroicons-map-pin" class="w-12 h-12 mx-auto text-gray-300" />
+                  <div v-else class="text-center py-8 text-gray-500 dark:text-gray-400">
+                    <UIcon name="i-heroicons-map-pin" class="w-12 h-12 mx-auto text-gray-300 dark:text-gray-500" />
                     <p class="mt-2">No addresses saved yet</p>
                   </div>
-                </div>
+                </UCard>
               </div>
             </div>
           </UContainer>
         </div>
 
-       
+        <!-- Not Logged In State -->
         <div v-else class="text-center py-16">
-          <UIcon name="i-heroicons-lock-closed" class="w-12 h-12 mx-auto text-gray-400" />
-          <h3 class="mt-4 text-lg font-medium text-gray-900">Please login to view your profile</h3>
-          <p class="mt-1 text-gray-500">Access your account details, addresses and more</p>
+          <UIcon name="i-heroicons-lock-closed" class="w-12 h-12 mx-auto text-gray-400 dark:text-gray-500" />
+          <h3 class="mt-4 text-lg font-medium text-gray-900 dark:text-gray-100">Please login to view your profile</h3>
+          <p class="mt-1 text-gray-500 dark:text-gray-400">Access your account details, addresses and more</p>
           <UButton
             class="mt-6"
             @click="isLoginModalOpen = true"
@@ -434,6 +412,7 @@ const { data: addresses } = useFindManyAddress({
     </UDashboardPanel>
   </UDashboardPage>
 
+  <!-- Login Modal -->
   <UModal v-model="isLoginModalOpen">
     <UCard>
       <template #header>
@@ -445,7 +424,7 @@ const { data: addresses } = useFindManyAddress({
     </UCard>
   </UModal>
 
- 
+  <!-- Address Modal -->
   <UModal v-model="isAddressModalOpen">
     <UCard>
       <template #header>
