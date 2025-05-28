@@ -212,6 +212,7 @@ const queryArgs = reactive({
     skip: (page.value - 1) * pageCount.value,
     take: pageCount.value,
     select: {
+        id:true,
         name:true,
         status:true,
         image:true,  

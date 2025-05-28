@@ -291,7 +291,7 @@ const { data: addresses } = useFindManyAddress({
                       >
                         Edit
                       </UButton>
-                      <div v-else class="space-x-2">
+                      <div v-else class="space-x-2 flex flex-row items-center">
                         <UButton
                           variant="outline"
                           color="gray"

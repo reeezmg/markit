@@ -203,37 +203,43 @@ const { data: categoriesData } = useFindManyCategory({
       some: {
         status: true,
         variants: {
-          some: {
-            images: { isEmpty: false }
-          }
+           some: {
+             images: { isEmpty: false }
+           }
         }
       }
     }
   },
   include: {
-    products: {
-      where: {
-        status: true,
-        variants: {
-          some: {
-            images: { isEmpty: false }
-          }
+  products: {
+    where: {
+      status: true,
+      variants: {
+        some: {
+          images: { isEmpty: false }
         }
-      },
-      include: {
-        _count: {
-          select: { variants: true }
+      }
+    },
+    take: 4,
+    include: {
+      variants: {
+        where: {
+          images: { isEmpty: false }
         }
-      },
-      take: 4
+      }
     }
   }
+}
 })
 
 // Reactive data
 const allProducts = computed(() => productsData.value || [])
 const trendingProducts = computed(() => trendingData.value || [])
 const allCategories = computed(() => categoriesData.value || [])
+
+watch(categoriesData, (NEWcategoriesData) => {
+    console.log(NEWcategoriesData);
+});
 
 // Enhanced flat variants with client-side sorting
 const flatVariants = computed(() => {
@@ -854,7 +860,7 @@ const cartItemCount =computed(() => cartStore.cartItemCount);
                     />
                     <h3 class="mt-3 font-bold text-gray-900 dark:text-white">{{ category.name }}</h3>
                     <p class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                      {{ category.products.reduce((sum, p) => sum + p._count.variants, 0) }} products
+                      {{ category.products.reduce((count, product) => count + product.variants.length,0) }} products
                     </p>
                   </div>
                 </div>
