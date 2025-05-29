@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
     },
     select: {
       id:true,
+      shortCut:true,
       fixedTax: true,
       taxBelowThreshold: true,
       taxAboveThreshold: true,

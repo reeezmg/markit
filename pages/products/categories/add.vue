@@ -19,6 +19,7 @@ interface Item {
 interface Category {
     id:number;
     name: string;
+    shortCut?: string;
     hsn: string;
     description: string;
     files: ImageData | null;
@@ -28,6 +29,7 @@ const linkList = ['Create', 'live'];
 
 const name = ref('');
 const hsn = ref('');
+const shortCut = ref('');
 const description = ref('');
 const taxType = ref<"FIXED" | "VARIABLE"| undefined >(undefined);
 const fixedTax = ref(0);
@@ -43,6 +45,7 @@ const subcategoryCounter = ref(1);
 const createValue = (data: any) => {
     name.value = data.name;
     hsn.value = data.hsn;
+    shortCut.value = data.shortCut;
     files.value = data.file;
     description.value = data.description;
     taxType.value = data.taxType;
@@ -74,7 +77,7 @@ const handleAddSubCategory = () => {
         hsn: '',
         files: null,
         description: '',
-        isNew: true
+        shortCut: ''
     });
 };
 
@@ -92,6 +95,7 @@ const handleSubmit = async (e: Event) => {
         hsn: hsn.value || '',
         description: description.value || '',
         status: live.value || undefined,
+        ...(shortCut.value && { shortCut: shortCut.value }),
         image: files.value?.uuid,
         taxType: taxType.value || undefined,
         fixedTax: fixedTax.value || undefined,

@@ -283,6 +283,7 @@ model Category {
   products          Product[]
   subcategories     Subcategory[]
   entries           Entry[]
+  shortCut          String?       @map("short_cut")
   hsn               String?
   taxType           TaxType       @default(FIXED)
   fixedTax          Float?

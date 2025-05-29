@@ -16,6 +16,7 @@ onMounted(async () => {
 const props = defineProps<{
     editName?: string | null;
     editHsn?: string | null;
+    editShortCut?: string | null;
     editDescription?: string | null;
     editFile?: string | null;
     taxType?: "FIXED" | "VARIABLE" | undefined;
@@ -29,6 +30,7 @@ const emit = defineEmits(['update']);
 const schemas = z.object({
     name: z.string().min(2),
     hsn: z.string().optional(),
+    shortCut: z.string().optional(),
     description: z.string(),
     taxType: z.enum(['FIXED', 'VARIABLE']),
     fixedTax: z.number().optional(),
@@ -51,6 +53,7 @@ const selectedFile = ref<ImageData | null>(null); // Single file instead of arra
 const imagePreviewUrl = ref<string | null>(null); // Single URL instead of array
 const [name, nameAttrs] = defineField('name');
 const [hsn, hsnAttrs] = defineField('hsn');
+const [shortCut, shortCutAttrs] = defineField('shortCut');
 const [description, descriptionAttrs] = defineField('description');
 const [taxType, taxTypeAttrs] = defineField('taxType');
 const [fixedTax, fixedTaxAttrs] = defineField('fixedTax');
@@ -66,6 +69,9 @@ watchEffect(() => {
     }
     if (props.editHsn) {
         hsn.value = props.editHsn;
+    }
+    if (props.editShortCut) {
+        shortCut.value = props.editShortCut;
     }
     if (props.editDescription) {
         description.value = props.editDescription;
@@ -119,6 +125,7 @@ watchEffect(() => {
     emit('update', {
         name: name.value,
         hsn: hsn.value,
+        shortCut: shortCut.value,
         description: description.value,
         file: selectedFile.value,
         taxType: taxType.value,
@@ -267,7 +274,17 @@ watch(hsn, (newVal) => {
                 class="w-full"
               />
             </UFormGroup>
+             
           </div>
+          <UFormGroup label="Short Cut" class="w-full">
+                <UInput
+                    id="shortCut"
+                    v-model="shortCut"
+                    v-bind="shortCutAttrs"
+                    type="text"
+                    class="w-full"
+                />
+            </UFormGroup>
         </div>
       </div>
     </div>

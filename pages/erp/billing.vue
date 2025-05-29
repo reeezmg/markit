@@ -233,7 +233,7 @@ const stopResize = () => {
 
 const addNewRow = async (index) => {
   const hasEmptyRow = items.value.some(item => {
-    return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim() && item.rate === 0;
+    return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim() && !item.category?.length && item.qty > 0;
   });
 
   if (hasEmptyRow) {
@@ -427,6 +427,18 @@ const handleEnterBarcode = (barcode,index) => {
   }
  
 };
+
+
+const handleShiftBarcode = (barcode,index) => {
+   const categorystore = categoryStore.getCategoryByShortCut(barcode)
+   console.log(categorystore)
+  items.value[index].category = categories.value.filter(category =>category.id === categorystore.id)
+  items.value[index].barcode = '';
+  const component = rateInputs.value[index];
+  const input = component.$el.querySelector("input");
+  input.select();
+  
+}
 
 const handleEnterMainDiscount = () => {
   const component = paymentref.value;
@@ -1069,7 +1081,6 @@ const focusInput = async (rowIndex, field) => {
     switch (field) {
       case 'barcode':
         if (barcodeInputs.value[rowIndex]?.$el) {
-          barcodeInputs.value[rowIndex].$el.querySelector('input')?.focus();
           barcodeInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
@@ -1080,31 +1091,27 @@ const focusInput = async (rowIndex, field) => {
         break;
       case 'name':
         if (nameInputs.value[rowIndex]?.$el) {
-          nameInputs.value[rowIndex].$el.querySelector('input')?.focus();
           nameInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
       case 'qty':
         if (qtyInputs.value[rowIndex]?.$el) {
-          qtyInputs.value[rowIndex].$el.querySelector('input')?.focus();
           qtyInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
       case 'rate':
         if (rateInputs.value[rowIndex]?.$el) {
-          rateInputs.value[rowIndex].$el.querySelector('input')?.focus();
           rateInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
       case 'discount':
         if (discountInputs.value[rowIndex]?.$el) {
-          discountInputs.value[rowIndex].$el.querySelector('input')?.focus();
           discountInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
       case 'tax':
         if (taxInputs.value[rowIndex]?.$el) {
-          taxInputs.value[rowIndex].$el.querySelector('input')?.focus();
+         taxInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
     }
@@ -1313,6 +1320,7 @@ function handleCategoryChange(category, rowIndex) {
         @blur="fetchItemData(row.barcode, index)"
         @keydown.delete="removeRow($event, row.barcode, index)"
         @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+        @keydown.shift.prevent="handleShiftBarcode(row.barcode, index)"
         @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
         @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
         @keydown.left.prevent="moveFocus(index, 'barcode', 'left')"
@@ -1378,7 +1386,7 @@ function handleCategoryChange(category, rowIndex) {
         ref="qtyInputs" 
         type="number" 
         size="sm"  
-        @keydown.enter="moveFocus(index, 'qty', 'right')"
+        @keydown.enter="addNewRow(index)"
         @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
         @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
         @keydown.left.prevent="moveFocus(index, 'qty', 'left')"

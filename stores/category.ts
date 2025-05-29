@@ -36,6 +36,9 @@ export const useCategoryStore = defineStore('category', () => {
   function getCategoryById(id: string) {
     return categories.value.find((c) => c.id === id) || null
   }
+  function getCategoryByShortCut(shortCut: string) {
+    return categories.value.find((c) => c.shortCut === shortCut) || null
+  }
 
   return {
     categories,
@@ -44,5 +47,6 @@ export const useCategoryStore = defineStore('category', () => {
     fetchAllCategories,
     refreshCategories,
     getCategoryById,
+    getCategoryByShortCut,
   }
 })

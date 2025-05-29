@@ -889,6 +889,10 @@ const metadata = {
                     isDataModel: true,
                     isArray: true,
                     backLink: 'category',
+                }, shortCut: {
+                    name: "shortCut",
+                    type: "String",
+                    isOptional: true,
                 }, hsn: {
                     name: "hsn",
                     type: "String",
