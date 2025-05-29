@@ -6,6 +6,7 @@ const emit = defineEmits(['totalreturnvalue']);
 const barcodeCInputs = ref([]);
 const categoryCInputs = ref([]);
 const nameCInputs = ref([]);
+const toast = useToast();
 const qtyCInputs = ref([]);
 const rateCInputs = ref([]);
 const discountCInputs = ref([]);
@@ -171,8 +172,12 @@ const fetchItemData = async (barcode, index) => {
     };
     loadingStates.value[index] = false;
   } else {
-    console.warn("entry data not found");
+     toast.add({
+          title: 'Barcode is invalid or item is empty!',
+          color: 'red',
+        });
     loadingStates.value[index] = false;
+    returnedItems.value[index].barcode = ''
   }
 };
 

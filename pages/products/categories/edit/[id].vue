@@ -186,7 +186,7 @@ const handleSubmit = async (e: Event) => {
       title: 'Category updated successfully!',
       color: 'green'
     });
-    categoryStore.fetchCategories();
+    await categoryStore.refreshCategories();
     router.push('/products/categories');
   } catch (error) {
     toast.add({

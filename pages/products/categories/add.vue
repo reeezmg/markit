@@ -90,7 +90,7 @@ const handleSubmit = async (e: Event) => {
  console.log(subcategory.value)
     e.preventDefault();
     try {
-        const res = CreateCategory.mutateAsync({
+        const res = await CreateCategory.mutateAsync({
     data: {
         name: name.value || '',
         hsn: hsn.value || '',
@@ -137,7 +137,8 @@ const handleSubmit = async (e: Event) => {
             title: 'Category added !',
             id: 'modal-success',
         });
-        categoryStore.fetchCategories();
+        await categoryStore.refreshCategories();
+         console.log('All Categories:', categoryStore.categories)
         router.push(
             `/products/categories`,
         );

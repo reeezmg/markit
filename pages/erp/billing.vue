@@ -645,8 +645,6 @@ const payload = {
  CreateBill.mutateAsync({
   data: payload
     });
-
-   
         toast.add({
           title: 'Bill created successfully!',
           color: 'green',
