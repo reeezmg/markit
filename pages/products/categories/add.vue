@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
 import { useCreateCategory } from '~/lib/hooks';
-definePageMeta({
-    auth: true,
-});
+
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();

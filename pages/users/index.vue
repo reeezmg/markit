@@ -10,9 +10,7 @@ import {
     useFindUniqueUser
 } from '~/lib/hooks';
 const toast = useToast();
-definePageMeta({
-    auth: true,
-});
+
 const CreateUser = useCreateUser();
 const UpdateUser = useUpdateUser();
 const DeleteUser = useDeleteUser();

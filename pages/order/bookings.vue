@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue';
-definePageMeta({
-    auth: true,
-});
+
 import type { Period, Range } from '~/types';
 import {
     useUpdateBill,

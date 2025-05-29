@@ -1,7 +1,15 @@
 import type { H3Event, SessionConfig } from 'h3';
 import crypto from 'uncrypto';
 
-const sessionConfig: SessionConfig = useRuntimeConfig().auth || {};
+const runtimeAuth = useRuntimeConfig().auth;
+
+const sessionConfig: SessionConfig = {
+  name: runtimeAuth.name,
+  password: runtimeAuth.password,
+  cookie: {
+    maxAge: 60 * 60 * 24 * 365,
+  }
+};
 
 export type AuthSession = {
     id: string;

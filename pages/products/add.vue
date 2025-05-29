@@ -7,9 +7,7 @@ const { printLabel } = usePrint();
 const router = useRouter();
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
-definePageMeta({
-    auth: true,
-});
+
 
 
 interface ImageData {

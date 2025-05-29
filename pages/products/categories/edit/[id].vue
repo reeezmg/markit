@@ -3,9 +3,6 @@ import AwsService from '~/composables/aws';
 import { useUpdateCategory, useFindUniqueCategory, useUpdateSubcategory, useCreateSubcategory, useDeleteSubcategory } from '~/lib/hooks';
 import type { Category, Subcategory } from '@prisma/client';
 
-definePageMeta({
-  auth: true,
-});
 
 const route = useRoute();
 const router = useRouter();

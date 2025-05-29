@@ -14,6 +14,7 @@ export default defineNuxtConfig({
         auth: {
             name: 'nuxt-session',
             password: process.env.NUXT_AUTH_PASSWORD || '',
+            
         },
     },
     nitro: {

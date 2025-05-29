@@ -3,10 +3,6 @@
 import { BillingAddClient } from '#components';
 import { useUpdateCompany,useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateManyItem } from '~/lib/hooks';
 
-definePageMeta({
-    auth: true,
-});
-
 
 const { printBill } = usePrint();
 const CreateBill = useCreateBill();
@@ -164,7 +160,7 @@ watch(items, async () => {
      
       if( category){
         const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = category;
-        console.log(taxType)
+
       if (taxType === 'FIXED') {
         item.tax = fixedTax ?? 0;
       } else {
@@ -1143,6 +1139,7 @@ const movecatgeory = (rowIndex) => {
       
       }
     });
+
     ul.addEventListener('keydown', function handler(e) {
       if (e.key === 'ArrowLeft') {
         button.click(); 
@@ -1150,8 +1147,6 @@ const movecatgeory = (rowIndex) => {
         requestAnimationFrame(() => {
           barcodeInputs.value[rowIndex].$el.querySelector('input').select();
         });
-              
-      
       }
     });
   }, 100); // enough time for dropdown to render
@@ -1240,26 +1235,38 @@ function submitSplitPayment() {
   showSplitModal.value = false
 }
 
+function handleCategoryChange(category, rowIndex) {
+  console.log(category);
+  
+  const isEmpty = !category || Object.keys(category).length === 0;
+
+  if (!isEmpty) {
+    rateInputs.value[rowIndex]?.$el?.querySelector('input')?.focus();
+  }
+}
+
 </script>
 
 
 <template>
   <UDashboardPanelContent class="p-1">
       <UCard 
-       :ui="{
-          base: 'h-full flex flex-col',
-          rounded: '',
-         divide: 'divide-y divide-gray-200 dark:divide-gray-700',
-          body: {
-            padding: '',
-            base: 'grow divide-y divide-gray-200 dark:divide-gray-700'
-          },
-          footer: {
-            base: ' divide-y divide-gray-200 dark:divide-gray-700',
-            padding:''
-          }
-        }">
-        <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm p-3">
+    :ui="{
+      base: 'h-full flex flex-col',
+      rounded: '',
+      divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+      body: {
+        padding: '',
+        base: 'sm:flex-1 sm:flex sm:flex-col sm:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700'
+      },
+      footer: {
+        base: 'divide-y divide-gray-200 dark:divide-gray-700',
+        padding: ''
+      }
+    }"
+  >
+
+        <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm p-3 ">
         <UInput v-if="!token" v-model="date" type="date" label="Date" class="lg:col-span-2" />
         <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2" />
         <UButton color="primary" label="Token Entries " block @click="isTokenOpen=true" class="lg:col-start-11 lg:col-span-2"/>
@@ -1268,7 +1275,7 @@ function submitSplitPayment() {
 
         <!-- Responsive table wrapper -->
          
-        <div class="overflow-x-auto mt-2 h-48 p-3">
+        <div class="overflow-x-auto mt-2 h-full p-3">
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
@@ -1310,7 +1317,7 @@ function submitSplitPayment() {
     <td class="py-1 whitespace-nowrap"  ref="categoryInputs">
       <USelectMenu  
         v-model="row.category" 
-        
+        @update:modelValue="() => handleCategoryChange(row.category, index)"
         :options="categories" 
         option-attribute="name"  
         option-key="id" 

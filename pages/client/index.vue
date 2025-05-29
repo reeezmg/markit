@@ -12,9 +12,6 @@ import {
     useUpdateBill,
 } from '~/lib/hooks';
 
-definePageMeta({
-    auth: true,
-});
 
 const UpdateClient = useUpdateClient();
 const UpdatePipeline = useUpdatePipeline();

@@ -15,9 +15,6 @@ import {
     useFindFirstItem
 } from '~/lib/hooks';
 
-definePageMeta({
-    auth: true,
-});
 
 interface ImageData {
     file: File;
