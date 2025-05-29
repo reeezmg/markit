@@ -276,7 +276,7 @@ watch(hsn, (newVal) => {
             </UFormGroup>
              
           </div>
-          <UFormGroup label="Short Cut" class="w-full">
+          <UFormGroup label="Short Cut" class="w-full my-3">
                 <UInput
                     id="shortCut"
                     v-model="shortCut"

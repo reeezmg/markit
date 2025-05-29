@@ -21,7 +21,12 @@ const useAuth = () => useNuxtApp().$auth;
 const columns = [
     {
         key: 'name',
-        label: 'name',
+        label: 'Name',
+        sortable: true,
+    },
+    {
+        key: 'shortCut',
+        label: 'Short Cut',
         sortable: true,
     },
     {
@@ -211,6 +216,7 @@ const queryArgs = reactive({
     take: pageCount.value,
     select: {
         id:true,
+        shortCut:true,
         name:true,
         status:true,
         image:true,  
