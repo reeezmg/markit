@@ -1070,6 +1070,7 @@ const focusInput = async (rowIndex, field) => {
       case 'barcode':
         if (barcodeInputs.value[rowIndex]?.$el) {
           barcodeInputs.value[rowIndex].$el.querySelector('input')?.focus();
+          barcodeInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
       case 'category':
@@ -1080,21 +1081,25 @@ const focusInput = async (rowIndex, field) => {
       case 'name':
         if (nameInputs.value[rowIndex]?.$el) {
           nameInputs.value[rowIndex].$el.querySelector('input')?.focus();
+          nameInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
       case 'qty':
         if (qtyInputs.value[rowIndex]?.$el) {
           qtyInputs.value[rowIndex].$el.querySelector('input')?.focus();
+          qtyInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
       case 'rate':
         if (rateInputs.value[rowIndex]?.$el) {
           rateInputs.value[rowIndex].$el.querySelector('input')?.focus();
+          rateInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
       case 'discount':
         if (discountInputs.value[rowIndex]?.$el) {
           discountInputs.value[rowIndex].$el.querySelector('input')?.focus();
+          discountInputs.value[rowIndex].$el.querySelector('input')?.select();
         }
         break;
       case 'tax':
