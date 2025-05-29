@@ -7,6 +7,7 @@ import type { Category, Subcategory } from '@prisma/client';
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+const categoryStore = useCategoryStore()
 const UpdateCategory = useUpdateCategory();
 const UpdateSubcategory = useUpdateSubcategory();
 const CreateSubcategory = useCreateSubcategory();
@@ -24,6 +25,7 @@ const linkList = ['Create', 'Subcategories', 'Live'];
 // Form data
 const name = ref('');
 const hsn = ref('');
+const shortCut = ref('');
 const description = ref('');
 const taxType = ref<'FIXED' | 'VARIABLE' | undefined>(undefined);
 const fixedTax = ref(0);
@@ -44,6 +46,7 @@ watchEffect(() => {
   if (category.value) {
     name.value = category.value.name;
     hsn.value = category.value.hsn || '';
+    shortCut.value = category.value.shortCut || '';
     description.value = category.value.description || '';
     taxType.value = category.value.taxType;
     fixedTax.value = category.value.fixedTax || 0;
@@ -68,6 +71,7 @@ watchEffect(() => {
 const createValue = (data: any) => {
   name.value = data.name;
   hsn.value = data.hsn;
+  shortCut.value = data.shortCut;
   description.value = data.description;
   taxType.value = data.taxType;
   fixedTax.value = data.fixedTax;
@@ -141,6 +145,7 @@ const handleSubmit = async (e: Event) => {
         status: live.value.live,
         image: files[0]?.uuid || category.value?.image,
         hsn: hsn.value,
+        ...(shortCut.value && { shortCut: shortCut.value }),
         taxType: taxType.value,
         fixedTax: fixedTax.value,
         thresholdAmount: thresholdAmount.value,
@@ -181,6 +186,7 @@ const handleSubmit = async (e: Event) => {
       title: 'Category updated successfully!',
       color: 'green'
     });
+    categoryStore.fetchCategories();
     router.push('/products/categories');
   } catch (error) {
     toast.add({
@@ -227,6 +233,7 @@ const scrollToSection = (sectionId: string) => {
           <AddCategoryCreate
             :editName="category?.name"
             :editHsn="category?.hsn"
+            :editShortCut="category?.shortCut"
             :editDescription="category?.description"
             :taxType="category?.taxType"
             :thresholdAmount="category?.thresholdAmount"

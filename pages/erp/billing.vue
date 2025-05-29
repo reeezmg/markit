@@ -394,6 +394,7 @@ const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs);
 const { data: entrydata ,refetch:entryRefetch} = useFindManyTokenEntry(entryargs,{enable:false});
 
 const handleEnterBarcode = (barcode,index) => {
+ const pattern = /^\d[A-Z]\d{6}$/;
   if(!barcode){
     if(token.value){
       const component = savetokenref.value;
@@ -407,9 +408,18 @@ const handleEnterBarcode = (barcode,index) => {
     input.select();
     }
   }else{
+    if(!pattern.test(barcode)){
+      const categorystore = categoryStore.getCategoryByShortCut(barcode)
+      console.log(categorystore)
+      items.value[index].category = categories.value.filter(category =>category.id === categorystore.id)
+      items.value[index].barcode = '';
+      const component = rateInputs.value[index];
+      const input = component.$el.querySelector("input");
+      input.select();
+    }else{
     const existingItemIndex = items.value.findIndex(
-  (item, i) => item.barcode === barcode && !item.return && i !== index
-);
+      (item, i) => item.barcode === barcode && !item.return && i !== index
+    );
 
     console.log(existingItemIndex)
     if(existingItemIndex != -1 && existingItemIndex !== index){
@@ -421,24 +431,11 @@ const handleEnterBarcode = (barcode,index) => {
 
     }else{
       fetchItemData(barcode, index);
-    addNewRow(index);
+      addNewRow(index);
     }
     
   }
- 
-};
-
-
-const handleShiftBarcode = (barcode,index) => {
-   const categorystore = categoryStore.getCategoryByShortCut(barcode)
-   console.log(categorystore)
-  items.value[index].category = categories.value.filter(category =>category.id === categorystore.id)
-  items.value[index].barcode = '';
-  const component = rateInputs.value[index];
-  const input = component.$el.querySelector("input");
-  input.select();
-  
-}
+}}
 
 const handleEnterMainDiscount = () => {
   const component = paymentref.value;
@@ -1320,7 +1317,6 @@ function handleCategoryChange(category, rowIndex) {
         @blur="fetchItemData(row.barcode, index)"
         @keydown.delete="removeRow($event, row.barcode, index)"
         @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
-        @keydown.shift.prevent="handleShiftBarcode(row.barcode, index)"
         @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
         @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
         @keydown.left.prevent="moveFocus(index, 'barcode', 'left')"

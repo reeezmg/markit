@@ -5,6 +5,7 @@ import { useCreateCategory } from '~/lib/hooks';
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
+const categoryStore = useCategoryStore()
 const CreateCategory = useCreateCategory();
 const awsService = new AwsService();
 const useAuth = () => useNuxtApp().$auth;
@@ -136,6 +137,7 @@ const handleSubmit = async (e: Event) => {
             title: 'Category added !',
             id: 'modal-success',
         });
+        categoryStore.fetchCategories();
         router.push(
             `/products/categories`,
         );
