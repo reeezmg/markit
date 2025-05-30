@@ -183,7 +183,7 @@ watch(items, async () => {
       baseValue += (baseValue * item.tax) / 100;
     }
 
-    item.value = baseValue.toFixed(2);
+    item.value = baseValue;
   }
 }, { deep: true });
 

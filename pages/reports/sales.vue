@@ -12,9 +12,10 @@ const useAuth = () => useNuxtApp().$auth;
 const loading = ref(true)
 const { printReport } = usePrint();
 let printData = {}
-const dashboard = useCompanyDashboard() as DashboardComposable
+
 const startDate = ref('')
 const endDate = ref('')
+const dashboard = useCompanyDashboard(startDate, endDate) as DashboardComposable
 const fullReport = ref(false)
 const quickRange = ref('Today')
 const quickRanges = ['Today','This Month', 'Last Month']
@@ -429,6 +430,15 @@ console.log(err)
               </template>
             </KpiCard>
         </div>
+
+        <UTable
+          :rows="dashboard.categorySales"
+          :columns="[
+            { key: 'name', label: 'Category' },
+            { key: 'sales', label: 'Sales', format: val => `₹${val.toFixed(2)}` }
+          ]"
+        />
+
 
         <TopProducts v-if="!loading && dashboard?.topProducts" :products="dashboard.topProducts" />
         <RevenueEChart v-if="!loading && dashboard?.revenueGraph" :data="dashboard.revenueGraph" title="Monthly Sales Overview" />

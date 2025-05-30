@@ -161,7 +161,7 @@ import {
     const productMap = new Map<string, { name: string; total: number }>()
   
     for (const entry of entries.value) {
-      const name = entry.variant?.product?.name || 'Unknown'
+      const name = entry.category?.name || 'Unknown'
       const key = name
   
       if (!productMap.has(key)) {
@@ -176,6 +176,28 @@ import {
       .slice(0, 5)
   })
   
+
+  const categorySales = computed(() => {
+  if (!entries.value) return []
+
+  const salesMap = new Map<string, { name: string; sales: number }>()
+
+  for (const entry of entries.value) {
+    if (entry.return) continue // skip returned entries
+
+    const name = entry.category?.name || 'Unknown'
+
+    if (!salesMap.has(name)) {
+      salesMap.set(name, { name, sales: 0 })
+    }
+
+    salesMap.get(name)!.sales += entry.value ?? 0
+  }
+
+  return [...salesMap.values()].sort((a, b) => b.sales - a.sales)
+})
+
+
   
     const productsCount = computed(() => products.value?.length ?? 0)
     const itemsCount = computed(() => items.value?.length ?? 0)
@@ -300,10 +322,6 @@ import {
     })
     
     
-    
-    
-
-  
     return {
       company:company,
       productsCount,
@@ -312,6 +330,7 @@ import {
       totalExpenses,
       revenueGraph,
       topProducts,
+      categorySales:categorySales.value,
       lowStockEntries,
       recentTransactions,
       revenueByCategory,
