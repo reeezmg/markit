@@ -10,7 +10,7 @@ import {
   import { computed } from 'vue'
   const useAuth = () => useNuxtApp().$auth;
   
-  export function useCompanyDashboard() {
+export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
     const companyQuery = useFindUniqueCompany({
         where: { id: useAuth().session.value?.companyId },
         select:{
@@ -161,7 +161,7 @@ import {
     const productMap = new Map<string, { name: string; total: number }>()
   
     for (const entry of entries.value) {
-      const name = entry.category?.name || 'Unknown'
+      const name = entry.variant.product?.name || 'Unknown'
       const key = name
   
       if (!productMap.has(key)) {
@@ -178,24 +178,31 @@ import {
   
 
   const categorySales = computed(() => {
-  if (!entries.value) return []
+    if (!entries.value) return []
 
-  const salesMap = new Map<string, { name: string; sales: number }>()
+    const salesMap = new Map<string, { name: string; sales: number }>()
 
-  for (const entry of entries.value) {
-    if (entry.return) continue // skip returned entries
+    for (const entry of entries.value) {
+      if (entry.return) continue
 
-    const name = entry.category?.name || 'Unknown'
+      const createdAt = new Date(entry.bill?.createdAt || '')
+      if (isNaN(createdAt)) continue
 
-    if (!salesMap.has(name)) {
-      salesMap.set(name, { name, sales: 0 })
+      // ✅ Apply date filter only if startDate/endDate are defined
+      if (startDate && createdAt < startDate) continue
+      if (endDate && createdAt > endDate) continue
+
+      const name = entry.category?.name || 'Unknown'
+
+      if (!salesMap.has(name)) {
+        salesMap.set(name, { name, sales: 0 })
+      }
+
+      salesMap.get(name)!.sales += entry.value ?? 0
     }
 
-    salesMap.get(name)!.sales += entry.value ?? 0
-  }
-
-  return [...salesMap.values()].sort((a, b) => b.sales - a.sales)
-})
+    return [...salesMap.values()].sort((a, b) => b.sales - a.sales)
+  })
 
 
   

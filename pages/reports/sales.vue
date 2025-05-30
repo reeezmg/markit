@@ -3,6 +3,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import KpiCard from '@/components/dashboard/KpiCard.vue'
 import TopProducts from '@/components/dashboard/TopProducts.vue'
 import RevenueEChart from '@/components/dashboard/RevenueEChart.vue'
+import CategoryRevenuePie from '@/components/dashboard/CategoryRevenuePie.vue'
 import { useCompanyDashboard } from '@/lib/api/useDashboardData'
 import { exportToCSV } from '~/utils/export-csv'
 import type { DashboardComposable, BillWithRelations, KpiItem, PdfReportMeta } from '~/types/dashboard'
@@ -15,7 +16,8 @@ let printData = {}
 
 const startDate = ref('')
 const endDate = ref('')
-const dashboard = useCompanyDashboard(startDate, endDate) as DashboardComposable
+const dashboard = ref({
+})
 const fullReport = ref(false)
 const quickRange = ref('Today')
 const quickRanges = ['Today','This Month', 'Last Month']
@@ -26,23 +28,77 @@ const toast = useToast()
 // Set default date range (current month)
 const setDefaultDateRange = () => {
   const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
   const today = now.toLocaleDateString('en-CA')
-    startDate.value = today
-    endDate.value = today
+  startDate.value = today
+  endDate.value = today
 }
+
+watch([startDate, endDate], ([start, end]) => {
+  if (start && end && !fullReport.value) {
+    fetchReportFromServer();
+  }
+});
+
+watch(dashboard, (newdashboard) => {
+  console.log('Dashboard data updated:', newdashboard);
+});
+
+// Watch for quick range changes
+watch(quickRange, async (value) => {
+  if (!value) return;
+
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = now.getMonth();
+
+  if (value === 'Today') {
+    const today = now.toLocaleDateString('en-CA');
+    startDate.value = today;
+    endDate.value = today;
+  } else if (value === 'This Month') {
+    startDate.value = new Date(year, month, 1).toLocaleDateString('en-CA');
+    endDate.value = new Date(year, month + 1, 0).toLocaleDateString('en-CA');
+  } else if (value === 'Last Month') {
+    startDate.value = new Date(year, month - 1, 1).toLocaleDateString('en-CA');
+    endDate.value = new Date(year, month, 0).toLocaleDateString('en-CA');
+  }
+
+  await fetchReportFromServer();
+});
+
+const fetchReportFromServer = async () => {
+  if (!startDate.value || !endDate.value) return;
+
+  try {
+    const res = await $fetch('/api/report', {
+      method: 'GET',
+      params: {
+        startDate: startDate.value,
+        endDate: endDate.value,
+      },
+    });
+
+    dashboard.value = res;
+  } catch (error) {
+    console.error('Failed to fetch server report:', error);
+    toast.add({
+      title: 'Server Error',
+      description: 'Could not fetch server-side report.',
+      color: 'red',
+    });
+  }
+};
 
 // Computed properties
 const isDownloadDisabled = computed(() => {
-  return loading.value || !dashboard.bills.value || 
+  return loading.value || !dashboard.value.bills || 
     (!fullReport.value && !startDate.value && !endDate.value && !quickRange.value)
 })
 
 const filteredBills = computed(() => {
-  if (!dashboard.bills.value || !dashboard.bills.value.length) return [];
+  if (!dashboard.value.bills || !dashboard.value.bills.length) return [];
 
-  if (fullReport.value) return dashboard.bills.value;
+  if (fullReport.value) return dashboard.value.bills;
 
   const start = startDate.value
     ? new Date(new Date(startDate.value).setHours(0, 0, 0, 0))
@@ -52,56 +108,52 @@ const filteredBills = computed(() => {
     ? new Date(new Date(endDate.value).setHours(23, 59, 59, 999))
     : null;
 
-  return dashboard.bills.value.filter(b => {
+  return dashboard.value.bills.filter(b => {
     const billDate = new Date(b.createdAt);
     return (!start || billDate >= start) && (!end || billDate <= end);
   });
 });
 
-
 const totals = computed(() => {
   const bills = filteredBills.value;
 
   const totalBills = bills.length;
-         {paymentStatus:'PAID'}
 
   const totalSales = bills
     .flatMap(b => b.entries ?? [])
     .reduce((sum, entry) => sum + ((entry.rate ?? 0) * (entry.qty ?? 0)), 0);
 
   const totalRevenue = bills
-  .filter(bill => bill.paymentStatus === 'PAID')
-  .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
+    .filter(bill => bill.paymentStatus === 'PAID')
+    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
 
   const totalCredit = bills
-  .filter(bill => bill.paymentStatus === 'PENDING')
-  .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
-
+    .filter(bill => bill.paymentStatus === 'PENDING')
+    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
 
   let totalRevenueInCash = 0;
-let totalRevenueInUPI = 0;
+  let totalRevenueInUPI = 0;
 
-bills.forEach(bill => {
-  if (bill.splitPayments && Array.isArray(bill.splitPayments)) {
-    bill.splitPayments.forEach(payment => {
-      if (payment.method === 'Cash') {
-        totalRevenueInCash += payment.amount ?? 0;
-      } else if (payment.method === 'UPI') {
-        totalRevenueInUPI += payment.amount ?? 0;
+  bills.forEach(bill => {
+    if (bill.splitPayments && Array.isArray(bill.splitPayments)) {
+      bill.splitPayments.forEach(payment => {
+        if (payment.method === 'Cash') {
+          totalRevenueInCash += payment.amount ?? 0;
+        } else if (payment.method === 'UPI') {
+          totalRevenueInUPI += payment.amount ?? 0;
+        }
+      });
+    } else {
+      // Fallback for non-split payments
+      const method = bill.paymentMethod;
+      const amount = bill.grandTotal ?? 0;
+      if (method === 'Cash') {
+        totalRevenueInCash += amount;
+      } else if (method === 'UPI') {
+        totalRevenueInUPI += amount;
       }
-    });
-  } else {
-    // Fallback for non-split payments
-    const method = bill.paymentMethod;
-    const amount = bill.grandTotal ?? 0;
-    if (method === 'Cash') {
-      totalRevenueInCash += amount;
-    } else if (method === 'UPI') {
-      totalRevenueInUPI += amount;
     }
-  }
-});
-
+  });
 
   const totalRevenueInCredit = bills
     .filter(bill => bill.paymentMethod === 'Credit')
@@ -121,12 +173,10 @@ bills.forEach(bill => {
   };
 });
 
-
-
 const filteredExpenses = computed(() => {
-  if (!dashboard.expenses.value || !dashboard.expenses.value.length) return []
+  if (!dashboard.value.expenses || !dashboard.value.expenses.length) return []
   
-  if (fullReport.value) return dashboard.expenses.value
+  if (fullReport.value) return dashboard.value.expenses
   
   const start = startDate.value
     ? new Date(new Date(startDate.value).setHours(0, 0, 0, 0))
@@ -136,39 +186,37 @@ const filteredExpenses = computed(() => {
     ? new Date(new Date(endDate.value).setHours(23, 59, 59, 999))
     : null;
 
-  return dashboard.expenses.value.filter(b => {
+  return dashboard.value.expenses.filter(b => {
     const billDate = new Date(b.expenseDate)
     return (!start || billDate >= start) && (!end || billDate <= end)
   })
 })
 
 const totalsExpense = computed(() => {
-     const expenses = filteredExpenses.value;
+  const expenses = filteredExpenses.value;
 
-     const totalExpense = expenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0
+  const totalExpense = expenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0
 
-     const totalExpensesInCash = expenses
+  const totalExpensesInCash = expenses
     .filter(expense => expense.paymentMode === 'CASH')
     .reduce((sum, expense) => sum + (expense.totalAmount ?? 0), 0)
 
-     const totalExpensesInUPI = expenses
+  const totalExpensesInUPI = expenses
     .filter(expense => expense.paymentMode === 'UPI')
     .reduce((sum, expense) => sum + (expense.totalAmount ?? 0), 0)
-    return {
-      totalExpense,
-      totalExpensesInCash,
-      totalExpensesInUPI,
     
+  return {
+    totalExpense,
+    totalExpensesInCash,
+    totalExpensesInUPI,
   };
 })
-
-
 
 const kpiArray = computed<KpiItem[]>(() => ([
   { KPI: 'Total Revenue', Value: formatCurrency(filteredBills.value.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0) },
   { KPI: 'Total Bills', Value: filteredBills.value.length },
   { KPI: 'Avg. Bill Value', Value: formatCurrency(filteredBills.value.length > 0 ? 
-    (dashboard.totalRevenue.value || 0) / filteredBills.value.length : 0) }
+    totals.value.totalRevenue / filteredBills.value.length : 0) }
 ]))
 
 const billsCSV = computed(() => filteredBills.value.map(bill => ({
@@ -224,7 +272,7 @@ const downloadCSV = () => {
 }
 
 const downloadPDF = async () => {
-  if (!dashboard.bills.value || !filteredBills.value.length) {
+  if (!dashboard.value.bills || !filteredBills.value.length) {
     toast.add({ title: 'No Data', description: 'No report data available to export', color: 'red' })
     return
   }
@@ -268,7 +316,7 @@ const downloadPDF = async () => {
 const refreshPage = async () => {
   loading.value = true
   try {
-    await dashboard.refreshAll()
+    await fetchReportFromServer()
     toast.add({ title: 'Data refreshed successfully' })
   } catch (error) {
     console.error('Refresh failed:', error)
@@ -278,57 +326,34 @@ const refreshPage = async () => {
   }
 }
 
-// Watch for quick range changes
-watch(quickRange, (value) => {
-  if (!value) return
-
-  const now = new Date()
-  const year = now.getFullYear()
-  const month = now.getMonth()
-
-  if (value === 'Today') {
-    const today = now.toLocaleDateString('en-CA')
-    startDate.value = today
-    endDate.value = today
-  } else if (value === 'This Month') {
-    startDate.value = new Date(year, month, 1).toLocaleDateString('en-CA')
-    endDate.value = new Date(year, month + 1, 0).toLocaleDateString('en-CA')
-  } else if (value === 'Last Month') {
-    startDate.value = new Date(year, month - 1, 1).toLocaleDateString('en-CA')
-    endDate.value = new Date(year, month, 0).toLocaleDateString('en-CA')
-  }
-})
-
-
 // Initialize
 onMounted(() => {
   setDefaultDateRange()
-  // Data is automatically loaded by the composable
+  fetchReportFromServer()
   loading.value = false
 })
 
 const printReportHandle = async() => {
-  try{
+  try {
     printData = {
       companyName: useAuth().session.value?.companyName || '',
-       companyAddress: dashboard.company.value.address || {},
-       expenses: filteredExpenses.value || [],
-       dateRange: startDate.value === endDate.value
+      companyAddress: dashboard.value.company?.address || {},
+      expenses: filteredExpenses.value || [],
+      dateRange: startDate.value === endDate.value
         ? `${startDate.value || 'Start'}`
         : `${startDate.value || 'Start'} to ${endDate.value || 'End'}`,
-        totalRevenue:totals.value.totalRevenue,
-        totalRevenueInCash:totals.value.totalRevenueInCash,
-        totalRevenueInUPI:totals.value.totalRevenueInUPI,
-        totalExpense:totalsExpense.value.totalExpense,
-        totalExpensesInUPI:totalsExpense.value.totalExpensesInUPI,
-        totalExpensesInCash:totalsExpense.value.totalExpensesInCash,
-        amountInUPI:totals.value.totalRevenueInUPI - totalsExpense.value.totalExpensesInUPI,
-        amountInDrawer:totals.value.totalRevenueInCash - totalsExpense.value.totalExpensesInCash,
+      totalRevenue: totals.value.totalRevenue,
+      totalRevenueInCash: totals.value.totalRevenueInCash,
+      totalRevenueInUPI: totals.value.totalRevenueInUPI,
+      totalExpense: totalsExpense.value.totalExpense,
+      totalExpensesInUPI: totalsExpense.value.totalExpensesInUPI,
+      totalExpensesInCash: totalsExpense.value.totalExpensesInCash,
+      amountInUPI: totals.value.totalRevenueInUPI - totalsExpense.value.totalExpensesInUPI,
+      amountInDrawer: totals.value.totalRevenueInCash - totalsExpense.value.totalExpensesInCash,
     }
     printReport(printData)
-console.log(printData)
-  }catch(err){
-console.log(err)
+  } catch(err) {
+    console.log(err)
   }
 }
 </script>
@@ -382,32 +407,26 @@ console.log(err)
 
             <UPopover mode="hover">
             <KpiCard class="w-full"  title="Total Revenue" :value="formatCurrency(totals.totalRevenue)">
-              <template #icon>
-                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-              </template>
+              
             </KpiCard>
 
            
             <template #panel>
             <div class="p-4 flex flex-col">
-              <div>Revenue in Cash: {{ totals.totalRevenueInCash }}</div>
-              <div>Revenue in UPI: {{ totals.totalRevenueInUPI }}</div>
+              <div>Revenue in Cash: {{ totals?.totalRevenueInCash }}</div>
+              <div>Revenue in UPI: {{ totals?.totalRevenueInUPI }}</div>
             </div>
           </template>
           </UPopover>
 
-           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(totals.totalCredit)">
-              <template #icon>
-                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-              </template>
+           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(totals?.totalCredit)">
+              
             </KpiCard>
 
 
             <UPopover mode="hover">
             <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(totalsExpense.totalExpense)">
-            <template #icon>
-              <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-            </template>
+           
           </KpiCard>
            <template #panel>
             <div class="p-4 flex flex-col">
@@ -419,29 +438,44 @@ console.log(err)
         
 
             <KpiCard title="Amount in Drawer" :value="formatCurrency(totals.totalRevenueInCash - totalsExpense.totalExpensesInCash)">
-              <template #icon>
-                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-              </template>
+              
             </KpiCard>
 
               <KpiCard title="Amount in Bank" :value="formatCurrency(totals.totalRevenueInUPI - totalsExpense.totalExpensesInUPI)">
-              <template #icon>
-                <UIcon name="i-heroicons-banknotes" class="text-indigo-600 dark:text-white text-3xl" />
-              </template>
+              
             </KpiCard>
         </div>
 
-        <UTable
-          :rows="dashboard.categorySales"
-          :columns="[
-            { key: 'name', label: 'Category' },
-            { key: 'sales', label: 'Sales', format: val => `₹${val.toFixed(2)}` }
-          ]"
-        />
+
+     <div class="flex flex-col lg:flex-row gap-4 h-[400px]">
+  <!-- Table -->
+  <div class="flex-1 bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4 overflow-auto">
+    <UTable
+      :rows="dashboard.categorySales"
+      :columns="[
+        { key: 'name', label: 'Category' },
+        {
+          key: 'sales',
+          label: 'Sales',
+          format: val => `₹${val.toFixed(2)}`
+        }
+      ]"
+    />
+  </div>
+
+  <!-- Top Products -->
+  <div class="flex-1">
+    <CategoryRevenuePie v-if="!loading && dashboard?.topProducts" :revenueByCategory="dashboard?.revenueByCategory" title="Category" />
+  </div>
+</div>
 
 
-        <TopProducts v-if="!loading && dashboard?.topProducts" :products="dashboard.topProducts" />
-        <RevenueEChart v-if="!loading && dashboard?.revenueGraph" :data="dashboard.revenueGraph" title="Monthly Sales Overview" />
+ <TopProducts
+      v-if="!loading && dashboard?.topProducts"
+      :topProducts="dashboard.topProducts"
+    />
+
+        
 
         <div v-if="loading" class="text-center py-6">
           <UIcon name="i-heroicons-arrow-path" class="animate-spin h-6 w-6 mx-auto" />
@@ -452,7 +486,7 @@ console.log(err)
           <UIcon name="i-heroicons-exclamation-circle" class="h-8 w-8 text-red-500 mx-auto" />
           <p class="text-red-500 mt-2">No data available for this report</p>
           <p class="text-sm text-gray-500 mt-1">
-            {{ (dashboard.bills.value?.length ?? 0) > 0 ? 'Filters may be too restrictive' : 'No bills found' }}
+            {{ (dashboard.bills?.length ?? 0) > 0 ? 'Filters may be too restrictive' : 'No bills found' }}
           </p>
           <UButton 
             icon="i-heroicons-arrow-path" 
