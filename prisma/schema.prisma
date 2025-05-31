@@ -397,6 +397,7 @@ model Bill {
   bookingDate    DateTime?     @map("booking_date")
   returnDeadline String?       @map("return_deadline")
   entries        Entry[]
+  billHistories  BillHistory[]
   company        Company       @relation(fields: [companyId], references: [id])
   companyId      String        @map("company_id")
   account        Account?      @relation(fields: [accountId], references: [id])
@@ -435,10 +436,11 @@ model Entry {
 
 model BillHistory {
   id        String   @id() @unique() @default(uuid())
-  billId    String   @map("bill_id")
   data      Json
   changedAt DateTime @default(now()) @map("changed_at")
   operation String
+  bill      Bill?    @relation(fields: [billId], references: [id])
+  billId    String?  @map("bill_id")
 
   @@map("bill_history")
 }

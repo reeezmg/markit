@@ -1350,6 +1350,12 @@ const metadata = {
                     isDataModel: true,
                     isArray: true,
                     backLink: 'bill',
+                }, billHistories: {
+                    name: "billHistories",
+                    type: "BillHistory",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'bill',
                 }, company: {
                     name: "company",
                     type: "Company",
@@ -1533,9 +1539,6 @@ const metadata = {
                     type: "String",
                     isId: true,
                     attributes: [{ "name": "@default", "args": [] }],
-                }, billId: {
-                    name: "billId",
-                    type: "String",
                 }, data: {
                     name: "data",
                     type: "Json",
@@ -1546,6 +1549,20 @@ const metadata = {
                 }, operation: {
                     name: "operation",
                     type: "String",
+                }, bill: {
+                    name: "bill",
+                    type: "Bill",
+                    isDataModel: true,
+                    isOptional: true,
+                    backLink: 'billHistories',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "billId" },
+                }, billId: {
+                    name: "billId",
+                    type: "String",
+                    isOptional: true,
+                    isForeignKey: true,
+                    relationField: 'bill',
                 },
             }, uniqueConstraints: {
                 id: {

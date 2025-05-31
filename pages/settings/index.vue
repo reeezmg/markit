@@ -22,6 +22,7 @@ const isUpdatingProfile = ref(false);
 const isUpdatingPassword = ref(false);
 const isNameChanged = ref(false);
 const isEmailChanged = ref(false);
+const router = useRouter();
 
 
 const toast = useToast();
@@ -446,9 +447,19 @@ const onVerifyOtp = async () => {
                 </UFormGroup>
 
                 
-                 
+        <UDivider class="my-4" />
               
-
+        <UDashboardSection
+            title="Sales History"
+        >
+            <template #links>
+                <UButton
+                    label="Check"
+                    size="md"
+                   @click=" () => router.push(`./saleshistory`)"
+                />
+           </template>
+        </UDashboardSection>
 
         <UDivider class="my-4" />
 
@@ -456,15 +467,16 @@ const onVerifyOtp = async () => {
             title="Account"
             description="No longer want to use our service? You can delete your account here. This action is not reversible. All information related to this account will be deleted permanently."
         >
-            <div>
+            <template #links>
                 <UButton
                     color="red"
                     label="Delete account"
                     size="md"
                     @click="isDeleteAccountModalOpen = true"
                 />
-            </div>
+           </template>
         </UDashboardSection>
+         <UDivider class="my-4" />
 
         <!-- ~/components/settings/DeleteAccountModal.vue -->
         <SettingsDeleteAccountModal v-model="isDeleteAccountModalOpen" />
