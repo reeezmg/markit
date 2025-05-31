@@ -115,3 +115,17 @@ AFTER INSERT ON companies
 FOR EACH ROW
 EXECUTE FUNCTION set_store_unique_name();
 
+--bill audit logging
+CREATE OR REPLACE FUNCTION log_bill_before_update()
+RETURNS TRIGGER AS $$
+BEGIN
+    INSERT INTO bill_history (bill_id, data, changed_at, operation)
+    VALUES (OLD.id, to_jsonb(OLD), now(), 'UPDATE');
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_bill_update
+BEFORE UPDATE ON bills
+FOR EACH ROW
+EXECUTE FUNCTION log_bill_before_update();

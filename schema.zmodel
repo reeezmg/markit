@@ -455,29 +455,6 @@ model Bill extends Base {
 
 }
 
-model TokenEntry extends Base {
-    createdAt       DateTime @map("created_at")
-    tokenNo         String @map("token_no")
-    company         Company @relation(fields: [companyId], references: [id])
-    companyId       String @map("company_id")   
-    itemId          String @map("item_id")
-    variantId       String @map("variant_id")
-    barcode         String
-    categoryId      String @map("category_id")
-    size            String
-    name            String
-    qty             Int
-    rate            Int
-    discount        Int
-    tax             Int
-    value           Int
-    sizes           Json
-    totalQty        Int @map("total_qty")
-           
-    @@allow("create, read, update, delete", true)
-    @@map("token_entries")
-}
-
 model Entry extends Base {
     name        String?
     barcode     String?    
@@ -501,6 +478,17 @@ model Entry extends Base {
     @@map("entries")
 }
 
+model BillHistory extends Base{
+  billId     String      @map("bill_id")
+  data       Json
+  changedAt  DateTime @default(now())  @map("changed_at")
+  operation  String
+
+  @@allow("create, read, update, delete", true)
+  @@map("bill_history")
+}
+
+
 model Account extends Base {
     name        String
     phone       String
@@ -511,6 +499,30 @@ model Account extends Base {
     
     @@allow("create, read, update, delete", true)
     @@map("accounts")
+}
+
+
+model TokenEntry extends Base {
+    createdAt       DateTime @map("created_at")
+    tokenNo         String @map("token_no")
+    company         Company @relation(fields: [companyId], references: [id])
+    companyId       String @map("company_id")   
+    itemId          String @map("item_id")
+    variantId       String @map("variant_id")
+    barcode         String
+    categoryId      String @map("category_id")
+    size            String
+    name            String
+    qty             Int
+    rate            Int
+    discount        Int
+    tax             Int
+    value           Int
+    sizes           Json
+    totalQty        Int @map("total_qty")
+           
+    @@allow("create, read, update, delete", true)
+    @@map("token_entries")
 }
 
 model ExpenseCategory extends Base {

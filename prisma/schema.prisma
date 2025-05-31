@@ -409,29 +409,6 @@ model Bill {
   @@map("bills")
 }
 
-model TokenEntry {
-  id         String   @id() @unique() @default(uuid())
-  createdAt  DateTime @map("created_at")
-  tokenNo    String   @map("token_no")
-  company    Company  @relation(fields: [companyId], references: [id])
-  companyId  String   @map("company_id")
-  itemId     String   @map("item_id")
-  variantId  String   @map("variant_id")
-  barcode    String
-  categoryId String   @map("category_id")
-  size       String
-  name       String
-  qty        Int
-  rate       Int
-  discount   Int
-  tax        Int
-  value      Int
-  sizes      Json
-  totalQty   Int      @map("total_qty")
-
-  @@map("token_entries")
-}
-
 model Entry {
   id         String    @id() @unique() @default(uuid())
   name       String?
@@ -456,6 +433,16 @@ model Entry {
   @@map("entries")
 }
 
+model BillHistory {
+  id        String   @id() @unique() @default(uuid())
+  billId    String   @map("bill_id")
+  data      Json
+  changedAt DateTime @default(now()) @map("changed_at")
+  operation String
+
+  @@map("bill_history")
+}
+
 model Account {
   id        String   @id() @unique() @default(uuid())
   name      String
@@ -466,6 +453,29 @@ model Account {
   companyId String   @map("company_id")
 
   @@map("accounts")
+}
+
+model TokenEntry {
+  id         String   @id() @unique() @default(uuid())
+  createdAt  DateTime @map("created_at")
+  tokenNo    String   @map("token_no")
+  company    Company  @relation(fields: [companyId], references: [id])
+  companyId  String   @map("company_id")
+  itemId     String   @map("item_id")
+  variantId  String   @map("variant_id")
+  barcode    String
+  categoryId String   @map("category_id")
+  size       String
+  name       String
+  qty        Int
+  rate       Int
+  discount   Int
+  tax        Int
+  value      Int
+  sizes      Json
+  totalQty   Int      @map("total_qty")
+
+  @@map("token_entries")
 }
 
 model ExpenseCategory {

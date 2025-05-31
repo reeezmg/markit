@@ -10,6 +10,7 @@ import type { DashboardComposable, BillWithRelations, KpiItem, PdfReportMeta } f
 
 // Refs
 const useAuth = () => useNuxtApp().$auth;
+const companyName = computed(() => useAuth().session.value?.companyName);
 const loading = ref(true)
 const { printReport } = usePrint();
 let printData = {}
@@ -33,7 +34,31 @@ const setDefaultDateRange = () => {
   endDate.value = today
 }
 
-watch([startDate, endDate], ([start, end]) => {
+
+const fetchReportFromServer = async () => {
+  if (!startDate.value || !endDate.value) return;
+
+  try {
+    const res = await $fetch('/api/report', {
+      method: 'GET',
+      params: {
+        startDate: startDate.value,
+        endDate: endDate.value,
+      },
+    });
+
+    dashboard.value = res;
+  } catch (error) {
+    console.error('Failed to fetch server report:', error);
+    toast.add({
+      title: 'Server Error',
+      description: 'Could not fetch server-side report.',
+      color: 'red',
+    });
+  }
+};
+
+watch([startDate, endDate, companyName], ([start, end, companyName]) => {
   if (start && end && !fullReport.value) {
     fetchReportFromServer();
   }
@@ -66,28 +91,6 @@ watch(quickRange, async (value) => {
   await fetchReportFromServer();
 });
 
-const fetchReportFromServer = async () => {
-  if (!startDate.value || !endDate.value) return;
-
-  try {
-    const res = await $fetch('/api/report', {
-      method: 'GET',
-      params: {
-        startDate: startDate.value,
-        endDate: endDate.value,
-      },
-    });
-
-    dashboard.value = res;
-  } catch (error) {
-    console.error('Failed to fetch server report:', error);
-    toast.add({
-      title: 'Server Error',
-      description: 'Could not fetch server-side report.',
-      color: 'red',
-    });
-  }
-};
 
 // Computed properties
 const isDownloadDisabled = computed(() => {
