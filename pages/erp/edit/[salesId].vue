@@ -264,8 +264,10 @@ const selectAllText = (index) => {
 };
 
 
-const removeRow = (barcode,index) => {
-  if (!barcode){
+const removeRow = (event,barcode,index) => {
+  const inputValue = event.target.value;
+  if (!inputValue) {
+    event.preventDefault();
     if (items.value.length > 1) {
     items.value.splice(index, 1);
     // Reorder serial numbers after deletion
@@ -403,6 +405,7 @@ const billArgs = computed(() => ({
     deliveryFees: true,
     paymentMethod: true,
     paymentStatus: true,
+    splitPayments:true,
     notes:true,
     returnDeadline: true,
     accountId:true,
@@ -463,17 +466,33 @@ const {data: entriesToDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry
 watch(entriesToDelete, (newBill) => {
   console.log(newBill)
 })
-
 const handleEnterBarcode = (barcode,index) => {
+ const pattern = /^\d[A-Z]\d{6}$/;
   if(!barcode){
+    if(token.value){
+      const component = savetokenref.value;
+      const button = component.$el;
+      button.focus();
+    }
+    else{
     const component = discountref.value;
     const input = component.$el.querySelector("input");
     input.focus();
     input.select();
+    }
   }else{
+    if(!pattern.test(barcode)){
+      const categorystore = categoryStore.getCategoryByShortCut(barcode)
+      console.log(categorystore)
+      items.value[index].category = categories.value.filter(category =>category.id === categorystore.id)
+      items.value[index].barcode = '';
+      const component = rateInputs.value[index];
+      const input = component.$el.querySelector("input");
+      input.select();
+    }else{
     const existingItemIndex = items.value.findIndex(
-  (item, i) => item.barcode === barcode && !item.return && i !== index
-);
+      (item, i) => item.barcode === barcode && !item.return && i !== index
+    );
 
     console.log(existingItemIndex)
     if(existingItemIndex != -1 && existingItemIndex !== index){
@@ -485,12 +504,11 @@ const handleEnterBarcode = (barcode,index) => {
 
     }else{
       fetchItemData(barcode, index);
-    addNewRow(index);
+      addNewRow(index);
     }
     
   }
- 
-};
+}}
 
 const handleEnterMainDiscount = () => {
   const component = paymentref.value;
@@ -505,10 +523,40 @@ const handleEnterPayment = () => {
 };
 
 
+const deleteBill = async () => {
+    const res = await UpdateBill.mutateAsync({
+        where:{
+            id: router.params.salesId
+        },
+        data:{
+            deleted:true
+        }
+    })
+route.push('/erp/sales')
+    toast.add({
+        title: 'Bill Deleted !',
+       color: 'red',
+    });
+
+};
+
+
 
 watch(() => bill.value, (newData) => {
   console.log(newData)
   if (!newData || !newData.entries) return;
+  if (newData?.splitPayments && newData.splitPayments.length > 0) {
+    // Set initial split amounts
+    tempSplits.value = Object.fromEntries(
+      paymentOptions.map(method => {
+        const match = newData.splitPayments.find(p => p.method === method)
+        return [method, { method, amount: match?.amount ?? null }]
+      })
+    )
+        // Set the splitPayments array (if needed)
+    splitPayments.value = [...newData.splitPayments]
+    }
+
   discount.value = newData.discount
     selected.value = newData.accountId
     clientId.value = newData.client?.id
@@ -765,7 +813,7 @@ if (entryIds.length > 0) {
     where: { id: { in: entryIds } },
   });
 }
-
+console.log(splitPayments.value)
    
     // Execute all create, update, and delete promises
     const updateBillPromise = () => UpdateBill.mutateAsync({

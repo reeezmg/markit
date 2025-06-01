@@ -118,12 +118,39 @@ EXECUTE FUNCTION set_store_unique_name();
 --bill audit logging
 CREATE OR REPLACE FUNCTION log_bill_before_update()
 RETURNS TRIGGER AS $$
+DECLARE
+    op TEXT;
+    full_data JSONB;
 BEGIN
-    INSERT INTO bill_history (bill_id, data, changed_at, operation)
-    VALUES (OLD.id, to_jsonb(OLD), now(), 'UPDATE');
+    -- Determine operation type
+    IF OLD.deleted IS DISTINCT FROM TRUE AND NEW.deleted = TRUE THEN
+        op := 'DELETED';
+    ELSE
+        op := 'UPDATE';
+    END IF;
+
+    -- Merge entries into the bill JSON
+    SELECT 
+        jsonb_set(
+            to_jsonb(OLD),
+            '{entries}',
+            (
+                SELECT COALESCE(jsonb_agg(to_jsonb(e)), '[]'::jsonb)
+                FROM entries e 
+                WHERE e.bill_id = OLD.id
+            )
+        )
+    INTO full_data;
+
+    -- Insert into bill_history
+    INSERT INTO bill_history (id, bill_id, data, changed_at, operation)
+    VALUES (gen_random_uuid(), OLD.id, full_data, now(), op);
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+
 
 CREATE TRIGGER trigger_bill_update
 BEFORE UPDATE ON bills

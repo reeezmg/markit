@@ -1,11 +1,16 @@
    <script setup lang="ts">
 import {
     useFindManyBill,
+    useUpdateBill
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
 
+const UpdateBill = useUpdateBill();
 const search = ref<number | null>(null);
 const useAuth = () => useNuxtApp().$auth;
+const router = useRouter();
+const toast = useToast();
+
 // Reuse columns in both parent and expanded tables
 const columns = [
   {
@@ -16,11 +21,6 @@ const columns = [
   {
     key: 'createdAt',
     label: 'Date',
-    sortable: true,
-  },
-  {
-    key: 'entries',
-    label: 'Entries',
     sortable: true,
   },
   {
@@ -43,11 +43,10 @@ const columns = [
     label: 'Deleted',
     sortable: true,
   },
-   {
-        key: 'actions',
-        label: 'Actions',
-        sortable: false,
-    },
+     {
+    key: 'action',
+    label: '',
+  },
 ]
 const historycolumns = [
    {
@@ -81,6 +80,10 @@ const historycolumns = [
     label: 'Operation',
     sortable: true,
   },
+  {
+    key: 'action',
+    label: '',
+  },
 ]
 
 const action = (row: any) => {
@@ -107,7 +110,7 @@ const action = (row: any) => {
 const sort = ref({ column: 'invoiceNumber', direction: 'desc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
-const pageCount = ref('5');
+const pageCount = ref('20');
 
 const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
   return {
@@ -124,11 +127,10 @@ const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
     orderBy: {
       [sort.value.column]: sort.value.direction,
     },
-    skip: (page.value - 1) * parseInt(pageCount.value),
-    take: parseInt(pageCount.value),
+    // skip: (page.value - 1) * parseInt(pageCount.value),
+    // take: parseInt(pageCount.value),
   };
 });
-
 
 
 const {
@@ -138,19 +140,30 @@ const {
     refetch,
 } = useFindManyBill(queryArgs);
 
-watch(bills, (newsales) => {
-    console.log( newsales);
-});
+const restoreBill = async (id:string) => {
+  console.log(id)
+    const res = await UpdateBill.mutateAsync({
+        where:{
+            id
+        },
+        data:{
+            deleted:false
+        }
+    })
+    console.log(res)
 
+      toast.add({
+        title: 'Bill Restored!',
+       color: 'green',
+         });
+
+};
 
 </script>
 
 <template>
     <UDashboardPanelContent class="pb-24">
-   
 
-<template>
-  <div>
     <UTable
       :columns="columns"
       :rows="bills"
@@ -160,22 +173,23 @@ watch(bills, (newsales) => {
        sort-mode="manual"
     >
    <template #createdAt-data="{ row }">
-                    {{ row.createdAt.toLocaleDateString('en-GB') }}
-                </template>
-        <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
-                        <UButton
-                            color="gray"
-                            variant="ghost"
-                            icon="i-heroicons-ellipsis-horizontal-20-solid"
-                        />
-                    </UDropdown>
-                </template>
+        {{ row.createdAt.toLocaleDateString('en-GB') }}
+    </template>
+    <template #action-data="{ row }">
+      
+              <UButton
+                v-if="row.deleted"
+                color="primary"
+                variant="ghost"
+                icon="i-heroicons-arrow-path"
+                @click="restoreBill(row.id)"
+              />
+            </template>
       <!-- Expanded Row Template -->
       <template #expand="{ row }">
           <UTable
             :columns="historycolumns"
-            :rows="(row.billHistories).map(h => ({ ...h.data, operation: h.operation, changedAt:h.changedAt }))"
+            :rows="(row.billHistories).map(h => ({ ...h.data,id:h.id, operation: h.operation, changedAt:h.changedAt }))"
             class="text-sm"
           >
           
@@ -185,14 +199,22 @@ watch(bills, (newsales) => {
             </template>
 
             
-            <template #grand_total="{ row }">
+            <template #grand_total-data="{ row }">
               ₹{{ row.grand_total?.toFixed(2) }}
+            </template>
+
+            <template #action-data="{ row }">
+              <UButton
+                color="primary"
+                variant="ghost"
+                icon="i-heroicons-eye"
+                @click="() => router.push(`/saleshistory/${row.id}`)"
+              />
             </template>
           </UTable>
       </template>
     </UTable>
-  </div>
-</template>
+
 
     </UDashboardPanelContent>
 </template>
