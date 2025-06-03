@@ -1,5 +1,17 @@
 <template>
-    <UDashboardPanelContent>
+     <UDashboardPage>
+      <UDashboardPanel>
+      <UDashboardNavbar title="Product">
+          <template #right>
+
+      <ClientOnly>
+      <NotificationIcon />
+      </ClientOnly>
+
+      </template>
+      </UDashboardNavbar>
+
+      <UDashboardPanelContent>
     <UContainer class="py-20 space-y-24">
       <!-- Hero Section -->
       <UCard class="text-center space-y-6 shadow-xl">
@@ -71,6 +83,10 @@
       </div>
     </UContainer>
 </UDashboardPanelContent>
+      
+      </UDashboardPanel>
+     </UDashboardPage>
+    
   </template>
   
   <script setup>

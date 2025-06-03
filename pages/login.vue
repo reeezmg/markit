@@ -75,6 +75,18 @@ async function onSubmit(data: any) {
 <!-- eslint-disable vue/multiline-html-element-content-newline -->
 <!-- eslint-disable vue/singleline-html-element-content-newline -->
 <template>
+    <UDashboardPage>
+    <UDashboardPanel grow>
+      <UDashboardNavbar title="Markit">
+        <template #right>
+          <div class="flex items-center gap-4">
+            <UButton color="primary"  to="/login">Login</UButton>
+            <UButton color="primary" to="/register">Register</UButton>
+          </div>
+        </template>
+      </UDashboardNavbar>
+
+      <UDashboardPanelContent>
     <div class="flex justify-center items-center mt-10">
         <UCard class="max-w-sm w-full">
             <UAuthForm
@@ -110,4 +122,7 @@ async function onSubmit(data: any) {
             </UAuthForm>
         </UCard>
     </div>
+       </UDashboardPanelContent>
+    </UDashboardPanel>
+  </UDashboardPage>
 </template>

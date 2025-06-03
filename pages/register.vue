@@ -150,6 +150,18 @@ const onVerifyOtp = async () => {
 </script>
 
 <template>
+     <UDashboardPage>
+     <UDashboardPanel grow>
+        <UDashboardNavbar title="Markit">
+          <template #right>
+            <div class="flex items-center gap-4">
+              <UButton color="primary"  to="/login">Login</UButton>
+              <UButton color="primary" to="/register">Register</UButton>
+            </div>
+          </template>
+        </UDashboardNavbar>
+  
+        <UDashboardPanelContent>
   <div class="flex justify-center items-center mt-10">
     <UCard class="max-w-sm w-full">
       <UForm :state="state" :validate="validate" @submit="onSubmit" class="space-y-4">
@@ -244,4 +256,7 @@ const onVerifyOtp = async () => {
       </UForm>
     </UCard>
   </div>
+     </UDashboardPanelContent>
+    </UDashboardPanel>
+  </UDashboardPage>
 </template>

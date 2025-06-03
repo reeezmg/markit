@@ -163,6 +163,20 @@ const restoreBill = async (id:string) => {
 
 <template>
     <UDashboardPanelContent class="pb-24">
+      <UCard 
+       :ui="{
+          base: 'h-full flex flex-col',
+          rounded: '',
+         divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+          body: {
+            padding: '',
+            base: 'grow divide-y divide-gray-200 dark:divide-gray-700'
+          },
+          footer: {
+            base: ' divide-y divide-gray-200 dark:divide-gray-700',
+            padding:''
+          }
+        }">
 
     <UTable
       :columns="columns"
@@ -215,6 +229,6 @@ const restoreBill = async (id:string) => {
       </template>
     </UTable>
 
-
+  </UCard>
     </UDashboardPanelContent>
 </template>
