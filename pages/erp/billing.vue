@@ -1320,7 +1320,7 @@ onMounted(() => {
         <!-- Responsive table wrapper -->  
          
         <!-- Mobile layout with alternating colors -->
-<div  v-if="isMobile" class="block sm:hidden space-y-4 py-1">
+<div  v-if="isMobile" class="block sm:hidden space-y-4 py-1 px-2">
   <div
     v-for="(row, index) in items"
     :key="row.sn"    
@@ -1670,7 +1670,7 @@ onMounted(() => {
         </div>
 
         <!-- mobile view -->
-        <div  v-if="isMobile" class="sm:hidden flex flex-col gap-3 py-3 text-sm" >
+        <div  v-if="isMobile" class="sm:hidden flex flex-col gap-3 py-3 text-sm px-2" >
         <div class="">
           <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
