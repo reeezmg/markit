@@ -1325,7 +1325,7 @@ onMounted(() => {
     v-for="(row, index) in items"
     :key="row.sn"    
     :class="[
-      'p-4 text-sm space-y-3',   
+      'p-4 text-base space-y-3',   
       index % 2 === 0 
         ? 'bg-gray-300 dark:bg-zinc-700'  // Even rows
         : 'bg-gray-100 dark:bg-zinc-900'     // Odd rows
@@ -1560,7 +1560,7 @@ onMounted(() => {
             </div>
           </div>
         <!-- Other form elements -->
-         <div v-if="!token" class="sm:grid hidden grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
+         <div v-if="!token && !isMobile" class="sm:grid hidden grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
 
           <div class="">
 
@@ -1670,7 +1670,7 @@ onMounted(() => {
         </div>
 
         <!-- mobile view -->
-        <div  v-if="isMobile" class="sm:hidden flex flex-col gap-3 py-3 text-sm px-2" >
+        <div  v-if="isMobile" class="sm:hidden flex flex-col gap-3 py-3 text-base px-2" >
         <div class="">
           <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
