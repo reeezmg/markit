@@ -69,7 +69,7 @@ const isPrint = ref(false);
 const isSaving = ref(false);
 let printData = {}
 
-
+const isMobile = ref(false);
 
 
 const isOpen = ref(false);
@@ -90,7 +90,7 @@ const selected = ref(null);
 
 
 const items = ref([
-  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0 ,return:false},
+  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: null, discount: null, tax: null, value: 0,sizes:{}, totalQty:0 ,return:false},
 ]);
 
 
@@ -242,7 +242,7 @@ const addNewRow = async (index) => {
   input.focus();
   input.select();
   return;
-  };
+  };   
 
   items.value.push({
     id: '',
@@ -253,9 +253,9 @@ const addNewRow = async (index) => {
     size: '',
     name: '',
     qty: 1,
-    rate: 0,
-    discount: 0,
-    tax: 0,
+    rate: null,
+    discount: null,
+    tax: null,
     value: 0,
     sizes: {},
     totalQty: 0,
@@ -1252,6 +1252,13 @@ function handleCategoryChange(category, rowIndex) {
   }
 }
 
+onMounted(() => {
+  isMobile.value = window.innerWidth < 640;
+  window.addEventListener('resize', () => {
+    isMobile.value = window.innerWidth < 640;
+  });
+});
+
 </script>
 
 
@@ -1261,6 +1268,7 @@ function handleCategoryChange(category, rowIndex) {
     :ui="{
       base: 'h-full flex flex-col',
       rounded: '',
+      ring: 'ring-0 sm:ring-1 sm:ring-gray-200 sm:dark:ring-gray-800', // force no ring on mobile
       divide: 'divide-y divide-gray-200 dark:divide-gray-700',
       body: {
         padding: '',
@@ -1272,17 +1280,135 @@ function handleCategoryChange(category, rowIndex) {
       }
     }"
   >
+     <div class="w-full flex flex-wrap gap-4  px-3 py-3 sm:hidden">
+          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
+          <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
+          <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
+        </div>
+    
+        <div  class="sm:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2">
+        <div class="flex-1 border border-primary-700 dark:border-primary-300 rounded-md">
+          <div class="flex flex-col items-center justify-center py-3">
+            <div class="text-s">Sub Total</div>
+            <div class="text-primary-700 dark:text-primary-300 font-bold text-2xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
+          </div>
+        </div>
+            
 
-        <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm p-3 ">
-        <UInput v-if="!token" v-model="date" type="date" label="Date" class="lg:col-span-2" />
-        <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2" />
-        <UButton color="primary" label="Token Entries " block @click="isTokenOpen=true" class="lg:col-start-11 lg:col-span-2"/>
+          <!-- Grand Total Display -->
+          <div class="flex-1 border border-green-700 dark:border-green-300 rounded-md">
+          <div class="flex flex-col items-center justify-center py-3">
+            <div class="text-s">Grand Total</div>
+            <div class="text-green-700 dark:text-green-300 font-bold text-2xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+          </div>
+        </div>
+        </div>
+     
+         <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2">
+            <UInput v-if="!token" v-model="date" type="date" label="Date" class="flex-1" />
+            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1"/>
+          </div>
+        
+        <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm py-3 hidden">
+        <UInput v-if="!token" v-model="date" type="date" label="Date" class="lg:col-span-2"  />
+        <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2 " />
+        <UButton color="primary" label="Token Entries " block @click="isTokenOpen=true" class="lg:col-start-11 lg:col-span-2" />
       </div>
 
 
-        <!-- Responsive table wrapper -->
+        <!-- Responsive table wrapper -->  
          
-        <div class="overflow-x-auto mt-2 h-full p-3">
+        <!-- Mobile layout with alternating colors -->
+<div  v-if="isMobile" class="block sm:hidden space-y-4 py-1">
+  <div
+    v-for="(row, index) in items"
+    :key="row.sn"    
+    :class="[
+      'p-4 text-sm space-y-3',   
+      index % 2 === 0 
+        ? 'bg-gray-300 dark:bg-zinc-700'  // Even rows
+        : 'bg-gray-100 dark:bg-zinc-900'     // Odd rows
+    ]"
+  >
+    <!-- SN, Name, Value row -->
+    <div class="flex justify-between text-gray-800 dark:text-gray-200 font-medium">
+      <span>SN: {{ row.sn }}</span>
+      <span>{{ row.name }}</span>
+      <span>₹{{ row.value }}</span>
+    </div>
+
+    <!-- Row 1: Barcode | Qty | Discount -->
+    <div class="grid grid-cols-3 gap-2">
+      <UInput
+        v-model="row.barcode"
+        placeholder="Barcode"
+        size="sm"
+        ref="barcodeInputs"
+        @focus="selectAllText(index)"
+        @blur="fetchItemData(row.barcode, index)"
+        @keydown.delete="removeRow($event, row.barcode, index)"
+        @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+      />
+       <UInput
+        v-model="row.rate"
+        ref="rateInputs"
+        placeholder="Rate"
+        type="number"
+        size="sm"
+        @keydown.enter="moveFocus(index, 'rate', 'right')"
+      />
+      
+      <UInput
+        v-model="row.discount"
+        placeholder="Discount"
+        ref="discountInputs" 
+        type="number"
+        size="sm"
+        @keydown.enter="addNewRow(index)"
+      />
+    </div>
+
+    <!-- Row 2: Category | Rate | Tax -->
+    <div class="grid grid-cols-3 gap-2 ">
+      <USelectMenu
+        v-model="row.category"
+        :options="categories"
+        option-attribute="name"
+        @update:modelValue="() => handleCategoryChange(row.category, index)"
+        track-by="id"
+        multiple
+        searchable
+        placeholder="Category"
+      >
+        <template #label>
+          <span v-if="row.category.length">{{ row.category.map(c => c.name).join(', ') }}</span>
+          <span v-else class="text-gray-400">Category</span>
+        </template>
+      </USelectMenu>
+      <UInput
+        v-model="row.qty"
+        placeholder="Qty"
+        ref="qtyInputs" 
+        type="number"
+        size="sm"
+       @keydown.enter="moveFocus(index, 'qty', 'right')"
+      />
+     
+      <UInput
+        v-model="row.tax"
+        ref="taxInputs"
+        placeholder="Tax"
+        type="number"
+        size="sm"
+       @keydown.enter="addNewRow(index)"
+      />
+    </div>
+  </div>
+</div>
+
+         
+        <div v-else class="overflow-x-auto p-3 hidden sm:block">    
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
@@ -1352,7 +1478,7 @@ function handleCategoryChange(category, rowIndex) {
     <td class="py-1 whitespace-nowrap">
       <UInput 
         v-model="row.name" 
-          ref="nameInputs"
+        ref="nameInputs"
         size="sm"  
         @keydown.enter="addNewRow(index)"
         @keydown.up.prevent="moveFocus(index, 'name', 'up')"
@@ -1380,7 +1506,7 @@ function handleCategoryChange(category, rowIndex) {
         ref="qtyInputs" 
         type="number" 
         size="sm"  
-        @keydown.enter="addNewRow(index)"
+         @keydown.enter="moveFocus(index, 'qty', 'right')"
         @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
         @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
         @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
@@ -1434,7 +1560,7 @@ function handleCategoryChange(category, rowIndex) {
             </div>
           </div>
         <!-- Other form elements -->
-        <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
+         <div v-if="!token" class="sm:grid hidden grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
 
           <div class="">
 
@@ -1543,7 +1669,87 @@ function handleCategoryChange(category, rowIndex) {
           </div>
         </div>
 
-        <div class="w-full flex flex-wrap gap-4  px-3 py-3">
+        <!-- mobile view -->
+        <div  v-if="isMobile" class="sm:hidden flex flex-col gap-3 py-3 text-sm" >
+        <div class="">
+          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
+          <UInput
+          ref="discountref"
+          type="number"
+          v-model="discount"
+          @keydown.enter.prevent="handleEnterMainDiscount()"
+          placeholder="Enter discount"
+          />
+        </div>
+
+        <div class="">
+          <label class="block text-gray-700 font-medium">Payment Method</label>
+          <div class="w-full flex flex-row gap-2">
+            <USelect
+            ref="paymentref"
+            v-model="paymentMethod"
+            :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
+            @keydown.enter.prevent="handleEnterPayment(index)"
+            class="flex-1"
+            />
+            <UButton
+            icon="i-heroicons-pencil-square"
+            size="sm"
+            color="primary"
+            square
+            variant="solid"
+            class="w-auto"
+            @click="handleSplit"
+            />
+          </div>    
+        </div>    
+
+        <div class="">
+          <label class="block text-gray-700 font-medium">Sales Return AMT</label>
+          <UInput v-model="returnAmt" />
+        </div>
+
+        <div class=" flex flex-row gap-2">
+          <div class="">
+            <label class="block text-gray-700 font-medium">Cell No.</label>
+            <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
+          </div>
+          <div class="">
+            <label class="block text-gray-700 font-medium">Name</label>
+            <UInput v-model="clientName" />
+          </div>
+        </div>
+
+        <div class="">
+          <label class="block text-gray-700 font-medium">Account Name</label>
+          <div class="w-full flex flex-row gap-2">
+            <UInputMenu class="flex-1" v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
+            <UButton
+            icon="i-heroicons-plus"
+            size="sm"
+            color="primary"
+            square
+            variant="solid"
+            class="w-auto"
+            :disabled="isSavingAcc"
+            @click="isOpen=true"
+            />
+          </div>
+        </div>
+
+          <div>
+            <label class="block text-gray-700 font-medium">Token</label>
+            <div class=" flex flex-row items-center justify-between gap-2">
+              <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="w-full" />
+              <UButton color="primary" label="Token Entries " hidden @click="isTokenOpen=true" class=""/>
+            </div>
+          </div>
+
+        </div>
+
+         
+
+        <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden sm:flex">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
@@ -1551,6 +1757,13 @@ function handleCategoryChange(category, rowIndex) {
           <UButton class="flex-1" block>Barcode Search</UButton>
           <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
           <UButton v-if="!token" class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
+        </div>
+
+          <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 sm:hidden">
+          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
+          <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
+          <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
         </template>
       </UCard>
