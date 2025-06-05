@@ -73,12 +73,20 @@ useSeoMeta({
 </template>
 
 <style>
-html, body {
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
-  box-sizing: border-box;
-}
+  html, body {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    box-sizing: border-box;
+  }
+
+  /* Override text-sm only for mobile (default Tailwind breakpoint is 'sm: 640px') */
+  @media (max-width: 639px) {
+    .text-sm {
+      font-size: 1rem !important;
+      line-height: 1.5rem !important;
+    }
+  }
 </style>
 
