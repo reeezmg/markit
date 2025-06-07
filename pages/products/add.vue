@@ -161,6 +161,7 @@ const createValue = (data: any) => {
 };
 
 const updateVariant = (index,data: any) => {
+    console.log(data)
   variants.value[index] = { ...variants.value[index], ...data };
 };
 
@@ -175,6 +176,11 @@ const fileValue = (data: any) => {
   
 };
 
+watch(isOpenAdd, (newVal) => {
+  if (!newVal) {
+    handleReset()
+  }
+});
 
 const handleProductSelected = (product:any) => {
   selectedProduct.value = product;
@@ -767,22 +773,16 @@ const handleNewProduct = () => {
   isOpenAdd.value = true
 }
 
-watch(isOpenAdd, (newVal) => {
-  if (!newVal) {
-    handleReset()
-  }
-});
+
 
 </script>
 
 <template>
-     <UDashboardNavbar >
-        <template #left>
+    <UDashboardPanelContent>
+       
           <AddProductTopBar @update="handleDistributorValue" :totalAmount="totalAmount"/>   
-        </template>
-      </UDashboardNavbar>
-    <UDashboardPanelContent class="pb-24">
-  
+
+          <UDivider class="py-4"/>
 
         <div class="md:flex md:flex-row">
             <div class="md:w-1/2">
@@ -902,9 +902,6 @@ watch(isOpenAdd, (newVal) => {
                   </UPageCard>
                   </div>
 
-                 
-          
-
                 <UButton
                     @click="addVariant"
                     color="green"
@@ -914,9 +911,9 @@ watch(isOpenAdd, (newVal) => {
                   </UButton>
 
 
-                <UPageCard class="m-3" id="Live">
+                <!-- <UPageCard class="m-3" id="Live">
                     <AddProductLive @update="liveValue" />
-                </UPageCard>
+                </UPageCard> -->
 
                 <div v-if="clearInputs" class="m-3">
                     <UButton
@@ -940,17 +937,15 @@ watch(isOpenAdd, (newVal) => {
         </div>
 
         <UModal v-model="isOpen" fullscreen>
-      <UCard :ui="{
-          base: 'h-full flex flex-col overflow-y-auto',
-          rounded: '',
-          divide: 'divide-y divide-gray-100 dark:divide-gray-800',
-          body: {
-            base: 'grow'
-          }
-        }">
+        <UCard :ui="{
+            base: 'h-full flex flex-col overflow-y-auto',
+            rounded: '',
+            divide: 'divide-y divide-gray-100 dark:divide-gray-800',
+            body: {
+              base: 'grow'
+            }
+          }">
     
-       
-
         <BarcodeComponent v-if="barcodes.length" :barcodes="barcodes" />
       
           <template #header>
@@ -1007,8 +1002,9 @@ watch(isOpenAdd, (newVal) => {
         
 
              
-                <UPageCard class="m-3" id="Create">
-                  <AddProductCreate 
+               <UPageCard class="m-3" id="Create">
+                    <AddProductCreate 
+                        ref="createRef"
                         :editName="selectedProduct?.name"
                         :editBrand="selectedProduct?.brand"
                         :editDescription="selectedProduct?.description"
@@ -1016,49 +1012,48 @@ watch(isOpenAdd, (newVal) => {
                         :editSubcategory="selectedProduct?.subcategoryId"
                         @update="createValue" />
                 </UPageCard>
+                 
+          
 
-                <!-- <UPageCard class="m-3" id="Variants">
-                    <AddProductVariants @update="variantValue" />
-                </UPageCard> -->
-
-               
-                  <div v-for="(variant, index) in variants" :key="index" class="mb-3">
+                <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.id" class="mb-3">
                     <UPageCard class="m-3" id="Variants">
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
                      
                       <UButton
-                      v-if="!(index === 0)"
                         @click="removeVariant(index)"
-                        class="text-red-500 hover:text-red-700 text-sm"
-                      >
-                        Remove
+                        variant="outline"
+                        color="red"
+                      >Remove
                       </UButton>
                     </div>
                     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
-                    <AddProductVariants :key="index"
-                      :editName="selectedProduct?.variants[index].name"
-                      :editCode="selectedProduct?.variants[index].code"
-                      :editQty="selectedProduct?.variants[index].qty"
-                      :editsPrice="selectedProduct?.variants[index].sprice"
-                      :editpPrice="selectedProduct?.variants[index].pprice"
-                      :editSizes="selectedProduct?.variants[index].sizes"
+                    <AddProductVariants   
+                      ref="variantRef"
+                      :id="selectedProduct?.variants[index]?.id"
+                      :editName="selectedProduct?.variants[index]?.name " 
+                      :editCode="selectedProduct?.variants[index]?.code || variants[0]?.code"
+                      :editQty="selectedProduct?.variants[index]?.qty"
+                      :editsPrice="selectedProduct?.variants[index]?.sprice || variants[0]?.sprice"
+                      :editpPrice="selectedProduct?.variants[index]?.pprice || variants[0]?.pprice"
+                      :editdPrice="selectedProduct?.variants[index]?.dprice || variants[0]?.dprice"
+                      :editDiscount="selectedProduct?.variants[index]?.discount || variants[0]?.discount"
+                      :editSizes="selectedProduct?.variants[index]?.sizes"
+          
                       @update="updateVariant(index,$event)" />
                       <AddProductMedia
-                      :key="index"
-                      :editFile="selectedProduct && selectedProduct.variants[index].images"
+                      ref="mediaRefs"
+                      :editFile="selectedProduct && selectedProduct.variants[index]?.images"
                       :index="index" 
                       @update="fileValue"
                     />
                   </UPageCard>
                   </div>
 
-                 
-          
-
                 <UButton
-                    class="rounded-md bg-green-500 hover:bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm m-3"
                     @click="addVariant"
+                    color="green"
+                    block
                   >
                     + Add Variant
                   </UButton>

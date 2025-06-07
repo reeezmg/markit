@@ -74,7 +74,7 @@ const fileInputId = computed(() => `subcategory-image-${props.index}`);
 </script>
 
 <template>
-  <div class="flex space-x-4">
+  <div class="flex sm:flex-row flex-col sm:justify-start justify-center sm:items-start items-center sm:space-x-4">
     <!-- Image Upload -->
     <div class="mb-5">
       <div class="block text-sm font-medium leading-6 dark:text-white mb-1">Image</div>
@@ -113,7 +113,7 @@ const fileInputId = computed(() => `subcategory-image-${props.index}`);
     </div>
 
     <!-- Form Fields -->
-    <div class="flex-1 space-y-4">
+    <div class="w-full flex flex-col space-y-4">
       <UFormGroup label="Name" required :error="errors.name">
         <UInput v-model="name" type="text" />
       </UFormGroup>

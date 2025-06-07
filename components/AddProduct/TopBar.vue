@@ -104,45 +104,61 @@ watch([selected, paymentType], emitUpdatedValues, { deep: true });
 </script>
 
 <template>
-  <div class="flex">
-    <div class="flex">
-  <USelectMenu class=" min-w-44 me-2" v-model="selected" :options="distributors" searchable searchable-placeholder="Search a distributor">
-    <template #label>
-      <span v-if="!selected.name">Select Distributor</span>
-      <span>{{ selected.name }}</span>
-    </template>
-    <template #option="{option:name}">
-      <span>{{ name.name }}</span>
-    </template>
-  </USelectMenu>
-  <UButton
-    icon="i-heroicons-plus"
-    size="sm"
-    color="primary"
-    square
-    variant="solid"
-    @click="isOpen = true"
+  <div class="grid grid-cols-1 sm:flex gap-3 items-center">
+  <!-- Line 1 (Select Menu + Button) -->
+  <div class="flex items-center gap-2">
+    <USelectMenu
+      class="min-w-44 w-full sm:w-auto"
+      v-model="selected"
+      :options="distributors"
+      searchable
+      searchable-placeholder="Search a distributor"
+    >
+      <template #label>
+        <span v-if="!selected.name">Select Distributor</span>
+        <span>{{ selected.name }}</span>
+      </template>
+      <template #option="{ option: name }">
+        <span>{{ name.name }}</span>
+      </template>
+    </USelectMenu>
+    <UButton
+      icon="i-heroicons-plus"
+      size="sm"
+      color="primary"
+      square
+      variant="solid"
+      @click="isOpen = true"
+    />
+  </div>
+
+  <!-- Divider for larger screens -->
+  <UDivider class="hidden sm:block mx-3" orientation="vertical" />
+
+  <!-- Line 2 (Payment Type) -->
+  <USelect
+    v-model="paymentType"
+    :options="[
+      { label: 'Credit', value: 'CREDIT' },
+      { label: 'Cash', value: 'CASH' },
+      { label: 'UPI', value: 'UPI' },
+    ]"
+    option-attribute="label"
+    value-attribute="value"
+    placeholder="Payment Type"
+    class="w-full sm:w-auto"
   />
+
+  <!-- Divider for larger screens -->
+  <UDivider v-if="paymentType === 'CREDIT'" class="hidden sm:block mx-3" orientation="vertical" />
+  <UDivider class="hidden sm:block mx-3" orientation="vertical" />
+
+  <!-- Line 3 (Total) -->
+  <div class="flex items-center">
+    <span class="font-semibold whitespace-nowrap">Total: ₹{{ totalAmount.toFixed(2) }}</span>
+  </div>
 </div>
 
-<UDivider class="mx-3" orientation="vertical"/>
-<USelect
-      v-model="paymentType"
-      :options="[
-          { label: 'Credit', value: 'CREDIT' },
-          { label: 'Cash', value: 'CASH' },
-          { label: 'UPI', value: 'UPI' },
-      ]"
-      option-attribute="label"
-      value-attribute="value"
-      placeholder="Payment Type"
-      />
-<UDivider v-if="paymentType==='CREDIT'" class="mx-3" orientation="vertical"/>
-<UDivider class="mx-3" orientation="vertical"/>
-<div class="h-full flex items-center">
- Total: ₹{{ totalAmount.toFixed(2) }}
-</div >
-</div>
 
   <template>
     <div>

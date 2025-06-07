@@ -160,7 +160,7 @@ watch(hsn, (newVal) => {
     <div>
       <div class="text-xl mb-4">Category</div>
       <hr class="h-px my-8 bg-gray-200 border-0 dark:bg-gray-700" />
-      <div class="flex space-x-2">
+      <div class="flex sm:flex-row flex-col sm:justify-start justify-center sm:items-start items-center space-x-2">
         <div class="mb-5">
           <div class="block text-sm font-medium leading-6 dark:text-white mb-1">Image</div>
           <label for="image">

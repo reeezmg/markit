@@ -1287,7 +1287,7 @@ onMounted(() => {
           <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
     
-        <div  class="sm:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2">
+        <div  class="sm:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2 px-2">
         <div class="flex-1 border border-primary-700 dark:border-primary-300 rounded-md">
           <div class="flex flex-col items-center justify-center py-3">
             <div class="text-s">Sub Total</div>

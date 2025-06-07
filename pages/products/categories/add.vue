@@ -159,7 +159,7 @@ const scrollToSection = (sectionId: string) => {
 <template>
     <UDashboardPanelContent class="pb-24">
         <div class="flex flex-row">
-            <div class="w-1/4">
+            <div class="w-1/4 sm:block hidden">
                 <UPageCard class="m-3">
                     <div class="text-lg"> Quick Links</div>
                     <div v-for="item in linkList" :key="item">
@@ -178,7 +178,7 @@ const scrollToSection = (sectionId: string) => {
                 </UPageCard>
             </div>
 
-            <div class="flex flex-col w-3/4">
+            <div class="flex flex-col sm:w-3/4 w-full">
                 <UPageCard class="m-3" id="Create">
                     <AddCategoryCreate @update="createValue" />
                 </UPageCard>
@@ -215,9 +215,9 @@ const scrollToSection = (sectionId: string) => {
                     />
                     </UPageCard>
 
-                <div class="mt-5">
+                <div class="mt-5 text-end">
                     <button
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
+                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm w-40"
                         @click="handleSubmit"
                     >
                         Finish

@@ -261,14 +261,15 @@ const multiUpdate = async(status:string,ids:any) => {
             }"
         >
             <template #header>
-                <div class="flex items-center justify-between gap-3">
-                    <div class="flex flex-row">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
+                    <div class="flex sm:flex-row flex-col gap-3 w-full sm:w-auto">
+                       <div class="flex flex-row gap-3 w-full sm:w-auto">    
                         <USelectMenu
                             v-model="selectedStatus"
                             :options="['Paid','Pending', 'Approved', 'Rejected']"
                             multiple
                             placeholder="Status"
-                            class="w-40 me-3"
+                             class="w-full sm:w-40"
                         />
 
                         <USelectMenu
@@ -278,10 +279,11 @@ const multiUpdate = async(status:string,ids:any) => {
                             value-attribute="id"
                             multiple
                             placeholder="Category"
-                            class="w-40 me-3"
+                            class="w-full sm:w-40"
                         />
+                        </div>
                         <UPopover :popper="{ placement: 'bottom-start' }" class=" z-10">
-                        <UButton icon="i-heroicons-calendar-days-20-solid">
+                        <UButton icon="i-heroicons-calendar-days-20-solid" class=" w-full sm:w-60">
                         {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
                         </UButton>
 
@@ -294,19 +296,19 @@ const multiUpdate = async(status:string,ids:any) => {
                                 :label="range.label"
                                 color="gray"
                                 variant="ghost"
-                                class="rounded-none px-6"
+                                class="rounded-none px-6 hidden sm:block"
                                 :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
                                 truncate
                                 @click="selectRange(range.duration)"
                             />
                             </div>
 
-                            <DatePicker v-model="selectedDate" @close="close" />
+                            <DatePicker v-model="selectedDate" @close="close"  />
                         </div>
                         </template>
                     </UPopover>
                     </div>
-                    <UButton color="primary" @click=" emit('open')">
+                    <UButton color="primary" @click=" emit('open')" block class="w-full sm:w-40" >
                         Add Expense
                     </UButton>
                 </div>
@@ -314,7 +316,7 @@ const multiUpdate = async(status:string,ids:any) => {
             
       <div class="flex justify-between items-center w-full px-4 py-3">
                 <div class="flex items-center gap-1.5">
-                    <span class="text-sm leading-5">Rows per page:</span>
+                    <span class="text-sm leading-5 hidden sm:block">Rows per page:</span>
                     <USelect
                         v-model="pageCount"
                         :options="[3, 5, 10, 20, 30, 40].map(num => ({ label: num, value: num }))"
@@ -401,7 +403,7 @@ const multiUpdate = async(status:string,ids:any) => {
     <template #footer>
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
-                        <span class="text-sm leading-5">
+                        <span class="text-sm leading-5 hidden sm:block">
                             Showing
                             <span class="font-medium">{{ pageFrom }}</span>
                             to

@@ -431,7 +431,6 @@ const handleChange = (value:string, row:any) => {
             class="w-full"
             :ui="{
                 base: '',
-                ring: '',
                 divide: 'divide-y divide-gray-200 dark:divide-gray-700',
                 header: { padding: 'px-4 py-5' },
                 body: {
@@ -442,22 +441,28 @@ const handleChange = (value:string, row:any) => {
             }"
         >
             <!-- Filters -->
-            <div class="flex items-center justify-between gap-3 px-4 py-3">
+        <template #header>
+            <div class="flex flex-col sm:flex-row justify-between gap-3 w-full">
+            <!-- Left side: Search + Status -->
+            <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
                 <UInput
                     v-model="search"
                     icon="i-heroicons-magnifying-glass-20-solid"
                     placeholder="Search..."
+                     class="w-full sm:w-60"
                 />
-                <div class="flex flex-row">
-                    <USelectMenu
+                  <USelectMenu
                         v-model="selectedStatus"
                         :options="todoStatus"
                         multiple
                         placeholder="Status"
-                        class="w-40"
+                        class="w-full sm:w-60"
                     />
+            </div>
+                <div class="w-full sm:w-auto flex justify-end">
+                  
                     <UButton
-                        class="ms-5"
+                       class="w-full sm:w-40"
                         icon="i-heroicons-plus"
                         size="sm"
                         color="primary"
@@ -467,11 +472,11 @@ const handleChange = (value:string, row:any) => {
                     />
                 </div>
             </div>
-
+        </template>
             <!-- Header and Action buttons -->
             <div class="flex justify-between items-center w-full px-4 py-3">
                 <div class="flex items-center gap-1.5">
-                    <span class="text-sm leading-5">Rows per page:</span>
+                    <span class="text-sm leading-5 hidden sm:block">Rows per page:</span>
                     <USelect
                         v-model="pageCount"
                         :options="[3, 5, 10, 20, 30, 40]"
@@ -687,7 +692,7 @@ const handleChange = (value:string, row:any) => {
             <template #footer>
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
-                        <span class="text-sm leading-5">
+                        <span class="text-sm leading-5 hidden sm:block">
                             Showing
                             <span class="font-medium">{{ pageFrom }}</span>
                             to

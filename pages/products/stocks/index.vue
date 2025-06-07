@@ -1,6 +1,6 @@
 <template>
 <UDashboardPanelContent class="pb-24">
-  <div class="mb-4 flex flex-row gap-4">
+  <div class="mb-4 flex-row gap-4 hidden sm:flex">
     <UDashboardCard
     class="w-1/2"
     :title="totals.qty"
@@ -12,6 +12,18 @@
    :title="totals.stock"
     description="Total Stock"
     icon="i-heroicons-banknotes"
+  />
+  </div>
+  <div class="mb-4 flex flex-row gap-4 sm:hidden">
+    <UDashboardCard
+    class="w-1/2"
+    :title="totals.qty"
+    description="Total Quantity"
+  />
+    <UDashboardCard
+     class="w-1/2"
+    :title="totals.stock"
+    description="Total Stock"
   />
   </div>
    <UCard
@@ -28,7 +40,7 @@
             }"
         >
   
-    <div class="grid md:grid-cols-3 gap-4 px-4 py-3">
+    <div class="grid sm:grid-cols-3 grid-cols-2 gap-4 px-4 py-3">
       <USelect v-model="filters.category" :options="categories" option-attribute="name" value-attribute="id" placeholder="Filter by Category" />
       <USelect v-model="filters.brand" :options="brands" placeholder="Filter by Brand" />
       <USelect v-model="filters.rating" :options="ratings" placeholder="Filter by Rating" />
@@ -37,19 +49,25 @@
       <UInput v-model="filters.endDate" type="date" placeholder="End Date" />
     </div>
 
-<div class="flex justify-between px-4 py-3">
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 py-3 w-full">
       <UInput
       v-model="search"
       icon="i-heroicons-magnifying-glass-20-solid"
       placeholder="Search"
+       class="w-full flex-1 sm:w-auto sm:flex-none"
     />
 
-     <div class="flex space-x-2 items-center">
-    <USelect v-model="groupBy" :options="groupOptions" placeholder="Group By" />
+     <div class="flex flex-row gap-3 w-full sm:w-auto justify-end">
+    <USelect 
+    v-model="groupBy" 
+    :options="groupOptions" 
+    placeholder="Group By" 
+     class="w-full flex-1 sm:w-auto sm:flex-none"/>
     <UButton
-      class=" ms-3 "
       @click="resetFilters"
       type="button"
+      block
+       class="w-full flex-1 sm:w-auto sm:flex-none"
     >
       Reset
     </UButton>

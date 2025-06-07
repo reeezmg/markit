@@ -97,17 +97,19 @@ watch(
 
 
 
-
-watchEffect(() => {
+watch(
+  [name, brand, description, selectedRow, subselectedRow],
+  ([newName, newBrand, newDescription, newCategoryRow, newSubcategoryRow]) => {
     emit('update', {
-        name: name.value,
-        brand: brand.value,
-        description: description.value,
-        category: selectedRow.value.id,
-        subcategory: subselectedRow.value.id,
-        
+      name: newName,
+      brand: newBrand,
+      description: newDescription,
+      category: newCategoryRow?.id,
+      subcategory: newSubcategoryRow?.id,
     });
-});
+  },
+  { immediate: true }
+);
 
 
 </script>

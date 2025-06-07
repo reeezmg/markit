@@ -67,7 +67,7 @@ const showSplitModal = ref(false)
 const tempSplits = ref(
   Object.fromEntries(paymentOptions.map(method => [method, { method, amount: null }]))
 )
-
+const isMobile = ref(false);
 const splitPayments = ref([])
 const barcodeInputs = ref([]);
 const categoryInputs = ref([]);
@@ -103,8 +103,8 @@ const columns = ref([
   { key: 'barcode', label: 'BAR CODE' },
   { key: 'category', label: 'CATEGORY' },
   { key: 'name', label: 'NAME' },
-  { key: 'qty', label: 'QTY' },
   { key: 'rate', label: 'RATE' },
+  { key: 'qty', label: 'QTY' },
   { key: 'discount', label: 'DISC %' },
   { key: 'tax', label: 'TAX%' },
   { key: 'value', label: 'VALUE' },
@@ -469,17 +469,12 @@ watch(entriesToDelete, (newBill) => {
 const handleEnterBarcode = (barcode,index) => {
  const pattern = /^\d[A-Z]\d{6}$/;
   if(!barcode){
-    if(token.value){
-      const component = savetokenref.value;
-      const button = component.$el;
-      button.focus();
-    }
-    else{
+    
     const component = discountref.value;
     const input = component.$el.querySelector("input");
     input.focus();
     input.select();
-    }
+    
   }else{
     if(!pattern.test(barcode)){
       const categorystore = categoryStore.getCategoryByShortCut(barcode)
@@ -542,37 +537,39 @@ route.push('/erp/sales')
 
 
 
-watch(() => bill.value, (newData) => {
-  console.log(newData)
-  if (!newData || !newData.entries) return;
-  if (newData?.splitPayments && newData.splitPayments.length > 0) {
-    // Set initial split amounts
-    tempSplits.value = Object.fromEntries(
-      paymentOptions.map(method => {
-        const match = newData.splitPayments.find(p => p.method === method)
-        return [method, { method, amount: match?.amount ?? null }]
-      })
-    )
-        // Set the splitPayments array (if needed)
-    splitPayments.value = [...newData.splitPayments]
+
+watch(
+  () => bill.value,
+  async (newData) => {
+    console.log(newData);
+    if (!newData || !newData.entries) return;
+
+    if (newData?.splitPayments && newData.splitPayments.length > 0) {
+      tempSplits.value = Object.fromEntries(
+        paymentOptions.map((method) => {
+          const match = newData.splitPayments.find((p) => p.method === method);
+          return [method, { method, amount: match?.amount ?? null }];
+        })
+      );
+      splitPayments.value = [...newData.splitPayments];
     }
 
-  discount.value = newData.discount
-    selected.value = newData.accountId
-    clientId.value = newData.client?.id
-    clientName.value = newData.client?.name
-    phoneNo.value = newData.client?.phone
-  paymentMethod.value = newData.paymentMethod
-   date.value = new Date(newData.createdAt).toISOString().split('T')[0]
-  items.value = newData.entries.map((entry, index) => {
-    return {
+    discount.value = newData.discount;
+    selected.value = newData.accountId;
+    clientId.value = newData.client?.id;
+    clientName.value = newData.client?.name;
+    phoneNo.value = newData.client?.phone;
+    paymentMethod.value = newData.paymentMethod;
+    date.value = new Date(newData.createdAt).toISOString().split('T')[0];
+
+    items.value = newData.entries.map((entry, index) => ({
       entryId: entry.id || '',
-      id:entry.item?.id || '',
+      id: entry.item?.id || '',
       variantId: entry.variant?.id || '',
       sn: index + 1,
-      name:entry.name || '',
-      barcode: entry.barcode || '', 
-      category:  categories.value.filter(category =>category.id === entry.categoryId),
+      name: entry.name || '',
+      barcode: entry.barcode || '',
+      category: categories.value.filter((category) => category.id === entry.categoryId),
       size: entry.item?.size || '',
       sizes: entry.sizes || null,
       qty: entry.qty || 1,
@@ -580,9 +577,34 @@ watch(() => bill.value, (newData) => {
       discount: entry.discount || 0,
       tax: entry.tax || 0,
       value: entry.value || 0,
-    };
-  });
-}, { deep: true, immediate: true });
+    }));
+
+    items.value.push({
+      id: '',
+      variantId: '',
+      sn: items.value.length + 1,
+      barcode: '',
+      category: [],
+      size: '',
+      name: '',
+      qty: 1,
+      rate: 0,
+      discount: 0,
+      tax: 0,
+      value: 0,
+      sizes: {},
+      totalQty: 0,
+    });
+
+    // Wait for DOM update
+    await nextTick();
+
+    const component = barcodeInputs.value[items.value.length - 1];
+    const input = component?.$el?.querySelector?.("input");
+    input?.focus(); // Safe access
+  },
+  { deep: true, immediate: true }
+);
 
 
 
@@ -820,7 +842,7 @@ console.log(splitPayments.value)
   where: { id: route.params.salesId },
   data: {
     subtotal: subtotal.value,
-    discount: discount.value,
+    discount: discount.value || 0,
     grandTotal: grandTotal.value,
     paymentMethod: paymentMethod.value,
     paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
@@ -1312,37 +1334,160 @@ onMounted(() => {
   });
 });
 
-
+onMounted(() => {
+  isMobile.value = window.innerWidth < 640;
+  window.addEventListener('resize', () => {
+    isMobile.value = window.innerWidth < 640;
+  });
+});
 
 </script>
 
 
 <template>
   <UDashboardPanelContent class="p-1">
-    <UCard 
-       :ui="{
-          base: 'h-full flex flex-col',
-          rounded: '',
-         divide: 'divide-y divide-gray-200 dark:divide-gray-700',
-          body: {
-            padding: '',
-            base: 'grow divide-y divide-gray-200 dark:divide-gray-700'
-          },
-          footer: {
-            base: ' divide-y divide-gray-200 dark:divide-gray-700',
-            padding:''
-          }
-        }">
+      <UCard 
+    :ui="{
+      base: 'h-full flex flex-col',
+      rounded: '',
+      ring: 'ring-0 sm:ring-1 sm:ring-gray-200 sm:dark:ring-gray-800', // force no ring on mobile
+      divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+      body: {
+        padding: '',
+        base: 'sm:flex-1 sm:flex sm:flex-col sm:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700'
+      },
+      footer: {
+        base: 'divide-y divide-gray-200 dark:divide-gray-700',
+        padding: ''
+      }
+    }"
+  >
+     <div class="w-full flex flex-wrap gap-4  px-3 py-3 sm:hidden">
+          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
+        </div>
+    
+        <div  class="sm:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2 px-2">
+        <div class="flex-1 border border-primary-700 dark:border-primary-300 rounded-md">
+          <div class="flex flex-col items-center justify-center py-3">
+            <div class="text-s">Sub Total</div>
+            <div class="text-primary-700 dark:text-primary-300 font-bold text-2xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
+          </div>
+        </div>
+            
 
-        <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
-        <UInput v-model="date" type="date" label="Date" class="lg:col-span-2" />
-
+          <!-- Grand Total Display -->
+          <div class="flex-1 border border-green-700 dark:border-green-300 rounded-md">
+          <div class="flex flex-col items-center justify-center py-3">
+            <div class="text-s">Grand Total</div>
+            <div class="text-green-700 dark:text-green-300 font-bold text-2xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+          </div>
+        </div>
+        </div>
+     
+         <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2">
+            <UInput v-model="date" type="date" label="Date" class="flex-1" />
+            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1"/>
+          </div>
+        
+        <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm py-3 hidden">
+        <UInput v-model="date" type="date" label="Date" class="lg:col-span-2"  />
       </div>
 
 
-        <!-- Responsive table wrapper -->
+        <!-- Responsive table wrapper -->  
          
-        <div class="overflow-x-auto mt-2 h-48 p-3">
+        <!-- Mobile layout with alternating colors -->
+<div  v-if="isMobile" class="block sm:hidden space-y-4 py-1 px-2">
+  <div
+    v-for="(row, index) in items"
+    :key="row.sn"    
+    :class="[
+      'p-4 text-sm space-y-3',   
+      index % 2 === 0 
+        ? 'bg-gray-300 dark:bg-zinc-700'  // Even rows
+        : 'bg-gray-100 dark:bg-zinc-900'     // Odd rows
+    ]"
+  >
+    <!-- SN, Name, Value row -->
+    <div class="flex justify-between text-gray-800 dark:text-gray-200 font-medium">
+      <span>SN: {{ row.sn }}</span>
+      <span>{{ row.name }}</span>
+      <span>₹{{ row.value }}</span>
+    </div>
+
+    <!-- Row 1: Barcode | Qty | Discount -->
+    <div class="grid grid-cols-3 gap-2">
+      <UInput
+        v-model="row.barcode"
+        placeholder="Barcode"
+        size="sm"
+        ref="barcodeInputs"
+        @focus="selectAllText(index)"
+        @blur="fetchItemData(row.barcode, index)"
+        @keydown.delete="removeRow($event, row.barcode, index)"
+        @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+      />
+       <UInput
+        v-model="row.rate"
+        ref="rateInputs"
+        placeholder="Rate"
+        type="number"
+        size="sm"
+        @keydown.enter="moveFocus(index, 'rate', 'right')"
+      />
+      
+      <UInput
+        v-model="row.discount"
+        placeholder="Discount"
+        ref="discountInputs" 
+        type="number"
+        size="sm"
+        @keydown.enter="addNewRow(index)"
+      />
+    </div>
+
+    <!-- Row 2: Category | Rate | Tax -->
+    <div class="grid grid-cols-3 gap-2 ">
+      <USelectMenu
+        v-model="row.category"
+        :options="categories"
+        option-attribute="name"
+        @update:modelValue="() => handleCategoryChange(row.category, index)"
+        track-by="id"
+        multiple
+        searchable
+        placeholder="Category"
+      >
+        <template #label>
+          <span v-if="row.category.length">{{ row.category.map(c => c.name).join(', ') }}</span>
+          <span v-else class="text-gray-400">Category</span>
+        </template>
+      </USelectMenu>
+      <UInput
+        v-model="row.qty"
+        placeholder="Qty"
+        ref="qtyInputs" 
+        type="number"
+        size="sm"
+       @keydown.enter="moveFocus(index, 'qty', 'right')"
+      />
+     
+      <UInput
+        v-model="row.tax"
+        ref="taxInputs"
+        placeholder="Tax"
+        type="number"
+        size="sm"
+       @keydown.enter="addNewRow(index)"
+      />
+    </div>
+  </div>
+</div>
+
+         
+        <div v-else class="overflow-x-auto p-3 hidden sm:block">    
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
@@ -1362,122 +1507,122 @@ onMounted(() => {
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
-            <tr v-for="(row, index) in items" :key="row.sn">
-              <td class="py-1 whitespace-nowrap">
-                {{ row.sn }}
-              </td>
-              <td class="py-1 whitespace-nowrap">
-                <UInput
-                  v-model="row.barcode"
-                  ref="barcodeInputs"
-                  size="sm"
-                  @focus="selectAllText(index)"
-                  @blur="fetchItemData(row.barcode, index)"
-                  @keydown.delete="removeRow($event, row.barcode, index)"
-                  @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
-                  @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
-                  @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
-                  @keydown.left.prevent="moveFocus(index, 'barcode', 'left')"
-                  @keydown.right.prevent="moveFocus(index, 'barcode', 'right')"
-                />
-              </td>
-              <td class="py-1 whitespace-nowrap"  ref="categoryInputs">
-                <USelectMenu  
-                  v-model="row.category" 
-                  
-                  :options="categories" 
-                  option-attribute="name"  
-                  option-key="id" 
-                  track-by="id"
-                  multiple 
-                  searchable
-                  searchable-placeholder="Search a Category..."
-                  @keydown.up.prevent="moveFocus(index, 'category', 'up')"
-                  @keydown.down.prevent="moveFocus(index, 'category', 'down')"
-                  @keydown.left.prevent="movecatgeory(index)"
-                  @keydown.right.prevent="movecatgeory(index)"
-                  @keydown.enter.prevent="movecatgeory(index)"
-                >
-                  <template #label>
-                    <span v-if="row.category.length" class="truncate">
-                      {{ row.category.map(item => item.name).join(', ') }}
-                    </span>
-                    <span v-else>Select Category</span>
-                  </template>
-                  <template  #option="{ option: category }">
-                    <span class="truncate">{{ category.name }}</span>
-                  </template>
-                </USelectMenu>
-              </td>
-              <td class="py-1 whitespace-nowrap">
-                <UInput 
-                  v-model="row.name" 
-                    ref="nameInputs"
-                  size="sm"  
-                  @keydown.enter="addNewRow(index)"
-                  @keydown.up.prevent="moveFocus(index, 'name', 'up')"
-                  @keydown.down.prevent="moveFocus(index, 'name', 'down')"
-                  @keydown.left.prevent="moveFocus(index, 'name', 'left')"
-                  @keydown.right.prevent="moveFocus(index, 'name', 'right')"
-                />
-              </td>
-              <td class="py-1 whitespace-nowrap">
-                <UInput 
-                  v-model="row.rate" 
-                  type="number" 
-                  ref="rateInputs"
-                  size="sm"  
-                  @keydown.enter="addNewRow(index)"
-                  @keydown.up.prevent="moveFocus(index, 'rate', 'up')"
-                  @keydown.down.prevent="moveFocus(index, 'rate', 'down')"
-                  @keydown.left.prevent="moveFocus(index, 'rate', 'left')"
-                  @keydown.right.prevent="moveFocus(index, 'rate', 'right')"
-                />
-              </td>
-              <td class="py-1 whitespace-nowrap">
-                <UInput 
-                  v-model="row.qty"  
-                  ref="qtyInputs" 
-                  type="number" 
-                  size="sm"  
-                  @keydown.enter="addNewRow(index)"
-                  @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
-                  @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
-                  @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
-                  @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
-                />
-              </td>
-              <td class="py-1 whitespace-nowrap">
-                <UInput 
-                  v-model="row.discount" 
-                  type="number"
-                  ref="discountInputs" 
-                  size="sm"  
-                  @keydown.enter="addNewRow(index)"
-                  @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
-                  @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
-                  @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
-                  @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
-                />
-              </td>
-              <td class="py-1 whitespace-nowrap">
-                <UInput 
-                  v-model="row.tax" 
-                    ref="taxInputs"
-                  type="number" 
-                  size="sm" 
-                  @keydown.enter="addNewRow(index)"
-                  @keydown.up.prevent="moveFocus(index, 'tax', 'up')"
-                  @keydown.down.prevent="moveFocus(index, 'tax', 'down')"
-                  @keydown.left.prevent="moveFocus(index, 'tax', 'left')"
-                  @keydown.right.prevent="moveFocus(index, 'tax', 'right')"
-                />
-              </td>
-              <td class="py-1 ps-2 whitespace-nowrap">
-                {{ row.value }}
-              </td>
-            </tr>
-          </tbody>
+  <tr v-for="(row, index) in items" :key="row.sn">
+    <td class="py-1 whitespace-nowrap">
+      {{ row.sn }}
+    </td>
+    <td class="py-1 whitespace-nowrap">
+      <UInput
+        v-model="row.barcode"
+        ref="barcodeInputs"
+        size="sm"
+        @focus="selectAllText(index)"
+        @blur="fetchItemData(row.barcode, index)"
+        @keydown.delete="removeRow($event, row.barcode, index)"
+        @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+        @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
+        @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
+        @keydown.left.prevent="moveFocus(index, 'barcode', 'left')"
+        @keydown.right.prevent="moveFocus(index, 'barcode', 'right')"
+      />
+    </td>
+    <td class="py-1 whitespace-nowrap"  ref="categoryInputs">
+      <USelectMenu  
+        v-model="row.category" 
+        @update:modelValue="() => handleCategoryChange(row.category, index)"
+        :options="categories" 
+        option-attribute="name"  
+        option-key="id" 
+        track-by="id"
+        multiple 
+        searchable
+        searchable-placeholder="Search a Category..."
+        @keydown.up.prevent="moveFocus(index, 'category', 'up')"
+        @keydown.down.prevent="moveFocus(index, 'category', 'down')"
+        @keydown.left.prevent="movecatgeory(index)"
+        @keydown.right.prevent="movecatgeory(index)"
+        @keydown.enter.prevent="movecatgeory(index)"
+      >
+        <template #label>
+          <span v-if="row.category.length" class="truncate">
+            {{ row.category.map(item => item.name).join(', ') }}
+          </span>
+          <span v-else>Select Category</span>
+        </template>
+        <template  #option="{ option: category }">
+          <span class="truncate">{{ category.name }}</span>
+        </template>
+      </USelectMenu>
+    </td>
+    <td class="py-1 whitespace-nowrap">
+      <UInput 
+        v-model="row.name" 
+        ref="nameInputs"
+        size="sm"  
+        @keydown.enter="addNewRow(index)"
+        @keydown.up.prevent="moveFocus(index, 'name', 'up')"
+        @keydown.down.prevent="moveFocus(index, 'name', 'down')"
+        @keydown.left.prevent="moveFocus(index, 'name', 'left')"
+        @keydown.right.prevent="moveFocus(index, 'name', 'right')"
+      />
+    </td>
+    <td class="py-1 whitespace-nowrap">
+      <UInput 
+        v-model="row.rate" 
+        type="number" 
+        ref="rateInputs"
+        size="sm"  
+        @keydown.enter="moveFocus(index, 'rate', 'right')"
+        @keydown.up.prevent="moveFocus(index, 'rate', 'up')"
+        @keydown.down.prevent="moveFocus(index, 'rate', 'down')"
+        @keydown.left.prevent="moveFocus(index, 'rate', 'left')"
+        @keydown.right.prevent="moveFocus(index, 'rate', 'right')"
+      />
+    </td>
+    <td class="py-1 whitespace-nowrap">
+      <UInput 
+        v-model="row.qty"  
+        ref="qtyInputs" 
+        type="number" 
+        size="sm"  
+         @keydown.enter="moveFocus(index, 'qty', 'right')"
+        @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
+        @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
+        @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
+        @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
+      />
+    </td>
+    <td class="py-1 whitespace-nowrap">
+      <UInput 
+        v-model="row.discount" 
+        type="number"
+        ref="discountInputs" 
+        size="sm"  
+        @keydown.enter="addNewRow(index)"
+        @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
+        @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
+        @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
+        @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
+      />
+    </td>
+    <td class="py-1 whitespace-nowrap">
+      <UInput 
+        v-model="row.tax" 
+          ref="taxInputs"
+        type="number" 
+        size="sm" 
+        @keydown.enter="addNewRow(index)"
+        @keydown.up.prevent="moveFocus(index, 'tax', 'up')"
+        @keydown.down.prevent="moveFocus(index, 'tax', 'down')"
+        @keydown.left.prevent="moveFocus(index, 'tax', 'left')"
+        @keydown.right.prevent="moveFocus(index, 'tax', 'right')"
+      />
+    </td>
+    <td class="py-1 ps-2 whitespace-nowrap">
+      {{ row.value }}
+    </td>
+  </tr>
+</tbody>
 
 
           </table>
@@ -1485,21 +1630,22 @@ onMounted(() => {
         </div>
 
         
-
-        
+         
 
   <template #footer>
    <div class="px-3 py-2">
             <div>
-              Qty: {{ tQty }}
+           Qty: {{ tQty }}
             </div>
           </div>
         <!-- Other form elements -->
-        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
-          <div>
-            <!-- Discount Input -->
+         <div v-if="!isMobile" class="sm:grid hidden grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
+
+          <div class="">
+
+        <!-- Discount Input -->
         <div class="mb-6">
-          <label class="block text-gray-700 font-medium">Dis %(+) / Round Off (-)</label>
+          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
             ref="discountref"
             type="number"
@@ -1509,24 +1655,24 @@ onMounted(() => {
           />
         </div>
 
-         <!-- Subtotal Display -->
-        <div class="border border-primary-700 dark:border-primary-300 rounded-md mb-7">
-        <div class="flex flex-col items-center justify-center py-3">
-          <div class="text-s">Sub Total</div>
-          <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
-        </div>
-      </div>
-          
+  <!-- Subtotal Display -->
+  <div class="border border-primary-700 dark:border-primary-300 rounded-md mb-7">
+  <div class="flex flex-col items-center justify-center py-3">
+    <div class="text-s">Sub Total</div>
+    <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
+  </div>
+</div>
+    
 
-         <!-- Grand Total Display -->
-          <div class="border border-green-700 dark:border-green-300 rounded-md">
-          <div class="flex flex-col items-center justify-center py-3">
-            <div class="text-s">Grand Total</div>
-            <div class="text-green-700 dark:text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
-          </div>
-        </div>
+  <!-- Grand Total Display -->
+   <div class="border border-green-700 dark:border-green-300 rounded-md">
+  <div class="flex flex-col items-center justify-center py-3">
+    <div class="text-s">Grand Total</div>
+    <div class="text-green-700 dark:text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+  </div>
+</div>
 
-          </div>
+</div>
 
           <div>
             <div class="mb-4">
@@ -1558,10 +1704,12 @@ onMounted(() => {
                 />
               </div>
             </div>
+
+
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
               <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
-            </div>
+            </div>    
           </div>
 
           <div>
@@ -1577,16 +1725,16 @@ onMounted(() => {
               <UInput v-model="voucherNo" />
             </div>
             <div class="mt-9">
-              <UButton color="primary" block @click="isOpen=true" :disabled="isSavingAcc" >Add Account</UButton>
+              <UButton color="primary" block @click="isOpen=true" :disabled="isSavingAcc">Add Account</UButton>
             </div>
           </div>
-
+          
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
               <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
             </div>
-           <div class="mb-4">
+            <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
               <UInput v-model="clientName" />
             </div>
@@ -1600,18 +1748,94 @@ onMounted(() => {
           </div>
         </div>
 
-        <div class="w-full flex flex-wrap gap-4 px-3 py-3">
-          <UButton color="blue" class="flex-1" block @click="() => router.push('/erp/billing')">New</UButton>
-          <UButton :loading="isSaving"  ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
-          <UButton color="red" class="flex-1" block  @click="deleteBill">Delete</UButton>
-          <UButton class="flex-1" block>Barcode Search</UButton>
-          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
-          <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
+        <!-- mobile view -->
+        <div  v-if="isMobile" class="sm:hidden flex flex-col gap-3 py-3 text-sm px-2" >
+        <div class="">
+          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
+          <UInput
+          ref="discountref"
+          type="number"
+          v-model="discount"
+          @keydown.enter.prevent="handleEnterMainDiscount()"
+          placeholder="Enter discount"
+          />
+        </div>
+
+        <div class="">
+          <label class="block text-gray-700 font-medium">Payment Method</label>
+          <div class="w-full flex flex-row gap-2">
+            <USelect
+            ref="paymentref"
+            v-model="paymentMethod"
+            :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
+            @keydown.enter.prevent="handleEnterPayment(index)"
+            class="flex-1"
+            />
+            <UButton
+            icon="i-heroicons-pencil-square"
+            size="sm"
+            color="primary"
+            square
+            variant="solid"
+            class="w-auto"
+            @click="handleSplit"
+            />
+          </div>    
+        </div>    
+
+        <div class="">
+          <label class="block text-gray-700 font-medium">Sales Return AMT</label>
+          <UInput v-model="returnAmt" />
+        </div>
+
+        <div class=" flex flex-row gap-2">
+          <div class="">
+            <label class="block text-gray-700 font-medium">Cell No.</label>
+            <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
+          </div>
+          <div class="">
+            <label class="block text-gray-700 font-medium">Name</label>
+            <UInput v-model="clientName" />
+          </div>
+        </div>
+
+        <div class="">
+          <label class="block text-gray-700 font-medium">Account Name</label>
+          <div class="w-full flex flex-row gap-2">
+            <UInputMenu class="flex-1" v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
+            <UButton
+            icon="i-heroicons-plus"
+            size="sm"
+            color="primary"
+            square
+            variant="solid"
+            class="w-auto"
+            :disabled="isSavingAcc"
+            @click="isOpen=true"
+            />
+          </div>
+        </div>
 
         </div>
 
-    </template>
-     </UCard>
+         
+
+        <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden sm:flex">
+          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
+          <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
+          <UButton class="flex-1" block>Barcode Search</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
+          <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
+        </div>
+
+          <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 sm:hidden">
+          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
+        </div>
+        </template>
+      </UCard>
   </UDashboardPanelContent>
 
   <UModal v-model="isOpen">
@@ -1621,7 +1845,7 @@ onMounted(() => {
           <!-- Name -->
           <h3 class="text-md font-semibold">Personal Details</h3>
           <UInput v-model="account.name" label="Name" placeholder="Enter full name" required />
-          <UInput v-model="account.phone" label="Phone No" placeholder="Enter full name" required />
+          <UInput v-model="account.phone" label="Phone No" placeholder="Enter Phone Number" required />
 
           <!-- Address -->
           <h3 class="text-md font-semibold mt-4">Address Details</h3>
@@ -1633,49 +1857,26 @@ onMounted(() => {
 
 
           <!-- Submit Button -->
-          <UButton @click="submitForm" :disabled="isSavingAcc"  block>Submit</UButton>
+          <UButton @click="submitForm" :disabled="isSavingAcc" block>Submit</UButton>
         </div>
       </UModal>
 
-      <UDashboardModal
-        v-model="isPrint"
-        title="Print Bill"
-        description="Would You Like to print?"
-        icon="i-heroicons-exclamation-circle"
-        prevent-close
-        :close-button="null"
-        :ui="{
-            icon: {
-                base: 'text-red-500 dark:text-red-400',
-            },
-            footer: {
-                base: 'ml-16',
-            },
-        }"
-    >
-        <template #footer>
-            <UButton
-                color="green"
-                label="Yes"
-                :loading="loading"
-                @click="print"
-            />
-            <UButton color="red" label="NO" @click="isPrint = false" />
-        </template>
-    </UDashboardModal>
 
-    <BillingAddClient
+     
+<!-- sales return -->
+<BillingSalesReturn
+  v-model="issalesReturnModelOpen"
+  @totalreturnvalue="handleReturnData"
+/>
+<BillingAddClient
   v-model:model="isClientAddModelOpen"
   v-model:phoneNo="phoneNo"
   :onVerify="handleEnterPhone"
 />
 
-<BillingSalesReturn
-  v-model="issalesReturnModelOpen"
-  @totalreturnvalue="handleReturnData"
-/>
 
-      <!-- split payment method modal -->
+
+   <!-- split payment method modal -->
    <UModal v-model="showSplitModal">
   <div class="p-4 space-y-4">
     <h2 class="text-lg font-semibold">Split Payment</h2>
@@ -1726,8 +1927,33 @@ onMounted(() => {
 </UModal>
 
 
-</template>
+    <UDashboardModal
+        v-model="isPrint"
+        title="Print Bill"
+        description="Would You Like to print?"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            },
+            footer: {
+                base: 'ml-16',
+            },
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="green"
+                label="Yes"
+                @click="print"
+            />
+            <UButton color="red" label="NO" @click="isPrint = false" />
+        </template>
+    </UDashboardModal>
 
+</template>
 
 <style scoped>
 .relative {

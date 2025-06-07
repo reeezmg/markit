@@ -121,23 +121,29 @@ watch([sprice, discount], ([newSPrice, newDiscount]) => {
     }
 });
 
-watchEffect(() => {
-    if (sizes.value.length > 0) {
-        qty.value = sizes.value.reduce((total, size) => total + (size.qty || 0), 0);
+watch(
+  [sizes, name, code, qty, sprice, pprice, dprice, discount],
+  ([newSizes, newName, newCode, newQty, newSPrice, newPPrice, newDPrice, newDiscount]) => {
+    // If sizes are present, recalculate qty from them
+    if (newSizes.length > 0) {
+      qty.value = newSizes.reduce((total, size) => total + (size.qty || 0), 0);
     }
-    
+
     emit('update', {
-        ...(id.value && { id: id.value }),
-        name: name.value,
-        code: code.value,
-        qty: qty.value,
-        sprice: sprice.value,
-        pprice: pprice.value,
-        dprice: dprice.value,
-        discount: discount.value,
-        sizes: sizes.value,
+      ...(id.value && { id: id.value }),
+      name: newName,
+      code: newCode,
+      qty: qty.value,
+      sprice: newSPrice,
+      pprice: newPPrice,
+      dprice: newDPrice,
+      discount: newDiscount,
+      sizes: newSizes,
     });
-});
+  },
+  { deep: true, immediate: true }
+);
+
 
 defineExpose({ resetForm });
 </script>
@@ -164,7 +170,7 @@ defineExpose({ resetForm });
 </div>
 
 <div class="flex flex-row w-full space-x-4 mb-3">
-    <UFormGroup label="Discounted Price" class="w-full">
+    <UFormGroup label="Discount Price" class="w-full">
         <UInput v-model="dprice" v-bind="dpriceAttrs" type="number" placeholder="Enter discounted price" step="0.01" />
     </UFormGroup>
 

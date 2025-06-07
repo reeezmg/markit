@@ -429,47 +429,55 @@ isAddPhotoModelOpen.value = false
                 footer: { padding: 'p-4' },
             }"
         >
-            <!-- Filters -->
-            <div class="flex items-center justify-between gap-3 px-4 py-3">
-                <UInput
-                    v-model="search"
-                    icon="i-heroicons-magnifying-glass-20-solid"
-                    placeholder="Search..."
-                />
-                <div class="flex flex-row">
-                    <USelectMenu
-                        v-model="selectedStatus"
-                        :options="todoStatus"
-                        multiple
-                        placeholder="Status"
-                        class="w-40"
-                    />
-                    <UButton
-                        class="ms-5"
-                        icon="i-heroicons-plus"
-                        size="sm"
-                        color="primary"
-                        variant="solid"
-                        label="Add Product"
-                        :loading=isAdd
-                        @click="handleAdd"
-                    />
-                    <UButton
-                        class="ms-5"
-                        icon="i-heroicons-camera"
-                        size="sm"
-                        color="primary"
-                        variant="solid"
-                        label="Add Photo"
-                        @click="isAddPhotoModelOpen = true"
-                    />
-                </div>
-            </div>
+         <!-- Filters -->
+<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 py-3 w-full">
+  <!-- Left side: Search + Status -->
+  <div class="flex flex-row gap-3 w-full sm:w-auto">
+    <UInput
+      v-model="search"
+      icon="i-heroicons-magnifying-glass-20-solid"
+      placeholder="Search..."
+      class="w-full sm:w-auto"
+    />
+    <USelectMenu
+      v-model="selectedStatus"
+      :options="todoStatus"
+      multiple
+      placeholder="Status"
+      class="w-full sm:w-40"
+    />
+  </div>
+
+  <!-- Right side: Buttons -->
+  <div class="flex flex-row gap-3 w-full sm:w-auto justify-end">
+    <UButton
+      icon="i-heroicons-plus"
+      size="sm"
+      color="primary"
+      variant="solid"
+      label="Add Product"
+      :loading="isAdd"
+      @click="handleAdd"
+       class="w-full flex-1 sm:w-auto sm:flex-none"
+    />
+    <UButton
+      icon="i-heroicons-camera"
+      size="sm"
+      color="primary"
+      variant="solid"
+      label="Add Photo"
+      @click="isAddPhotoModelOpen = true"
+    class="w-full flex-1 sm:w-auto sm:flex-none"
+    />
+  </div>
+</div>
+
+
 
             <!-- Header and Action buttons -->
             <div class="flex justify-between items-center w-full px-4 py-3">
                 <div class="flex items-center gap-1.5">
-                    <span class="text-sm leading-5">Rows per page:</span>
+                    <span class="text-sm leading-5 hidden sm:block">Rows per page:</span>
                     <USelect
                         v-model="pageCount"
                         :options="[3, 5, 10, 20, 30, 40].map(num => ({ label: num, value: num }))"
@@ -706,7 +714,7 @@ isAddPhotoModelOpen.value = false
             <template #footer>
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
-                        <span class="text-sm leading-5">
+                        <span class="text-sm leading-5 hidden sm:flex">
                             Showing
                             <span class="font-medium">{{ pageFrom }}</span>
                             to

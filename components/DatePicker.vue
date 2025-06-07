@@ -8,6 +8,8 @@ defineOptions({
   inheritAttrs: false
 })
 
+const isMobile = ref(false);
+
 const props = defineProps({
   modelValue: {
     type: [Date, Object] as PropType<DatePickerDate | DatePickerRangeObject | null>,
@@ -37,13 +39,21 @@ function onDayClick(_: any, event: MouseEvent): void {
   const target = event.target as HTMLElement
   target.blur()
 }
+
+onMounted(() => {
+  isMobile.value = window.innerWidth < 640;
+  window.addEventListener('resize', () => {
+    isMobile.value = window.innerWidth < 640;
+  });
+});
+
 </script>
 
 <template>
   <VCalendarDatePicker
     v-if="date && (date as DatePickerRangeObject)?.start && (date as DatePickerRangeObject)?.end"
     v-model.range="date"
-    :columns="2"
+    :columns="isMobile ? 1 : 2"
     v-bind="{ ...attrs, ...$attrs }"
     @dayclick="onDayClick"
   />

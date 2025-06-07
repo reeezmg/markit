@@ -23,11 +23,11 @@ const companyId = ref<string | null>(null)
 
 
 const columns = [
-  { key: 'distributor.name', label: 'Distributor Name', sortable: true },
-  { key: 'purchaseorders.length', label: 'Total Order', sortable: true },
-  { key: 'totalAmount', label: 'Total(₹)', sortable: true },
-  { key: 'paidAmount', label: 'Paid (₹)', sortable: true },
-  { key: 'totalDue', label: 'Due (₹)', sortable: true },
+  { key: 'distributor.name', label: 'Distributor', sortable: true },
+  { key: 'purchaseorders.length', label: 'Orders', sortable: true },
+  { key: 'totalAmount', label: 'Total', sortable: true },
+  { key: 'paidAmount', label: 'Paid', sortable: true },
+  { key: 'totalDue', label: 'Due', sortable: true },
   {
         key: 'actions',
         label: 'Actions',
@@ -208,11 +208,11 @@ const selectedDistributor = computed(() => {
             }"
         >
         <template #header>
-                <div class="flex items-center justify-between gap-3">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
                     <div class="flex flex-row">
     
                     </div>
-                    <UButton color="primary" @click=" emit('modal-open')">
+                    <UButton color="primary" @click=" emit('modal-open')" block class="w-full sm:w-40">
                         Add Distributor
                     </UButton>
                 </div>
@@ -253,7 +253,7 @@ const selectedDistributor = computed(() => {
             <template #footer>
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
-                        <span class="text-sm leading-5">
+                        <span class="text-sm leading-5 hidden sm:block">
                             Showing
                             <span class="font-medium">{{ pageFrom }}</span>
                             to

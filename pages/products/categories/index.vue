@@ -26,7 +26,7 @@ const columns = [
     },
     {
         key: 'shortCut',
-        label: 'Short Cut',
+        label: 'Code',
         sortable: true,
     },
     {
@@ -327,37 +327,44 @@ async function toggleStatus(id) {
                 footer: { padding: 'p-4' },
             }"
         >
-            <!-- Filters -->
-            <div class="flex items-center justify-between gap-3 px-4 py-3">
-                <UInput
-                    v-model="search"
-                    icon="i-heroicons-magnifying-glass-20-solid"
-                    placeholder="Search..."
-                />
-                <div class="flex flex-row">
-                    <USelectMenu
-                        v-model="selectedStatus"
-                        :options="todoStatus"
-                        multiple
-                        placeholder="Status"
-                        class="w-40"
-                    />
-                    <UButton
-                        class="ms-5"
-                        icon="i-heroicons-plus"
-                        size="sm"
-                        color="primary"
-                        variant="solid"
-                        label="Add Category"
-                        @click="() => router.push('categories/add')"
-                    />
-                </div>
-            </div>
 
+      <div class="flex flex-col sm:flex-row justify-between gap-3 px-4 py-3 w-full">
+  <!-- Left side: Search + Status -->
+  <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+    <UInput
+      v-model="search"
+      icon="i-heroicons-magnifying-glass-20-solid"
+      placeholder="Search..."
+      class="w-full sm:w-60"
+    />
+    <USelectMenu
+      v-model="selectedStatus"
+      :options="todoStatus"
+      multiple
+      placeholder="Status"
+      class="w-full sm:w-60"
+    />
+  </div>
+
+  <!-- Right side: Add Button aligned to end -->
+  <div class="w-full sm:w-auto flex justify-end">
+    <UButton
+      icon="i-heroicons-plus"
+      size="sm"
+      color="primary"
+      variant="solid"
+      label="Add Category"
+      class="w-full sm:w-40"
+      @click="() => router.push('categories/add')"
+    />
+  </div>
+</div>
+
+           
             <!-- Header and Action buttons -->
             <div class="flex justify-between items-center w-full px-4 py-3">
                 <div class="flex items-center gap-1.5">
-                    <span class="text-sm leading-5">Rows per page:</span>
+                    <span class="text-sm leading-5 sm:block hidden">Rows per page:</span>
                     <USelect
                         v-model="pageCount"
                         :options="[3, 5, 10, 20, 30, 40]"
@@ -419,9 +426,9 @@ async function toggleStatus(id) {
                 sort-asc-icon="i-heroicons-arrow-up"
                 sort-desc-icon="i-heroicons-arrow-down"
                 sort-mode="manual"
-                class="w-full"
+                
                 :ui="{
-                    td: { base: 'max-w-[0] truncate' },
+
                     default: { checkbox: { color: 'gray' } },
                 }"
             >
@@ -577,7 +584,7 @@ async function toggleStatus(id) {
             <template #footer>
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
-                        <span class="text-sm leading-5">
+                        <span class="text-sm leading-5 sm:block hidden">
                             Showing
                             <span class="font-medium">{{ pageFrom }}</span>
                             to
