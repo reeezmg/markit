@@ -534,8 +534,12 @@ const fetchItemData = async (barcode, index) => {
 };
 
 const processItemResponse = (itemData, index) => {
+  if (!items.value[index]) {
+    return;
+  }
+
   const categoryId = itemData.variant.product.categoryId;
-  
+
   items.value[index].id = itemData.id || '';
   items.value[index].size = itemData.size || '';
   items.value[index].name = `${itemData.variant?.name}-${itemData.variant.product.name}` || '';
@@ -546,8 +550,7 @@ const processItemResponse = (itemData, index) => {
   items.value[index].totalQty = itemData.variant?.qty || 0;
   items.value[index].sizes = itemData.variant?.sizes || null;
   items.value[index].variantId = itemData.variant?.id || '';
-  
-  // Clean up
+
   delete currentRequestIds.value[index];
 };
 
