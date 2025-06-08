@@ -4,9 +4,12 @@ import { BillingAddClient } from '#components';
 import { useUpdateCompany,useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateManyItem } from '~/lib/hooks';
 
 
+const currentRequestIds = ref({}); // Tracks the latest request ID per index
+const lastResponse  = ref({}); // Stores responses by request ID
+
 const { printBill } = usePrint();
 const CreateBill = useCreateBill();
-const CreateTokenEntry = useCreateTokenEntry();
+const CreateTokenEntry = useCreateTokenEntry();``
 const CreateAccount = useCreateAccount();
 const UpdateVariant = useUpdateVariant();
 const UpdateCompany = useUpdateCompany();
@@ -19,15 +22,16 @@ const router = useRouter();
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
+
 const subtotal = computed(() => {
-  return items.value.reduce((sum, item) => sum + (item.qty * item.rate || 0), 0);
+  return items.value.reduce((sum, item) => sum + ((item.qty || 1) * (item.rate || 0)), 0);
 });
 const grandTotal = computed(() => {
   const baseTotal = items.value.reduce((sum, item) => sum + (item.value || 0), 0);
 
   if (discount.value < 0) {
     return parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
-  } else {
+  } else {``
     const discounted = baseTotal - (baseTotal * discount.value) / 100;
     return parseFloat(discounted.toFixed(2));
   }
@@ -177,7 +181,7 @@ watch(items, async () => {
 
     
     // ---------- Step 3: Calculate base value ----------
-    let baseValue = discountedRate * item.qty;
+    let baseValue = discountedRate * (item.qty || 1);
     
     if (!isTaxIncluded) {
       baseValue += (baseValue * item.tax) / 100;
@@ -191,7 +195,7 @@ watch(items, async () => {
 const tQty = computed(() =>
   items.value.reduce((sum, item) => {
     if (item.barcode || item.name || item.category.length > 0) {
-      return sum + item.qty
+      return sum + (item.qty || 1);
     }
     return sum
   }, 0)
@@ -394,7 +398,8 @@ const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs);
 const { data: entrydata ,refetch:entryRefetch} = useFindManyTokenEntry(entryargs,{enable:false});
 
 const handleEnterBarcode = (barcode,index) => {
- const pattern = /^\d[A-Z]\d{6}$/;
+ const pattern = /^\d+[A-Z]\d{6}$/;
+
   if(!barcode){
     if(token.value){
       const component = savetokenref.value;
@@ -488,44 +493,74 @@ const selectAllText = (index) => {
   }
 };
 
-
+watch(itemdata, (newData) => {
+  if (!newData) return;
+  
+  lastResponse.value = {
+    data: newData,
+    requestId: scannedBarcode.value // Using barcode as ID
+  };
+  
+  processItemResponse(newData);
+});
 
 const fetchItemData = async (barcode, index) => {
   if (!barcode) return;
 
+  // Store the current barcode and index
+  currentRequestIds.value[index] = barcode;
   scannedBarcode.value = barcode;
-  console.log(scannedBarcode.value);
-
-  await itemRefetch();
-
-  if (itemdata.value) {
+  
+  try {
+    await itemRefetch();
     
-    const categoryId = itemdata.value.variant.product.categoryId;
+    // Check if this is still the active request for this index
+    if (currentRequestIds.value[index] !== barcode) {
+      return; // Newer request has been made
+    }
     
-
-    items.value[index].id = itemdata.value.id || '';
-    items.value[index].size = itemdata.value.size || '';
-    items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant.product.name}` || '';
-    items.value[index].category = categories.value.filter(category =>category.id === categoryId);
-    items.value[index].rate = itemdata.value.variant?.sprice || 0;
-    items.value[index].discount = itemdata.value.variant?.discount || 0;
-    items.value[index].tax = itemdata.value.variant?.tax || 0;
-    items.value[index].totalQty = itemdata.value.variant?.qty || 0;
-    items.value[index].sizes = itemdata.value.variant?.sizes || null;
-    items.value[index].variantId = itemdata.value.variant?.id || '';
-  } else {
-    items.value[index].barcode = ''
-     toast.add({
-          title: 'Barcode is invalid or item is empty!',
-          color: 'red',
-        });
+    // Process the response if we got one
+    if (lastResponse.value?.requestId === barcode && itemdata.value) {
+      processItemResponse(itemdata.value, index);
+    } else if (!itemdata.value) {
+      handleInvalidBarcode(index);
+    }
+  } catch (error) {
+    console.error('Error fetching item:', error);
+    if (currentRequestIds.value[index] === barcode) {
+      handleInvalidBarcode(index);
+    }
   }
 };
 
+const processItemResponse = (itemData, index) => {
+  const categoryId = itemData.variant.product.categoryId;
+  
+  items.value[index].id = itemData.id || '';
+  items.value[index].size = itemData.size || '';
+  items.value[index].name = `${itemData.variant?.name}-${itemData.variant.product.name}` || '';
+  items.value[index].category = categories.value.filter(category => category.id === categoryId);
+  items.value[index].rate = itemData.variant?.sprice || 0;
+  items.value[index].discount = itemData.variant?.discount || 0;
+  items.value[index].tax = itemData.variant?.tax || 0;
+  items.value[index].totalQty = itemData.variant?.qty || 0;
+  items.value[index].sizes = itemData.variant?.sizes || null;
+  items.value[index].variantId = itemData.variant?.id || '';
+  
+  // Clean up
+  delete currentRequestIds.value[index];
+};
+
+const handleInvalidBarcode = (index) => {
+  items.value[index].barcode = '';
+  toast.add({
+    title: 'Barcode is invalid or item is empty!',
+    color: 'red',
+  });
+  delete currentRequestIds.value[index];
+};
 
 const handleSave = async () => {
-    // Filter out empty items
-    console.log(items)
     isSaving.value = true
     let itemIds = []
     let variantDetails = []
@@ -641,15 +676,8 @@ const payload = {
   }),
 };
 
-
- CreateBill.mutateAsync({
-  data: payload
-    });
-        toast.add({
-          title: 'Bill created successfully!',
-          color: 'green',
-        });
-        isPrint.value = true
+  isSaving.value = false;
+          isPrint.value = true
            printData = {
               invoiceNumber: billid.billCounter,
               date: new Date(date.value).toISOString(),
@@ -706,31 +734,17 @@ const payload = {
             }
           }, 0),
         };
-    isSaving.value = false;
-   console.log(printData)
-        $fetch('/api/notifications/notify', {
-        method: 'POST',
-        body: {
-          userId:useAuth().session.value?.id,
-          type: 'BILL',
-          companyId: useAuth().session.value?.companyId,
-          // id: billResponse.id,
-          invoiceNumber: billid.billCounter,
-          amount: grandTotal.value
-        }
-      })
-    
-    } catch (error) {
-      isSaving.value = false;
-      console.error('Error creating bill', error);
-      toast.add({
-        title: 'Bill creation failed!',
-        description: error.message,
-        color: 'red',
-      });
-    }
-   
-      for (const item of items.value) {
+
+      CreateBill.mutateAsync({
+        data: payload
+          });
+        toast.add({
+          title: 'Bill created successfully!',
+          color: 'green',
+        });
+
+
+         for (const item of items.value) {
         if (item.barcode && item.return === false) {
           let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
           let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
@@ -739,7 +753,6 @@ const payload = {
             }
             return sizeData;
           }) : [];
-  
   
             UpdateVariant.mutateAsync({
               where: { id: item.variantId },
@@ -793,6 +806,20 @@ const payload = {
           } 
           }
 
+  
+   console.log(printData)
+        $fetch('/api/notifications/notify', {
+        method: 'POST',
+        body: {
+          userId:useAuth().session.value?.id,
+          type: 'BILL',
+          companyId: useAuth().session.value?.companyId,
+          // id: billResponse.id,
+          invoiceNumber: billid.billCounter,
+          amount: grandTotal.value
+        }
+      })
+
            items.value = [
       { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
       ];
@@ -802,6 +829,19 @@ const payload = {
         const input = barcodeInputs.value[0]?.$el?.querySelector('input');
     input?.focus();
   
+    
+    } catch (error) {
+      isSaving.value = false;
+      console.error('Error creating bill', error);
+      toast.add({
+        title: 'Bill creation failed!',
+        description: error.message,
+        color: 'red',
+      });
+    }
+   
+     
+      
   
     try {
       tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
@@ -1346,7 +1386,6 @@ onMounted(() => {
         size="sm"
         ref="barcodeInputs"
         @focus="selectAllText(index)"
-        @blur="fetchItemData(row.barcode, index)"
         @keydown.delete="removeRow($event, row.barcode, index)"
         @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
       />
@@ -1438,7 +1477,6 @@ onMounted(() => {
         ref="barcodeInputs"
         size="sm"
         @focus="selectAllText(index)"
-        @blur="fetchItemData(row.barcode, index)"
         @keydown.delete="removeRow($event, row.barcode, index)"
         @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
         @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
