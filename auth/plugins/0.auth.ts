@@ -9,11 +9,18 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   const { data: session, refresh: updateSession } = await useFetch<AuthSession>('/api/auth/session');
 
   const loggedIn = computed(() => !!session.value?.email);
-  const redirectTo = useState<string>('redirectTo', () => '/dashboard');
+  
+  const redirectTo = useState<string>('redirectTo', () => '/erp/billing');
 
   // Only register middleware on client
   if (process.client) {
     addRouteMiddleware('auth', (to) => {
+      // Redirect away from auth pages if already logged in
+      if (loggedIn.value && ['/login', '/register', '/'].includes(to.path)) {
+        return '/erp/billing';
+      }
+      
+      // Original auth check
       if (to.meta.auth && !loggedIn.value && session.value?.type !== 'USER') {
         redirectTo.value = to.path;
         return '/login';
@@ -23,16 +30,21 @@ export default defineNuxtPlugin(async (nuxtApp) => {
     const route = useRoute();
     watch(loggedIn, async (isLoggedIn) => {
       const isStoreRoute = route.path.startsWith('/store/');
+      // Handle logout case
       if (!isLoggedIn && route.meta.auth && !isStoreRoute) {
         redirectTo.value = route.path;
         await navigateTo('/login');
       }
+      // Handle login case - redirect from auth pages
+      else if (isLoggedIn && ['/login', '/register', '/'].includes(route.path)) {
+        await navigateTo(redirectTo.value || '/erp/billing');
+      }
     });
 
-    // Handle redirect if already logged in and on public routes
+    // Initial check for logged-in users on public routes
     if (
       loggedIn.value &&
-      ['/login', '/register', '/'].includes(useRoute().path)
+      ['/login', '/register', '/'].includes(route.path)
     ) {
       const currentRoute = useRoute();
       const query = currentRoute.query;
@@ -40,7 +52,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         ? '?' + new URLSearchParams(query as Record<string, string>).toString()
         : '';
 
-      const target = redirectTo.value || '/dashboard';
+      const target = redirectTo.value || '/erp/billing';
       if (target !== currentRoute.path) {
         await navigateTo(`${target}${queryString}`);
       }
