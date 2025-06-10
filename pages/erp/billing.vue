@@ -1447,6 +1447,7 @@ onMounted(() => {
         type="number"
         size="sm"
         @keydown.enter="moveFocus(index, 'rate', 'right')"
+        @keydown.tab.prevent="moveFocus(index, 'rate', 'right')"
       />
       
       <UInput
@@ -1456,6 +1457,7 @@ onMounted(() => {
         type="text"
         size="sm"
         @keydown.enter="addNewRow(index)"
+        @keydown.tab.prevent="addNewRow(index)"
       />
     </div>
 
@@ -1483,6 +1485,7 @@ onMounted(() => {
         type="number"
         size="sm"
        @keydown.enter="moveFocus(index, 'qty', 'right')"
+       @keydown.tab.prevent="moveFocus(index, 'qty', 'right')"
       />
      
       <UInput
@@ -1492,6 +1495,7 @@ onMounted(() => {
         type="number"
         size="sm"
        @keydown.enter="addNewRow(index)"
+       @keydown.tab.prevent="addNewRow(index)"
       />
     </div>
   </div>
