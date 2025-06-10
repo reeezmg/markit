@@ -24,6 +24,7 @@ export default eventHandler(async (event) => {
         email: user.email,
         storeUniqueName: user.companies[0].company.storeUniqueName,
         isTaxIncluded: user.companies[0].company.isTaxIncluded,
+        isBarcodeIncluded: user.companies[0].company.isBarcodeIncluded,
         companyId: user.companies[0].companyId,
         companyType: user.companies[0].company.type,
         companyName: user.companies[0].company.name,

@@ -116,6 +116,7 @@ model Company {
   tiktokRefreshTokenExpireIn Int?                 @map("tiktok_refresh_token_expire_in")
   images                     String?
   isTaxIncluded              Boolean              @default(true) @map("is_tax_included")
+  isBarcodeIncluded          Boolean              @default(true) @map("is_barcode_included")
   users                      CompanyUser[]
   promoCodes                 PromoCode[]
   clients                    CompanyClient[]

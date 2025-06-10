@@ -48,6 +48,7 @@ const addstate = reactive<AddressState>({
 
 const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
+const isBarcodeInclude = ref(useAuth().session.value?.isBarcodeIncluded);
 
 watch(() => storeUniqueName.value, (newName) => {
   isNameChanged.value = newName !== useAuth().session.value?.storeUniqueName;
@@ -220,6 +221,26 @@ const onTaxIncludeChange = async () => {
     toast.add({ title: 'Error updating tax setting', color: 'red', icon: 'i-heroicons-x-circle' });
   }
 };
+
+const onBarcodeIncludeChange = async () => {
+  try {
+    const res = await UpdateCompany.mutateAsync({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        isBarcodeIncluded: isBarcodeInclude.value,
+      },
+    });
+    await updateIsBarcodeIncluded(isBarcodeInclude.value);
+    toast.add({ title: 'Barcode include updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating Barcode setting', color: 'red', icon: 'i-heroicons-x-circle' });
+  }
+};
+
+
 </script>
 
 <template>
@@ -272,6 +293,7 @@ const onTaxIncludeChange = async () => {
       :ui="{ container: '' }"    
     >
       <UCheckbox v-model="isTaxInclude" @change="onTaxIncludeChange" />
+      <UCheckbox v-model="isBarcodeInclude" @change="onBarcodeIncludeChange" />
     </UFormGroup>
     
     <UDivider class="mb-4" />

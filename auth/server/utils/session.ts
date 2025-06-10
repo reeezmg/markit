@@ -21,6 +21,7 @@ export type AuthSession = {
     companyName: string;
     storeUniqueName?: string;
     isTaxIncluded: boolean;
+    isBarcodeIncluded: boolean;
     logo?: string;
     role: string;
     pipelineId: string;

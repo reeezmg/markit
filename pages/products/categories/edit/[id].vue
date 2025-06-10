@@ -23,6 +23,7 @@ interface ImageData {
 const linkList = ['Create', 'Subcategories', 'Live'];
 
 // Form data
+const isLoading = ref(false);
 const name = ref('');
 const hsn = ref('');
 const shortCut = ref('');
@@ -118,6 +119,7 @@ const handleDeleteSubCategory = async (index: number) => {
 };
 
 const handleSubmit = async (e: Event) => {
+  isLoading.value = true;
   e.preventDefault();
   try {
     // 1. Upload images
@@ -194,6 +196,8 @@ const handleSubmit = async (e: Event) => {
       description: error.message,
       color: 'red'
     });
+  } finally {
+    isLoading.value = false;
   }
 };
 
@@ -291,6 +295,7 @@ const scrollToSection = (sectionId: string) => {
           <button
             class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm w-40"
             @click="handleSubmit"
+             :loading="isLoading"
         >
             Finish
         </button>

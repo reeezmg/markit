@@ -37,6 +37,7 @@ const fixedTax = ref(0);
 const thresholdAmount = ref(0);
 const taxBelowThreshold = ref(0);
 const taxAboveThreshold = ref(0);
+const isLoading = ref(false);
 
 const live = ref<boolean>();
 let files = ref<ImageData | null>(null);
@@ -87,6 +88,7 @@ const handleDeleteSubCategory = (index: number) => {
 };
 
 const handleSubmit = async (e: Event) => {
+    isLoading.value = true;
  console.log(subcategory.value)
     e.preventDefault();
     try {
@@ -145,6 +147,8 @@ const handleSubmit = async (e: Event) => {
     } catch (err: any) {
         alert(err.info?.message ?? err);
         console.log(err)
+    } finally {
+        isLoading.value = false;
     }
 };
 
@@ -219,6 +223,7 @@ const scrollToSection = (sectionId: string) => {
                     <button
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm w-40"
                         @click="handleSubmit"
+                        :loading="isLoading"
                     >
                         Finish
                     </button>

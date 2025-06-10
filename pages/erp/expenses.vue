@@ -12,6 +12,7 @@ import {
 const CreateExpense = useCreateExpense();
 const UpdateExpense = useUpdateExpense();
 const DeleteExpense = useDeleteExpense();
+const toast = useToast();
 const awsService = new AwsService();
 const useAuth = () => useNuxtApp().$auth;
 
@@ -119,6 +120,13 @@ const closeForm = () => {
 };
 
 const saveExpense = (form: any) => {
+    if(!form.category || !form.category.id) {
+       toast.add({
+            title: 'Please select a category!',
+            color: 'red',
+        });
+        return;
+    }
     if (selectedExpense.value) {
         editExpense(selectedExpense.value.id, form);
     } else {
@@ -130,8 +138,6 @@ const saveExpense = (form: any) => {
 
 <template>
     <UDashboardPanelContent class="pb-24">
-        
-
             <div>
                 <ExpenseList @edit="openForm" @delete="deleteExpense"  @open="openForm"/>
 

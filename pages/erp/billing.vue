@@ -19,7 +19,8 @@ const DeleteTokenEntry = useDeleteTokenEntry();
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const router = useRouter();
-const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
+const isTaxIncluded = ref(useAuth().session.value?.isTaxIncluded);
+const isBarcodeIncluded = ref(useAuth().session.value?.isBarcodeIncluded);
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
 
@@ -46,6 +47,8 @@ const points = ref(0);
 const clientName = ref('');
 const clientId = ref('');
 const scannedBarcode = ref("");
+const activeCategoryId = ref("");
+const activeSPrice = ref(null);
 const token = ref("")
 const tokenEntries = ref([])
 const showSplitModal = ref(false)
@@ -109,6 +112,7 @@ watch(
         items.value[index].category = [lastCategory];
       }
     });
+    console.log(newItems)
   },
   { deep: true }
 );
@@ -183,7 +187,7 @@ watch(items, async () => {
     // ---------- Step 3: Calculate base value ----------
     let baseValue = discountedRate * (item.qty || 1);
     
-    if (!isTaxIncluded) {
+    if (!isTaxIncluded.value) {
       baseValue += (baseValue * item.tax) / 100;
     }
 
@@ -347,37 +351,36 @@ const {
 
 
 const itemargs = computed(() => ({
-  where: { 
-    barcode: scannedBarcode.value,
-    status:'in_stock',
-    companyId:useAuth().session.value?.companyId || ''
-
-   },
+  where:  {
+        barcode: scannedBarcode.value,
+        status: 'in_stock',
+        companyId: useAuth().session.value?.companyId
+      },
   select: {
-    id: true, 
-    size:true,
+    id: true,
+    size: true,
     variant: {
       select: {
-        id:true,
-        sprice:true,
-        name: true, 
-        qty:true,
-        sizes:true,
-        tax:true,
-        discount:true,
+        id: true,
+        sprice: true,
+        name: true,
+        qty: true,
+        sizes: true,
+        tax: true,
+        discount: true,
         product: {
           select: {
-            name: true, 
-            categoryId:true ,
-            category:{
-              select:{
-                taxType:true,
-                fixedTax:true,
-                thresholdAmount:true,
-                taxBelowThreshold:true,
-                taxAboveThreshold:true
+            name: true,
+            categoryId: true,
+            category: {
+              select: {
+                taxType: true,
+                fixedTax: true,
+                thresholdAmount: true,
+                taxBelowThreshold: true,
+                taxAboveThreshold: true
               }
-            } 
+            }
           }
         }
       }
@@ -498,7 +501,7 @@ watch(itemdata, (newData) => {
   
   lastResponse.value = {
     data: newData,
-    requestId: scannedBarcode.value // Using barcode as ID
+    requestId: scannedBarcode.value 
   };
   
   processItemResponse(newData);
@@ -533,11 +536,42 @@ const fetchItemData = async (barcode, index) => {
   }
 };
 
+const fetchItemDataNonBarcode = async (categoryId, sPrice, index) => {
+  if (!categoryId || !sPrice) return;
+
+  try {
+    const { data } = await useFetch('/api/items/findFirst', {
+      query: {
+        categoryId,
+        sPrice
+      }
+    });
+
+    if (data.value?.data) {
+      const itemData = data.value.data;
+      items.value[index] = {
+        ...items.value[index],
+        id: itemData.id || '',
+        size: itemData.size || '',
+        name: `${itemData.variant?.name}-${itemData.variant?.product?.name}` || '',
+        rate: itemData.variant?.sprice || 0,
+        discount: itemData.variant?.discount || 0,
+        tax: itemData.variant?.tax || 0,
+        totalQty: itemData.variant?.qty || 0,
+        sizes: itemData.variant?.sizes || null,
+        variantId: itemData.variant?.id || ''
+      };
+    }
+  } catch (error) {
+    console.error('Error fetching item:', error);
+  }
+};
+
 const processItemResponse = (itemData, index) => {
   if (!items.value[index]) {
     return;
   }
-
+  
   const categoryId = itemData.variant.product.categoryId;
 
   items.value[index].id = itemData.id || '';
@@ -587,6 +621,18 @@ const handleSave = async () => {
       throw new Error(`No category in entry ${index + 1}`);
     }
   });
+
+  if(!isBarcodeIncluded.value){
+      const results = await Promise.all(
+        items.value.map((item, index) =>
+          fetchItemDataNonBarcode(item.category[0]?.id, item.rate, index)
+        )
+      );
+      console.log('Fetched items:', results);
+    };
+
+
+
   
    const returnedItems = items.value.filter(item => item.return);
      itemIds = returnedItems.map(item => item.id);
@@ -748,7 +794,7 @@ const payload = {
 
 
          for (const item of items.value) {
-        if (item.barcode && item.return === false) {
+        if ((item.barcode && item.return === false) || (!isBarcodeIncluded.value && item.variantId)) {
           let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
           let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
             if (sizeData.size === item.size) {

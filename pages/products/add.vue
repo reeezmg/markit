@@ -394,6 +394,7 @@ const res = await CreateProduct.mutateAsync({
     console.log(err.info?.message ?? err);
   }finally{
     isLoad.value = false
+    isOpenAdd.value = false
   }
  
 };
@@ -552,6 +553,7 @@ const handleEdit = async (e: Event) => {
   }
   finally{
     isLoad.value = false
+    isOpenAdd.value = false
   }
 };
 
@@ -983,6 +985,7 @@ const handleNewProduct = () => {
                     <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
+                        :loading="isLoad"
                     >
                         Add Product
                     </UButton>
@@ -991,6 +994,7 @@ const handleNewProduct = () => {
                     <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
+                        :loading="isLoad"
                     >
                         Edit Product
                     </UButton>
@@ -1067,6 +1071,7 @@ const handleNewProduct = () => {
                     <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
+                        :loading="isLoad"
                     >
                         Add Product
                     </UButton>
@@ -1075,6 +1080,7 @@ const handleNewProduct = () => {
                     <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
+                        :loading="isLoad"
                     >
                         Edit Product
                     </UButton>

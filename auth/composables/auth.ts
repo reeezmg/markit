@@ -110,3 +110,16 @@ export const updateIsTaxIncluded = async (
     });
     await useAuth().updateSession();
 };
+
+export const updateIsBarcodeIncluded = async (
+    isBarcodeIncluded: boolean,
+    
+) => {
+    await $fetch('/api/auth/changeIncludeBarcode', {
+        method: 'PUT',
+        body: {
+            isBarcodeIncluded
+        },
+    });
+    await useAuth().updateSession();
+};

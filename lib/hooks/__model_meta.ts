@@ -130,6 +130,10 @@ const metadata = {
                     name: "isTaxIncluded",
                     type: "Boolean",
                     attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, isBarcodeIncluded: {
+                    name: "isBarcodeIncluded",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
                 }, users: {
                     name: "users",
                     type: "CompanyUser",
