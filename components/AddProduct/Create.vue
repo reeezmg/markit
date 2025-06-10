@@ -119,7 +119,7 @@ watch(
     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
    
     <div class="flex flex-row w-full space-x-4 mb-3">
-        <UFormGroup label="Name" required :error="errors.name && errors.name" class="w-full">
+        <UFormGroup label="Name" class="w-full">
             <UInput
                 id="name"
                 v-model="name"

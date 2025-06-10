@@ -373,8 +373,8 @@ model Variant {
     id          String            @id @default(uuid())
     createdAt   DateTime          @default(now()) @map("created_at")
     updatedAt   DateTime          @updatedAt @map("updated_at")
-    name        String            @length(1, 256)
-    code        String?            @length(1, 256)
+    name        String            
+    code        String?            
     status      Boolean           @default(true)
     sprice      Float @map("s_price")
     pprice      Float? @map("p_price")

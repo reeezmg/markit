@@ -150,7 +150,7 @@ defineExpose({ resetForm });
 
 <template>
     <div class="flex flex-row w-full space-x-4 mb-3">
-        <UFormGroup label="Variant Name" required :error="errors.name && errors.name" class="w-full">
+        <UFormGroup label="Variant Name"  class="w-full">
             <UInput v-model="name" v-bind="nameAttrs" type="text" placeholder="Color/Design" />
         </UFormGroup>
 

@@ -199,13 +199,13 @@ const handleAdd = async (e: Event) => {
   e.preventDefault();
   try {
 
-    if (!name.value || name.value.trim() === '') {
-      toast.add({
-        title: 'Please fill product name',
-        color: 'red',
-      });
-      return;
-    }
+    // if (!name.value || name.value.trim() === '') {
+    //   toast.add({
+    //     title: 'Please fill product name',
+    //     color: 'red',
+    //   });
+    //   return;
+    // }
     if (!category.value || category.value.trim() === '') {
       toast.add({
         title: 'Please fill product category',
@@ -215,17 +215,17 @@ const handleAdd = async (e: Event) => {
     }
 
     // Validate variant names
-    const emptyVariantIndex = variants.value.findIndex(
-      (variant) => !variant.name || variant.name.trim() === ''
-    );
+    // const emptyVariantIndex = variants.value.findIndex(
+    //   (variant) => !variant.name || variant.name.trim() === ''
+    // );
     
-    if (emptyVariantIndex !== -1) {
-      toast.add({
-        title: `Please fill variant ${emptyVariantIndex + 1} name`,
-        color: 'red',
-      });
-      return;
-    }
+    // if (emptyVariantIndex !== -1) {
+    //   toast.add({
+    //     title: `Please fill variant ${emptyVariantIndex + 1} name`,
+    //     color: 'red',
+    //   });
+    //   return;
+    // }
 
 
     const base64files = await Promise.all(
@@ -404,13 +404,13 @@ const handleEdit = async (e: Event) => {
   isLoad.value = true
   try {
     // Validate product name
-    if (!name.value || name.value.trim() === '') {
-      toast.add({
-        title: 'Please fill product name',
-        color: 'red',
-      });
-      return;
-    }
+    // if (!name.value || name.value.trim() === '') {
+    //   toast.add({
+    //     title: 'Please fill product name',
+    //     color: 'red',
+    //   });
+    //   return;
+    // }
     if (!category.value || category.value.trim() === '') {
       toast.add({
         title: 'Please fill product category',
@@ -420,17 +420,17 @@ const handleEdit = async (e: Event) => {
     }
 
     // Validate variant names
-    const emptyVariantIndex = variants.value.findIndex(
-      (variant) => !variant.name || variant.name.trim() === ''
-    );
+    // const emptyVariantIndex = variants.value.findIndex(
+    //   (variant) => !variant.name || variant.name.trim() === ''
+    // );
     
-    if (emptyVariantIndex !== -1) {
-      toast.add({
-        title: `Please fill variant ${emptyVariantIndex + 1} name`,
-        color: 'red',
-      });
-      return;
-    }
+    // if (emptyVariantIndex !== -1) {
+    //   toast.add({
+    //     title: `Please fill variant ${emptyVariantIndex + 1} name`,
+    //     color: 'red',
+    //   });
+    //   return;
+    // }
 
     const base64files = await Promise.all(
       variants.value.flatMap((variant) =>
