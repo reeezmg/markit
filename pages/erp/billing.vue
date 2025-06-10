@@ -1438,6 +1438,7 @@ onMounted(() => {
         @focus="selectAllText(index)"
         @keydown.delete="removeRow($event, row.barcode, index)"
         @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+        @keydown.tab.prevent="handleEnterBarcode(row.barcode, index)"
       />
        <UInput
         v-model="row.rate"
@@ -1452,7 +1453,7 @@ onMounted(() => {
         v-model="row.discount"
         placeholder="Discount"
         ref="discountInputs" 
-        type="number"
+        type="text"
         size="sm"
         @keydown.enter="addNewRow(index)"
       />
@@ -1764,7 +1765,7 @@ onMounted(() => {
           <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
           ref="discountref"
-          type="number"
+          type="text"
           v-model="discount"
           @keydown.enter.prevent="handleEnterMainDiscount()"
           placeholder="Enter discount"
