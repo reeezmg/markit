@@ -1605,7 +1605,7 @@ onMounted(() => {
     <td class="py-1 whitespace-nowrap">
       <UInput 
         v-model="row.discount" 
-        type="number"
+        type="text"
         ref="discountInputs" 
         size="sm"  
         @keydown.enter="addNewRow(index)"
@@ -1658,7 +1658,7 @@ onMounted(() => {
           <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
             ref="discountref"
-            type="number"
+            type="text"
             v-model="discount"
             @keydown.enter.prevent="handleEnterMainDiscount()"
             placeholder="Enter discount"
