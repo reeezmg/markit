@@ -4,7 +4,12 @@ export default defineNuxtConfig({
   ssr: true,
 
   build: {
-    transpile: ['trpc-nuxt']
+    transpile: ['trpc-nuxt'],
+    loaders: {
+      scss: {
+        implementation: require('sass')
+      }
+    }
   },
   output: {
     standalone: true

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { provideHooksContext } from './lib/hooks';
 import { VueQueryDevtools } from '@tanstack/vue-query-devtools';
+import PullToRefresh from 'pulltorefreshjs'
+
 const config = useRuntimeConfig();
 // Provide tanstack-query context
 // Use an absolute endpoint so server-side fetch works too
@@ -9,6 +11,22 @@ const categoryStore = useCategoryStore()
 onMounted(async () => {
   await categoryStore.fetchAllCategories()
   console.log('All Categories:', categoryStore.categories)
+  PullToRefresh.init({
+    mainElement: 'body',
+    onRefresh() {
+      // You can reload the whole page or trigger your data fetching logic
+      window.location.reload()
+    },
+    instructionsPullToRefresh: '↓ Pull down to refresh',
+    instructionsReleaseToRefresh: '↻ Release to refresh',
+    instructionsRefreshing: '⏳ Refreshing...',
+    distThreshold: 80,
+    distMax: 120,
+    distReload: 50,
+    resistanceFunction(t) {
+      return Math.min(1, t / 2.5)
+    },
+  })
 })
 
 provideHooksContext({
@@ -73,6 +91,12 @@ useSeoMeta({
 </template>
 
 <style>
+body {
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
+
   html, body {
     padding-top: env(safe-area-inset-top);
     padding-bottom: env(safe-area-inset-bottom);
