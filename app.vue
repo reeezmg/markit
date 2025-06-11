@@ -49,7 +49,7 @@ useHead({
 });
 
 
-const title = 'Bazaar - a new hospitality trade marketplace.';
+const title = 'Markit';
 const description = '';
 
 useSeoMeta({

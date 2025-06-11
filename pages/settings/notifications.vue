@@ -26,7 +26,7 @@ const sections = [
     },
     {
         title: 'Account updates',
-        description: 'Receive updates about Bazaar.',
+        description: 'Receive updates about Markit.',
         fields: [
             {
                 name: 'weekly_digest',
