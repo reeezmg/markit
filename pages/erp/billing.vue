@@ -1438,6 +1438,7 @@ onMounted(() => {
         @keydown.delete="removeRow($event, row.barcode, index)"
           enterkeyhint="enter"
         @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+        @keyup.enter.prevent="handleEnterBarcode(row.barcode, index)"
         @keydown.tab.prevent="handleEnterBarcode(row.barcode, index)"
       />
        <UInput
