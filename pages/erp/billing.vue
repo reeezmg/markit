@@ -1435,11 +1435,10 @@ onMounted(() => {
         ref="barcodeInputs"
         @blur="fetchItemData(row.barcode, index)"
         @focus="selectAllText(index)"
-        @keydown.delete="removeRow($event, row.barcode, index)"
+        @keyup.delete="removeRow($event, row.barcode, index)"
           enterkeyhint="enter"
-        @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
         @keyup.enter.prevent="handleEnterBarcode(row.barcode, index)"
-        @keydown.tab.prevent="handleEnterBarcode(row.barcode, index)"
+        @keyup.tab.prevent="handleEnterBarcode(row.barcode, index)"
       />
        <UInput
         v-model="row.rate"
@@ -1447,8 +1446,9 @@ onMounted(() => {
         placeholder="Rate"
         type="number"
         size="sm"
-        @keydown.enter="moveFocus(index, 'rate', 'right')"
-        @keydown.tab.prevent="moveFocus(index, 'rate', 'right')"
+         enterkeyhint="enter"
+        @keyup.enter="moveFocus(index, 'rate', 'right')"
+        @keyup.tab.prevent="moveFocus(index, 'rate', 'right')"
       />
       
       <UInput
@@ -1457,8 +1457,9 @@ onMounted(() => {
         ref="discountInputs" 
         type="text"
         size="sm"
-        @keydown.enter="addNewRow(index)"
-        @keydown.tab.prevent="addNewRow(index)"
+         enterkeyhint="enter"
+        @keyup.enter="addNewRow(index)"
+        @keyup.tab.prevent="addNewRow(index)"
       />
     </div>
 
@@ -1485,8 +1486,9 @@ onMounted(() => {
         ref="qtyInputs" 
         type="number"
         size="sm"
-       @keydown.enter="moveFocus(index, 'qty', 'right')"
-       @keydown.tab.prevent="moveFocus(index, 'qty', 'right')"
+         enterkeyhint="enter"
+       @keyup.enter="moveFocus(index, 'qty', 'right')"
+       @keyup.tab.prevent="moveFocus(index, 'qty', 'right')"
       />
      
       <UInput
@@ -1495,8 +1497,9 @@ onMounted(() => {
         placeholder="Tax"
         type="number"
         size="sm"
-       @keydown.enter="addNewRow(index)"
-       @keydown.tab.prevent="addNewRow(index)"
+         enterkeyhint="enter"
+       @keyup.enter="addNewRow(index)"
+       @keyup.tab.prevent="addNewRow(index)"
       />
     </div>
   </div>
