@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import PullToRefresh from 'pulltorefreshjs'
 import KpiCard from '@/components/dashboard/KpiCard.vue'
 import TopProducts from '@/components/dashboard/TopProducts.vue'
 import RevenueEChart from '@/components/dashboard/RevenueEChart.vue'
@@ -8,7 +9,48 @@ import { useCompanyDashboard } from '@/lib/api/useDashboardData'
 import { exportToCSV } from '~/utils/export-csv'
 import type { DashboardComposable, BillWithRelations, KpiItem, PdfReportMeta } from '~/types/dashboard'
 
+
+const scrollContainer = ref<HTMLElement | null>(null)
+
+const colorMode = useColorMode()
+
+const iconColorClass = computed(() =>
+  colorMode.value === 'dark' ? 'text-white' : 'text-gray-800'
+)
+
+onMounted(async () => {
+  await nextTick()
+
+  if (!scrollContainer.value) {
+    console.warn('Scroll container not found!')
+    return
+  }
+
+  const arrowIcon = `
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 ${iconColorClass.value}" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+    </svg>
+  `
+
+  const refreshingIcon = `
+    <svg xmlns="http://www.w3.org/2000/svg" class="w-6 h-6 ${iconColorClass.value} animate-spin" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582M20 20v-5h-.582M4 4a9 9 0 0116 0m-8 16a9 9 0 01-8-9h1.5" />
+    </svg>
+  `
+
+ PullToRefresh.init({
+  mainElement: scrollContainer.value,
+  onRefresh: () => fetchReportFromServer(),
+})
+
+})
+
+onUnmounted(() => {
+  PullToRefresh.destroyAll()
+})
+
 // Refs
+
 const useAuth = () => useNuxtApp().$auth;
 const companyName = computed(() => useAuth().session.value?.companyName);
 const loading = ref(true)
@@ -364,8 +406,9 @@ const printReportHandle = async() => {
 
 <template>
   <UDashboardPanelContent>
+    <div ref="scrollContainer" class="scroll-container">
     <ClientOnly>
-      <div class="space-y-6 p-6">
+      <div class="space-y-6 p-6"  >
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <h1 class="text-xl font-semibold">Sales Report</h1>
           <div class="flex flex-wrap items-center gap-3">
@@ -502,5 +545,6 @@ const printReportHandle = async() => {
         </div>
       </div>
     </ClientOnly>
+  </div>
   </UDashboardPanelContent>
 </template>

@@ -2,7 +2,17 @@ export default defineNuxtConfig({
   extends: ['@nuxt/ui-pro', './auth'],
   sessionSecret: process.env.SESSION_SECRET ,
   ssr: true,
-
+ app: {
+    head: {
+      link: [
+        { rel: 'manifest', href: '/manifest.json' },
+        { rel: 'apple-touch-icon', href: '/icons/icon-192.png' }
+      ],
+      meta: [
+        { name: 'theme-color', content: '#3367D6' }
+      ]
+    }
+  },
   build: {
     transpile: ['trpc-nuxt']
   },
