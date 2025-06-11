@@ -665,14 +665,13 @@ const handleSave = async () => {
 const entriesData = items.value.map(item => {
   const entry = {
     name: item.name || '',
-    qty: item.qty || 1,
-    rate: item.rate || 0,
-    discount: item.discount || 0,
-    tax: item.tax || 0,
-    value: item.value || 0,
-    return:item.return || false,
-    ...(item.size && { size:item.size} )
-   
+    qty: Number(item.qty || 1),
+    rate: Number(item.rate || 0),
+    discount: Number(item.discount || 0),
+    tax: Number(item.tax || 0),
+    value: Number(item.value || 0),
+    return: item.return || false,
+    ...(item.size && { size: item.size })
   };
 
   if (item.barcode) {
@@ -746,7 +745,7 @@ const payload = {
                 hsn: entry.category[0].hsn,
                 qty: entry.qty,
                 mrp: entry.rate,
-                discount: calculatedDiscount, // ✅ set calculated discount
+                discount: Number(calculatedDiscount), // ✅ set calculated discount
                 tax: entry.tax,
                 value: entry.qty * entry.rate ,
                 size: entry.size,
@@ -756,7 +755,7 @@ const payload = {
             }),
     
           subtotal: subtotal.value,
-          discount: discount.value,
+         discount: Number(discount.value),
           grandTotal: grandTotal.value,
           paymentMethod: paymentMethod.value,
           companyName: useAuth().session.value?.companyName || '',
@@ -1610,7 +1609,7 @@ onMounted(() => {
     <td class="py-1 whitespace-nowrap">
       <UInput 
         v-model="row.discount" 
-        type="number"
+        type="text"
         ref="discountInputs" 
         size="sm"  
         @keydown.enter="addNewRow(index)"
@@ -1663,7 +1662,7 @@ onMounted(() => {
           <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
             ref="discountref"
-            type="number"
+            type="text"
             v-model="discount"
             @keydown.enter.prevent="handleEnterMainDiscount()"
             placeholder="Enter discount"
