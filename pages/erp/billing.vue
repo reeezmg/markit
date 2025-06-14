@@ -711,10 +711,10 @@ const payload = {
     
               if (entry.discount < 0) {
                 // Fixed discount
-                calculatedDiscount = Math.abs(entry.discount) * entry.qty;
+                calculatedDiscount = entry.discount;
               } else {
                 // Percentage discount
-                calculatedDiscount = ((entry.rate * entry.discount) / 100) * entry.qty;
+                calculatedDiscount = `${entry.discount}%`;
               }
     
               return {
@@ -722,7 +722,7 @@ const payload = {
                 hsn: entry.category[0].hsn,
                 qty: entry.qty,
                 mrp: entry.rate,
-                discount: Number(calculatedDiscount), // ✅ set calculated discount
+                discount: calculatedDiscount, // ✅ set calculated discount
                 tax: entry.tax,
                 value: entry.qty * entry.rate ,
                 size: entry.size,
@@ -751,13 +751,14 @@ const payload = {
           // 🆕 Add total qty
           tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
           tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+          ttvalue: items.value.reduce((sum, entry) => sum + (entry.value), 0),
           tdiscount: items.value.reduce((sum, entry) => {
             if (entry.discount < 0) {
               return sum + (Math.abs(entry.discount) * entry.qty);
             } else {
               return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
             }
-          }, 0),
+          }, 0)
         };
 
       CreateBill.mutateAsync({
