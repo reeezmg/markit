@@ -702,7 +702,7 @@ const payload = {
 };
 
   isSaving.value = false;
-          isPrint.value = true
+         isPrint.value = true
            printData = {
               invoiceNumber: billid.billCounter,
               date: new Date(date.value).toISOString(),
@@ -764,20 +764,7 @@ const payload = {
             }
           }, 0)
         };
-console.log(printData)
-        const billResponse = await  useFetch('/api/bills/create', {
-          method: 'POST',
-          body: payload
-        });
 
-        if (!billResponse.data.value) {
-          throw new Error('Failed to create bill');
-        }
-
-        const billId = billResponse.data.value.id;
-        console.log('Bill created with ID:', billId);
-
-        // Notify the user
       CreateBill.mutateAsync({
         data: payload
           });
