@@ -712,9 +712,13 @@ const payload = {
               if (entry.discount < 0) {
                 // Fixed discount
                 calculatedDiscount = entry.discount;
-              } else {
+              } else if( entry.discount > 0) {
                 // Percentage discount
                 calculatedDiscount = `${entry.discount}%`;
+              }else if (entry.discount === null || entry.discount === undefined) {
+                calculatedDiscount = 0;
+              }else{
+                calculatedDiscount = 0;
               }
     
               return {
