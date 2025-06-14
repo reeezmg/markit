@@ -961,12 +961,16 @@ console.log('Bill updated successfully:', billResponse);
           let calculatedDiscount = 0;
 
           if (entry.discount < 0) {
-                         // Fixed discount
-                         calculatedDiscount = entry.discount;
-                       } else {
-                         // Percentage discount
-                         calculatedDiscount = `${entry.discount}%`;
-                       }
+                // Fixed discount
+                calculatedDiscount = entry.discount;
+              } else if( entry.discount > 0) {
+                // Percentage discount
+                calculatedDiscount = `${entry.discount}%`;
+              }else if (entry.discount === null || entry.discount === undefined) {
+                calculatedDiscount = 0;
+              }else{
+                calculatedDiscount = 0;
+              }
              
           return {
             description: entry.barcode ? entry.name : entry.category.name,
