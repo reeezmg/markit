@@ -722,7 +722,7 @@ const payload = {
                 hsn: entry.category[0].hsn,
                 qty: entry.qty,
                 mrp: entry.rate,
-                discount: calculatedDiscount, // ✅ set calculated discount
+                discount: calculatedDiscount || 0, // ✅ set calculated discount
                 tax: entry.tax,
                 value: entry.qty * entry.rate ,
                 size: entry.size,
@@ -760,7 +760,20 @@ const payload = {
             }
           }, 0)
         };
+console.log(printData)
+        const billResponse = await  useFetch('/api/bills/create', {
+          method: 'POST',
+          body: payload
+        });
 
+        if (!billResponse.data.value) {
+          throw new Error('Failed to create bill');
+        }
+
+        const billId = billResponse.data.value.id;
+        console.log('Bill created with ID:', billId);
+
+        // Notify the user
       CreateBill.mutateAsync({
         data: payload
           });
