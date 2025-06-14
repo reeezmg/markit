@@ -1,14 +1,11 @@
 <script setup lang="ts">
 import { ref, computed, watchEffect } from 'vue';
-import { useFindUniquePurchaseOrder, useDeleteProduct, useUpdateProduct, useFindUniqueProduct } from '~/lib/hooks';
+import { useFindUniquePurchaseOrder, useDeleteProduct, useUpdateProduct } from '~/lib/hooks';
 
 const emit = defineEmits(['product-selected','clicked']);
 const DeleteProduct = useDeleteProduct();
-const UpdateProduct = useUpdateProduct();
 const route = useRoute();
 const poId = String(route.query.poId || '');
-const product = ref(null);
-const selectedProductId = ref<string | null>(null); // Store the selected product ID
 
 const {
   data: PO,
@@ -18,31 +15,10 @@ const {
 } = useFindUniquePurchaseOrder({
   where: { id: poId },
   include: {
-    products: { include: { variants: true } },
+    products: { include: { variants: { include: { items: true } } } },
   },
 });
 
-
-const queryArgs = computed(() => ({
-  where: { id: selectedProductId.value || '' }, // Provide a default empty string
-  include: {
-    category: true ,
-    subcategory:true,
-    variants: true,
-  },
-}));
-
-// Use the computed query arguments
-const { data: productData, refetch: fetchProduct } = useFindUniqueProduct(queryArgs);
-
-
-// Watch for changes and update product ref
-watch(() => productData.value, (newValue) => {
-  if (newValue) {
-    emit('product-selected', newValue);
-    console.log(newValue);
-  }
-});
 
 // Compute table data
 const products = computed(() => {
@@ -80,26 +56,35 @@ const removeProduct = async(id:string) => {
 };
 
 // 🟢 Edit product function
-const editProduct = async(id:string) => {
-  selectedProductId.value = id; // Set the product ID
-  await fetchProduct(); // Fetch the product details
+const editProduct = (id: string) => {
+  const selected = PO.value?.products?.find(p => p.id === id);
+  if (selected) {
+    emit('product-selected', selected);
+  }
 };
 
-const editProductsm = async(id:string) => {
-  selectedProductId.value = id; // Set the product ID
-  await fetchProduct(); // Fetch the product details
-  emit('clicked', true);
+const editProductsm = (id: string) => {
+  const selected = PO.value?.products?.find(p => p.id === id);
+  if (selected) {
+    emit('clicked', true);
+    emit('product-selected', selected);
+  }
 };
+
 </script>
 
 
 <template>
   <div>
-    <UTable class="w-full table-auto"  v-model:expand="expand" :rows="products" :columns="columns">
-      <template #qty-data="{ row }">
-        {{ row.variants?.reduce((sum, v) => sum + (v.qty || 0), 0) }}
-      </template>
-
+    <UTable class="w-full table-auto" :loading="isLoading" v-model:expand="expand" :rows="products" :columns="columns">
+       <template #qty-data="{ row }">
+        {{
+          row.variants?.reduce((variantTotal, variant) => {
+            const itemTotal = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
+            return variantTotal + itemTotal;
+          }, 0)
+        }}
+    </template>
       <template #action-data="{ row }">
         <div class="hidden md:block">
         <UButton
@@ -147,7 +132,15 @@ const editProductsm = async(id:string) => {
           <UTable 
             :rows="row.variants" 
             :columns="variantColumns"
-          />
+          >
+          <template #qty-data="{ row }">
+            {{
+              row.items?.reduce((variantTotal, item) => {
+                return variantTotal + (item.qty || 0);
+              }, 0)
+            }}
+        </template>
+          </UTable>
         </div>
       </template>
     </UTable>

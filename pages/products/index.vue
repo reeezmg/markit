@@ -239,7 +239,11 @@ const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
         ],
     },
     include: {
-        variants: true,
+        variants: {
+            include:{
+                items: true,
+            }
+        },
     },
     orderBy: {
         [sort.value.column]: sort.value.direction,
@@ -549,12 +553,22 @@ isAddPhotoModelOpen.value = false
                     </UDropdown>
                 </template>
 
-                <template #variants-data="{ row }">
-                    {{ row.variants.reduce((total,variant) => total + (variant.qty || 0),0)}}
+                <template #variants-data="{ row }"> 
+                    {{
+                        row.variants?.reduce((variantTotal, variant) => {
+                            const itemTotal = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
+                            return variantTotal + itemTotal;
+                        }, 0)
+                        }}
                 </template>
                 <template #stocks-data="{ row }">
-                    {{ row.variants.reduce((total,variant) => total + (variant.sprice * variant.qty || 0),0)}}
-                </template>
+                    {{
+                        row.variants.reduce((total, variant) => {
+                        const itemQty = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
+                        return total + (itemQty * (variant.sprice || 0));
+                        }, 0)
+                    }}
+                    </template>
 
                 <template #status-data="{ row }">
                     <Switch
@@ -643,6 +657,14 @@ isAddPhotoModelOpen.value = false
                         />
                         <div class="ms-3">{{ row.name }}</div>
                     </div>
+                </template>
+
+                <template #qty-data="{ row }">
+                    {{
+                    row.items?.reduce((variantTotal, item) => {
+                        return variantTotal + (item.qty || 0);
+                    }, 0)
+                    }}
                 </template>
                     <template #status-data="{ row }">
                     <Switch

@@ -5,7 +5,7 @@ export default eventHandler(async (event) => {
     const session = await useAuthSession(event);
 
     const { variants } = body; // Now expecting variants array directly in the body
-  
+    
     if (!variants || !Array.isArray(variants)) {
         throw createError({ statusCode: 400, message: "Variants array is required" });
     }
@@ -13,36 +13,30 @@ export default eventHandler(async (event) => {
  
 
     try {
-        let newItems = [];
-        const variantIds = []; // To collect variant IDs for deletion
+       let newItems = [];
+        const variantIds = [];
 
         for (const variant of variants) {
             if (!variant.qty || variant.qty <= 0) continue;
-            console.log('newItems',variant)
-            // Add variant ID to our list for deletion
+
             if (variant.id) {
                 variantIds.push(variant.id);
             }
 
-            if (variant.sizes && variant.sizes.length>0) {
-                const sizes = variant.sizes;
-                for (const size of sizes) {
-                    for (let i = 0; i < size.qty; i++) {
-                        newItems.push({ 
-                            variantId: variant.id, 
-                            status: "in_stock", 
-                            size: size.size 
-                        });
-                    }
-                }
-            } else {
-                for (let i = 0; i < variant.qty; i++) {
-                    newItems.push({ 
-                        variantId: variant.id, 
-                        status: "in_stock", 
-                        size: null 
+            if (variant.sizes && variant.sizes.length > 0) {
+                for (const size of variant.sizes) {
+                    newItems.push({
+                        variantId: variant.id,
+                        size: size.size,
+                        qty: size.qty || 0,
                     });
                 }
+            } else {
+                newItems.push({
+                    variantId: variant.id,
+                    size: null,
+                    qty: variant.qty || 0,
+                });
             }
         }
 

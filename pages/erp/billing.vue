@@ -353,19 +353,17 @@ const {
 const itemargs = computed(() => ({
   where:  {
         barcode: scannedBarcode.value,
-        status: 'in_stock',
         companyId: useAuth().session.value?.companyId
       },
   select: {
     id: true,
     size: true,
+    qty: true,
     variant: {
       select: {
         id: true,
         sprice: true,
         name: true,
-        qty: true,
-        sizes: true,
         tax: true,
         discount: true,
         product: {
@@ -425,24 +423,9 @@ const handleEnterBarcode = (barcode,index) => {
       const input = component.$el.querySelector("input");
       input.select();
     }else{
-    const existingItemIndex = items.value.findIndex(
-      (item, i) => item.barcode === barcode && !item.return && i !== index
-    );
-
-    console.log(existingItemIndex)
-    if(existingItemIndex != -1 && existingItemIndex !== index){
-      items.value[existingItemIndex].qty += 1;
-      const component = barcodeInputs.value[index];
-      const input = component.$el.querySelector("input");
-      input.select();
-      items.value[index].barcode = '';
-
-    }else{
       fetchItemData(barcode, index);
       addNewRow(index);
     }
-    
-  }
 }}
 
 const handleEnterMainDiscount = () => {
@@ -571,7 +554,7 @@ const processItemResponse = (itemData, index) => {
   if (!items.value[index]) {
     return;
   }
-  
+
   const categoryId = itemData.variant.product.categoryId;
 
   items.value[index].id = itemData.id || '';
@@ -615,7 +598,7 @@ const handleSave = async () => {
         tokenEntries.value = [''];
         throw new Error(`No valid items to bill.`);
       }
-  
+    console.log(items.value)
    items.value.forEach((item, index) => {
     if (!item.category || !item.category[0]?.id) {
       throw new Error(`No category in entry ${index + 1}`);
@@ -635,13 +618,7 @@ const handleSave = async () => {
 
   
    const returnedItems = items.value.filter(item => item.return);
-     itemIds = returnedItems.map(item => item.id);
-     variantDetails = returnedItems.map(e => ({
-      variantId: e.variantId,
-      qty: e.qty ,
-      size: e.size ?? null,
-      sizes: e.sizes ?? [], // ✅ map in the sizes JSON from the variant
-    }));
+    
 
     const billid = await UpdateCompany.mutateAsync({
       where:{
@@ -793,66 +770,47 @@ const payload = {
 
 
          for (const item of items.value) {
-        if ((item.barcode && item.return === false) || (!isBarcodeIncluded.value && item.variantId)) {
-          let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
-          let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
-            if (sizeData.size === item.size) {
-              return { ...sizeData, qty: Math.max((sizeData.qty || 0) - item.qty, 0) };
-            }
-            return sizeData;
-          }) : [];
+          if ((item.barcode && item.return === false) || (!isBarcodeIncluded.value && item.variantId && item.return === false)) {
+              UpdateVariant.mutateAsync({
+                where: { id: item.variantId },
+                data: { 
+                  sold: { increment: item.qty },
+                }
+              }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
+          
+    
   
-            UpdateVariant.mutateAsync({
-              where: { id: item.variantId },
-              data: { qty: updatedQty, sizes: updatedSizes }
-            }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-         
-  
- 
-            UpdateItem.mutateAsync({
+              UpdateItem.mutateAsync({
               where: { id: item.id },
-              data: { status: 'sold' }
-            }).catch(error => console.error(`Error updating item ${item.id}`, error))
-          }
+              data: { 
+                qty: { decrement: item.qty },
+              }
+              }).catch(error => console.error(`Error updating item ${item.id}`, error))
+            }
         }
 
-        if (itemIds.length > 0) {
-            UpdateManyItem.mutateAsync({
-              where: { id: { in: itemIds } },
-              data: { 
-                status: 'in_stock' 
-              },
-            });
-             // Step 4: update the variants
-            for (const { variantId, qty, size, sizes } of variantDetails) {
-            if (!variantId || !qty) continue;
-
-            // Decrement overall variant qty
-            const updateData = {
-              qty: { increment: qty },
-            };
-
-            // Update sizes only if size is not null
-            if (size) {
-              const updatedSizes = sizes.map(s => {
-                if (s.size === size) {
-                  return {
-                    ...s,
-                    qty: Math.max((s.qty ?? 0) + qty) // Prevent negative qty
-                  };
-                }
-                return s;
-              });
-
-              updateData.sizes = updatedSizes;
-                console.log(updatedSizes)
-            }
+        
+        if (returnedItems.length > 0) {
+          console.log('returnedItems', returnedItems)
+         for (const item of returnedItems) {
+        console.log(item)
             UpdateVariant.mutateAsync({
-              where: { id: variantId },
-              data: updateData,
-            });
-          } 
+              where: { id: item.variantId },
+              data: { 
+                sold: { decrement: item.qty },
+               }
+            }).catch(error => console.error(`Error updating variant`, error))
+         
+              UpdateItem.mutateAsync({
+              where: { id: item.id },
+              data: { 
+                qty: { increment: item.qty },
+              }
+            }).catch(error => console.error(`Error updating item}`, error))
           }
+        }
+      
+
 
   
    console.log(printData)
@@ -1285,6 +1243,9 @@ watch(paymentMethod, (val) => {
   if (val === 'Split') {
     showSplitModal.value = true
   }
+})
+watch(items, (val) => {
+  console.log(val)
 })
 
 const handleAmountEntry = (method) => {

@@ -15,7 +15,7 @@ import {
   useDeleteManyEntry,
   useUpdateManyItem,
   useFindManyEntry,
-} from '~/lib/hooks';
+} from '~/lib/hooks'; 
 
 const UpdateBill = useUpdateBill();
 const CreateAccount = useCreateAccount();
@@ -31,6 +31,7 @@ const toast = useToast();
 const { printBill } = usePrint();
 const router = useRouter();
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
+const isBarcodeIncluded = ref(useAuth().session.value?.isBarcodeIncluded);
 const isPrint = ref(false);
 const isSavingAcc = ref(false);
 const issalesReturnModelOpen = ref(false);
@@ -240,7 +241,8 @@ const addNewRow = async (index) => {
     tax: 0,
     value: 0, 
     sizes:{},
-    totalQty:0 
+    totalQty:0,
+    return:false
   });
 
   // Wait for Vue to update the DOM
@@ -338,24 +340,33 @@ const {
 const itemargs = computed(() => ({
   where: { 
     barcode: scannedBarcode.value,
-    status:'in_stock',
     companyId:useAuth().session.value?.companyId || ''
 
    },
   select: {
-    id: true, 
-    size:true,
+    id: true,
+    size: true,
+    qty: true,
     variant: {
       select: {
-        id:true,
-        sprice:true,
-        name: true, 
-        qty:true,
-        sizes:true,
+        id: true,
+        sprice: true,
+        name: true,
+        tax: true,
+        discount: true,
         product: {
           select: {
-            name: true, 
-            categoryId:true  
+            name: true,
+            categoryId: true,
+            category: {
+              select: {
+                taxType: true,
+                fixedTax: true,
+                thresholdAmount: true,
+                taxBelowThreshold: true,
+                taxAboveThreshold: true
+              }
+            }
           }
         }
       }
@@ -381,11 +392,6 @@ const findManyEntryargs = computed(() => ({
     size:true,
     variantId: true,
     return:true,
-    variant:{
-      select:{
-        sizes:true
-      }
-    }
   },
 
 }));
@@ -440,6 +446,7 @@ const billArgs = computed(() => ({
         size: true,
         outOfStock: true,
         categoryId:true,
+        return:true,
         item:{
           select:{
             id:true,
@@ -460,14 +467,11 @@ const billArgs = computed(() => ({
 
 const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs,{enabled:false});
 const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enabled:false});
-const {data: entriesToDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
+const {data: entriesDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
 
 
-watch(entriesToDelete, (newBill) => {
-  console.log(newBill)
-})
 const handleEnterBarcode = (barcode,index) => {
- const pattern = /^\d[A-Z]\d{6}$/;
+ const pattern = /^\d+[A-Z]\d{6}$/;
   if(!barcode){
     
     const component = discountref.value;
@@ -485,24 +489,11 @@ const handleEnterBarcode = (barcode,index) => {
       const input = component.$el.querySelector("input");
       input.select();
     }else{
-    const existingItemIndex = items.value.findIndex(
-      (item, i) => item.barcode === barcode && !item.return && i !== index
-    );
-
-    console.log(existingItemIndex)
-    if(existingItemIndex != -1 && existingItemIndex !== index){
-      items.value[existingItemIndex].qty += 1;
-      const component = barcodeInputs.value[index];
-      const input = component.$el.querySelector("input");
-      input.select();
-      items.value[index].barcode = '';
-
-    }else{
+    
       fetchItemData(barcode, index);
       addNewRow(index);
     }
-    
-  }
+  
 }}
 
 const handleEnterMainDiscount = () => {
@@ -577,6 +568,7 @@ watch(
       discount: entry.discount || 0,
       tax: entry.tax || 0,
       value: entry.value || 0,
+      return: entry.return || false,
     }));
 
     items.value.push({
@@ -594,6 +586,7 @@ watch(
       value: 0,
       sizes: {},
       totalQty: 0,
+      return: false
     });
 
     // Wait for DOM update
@@ -605,6 +598,38 @@ watch(
   },
   { deep: true, immediate: true }
 );
+
+
+const fetchItemDataNonBarcode = async (categoryId, sPrice, index) => {
+  if (!categoryId || !sPrice) return;
+
+  try {
+    const { data } = await useFetch('/api/items/findFirst', {
+      query: {
+        categoryId,
+        sPrice
+      }
+    });
+
+    if (data.value?.data) {
+      const itemData = data.value.data;
+      items.value[index] = {
+        ...items.value[index],
+        id: itemData.id || '',
+        size: itemData.size || '',
+        name: `${itemData.variant?.name}-${itemData.variant?.product?.name}` || '',
+        rate: itemData.variant?.sprice || 0,
+        discount: itemData.variant?.discount || 0,
+        tax: itemData.variant?.tax || 0,
+        totalQty: itemData.variant?.qty || 0,
+        sizes: itemData.variant?.sizes || null,
+        variantId: itemData.variant?.id || ''
+      };
+    }
+  } catch (error) {
+    console.error('Error fetching item:', error);
+  }
+};
 
 
 
@@ -620,20 +645,17 @@ const fetchItemData = async (barcode, index) => {
     
     const categoryId = itemdata.value.variant.product.categoryId;
 
-    
-    items.value[index].entryId = itemdata.value.entry?.id || '';
-    items.value[index].id = itemdata.value.item?.id || '';
-    items.value[index].size = itemdata.value.size || '';
+    items.value[index].id = itemdata.value?.id || '';
     items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant.product.name}` || '';
     items.value[index].category = categories.value.filter(category =>category.id === categoryId);
     items.value[index].rate = itemdata.value.variant?.sprice || 0;
-    items.value[index].totalQty = itemdata.value.variant?.qty || 0;
-    items.value[index].sizes = itemdata.value.variant?.sizes || null;
     items.value[index].variantId = itemdata.value.variant?.id || '';
   } else {
     console.warn("itemdata is undefined");
   }
 };
+
+
 
 
 
@@ -655,10 +677,20 @@ const handleEdit = async () => {
       throw new Error(`No category in entry ${index + 1}`);
     }
   });
+
+    if(!isBarcodeIncluded.value){
+      const results = await Promise.all(
+        items.value.map((item, index) =>
+          fetchItemDataNonBarcode(item.category[0]?.id, item.rate, index)
+        )
+      );
+      console.log('Fetched items:', results);
+    };
+
     // Separate items into those with an ID and those without
     const itemsWithId = items.value.filter(item => item.entryId);
     const itemsWithoutId = items.value.filter(item => !item.entryId);
-
+console.log('Items with ID:', itemsWithoutId);
     // Separate create and update logic
 
     // Create entries for new items (itemsWithoutId)
@@ -687,6 +719,8 @@ const handleEdit = async () => {
       });
     });
 
+    console.log('Creating entries for new items:', createPromises);
+
     // Update entries for items with an ID (itemsWithId)
     const updatePromises = itemsWithId.map(item => {
       return UpdateEntry.mutateAsync({
@@ -714,127 +748,111 @@ const handleEdit = async () => {
         },
       });
     });
+    
 
-   // Step 1: Find entries to delete
-await entriesToDeleteRefetch()
+ // for items that is added to entry
+const withoutIdReturnedItems = itemsWithoutId?.filter(item => item.return);
+const withoutIdNotReturnedItems = itemsWithoutId?.filter(item => !item.return);
+
+
+if (withoutIdNotReturnedItems?.length > 0) {
+  console.log(withoutIdNotReturnedItems)
+  for (const item of withoutIdNotReturnedItems) {
+    console.log(item)
+    UpdateVariant.mutateAsync({
+      where: { id: item.variantId }, 
+      data: { 
+        sold: { increment: item.qty }, 
+      }
+    }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
+
+    UpdateItem.mutateAsync({
+          where: { id: item.id },
+          data: { 
+            qty: { decrement: item.qty },
+          }
+          }).catch(error => console.error(`Error updating item ${item.id}`, error))
+        }
+    }
+
+    if (withoutIdReturnedItems?.length > 0) {
+      console.log(withoutIdReturnedItems)
+    for (const item of withoutIdReturnedItems) {
+      UpdateVariant.mutateAsync({
+        where: { id: item.variantId },
+        data: { 
+          sold: { decrement: item.qty },
+        }
+      }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
+
+      UpdateItem.mutateAsync({
+            where: { id: item.id },
+            data: { 
+              qty: { increment: item.qty },
+            }
+            }).catch(error => console.error(`Error updating item ${item.id}`, error))
+          }
+    }
+
+
+
+// for items that is removed from entry
+const { data: entriesToDelete } = await entriesToDeleteRefetch()
 console.log(entriesToDelete)
-const entryIds = entriesToDelete.value?.filter(e=>e.id).map(e => e.id);
 
-// Step 2: Extract itemIds and entryIds
-// Filter entries with return === true
-const entriesReturned = entriesToDelete.value?.filter(e => e.return === true) ?? [];
-const returnedItemIds = entriesReturned.filter(e => e.itemId).map(e => e.itemId);
-const returnedVariantDetails = entriesReturned.map(e => ({
-  variantId: e.variantId,
-  qty: e.qty,
-  size: e.size ?? null,
-  sizes: e?.variant?.sizes ?? [],
-}));
-
-// Filter entries with return === false
-const entriesNotReturned = entriesToDelete.value?.filter(e => e.return === false) ?? [];
-const notReturnedItemIds = entriesNotReturned.filter(e => e.itemId).map(e => e.itemId);
-const notReturnedVariantDetails = entriesNotReturned.map(e => ({
-  variantId: e.variantId,
-  qty: e.qty,
-  size: e.size ?? null,
-  sizes: e?.variant?.sizes ?? [],
-}));
+const entryToDeleteIds = entriesToDelete?.filter(e=>e.id).map(e => e.id);
+const returnedItems = entriesToDelete?.filter(item => item.return);
+const notReturnedItems = entriesToDelete?.filter(item => !item.return);
 
 
-
-// Step 3: Update related items to be in_stock
-if (notReturnedItemIds.length > 0) {
-   UpdateManyItem.mutateAsync({
-    where: { id: { in: notReturnedItemIds } },
-    data: { 
-      status: 'in_stock' 
-    },
-
-  });
-
-
-// Step 4: update the variants
-for (const { variantId, qty, size, sizes } of notReturnedVariantDetails) {
-  if (!variantId || !qty) continue;
-
-  // increment overall variant qty
-  const updateData = {
-    qty: { increment: qty },
-  };
-
-  // Update sizes only if size is not null
-  if (size) {
-    const updatedSizes = sizes.map(s => {
-      if (s.size === size) {
-        return {
-          ...s,
-          qty: Math.max((s.qty ?? 0) + qty) // Prevent negative qty
-        };
+if (returnedItems?.length > 0) {
+  for (const item of returnedItems) {
+    UpdateVariant.mutateAsync({
+      where: { id: item.variantId },
+      data: { 
+        sold: { increment: item.qty },
       }
-      return s;
-    });
+    }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
 
-    updateData.sizes = updatedSizes;
-  }
+    UpdateItem.mutateAsync({
+          where: { id: item.itemId },
+          data: { 
+            qty: { decrement: item.qty },
+          }
+          }).catch(error => console.error(`Error updating item ${item.id}`, error))
+        }
+    }
 
-   UpdateVariant.mutateAsync({
-    where: { id: variantId },
-    data: updateData,
+    if (notReturnedItems?.length > 0) {
+      console.log(notReturnedItems)
+    for (const item of notReturnedItems) {
+      console.log(item)
+      UpdateVariant.mutateAsync({
+        where: { id: item.variantId },
+        data: { 
+          sold: { decrement: item.qty },
+        }
+      }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
+
+      UpdateItem.mutateAsync({
+            where: { id: item.itemId },
+            data: { 
+              qty: { increment: item.qty },
+            }
+            }).catch(error => console.error(`Error updating item ${item.id}`, error))
+          }
+    }
+
+
+if (entryToDeleteIds.length > 0) {
+  console.log('Deleting entries:', entryToDeleteIds);
+    DeleteManyEntry.mutateAsync({
+    where: { id: { in: entryToDeleteIds } },
   });
 }
-
-}
-
-
-if (returnedItemIds.length > 0) {
-   UpdateManyItem.mutateAsync({
-    where: { id: { in: returnedItemIds } },
-    data: { 
-      status: 'sold' 
-    },
-
-  });
+   
 
 
-// Step 4: update the variants
-for (const { variantId, qty, size, sizes } of returnedVariantDetails) {
-  if (!variantId || !qty) continue;
-
-  // increment overall variant qty
-  const updateData = {
-    qty: { decrement: qty },
-  };
-
-  // Update sizes only if size is not null
-  if (size) {
-    const updatedSizes = sizes.map(s => {
-      if (s.size === size) {
-        return {
-          ...s,
-          qty: Math.max((s.qty ?? 0) - qty) // Prevent negative qty
-        };
-      }
-      return s;
-    });
-
-    updateData.sizes = updatedSizes;
-  }
-
-   UpdateVariant.mutateAsync({
-    where: { id: variantId },
-    data: updateData,
-  });
-}
-
-}
-
-// Step 4: Delete the entries
-if (entryIds.length > 0) {
-   DeleteManyEntry.mutateAsync({
-    where: { id: { in: entryIds } },
-  });
-}
 console.log(splitPayments.value)
    
     // Execute all create, update, and delete promises
@@ -1000,7 +1018,6 @@ console.log('Bill updated successfully:', billResponse);
     }
 
 
-
   } catch (error) {
     console.error('Error updating bill', error);
     toast.add({
@@ -1011,40 +1028,6 @@ console.log('Bill updated successfully:', billResponse);
   }finally {
       isSaving.value = false;
     }
-
-  // Collect all async operations in an array for items with a barcode
-  const updatePromises = [];
-
-  for (const item of items.value) {
-    if (item.barcode) {
-      let updatedQty = item.totalQty ? (item.totalQty - item.qty) : 0;
-      let updatedSizes = item.sizes ? item.sizes.map(sizeData => {
-        if (sizeData.size === item.size) {
-          return { ...sizeData, qty: Math.max((sizeData.qty || 0) - 1, 0) };
-        }
-        return sizeData;
-      }) : [];
-
-      // Push update promises to the array
-      updatePromises.push(
-        UpdateVariant.mutateAsync({
-          where: { id: item.variantId },
-          data: { qty: updatedQty, sizes: updatedSizes },
-        }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-      );
-
-      updatePromises.push(
-        UpdateItem.mutateAsync({
-          where: { id: item.id },
-          data: { status: 'sold' },
-        }).catch(error => console.error(`Error updating item ${item.id}`, error))
-      );
-    }
-  }
-
-  // Wait for all updates to finish before proceeding
- Promise.all(updatePromises);
-
 
 };
 
@@ -1127,6 +1110,10 @@ watch(paymentMethod, (val) => {
     showSplitModal.value = true
   }
 })
+watch(items, (val) => {
+  console.log(val)
+})
+
 
 // 
 const handleAmountEntry = (method) => {
@@ -1341,6 +1328,13 @@ onMounted(() => {
   });
 });
 
+
+const newBill = () => {
+  window.open(window.location.href, '_blank');
+};
+
+
+
 </script>
 
 
@@ -1425,7 +1419,6 @@ onMounted(() => {
         size="sm"
         ref="barcodeInputs"
         @focus="selectAllText(index)"
-        @blur="fetchItemData(row.barcode, index)"
         @keydown.delete="removeRow($event, row.barcode, index)"
         @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
       />
@@ -1486,7 +1479,7 @@ onMounted(() => {
   </div>
 </div>
 
-         
+        <!-- Desktop table layout -->   
         <div v-else class="overflow-x-auto p-3 hidden sm:block">    
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
@@ -1517,7 +1510,6 @@ onMounted(() => {
         ref="barcodeInputs"
         size="sm"
         @focus="selectAllText(index)"
-        @blur="fetchItemData(row.barcode, index)"
         @keydown.delete="removeRow($event, row.barcode, index)"
         @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
         @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
@@ -1590,6 +1582,7 @@ onMounted(() => {
         @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
         @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
         @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
+      
       />
     </td>
     <td class="py-1 whitespace-nowrap">

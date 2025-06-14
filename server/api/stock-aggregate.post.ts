@@ -43,28 +43,30 @@ export default defineEventHandler(async (event) => {
   }
 
   const variants = await prisma.variant.findMany({
-    where,
-    include: {
-      product: {
-        include: {
-          category: true,
-          purchaseorder: {
-            include: {
-              distributorCompany: {
-                include: {
-                  distributor: true
-                }
+  where,
+  include: {
+    items: true, 
+    product: {
+      include: {
+        category: true,
+        purchaseorder: {
+          include: {
+            distributorCompany: {
+              include: {
+                distributor: true
               }
             }
           }
         }
       }
     }
-  })
+  }
+})
+
 
   const grouped: Record<string, { stock: number; qty: number }> = {}
 
-for (const variant of variants) {
+  for (const variant of variants) {
   const key = (() => {
     const product = variant.product
     switch (groupBy) {
@@ -77,20 +79,25 @@ for (const variant of variants) {
     }
   })()
 
-  const stockValue = (variant.qty ?? 0) * (variant.sprice ?? 0)
-  const quantity = variant.qty ?? 0
+  const itemQty = variant.items?.reduce((sum, item) => sum + (item.qty ?? 0), 0) ?? 0
+  const stockValue = itemQty * (variant.sprice ?? 0)
+  const purchaseStockValue = itemQty * (variant.pprice ?? 0)
+  const quantity = itemQty
 
   if (!grouped[key]) {
-    grouped[key] = { stock: 0, qty: 0 }
+    grouped[key] = { stock: 0, purchaseStock: 0, qty: 0 }
   }
 
   grouped[key].stock += stockValue
+  grouped[key].purchaseStock += purchaseStockValue
   grouped[key].qty += quantity
 }
 
-return Object.entries(grouped).map(([key, { stock, qty }]) => ({
+
+return Object.entries(grouped).map(([key, { stock, purchaseStock, qty }]) => ({
   [groupBy]: key,
   stock: Number(stock.toFixed(2)),
+  purchaseStock: Number(purchaseStock.toFixed(2)),
   qty
 }))
 })

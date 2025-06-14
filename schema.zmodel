@@ -380,10 +380,8 @@ model Variant {
     status      Boolean           @default(true)
     sprice      Float @map("s_price")
     pprice      Float? @map("p_price")
-    qty         Int?
     discount    Float?
-    dprice Float? @map("d_price")
-    sizes       Json?
+    dprice      Float? @map("d_price")
     images      String[]
     tax         Float       @default(0.0)
     product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
@@ -409,15 +407,15 @@ model Item {
     updatedAt   DateTime @updatedAt @map("updated_at")
     variant     Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
     variantId   String @map("variant_id")
-    status      String @default("in_stock")
     size        String?
+    qty         Int? @default(0)
     entry        Entry[]
     company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
     companyId   String @map("company_id")
     
     @@allow('read', true)
-    @@allow('read, create, update', true)
-    
+    @@allow('read, create, update, delete', true)
+
     @@map("items")
 }
 

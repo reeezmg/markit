@@ -1134,10 +1134,6 @@ const metadata = {
                     name: "pprice",
                     type: "Float",
                     isOptional: true,
-                }, qty: {
-                    name: "qty",
-                    type: "Int",
-                    isOptional: true,
                 }, discount: {
                     name: "discount",
                     type: "Float",
@@ -1145,10 +1141,6 @@ const metadata = {
                 }, dprice: {
                     name: "dprice",
                     type: "Float",
-                    isOptional: true,
-                }, sizes: {
-                    name: "sizes",
-                    type: "Json",
                     isOptional: true,
                 }, images: {
                     name: "images",
@@ -1246,14 +1238,15 @@ const metadata = {
                     type: "String",
                     isForeignKey: true,
                     relationField: 'variant',
-                }, status: {
-                    name: "status",
-                    type: "String",
-                    attributes: [{ "name": "@default", "args": [{ "value": "in_stock" }] }],
                 }, size: {
                     name: "size",
                     type: "String",
                     isOptional: true,
+                }, qty: {
+                    name: "qty",
+                    type: "Int",
+                    isOptional: true,
+                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
                 }, entry: {
                     name: "entry",
                     type: "Entry",

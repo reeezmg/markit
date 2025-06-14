@@ -14,6 +14,14 @@ const UpdateBill = useUpdateBill();
 const UpdateManyCategory = useUpdateManyCategory();
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
+const isMobile = ref(false);
+
+onMounted(() => {
+  isMobile.value = window.innerWidth < 640;
+  window.addEventListener('resize', () => {
+    isMobile.value = window.innerWidth < 640;
+  });
+});
 
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
@@ -29,44 +37,33 @@ const selectedDate = ref({
     end: new Date() 
 });
 
-// Columns
-const columns = [
-    {
-        key: 'invoiceNumber',
-        label: 'Inv#',
-        sortable: true,
-    },
-    {
-        key: 'createdAt',
-        label: 'Date',
-        sortable: true,
-    },
-    {
-        key: 'entries',
-        label: 'Entries',
-        sortable: true,
-    },
-    {
-        key: 'grandTotal',
-        label: 'Total',
-        sortable: true,
-    },
-    {
-        key: 'paymentStatus',
-        label: 'Payment',
-        sortable: true,
-    },
-    {
-        key: 'notes',
-        label: 'Notes',
-        sortable: true,
-    },
-    {
-        key: 'actions',
-        label: 'Actions',
-        sortable: false,
-    },
-];
+const getColumns = (isMobile) => {
+  if (!isMobile) {
+    return [
+      { key: 'invoiceNumber', label: 'Inv#', sortable: true },
+      { key: 'createdAt', label: 'Date', sortable: true },
+      { key: 'entries', label: 'Entries', sortable: true },
+      { key: 'grandTotal', label: 'Total', sortable: true },
+      { key: 'paymentStatus', label: 'Payment', sortable: true },
+      { key: 'notes', label: 'Notes', sortable: true },
+      { key: 'actions', label: 'Actions', sortable: false },
+    ];
+  }
+
+  return [
+    { key: 'invoiceNumber', label: 'Inv#', sortable: true },
+    { key: 'grandTotal', label: 'Total', sortable: true },
+    { key: 'createdAt', label: 'Date', sortable: true },
+    { key: 'entries', label: 'Entries', sortable: true },
+    { key: 'paymentStatus', label: 'Payment', sortable: true },
+    { key: 'notes', label: 'Notes', sortable: true },
+    { key: 'actions', label: 'Actions', sortable: false },
+  ];
+};
+
+// Call it with the current isMobile value
+const columns = computed(() => getColumns(isMobile.value));
+
 
 const entrycolumns = [
     {
@@ -157,12 +154,14 @@ const todoStatus = [
 
 
 
+const selectedColumns = ref([]);
+watch(columns, (newColumns) => {
+  selectedColumns.value = [...newColumns];
+}, { immediate: true });
 
-const selectedColumns = ref(columns);
 const columnsTable = computed(() =>
-    columns.filter((column) => selectedColumns.value.includes(column)),
+  columns.value.filter((column) => selectedColumns.value.includes(column))
 );
-
 // Selected Rows
 const selectedRows = ref([]);
 const notes = ref<any>({})

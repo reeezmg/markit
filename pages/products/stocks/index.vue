@@ -2,16 +2,22 @@
 <UDashboardPanelContent class="pb-24">
   <div class="mb-4 flex-row gap-4 hidden sm:flex">
     <UDashboardCard
-    class="w-1/2"
+    class="flex-1"
     :title="totals.qty"
     description="Total Quantity"
     icon="i-heroicons-archive-box"
   />
     <UDashboardCard
-     class="w-1/2"
+     class="flex-1"
    :title="totals.stock"
-    description="Total Stock"
+    description="Stock in MRP"
     icon="i-heroicons-banknotes"
+  />
+    <UDashboardCard
+     class="flex-1"
+   :title="totals.purchaseStock"
+    description="Total Stock"
+    icon="i-heroicons-archive-box-arrow-down"
   />
   </div>
   <div class="mb-4 flex flex-row gap-4 sm:hidden">
@@ -23,7 +29,12 @@
     <UDashboardCard
      class="w-1/2"
     :title="totals.stock"
-    description="Total Stock"
+    description="Stock in MRP"
+  />
+    <UDashboardCard
+     class="w-1/2"
+    :title="totals.purchaseStock"
+    description="Total Purchase Stock"
   />
   </div>
    <UCard
@@ -147,9 +158,10 @@ const totals = computed(() => {
     (acc, item) => {
       acc.qty += item.qty || 0
       acc.stock += item.stock || 0
+      acc.purchaseStock += item.purchaseStock || 0
       return acc
     },
-    { qty: 0, stock: 0 }
+    { qty: 0, stock: 0, purchaseStock: 0 }
   )
 })
 
@@ -158,7 +170,8 @@ const columns = computed(() => {
   const common = [
     { key: groupBy.value, label: groupOptions.find(opt => opt.value === groupBy.value)?.label || 'Group' },
     { key: 'qty', label: 'Total Qty' },
-    { key: 'stock', label: 'Total Stock Value' }
+    { key: 'stock', label: 'Stock in MRP' },
+    { key: 'purchaseStock', label: 'TotalStock Value' }
   ]
   return common
 })

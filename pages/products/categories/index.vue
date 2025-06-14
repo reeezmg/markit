@@ -225,12 +225,15 @@ const queryArgs = reactive({
                 id:true,
                 name:true,
                 status:true,
-
                 variants:{
                     select:{
-                        qty:true,
                         images:true,
                         sprice:true,
+                        items:{
+                            select: {
+                                qty: true,
+                            },
+                        }
                     }
                 }
             }
@@ -520,12 +523,15 @@ async function toggleStatus(id) {
                 <template #stocks-data="{ row }">
                     {{
                         row.products?.reduce((productTotal, product) => {
-                        const variantStock = product.variants?.reduce((variantTotal, variant) => {
-                            return variantTotal + ((variant.sprice || 0) * (variant.qty || 0));
-                        }, 0);
-                        return productTotal + variantStock;
+                            const variantStock = product.variants?.reduce((variantTotal, variant) => {
+                            const itemQty = variant.items?.reduce((itemTotal, item) => {
+                                return itemTotal + (item.qty || 0);
+                            }, 0) || 0;
+                            return variantTotal + (itemQty * (variant.sprice || 0));
+                            }, 0) || 0;
+                            return productTotal + variantStock;
                         }, 0) || 0
-                    }}
+                        }}
                     </template>
 
 
@@ -554,11 +560,21 @@ async function toggleStatus(id) {
                 </template>
 
                 <template #variants-data="{ row }">
-                    {{ row.variants.reduce((total,variant) => total + (variant.qty || 0),0)}}
+                    {{
+                        row.variants?.reduce((variantTotal, variant) => {
+                            const itemTotal = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
+                            return variantTotal + itemTotal;
+                        }, 0)
+                        }}
                 </template>
 
                  <template #stocks-data="{ row }">
-                    {{ row.variants.reduce((total,variant) => total + (variant.sprice * variant.qty || 0),0)}}
+                    {{
+                        row.variants.reduce((total, variant) => {
+                        const itemQty = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
+                        return total + (itemQty * (variant.sprice || 0));
+                        }, 0)
+                    }}
                 </template>
 
 

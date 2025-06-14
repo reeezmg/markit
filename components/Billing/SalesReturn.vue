@@ -159,7 +159,6 @@ const fetchItemData = async (barcode, index) => {
 
     returnedItems.value[index] = {
       ...returnedItems.value[index],
-      entryId: data.id || '',
       id: data?.itemId || '',
       size: data?.size || '',
       sizes: data?.variant.sizes || '',
@@ -288,13 +287,15 @@ const addNewRow = async (index) => {
     category: {},
     size: '',
     name: '',
+    item: '',
     qty: 1,
     rate: 0,
     discount: 0,
     tax: 0,
     value: 0,
     sizes: {},
-    totalQty: 0
+    totalQty: 0,
+    return: true
   });
 
   await nextTick();
