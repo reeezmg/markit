@@ -14,12 +14,15 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-    const session = await useAuthSession(event);
+    const session = await useAuthSession(event)
+
+  // Ensure session and companyId are present
+ console.log('Session:', session.data)
 
   const { filters, groupBy } = bodySchema.parse(await readBody(event))
 
-  const where: any = {
-    companyId: session.data.companyId,
+  const where = {
+    companyId: session?.data?.companyId,
     status: true,
     product: {
       status: true,
