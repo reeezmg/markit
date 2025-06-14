@@ -954,63 +954,60 @@ console.log('Bill updated successfully:', billResponse);
 
     try {
         isPrint.value = true
-           printData = {
-              invoiceNumber: billid.billCounter,
-              date: new Date(date.value).toISOString(),
-              entries: items.value.map(entry => {
-              let calculatedDiscount = 0;
-    
-              if (entry.discount < 0) {
-                // Fixed discount
-                calculatedDiscount = entry.discount;
-              } else {
-                // Percentage discount
-                calculatedDiscount = `${entry.discount}%`;
-              }
-    
-              return {
-                description: entry.barcode ? entry.name : entry.category[0].name,
-                hsn: entry.category[0].hsn,
-                qty: entry.qty,
-                mrp: entry.rate,
-                discount: calculatedDiscount, // ✅ set calculated discount
-                tax: entry.tax,
-                value: entry.qty * entry.rate ,
-                size: entry.size,
-                barcode: entry.barcode,
-                tvalue:entry.value,
-              };
-            }),
-    
-          subtotal: subtotal.value,
-         discount: Number(discount.value),
-          grandTotal: grandTotal.value,
-          paymentMethod: paymentMethod.value,
-          companyName: useAuth().session.value?.companyName || '',
-          companyAddress: billid.address || {},
-          gstin: billid.gstin || '',
-          ...(paymentMethod.value === 'Split' && {
+      printData = {
+          invoiceNumber: billResponse.invoiceNumber || 'N/A',
+          date: billResponse.createdAt,
+          entries: billResponse.entries.map(entry => {
+          let calculatedDiscount = 0;
+
+          if (entry.discount < 0) {
+                         // Fixed discount
+                         calculatedDiscount = entry.discount;
+                       } else {
+                         // Percentage discount
+                         calculatedDiscount = `${entry.discount}%`;
+                       }
+             
+          return {
+            description: entry.barcode ? entry.name : entry.category.name,
+            hsn: entry.category.hsn,
+            qty: entry.qty,
+            mrp: entry.rate,
+            discount: calculatedDiscount, // ✅ set calculated discount
+            tax: entry.tax,
+            value: entry.qty * entry.rate ,
+            size: entry.size,
+            barcode: entry.barcode,
+            tvalue:entry.value,
+          };
+        }),
+ 
+  subtotal: billResponse.subtotal,
+  discount: billResponse.discount,
+  grandTotal: billResponse.grandTotal,
+  paymentMethod: billResponse.paymentMethod,
+  ...(paymentMethod.value === 'Split' && {
             splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
           }),
-          accHolderName: billid.accHolderName || '',
-          ...(paymentMethod.value === 'Split' && {
-            splitPayments: splitPayments.value,
-          }),
-          upiId: billid.upiId || '',
-          clientName:clientName.value,
-          clientPhone:phoneNo.value,
-          // 🆕 Add total qty
-          tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
-          tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
-          ttvalue: items.value.reduce((sum, entry) => sum + (entry.value), 0),
-          tdiscount: items.value.reduce((sum, entry) => {
-            if (entry.discount < 0) {
-              return sum + (Math.abs(entry.discount) * entry.qty);
-            } else {
-              return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
-            }
-          }, 0)
-        };
+  companyName: billResponse.company.name || '',
+  companyAddress: billResponse.company.address || {},
+  gstin: billResponse.company.gstin || '',
+  accHolderName: billResponse.company.accHolderName || '',
+  upiId: billResponse.company.upiId || '',
+   clientName:clientName.value,
+    clientPhone:phoneNo.value,
+  // 🆕 Add total qty
+  tqty: billResponse.entries.reduce((sum, entry) => sum + entry.qty, 0),
+  tvalue: billResponse.entries.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+   ttvalue: items.value.reduce((sum, entry) => sum + (entry.value), 0),
+  tdiscount: billResponse.entries.reduce((sum, entry) => {
+    if (entry.discount < 0) {
+      return sum + (Math.abs(entry.discount) * entry.qty);
+    } else {
+      return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
+    }
+  }, 0),
+};
 
     } catch (err) {
       console.error('Printing error:', err);
