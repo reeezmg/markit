@@ -46,6 +46,8 @@ const [pprice, ppriceAttrs] = defineField('pprice');
 const [dprice, dpriceAttrs] = defineField('dprice');
 const [discount, discountAttrs] = defineField('discount');
 
+const variantInputs = ref(useAuth().session.value?.variantInputs)
+
 // Initialize items with a deep copy of props.editItems
 const items = ref<{ size: string; qty: number | undefined }[]>(
     props.editItems ? JSON.parse(JSON.stringify(props.editItems)) : []
@@ -142,7 +144,6 @@ watch(items, (newItems) => {
 }, { deep: true, immediate: true });
 
 
-
 watch(
   [items, name, code, qty, sprice, pprice, dprice, discount],
   ([newItems, newName, newCode, newQty, newSPrice, newPPrice, newDPrice, newDiscount]) => {
@@ -177,43 +178,43 @@ defineExpose({ resetForm });
 <template>
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
     <!-- Variant Name -->
-    <UFormGroup label="Variant Name">
+    <UFormGroup label="Variant Name" v-if="variantInputs?.name">
       <UInput v-model="name" v-bind="nameAttrs" type="text" placeholder="Color/Design" />
     </UFormGroup>
 
     <!-- Code -->
-    <UFormGroup label="Code">
+    <UFormGroup label="Code" v-if="variantInputs?.code">
       <UInput v-model="code" v-bind="codeAttrs" type="text" placeholder="Enter code" />
     </UFormGroup>
 
     <!-- Selling Price -->
-    <UFormGroup label="Selling Price" required :error="errors.sprice && errors.sprice">
+    <UFormGroup label="Selling Price" required :error="errors.sprice && errors.sprice" v-if="variantInputs?.sprice">
       <UInput v-model="sprice" v-bind="spriceAttrs" type="number" placeholder="Enter selling price" step="0.01" />
     </UFormGroup>
 
     <!-- Purchase Price -->
-    <UFormGroup label="Purchase Price">
+    <UFormGroup label="Purchase Price" v-if="variantInputs?.pprice">
       <UInput v-model="pprice" v-bind="ppriceAttrs" type="number" placeholder="Enter purchase price" step="0.01" />
     </UFormGroup>
 
     <!-- Discount Price -->
-    <UFormGroup label="Discount Price">
+    <UFormGroup label="Discount Price" v-if="variantInputs?.dprice">
       <UInput v-model="dprice" v-bind="dpriceAttrs" type="number" placeholder="Enter discounted price" step="0.01" />
     </UFormGroup>
 
     <!-- Discount % -->
-    <UFormGroup label="Discount %" >
+    <UFormGroup label="Discount %" v-if="variantInputs?.discount">
       <UInput v-model="discount" v-bind="discountAttrs" type="number" placeholder="Enter discount percentage" step="0.01" />
     </UFormGroup>
 
     <!-- Quantity (Full Width) -->
-    <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2">
+    <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2" v-if="variantInputs?.qty">
       <UInput v-model="qty" v-bind="qtyAttrs" type="number" placeholder="Enter quantity" :disabled="hasSizes" />
     </UFormGroup>
   </div>
 
   <!-- Sizes (Full Width) -->
-  <div class="w-full">
+  <div class="w-full" v-if="variantInputs?.sizes">
     <template v-if="hasSizes">
       <label class="block text-sm font-medium leading-6 dark:text-white mt-4">Items & Quantities</label>
       <div v-for="(item, index) in items" :key="index" class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">

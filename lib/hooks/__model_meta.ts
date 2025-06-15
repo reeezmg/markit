@@ -299,6 +299,18 @@ const metadata = {
                     isDataModel: true,
                     isArray: true,
                     backLink: 'company',
+                }, productinput: {
+                    name: "productinput",
+                    type: "Productinput",
+                    isDataModel: true,
+                    isOptional: true,
+                    backLink: 'company',
+                }, variantinput: {
+                    name: "variantinput",
+                    type: "Variantinput",
+                    isDataModel: true,
+                    isOptional: true,
+                    backLink: 'company',
                 },
             }, uniqueConstraints: {
                 id: {
@@ -310,6 +322,122 @@ const metadata = {
                 }, storeUniqueName: {
                     name: "storeUniqueName",
                     fields: ["storeUniqueName"]
+                },
+            },
+        },
+        productinput: {
+            name: 'Productinput', fields: {
+                id: {
+                    name: "id",
+                    type: "String",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, name: {
+                    name: "name",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, brand: {
+                    name: "brand",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, category: {
+                    name: "category",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, subcategory: {
+                    name: "subcategory",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, description: {
+                    name: "description",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, company: {
+                    name: "company",
+                    type: "Company",
+                    isDataModel: true,
+                    backLink: 'productinput',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "companyId" },
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'company',
+                },
+            }, uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
+                }, companyId: {
+                    name: "companyId",
+                    fields: ["companyId"]
+                },
+            },
+        },
+        variantinput: {
+            name: 'Variantinput', fields: {
+                id: {
+                    name: "id",
+                    type: "String",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, name: {
+                    name: "name",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, code: {
+                    name: "code",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, sprice: {
+                    name: "sprice",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, pprice: {
+                    name: "pprice",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, dprice: {
+                    name: "dprice",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, discount: {
+                    name: "discount",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, qty: {
+                    name: "qty",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, sizes: {
+                    name: "sizes",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, images: {
+                    name: "images",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, company: {
+                    name: "company",
+                    type: "Company",
+                    isDataModel: true,
+                    backLink: 'variantinput',
+                    isRelationOwner: true,
+                    foreignKeyMapping: { "id": "companyId" },
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isForeignKey: true,
+                    relationField: 'company',
+                },
+            }, uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
+                }, companyId: {
+                    name: "companyId",
+                    fields: ["companyId"]
                 },
             },
         },

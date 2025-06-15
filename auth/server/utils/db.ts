@@ -11,7 +11,9 @@ export async function findUserByEmail(email: string) {
                         include:{ 
                             company: {
                                 include:{
-                                    pipeline:true
+                                    pipeline:true,
+                                    productinput: true,
+                                    variantinput: true,
                                 }
                             } 
 

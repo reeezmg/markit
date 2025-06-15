@@ -11,25 +11,7 @@ const isNameChanged = ref(false);
 const isUpdatingName = ref(false);
 const isUpdatingAddress = ref(false);
 const isUpdatingAccount = ref(false);
-
-const productInputs = reactive([
-  { key: 'name', label: 'Name', value: true },
-  { key: 'brand', label: 'Brand', value: true },
-  { key: 'category', label: 'Category', value: false },
-  { key: 'description', label: 'Description', value: false },
-])
-
-const variantInputs = reactive([
-  { key: 'name', label: 'Variant Name', value: true },
-  { key: 'code', label: 'Code', value: true },
-  { key: 'sprice', label: 'Selling Price', value: true },
-  { key: 'pprice', label: 'Purchase Price', value: false },
-  { key: 'dprice', label: 'Discount Price', value: false },
-  { key: 'discount', label: 'Discount', value: false },
-  { key: 'qty', label: 'Quantity', value: false },
-  { key: 'sizes', label: 'Sizes', value: false },
-  { key: 'images', label: 'Images', value: false },
-])
+const isUpdatingInputs = ref(false);
 
 
 interface AccountState {
@@ -69,6 +51,26 @@ const addstate = reactive<AddressState>({
 const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
 const isBarcodeInclude = ref(useAuth().session.value?.isBarcodeIncluded);
+
+const productInputs = reactive([
+  { key: 'name', label: 'Name', value: useAuth().session.value?.productInputs?.name  },
+  { key: 'brand', label: 'Brand', value: useAuth().session.value?.productInputs?.brand  },
+  { key: 'category', label: 'Category', value: useAuth().session.value?.productInputs?.category  },
+  { key: 'subcategory', label: 'Subcategory', value: useAuth().session.value?.productInputs?.subcategory  },
+  { key: 'description', label: 'Description', value: useAuth().session.value?.productInputs?.description },
+])
+
+const variantInputs = reactive([
+  { key: 'name', label: 'Variant Name', value: useAuth().session.value?.variantInputs?.name  },
+  { key: 'code', label: 'Code', value: useAuth().session.value?.variantInputs?.code  },
+  { key: 'sprice', label: 'Selling Price', value: useAuth().session.value?.variantInputs?.sprice  },
+  { key: 'pprice', label: 'Purchase Price', value: useAuth().session.value?.variantInputs?.pprice  },
+  { key: 'dprice', label: 'Discount Price', value: useAuth().session.value?.variantInputs?.dprice  },
+  { key: 'discount', label: 'Discount', value: useAuth().session.value?.variantInputs?.discount  },
+  { key: 'qty', label: 'Quantity', value: useAuth().session.value?.variantInputs?.qty  },
+  { key: 'sizes', label: 'Sizes', value: useAuth().session.value?.variantInputs?.sizes  },
+  { key: 'images', label: 'Images', value: useAuth().session.value?.variantInputs?.images  },
+])
 
 watch(() => storeUniqueName.value, (newName) => {
   isNameChanged.value = newName !== useAuth().session.value?.storeUniqueName;
@@ -257,6 +259,37 @@ const onBarcodeIncludeChange = async () => {
   } catch (error) {
     console.error(error);
     toast.add({ title: 'Error updating Barcode setting', color: 'red', icon: 'i-heroicons-x-circle' });
+  }
+};
+
+const onInputChange = async () => {
+  isUpdatingInputs.value = true;
+  try {
+    const productinputData = Object.fromEntries(productInputs.map(input => [input.key, input.value]));
+    const variantinputData = Object.fromEntries(variantInputs.map(input => [input.key, input.value]));
+
+    const res= await UpdateCompany.mutateAsync({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        productinput: {
+          update: productinputData,
+        },
+        variantinput: {
+          update: variantinputData,
+        },
+      },
+    });
+    console.log(productinputData, variantinputData);
+    const resu = await updateSession(productinputData, variantinputData);
+    console.log(resu);
+    toast.add({ title: 'Product and Variant inputs updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating Product and Variant inputs', color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingInputs.value = false;
   }
 };
 
@@ -469,6 +502,8 @@ const onBarcodeIncludeChange = async () => {
     </div>
   </div>
 </div>
+
+<UButton class="mt-4" @click="onInputChange" label="Save Inputs" :loading="isUpdatingInputs" />
 
   </UDashboardPanelContent>
 </template>

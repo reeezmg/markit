@@ -8,10 +8,11 @@ const router = useRouter();
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
 
-
+const variantInputs = ref(useAuth().session.value?.variantInputs)
 
 interface ImageData {
     file: File;
+    uuid: string;
     uuid: string;
 }
 interface Item {
@@ -271,7 +272,7 @@ const handleAdd = async (e: Event) => {
   },
   select: { id: true }
 });
-
+console.log(variants.value)
 await Promise.all(
   variants.value.map((variant) => {
     let tax = 0;
@@ -286,34 +287,25 @@ await Promise.all(
       }
     }
 
-    const itemsToCreate = variant.items.length > 0
-      ? variant.items.map((size) => ({
-          size:size.size,
+    const itemsToCreate = (variant.items && variant.items.length > 0)
+      && variant.items.map((size) => ({
+          size: size.size || null,
           qty: size.qty || 0,
           company: {
             connect: { id: useAuth().session.value?.companyId },
           }
-        }))
-      : [{
-          size: null,
-          qty: size.qty || 0,
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          }
-        }];
-console.log(variant)
+        }));
     return CreateVariant.mutateAsync({
       data: {
         name: variant.name || '',
         ...(variant.code && { code: variant.code }),
         sprice: variant.sprice || 0,
         pprice: variant.pprice || 0,
-          dprice: variant.dprice || 0,
-  
+        dprice: variant.dprice || 0,
         discount: variant.discount || 0,
         status: true,
         tax,
-        images: variant.images.map((file) => file.uuid),
+        images: variant.images?.map((file) => file.uuid) || [],
         product: {
           connect: { id: productRes.id },
         },
@@ -327,6 +319,7 @@ console.log(variant)
     });
   })
 );
+
 
 
       // console.log(resimage)
@@ -509,21 +502,14 @@ await Promise.all(
     }
     console.log("variant",variant.items)
     // 2. Prepare Item creation
-    const itemsToCreate = variant.items?.length > 0
-      ? variant.items.map((size) => ({
-          size: size.size,
+       const itemsToCreate = (variant.items && variant.items.length > 0)
+      && variant.items.map((size) => ({
+          size: size.size || null,
           qty: size.qty || 0,
           company: {
             connect: { id: useAuth().session.value?.companyId },
-          },
-        }))
-      : [{
-          size: null,
-          qty: size.qty || 0,
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-        }];
+          }
+        }));
 
     // 3. Common variant data
     const variantData = {
@@ -531,8 +517,7 @@ await Promise.all(
       ...(variant.code && { code: variant.code }),
       sprice: variant.sprice || 0,
       pprice: variant.pprice || 0,
-        dprice: variant.dprice || 0,
- 
+      dprice: variant.dprice || 0,
       discount: variant.discount || 0,
       status: true,
       images: variant.images.map((file) => file.uuid),
@@ -942,6 +927,7 @@ const handleNewProduct = () => {
           
                       @update="updateVariant(index,$event)" />
                       <AddProductMedia
+                      v-if="variantInputs?.images"
                       ref="mediaRefs"
                       :editFile="selectedProduct && selectedProduct.variants[index]?.images"
                       :index="index" 

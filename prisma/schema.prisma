@@ -148,8 +148,40 @@ model Company {
   billCounter                Int                  @default(0) @map("bill_counter")
   barcodeCounter             Int                  @default(1) @map("barcode_counter")
   likeCompanies              LikeCompanyClient[]
+  productinput               Productinput?
+  variantinput               Variantinput?
 
   @@map("companies")
+}
+
+model Productinput {
+  id          String  @id() @unique() @default(uuid())
+  name        Boolean @default(true)
+  brand       Boolean @default(true)
+  category    Boolean @default(true)
+  subcategory Boolean @default(true)
+  description Boolean @default(true)
+  company     Company @relation(fields: [companyId], references: [id])
+  companyId   String  @unique() @map("company_id")
+
+  @@map("product_inputs")
+}
+
+model Variantinput {
+  id        String  @id() @unique() @default(uuid())
+  name      Boolean @default(true)
+  code      Boolean @default(true)
+  sprice    Boolean @default(true)
+  pprice    Boolean @default(true)
+  dprice    Boolean @default(true)
+  discount  Boolean @default(true)
+  qty       Boolean @default(true)
+  sizes     Boolean @default(true)
+  images    Boolean @default(true)
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String  @unique() @map("company_id")
+
+  @@map("variant_inputs")
 }
 
 model Distributor {

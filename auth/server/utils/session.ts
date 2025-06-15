@@ -28,6 +28,24 @@ export type AuthSession = {
     shopifyStoreName?:string;
     shopifyAccessToken?:string;
     type: string;
+    productInputs?: {
+        name: boolean;
+        brand: boolean;
+        category: boolean;
+        description: boolean;
+    };
+
+    variantInputs?: {
+        name: boolean;
+        code: boolean;
+        sprice: boolean;
+        pprice: boolean;
+        dprice: boolean;
+        discount: boolean;
+        qty: boolean;
+        sizes: boolean;
+        images: boolean;
+    };
 };
 
 export const useAuthSession = async (event: H3Event) => {

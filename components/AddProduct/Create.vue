@@ -33,6 +33,7 @@ const [description, descriptionAttrs] = defineField('description');
 const selectedRow = ref<any>({});
 const subselectedRow = ref<any>({});
 
+const productInputs = ref(useAuth().session.value?.productInputs)
 
 const {
     data: categories,
@@ -120,7 +121,7 @@ watch(
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
     <!-- Name -->
-    <UFormGroup label="Name">
+    <UFormGroup label="Name" v-if="productInputs?.name">
       <UInput
         id="name"
         v-model="name"
@@ -131,7 +132,7 @@ watch(
     </UFormGroup>
 
     <!-- Brand -->
-    <UFormGroup label="Brand">
+    <UFormGroup label="Brand" v-if="productInputs?.brand">
       <UInput
         id="brand"
         v-model="brand"
@@ -142,7 +143,7 @@ watch(
     </UFormGroup>
 
     <!-- Category -->
-    <UFormGroup label="Category">
+    <UFormGroup label="Category" v-if="productInputs?.category">
       <USelectMenu
         v-model="selectedRow"
         :options="categories"
@@ -186,7 +187,7 @@ watch(
     </UFormGroup>
 
     <!-- Sub-category -->
-    <UFormGroup label="Sub-Category">
+    <UFormGroup label="Sub-Category" v-if="productInputs?.subcategory">
       <USelectMenu
         v-model="subselectedRow"
         :options="subcategories"
@@ -230,7 +231,7 @@ watch(
     </UFormGroup>
 
     <!-- Description: spans full row -->
-    <UFormGroup label="Description" class="md:col-span-2">
+    <UFormGroup label="Description" class="md:col-span-2" v-if="productInputs?.description">
       <UTextarea
         id="description"
         v-model="description"

@@ -7,6 +7,8 @@
 
 export * from './distributor-company';
 export * from './company';
+export * from './productinput';
+export * from './variantinput';
 export * from './distributor';
 export * from './purchase-order';
 export * from './distributor-payment';

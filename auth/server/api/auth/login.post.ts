@@ -33,6 +33,12 @@ export default eventHandler(async (event) => {
         shopifyStoreName:user.companies[0].company.shopifyStoreName,
         shopifyAccessToken:user.companies[0].company.shopifyAccessToken,
         type:'USER',
+        productInputs: (({ name, brand, category, subcategory, description }) =>
+        ({ name, brand, category, subcategory, description }))(user.companies[0].company.productinput || {}),
+
+        variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, sizes, images }) =>
+        ({ name, code, sprice, pprice, dprice, discount, qty, sizes, images }))(user.companies[0].company.variantinput || {}),
     });
+
     return session;
 });

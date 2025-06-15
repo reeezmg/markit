@@ -123,3 +123,19 @@ export const updateIsBarcodeIncluded = async (
     });
     await useAuth().updateSession();
 };
+
+export const updateSession = async (
+    productinputData: any,
+    variantinputData: any,
+    
+) => {
+    await $fetch('/api/auth/changeInputs', {
+        method: 'PUT',
+        body: {
+            productinputData,
+            variantinputData
+        },
+    });
+    await useAuth().updateSession();
+    console.log('Session updated');
+};
