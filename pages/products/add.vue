@@ -296,7 +296,7 @@ for (const variant of variants.value) {
       }))
     : [];
 
-  await CreateVariant.mutateAsync({
+  CreateVariant.mutateAsync({
     data: {
       name: variant.name || '',
       ...(variant.code && { code: variant.code }),
@@ -543,7 +543,7 @@ for (const variant of variants.value) {
   }
 
   // 5. Upsert the variant
-  await UpsertVariant.mutateAsync({
+  UpsertVariant.mutateAsync({
     where: { id: variant.id },
     create: {
       ...variantData,
@@ -558,11 +558,7 @@ for (const variant of variants.value) {
       },
     },
   });
-}
-
-
-
-    
+} 
     // console.log(res?.variants);
     // await getItem(res?.variants);
     handleReset();
