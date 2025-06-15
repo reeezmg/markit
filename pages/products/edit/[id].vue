@@ -290,86 +290,78 @@ const handleEdit = async (e: Event) => {
      },
      select: { id: true }
    });
-   await Promise.all(
-     variants.value.map(async (variant) => {
-       let tax = 0;
-       if (categoryTax.value) {
-         if (categoryTax.value.taxType === 'FIXED') {
-           tax = categoryTax.value.fixedTax || 0;
-         } else if (categoryTax.value.taxType === 'VARIABLE') {
-           const threshold = categoryTax.value.thresholdAmount || 0;
-           tax = (variant.sprice || 0) > threshold 
-             ? (categoryTax.value.taxAboveThreshold || 0)
-             : (categoryTax.value.taxBelowThreshold || 0);
-         }
-       }
-   
-       // 2. Prepare Item creation
-       const itemsToCreate = variant.items?.length > 0
-         ? variant.items.map((size) => ({
-             size: size.size,
-             qty: size.qty || 0,
-             company: {
-               connect: { id: useAuth().session.value?.companyId },
-             },
-           }))
-         : [{
-             size: null,
-             qty: size.qty || 0,
-             company: {
-               connect: { id: useAuth().session.value?.companyId },
-             },
-           }];
-   
-       // 3. Common variant data
-       const variantData = {
-         name: variant.name || '',
-         ...(variant.code && { code: variant.code }),
-         sprice: variant.sprice || 0,
-         pprice: variant.pprice || 0,
-         ...(variant.sprice !== variant.dprice && {
-           dprice: variant.dprice || 0,
-         }),
-         discount: variant.discount || 0,
-         status: true,
-         images: variant.images.map((file) => file.uuid),
-         tax,
-         product: {
-           connect: { id: productId },
-         },
-         company: {
-           connect: { id: useAuth().session.value?.companyId },
-         },
-       };
-      
-       // 4. If updating, delete existing items
-       if (variant.id) {
-         await DeleteManyItem.mutateAsync({
-           where: {
-             variantId: variant.id,
-           },
-         });
-       }
-   
-       // 5. Upsert the variant
-       return await UpsertVariant.mutateAsync({
-         where: { id: variant.id },
-         create: {
-           ...variantData,
-           items: {
-             create: itemsToCreate,
-           },
-         },
-         update: {
-           ...variantData,
-           items: {
-             create: itemsToCreate, // only create (we already deleted manually)
-           },
-         },
-       });
-     })
-   );
-   
+  for (const variant of variants.value) {
+  let tax = 0;
+  if (categoryTax.value) {
+    if (categoryTax.value.taxType === 'FIXED') {
+      tax = categoryTax.value.fixedTax || 0;
+    } else if (categoryTax.value.taxType === 'VARIABLE') {
+      const threshold = categoryTax.value.thresholdAmount || 0;
+      tax = (variant.sprice || 0) > threshold 
+        ? (categoryTax.value.taxAboveThreshold || 0)
+        : (categoryTax.value.taxBelowThreshold || 0);
+    }
+  }
+
+  // 2. Prepare Item creation
+  const itemsToCreate = (variant.items && variant.items.length > 0)
+    ? variant.items.map((size) => ({
+        size: size.size || null,
+        qty: size.qty || 0,
+        company: {
+          connect: { id: useAuth().session.value?.companyId },
+        }
+      }))
+    : [];
+
+  // 3. Common variant data
+  const variantData = {
+    name: variant.name || '',
+    ...(variant.code && { code: variant.code }),
+    sprice: variant.sprice || 0,
+    pprice: variant.pprice || 0,
+    ...(variant.sprice !== variant.dprice && {
+      dprice: variant.dprice || 0,
+    }),
+    discount: variant.discount || 0,
+    status: true,
+    images: variant.images?.map((file) => file.uuid) || [],
+    tax,
+    product: {
+      connect: { id: productId },
+    },
+    company: {
+      connect: { id: useAuth().session.value?.companyId },
+    },
+  };
+
+  // 4. If updating, delete existing items
+  if (variant.id) {
+    await DeleteManyItem.mutateAsync({
+      where: {
+        variantId: variant.id,
+      },
+    });
+  }
+
+  // 5. Upsert the variant
+  await UpsertVariant.mutateAsync({
+    where: { id: variant.id },
+    create: {
+      ...variantData,
+      items: {
+        create: itemsToCreate,
+      },
+    },
+    update: {
+      ...variantData,
+      items: {
+        create: itemsToCreate, // only create since we already deleted
+      },
+    },
+  });
+}
+
 
     await handleSave()
 
