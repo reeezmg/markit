@@ -12,6 +12,26 @@ const isUpdatingName = ref(false);
 const isUpdatingAddress = ref(false);
 const isUpdatingAccount = ref(false);
 
+const productInputs = reactive([
+  { key: 'name', label: 'Name', value: true },
+  { key: 'brand', label: 'Brand', value: true },
+  { key: 'category', label: 'Category', value: false },
+  { key: 'description', label: 'Description', value: false },
+])
+
+const variantInputs = reactive([
+  { key: 'name', label: 'Variant Name', value: true },
+  { key: 'code', label: 'Code', value: true },
+  { key: 'sprice', label: 'Selling Price', value: true },
+  { key: 'pprice', label: 'Purchase Price', value: false },
+  { key: 'dprice', label: 'Discount Price', value: false },
+  { key: 'discount', label: 'Discount', value: false },
+  { key: 'qty', label: 'Quantity', value: false },
+  { key: 'sizes', label: 'Sizes', value: false },
+  { key: 'images', label: 'Images', value: false },
+])
+
+
 interface AccountState {
   accHolderName?: string;
   ifsc?: string;
@@ -417,5 +437,38 @@ const onBarcodeIncludeChange = async () => {
       </UFormGroup>
     </UForm>
     <UDivider class="mb-4" />
+
+    <!-- Product Inputs Section -->
+<div class="mb-6">
+  <h2 class="text-lg font-semibold mb-2">Product Inputs</h2>
+  <div class="grid grid-cols-2 gap-4">
+    <div
+      v-for="(input, index) in productInputs"
+      :key="input.key"
+      class="flex items-center justify-between border px-3 py-2 rounded-md"
+    >
+      <label class="text-sm font-medium">{{ input.label }}</label>
+      <UCheckbox v-model="input.value" />
+    </div>
+  </div>
+</div>
+
+    <UDivider class="my-4" />
+
+<!-- Variant Inputs Section -->
+<div class="mb-6">
+  <h2 class="text-lg font-semibold mb-2">Variant Inputs</h2>
+  <div class="grid grid-cols-2 gap-4">
+    <div
+      v-for="(input, index) in variantInputs"
+      :key="input.key"
+      class="flex items-center justify-between border px-3 py-2 rounded-md"
+    >
+      <label class="text-sm font-medium">{{ input.label }}</label>
+      <UCheckbox v-model="input.value" />
+    </div>
+  </div>
+</div>
+
   </UDashboardPanelContent>
 </template>

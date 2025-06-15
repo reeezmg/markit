@@ -136,6 +136,8 @@ watch(items, (newItems) => {
     (newItems[0].size === null || newItems[0].size === undefined)
   ) {
     qty.value = newItems[0].qty || 0;
+  }else{
+    qty.value = newItems.reduce((total, item) => total + (item.qty || 0), 0);
   }
 }, { deep: true, immediate: true });
 
@@ -172,56 +174,64 @@ watch(
 
 defineExpose({ resetForm });
 </script>
-
 <template>
-    <div class="flex flex-row w-full space-x-4 mb-3">
-        <UFormGroup label="Variant Name" class="w-full">
-            <UInput v-model="name" v-bind="nameAttrs" type="text" placeholder="Color/Design" />
-        </UFormGroup>
-
-        <UFormGroup label="Code" class="w-full">
-            <UInput v-model="code" v-bind="codeAttrs" type="text" placeholder="Enter price" step="0.01" />
-        </UFormGroup>
-    </div>
-
-    <div class="flex flex-row w-full space-x-4 mb-3">
-        <UFormGroup label="Selling Price" required :error="errors.sprice && errors.sprice" class="w-full">
-            <UInput v-model="sprice" v-bind="spriceAttrs" type="number" placeholder="Enter selling price" step="0.01" />
-        </UFormGroup>
-
-        <UFormGroup label="Purchase Price" class="w-full">
-            <UInput v-model="pprice" v-bind="ppriceAttrs" type="number" placeholder="Enter purchase price" step="0.01" />
-        </UFormGroup>
-    </div>
-
-    <div class="flex flex-row w-full space-x-4 mb-3">
-        <UFormGroup label="Discount Price" class="w-full">
-            <UInput v-model="dprice" v-bind="dpriceAttrs" type="number" placeholder="Enter discounted price" step="0.01" />
-        </UFormGroup>
-
-        <UFormGroup label="Discount %" class="w-full">
-            <UInput v-model="discount" v-bind="discountAttrs" type="number" placeholder="Enter discount percentage" step="0.01" />
-        </UFormGroup>
-    </div>
-    
-    <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="w-full mt-3">
-        <UInput v-model="qty" v-bind="qtyAttrs" type="number" placeholder="Enter quantity" :disabled="hasSizes" />
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+    <!-- Variant Name -->
+    <UFormGroup label="Variant Name">
+      <UInput v-model="name" v-bind="nameAttrs" type="text" placeholder="Color/Design" />
     </UFormGroup>
 
-    <div class="w-full">
-        <template v-if="hasSizes">
-            <label class="block text-sm font-medium leading-6 dark:text-white mt-4">Items & Quantities</label>
-            <div v-for="(item, index) in items" :key="index" class="grid grid-cols-3 gap-2 mt-2">
-                <UInput v-model="item.size" type="text" placeholder="Size" class="w-full" />
-                <UInput v-model.number="item.qty" type="number" placeholder="Quantity" class="w-full" />
-                <button type="button" @click="removeItem(index)" class="w-full text-red-500 border border-red-500 rounded-md">
-                    Remove
-                </button>
-            </div>
-        </template>
-            <button type="button" @click="addItem" class="mt-2 w-full text-blue-500 py-2 border border-blue-500 rounded-md">
-                Add Sizes
-            </button>
- 
-    </div>
+    <!-- Code -->
+    <UFormGroup label="Code">
+      <UInput v-model="code" v-bind="codeAttrs" type="text" placeholder="Enter code" />
+    </UFormGroup>
+
+    <!-- Selling Price -->
+    <UFormGroup label="Selling Price" required :error="errors.sprice && errors.sprice">
+      <UInput v-model="sprice" v-bind="spriceAttrs" type="number" placeholder="Enter selling price" step="0.01" />
+    </UFormGroup>
+
+    <!-- Purchase Price -->
+    <UFormGroup label="Purchase Price">
+      <UInput v-model="pprice" v-bind="ppriceAttrs" type="number" placeholder="Enter purchase price" step="0.01" />
+    </UFormGroup>
+
+    <!-- Discount Price -->
+    <UFormGroup label="Discount Price">
+      <UInput v-model="dprice" v-bind="dpriceAttrs" type="number" placeholder="Enter discounted price" step="0.01" />
+    </UFormGroup>
+
+    <!-- Discount % -->
+    <UFormGroup label="Discount %" >
+      <UInput v-model="discount" v-bind="discountAttrs" type="number" placeholder="Enter discount percentage" step="0.01" />
+    </UFormGroup>
+
+    <!-- Quantity (Full Width) -->
+    <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2">
+      <UInput v-model="qty" v-bind="qtyAttrs" type="number" placeholder="Enter quantity" :disabled="hasSizes" />
+    </UFormGroup>
+  </div>
+
+  <!-- Sizes (Full Width) -->
+  <div class="w-full">
+    <template v-if="hasSizes">
+      <label class="block text-sm font-medium leading-6 dark:text-white mt-4">Items & Quantities</label>
+      <div v-for="(item, index) in items" :key="index" class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+        <UInput v-model="item.size" type="text" placeholder="Size" class="w-full" />
+        <UInput v-model.number="item.qty" type="number" placeholder="Quantity" class="w-full" />
+        <button type="button" @click="removeItem(index)" class="w-full text-red-500 border border-red-500 rounded-md">
+          Remove
+        </button>
+      </div>
+    </template>
+
+    <!-- Add Sizes Button (Full Width) -->
+    <button
+      type="button"
+      @click="addItem"
+      class="mt-2 w-full text-blue-500 py-2 border border-blue-500 rounded-md"
+    >
+      Add Sizes
+    </button>
+  </div>
 </template>

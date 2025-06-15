@@ -499,7 +499,7 @@ const fetchItemData = async (barcode, index) => {
   
   try {
     await itemRefetch();
-    
+    console.log(itemdata.value) 
     // Check if this is still the active request for this index
     if (currentRequestIds.value[index] !== barcode) {
       return; // Newer request has been made

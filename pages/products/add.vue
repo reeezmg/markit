@@ -837,7 +837,7 @@ const handleNewProduct = () => {
               <div  class="m-3 hidden md:block">
                     <UButton
                         @click="handleSave"
-                        :loading = isSave
+                        :loading="isSave || isLoad"
                         color="green"
                     >
                         Save Order
@@ -860,7 +860,7 @@ const handleNewProduct = () => {
               <div class="m-3">
                     <UButton
                         @click="handleSave"
-                        :loading = isSave
+                        :loading="isSave || isLoad"
                         color="green"
                     >
                         Save Order

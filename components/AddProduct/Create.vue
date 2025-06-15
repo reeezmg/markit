@@ -115,99 +115,130 @@ watch(
 </script>
 
 <template id="create">
-    <div class="text-xl mb-4">Create</div>
-    <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
-   
-    <div class="flex flex-row w-full space-x-4 mb-3">
-        <UFormGroup label="Name" class="w-full">
-            <UInput
-                id="name"
-                v-model="name"
-                v-bind="nameAttrs"
-                type="text"
-                class="w-full"
-            />
-        </UFormGroup>
+  <div class="text-xl mb-4">Create</div>
+  <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
 
-        <UFormGroup label="Brand" class="w-full">
-            <UInput
-                id="brand"
-                v-model="brand"
-                type="text"
-                name="brand"
-                class="w-full"
-            />
-        </UFormGroup>
-    </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+    <!-- Name -->
+    <UFormGroup label="Name">
+      <UInput
+        id="name"
+        v-model="name"
+        v-bind="nameAttrs"
+        type="text"
+        class="w-full"
+      />
+    </UFormGroup>
 
+    <!-- Brand -->
+    <UFormGroup label="Brand">
+      <UInput
+        id="brand"
+        v-model="brand"
+        type="text"
+        name="brand"
+        class="w-full"
+      />
+    </UFormGroup>
 
-    <div class="flex flex-row w-full space-x-4 mb-3">
-        <UFormGroup label="Category" class="w-full">
-            <USelectMenu  
-                v-model="selectedRow" 
-                :options="categories"  
-                option-key="id" 
-                track-by="id"
-                searchable
-                searchable-placeholder="Search a Category..."
-            >
-                <template #label>
-                    <span v-if="Object.keys(selectedRow).length !== 0" class="truncate">
-                        {{ selectedRow.name }}
-                    </span>
-                    <span v-else>Select</span>
-                </template>
-                <template #leading>
-                    <UIcon v-if="!selectedRow.image" name="i-heroicons-user-circle" class="w-5 h-5" />
-                    <UAvatar v-else :src="`https://images.markit.co.in/${selectedRow.image}`" size="2xs" />
-                </template>
-                <template #option="{ option: category }">
-                    <UIcon v-if="!category.image" name="i-heroicons-user-circle" class="w-5 h-5" />
-                    <UAvatar v-else :src="`https://images.markit.co.in/${category.image}`" size="2xs" />
-                    <span class="truncate">{{ category.name }}</span>
-                </template>
-            </USelectMenu>
-        </UFormGroup>
+    <!-- Category -->
+    <UFormGroup label="Category">
+      <USelectMenu
+        v-model="selectedRow"
+        :options="categories"
+        option-key="id"
+        track-by="id"
+        searchable
+        searchable-placeholder="Search a Category..."
+      >
+        <template #label>
+          <span v-if="Object.keys(selectedRow).length !== 0" class="truncate">
+            {{ selectedRow.name }}
+          </span>
+          <span v-else>Select</span>
+        </template>
+        <template #leading>
+          <UIcon
+            v-if="!selectedRow.image"
+            name="i-heroicons-user-circle"
+            class="w-5 h-5"
+          />
+          <UAvatar
+            v-else
+            :src="`https://images.markit.co.in/${selectedRow.image}`"
+            size="2xs"
+          />
+        </template>
+        <template #option="{ option: category }">
+          <UIcon
+            v-if="!category.image"
+            name="i-heroicons-user-circle"
+            class="w-5 h-5"
+          />
+          <UAvatar
+            v-else
+            :src="`https://images.markit.co.in/${category.image}`"
+            size="2xs"
+          />
+          <span class="truncate">{{ category.name }}</span>
+        </template>
+      </USelectMenu>
+    </UFormGroup>
 
-        <UFormGroup label="Sub-Category" class="w-full">
-                <USelectMenu  
-                    v-model="subselectedRow" 
-                    :options="subcategories"  
-                    option-key="id" 
-                    track-by="id"
-                    searchable
-                    searchable-placeholder="Search a Category..."
-                >
-                <template #label>
-                    <span v-if="Object.keys(subselectedRow).length !== 0" class="truncate">
-                        {{ subselectedRow.name }}
-                    </span>
-                    <span v-else>Select</span>
-                </template>
-                <template #leading>
-                    <UIcon v-if="!subselectedRow.image" name="i-heroicons-user-circle" class="w-5 h-5" />
-                    <UAvatar v-else :src="`https://images.markit.co.in/${subselectedRow.image}`" size="2xs" />
-                </template>
-                <template #option="{ option: subcategory }">
-                    <UIcon v-if="!subcategory.image" name="i-heroicons-user-circle" class="w-5 h-5" />
-                    <UAvatar v-else :src="`https://images.markit.co.in/${subcategory.image}`" size="2xs" />
-                    <span class="truncate">{{ subcategory.name }}</span>
-                </template>
-            </USelectMenu>
-        </UFormGroup>
-        </div>
+    <!-- Sub-category -->
+    <UFormGroup label="Sub-Category">
+      <USelectMenu
+        v-model="subselectedRow"
+        :options="subcategories"
+        option-key="id"
+        track-by="id"
+        searchable
+        searchable-placeholder="Search a Category..."
+      >
+        <template #label>
+          <span v-if="Object.keys(subselectedRow).length !== 0" class="truncate">
+            {{ subselectedRow.name }}
+          </span>
+          <span v-else>Select</span>
+        </template>
+        <template #leading>
+          <UIcon
+            v-if="!subselectedRow.image"
+            name="i-heroicons-user-circle"
+            class="w-5 h-5"
+          />
+          <UAvatar
+            v-else
+            :src="`https://images.markit.co.in/${subselectedRow.image}`"
+            size="2xs"
+          />
+        </template>
+        <template #option="{ option: subcategory }">
+          <UIcon
+            v-if="!subcategory.image"
+            name="i-heroicons-user-circle"
+            class="w-5 h-5"
+          />
+          <UAvatar
+            v-else
+            :src="`https://images.markit.co.in/${subcategory.image}`"
+            size="2xs"
+          />
+          <span class="truncate">{{ subcategory.name }}</span>
+        </template>
+      </USelectMenu>
+    </UFormGroup>
 
-        <UFormGroup label="Description">
-                <UTextarea
-                    id="description"
-                    v-model="description"
-                    v-bind="descriptionAttrs"
-                    :rows="4"
-                    name="description"
-                />
-        </UFormGroup>
-
-
- 
-    
+    <!-- Description: spans full row -->
+    <UFormGroup label="Description" class="md:col-span-2">
+      <UTextarea
+        id="description"
+        v-model="description"
+        v-bind="descriptionAttrs"
+        :rows="4"
+        name="description"
+        class="w-full"
+      />
+    </UFormGroup>
+  </div>
 </template>
