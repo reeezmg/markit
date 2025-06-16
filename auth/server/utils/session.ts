@@ -27,6 +27,10 @@ export type AuthSession = {
     pipelineId: string;
     shopifyStoreName?:string;
     shopifyAccessToken?:string;
+    address?: any;
+    gstin: string;
+    accHolderName: string;
+    upiId: string;
     type: string;
     productInputs?: {
         name: boolean;

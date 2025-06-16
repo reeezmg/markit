@@ -112,7 +112,6 @@ watch(
         items.value[index].category = [lastCategory];
       }
     });
-    console.log(newItems)
   },
   { deep: true }
 );
@@ -142,7 +141,6 @@ watch(selected, (newSelected) => {
   if(newSelected){
     paymentMethod.value = 'Credit'
   }
-  console.log(newSelected)
 })
 
 
@@ -416,7 +414,6 @@ const handleEnterBarcode = (barcode,index) => {
   }else{
     if(!pattern.test(barcode)){
       const categorystore = categoryStore.getCategoryByShortCut(barcode)
-      console.log(categorystore)
       items.value[index].category = categories.value.filter(category =>category.id === categorystore.id)
       items.value[index].barcode = '';
       const component = rateInputs.value[index];
@@ -499,7 +496,6 @@ const fetchItemData = async (barcode, index) => {
   
   try {
     await itemRefetch();
-    console.log(itemdata.value) 
     // Check if this is still the active request for this index
     if (currentRequestIds.value[index] !== barcode) {
       return; // Newer request has been made
@@ -526,7 +522,7 @@ const fetchItemDataNonBarcode = async (categoryId, sPrice, index) => {
     const { data } = await useFetch('/api/items/findFirst', {
       query: {
         categoryId,
-        sPrice
+        sPrice: Math.abs(sPrice),
       }
     });
 
@@ -537,7 +533,7 @@ const fetchItemDataNonBarcode = async (categoryId, sPrice, index) => {
         id: itemData.id || '',
         size: itemData.size || '',
         name: `${itemData.variant?.name}-${itemData.variant?.product?.name}` || '',
-        rate: itemData.variant?.sprice || 0,
+        rate: sPrice || 0,
         discount: itemData.variant?.discount || 0,
         tax: itemData.variant?.tax || 0,
         totalQty: itemData.variant?.qty || 0,
@@ -582,8 +578,6 @@ const handleInvalidBarcode = (index) => {
 
 const handleSave = async () => {
     isSaving.value = true
-    let itemIds = []
-    let variantDetails = []
     try {
     items.value = items.value.filter(item =>
       item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
@@ -598,7 +592,6 @@ const handleSave = async () => {
         tokenEntries.value = [''];
         throw new Error(`No valid items to bill.`);
       }
-    console.log(items.value)
    items.value.forEach((item, index) => {
     if (!item.category || !item.category[0]?.id) {
       throw new Error(`No category in entry ${index + 1}`);
@@ -611,7 +604,6 @@ const handleSave = async () => {
           fetchItemDataNonBarcode(item.category[0]?.id, item.rate, index)
         )
       );
-      console.log('Fetched items:', results);
     };
 
 
@@ -631,10 +623,6 @@ const handleSave = async () => {
     },
     select:{
         billCounter:true,
-        address:true,
-        gstin:true,
-        accHolderName:true,
-        upiId:true
       }
     })
 
@@ -653,6 +641,9 @@ const entriesData = items.value.map(item => {
 
   if (item.barcode) {
     entry.barcode = item.barcode;
+  }
+
+  if (item.id) {
     entry.item = { connect: { id: item.id } };
   }
 
@@ -666,7 +657,7 @@ const entriesData = items.value.map(item => {
 
   return entry;
 });
-console.log(selected.value)
+
 const payload = {
   invoiceNumber: billid.billCounter,
   subtotal: Number(subtotal.value) || 0,
@@ -740,17 +731,17 @@ const payload = {
           grandTotal: grandTotal.value,
           paymentMethod: paymentMethod.value,
           companyName: useAuth().session.value?.companyName || '',
-          companyAddress: billid.address || {},
-          gstin: billid.gstin || '',
+          companyAddress: useAuth().session.value?.address || {},
+          gstin: useAuth().session.value?.gstin || '',
           ...(paymentMethod.value === 'Split' && {
             splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
           }),
-          accHolderName: billid.accHolderName || '',
+          accHolderName: useAuth().session.value?.accHolderName || '',
           ...(paymentMethod.value === 'Split' && {
             splitPayments: splitPayments.value,
           }),
-          upiId: billid.upiId || '',
-          clientName:clientName.value,
+          upiId: useAuth().session.value?.upiId || '',
+          clientName: clientName.value,
           clientPhone:phoneNo.value,
           // 🆕 Add total qty
           tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
@@ -796,9 +787,7 @@ const payload = {
 
         
         if (returnedItems.length > 0) {
-          console.log('returnedItems', returnedItems)
          for (const item of returnedItems) {
-        console.log(item)
             UpdateVariant.mutateAsync({
               where: { id: item.variantId },
               data: { 
@@ -814,11 +803,7 @@ const payload = {
             }).catch(error => console.error(`Error updating item}`, error))
           }
         }
-      
 
-
-  
-   console.log(printData)
         $fetch('/api/notifications/notify', {
         method: 'POST',
         body: {
@@ -860,7 +845,6 @@ const payload = {
          DeleteTokenEntry.mutateAsync({
           where: { tokenNo: { in: tokenEntries.value } }
         });
-        console.log('Token entries deleted successfully');
       }
     } catch (error) {
       console.error('Error deleting token entries', error);
@@ -872,7 +856,6 @@ const payload = {
 
 const print = async() => {
   try{
-  console.log(printData)
   await printBill(printData)
   isPrint.value = false
   toast.add({
@@ -974,9 +957,6 @@ const handleTokenSave = async () => {
     )
 );
 
-
-
-    console.log('Bill created successfully:', billResponse);
     
   } catch (error) {
     console.error('Error creating bill', error);
@@ -1054,7 +1034,6 @@ const submitEntryForm = async () => {
             discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0
         });
 
-        console.log('Items populated:', items.value);
     } else {
         console.warn("entrydata is undefined");
     }
@@ -1235,7 +1214,6 @@ const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
 
 const handleEnterPhone = async() => {
 const { data } = await refetchClient()
-console.log(data)
 clientName.value = data?.name
 clientId.value = data?.id
 if(!data){
@@ -1249,9 +1227,7 @@ watch(paymentMethod, (val) => {
     showSplitModal.value = true
   }
 })
-watch(items, (val) => {
-  console.log(val)
-})
+
 
 const handleAmountEntry = (method) => {
   const entry = tempSplits.value[method]
@@ -1290,15 +1266,10 @@ function submitSplitPayment() {
     alert(`Total split amount must be exactly ${grandTotal.value}`)
     return
   }
-
-  // Process splitPayments here
-  console.log('Final Split:', splitPayments.value)
   showSplitModal.value = false
 }
 
 function handleCategoryChange(category, rowIndex) {
-  console.log(category);
-  
   const isEmpty = !category || Object.keys(category).length === 0;
 
   if (!isEmpty) {
@@ -1423,6 +1394,8 @@ onMounted(() => {
         ref="discountInputs" 
         type="text"
         size="sm"
+        inputmode="decimal"
+        pattern="^-?[0-9]*[.,]?[0-9]*$"
          enterkeyhint="enter"
         @keyup.enter="addNewRow(index)"
         @keyup.tab.prevent="addNewRow(index)"
@@ -1471,7 +1444,7 @@ onMounted(() => {
   </div>
 </div>
 
-         
+         <!-- pc view -->
         <div v-else class="overflow-x-auto p-3 hidden sm:block">    
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
@@ -1580,7 +1553,7 @@ onMounted(() => {
     <td class="py-1 whitespace-nowrap">
       <UInput 
         v-model="row.discount" 
-        type="text"
+        type="number"
         ref="discountInputs" 
         size="sm"  
         @keydown.enter="addNewRow(index)"
@@ -1633,7 +1606,7 @@ onMounted(() => {
           <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
             ref="discountref"
-            type="text"
+            type="number"
             v-model="discount"
             @keydown.enter.prevent="handleEnterMainDiscount()"
             placeholder="Enter discount"
@@ -1741,8 +1714,10 @@ onMounted(() => {
           ref="discountref"
           type="text"
           v-model="discount"
+          inputmode="decimal"
           @keydown.enter.prevent="handleEnterMainDiscount()"
           placeholder="Enter discount"
+          pattern="^-?[0-9]*[.,]?[0-9]*$"
           />
         </div>
 

@@ -33,6 +33,10 @@ export default eventHandler(async (event) => {
         shopifyStoreName:user.companies[0].company.shopifyStoreName,
         shopifyAccessToken:user.companies[0].company.shopifyAccessToken,
         type:'USER',
+        address: user.companies[0].company.address || {},
+        gstin: user.companies[0].company.gstin || '',
+        accHolderName: user.companies[0].company.accHolderName || '',
+        upiId: user.companies[0].company.upiId || '',
         productInputs: (({ name, brand, category, subcategory, description }) =>
         ({ name, brand, category, subcategory, description }))(user.companies[0].company.productinput || {}),
 

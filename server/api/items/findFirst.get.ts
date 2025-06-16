@@ -11,7 +11,6 @@ export default defineEventHandler(async (event) => {
   try {
     const item = await prisma.item.findFirst({
       where: {
-       status: 'in_stock',
         companyId: companyId,
         variant: {
           sprice: Number(query.sPrice), 
@@ -25,13 +24,12 @@ export default defineEventHandler(async (event) => {
       select: {
     id: true,
     size: true,
+    qty: true,
     variant: {
       select: {
         id: true,
         sprice: true,
         name: true,
-        qty: true,
-        sizes: true,
         tax: true,
         discount: true,
         product: {
