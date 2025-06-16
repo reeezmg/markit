@@ -15,9 +15,6 @@ export async function findUserByEmail(email: string) {
                                     productinput: true,
                                     variantinput: true,
                                     address:true,
-                                    gstin:true,
-                                    accHolderName:true,
-                                    upiId:true
                                 }
                             } 
 
