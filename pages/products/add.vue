@@ -231,16 +231,16 @@ const handleAdd = async (e: Event) => {
     // }
 
 
-    const base64files = await Promise.all(
-    variants.value.flatMap((variant) =>
-      variant.images
-        .filter((file) => file.file instanceof File) // Only process if file.file is a File
-        .map(async (file) => {
-          const base64 = await prepareFileForApi(file.file);
-          return { base64, uuid: file.uuid };
-        })
-    )
-  );
+ const base64files = await Promise.all(
+  variants.value.flatMap((variant) =>
+    (variant.images || []) // ← fallback to empty array
+      .filter((file) => file.file instanceof File)
+      .map(async (file) => {
+        const base64 = await prepareFileForApi(file.file);
+        return { base64, uuid: file.uuid };
+      })
+  )
+);
 
   if (base64files.length > 0) {
     const awsres = await Promise.all(
@@ -440,15 +440,16 @@ const handleEdit = async (e: Event) => {
     // }
 
     const base64files = await Promise.all(
-      variants.value.flatMap((variant) =>
-        variant.images
-          .filter((file) => file.file instanceof File) // Only process if file.file is a File
-          .map(async (file) => {
-            const base64 = await prepareFileForApi(file.file);
-            return { base64, uuid: file.uuid };
-          })
-      )
-    );
+  variants.value.flatMap((variant) =>
+    (variant.images || []) // ← fallback to empty array
+      .filter((file) => file.file instanceof File)
+      .map(async (file) => {
+        const base64 = await prepareFileForApi(file.file);
+        return { base64, uuid: file.uuid };
+      })
+  )
+);
+
 
     if (base64files.length > 0) {
       const awsres = await Promise.all(
