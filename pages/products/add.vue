@@ -296,7 +296,7 @@ for (const variant of variants.value) {
       }))
     : [];
 
-  CreateVariant.mutateAsync({
+  await CreateVariant.mutateAsync({
     data: {
       name: variant.name || '',
       ...(variant.code && { code: variant.code }),
@@ -543,7 +543,7 @@ for (const variant of variants.value) {
   }
 
   // 5. Upsert the variant
-  UpsertVariant.mutateAsync({
+  await UpsertVariant.mutateAsync({
     where: { id: variant.id },
     create: {
       ...variantData,
@@ -1075,6 +1075,7 @@ const handleNewProduct = () => {
           
                       @update="updateVariant(index,$event)" />
                       <AddProductMedia
+                      v-if="variantInputs?.images"
                       ref="mediaRefs"
                       :editFile="selectedProduct && selectedProduct.variants[index]?.images"
                       :index="index" 

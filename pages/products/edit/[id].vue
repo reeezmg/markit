@@ -345,7 +345,7 @@ const handleEdit = async (e: Event) => {
   }
 
   // 5. Upsert the variant
-  UpsertVariant.mutateAsync({
+  await UpsertVariant.mutateAsync({
     where: { id: variant.id },
     create: {
       ...variantData,

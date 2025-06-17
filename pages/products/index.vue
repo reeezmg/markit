@@ -41,6 +41,11 @@ const columns = [
         sortable: true,
     },
     {
+        key: 'category',
+        label: 'Category',
+        sortable: true,
+    },
+    {
         key: 'variants',
         label: 'Variants',
         sortable: false,
@@ -103,6 +108,27 @@ const variantcolumns = [
 ];
 
 const selectedColumns = ref(columns);
+const STORAGE_KEY = 'selectedColumns';
+onMounted(() => {
+  const saved = localStorage.getItem(STORAGE_KEY);
+  if (saved) {
+    try {
+      const parsed = JSON.parse(saved);
+      // Ensure stored columns are still valid
+      selectedColumns.value = columns.filter(col =>
+        parsed.some((savedCol: any) => savedCol.key === col.key)
+      );
+    } catch (e) {
+      console.error('Failed to parse selectedColumns from localStorage:', e);
+    }
+  }
+});
+
+// Persist
+watch(selectedColumns, (newVal) => {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal));
+}, { deep: true });
+
 const columnsTable = computed(() =>
     columns.filter((column) => selectedColumns.value.includes(column)),
 );
@@ -244,6 +270,7 @@ const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
                 items: true,
             }
         },
+        category: true,
     },
     orderBy: {
         [sort.value.column]: sort.value.direction,
@@ -538,7 +565,7 @@ isAddPhotoModelOpen.value = false
                 v-model:sort="sort"
                 v-model:expand="expand"
                 :rows="products"
-                :columns="columnsTable"
+                :columns="selectedColumns"
                 :loading="isLoading"
                 sort-mode="manual"
                 class="w-full"
@@ -551,6 +578,10 @@ isAddPhotoModelOpen.value = false
                             icon="i-heroicons-ellipsis-horizontal-20-solid"
                         />
                     </UDropdown>
+                </template>
+
+                <template #category-data="{ row }">
+                    {{ row.category?.name }}
                 </template>
 
                 <template #variants-data="{ row }"> 
