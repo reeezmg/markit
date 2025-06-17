@@ -20,15 +20,15 @@ export default defineNuxtConfig({
     standalone: true
   },
 
-  nitro: {
-     preset: 'vercel',
-    esbuild: {
-        options: {
-          target: 'es2022'
-        }
-      },
-    
-  },
+nitro: {
+  preset: 'node', // ✅ suitable for Render/Node-style deploys
+  esbuild: {
+    options: {
+      target: 'es2022'
+    }
+  }
+},
+
 
   modules: [
       '@nuxt/ui',
