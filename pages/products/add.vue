@@ -487,6 +487,20 @@ const handleEdit = async (e: Event) => {
   },
   select: { id: true }
 });
+   // 1. Collect all variant IDs that need deletion
+const variantIdsToDelete = variants.value
+  .map((v) => v.id)
+  .filter((id): id is string => !!id);
+
+if (variantIdsToDelete.length > 0) {
+  await DeleteManyItem.mutateAsync({
+    where: {
+      variantId: { in: variantIdsToDelete },
+    },
+  });
+}
+
+
 for (const variant of variants.value) {
   // 1. Calculate tax
   let tax = 0;
@@ -500,8 +514,6 @@ for (const variant of variants.value) {
         : (categoryTax.value.taxBelowThreshold || 0);
     }
   }
-
-  console.log("variant", variant.items);
 
   // 2. Prepare Item creation
   const itemsToCreate = (variant.items && variant.items.length > 0)
@@ -532,15 +544,6 @@ for (const variant of variants.value) {
       connect: { id: useAuth().session.value?.companyId },
     },
   };
-
-  // 4. If updating, delete existing items
-  if (variant.id) {
-    await DeleteManyItem.mutateAsync({
-      where: {
-        variantId: variant.id,
-      },
-    });
-  }
 
   // 5. Upsert the variant
   await UpsertVariant.mutateAsync({
