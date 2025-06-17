@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useCreateProduct, useCreateVariant,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder,useCreateDistributorPayment, useUpdateDistributorCompany} from '~/lib/hooks';
+import { useCreateProduct,useCreatePurchaseOrder, useCreateVariant,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder,useCreateDistributorPayment, useUpdateDistributorCompany} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
 const { printLabel } = usePrint();
 const router = useRouter();
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
-
+const isAdd = ref(false);
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 
 interface ImageData {
@@ -61,6 +61,7 @@ const route = useRoute();
 const poId = route.query.poId as string;
 const CreateDistributorPayment = useCreateDistributorPayment();
 const CreateProduct = useCreateProduct();
+const CreatePurchaseOrder = useCreatePurchaseOrder();
 const CreateVariant = useCreateVariant();
 const UpdateProduct = useUpdateProduct();
 const UpsertVariant = useUpsertVariant();
@@ -800,8 +801,18 @@ const handleReset = async() => {
 }
 
 
-const handleSkip = () => {
- router.push(`/products`);
+const handleSkip = async() => {
+     isAdd.value =true
+    const res = await CreatePurchaseOrder.mutateAsync({
+        data:{
+            company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
+        },
+        select: { id: true }
+    })
+    router.push(`products/add?poId=${res?.id}`)
+    isAdd.value =false
 }
 const handleNewProduct = () => {
   isOpenAdd.value = true
