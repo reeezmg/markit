@@ -27,6 +27,7 @@ nitro: {
       target: 'es2022'
     }
   },
+  
 },
 
 

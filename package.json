@@ -11,7 +11,7 @@
         "postinstall": "nuxt prepare",
         "lint": "eslint .",
         "typecheck": "nuxt typecheck",
-        "start": "node .output/server/index.mjs"
+        "start": "nuxt start"
 
     },
     "dependencies": {
