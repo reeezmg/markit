@@ -26,7 +26,8 @@ nitro: {
     options: {
       target: 'es2022'
     }
-  }
+  },
+  host: '0.0.0.0' 
 },
 
 
