@@ -1,4 +1,5 @@
-import { enhance } from '../../../zenstack/enhance' 
+import enhanceModule from '@/zenstack/enhance';
+const { enhance } = enhanceModule;
 import { createEventHandler } from '@zenstackhq/server/nuxt';
 import { prisma } from '~/server/prisma';
 import { UserRole } from '@prisma/client';
