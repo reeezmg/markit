@@ -27,13 +27,8 @@ nitro: {
       target: 'es2022'
     }
   },
-  
 },
- externals: {
-    // Force this module to be included as external
-    // Prevent Nitro from tree-shaking it out
-    inline: ['async-function']
-  },
+
 
   modules: [
       '@nuxt/ui',
