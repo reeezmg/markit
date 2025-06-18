@@ -26,6 +26,3 @@ logs
 # VSC
 .history
 
-lib/hooks/*
-zenstack/
-package-lock.json
