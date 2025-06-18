@@ -27,5 +27,4 @@ logs
 .history
 
 lib/hooks/*
-zenstack/
 package-lock.json
