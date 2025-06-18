@@ -22,6 +22,15 @@ export default defineNuxtConfig({
 
 nitro: {
   preset: 'node', // ✅ suitable for Render/Node-style deploys
+  publicAssets: [
+      {
+        dir: 'node_modules/@zenstackhq/runtime/enhancements',
+        baseURL: '/node_modules/@zenstackhq/runtime/enhancements',
+      },
+    ],
+    externals: {
+      include: ['@zenstackhq/runtime'],
+    },
   esbuild: {
     options: {
       target: 'es2022'
