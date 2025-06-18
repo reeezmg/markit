@@ -19,7 +19,9 @@ export default defineNuxtConfig({
   output: {
     standalone: true
   },
-
+ externals: {
+    inline: ['@zenstackhq/runtime']
+  },
 nitro: {
   preset: 'node', // ✅ suitable for Render/Node-style deploys
   esbuild: {
