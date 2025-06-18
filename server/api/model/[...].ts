@@ -1,4 +1,4 @@
-import { enhance } from '@zenstackhq/runtime' 
+const { enhance } = await import(process.env.ENHANCE_PATH || '@zenstackhq/runtime');
 import { createEventHandler } from '@zenstackhq/server/nuxt';
 import { prisma } from '~/server/prisma';
 import { UserRole } from '@prisma/client';
