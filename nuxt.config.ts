@@ -29,7 +29,7 @@ nitro: {
       },
     ],
     externals: {
-      include: ['@zenstackhq/runtime'],
+      inline: ['@zenstackhq/runtime'],
     },
   esbuild: {
     options: {
