@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useCreateProduct,useCreatePurchaseOrder, useCreateVariant,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder,useCreateDistributorPayment, useUpdateDistributorCompany} from '~/lib/hooks';
+import { useQueryClient } from '@tanstack/vue-query'
+
+const queryClient = useQueryClient()
+import { useCreateProduct,useCreatePurchaseOrder, useCreateVariant,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
 const { printLabel } = usePrint();
@@ -10,9 +13,9 @@ const useAuth = () => useNuxtApp().$auth;
 const isAdd = ref(false);
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 
+
 interface ImageData {
     file: File;
-    uuid: string;
     uuid: string;
 }
 interface Item {
@@ -32,6 +35,7 @@ interface BarcodeItem {
 interface Variant {
   id:string;
   name: string;
+  key:string;
   code: string;
   qty: number;
   sprice: number;
@@ -59,13 +63,12 @@ interface Product {
 
 const route = useRoute();
 const poId = route.query.poId as string;
-const CreateDistributorPayment = useCreateDistributorPayment();
-const CreateProduct = useCreateProduct();
+
+const CreateProduct = useCreateProduct()
 const CreatePurchaseOrder = useCreatePurchaseOrder();
-const CreateVariant = useCreateVariant();
-const UpdateProduct = useUpdateProduct();
-const UpsertVariant = useUpsertVariant();
-const DeleteManyItem = useDeleteManyItem();
+const UpdateProduct = useUpdateProduct()
+
+const DeleteManyItem = useDeleteManyItem()
 const UpdateDistributorCompany = useUpdateDistributorCompany();
 const UpdatePurchaseOrder = useUpdatePurchaseOrder();
 const awsService = new AwsService();
@@ -81,6 +84,7 @@ const selectedProduct: Ref<Product> = ref({
   subcategoryId: '', 
   variants: [{
     id:'',
+    key:'',
     name: '',
     code: '',
     qty: 0,
@@ -123,6 +127,7 @@ const totalAmount = ref(0);
 
 const variants = ref<{ 
     id:string;
+    key:String;
     name: string; 
     code: string; 
     qty: number; 
@@ -133,7 +138,8 @@ const variants = ref<{
     items: { size: string; qty: number }[];
     images: ImageData[];
 }[]>([{ 
-    id:String(idCounter.value++),
+    id:'',
+    key:String(idCounter.value++),
     name: '', 
     code: '', 
     qty: 0, 
@@ -185,6 +191,13 @@ watch(isOpenAdd, (newVal) => {
     handleReset()
   }
 });
+watch(isOpenAdd, (newVal) => {
+  if (!newVal) {
+    handleReset()
+  }
+});
+
+
 
 
 const handleProductSelected = (product:any) => {
@@ -198,7 +211,8 @@ const handleDistributorValue = (data:any) => {
 };
 
 const handleAdd = async (e: Event) => {
-  isLoad.value = true
+
+  isLoad.value = false
   e.preventDefault();
   try {
 
@@ -250,81 +264,78 @@ const handleAdd = async (e: Event) => {
     );
 }
 
-  const productRes = await CreateProduct.mutateAsync({
-  data: {
-    name: name.value || '',
-    brand: brand.value || '',
-    description: description.value || '',
-    status: live.value ?? undefined,
-    company: {
-      connect: {
-        id: useAuth().session.value?.companyId,
-      },
-    },
-    purchaseorder: {
-      connect: { id: poId },
-    },
-    ...(category.value && {
-      category: { connect: { id: category.value } }
-    }),
-    ...(subcategory.value && {
-      subcategory: { connect: { id: subcategory.value } }
-    }),
-  },
-  select: { id: true }
-});
-console.log(variants.value)
-for (const variant of variants.value) {
-  let tax = 0;
-  if (categoryTax.value) {
-    if (categoryTax.value.taxType === 'FIXED') {
-      tax = categoryTax.value.fixedTax || 0;
-    } else if (categoryTax.value.taxType === 'VARIABLE') {
-      const threshold = categoryTax.value.thresholdAmount || 0;
-      tax = (variant.sprice || 0) > threshold 
-        ? (categoryTax.value.taxAboveThreshold || 0)
-        : (categoryTax.value.taxBelowThreshold || 0);
-    }
-  }
 
-  const itemsToCreate = (variant.items && variant.items.length > 0)
-    ? variant.items.map((size) => ({
-        size: size.size || null,
-        qty: size.qty || 0,
+    const productRes = await CreateProduct.mutateAsync({
+      data: {
+        name: name.value || '',
+        brand: brand.value || '',
+        description: description.value || '',
+        status: live.value ?? undefined,
         company: {
-          connect: { id: useAuth().session.value?.companyId },
+          connect: {
+            id: useAuth().session.value?.companyId,
+          },
+        },
+        purchaseorder: {
+          connect: { id: poId },
+        },
+        ...(category.value && {
+          category: { connect: { id: category.value } }
+        }),
+        ...(subcategory.value && {
+          subcategory: { connect: { id: subcategory.value } }
+        }),
+        variants: {
+          create: variants.value.map((variant) => {
+            let tax = 0;
+            if (categoryTax.value) {
+              if (categoryTax.value.taxType === 'FIXED') {
+                tax = categoryTax.value.fixedTax || 0;
+              } else if (categoryTax.value.taxType === 'VARIABLE') {
+                const threshold = categoryTax.value.thresholdAmount || 0;
+                tax = (variant.sprice || 0) > threshold
+                  ? (categoryTax.value.taxAboveThreshold || 0)
+                  : (categoryTax.value.taxBelowThreshold || 0);
+              }
+            }
+
+            const itemsToCreate = (variant.items && variant.items.length > 0)
+              ? variant.items.map((size) => ({
+                  size: size.size || null,
+                  qty: size.qty || 0,
+                  company: {
+                    connect: { id: useAuth().session.value?.companyId },
+                  },
+                }))
+              : [];
+
+            return {
+              name: variant.name || '',
+              ...(variant.code && { code: variant.code }),
+              sprice: variant.sprice || 0,
+              pprice: variant.pprice || 0,
+              dprice: variant.dprice || 0,
+              discount: variant.discount || 0,
+              status: true,
+              tax,
+              images: variant.images?.map((file) => file.uuid) || [],
+              company: {
+                connect: { id: useAuth().session.value?.companyId },
+              },
+              ...(itemsToCreate.length > 0 && {
+                items: {
+                  create: itemsToCreate,
+                }
+              })
+            };
+          })
         }
-      }))
-    : [];
-
-  await CreateVariant.mutateAsync({
-    data: {
-      name: variant.name || '',
-      ...(variant.code && { code: variant.code }),
-      sprice: variant.sprice || 0,
-      pprice: variant.pprice || 0,
-      dprice: variant.dprice || 0,
-      discount: variant.discount || 0,
-      status: true,
-      tax,
-      images: variant.images?.map((file) => file.uuid) || [],
-      product: {
-        connect: { id: productRes.id },
       },
-      company: {
-        connect: { id: useAuth().session.value?.companyId },
-      },
-      ...(itemsToCreate.length > 0 && {
-        items: {
-          create: itemsToCreate
-        }
-      })
-    }
-  });
-}
+      select: { id: true }
+    });
 
 
-      // console.log(resimage)
+       console.log(productRes)
       // await getItem(res?.variants)
 
     // const imageData = res?.images.map((item) => (
@@ -385,24 +396,30 @@ for (const variant of variants.value) {
       // console.log(files[0].file)
       // const resimage = await postImage(files[0].file)
 
-
-      handleReset()
-      
-
-      toast.add({
-        title: 'Product added!',
-        id: 'modal-success',
-      });
       
    
   } catch (err: any) {
     console.log(err.info?.message ?? err);
   }finally{
-    isLoad.value = false
     isOpenAdd.value = false
+    isLoad.value = false
   }
  
 };
+
+function calculateTax(variant) {
+  if (!categoryTax.value) return 0;
+
+  if (categoryTax.value.taxType === 'FIXED') {
+    return categoryTax.value.fixedTax || 0;
+  }
+
+  const threshold = categoryTax.value.thresholdAmount || 0;
+  return (variant.sprice || 0) > threshold
+    ? (categoryTax.value.taxAboveThreshold || 0)
+    : (categoryTax.value.taxBelowThreshold || 0);
+}
+
 
 
 const handleEdit = async (e: Event) => {
@@ -460,10 +477,19 @@ const handleEdit = async (e: Event) => {
     }
 
     const productId = selectedProduct.value.id;
+     const variantIdsToDelete = variants.value
+  .map((v) => v.id)
+  .filter((id): id is string => !!id);
 
+if (variantIdsToDelete.length > 0) {
+  await DeleteManyItem.mutateAsync({
+    where: {
+      variantId: { in: variantIdsToDelete },
+    },
+  });
+}
 
-    // Step 3: Update product and add new categories
-   const productRes = await UpdateProduct.mutateAsync({
+   const updatedProduct = UpdateProduct.mutateAsync({
   where: { id: productId },
   data: {
     name: name.value || '',
@@ -479,91 +505,74 @@ const handleEdit = async (e: Event) => {
     ...(subcategory.value && {
       subcategory: { connect: { id: subcategory.value } }
     }),
+
+    // 1. Delete variants not in the current list
     variants: {
       deleteMany: {
         id: {
-          notIn: variants.value.filter(v => v.id).map(v => v.id)
-        }
-      }
-    },
+          notIn: variants.value.filter(v => v.id).map(v => v.id),
+        },
+      },
+ 
+
+      // 2. Update existing variants
+      update: variants.value
+        .filter(v => v.id)
+        .map((v) => ({
+          where: { id: v.id },
+          data: {
+            name: v.name || '',
+            ...(v.code && { code: v.code }),
+            sprice: v.sprice || 0,
+            pprice: v.pprice || 0,
+            dprice: v.dprice || 0,
+            discount: v.discount || 0,
+            status: true,
+            images: v.images?.map((file) => file.uuid) || [],
+            tax: calculateTax(v), // your tax logic extracted
+            items: {
+              create: v.items.map(size => ({
+                size: size.size || null,
+                qty: size.qty || 0,
+                company: {
+                  connect: { id: useAuth().session.value?.companyId },
+                },
+              }))
+            },
+          },
+        })),
+
+      // 3. Create new variants
+      create: variants.value
+        .filter(v => !v.id)
+        .map((v) => ({
+          name: v.name || '',
+          ...(v.code && { code: v.code }),
+          sprice: v.sprice || 0,
+          pprice: v.pprice || 0,
+          dprice: v.dprice || 0,
+          discount: v.discount || 0,
+          status: true,
+          images: v.images?.map((file) => file.uuid) || [],
+          tax: calculateTax(v),
+          company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
+          items: {
+            create: v.items.map(size => ({
+              size: size.size || null,
+              qty: size.qty || 0,
+              company: {
+                connect: { id: useAuth().session.value?.companyId },
+              },
+            }))
+          }
+        }))
+    }
   },
   select: { id: true }
-});
-   // 1. Collect all variant IDs that need deletion
-const variantIdsToDelete = variants.value
-  .map((v) => v.id)
-  .filter((id): id is string => !!id);
+})
 
-if (variantIdsToDelete.length > 0) {
-  await DeleteManyItem.mutateAsync({
-    where: {
-      variantId: { in: variantIdsToDelete },
-    },
-  });
-}
-
-
-for (const variant of variants.value) {
-  // 1. Calculate tax
-  let tax = 0;
-  if (categoryTax.value) {
-    if (categoryTax.value.taxType === 'FIXED') {
-      tax = categoryTax.value.fixedTax || 0;
-    } else if (categoryTax.value.taxType === 'VARIABLE') {
-      const threshold = categoryTax.value.thresholdAmount || 0;
-      tax = (variant.sprice || 0) > threshold 
-        ? (categoryTax.value.taxAboveThreshold || 0)
-        : (categoryTax.value.taxBelowThreshold || 0);
-    }
-  }
-
-  // 2. Prepare Item creation
-  const itemsToCreate = (variant.items && variant.items.length > 0)
-    ? variant.items.map((size) => ({
-        size: size.size || null,
-        qty: size.qty || 0,
-        company: {
-          connect: { id: useAuth().session.value?.companyId },
-        }
-      }))
-    : [];
-
-  // 3. Common variant data
-  const variantData = {
-    name: variant.name || '',
-    ...(variant.code && { code: variant.code }),
-    sprice: variant.sprice || 0,
-    pprice: variant.pprice || 0,
-    dprice: variant.dprice || 0,
-    discount: variant.discount || 0,
-    status: true,
-    images: variant.images?.map((file) => file.uuid) || [],
-    tax,
-    product: {
-      connect: { id: productId },
-    },
-    company: {
-      connect: { id: useAuth().session.value?.companyId },
-    },
-  };
-
-  // 5. Upsert the variant
-  await UpsertVariant.mutateAsync({
-    where: { id: variant.id },
-    create: {
-      ...variantData,
-      items: {
-        create: itemsToCreate,
-      },
-    },
-    update: {
-      ...variantData,
-      items: {
-        create: itemsToCreate, // only create since we already deleted manually
-      },
-    },
-  });
-} 
     // console.log(res?.variants);
     // await getItem(res?.variants);
     handleReset();
@@ -590,7 +599,7 @@ const addVariant = () => {
  
     // Create a shallow copy of the variants array to ensure it's not read-only
     const newVariants = [...selectedProduct.value.variants];
-    newVariants.push({id:String(idCounter.value++), name: '', code:'',qty: 0, sprice: 0,pprice: 0,dprice: 0,discount: 0,  items: [], images: [] });
+    newVariants.push({id:'',key:String(idCounter.value++), name: '', code:'',qty: 0, sprice: 0,pprice: 0,dprice: 0,discount: 0,  items: [], images: [] });
     
     // Update the selectedProduct with the new variants array
     selectedProduct.value = {
@@ -618,34 +627,17 @@ const removeVariant = (index: number) => {
 };
 
 
-const { data: items, refetch: itemRefetch } = useFindUniquePurchaseOrder({
-  where: computed(() => ({ id: poId })), // Ensure poId is not undefined
-  select: {
-    id: true,
-    products: {
-      select: {
-        name: true,
-        brand:true,
-        variants: {
-          select: {
-            code: true,
-            name: true,
-            sprice: true,
-            dprice: true,
-            pprice:true,
-            items: {
-              select: {
-                barcode: true,
-                size: true,
-                qty:true
-              }
-            }
-          }
-        }
-      }
-    }
-  }
-});
+const {
+  data: items,
+  isLoading,
+  error,
+  refetch:itemRefetch,
+} = useFindUniquePurchaseOrder({
+  where: { id: poId },
+  include: {
+    products: { include: { variants: { include: { items: true } } } },
+  },
+},{enabled:false});
 
 watch(
   () => items.value, // Watch the fetched items
@@ -682,6 +674,8 @@ const printBarcodes = async() => {
       });
   }
 }
+
+
 const handleSave = async () => {
   isSave.value = true
   await itemRefetch()
@@ -756,6 +750,10 @@ if(distributorId.value){
 };
 
 
+
+
+
+
 const handleReset = async() => {
 
   clearInputs.value = true
@@ -766,6 +764,7 @@ const handleReset = async() => {
   mediaRefs.value.forEach((media:any) => media?.resetForm());
   variants.value = [{
     id:'',
+    key:'',
     name: '', 
     code: '', 
     qty: 0, 
@@ -788,6 +787,7 @@ const handleReset = async() => {
     subcategoryId: '',
     variants: [{
         id:'',
+        key:'',
         name: '', 
         code: '', 
         qty: 0, 
@@ -812,8 +812,9 @@ const handleSkip = async() => {
         },
         select: { id: true }
     })
-    router.push(`products/add?poId=${res?.id}`)
+   router.push(`/products/add?poId=${res?.id}`)
     isAdd.value =false
+    isOpen.value = false
 }
 const handleNewProduct = () => {
   isOpenAdd.value = true
@@ -835,8 +836,8 @@ const handleNewProduct = () => {
               <div  class="m-3 hidden md:block">
                     <UButton
                         @click="handleSave"
-                        :loading="isSave || isLoad"
                         color="green"
+                         :loading="isLoad && isSave"
                     >
                         Save Order
                     </UButton>
@@ -858,7 +859,7 @@ const handleNewProduct = () => {
               <div class="m-3">
                     <UButton
                         @click="handleSave"
-                        :loading="isSave || isLoad"
+                        :loading="isLoad"
                         color="green"
                     >
                         Save Order
@@ -882,7 +883,7 @@ const handleNewProduct = () => {
                 <div v-else class="mx-1 mt-3">
                     <UButton
                         @click="handleEdit"
-                        :loading="isLoad"
+                       :loading="isLoad"
                     >
                         Edit Product
                     </UButton>
@@ -913,7 +914,7 @@ const handleNewProduct = () => {
                 </UPageCard> -->
 
                
-                  <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.id" class="mb-3">
+                  <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.key" class="mb-3">
                     <UPageCard class="m-3" id="Variants">
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
@@ -966,7 +967,7 @@ const handleNewProduct = () => {
                     <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
-                          :loading="isLoad"
+                           :loading="isLoad"
                     >
                         Add Product
                     </UButton>
@@ -992,21 +993,22 @@ const handleNewProduct = () => {
             }
           }">
     
-        <BarcodeComponent v-if="barcodes.length" :barcodes="barcodes" />
+        <BarcodeComponent :barcodes="barcodes" />
+
       
           <template #header>
           <div class="flex items-end justify-end">
-          <UButton type="submit"  class="me-3 px-5" @click="printBarcodes">
+          <UButton type="submit"  class="me-3 px-5" @click="printBarcodes" :disabled="!barcodes.length">
                 Print
                 </UButton>
-                <UButton type="submit"  class="me-3 px-5" @click="handleSkip">
+                <UButton type="submit"  class="me-3 px-5" @click="handleSkip" :loading=isAdd>
                   Skip
                 </UButton>
               </div>
         </template>
         <template #footer>
           <div class="flex items-end justify-end">
-          <UButton type="submit"  class="me-3 px-5" @click="printBarcodes">
+          <UButton type="submit"  class="me-3 px-5" @click="printBarcodes" :disabled="!barcodes.length ">
                 Print
                 </UButton>
                 <UButton type="submit"  class="me-3 px-5" @click="handleSkip">
@@ -1029,7 +1031,7 @@ const handleNewProduct = () => {
                     <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
-                        :loading="isLoad"
+                         :loading="isLoad"
                     >
                         Add Product
                     </UButton>
@@ -1038,7 +1040,7 @@ const handleNewProduct = () => {
                     <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
-                        :loading="isLoad"
+                         :loading="isLoad"
                     >
                         Edit Product
                     </UButton>
@@ -1063,7 +1065,7 @@ const handleNewProduct = () => {
                  
           
 
-                <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.id" class="mb-3">
+                <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.key" class="mb-3">
                     <UPageCard class="m-3" id="Variants">
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
@@ -1116,7 +1118,7 @@ const handleNewProduct = () => {
                     <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
-                        :loading="isLoad"
+                         :loading="isLoad"
                     >
                         Add Product
                     </UButton>
@@ -1125,7 +1127,7 @@ const handleNewProduct = () => {
                     <UButton
                         class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
-                        :loading="isLoad"
+                         :loading="isLoad"
                     >
                         Edit Product
                     </UButton>

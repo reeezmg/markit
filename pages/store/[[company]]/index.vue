@@ -88,7 +88,7 @@ const getQueryArgs = () => {
 
   if (search.value) baseConditions.push({ name: { contains: search.value } })
   if (selectedCategory.value) baseConditions.push({ category: { id: selectedCategory.value.id } })
-  if (inStockOnly.value) baseConditions.push({ variants: { some: { items: { some: { status: 'in_stock' } } } }})
+  if (inStockOnly.value) baseConditions.push({ variants: { some: { items: { some: { qty: { gt: 0 } } } } }})
 
   // Price range filter - simplified
   const priceConditions = {
@@ -146,8 +146,11 @@ const getQueryArgs = () => {
         },
         include: {
           items: {
-            where: { status: 'in_stock' },
-            select: { id: true }
+            where: { 
+              qty: {
+                gt: 0
+              },
+             },
           }
         }
       },
@@ -185,7 +188,11 @@ const { data: trendingData } = useFindManyProduct({
       },
       include: {
         items: {
-          where: { status: 'in_stock' },
+          where: { 
+            qty: {
+                gt: 0
+              },
+           },
           select: { id: true }
         }
       }
@@ -237,33 +244,40 @@ const allProducts = computed(() => productsData.value || [])
 const trendingProducts = computed(() => trendingData.value || [])
 const allCategories = computed(() => categoriesData.value || [])
 
-watch(categoriesData, (NEWcategoriesData) => {
-    console.log(NEWcategoriesData);
-});
 
 // Enhanced flat variants with client-side sorting
 const flatVariants = computed(() => {
   let variants = allProducts.value.flatMap(product =>
-    product.variants.map((variant: any) => ({
-      ...variant,
-      product,
-      availableQty: variant.items?.length || 0,
-      isOutOfStock: (variant.qty || 0) <= 0,
-      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null,
-      discountPercentage: variant.discount || 
-        (variant.dprice && variant.sprice ? 
-          Math.round((1 - variant.dprice / variant.sprice) * 100) : 0)
-    }))
+    product.variants.map((variant: any) => {
+      const items = Array.isArray(variant.items) ? variant.items : []
+
+      // Sum qty from all items
+      const totalQty = items.reduce((sum, item) => sum + (item.qty || 0), 0)
+
+      return {
+        ...variant,
+        product,
+        qty: totalQty,
+        availableQty: items.length,
+        isOutOfStock: totalQty <= 0,
+        mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null,
+        discountPercentage:
+          variant.discount ??
+          (variant.dprice && variant.sprice
+            ? Math.round((1 - variant.dprice / variant.sprice) * 100)
+            : 0),
+      }
+    })
   ) || []
 
-  // Client-side filters
+  // Client-side discount filter
   variants = variants.filter(variant => {
     const discount = variant.discountPercentage
     return discount >= discountRange.value[0] && discount <= discountRange.value[1]
   })
 
-  // Client-side sorting
-  let sortedVariants = variants.slice()
+  // Sorting
+  const sortedVariants = [...variants]
   switch (sortOrder.value) {
     case 'price-low':
       sortedVariants.sort((a, b) => (a.dprice || a.sprice || 0) - (b.dprice || b.sprice || 0))
@@ -275,22 +289,40 @@ const flatVariants = computed(() => {
       sortedVariants.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   }
 
+  // Show in-stock first
   return [
     ...sortedVariants.filter(v => !v.isOutOfStock),
-    ...sortedVariants.filter(v => v.isOutOfStock)
+    ...sortedVariants.filter(v => v.isOutOfStock),
   ]
 })
 
+watch(flatVariants, (NEWflatVariants) => {
+    console.log(NEWflatVariants);
+});
+
+
 const trendingVariants = computed<VariantWithProduct[]>(() => {
-  return trendingProducts.value.flatMap(product => 
-    product.variants.filter(variant => (variant.qty || 0) > 0).map((variant: any) => ({
-      ...variant,
-      product,
-      availableQty: variant.items?.length || 0,
-      mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
-    }))
-  ) || []
+  return trendingProducts.value?.flatMap(product => {
+    return product.variants
+      .map((variant: any) => {
+        const items = Array.isArray(variant.items) ? variant.items : []
+
+        const totalQty = items.reduce((sum, item) => sum + (item.qty || 0), 0)
+
+        return {
+          ...variant,
+          product,
+          qty: totalQty,
+          availableQty: totalQty, // ✅ Set availableQty as total qty
+          mainImage: variant.images?.[0]
+            ? `https://images.markit.co.in/${variant.images[0]}`
+            : null,
+        }
+      })
+      .filter(variant => variant.availableQty > 0)
+  }) || []
 })
+
 
 // Load more function
 const loadMore = async () => {
@@ -360,7 +392,7 @@ const openQuickView = (variant: VariantWithProduct, selectedSize: string | null 
     images: variant.images?.map(img => `https://images.markit.co.in/${img}`) || [],
     currentImageIndex: 0,
     selectedSize,
-    availableSizes: parseSizes(variant.sizes)
+    availableSizes: parseSizes(variant.items)
   }
   showQuickView.value = true
   startImageRotation()
@@ -508,15 +540,18 @@ const handleIntersection = (index: number) => {
   })
 }
 
-const parseSizes = (sizes: unknown): { size: string; qty: number }[] => {
-  if (Array.isArray(sizes)) {
-    return sizes.map(size => ({
-      size: size.size || size,
-      qty: size.qty || 0
+const parseSizes = (items: unknown): { size: string; qty: number }[] => {
+  if (!Array.isArray(items)) return []
+
+  return items
+    .filter(item => typeof item === 'object' && item !== null && 'size' in item)
+    .map(item => ({
+      size: String((item as any).size || ''),
+      qty: Number((item as any).qty ?? 0),
     }))
-  }
-  return []
+    .filter(sizeObj => sizeObj.size !== '')
 }
+
 
 onMounted(() => {
   window.addEventListener('scroll', handleScroll)

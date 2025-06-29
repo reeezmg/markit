@@ -42,18 +42,22 @@ const discountPercentage = computed(() => {
 // Size handling
 type VariantSize = { size: string; qty: number }
 
-function parseSizes(sizes: unknown): VariantSize[] {
-  if (Array.isArray(sizes)) {
-    return sizes.map(size => ({
-      size: size.size || size,
-      qty: size.qty || (isOutOfStock.value ? 0 : 1)
+const parseSizes = (items: unknown): { size: string; qty: number }[] => {
+  if (!Array.isArray(items)) return []
+
+  return items
+    .filter(item => typeof item === 'object' && item !== null && 'size' in item)
+    .map(item => ({
+      size: String((item as any).size || ''),
+      qty: Number((item as any).qty ?? 0),
     }))
-  }
-  return []
+    .filter(sizeObj => sizeObj.size !== '')
 }
 
+
+
 const availableSizes = computed(() => {
-  return parseSizes(props.variant.sizes).filter(size => size.qty > 0)
+  return parseSizes(props.variant.items).filter(size => size.qty > 0)
 })
 
 // Navigation
@@ -76,7 +80,7 @@ const addToCart = async (e?: Event) => {
     return
   }
 
-  const sizes = parseSizes(props.variant.sizes)
+  const sizes = parseSizes(props.variant.items)
   const companyId = props.variant.product.company.id
   const qty = 1
 

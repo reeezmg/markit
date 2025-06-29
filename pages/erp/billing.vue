@@ -2,6 +2,30 @@
 <script setup>
 import { BillingAddClient } from '#components';
 import { useUpdateCompany,useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateManyItem } from '~/lib/hooks';
+import { ShapeStream, Shape } from '@electric-sql/client'
+
+// const config = useRuntimeConfig()
+
+// // 1. Create a stream
+// const stream = new ShapeStream({
+//   url: config.public.electricApiUrl,
+//   params: {
+//     table: 'products',
+//   }
+// })
+
+// const shape = new Shape(stream)
+
+// shape.subscribe(({ rows }) => {
+//    console.log('Stream update:', rows)
+// })
+
+
+
+
+// 4. Wait for rows to load
+// const resshape = await shape.rows
+// console.log('Initial rows:', resshape)
 
 
 const currentRequestIds = ref({}); // Tracks the latest request ID per index
@@ -21,6 +45,7 @@ const toast = useToast();
 const router = useRouter();
 const isTaxIncluded = ref(useAuth().session.value?.isTaxIncluded);
 const isBarcodeIncluded = ref(useAuth().session.value?.isBarcodeIncluded);
+const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
 
@@ -63,6 +88,7 @@ const nameInputs = ref([]);
 const qtyInputs = ref([]);
 const rateInputs = ref([]);
 const discountInputs = ref([]);
+const userInputs = ref([]);
 const taxInputs = ref([]);
 const discountref = ref();
 const paymentref = ref();
@@ -71,6 +97,7 @@ const savetokenref = ref();
 const addTokenRef = ref();
 const tokenInputs = ref(['']);
 const categoryStore = useCategoryStore()
+const userStore = useUserStore()
 
 const isPrint = ref(false);
 const isSaving = ref(false);
@@ -97,7 +124,7 @@ const selected = ref(null);
 
 
 const items = ref([
-  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: null, discount: null, tax: null, value: 0,sizes:{}, totalQty:0 ,return:false},
+  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: null, discount: null, tax: null, value: 0,sizes:{}, totalQty:0 ,return:false, userCode:null, userId:null, user:null},
 ]);
 
 
@@ -117,7 +144,7 @@ watch(
 );
 
 
-const columns = ref([
+const columns = computed(() => [
   { key: 'sn', label: 'S.N' },
   { key: 'barcode', label: 'BAR CODE' },
   { key: 'category', label: 'CATEGORY' },
@@ -125,10 +152,12 @@ const columns = ref([
   { key: 'rate', label: 'RATE' },
   { key: 'qty', label: 'QTY' },
   { key: 'discount', label: 'DISC %' },
+  ...(isUserTrackIncluded.value ? [{ key: 'user', label: 'User' }] : []),
   { key: 'tax', label: 'TAX%' },
   { key: 'value', label: 'VALUE' },
-
 ]);
+
+
 
 const resizableTable = ref(null); // Reference to the table element
 
@@ -179,6 +208,7 @@ watch(items, async () => {
         }
       }
       }
+
     }
 
     
@@ -265,7 +295,10 @@ const addNewRow = async (index) => {
     value: 0,
     sizes: {},
     totalQty: 0,
-    return:false
+    return:false,
+    userCode:null,
+    user:null,
+    userId:null
   });
 
   await nextTick();
@@ -655,6 +688,18 @@ const entriesData = items.value.map(item => {
     entry.category = { connect: { id: item.category[0].id } };
   }
 
+  if (item.userId) {
+    entry.userName = item.user
+    entry.companyUser = {
+      connect: {
+        companyId_userId: {
+          companyId: useAuth().session.value?.companyId,
+          userId: item.userId,
+        }
+      }
+    }
+  }
+
   return entry;
 });
 
@@ -982,7 +1027,7 @@ const handleTokenSave = async () => {
 
     // Optionally, you can reset the form or perform other actions after successful creation
     items.value = [
-    { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
+    { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0,userCode:null,userId:null,user:null }
     ];
     token.value = '';
     discount.value = 0;
@@ -1069,14 +1114,15 @@ const newBill = () => {
 
 };
 
-
 const moveFocus = (currentRowIndex, currentField, direction) => {
-  const fieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
+  const baseFieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
+  const fieldOrder = isUserTrackIncluded ? [...baseFieldOrder.slice(0, 6), 'user', 'tax'] : baseFieldOrder;
+
   const currentFieldIndex = fieldOrder.indexOf(currentField);
-  
+
   let nextRowIndex = currentRowIndex;
   let nextFieldIndex = currentFieldIndex;
-  
+
   switch (direction) {
     case 'up':
       nextRowIndex = Math.max(0, currentRowIndex - 1);
@@ -1091,12 +1137,12 @@ const moveFocus = (currentRowIndex, currentField, direction) => {
       nextFieldIndex = Math.min(fieldOrder.length - 1, currentFieldIndex + 1);
       break;
   }
-  
+
   // If we changed rows, keep the same column
   if (direction === 'up' || direction === 'down') {
     nextFieldIndex = currentFieldIndex;
   }
-  
+
   focusInput(nextRowIndex, fieldOrder[nextFieldIndex]);
 };
 
@@ -1105,46 +1151,36 @@ const focusInput = async (rowIndex, field) => {
   try {
     switch (field) {
       case 'barcode':
-        if (barcodeInputs.value[rowIndex]?.$el) {
-          barcodeInputs.value[rowIndex].$el.querySelector('input')?.select();
-        }
+        barcodeInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
       case 'category':
-      const td = categoryInputs.value[rowIndex]
-      const button = td?.querySelector('button')
-      button.focus()                                            
+        categoryInputs.value[rowIndex]?.querySelector('button')?.focus();
         break;
       case 'name':
-        if (nameInputs.value[rowIndex]?.$el) {
-          nameInputs.value[rowIndex].$el.querySelector('input')?.select();
-        }
+        nameInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
       case 'qty':
-        if (qtyInputs.value[rowIndex]?.$el) {
-          qtyInputs.value[rowIndex].$el.querySelector('input')?.select();
-        }
+        qtyInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
       case 'rate':
-        if (rateInputs.value[rowIndex]?.$el) {
-          rateInputs.value[rowIndex].$el.querySelector('input')?.select();
-        }
+        rateInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
       case 'discount':
-        if (discountInputs.value[rowIndex]?.$el) {
-          discountInputs.value[rowIndex].$el.querySelector('input')?.select();
+        discountInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
+        break;
+      case 'user':
+        if (isUserTrackIncluded) {
+          userInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         }
         break;
       case 'tax':
-        if (taxInputs.value[rowIndex]?.$el) {
-         taxInputs.value[rowIndex].$el.querySelector('input')?.select();
-        }
+        taxInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
     }
   } catch (e) {
     console.error('Error focusing input:', e);
   }
 };
-
 const movecatgeory = (rowIndex) => {
   const td = categoryInputs.value[rowIndex];
   if (!td) return;
@@ -1284,6 +1320,34 @@ onMounted(() => {
   });
 });
 
+async function updateUserDetails(index, user) {
+if(!user) return
+  const userdetails = userStore.getuserByShortCut(user)
+
+  if (userdetails) {
+    console.log(userdetails)
+    items.value[index].userCode = user
+    items.value[index].user = userdetails.name || null
+    items.value[index].userId = userdetails.id || null
+
+  } else {
+    items.value[index].user = null // Optional: clear name if user not found
+     toast.add({
+    title: 'user code invalid!',
+    color: 'red',
+  });
+  }
+}
+
+const handleDiscountEnter = (index) => {
+  if (isUserTrackIncluded.value) {
+    moveFocus(index, 'discount', 'right');
+  } else {
+    addNewRow(index);
+  }
+};
+
+
 </script>
 
 
@@ -1373,7 +1437,7 @@ onMounted(() => {
         @blur="fetchItemData(row.barcode, index)"
         @focus="selectAllText(index)"
         @keyup.delete="removeRow($event, row.barcode, index)"
-          enterkeyhint="enter"
+        enterkeyhint="enter"
         @keyup.enter.prevent="handleEnterBarcode(row.barcode, index)"
         @keyup.tab.prevent="handleEnterBarcode(row.barcode, index)"
       />
@@ -1550,13 +1614,27 @@ onMounted(() => {
         @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
       />
     </td>
-    <td class="py-1 whitespace-nowrap">
+   <td class="py-1 whitespace-nowrap">
+    <UInput 
+      v-model="row.discount" 
+      type="number"
+      ref="discountInputs" 
+      size="sm"  
+      @keydown.enter="handleDiscountEnter(index)"
+      @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
+      @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
+      @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
+      @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
+    />
+  </td>
+
+    <td class="py-1 whitespace-nowrap" v-if="isUserTrackIncluded">
       <UInput 
-        v-model="row.discount" 
-        type="number"
-        ref="discountInputs" 
+        v-model="row.user" 
+        type="text"
+        ref="userInputs" 
         size="sm"  
-        @keydown.enter="addNewRow(index)"
+        @keydown.enter="addNewRow(index); updateUserDetails(index,row.user)"
         @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
         @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
         @keydown.left.prevent="moveFocus(index, 'discount', 'left')"

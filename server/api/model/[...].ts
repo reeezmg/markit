@@ -17,8 +17,8 @@ export default createEventHandler({
                     : undefined,
             },
             {
-                transactionTimeout: 30000, 
-                transactionMaxWait: 30000,
+                transactionTimeout: 3000000, 
+                transactionMaxWait: 3000000,
             }
         );
     },

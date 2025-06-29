@@ -134,6 +134,10 @@ const metadata = {
                     name: "isBarcodeIncluded",
                     type: "Boolean",
                     attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, isUserTrackIncluded: {
+                    name: "isUserTrackIncluded",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
                 }, users: {
                     name: "users",
                     type: "CompanyUser",
@@ -674,21 +678,9 @@ const metadata = {
                 }, email: {
                     name: "email",
                     type: "String",
-                }, name: {
-                    name: "name",
-                    type: "String",
-                    isOptional: true,
                 }, password: {
                     name: "password",
                     type: "String",
-                }, status: {
-                    name: "status",
-                    type: "Boolean",
-                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
-                }, role: {
-                    name: "role",
-                    type: "UserRole",
-                    attributes: [{ "name": "@default", "args": [] }],
                 }, companies: {
                     name: "companies",
                     type: "CompanyUser",
@@ -914,6 +906,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'pipeline',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -997,6 +990,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'categories',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -1049,6 +1043,11 @@ const metadata = {
                     name: "taxAboveThreshold",
                     type: "Float",
                     isOptional: true,
+                }, writeId: {
+                    name: "writeId",
+                    type: "String",
+                    isOptional: true,
+                    attributes: [{ "name": "@default", "args": [] }],
                 },
             }, uniqueConstraints: {
                 id: {
@@ -1093,6 +1092,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'subcategories',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -1119,6 +1119,11 @@ const metadata = {
                     isOptional: true,
                     isForeignKey: true,
                     relationField: 'category',
+                }, writeId: {
+                    name: "writeId",
+                    type: "String",
+                    isOptional: true,
+                    attributes: [{ "name": "@default", "args": [] }],
                 },
             }, uniqueConstraints: {
                 id: {
@@ -1221,6 +1226,11 @@ const metadata = {
                     type: "String",
                     isForeignKey: true,
                     relationField: 'purchaseorder',
+                }, writeId: {
+                    name: "writeId",
+                    type: "String",
+                    isOptional: true,
+                    attributes: [{ "name": "@default", "args": [] }],
                 },
             }, uniqueConstraints: {
                 id: {
@@ -1326,6 +1336,11 @@ const metadata = {
                     name: "sold",
                     type: "Int",
                     isOptional: true,
+                }, writeId: {
+                    name: "writeId",
+                    type: "String",
+                    isOptional: true,
+                    attributes: [{ "name": "@default", "args": [] }],
                 },
             }, uniqueConstraints: {
                 id: {
@@ -1394,6 +1409,11 @@ const metadata = {
                     type: "String",
                     isForeignKey: true,
                     relationField: 'company',
+                }, writeId: {
+                    name: "writeId",
+                    type: "String",
+                    isOptional: true,
+                    attributes: [{ "name": "@default", "args": [] }],
                 },
             }, uniqueConstraints: {
                 id: {
@@ -1499,6 +1519,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'bills',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -1597,6 +1618,31 @@ const metadata = {
                     name: "size",
                     type: "String",
                     isOptional: true,
+                }, userName: {
+                    name: "userName",
+                    type: "String",
+                    isOptional: true,
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                    isOptional: true,
+                    isForeignKey: true,
+                    relationField: 'companyUser',
+                }, userId: {
+                    name: "userId",
+                    type: "String",
+                    isOptional: true,
+                    isForeignKey: true,
+                    relationField: 'companyUser',
+                }, companyUser: {
+                    name: "companyUser",
+                    type: "CompanyUser",
+                    isDataModel: true,
+                    isOptional: true,
+                    backLink: 'entries',
+                    isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
+                    foreignKeyMapping: { "companyId": "companyId", "userId": "userId" },
                 }, variant: {
                     name: "variant",
                     type: "Variant",
@@ -1694,6 +1740,7 @@ const metadata = {
                     isOptional: true,
                     backLink: 'billHistories',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "billId" },
                 }, billId: {
                     name: "billId",
@@ -1740,6 +1787,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'accounts',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -1773,6 +1821,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'tokenbills',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -1860,6 +1909,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'expenseCategories',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -1941,6 +1991,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'expenses',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -1998,6 +2049,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'payment',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -2099,6 +2151,7 @@ const metadata = {
                     isOptional: true,
                     backLink: 'address',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -2258,6 +2311,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'users',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, userId: {
                     name: "userId",
@@ -2271,7 +2325,30 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'companies',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "userId" },
+                }, code: {
+                    name: "code",
+                    type: "String",
+                    isOptional: true,
+                }, name: {
+                    name: "name",
+                    type: "String",
+                    isOptional: true,
+                }, role: {
+                    name: "role",
+                    type: "UserRole",
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, status: {
+                    name: "status",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, entries: {
+                    name: "entries",
+                    type: "Entry",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'companyUser',
                 },
             }, uniqueConstraints: {
                 companyId_userId: {
@@ -2294,6 +2371,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'clients',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, clientId: {
                     name: "clientId",
@@ -2307,6 +2385,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'companies',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "clientId" },
                 },
             }, uniqueConstraints: {
@@ -2506,6 +2585,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'notifications',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -2606,6 +2686,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'promoCodes',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, companyId: {
                     name: "companyId",
@@ -2737,6 +2818,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'cart',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "clientId" },
                 }, company: {
                     name: "company",
@@ -2744,6 +2826,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'carts',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, cart: {
                     name: "cart",
@@ -2821,6 +2904,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'likeCompanies',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "clientId" },
                 }, company: {
                     name: "company",
@@ -2828,6 +2912,7 @@ const metadata = {
                     isDataModel: true,
                     backLink: 'likeCompanies',
                     isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "companyId" },
                 }, like: {
                     name: "like",
@@ -2851,12 +2936,15 @@ const metadata = {
     },
     deleteCascade: {
         distributorCompany: ['PurchaseOrder', 'DistributorPayment', 'DistributorCredit'],
-        company: ['DistributorCompany', 'PurchaseOrder', 'Product', 'Variant', 'Item'],
+        company: ['DistributorCompany', 'PurchaseOrder', 'Pipeline', 'Category', 'Subcategory', 'Product', 'Variant', 'Item', 'Bill', 'Account', 'TokenEntry', 'ExpenseCategory', 'Expense', 'Payment', 'Address', 'CompanyUser', 'CompanyClient', 'Notification', 'PromoCode', 'CartCompanyClient', 'LikeCompanyClient'],
         distributor: ['DistributorCompany'],
         purchaseOrder: ['Product'],
+        user: ['CompanyUser'],
+        client: ['CompanyClient', 'CartCompanyClient', 'LikeCompanyClient'],
         product: ['Variant'],
         variant: ['Item', 'VariantSizeBarcode'],
-        bill: ['Entry'],
+        bill: ['Entry', 'BillHistory'],
+        companyUser: ['Entry'],
 
     },
     authModel: 'User'

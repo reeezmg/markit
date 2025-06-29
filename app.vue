@@ -5,10 +5,12 @@ const config = useRuntimeConfig();
 // Provide tanstack-query context
 // Use an absolute endpoint so server-side fetch works too
 const categoryStore = useCategoryStore()
+const userStore = useUserStore()
 
 onMounted(async () => {
   await categoryStore.fetchAllCategories()
-  console.log('All Categories:', categoryStore.categories)
+  await userStore.fetchAllUsers()
+  console.log('All Categories:', userStore.users)
 })
 
 onMounted(() => {

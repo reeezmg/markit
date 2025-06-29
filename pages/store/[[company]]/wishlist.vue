@@ -43,31 +43,44 @@ const {
     }
   })).value,
   include: {
+    items:true,
     product: {
       include: {
         company: true,
-        variants: { select: { id: true } }
+        variants: { 
+          select:{
+            id:true
+          }
+        }
       }
     },
   }
 })
+const processVariant = (variant: any) => {
+  console.log(variant)
+  const items = Array.isArray(variant.items) ? variant.items : []
+  const totalQty = items.reduce((sum, item) => sum + (item.qty || 0), 0)
 
-const processVariant = (variant: any) => ({
-  ...variant,
-  product: {
-    id: variant.product.id,
-    name: variant.product.name,
-    description: variant.product.description,
-    company: variant.product.company,
-    variants: variant.product.variants
-  },
-  availableQty: variant.qty || 0,
-  isOutOfStock: (variant.qty || 0) <= 0,
-  mainImage: variant.images?.[0] ? `https://images.markit.co.in/${variant.images[0]}` : null
-})
+  return {
+    ...variant,
+    product: {
+      id: variant.product?.id,
+      name: variant.product?.name,
+      description: variant.product?.description,
+      company: variant.product?.company,
+      variants: variant.product?.variants || [],
+    },
+    availableQty: totalQty,
+    isOutOfStock: totalQty <= 0,
+    mainImage: variant.images?.[0]
+      ? `https://images.markit.co.in/${variant.images[0]}`
+      : null,
+  }
+}
 
 const processedVariants = computed(() => {
   if (!variants.value) return []
+
   return variants.value
     .filter(variant => !locallyRemovedIds.value.has(variant.id))
     .map(processVariant)
@@ -170,15 +183,7 @@ watch(
           />
         </div>
 
-        <!-- Page Header -->
-        <div class="mb-8 text-center">
-          <h1 class="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-2">
-            Your Wishlist
-          </h1>
-          <p class="text-gray-500 dark:text-gray-400 max-w-2xl mx-auto">
-            Saved items you love
-          </p>
-        </div>
+    
 
         <!-- Loading State -->
         <div v-if="isLoading" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 sm:gap-6">

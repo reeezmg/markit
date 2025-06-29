@@ -2,12 +2,14 @@
 import { Switch } from '@headlessui/vue';
 import { hash } from '~/composables/hash';
 import {
-    useFindManyUser,
+    useFindManyCompanyUser,
     useUpdateUser,
     useDeleteUser,
     useUpdateManyUser,
+    useUpdateCompanyUser,
     useCreateUser,
-    useFindUniqueUser
+    useFindUniqueUser,
+    useFindFirstCompanyUser
 } from '~/lib/hooks';
 const toast = useToast();
 
@@ -15,10 +17,13 @@ const CreateUser = useCreateUser();
 const UpdateUser = useUpdateUser();
 const DeleteUser = useDeleteUser();
 const UpdateManyUser = useUpdateManyUser();
+const UpdateCompanyUser = useUpdateCompanyUser();
 const router = useRouter();
 const route = useRoute();
 const isOpen = ref(false);
+const disableSave = ref(true)
 const useAuth = () => useNuxtApp().$auth;
+
 // Columns
 const columns = [
     {
@@ -29,6 +34,11 @@ const columns = [
     {
         key: 'email',
         label: 'email',
+        sortable: true,
+    },
+    {
+        key: 'code',
+        label: 'Code',
         sortable: true,
     },
     {
@@ -133,7 +143,9 @@ const formData = reactive({
     email: '',
     name: '',
     role: { label: '', value: '' },
+    code:''
 });
+
 
 const options = [
     { label: 'Admin', value: 'admin' },
@@ -150,6 +162,22 @@ const { data: existingUser, refetch: refetchUser } = useFindUniqueUser(
   () => ({ where: { email: formData.email } }),
   { enabled: false }
 );
+
+const {data:existingCode} = useFindFirstCompanyUser({
+    where: computed(() => ({
+        code: formData.code,
+        companyId:useAuth().session.value?.companyId!  
+    })),
+})
+
+watch(existingCode, (newexistingCode) => {
+  if(formData.code && newexistingCode){
+    disableSave.value = true
+  }else{
+    disableSave.value = false
+  }
+});
+
 
 
 // Pagination
@@ -182,50 +210,51 @@ const deleteUser = async (id: string) => {
     await authLogout();
   }
 };
-
-
-// Data
 const queryArgs = computed(() => {
-    const selectedStatusCondition =
-        selectedStatus.value.length > 0
-            ? {
-                  OR: selectedStatus.value.map((item) => {
-                      return { status: item.value };
-                  }),
-              }
-            : {};
+  const selectedStatusCondition =
+    selectedStatus.value.length > 0
+      ? {
+          OR: selectedStatus.value.map((item) => ({
+            status: item.value, // Correct: status is on CompanyUser
+          })),
+        }
+      : {};
 
-    return {
-        where: {
-            AND: [
-                {
-                    companies: {
-                        some: { companyId: useAuth().session.value?.companyId },
-                    },
-                },
-                { name: { contains: search.value } },
-                selectedStatusCondition,
-            ],
+  return {
+    where: {
+      AND: [
+        {
+          companyId: useAuth().session.value?.companyId,
         },
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
+        {
+          name: {
+            contains: search.value,
+            mode: 'insensitive',
+          },
         },
-        skip: (page.value - 1) * pageCount.value,
-        take: pageCount.value,
-        include: {
-            companies: {
-                include: {
-                    company: true,
-                },
-            },
-        },
-    };
+        selectedStatusCondition,
+      ],
+    },
+    include: {
+      user: true,
+      company: true,
+    },
+    orderBy: {
+      user: {
+        [sort.value.column]: sort.value.direction,
+      },
+    },
+    skip: (page.value - 1) * pageCount.value,
+    take: pageCount.value,
+  };
 });
-const { data: users, isLoading, error, refetch } = useFindManyUser(queryArgs);
+
+const { data: users, isLoading, error, refetch } = useFindManyCompanyUser(queryArgs);
+
 
 watch(users, () => {
     pageTotal.value = users.value ? users.value.length : 0;
-    console.log(users)
+    console.log(users.value)
 });
 
 async function multiToggle(ids, status: boolean) {
@@ -261,24 +290,32 @@ const handleSubmit = async (e: Event) => {
     try {
         const { data } = await refetchUser();
          if (data) {
-         await UpdateUser.mutateAsync({
-                where: { id:data.id },
-                data: {
-                name: formData.name || '',
+        await UpdateUser.mutateAsync({
+            where: { id: data.id },
+            data: {
                 companies: {
-                    create: [{ company: { connect: { id: useAuth().session.value?.companyId} } }],
+                    create: [{
+                        company: {
+                            connect: { id: useAuth().session.value?.companyId },
+                            },
+                        name: formData.name, 
+                        code: formData.code, 
+                        role: formData.role.value, 
+                    }],
                 },
             },
             });
+
         } else {
             const res = await CreateUser.mutateAsync({
             data: {
-                name: formData.name || '',
                 email: formData.email || '',
                 password: await hash(formData.email),
-                role: formData.role.value,
                 companies: {
                     create: {
+                        name: formData.name, 
+                        code: formData.code, 
+                        role: formData.role.value, 
                         company: {
                             connect: {
                                 id: useAuth().session.value?.companyId,
@@ -297,6 +334,10 @@ const handleSubmit = async (e: Event) => {
         isOpen.value = false;
     } catch (err: any) {
         console.log(err.info?.message ?? err);
+         toast.add({
+            title: 'Unable to add user !',
+            description: `${err.info?.message ?? err}`
+        });
     }
 };
 </script>
@@ -428,6 +469,10 @@ const handleSubmit = async (e: Event) => {
                             icon="i-heroicons-ellipsis-horizontal-20-solid"
                         />
                     </UDropdown>
+                </template>
+            
+                <template #email-data="{ row }">
+                      <div>{{ row.user.email }}</div>
                 </template>
 
                 <template #status-data="{ row }">
@@ -570,12 +615,21 @@ const handleSubmit = async (e: Event) => {
                     />
                 </UFormGroup>
 
+                <UFormGroup name="selectMenu" label="code" class="mb-5" :error="(disableSave && formData.code) && 'Code is already taken'">
+                    <UInput
+                        v-model="formData.code"
+                        type="text"
+                        placeholder="Enter code"
+                    />
+                </UFormGroup>
+
                 <template #footer>
                     <UButton
                         type="submit"
                         block
                         class="mb-5"
                         @click="handleSubmit"
+                        :disabled = "disableSave"
                     >
                         Continue
                     </UButton>

@@ -3,6 +3,7 @@
 import { z } from 'zod';
 import type { FormError } from '#ui/types';
 import { storeToRefs } from 'pinia';
+
 // import type { Bill, Company, Variant, Address, Client } from '~/types'; // Adjust import path as needed
 import {
   useCreateBill,
@@ -10,6 +11,7 @@ import {
   useUpdateAddress,
   useFindFirstCompany,
   useUpdateVariant,
+  useUpdateItem,
   useCreateAddress
 } from '~/lib/hooks';
 
@@ -19,6 +21,7 @@ import type { PaymentStatus, paymentType,OrderStatus } from '@prisma/client';
 interface CartItem {
   id: string;
   variantId: string;
+  itemId: string;
   pName: string;
   vName: string;
   size: string;
@@ -58,6 +61,7 @@ const CreateBill = useCreateBill();
 const UpdateAddress = useUpdateAddress();
 const CreateAddress = useCreateAddress();
 const UpdateVariant = useUpdateVariant();
+const UpdateItem = useUpdateItem();
 const CreateProduct = useCreateProduct();
 const useClientAuth = () => useNuxtApp().$authClient;
 const toast = useToast();
@@ -65,7 +69,7 @@ const cartStore = useCartStore();
 const router = useRouter();
 const route = useRoute();
 const { items: cart } = storeToRefs(cartStore);
-
+const paymentLoading = ref(false)
 // Refs with proper typing
 const activeAddressId = ref<string>('');
 const total = ref<number>(0);
@@ -89,7 +93,6 @@ const priceValue = (data: PriceData) => {
   total.value = data.total;
   discount.value = data.discount;
   subtotal.value = data.subtotal;
-  paymentMethod.value = data.paymentMethod;
   type.value = data.checkoutOption;
   bookingDate.value = data.bookingDate;
   deliveryFees.value = data.deliveryFees;
@@ -140,43 +143,8 @@ const handleSubmit = async (e?: Event) => {
 
   try {
     console.log('items',items)
-    const updatePromises = items.value.map(async (item) => {
-      // For items with size information
-      if (item.size !== null && item.sizes !== null) {
-        const updatedQty = item.totalQty - item.qty;
-        const updatedSizes = item.sizes.map(sizeData => 
-          sizeData.size === item.size
-            ? { ...sizeData, qty: Math.max(sizeData.qty - item.qty, -1) }
-            : sizeData
-        );
-
-        const selectedSize = updatedSizes.find(size => size.size === item.size);
-        if (updatedQty < 0 || (selectedSize?.qty ?? -1) < 0) {
-          toast.add({title:'Out of Stock', id: 'modal-error',color:'red'})
-          throw new Error(`${item.pName} - ${item.vName} (Size: ${item.size}) is out of stock`);
-        }
-
-        return UpdateVariant.mutateAsync({
-          where: { id: item.variantId },
-          data: { sizes: updatedSizes }, // Only update sizes for sized items
-        });
-      }
-      // For non-sized items
-      else {
-        const updatedQty = item.totalQty - item.qty;
-        if (updatedQty < 0) {
-          toast.add({title:'Out of Stock', id: 'modal-error',color:'red'})
-          throw new Error(`${item.pName} - ${item.vName} is out of stock`);
-        }
-
-        return UpdateVariant.mutateAsync({
-          where: { id: item.variantId },
-          data: { qty: updatedQty }, // Only update quantity for non-sized items
-        });
-      }
-    });
-
-    await Promise.all(updatePromises);
+   
+        
 
     // Create the bill data with proper typing
     const billData = {
@@ -210,7 +178,7 @@ const handleSubmit = async (e?: Event) => {
           ...(item.size && { size: item.size }),
           rate: item.value,
           discount: item.discount,
-          tax: item.tax,
+          tax: item.tax,         
           value: item.value,
           ...(item.categoryId && { category: { connect: { id: item.categoryId } } }),
           ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
@@ -219,6 +187,28 @@ const handleSubmit = async (e?: Event) => {
     };
     
     const data = await CreateBill.mutateAsync({ data: billData });
+
+    
+         for (const item of items.value) {
+          if (item.variantId) {
+              UpdateVariant.mutateAsync({
+                where: { id: item.variantId },
+                data: { 
+                  sold: { increment: item.qty },
+                }
+              }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
+          
+    
+  
+              UpdateItem.mutateAsync({
+              where: { id: item.itemId },
+              data: { 
+                qty: { decrement: item.qty },
+              }
+              }).catch(error => console.error(`Error updating item ${item.id}`, error))
+            }
+        }
+
     
     if (!data) {
       throw new Error('Failed to create bill: no data returned');
@@ -249,6 +239,7 @@ const handleSubmit = async (e?: Event) => {
 
 
 const initiatePayment = async (method: string) => {
+  paymentLoading.value = true
   try {
     paymentMethod.value = method;
 
@@ -295,6 +286,8 @@ const initiatePayment = async (method: string) => {
   } catch (err: unknown) {
     console.error('Payment error:', err instanceof Error ? err.message : err);
     toast.add({ title: 'Payment failed', color: 'red' });
+  } finally{
+    paymentLoading.value = false
   }
 };
 </script>
@@ -333,16 +326,18 @@ const initiatePayment = async (method: string) => {
                         color="blue" 
                         icon="i-mdi-qrcode-scan" 
                         @click="handleSubmit"
+                        :loading = "paymentLoading"
                     >
                         Book Now
                     </UButton>
 
-                    <template v-if="paymentMethod !== 'COD'">
+                    <div v-else>
                         <UButton 
                             class="w-full flex items-center justify-center rounded-md border border-transparent px-4 py-3 text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2" 
                             color="blue" 
                             icon="i-mdi-qrcode-scan" 
                             @click="() => initiatePayment('upi')"
+                            :loading = "paymentLoading"
                         >
                             Pay with UPI
                         </UButton>
@@ -352,20 +347,22 @@ const initiatePayment = async (method: string) => {
                             color="green" 
                             icon="i-tabler-credit-card"
                             @click="() => initiatePayment('card')"
+                            :loading = "paymentLoading"
                         >
                             Pay with Credit/Debit Card
                         </UButton>
                         <UDivider class="py-2" label="OR" />
-                    </template>
-
-                    <UButton 
-                        class="w-full flex items-center justify-center rounded-md border border-transparent px-4 py-3 text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 mt-2" 
+                        <UButton 
+                        class="w-full flex items-center justify-center rounded-md border border-transparent px-4 py-3 text-base font-medium shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2" 
                         color="gray" 
                         icon="i-mdi-cash"
                         @click="() => initiatePayment('COD')"
                     >
                         Cash on Delivery (COD)
                     </UButton>
+                    </div>
+
+                    
                 </div>
             </div>
         </div>

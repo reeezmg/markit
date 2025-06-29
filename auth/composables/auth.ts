@@ -123,6 +123,18 @@ export const updateIsBarcodeIncluded = async (
     });
     await useAuth().updateSession();
 };
+export const updateIsUserTrackIncluded = async (
+    isUserTrackIncluded: boolean,
+    
+) => {
+    await $fetch('/api/auth/changeIncludeUserTrack', {
+        method: 'PUT',
+        body: {
+            isUserTrackIncluded
+        },
+    });
+    await useAuth().updateSession();
+};
 
 export const updateSession = async (
     productinputData: any,

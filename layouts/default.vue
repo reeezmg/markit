@@ -52,14 +52,6 @@ const links = computed(() => {
                     },
                 },
                 {
-                    label: 'Reports',
-                    to: `/reports/sales`,
-                    tooltip: {
-                        text: 'ERP',
-                        shortcuts: ['E', 'R'],
-                    },
-                },
-                {
                     label: 'Accounts',
                     to: `/erp/accounts`,
                     tooltip: {
@@ -67,6 +59,30 @@ const links = computed(() => {
                         shortcuts: ['E', 'A'],
                     },
                 },
+            ],
+        },
+        {   
+            id: 'reports',     
+            label: 'Reports',
+            to: '/reports',
+            icon: 'i-heroicons-book-open',
+            children: [
+                  {
+                    label: 'Sales',
+                    to: `/reports/sales`,
+                    tooltip: {
+                        text: 'Reports',
+                        shortcuts: ['R', 'S'],
+                    },
+                    },
+                  {
+                    label: 'Users',
+                    to: `/reports/users`,
+                    tooltip: {
+                        text: 'Reports',
+                        shortcuts: ['R', 'U'],
+                    },
+                    },
             ],
         },
         {

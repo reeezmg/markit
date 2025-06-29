@@ -32,6 +32,7 @@ const { printBill } = usePrint();
 const router = useRouter();
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const isBarcodeIncluded = ref(useAuth().session.value?.isBarcodeIncluded);
+const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
 const isPrint = ref(false);
 const isSavingAcc = ref(false);
 const issalesReturnModelOpen = ref(false);
@@ -62,6 +63,7 @@ const points = ref(0);
 const clientId = ref('');
 const scannedBarcode = ref("");
 const categoryStore = useCategoryStore()
+const userStore = useUserStore()
 let printData = {}
 const isSaving = ref(false);
 const showSplitModal = ref(false)
@@ -77,6 +79,7 @@ const qtyInputs = ref([]);
 const rateInputs = ref([]);
 const discountInputs = ref([]);
 const taxInputs = ref([]);
+const userInputs = ref([]);
 const discountref = ref();
 const paymentref = ref();
 const saveref = ref();
@@ -95,11 +98,11 @@ const selected = ref(null);
 
 
 const items = ref([
-  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false },
+  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
 ]);
 
 
-const columns = ref([
+const columns = computed(() => [
   { key: 'sn', label: 'S.N' },
   { key: 'barcode', label: 'BAR CODE' },
   { key: 'category', label: 'CATEGORY' },
@@ -107,10 +110,11 @@ const columns = ref([
   { key: 'rate', label: 'RATE' },
   { key: 'qty', label: 'QTY' },
   { key: 'discount', label: 'DISC %' },
+  ...(isUserTrackIncluded.value ? [{ key: 'user', label: 'User' }] : []),
   { key: 'tax', label: 'TAX%' },
   { key: 'value', label: 'VALUE' },
-
 ]);
+
 
 const resizableTable = ref(null); // Reference to the table element
 
@@ -241,7 +245,11 @@ const addNewRow = async (index) => {
     value: 0, 
     sizes:{},
     totalQty:0,
-    return:false
+    return:false,
+    userCode:null, 
+    userId:null, 
+    user:null
+
   });
 
   // Wait for Vue to update the DOM
@@ -447,6 +455,9 @@ const billArgs = computed(() => ({
         outOfStock: true,
         categoryId:true,
         return:true,
+        userName:true,
+        companyUser:true,
+        userId:true,
         item:{
           select:{
             id:true,
@@ -567,6 +578,8 @@ watch(
       tax: entry.tax || 0,
       value: entry.value || 0,
       return: entry.return || false,
+      user:entry.userName || null,
+      userId:entry.userId || null
     }));
 
     items.value.push({
@@ -707,6 +720,17 @@ const handleEdit = async () => {
       ...(item.id && {
         item: { connect: { id: item.id } },
       }),
+      ...(item.userId && {
+        companyUser: {
+              connect: {
+                companyId_userId: {
+                  companyId: useAuth().session.value?.companyId,
+                  userId: item.userId,
+                }
+              }
+            },
+        userName:item.user
+      }),
       bill: {
         connect: {
           id: route.params.salesId,
@@ -737,6 +761,17 @@ const handleEdit = async () => {
       }),
       ...(item.id && {
         item: { connect: { id: item.id } },
+      }),
+       ...(item.userId && {
+        companyUser: {
+              connect: {
+                companyId_userId: {
+                  companyId: useAuth().session.value?.companyId,
+                  userId: item.userId,
+                }
+              }
+            },
+        userName:item.user
       }),
       bill: {
         connect: {
@@ -1107,13 +1142,34 @@ const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
 };
 
 
+async function updateUserDetails(index, user) {
+
+  const userdetails = userStore.getuserByShortCut(user)
+
+  if (userdetails) {
+    console.log(userdetails)
+    items.value[index].userCode = user
+    items.value[index].user = userdetails.name || null
+    items.value[index].userId = userdetails.id || null
+
+  } else {
+    items.value[index].user = null // Optional: clear name if user not found
+     toast.add({
+    title: 'user code invalid!',
+    color: 'red',
+  });
+  }
+}
+
 const moveFocus = (currentRowIndex, currentField, direction) => {
-  const fieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
+  const baseFieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
+  const fieldOrder = isUserTrackIncluded ? [...baseFieldOrder.slice(0, 6), 'user', 'tax'] : baseFieldOrder;
+
   const currentFieldIndex = fieldOrder.indexOf(currentField);
-  
+
   let nextRowIndex = currentRowIndex;
   let nextFieldIndex = currentFieldIndex;
-  
+
   switch (direction) {
     case 'up':
       nextRowIndex = Math.max(0, currentRowIndex - 1);
@@ -1128,12 +1184,12 @@ const moveFocus = (currentRowIndex, currentField, direction) => {
       nextFieldIndex = Math.min(fieldOrder.length - 1, currentFieldIndex + 1);
       break;
   }
-  
+
   // If we changed rows, keep the same column
   if (direction === 'up' || direction === 'down') {
     nextFieldIndex = currentFieldIndex;
   }
-  
+
   focusInput(nextRowIndex, fieldOrder[nextFieldIndex]);
 };
 
@@ -1142,39 +1198,30 @@ const focusInput = async (rowIndex, field) => {
   try {
     switch (field) {
       case 'barcode':
-        if (barcodeInputs.value[rowIndex]?.$el) {
-          barcodeInputs.value[rowIndex].$el.querySelector('input')?.focus();
-        }
+        barcodeInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
       case 'category':
-      const td = categoryInputs.value[rowIndex]
-      const button = td?.querySelector('button')
-      button.focus()                                            
+        categoryInputs.value[rowIndex]?.querySelector('button')?.focus();
         break;
       case 'name':
-        if (nameInputs.value[rowIndex]?.$el) {
-          nameInputs.value[rowIndex].$el.querySelector('input')?.focus();
-        }
+        nameInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
       case 'qty':
-        if (qtyInputs.value[rowIndex]?.$el) {
-          qtyInputs.value[rowIndex].$el.querySelector('input')?.focus();
-        }
+        qtyInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
       case 'rate':
-        if (rateInputs.value[rowIndex]?.$el) {
-          rateInputs.value[rowIndex].$el.querySelector('input')?.focus();
-        }
+        rateInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
       case 'discount':
-        if (discountInputs.value[rowIndex]?.$el) {
-          discountInputs.value[rowIndex].$el.querySelector('input')?.focus();
+        discountInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
+        break;
+      case 'user':
+        if (isUserTrackIncluded) {
+          userInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         }
         break;
       case 'tax':
-        if (taxInputs.value[rowIndex]?.$el) {
-          taxInputs.value[rowIndex].$el.querySelector('input')?.focus();
-        }
+        taxInputs.value[rowIndex]?.$el?.querySelector('input')?.select();
         break;
     }
   } catch (e) {
@@ -1247,6 +1294,13 @@ const newBill = () => {
 };
 
 
+const handleDiscountEnter = (index) => {
+  if (isUserTrackIncluded.value) {
+    moveFocus(index, 'discount', 'right');
+  } else {
+    addNewRow(index);
+  }
+};
 
 </script>
 
@@ -1501,12 +1555,26 @@ const newBill = () => {
       />
     </td>
     <td class="py-1 whitespace-nowrap">
+    <UInput 
+      v-model="row.discount" 
+      type="number"
+      ref="discountInputs" 
+      size="sm"  
+      @keydown.enter="handleDiscountEnter(index)"
+      @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
+      @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
+      @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
+      @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
+    />
+  </td>
+
+    <td class="py-1 whitespace-nowrap" v-if="isUserTrackIncluded">
       <UInput 
-        v-model="row.discount" 
-        type="number"
-        ref="discountInputs" 
+        v-model="row.user" 
+        type="text"
+        ref="userInputs" 
         size="sm"  
-        @keydown.enter="addNewRow(index)"
+        @keydown.enter="addNewRow(index); updateUserDetails(index,row.user)"
         @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
         @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
         @keydown.left.prevent="moveFocus(index, 'discount', 'left')"

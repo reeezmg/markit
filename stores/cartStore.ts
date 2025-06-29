@@ -110,6 +110,7 @@ export const useCartStore = defineStore({
       
       // Sync with server if we have a session
       if (this.sessionId) {
+        console.log(this.sessionId)
         await this._syncWithServer();
       }
     },

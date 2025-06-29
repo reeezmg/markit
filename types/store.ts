@@ -1,4 +1,4 @@
-import type { Product, Category, Variant, Company } from '@prisma/client';
+import type { Product, Category,Item, Variant, Company } from '@prisma/client';
 
 export type ProductWithVariants = Product & {
   variants: Variant[];
@@ -12,6 +12,7 @@ export type CategoryWithProducts = Category & {
 
 export type VariantWithProduct = Variant & {
   product: ProductWithVariants;
+  items: Item[];
 };
 
 export type WishlistVariant = Variant & {

@@ -4,7 +4,8 @@ import { ref, computed, watchEffect } from 'vue';
 
 
 const route = useRoute();
-const selectedVariant = ref(route.query.variant || 0);
+const variantId = ref(route.query.variant);
+const selectedVariant = ref();
 const cartStore = useCartStore();
 const likeStore = useLikeStore();
 const toast = useToast();
@@ -12,36 +13,39 @@ const auth = useClientAuth();
 
 const selectedSizes = ref(new Set()); 
 
-watchEffect(() => {
-    console.log(route.query.variant);
-    
-});
+
 
 const { data: product, isLoading, error, refetch } = useFindUniqueProduct({
     where: {
         id: route.params.id,
     },
-    select: {
-        id: true,
-        name: true,
-        description: true,
-        company: {
-            select: {
-                id: true,
-                name: true,
-            },
+    
+    include: {
+        company: true,
+        variants: {
+        include: {
+            items: true,
         },
-        variants: true,
+        },
     },
 });
 
+watch(product, (newproduct) => {
+  if (!variantId.value || !newproduct) return
+
+  const index = product.value.variants.findIndex(v => v.id === variantId.value)
+  if (index !== -1) {
+    selectedVariant.value = index
+    console.log(index)
+  }
+})
 
 
 // ✅ Handle actions safely, accounting for missing `sizes`
 const actions = computed(() => {
-    if ( !product.value.variants[selectedVariant.value]?.sizes) return [];
+    if ( !product.value.variants[selectedVariant.value]?.items) return [];
     console.log("Company item:",product.value.companyId)
-    return product.value.variants[selectedVariant.value]?.sizes?.map((size, index) => ({
+    return product.value.variants[selectedVariant.value]?.items?.map((size, index) => ({
         label: `Size: ${size.size}`,
         click: () => {
             if (size.qty > 0) {
@@ -56,11 +60,13 @@ const actions = computed(() => {
 });
 
 
+
+
 // ✅ Add to Cart Logic with missing `sizes` handling
 const addToCart = () => {
     const currentVariant = product.value.variants[selectedVariant.value];
 
-    if (currentVariant.sizes && currentVariant.sizes.length > 0) {
+    if (currentVariant.items && currentVariant.items.length > 0) {
         if (selectedSizes.value.size === 0) {
             toast.add({ 
                 title: 'Size Missing',
@@ -77,7 +83,7 @@ const addToCart = () => {
 
         const selectedItems = Array.from(selectedSizes.value).map(index => ({
     variantId: currentVariant.id,
-    size: currentVariant.sizes[index].size,
+    size: currentVariant.items[index].size,
     qty: 1
 }));
 
@@ -136,7 +142,7 @@ const toggleLike = () => {
 const handleSizeSelect = (index) => {
     const currentVariant = product.value.variants[selectedVariant.value];
 
-    if (currentVariant.sizes && currentVariant.sizes[index]?.qty !== 0) {
+    if (currentVariant.items && currentVariant.items[index]?.qty !== 0) {
         if (selectedSizes.value.has(index)) {
             selectedSizes.value.delete(index); 
         } else {
@@ -312,13 +318,13 @@ const formatPrice = (price) => {
                         </div>
 
                         <!-- Size Selection -->
-                        <div v-if="product.variants[selectedVariant]?.sizes?.length > 0">
+                        <div v-if="product.variants[selectedVariant]?.items?.length > 0 && product.variants[selectedVariant]?.items[0]?.size">
                             <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
                                 Select Size
                             </h3>
                             <div class="grid grid-cols-4 sm:grid-cols-5 md:grid-cols-6 gap-2">
                                 <UButton
-                                    v-for="(size, index) in product.variants[selectedVariant]?.sizes || []"
+                                    v-for="(size, index) in product.variants[selectedVariant]?.items || []"
                                     :key="index"
                                     size="md"
                                     :color="selectedSizes.has(index) ? 'primary' : 'gray'"
@@ -342,7 +348,7 @@ const formatPrice = (price) => {
                                 icon="i-heroicons-shopping-cart"
                                 size="lg"
                                 @click="addToCart"
-                                :disabled="product.variants[selectedVariant]?.sizes?.length > 0 && selectedSizes.size === 0"
+                                :disabled="product.variants[selectedVariant]?.items?.length > 0 && selectedSizes.size === 0"
                                 class="flex-1 py-3"
                                 :ui="{ rounded: 'rounded-lg' }"
                             >

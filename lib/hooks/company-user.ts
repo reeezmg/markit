@@ -239,8 +239,9 @@ export function useCountCompanyUser<TArgs extends Prisma.CompanyUserCountArgs, T
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<TQueryFnData, TData, TError>('CompanyUser', `${endpoint}/companyUser/count`, args, options, fetch);
 }
+import type { UserRole } from '@prisma/client';
 
-export function useCheckCompanyUser<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { companyId?: string; userId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckCompanyUser<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { companyId?: string; userId?: string; code?: string; name?: string; role?: UserRole; status?: boolean }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('CompanyUser', `${endpoint}/companyUser/check`, args, options, fetch);
 }

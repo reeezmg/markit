@@ -19,12 +19,13 @@ export default eventHandler(async (event) => {
 
     await session.update({
         id: user.id,
-        name: user.name || null,
+        name: user.companies[0].name || null,
         image: user.image || null,
         email: user.email,
         storeUniqueName: user.companies[0].company.storeUniqueName,
         isTaxIncluded: user.companies[0].company.isTaxIncluded,
         isBarcodeIncluded: user.companies[0].company.isBarcodeIncluded,
+        isUserTrackIncluded: user.companies[0].company.isUserTrackIncluded,
         companyId: user.companies[0].companyId,
         companyType: user.companies[0].company.type,
         companyName: user.companies[0].company.name,

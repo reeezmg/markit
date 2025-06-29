@@ -240,7 +240,7 @@ export function useCountProduct<TArgs extends Prisma.ProductCountArgs, TQueryFnD
     return useModelQuery<TQueryFnData, TData, TError>('Product', `${endpoint}/product/count`, args, options, fetch);
 }
 
-export function useCheckProduct<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; brand?: string; status?: boolean; description?: string; companyId?: string; categoryId?: string; subcategoryId?: string; purchaseorderId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckProduct<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { id?: string; name?: string; brand?: string; status?: boolean; description?: string; companyId?: string; categoryId?: string; subcategoryId?: string; purchaseorderId?: string; writeId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('Product', `${endpoint}/product/check`, args, options, fetch);
 }

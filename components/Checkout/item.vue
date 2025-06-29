@@ -32,9 +32,14 @@ const {
         sprice: true,
         dprice: true,
         images: true,
-        qty: true,
-        sizes: true,
         discount: true,
+        items:{
+            select:{
+                id:true,
+                size:true,
+                qty: true,
+            }
+        },
         product: {
             select: {
                 name: true,
@@ -60,6 +65,11 @@ const checkoutOption = ref({ label: 'Standard Purchase', value: 'STANDARD' });
 const paymentMethod = ref<{ label: string; value: string }>({ label: 'COD', value: 'COD' });
 const selectedDate = ref(dayjs().add(1, 'day').format('YYYY-MM-DD'));
 
+
+watch(variants, (NEWvariants) => {
+    console.log(NEWvariants);
+});
+
 const shipping = computed(() => {
     if (checkoutOption.value.value === 'BOOKING') return 0.0;
     else return 5.0;
@@ -84,7 +94,7 @@ const subtotal = computed(() => {
 
 const totalDiscount = computed(() => {
     if (!variants.value) return 0;
-
+    if (checkoutOption.value.value === 'TRY_AT_HOME' || checkoutOption.value.value === 'BOOKING') return 0.0;
     const discountAmount = items.value.reduce((acc, cartItem) => {
         const variant = variants.value.find((p) => p.id === cartItem.variantId);
         if (variant && variant.discount) {
@@ -129,7 +139,7 @@ const applyPromoCode = async () => {
             })
             discount.value = res.discountPercent || 0;
         }
-    } catch (err) {
+    } catch (err) { 
         toast.remove(toastId.id)
         toast.add({ title: 'Network error', color: 'red' })
     } finally {
@@ -210,16 +220,16 @@ const orderItems = computed(() => {
         const variant = variants.value.find((v) => v.id === cartItem.variantId);
         if (!variant) return null;
 
-        const qty = cartItem.qty || 1;
+       const qty = cartItem.qty || 1;
         const size = cartItem.size;
         const sprice = variant.sprice || 0;
         const discount = variant.discount || 0;
         const categoryId = variant.product?.category?.id || null;
         const variantId = variant.id;
+        const items = variant.items.find(item => item.size === size);
+        const itemId = items?.id || null;
         const tax = 0;
         const value = qty * sprice;
-        const sizes = variant.sizes;
-        const totalQty = variant.qty;
         const vName = variant.name;
         const pName = variant.product.name;
 
@@ -233,8 +243,8 @@ const orderItems = computed(() => {
             value: parseFloat(value.toFixed(2)),
             categoryId,
             variantId,
-            sizes,
-            totalQty,
+            itemId,
+            items,
             size
         };
     }).filter(Boolean);
@@ -252,6 +262,7 @@ watchEffect(() => {
             bookingDate: checkoutOption.value.value === 'BOOKING' ? selectedDate.value : null,
             items: orderItems.value
         });
+        console.log(variants.value,orderItems.value)
     }
 });
 </script>
@@ -333,9 +344,6 @@ watchEffect(() => {
             />
         </div>
 
-        <UFormGroup v-if="checkoutOption.value !== 'BOOKING'" label="Payment" name="paymentMethods" class="mb-5">
-            <USelectMenu v-model="paymentMethod" :options="paymentMethods" />
-        </UFormGroup>
 
         <dl v-if="checkoutOption.value !== 'BOOKING'" class="rounded-lg border dark:border-gray-800 border-gray-200 space-y-6 border-t px-4 py-6 sm:px-6 mt-5">
             <div class="flex items-center justify-between">

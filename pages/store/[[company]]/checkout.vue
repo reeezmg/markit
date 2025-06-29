@@ -48,7 +48,7 @@ definePageMeta({
                                 <UIcon
                                     name="i-heroicons-heart"
                                     class="w-5 h-5"
-                                />
+                                /> 
                             </UChip>
                         </NuxtLink>
                     </UTooltip>

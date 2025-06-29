@@ -3,7 +3,13 @@ import { ref, computed, watchEffect } from 'vue';
 import { useFindUniquePurchaseOrder, useDeleteProduct, useUpdateProduct } from '~/lib/hooks';
 
 const emit = defineEmits(['product-selected','clicked']);
-const DeleteProduct = useDeleteProduct();
+const DeleteProduct = useDeleteProduct({ // ✅ Your mutation callbacks (optional)
+  onSuccess: (data) => console.log('Created:', data),
+  onError: (err) => console.error('Error:', err),
+
+  // ✅ These control automatic behavior
+  invalidate: true,
+  optimisticUpdate: true});
 const route = useRoute();
 const poId = String(route.query.poId || '');
 

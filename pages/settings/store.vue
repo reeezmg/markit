@@ -51,6 +51,7 @@ const addstate = reactive<AddressState>({
 const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
 const isBarcodeInclude = ref(useAuth().session.value?.isBarcodeIncluded);
+const isUserTrackInclude = ref(useAuth().session.value?.isUserTrackIncluded);
 
 const productInputs = reactive([
   { key: 'name', label: 'Name', value: useAuth().session.value?.productInputs?.name  },
@@ -262,6 +263,24 @@ const onBarcodeIncludeChange = async () => {
   }
 };
 
+const onUserTrackIncludeChange = async () => {
+  try {
+    const res = await UpdateCompany.mutateAsync({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        isUserTrackIncluded: isUserTrackInclude.value,
+      },
+    });
+    await updateIsUserTrackIncluded(isUserTrackInclude.value);
+    toast.add({ title: 'UserTrack include updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating UserTrack setting', color: 'red', icon: 'i-heroicons-x-circle' });
+  }
+};
+
 const onInputChange = async () => {
   isUpdatingInputs.value = true;
   try {
@@ -346,7 +365,32 @@ const onInputChange = async () => {
       :ui="{ container: '' }"    
     >
       <UCheckbox v-model="isTaxInclude" @change="onTaxIncludeChange" />
+    </UFormGroup>
+    
+    <UDivider class="mb-4" />
+
+    <UFormGroup
+      name="barcodeInclude"
+      label="Include barcode in Billing"
+      description="Check if you want to include barcode in the Billing."
+      required
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"    
+    >
       <UCheckbox v-model="isBarcodeInclude" @change="onBarcodeIncludeChange" />
+    </UFormGroup>
+    
+    <UDivider class="mb-4" />
+
+    <UFormGroup
+      name="usersReport"
+      label="Users Sales Track "
+      description="Check if you want to track user sales."
+      required
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"    
+    >
+      <UCheckbox v-model="isUserTrackInclude" @change="onUserTrackIncludeChange" />
     </UFormGroup>
     
     <UDivider class="mb-4" />

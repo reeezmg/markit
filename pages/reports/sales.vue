@@ -140,27 +140,9 @@ const isDownloadDisabled = computed(() => {
     (!fullReport.value && !startDate.value && !endDate.value && !quickRange.value)
 })
 
-const filteredBills = computed(() => {
-  if (!dashboard.value.bills || !dashboard.value.bills.length) return [];
-
-  if (fullReport.value) return dashboard.value.bills;
-
-  const start = startDate.value
-    ? new Date(new Date(startDate.value).setHours(0, 0, 0, 0))
-    : null;
-
-  const end = endDate.value
-    ? new Date(new Date(endDate.value).setHours(23, 59, 59, 999))
-    : null;
-
-  return dashboard.value.bills.filter(b => {
-    const billDate = new Date(b.createdAt);
-    return (!start || billDate >= start) && (!end || billDate <= end);
-  });
-});
 
 const totals = computed(() => {
-  const bills = filteredBills.value;
+  const bills = dashboard.value.bills;
 
   const totalBills = bills.length;
 
@@ -218,27 +200,10 @@ const totals = computed(() => {
   };
 });
 
-const filteredExpenses = computed(() => {
-  if (!dashboard.value.expenses || !dashboard.value.expenses.length) return []
-  
-  if (fullReport.value) return dashboard.value.expenses
-  
-  const start = startDate.value
-    ? new Date(new Date(startDate.value).setHours(0, 0, 0, 0))
-    : null;
 
-  const end = endDate.value
-    ? new Date(new Date(endDate.value).setHours(23, 59, 59, 999))
-    : null;
-
-  return dashboard.value.expenses.filter(b => {
-    const billDate = new Date(b.expenseDate)
-    return (!start || billDate >= start) && (!end || billDate <= end)
-  })
-})
 
 const totalsExpense = computed(() => {
-  const expenses = filteredExpenses.value;
+  const expenses = dashboard.value.expenses;
 
   const totalExpense = expenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0
 
@@ -258,13 +223,13 @@ const totalsExpense = computed(() => {
 })
 
 const kpiArray = computed<KpiItem[]>(() => ([
-  { KPI: 'Total Revenue', Value: formatCurrency(filteredBills.value.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0) },
-  { KPI: 'Total Bills', Value: filteredBills.value.length },
-  { KPI: 'Avg. Bill Value', Value: formatCurrency(filteredBills.value.length > 0 ? 
-    totals.value.totalRevenue / filteredBills.value.length : 0) }
+  { KPI: 'Total Revenue', Value: formatCurrency(dashboard.value.bills.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0) },
+  { KPI: 'Total Bills', Value: dashboard.value.bills.length },
+  { KPI: 'Avg. Bill Value', Value: formatCurrency(dashboard.value.bills.length > 0 ? 
+    totals.value.totalRevenue / dashboard.value.bills.length : 0) }
 ]))
 
-const billsCSV = computed(() => filteredBills.value.map(bill => ({
+const billsCSV = computed(() => dashboard.value.bills.map(bill => ({
   Invoice: bill.invoiceNumber ?? '-',
   Date: bill.createdAt ? new Date(bill.createdAt).toLocaleDateString() : 'N/A',
   Client: bill.client?.name ?? 'N/A',
@@ -300,7 +265,7 @@ const csvfilename = `sales-report-${timestamp}.csv`
 const pdfFilename = `sales-report-${timestamp}.pdf`
 
 const downloadCSV = () => {
-  if (!filteredBills.value.length) {
+  if (!dashboard.value.bills.length) {
     toast.add({ title: 'No Data', description: 'No report data available to download', color: 'red' })
     return
   }
@@ -317,7 +282,7 @@ const downloadCSV = () => {
 }
 
 const downloadPDF = async () => {
-  if (!dashboard.value.bills || !filteredBills.value.length) {
+  if (!dashboard.value.bills || !dashboard.value.bills.length) {
     toast.add({ title: 'No Data', description: 'No report data available to export', color: 'red' })
     return
   }
@@ -339,7 +304,7 @@ const downloadPDF = async () => {
 
     await generateSalesReportPDF(
       kpiArray.value,
-      filteredBills.value,
+      dashboard.value.bills,
       reportMeta,
       pdfFilename
     )
@@ -452,44 +417,41 @@ const printReportHandle = async() => {
         <div v-if="!loading && dashboard" class="grid grid-cols-1 sm:grid-cols-5 gap-4">
 
             <UPopover mode="hover">
-            <KpiCard class="w-full"  title="Total Revenue" :value="formatCurrency(totals.totalRevenue)">
-              
-            </KpiCard>
-
-           
-            <template #panel>
-            <div class="p-4 flex flex-col">
-              <div>Revenue in Cash: {{ totals?.totalRevenueInCash }}</div>
-              <div>Revenue in UPI: {{ totals?.totalRevenueInUPI }}</div>
-            </div>
-          </template>
+              <KpiCard class="w-full"  title="Total Revenue" :value="formatCurrency(totals.totalRevenue)"/> 
+              <template #panel>
+                <div class="p-4 flex flex-col">
+                  <div>Revenue in Cash: {{ totals?.totalRevenueInCash }}</div>
+                  <div>Revenue in UPI: {{ totals?.totalRevenueInUPI }}</div>
+                </div>
+            </template>
           </UPopover>
 
-           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(totals?.totalCredit)">
-              
-            </KpiCard>
-
+           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(totals?.totalCredit)"/>
 
             <UPopover mode="hover">
-            <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(totalsExpense.totalExpense)">
-           
-          </KpiCard>
-           <template #panel>
-            <div class="p-4 flex flex-col">
-              <div>Expense in Cash: {{ totalsExpense.totalExpensesInCash }}</div>
-              <div>Expense in UPI: {{ totalsExpense.totalExpensesInUPI }}</div>
-            </div>
-          </template>
-        </UPopover>
-        
+              <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(totalsExpense.totalExpense)"/>
+              <template #panel>
+                <div class="p-4 flex flex-col">
+                  <div>Expense in Cash: {{ totalsExpense.totalExpensesInCash }}</div>
+                  <div>Expense in UPI: {{ totalsExpense.totalExpensesInUPI }}</div>
+                </div>
+              </template>
+            </UPopover>
+      
 
-            <KpiCard title="Amount in Drawer" :value="formatCurrency(totals.totalRevenueInCash - totalsExpense.totalExpensesInCash)">
-              
-            </KpiCard>
+            <UPopover mode="hover">
+              <KpiCard class="w-full" title="Balance" :value="formatCurrency(totals.totalRevenue - totalsExpense.totalExpense)"/>
+              <template #panel>
+                <div class="p-4 flex flex-col">
+                  <div>Balance in Cash: {{ formatCurrency(totals.totalRevenueInCash - totalsExpense.totalExpensesInCash) }}</div>
+                  <div>Balance in UPI: {{ formatCurrency(totals.totalRevenueInUPI - totalsExpense.totalExpensesInUPI) }}</div>
+                </div>
+              </template>
+            </UPopover>
 
-              <KpiCard title="Amount in Bank" :value="formatCurrency(totals.totalRevenueInUPI - totalsExpense.totalExpensesInUPI)">
-              
-            </KpiCard>
+              <KpiCard title="Profit" :value="formatCurrency(dashboard.totalProfit - totalsExpense.totalExpense)"/>
+
+
         </div>
 
 
@@ -528,7 +490,7 @@ const printReportHandle = async() => {
           <p class="mt-2">Loading report data...</p>
         </div>
 
-        <div v-if="!loading && !filteredBills.length" class="text-center py-6">
+        <div v-if="!loading && !dashboard.bills.length" class="text-center py-6">
           <UIcon name="i-heroicons-exclamation-circle" class="h-8 w-8 text-red-500 mx-auto" />
           <p class="text-red-500 mt-2">No data available for this report</p>
           <p class="text-sm text-gray-500 mt-1">

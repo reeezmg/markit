@@ -50,6 +50,10 @@ export default defineEventHandler(async (event) => {
     prisma.bill.findMany({
       where: { 
         companyId,
+        createdAt: {
+        gte: startDate ? new Date(startDate) : undefined,
+        lte: endDate ? new Date(endDate) : undefined,
+      },
         deleted: false
       },
       include: {
@@ -64,7 +68,13 @@ export default defineEventHandler(async (event) => {
       }
     }),
     prisma.expense.findMany({
-      where: { companyId },
+      where: { 
+        companyId,
+        createdAt: {
+        gte: startDate ? new Date(startDate) : undefined,
+        lte: endDate ? new Date(endDate) : undefined,
+      }
+       },
       include: { expensecategory: true }
     }),
     prisma.entry.findMany({
@@ -224,6 +234,66 @@ export default defineEventHandler(async (event) => {
   const outstandingCustomers = Array.from(outstandingCustomersMap.values())
     .sort((a, b) => b.total - a.total)
 
+
+
+     const profitData = entries.map(entry => {
+    if (!entry.variant || !entry.qty || entry.qty <= 0 || entry.return) {
+      return null;
+    }
+
+    const salePricePerUnit = (entry.value ?? 0) / entry.qty;
+    const purchasePrice = entry.variant.pprice ?? 0;
+    const profitPerUnit = salePricePerUnit - purchasePrice;
+    const totalProfit = profitPerUnit * entry.qty;
+
+    return {
+      entryId: entry.id,
+      variantId: entry.variantId,
+      productName: entry.variant.product?.name || 'Unknown',
+      variantName: entry.variant.name,
+      qty: entry.qty,
+      salePricePerUnit,
+      purchasePrice,
+      profitPerUnit,
+      totalProfit,
+      date: entry.bill?.createdAt
+    };
+  }).filter(Boolean); // Remove null entries
+
+  // Calculate total profit
+  const totalProfit = profitData.reduce((sum, item) => sum + (item.totalProfit || 0), 0);
+
+  // Calculate profit by month
+  const profitByMonth = Array.from({ length: 12 }, (_, i) => {
+    const month = i + 1;
+    const monthProfit = profitData
+      .filter(item => item.date && new Date(item.date).getMonth() + 1 === month)
+      .reduce((sum, item) => sum + (item.totalProfit || 0), 0);
+    
+    return {
+      month: monthNames[i],
+      profit: monthProfit
+    };
+  });
+
+  // Calculate profit by category
+  const profitByCategoryMap = new Map<string, { name: string; profit: number }>();
+  for (const entry of entries) {
+    if (!entry.variant || !entry.qty || entry.qty <= 0 || entry.return) continue;
+
+    const categoryName = entry.category?.name || 'Uncategorized';
+    const salePricePerUnit = (entry.value ?? 0) / entry.qty;
+    const purchasePrice = entry.variant.pprice ?? 0;
+    const profit = (salePricePerUnit - purchasePrice) * entry.qty;
+
+    if (!profitByCategoryMap.has(categoryName)) {
+      profitByCategoryMap.set(categoryName, { name: categoryName, profit: 0 });
+    }
+    profitByCategoryMap.get(categoryName)!.profit += profit;
+  }
+  const profitByCategory = Array.from(profitByCategoryMap.values())
+    .sort((a, b) => b.profit - a.profit);
+
   return {
     company,
     productsCount,
@@ -245,6 +315,10 @@ export default defineEventHandler(async (event) => {
     products,
     bills,
     expenses,
-    entries
+    entries,
+    totalProfit,
+    profitByMonth,
+    profitByCategory,
+    profitData,
   }
 })

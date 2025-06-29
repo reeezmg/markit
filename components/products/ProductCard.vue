@@ -71,18 +71,21 @@ const formatPrice = (price: number) => {
 // Size handling
 type VariantSize = { size: string; qty: number };
 
-function parseSizes(sizes: unknown): VariantSize[] {
-  if (Array.isArray(sizes)) {
-    return sizes.map(size => ({
-      size: size.size || size,
-      qty: size.qty || (isOutOfStock.value ? 0 : 1)
-    }));
-  }
-  return [];
+const parseSizes = (items: unknown): { size: string; qty: number }[] => {
+  if (!Array.isArray(items)) return []
+
+  return items
+    .filter(item => typeof item === 'object' && item !== null && 'size' in item)
+    .map(item => ({
+      size: String((item as any).size || ''),
+      qty: Number((item as any).qty ?? 0),
+    }))
+    .filter(sizeObj => sizeObj.size !== '')
 }
 
+
 const availableSizes = computed(() => {
-  return parseSizes(props.variant.sizes).filter(size => size.qty > 0);
+  return parseSizes(props.variant.items).filter(size => size.qty > 0);
 });
 
 // Navigation
@@ -128,7 +131,7 @@ const addToCart = async (e?: Event) => {
   }
 
   const variant = variants.value[currentVariantIndex.value];
-  const sizes = parseSizes(variant.sizes);
+  const sizes = parseSizes(variant.items);
   const companyId = variant.companyId;
   const qty = 1;
 
@@ -153,7 +156,7 @@ const addToCart = async (e?: Event) => {
     }
 
     const selected = sizes[selectedSize.value];
-
+    console.log(selected)
     await cartStore.addToCart(
       { variantId: variant.id, size: selected.size, qty } as CartItem,
       companyId,
@@ -327,9 +330,9 @@ const showSuccessToast = (description: string) => {
       </div>
       
       <!-- Size Selection -->
-      <div v-if="parseSizes(props.variant.sizes).length > 0" class="mt-1 flex flex-wrap gap-1">
+      <div v-if="parseSizes(props.variant.items).length > 0" class="mt-1 flex flex-wrap gap-1">
         <UBadge
-          v-for="(size, index) in parseSizes(props.variant.sizes)"
+          v-for="(size, index) in parseSizes(props.variant.items)"
           :key="index"
           :color="selectedSize === index ? 'primary' : 'gray'"
           variant="outline"

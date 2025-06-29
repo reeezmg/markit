@@ -17,7 +17,7 @@ plugin hooks {
 abstract model Base {
     id String @id @unique @default(uuid())
 
-    @@allow('read, update', auth().role == 'admin')
+    @@allow('read, update', true)
 }
 
 enum UserRole {
@@ -115,6 +115,7 @@ model Company extends Base {
 
     isTaxIncluded Boolean @default(true) @map("is_tax_included")
     isBarcodeIncluded Boolean @default(true) @map("is_barcode_included")
+    isUserTrackIncluded Boolean @default(true) @map("is_usertrack_included")
 
     users       CompanyUser[]
     promoCodes  PromoCode[]
@@ -267,16 +268,14 @@ model DistributorCredit {
 
 model User extends Base {
     email     String        @unique @email
-    name      String?
     password  String
-    status    Boolean       @default(true)
-    role      UserRole      @default(user) @map('role')
     companies CompanyUser[]
     address   Address?
     notifications Notification[]
     conversations UserConversation[]
     clients     UserClient[]
     image       String?
+   
     // everybody can signup
     @@allow('create', true)
     @@allow('update', id == auth().id)
@@ -319,7 +318,7 @@ model Client extends Base {
 }
 
 model Pipeline extends Base {
-    company     Company           @relation(fields: [companyId], references: [id])
+    company     Company           @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId   String            @map('company_id') @unique
     newClients      Client[] @relation("PipelineNewClients")
     prospectClients Client[] @relation("PipelineProspectClients")
@@ -339,7 +338,7 @@ model Category {
   description       String?
   status            Boolean         @default(true)
   image             String?
-  company           Company         @relation(fields: [companyId], references: [id])
+  company           Company         @relation(fields: [companyId], references: [id],onDelete:Cascade)
   companyId         String          @map("company_id")
   products          Product[]
   subcategories     Subcategory[]
@@ -351,7 +350,7 @@ model Category {
   thresholdAmount   Float?          // used if taxType == VARIABLE
   taxBelowThreshold Float?          // used if taxType == VARIABLE
   taxAboveThreshold Float?          // used if taxType == VARIABLE
-
+  writeId           String?            @default(uuid()) @map('write_id')
   @@allow("read", true)
   @@allow("create, update, delete", company.users?[user == auth()])
   @@map("categories")
@@ -366,13 +365,13 @@ model Subcategory {
     description String?
     status      Boolean            @default(true)
     image       String?
-    company     Company            @relation(fields: [companyId], references: [id])
+    company     Company            @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId   String             @map('company_id')
     products     Product[] 
     category     Category?           @relation(fields: [categoryId], references: [id])
     categoryId   String?             @map('category_id')
+    writeId     String?            @default(uuid()) @map('write_id')
 
-    
     @@allow('read', true)
     @@allow('create, update,delete',company.users?[user == auth()])
 
@@ -397,7 +396,7 @@ model Product {
     variants    Variant[]         
     purchaseorder     PurchaseOrder @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
     purchaseorderId   String            @map('purchaseorder_id')
-
+    writeId           String?            @default(uuid()) @map('write_id')
     @@allow('read', true)
     @@allow('read, create, update, delete', company.users?[user == auth()])
 
@@ -425,7 +424,7 @@ model Variant {
     companyId   String            @map('company_id')
     VariantSizeBarcode VariantSizeBarcode[]
     sold        Int?
-
+    writeId           String?            @default(uuid()) @map('write_id')
     @@allow('read', true)
     @@allow('update', true)
     @@allow('read, create, update, delete', product.company.users?[user == auth()])
@@ -445,7 +444,7 @@ model Item {
     entry        Entry[]
     company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
     companyId   String @map("company_id")
-    
+    writeId     String?            @default(uuid()) @map('write_id')
     @@allow('read', true)
     @@allow('read, create, update, delete', true)
 
@@ -475,7 +474,7 @@ model Bill extends Base {
     returnDeadline  String? @map("return_deadline")
     entries         Entry[] 
     billHistories   BillHistory[]    
-    company         Company @relation(fields: [companyId], references: [id])
+    company         Company @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId       String @map("company_id")   
     account         Account? @relation(fields: [accountId], references: [id])
     accountId       String? @map("account_id")   
@@ -498,8 +497,15 @@ model Entry extends Base {
     tax         Float? 
     value       Float?
     size        String?
+    userName    String?
+
+    companyId       String? @map("company_id")
+    userId          String? @map("user_id")
+    companyUser     CompanyUser? @relation(fields: [companyId, userId], references: [companyId, userId], onDelete:Cascade)
+  
     variant     Variant? @relation(fields: [variantId], references: [id])
-    variantId    String? @map("variant_id") 
+    variantId    String? @map("variant_id")
+
     outOfStock  Boolean? @map("out_of_stock")
     category     Category? @relation(fields: [categoryId], references: [id])
     categoryId   String? @map("category_id")
@@ -516,7 +522,7 @@ model BillHistory extends Base{
   data       Json
   changedAt  DateTime @default(now())  @map("changed_at")
   operation  String
-  bill         Bill? @relation(fields: [billId], references: [id])
+  bill         Bill? @relation(fields: [billId], references: [id],onDelete:Cascade)
   billId       String? @map("bill_id") 
 
   @@allow("create, read, update, delete", true)
@@ -529,7 +535,7 @@ model Account extends Base {
     phone       String
     bill        Bill[]    
     address     Address?
-    company     Company @relation(fields: [companyId], references: [id])
+    company     Company @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId   String @map("company_id") 
     
     @@allow("create, read, update, delete", true)
@@ -540,7 +546,7 @@ model Account extends Base {
 model TokenEntry extends Base {
     createdAt       DateTime @map("created_at")
     tokenNo         String @map("token_no")
-    company         Company @relation(fields: [companyId], references: [id])
+    company         Company @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId       String @map("company_id")   
     itemId          String @map("item_id")
     variantId       String @map("variant_id")
@@ -566,7 +572,7 @@ model ExpenseCategory extends Base {
     createdAt   DateTime @default(now()) @map("created_at")
     updatedAt   DateTime @updatedAt @map("updated_at")
     expenses    Expense[]  
-    company     Company @relation(fields: [companyId], references: [id])
+    company     Company @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId   String @map("company_id")   
 
     @@allow("create, read, update, delete", true)
@@ -587,7 +593,7 @@ model Expense extends Base {
     updatedAt       DateTime @updatedAt @map("updated_at")
     expensecategory ExpenseCategory @relation(fields: [expensecategoryId], references: [id])
     expensecategoryId String @map("expense_category_id")
-    company         Company @relation(fields: [companyId], references: [id])
+    company         Company @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId       String @map("company_id")   
 
     @@allow("create, read, update, delete", true)
@@ -605,7 +611,7 @@ model Payment extends Base {
     status           String @default("Completed")
     createdAt        DateTime @default(now()) @map("created_at")
     updatedAt        DateTime @updatedAt @map("updated_at")
-    company         Company @relation(fields: [companyId], references: [id])
+    company         Company @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId       String @map("company_id")   
 
     @@allow("create, read, update, delete", true)
@@ -628,7 +634,7 @@ model Address extends Base {
     clientId    String? @map('client_id')
     distributor Distributor? @relation(fields: [distributorId], references: [id])
     distributorId String? @map('distributor_id') @unique
-    company Company? @relation(fields: [companyId], references: [id])
+    company Company? @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId String? @map('company_id') @unique
     account     Account? @relation(fields: [accountId], references: [id])
     accountId    String? @map('account_id') @unique
@@ -667,10 +673,14 @@ model Message extends Base {
 
 model CompanyUser {
     companyId String @map('company_id')
-    company   Company @relation(fields: [companyId], references: [id])
+    company   Company @relation(fields: [companyId], references: [id],onDelete: Cascade)
     userId    String @map('user_id')
-    user      User @relation(fields: [userId], references: [id])
-
+    user      User @relation(fields: [userId], references: [id],onDelete: Cascade)
+    code      String?
+    name      String?
+    role      UserRole      @default(user) @map('role')
+    status    Boolean       @default(true)
+    entries     Entry[]
     @@id([companyId, userId])
     @@allow('read,create, update, delete', auth() != null )
     @@map('company_users')
@@ -678,9 +688,9 @@ model CompanyUser {
 
 model CompanyClient {
     companyId String @map('company_id')
-    company   Company @relation(fields: [companyId], references: [id])
+    company   Company @relation(fields: [companyId], references: [id],onDelete: Cascade)
     clientId  String @map('client_id')
-    client    Client @relation(fields: [clientId], references: [id])
+    client    Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
 
     @@id([companyId, clientId])
     @@allow('read,create, update, delete', true)
@@ -750,7 +760,7 @@ model EmailOtp extends Base {
 
 model Notification {
   id String @id @default(cuid())
-  company Company @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id],onDelete:Cascade)
   companyId String
   user      User? @relation(fields: [userId], references: [id])
   userId    String? @map('user_id') 
@@ -787,7 +797,7 @@ model PromoCode {
   minAmount       Float
   expiresAt       DateTime
   isActive        Boolean  @default(true)
-  company         Company  @relation(fields: [companyId], references: [id])
+  company         Company  @relation(fields: [companyId], references: [id],onDelete:Cascade)
   companyId       String
   usageLimit      Int?
   usageCount      Int?
@@ -828,8 +838,8 @@ model CartCompanyClient {
   cartId    String @unique
 
   // Relations
-  client  Client  @relation(fields: [clientId], references: [id])
-  company Company @relation(fields: [companyId], references: [id])
+  client  Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id],onDelete: Cascade)
   cart    Cart    @relation(fields: [cartId], references: [id])
 
   // Composite unique constraint ensuring one cart per client-company pair
@@ -857,8 +867,8 @@ model LikeCompanyClient {
   likeId    String @unique
 
   // Relations
-  client  Client  @relation(fields: [clientId], references: [id])
-  company Company @relation(fields: [companyId], references: [id])
+  client  Client  @relation(fields: [clientId], references: [id],onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id],onDelete: Cascade)
   like    Like    @relation(fields: [likeId], references: [id])
 
   // Composite unique constraint ensuring one like collection per client-company pair
