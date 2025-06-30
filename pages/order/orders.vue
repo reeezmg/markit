@@ -136,11 +136,6 @@ const action = (row) => [
             icon: 'i-heroicons-clipboard-document-check-20-solid',
             click: () => router.push(`/erp/edit/${row.id}`),
         },
-        {
-            label: 'Edit',
-            icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`order/edit${row.id}`),
-        },
     ],
     
 ];

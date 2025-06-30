@@ -143,12 +143,26 @@ const handleSubmit = async (e?: Event) => {
     }
 
   try {
-    console.log('items',items)
+        const billid = await UpdateCompany.mutateAsync({
+      where:{
+        id:useAuth().session.value?.companyId
+      },
+    data: {
+        billCounter: {
+          increment: 1, 
+      },
+    },
+    select:{
+        billCounter:true,
+      }
+    })
+
    
         
 
     // Create the bill data with proper typing
     const billData = {
+      invoiceNumber: billid.billCounter,
       grandTotal: total.value,
       discount: discount.value,
       subtotal: subtotal.value,
