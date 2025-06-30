@@ -8,6 +8,7 @@ const { $client } = useNuxtApp()
 const reject = ref(true);
 const route = useRoute();
 const router = useRouter();
+const loginLoading = ref(false)
 const useAuth = () => useNuxtApp().$auth;
 console.log(route.query.code)
 
@@ -58,6 +59,7 @@ const validate = (state: any) => {
 };
 
 async function onSubmit(data: any) {
+    loginLoading.value = true
     try {
         const res = await authLogin(data.email, data.password);
 
@@ -65,6 +67,9 @@ async function onSubmit(data: any) {
     } catch (error) {
         reject.value = false;
         console.log(error);
+    }
+    finally{
+        loginLoading.value = false
     }
 }
 
@@ -92,6 +97,7 @@ async function onSubmit(data: any) {
             <UAuthForm
                 :fields="fields"
                 :validate="validate"
+                :loading="loginLoading"
                 title="Welcome back!"
                 icon="i-heroicons-lock-closed"
                 :ui="{ base: 'text-center', footer: 'text-center' }"

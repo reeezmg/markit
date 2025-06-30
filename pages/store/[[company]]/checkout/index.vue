@@ -7,12 +7,10 @@ import { storeToRefs } from 'pinia';
 // import type { Bill, Company, Variant, Address, Client } from '~/types'; // Adjust import path as needed
 import {
   useCreateBill,
-  useCreateProduct,
-  useUpdateAddress,
   useFindFirstCompany,
   useUpdateVariant,
   useUpdateItem,
-  useCreateAddress
+  useUpdateCompany
 } from '~/lib/hooks';
 
 import type { PaymentStatus, paymentType,OrderStatus } from '@prisma/client';
@@ -59,11 +57,9 @@ interface NotificationPayload {
 
 // Hooks
 const CreateBill = useCreateBill();
-const UpdateAddress = useUpdateAddress();
-const CreateAddress = useCreateAddress();
+const UpdateCompany = useUpdateCompany();
 const UpdateVariant = useUpdateVariant();
 const UpdateItem = useUpdateItem();
-const CreateProduct = useCreateProduct();
 const useClientAuth = () => useNuxtApp().$authClient;
 const toast = useToast();
 const cartStore = useCartStore();
