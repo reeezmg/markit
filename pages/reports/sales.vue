@@ -348,7 +348,7 @@ const printReportHandle = async() => {
     printData = {
       companyName: useAuth().session.value?.companyName || '',
       companyAddress: dashboard.value.company?.address || {},
-      expenses: filteredExpenses.value || [],
+      expenses: dashboard.value.expenses || [],
       dateRange: startDate.value === endDate.value
         ? `${startDate.value || 'Start'}`
         : `${startDate.value || 'Start'} to ${endDate.value || 'End'}`,
