@@ -70,7 +70,7 @@ export default defineEventHandler(async (event) => {
     prisma.expense.findMany({
       where: { 
         companyId,
-         createdAt: {
+         expenseDate: {
             gte: startDate ? new Date(new Date(startDate).setHours(0, 0, 0, 0)) : undefined,
             lte: endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : undefined,
           }
