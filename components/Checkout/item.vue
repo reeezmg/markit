@@ -38,6 +38,7 @@ const {
                 id:true,
                 size:true,
                 qty: true,
+                barcode:true
             }
         },
         product: {
@@ -228,6 +229,7 @@ const orderItems = computed(() => {
         const variantId = variant.id;
         const items = variant.items.find(item => item.size === size);
         const itemId = items?.id || null;
+        const barcode = items?.barcode || null;
         const tax = 0;
         const value = qty * sprice;
         const vName = variant.name;
@@ -244,6 +246,7 @@ const orderItems = computed(() => {
             categoryId,
             variantId,
             itemId,
+            barcode,
             items,
             size
         };

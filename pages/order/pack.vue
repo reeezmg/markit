@@ -42,6 +42,7 @@ const order = ref({
 
 const columns = ref([
   { key: 'sn', label: 'S.N' },
+  { key: 'image', label: 'IMAGE' },
   { key: 'barcode', label: 'BAR CODE' },
   { key: 'category', label: 'CATEGORY' },
   { key: 'name', label: 'NAME' },
@@ -608,6 +609,13 @@ const handleSave = async () => {
                 <td class="py-1 whitespace-nowrap">
                  {{ row.sn }}
                 </td>
+                <td class="py-1 whitespace-nowrap">
+                <img
+                  v-if="row.image"
+                  :src="`https://images.markit.co.in/${row.image}`"
+                  class="w-12 h-12 rounded-md object-cover border"
+                />
+              </td>
                 <td class="py-1 whitespace-nowrap">
                   <UInput v-model="row.barcode" ref="barcodeInputs"  size="sm" @keydown.enter.prevent="handleEnterBarcode(row.barcode,row.id,row.variantId,row.outOfStock,row.value)"/>
                 </td>

@@ -36,9 +36,9 @@ export default defineEventHandler(async (event) => {
   where: {
     companyId,
     createdAt: {
-      gte: startDate ? new Date(startDate) : undefined,
-      lte: endDate ? new Date(endDate) : undefined,
-    }
+            gte: startDate ? new Date(new Date(startDate).setHours(0, 0, 0, 0)) : undefined,
+            lte: endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : undefined,
+          },
   }
 }),
     prisma.item.findMany({
@@ -51,9 +51,9 @@ export default defineEventHandler(async (event) => {
       where: { 
         companyId,
         createdAt: {
-        gte: startDate ? new Date(startDate) : undefined,
-        lte: endDate ? new Date(endDate) : undefined,
-      },
+            gte: startDate ? new Date(new Date(startDate).setHours(0, 0, 0, 0)) : undefined,
+            lte: endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : undefined,
+          },
         deleted: false
       },
       include: {
@@ -70,10 +70,10 @@ export default defineEventHandler(async (event) => {
     prisma.expense.findMany({
       where: { 
         companyId,
-        createdAt: {
-        gte: startDate ? new Date(startDate) : undefined,
-        lte: endDate ? new Date(endDate) : undefined,
-      }
+         createdAt: {
+            gte: startDate ? new Date(new Date(startDate).setHours(0, 0, 0, 0)) : undefined,
+            lte: endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : undefined,
+          }
        },
       include: { expensecategory: true }
     }),
@@ -83,9 +83,9 @@ export default defineEventHandler(async (event) => {
           companyId,
           deleted: false,
            createdAt: {
-            gte: startDate ? new Date(startDate) : undefined,
-            lte: endDate ? new Date(endDate) : undefined,
-          }
+              gte: startDate ? new Date(new Date(startDate).setHours(0, 0, 0, 0)) : undefined,
+              lte: endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : undefined,
+            }
         }
       },
       include: {

@@ -22,6 +22,7 @@ interface CartItem {
   id: string;
   variantId: string;
   itemId: string;
+  barcode:string;
   pName: string;
   vName: string;
   size: string;
@@ -173,6 +174,7 @@ const handleSubmit = async (e?: Event) => {
       }),
       entries: {
         create: items.value.map(item => ({
+          barcode:item.barcode,
           name: `${item.pName}-${item.vName}`,
           qty: item.qty,
           ...(item.size && { size: item.size }),

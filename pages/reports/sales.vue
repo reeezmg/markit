@@ -142,9 +142,9 @@ const isDownloadDisabled = computed(() => {
 
 
 const totals = computed(() => {
-  const bills = dashboard.value.bills;
+  const bills = dashboard.value.bills || [];
 
-  const totalBills = bills.length;
+  const totalBills = bills?.length;
 
   const totalSales = bills
     .flatMap(b => b.entries ?? [])
@@ -203,7 +203,7 @@ const totals = computed(() => {
 
 
 const totalsExpense = computed(() => {
-  const expenses = dashboard.value.expenses;
+  const expenses = dashboard.value.expenses || [];
 
   const totalExpense = expenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0
 
@@ -224,9 +224,9 @@ const totalsExpense = computed(() => {
 
 const kpiArray = computed<KpiItem[]>(() => ([
   { KPI: 'Total Revenue', Value: formatCurrency(dashboard.value.bills.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0) },
-  { KPI: 'Total Bills', Value: dashboard.value.bills.length },
+  { KPI: 'Total Bills', Value: dashboard.value.bills?.length },
   { KPI: 'Avg. Bill Value', Value: formatCurrency(dashboard.value.bills.length > 0 ? 
-    totals.value.totalRevenue / dashboard.value.bills.length : 0) }
+    totals.value.totalRevenue / dashboard.value.bills?.length : 0) }
 ]))
 
 const billsCSV = computed(() => dashboard.value.bills.map(bill => ({
@@ -265,7 +265,7 @@ const csvfilename = `sales-report-${timestamp}.csv`
 const pdfFilename = `sales-report-${timestamp}.pdf`
 
 const downloadCSV = () => {
-  if (!dashboard.value.bills.length) {
+  if (!dashboard.value.bills?.length) {
     toast.add({ title: 'No Data', description: 'No report data available to download', color: 'red' })
     return
   }
@@ -282,7 +282,7 @@ const downloadCSV = () => {
 }
 
 const downloadPDF = async () => {
-  if (!dashboard.value.bills || !dashboard.value.bills.length) {
+  if (!dashboard.value.bills || !dashboard.value.bills?.length) {
     toast.add({ title: 'No Data', description: 'No report data available to export', color: 'red' })
     return
   }
@@ -449,7 +449,7 @@ const printReportHandle = async() => {
               </template>
             </UPopover>
 
-              <KpiCard title="Profit" :value="formatCurrency(dashboard.totalProfit - totalsExpense.totalExpense)"/>
+              <KpiCard title="Profit" :value="formatCurrency(dashboard.totalProfit - totalsExpense.totalExpense) || 0.00"/>
 
 
         </div>
@@ -490,7 +490,7 @@ const printReportHandle = async() => {
           <p class="mt-2">Loading report data...</p>
         </div>
 
-        <div v-if="!loading && !dashboard.bills.length" class="text-center py-6">
+        <div v-if="!loading && !dashboard.bills?.length" class="text-center py-6">
           <UIcon name="i-heroicons-exclamation-circle" class="h-8 w-8 text-red-500 mx-auto" />
           <p class="text-red-500 mt-2">No data available for this report</p>
           <p class="text-sm text-gray-500 mt-1">
