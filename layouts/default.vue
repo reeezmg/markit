@@ -100,18 +100,15 @@ const links = computed(() => {
                         shortcuts: ['P', 'P'],
                     },
                 },
-                ...(auth.session.value?.role === 'admin'
-                    ? [
-                          {
-                              label: 'Categories',
-                              to: `/products/categories`,
-                              tooltip: {
-                                text: 'products',
-                                shortcuts: ['P', 'C'],
-                                },
-                          },
-                      ]
-                    : []),
+
+                   {
+                    label: 'Categories',
+                    to: `/products/categories`,
+                    tooltip: {
+                    text: 'products',
+                    shortcuts: ['P', 'C'],
+                    },
+                },
                      {
                     label: 'Stocks',
                     to: `/products/stocks`,
@@ -190,8 +187,7 @@ const links = computed(() => {
             ],
            
         },
-        ...(auth.session.value?.role === 'admin'
-            ? [
+        
                   {
                       id: 'users',
                       label: 'Users',
@@ -202,8 +198,8 @@ const links = computed(() => {
                           shortcuts: ['U', 'U'],
                       },
                   },
-              ]
-            : []),
+              
+      
         {
             id: 'client',
             label: 'Client',

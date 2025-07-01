@@ -30,7 +30,7 @@ export default eventHandler(async (event) => {
         companyType: user.companies[0].company.type,
         companyName: user.companies[0].company.name,
         pipelineId: user.companies[0].company.pipeline?.id,
-        role: user.role,
+        role: user.companies[0].role,
         shopifyStoreName:user.companies[0].company.shopifyStoreName,
         shopifyAccessToken:user.companies[0].company.shopifyAccessToken,
         type:'USER',
