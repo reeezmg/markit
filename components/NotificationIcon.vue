@@ -28,7 +28,7 @@ const activeFilter = ref<NotificationFilter>('all')
 const session = useAuth().session.value
 const userRole = session?.role || 'user'
 const notificationConfigs = computed(() => typeConfigs)
-
+console.log(session?.role)
 // Type-safe config fallback
 const getNotificationConfig = (type: NotificationType): NotificationConfig => {
   return notificationConfigs.value[type] || {
@@ -69,15 +69,8 @@ const formatRelativeTime = (date: Date | string) => {
 }
 
 const filteredNotifications = computed(() => {
-  // Ensure we're working with an array
 
-  
-  console.log("All notifications:", allNotifications) // Debug log
-
-  return allNotifications.value.filter(notification => {
-    // Debug each notification
-    console.log("Checking notification:", notification)
-    
+  return allNotifications.value.filter(notification => {  
     // 1. First check if notification is valid
     if (!notification?.type) return false
     

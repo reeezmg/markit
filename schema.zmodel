@@ -275,7 +275,6 @@ model User extends Base {
     conversations UserConversation[]
     clients     UserClient[]
     image       String?
-   
     // everybody can signup
     @@allow('create', true)
     @@allow('update', id == auth().id)
@@ -789,6 +788,19 @@ enum NotificationType {
   SHIPMENT_SENT
   SYSTEM_ALERT
 }
+
+model PushToken extends Base {
+  userId      String
+  companyId   String
+  token       String
+  userAgent   String
+  deviceId    String   
+  createdAt   DateTime @default(now())
+
+  @@unique([userId, companyId, deviceId])  
+  @@map("push_token")
+}
+
 
 model PromoCode {
   id              String   @id @default(cuid())

@@ -4,7 +4,7 @@ definePageMeta({
 });
 import { z } from 'zod';
 import type { FormError } from '#ui/types';
-const { $client } = useNuxtApp()
+import { usePushNotifications } from '~/composables/usePushNotifications'
 const reject = ref(true);
 const route = useRoute();
 const router = useRouter();
@@ -62,7 +62,7 @@ async function onSubmit(data: any) {
     loginLoading.value = true
     try {
         const res = await authLogin(data.email, data.password);
-
+        usePushNotifications(useAuth().session.value?.id!,useAuth().session.value?.companyId!)
        
     } catch (error) {
         reject.value = false;

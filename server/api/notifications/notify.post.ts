@@ -45,7 +45,7 @@ export default defineEventHandler(async (event) => {
               message: `Bill #${body.invoiceNumber || 'N/A'} for ${body.amount}`,
               actionPath: `/erp/sales/`,
               metadata: {
-                billId: body.id,
+                invoiceNo: body.invoiceNumber,
                 amount: body.amount
               }
             }
@@ -144,7 +144,17 @@ export default defineEventHandler(async (event) => {
       }
 
     // Broadcast to connected clients
-    broadcastToCompany(body.companyId, notification)
+      await fetch('http://localhost:3004/broadcast', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        companyId: body.companyId,
+        senderId: body.userId,
+        notification
+      })
+    })
 
     return { success: true, notification }
   } catch (error) {

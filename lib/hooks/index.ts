@@ -40,6 +40,7 @@ export * from './user-client';
 export * from './variant-size-barcode';
 export * from './email-otp';
 export * from './notification';
+export * from './push-token';
 export * from './promo-code';
 export * from './client-promo-code';
 export * from './cart';

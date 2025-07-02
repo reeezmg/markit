@@ -861,6 +861,21 @@ const payload = {
         }
       })
 
+    await $fetch('/api/notifyfcm', {
+    method: 'POST',
+    body: {
+      companyId: useAuth().session.value?.companyId,
+      excludeDeviceId: localStorage.getItem('device_id'), // 🧠 Prevent notifying self
+      title: '🧾 New Bill Created',
+      body: `Invoice #${billid.billCounter} for ₹${grandTotal.value} has been created.`,
+      // Optional: include click_action URL
+      data: {
+        url: '/erp/sales' // for redirect on click (handled in service worker)
+      }
+    }
+  })
+
+
            items.value = [
       { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
       ];

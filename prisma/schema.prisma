@@ -718,6 +718,19 @@ model Notification {
   @@map("notifications")
 }
 
+model PushToken {
+  id        String   @id() @unique() @default(uuid())
+  userId    String
+  companyId String
+  token     String
+  userAgent String
+  deviceId  String
+  createdAt DateTime @default(now())
+
+  @@unique([userId, companyId, deviceId])
+  @@map("push_token")
+}
+
 model PromoCode {
   id              String            @id() @default(cuid())
   code            String            @unique()

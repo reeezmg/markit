@@ -2657,6 +2657,43 @@ const metadata = {
                 },
             },
         },
+        pushToken: {
+            name: 'PushToken', fields: {
+                id: {
+                    name: "id",
+                    type: "String",
+                    isId: true,
+                    attributes: [{ "name": "@default", "args": [] }],
+                }, userId: {
+                    name: "userId",
+                    type: "String",
+                }, companyId: {
+                    name: "companyId",
+                    type: "String",
+                }, token: {
+                    name: "token",
+                    type: "String",
+                }, userAgent: {
+                    name: "userAgent",
+                    type: "String",
+                }, deviceId: {
+                    name: "deviceId",
+                    type: "String",
+                }, createdAt: {
+                    name: "createdAt",
+                    type: "DateTime",
+                    attributes: [{ "name": "@default", "args": [] }],
+                },
+            }, uniqueConstraints: {
+                id: {
+                    name: "id",
+                    fields: ["id"]
+                }, userId_companyId_deviceId: {
+                    name: "userId_companyId_deviceId",
+                    fields: ["userId", "companyId", "deviceId"]
+                },
+            },
+        },
         promoCode: {
             name: 'PromoCode', fields: {
                 id: {

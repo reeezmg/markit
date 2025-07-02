@@ -14,6 +14,7 @@ export const useNotifications = () => {
   const maxReconnectAttempts = 5
   const auth = useNuxtApp().$auth
   const companyId = auth?.session.value?.companyId
+  const senderId = auth?.session.value?.id
 
   // Add this to your composable
 const typeConfigs: Record<NotificationType, NotificationConfig> = {
@@ -90,7 +91,7 @@ const typeConfigs: Record<NotificationType, NotificationConfig> = {
   const fetchNotifications = async () => {
     try {
       isLoading.value = true
-      const data = await $fetch<any[]>(`/api/notifications?companyId=${companyId}`)
+      const data = await $fetch<any[]>(`/api/notifications?companyId=${companyId}&userId=${senderId}`)
       // Ensure we always set an array
       notifications.value = Array.isArray(data)
         ? data.map(validateNotification)
@@ -140,21 +141,30 @@ const typeConfigs: Record<NotificationType, NotificationConfig> = {
 
   const setupWebSocket = () => {
     if (!companyId || ws) return
-    
     const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://'
-    const url = `${protocol}${window.location.hostname}:3003?companyId=${companyId}`
-    
+
+    const isLocalhost = window.location.hostname === 'localhost'
+
+    // 👇 If on localhost, use port 3003; otherwise use hosted domain (e.g. Fly.io)
+    const host = isLocalhost
+      ? 'localhost:3004'
+      : 'your-fly-app.fly.dev' // ✅ Replace with your Fly.io WebSocket domain
+
+    const url = `${protocol}${host}?companyId=${companyId}&clientId=${senderId}`
+
     ws = new WebSocket(url)
 
     ws.onopen = () => {
       isConnected.value = true
       reconnectAttempt = 0
-      console.log('WebSocket connected')
+      console.log('✅ WebSocket connected')
     }
+
 
     ws.onmessage = (event) => {
       try {
         const notification = validateNotification(JSON.parse(event.data))
+        console.log(notification)
         notifications.value = [notification, ...notifications.value]
         if (!notification.read) playNotificationSound()
       } catch (err) {
