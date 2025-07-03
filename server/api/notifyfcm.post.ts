@@ -55,16 +55,15 @@ export default defineEventHandler(async (event) => {
       body: JSON.stringify({
         message: {
           token,
-          notification: {
-            title,
-            body: msgBody
-          },
+          data: {
+          title,
+          body: msgBody,
+          url: '/' // optional redirect URL
+        },
           android: { priority: 'high' },
           webpush: {
             headers: { Urgency: 'high' },
-            notification: {
-              icon: '/icons/icon-192.png'
-            }
+
           }
         }
       })
