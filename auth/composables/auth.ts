@@ -151,3 +151,20 @@ export const updateSession = async (
     await useAuth().updateSession();
     console.log('Session updated');
 };
+
+export const updateProfileDetails = async (
+    name: string | null,
+    email: string | null,
+    image: string | null
+) => {
+    await $fetch('/api/auth/changeprofiledetails', {
+        method: 'PUT',
+        body: {
+            name,
+            email,
+            image,
+        },
+    });
+    await useAuth().updateSession();
+    console.log('Session updated');
+};

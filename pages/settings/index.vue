@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { FormError, FormSubmitEvent } from '#ui/types';
-import { useFindUniqueUser, useUpdateUser } from '~/lib/hooks';
+import { useFindUniqueUser, useUpdateUser,useFindUniqueCompanyUser,useUpdateCompanyUser } from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
 import AwsService from '~/composables/aws';
 
@@ -10,6 +10,7 @@ interface ImageData {
 }
 
 const UpdateUser = useUpdateUser();
+const UpdateCompanyUser = useUpdateCompanyUser();
 const fileRef = ref<HTMLInputElement>();
 const awsService = new AwsService();
 const isDeleteAccountModalOpen = ref(false);
@@ -21,6 +22,7 @@ const isVerifyingOtp = ref(false);
 const isUpdatingProfile = ref(false);
 const isUpdatingPassword = ref(false);
 const isNameChanged = ref(false);
+const isImageChanged = ref(false);
 const isEmailChanged = ref(false);
 const router = useRouter();
 
@@ -45,17 +47,28 @@ const { data: userData } = useFindUniqueUser({
     },
     select: {
         id: true,
-        name: true,
         email: true,
         image: true,
         password: true,
     },
 }
 );
+const { data: companyUserData } = useFindUniqueCompanyUser({
+     where: {
+        companyId_userId: {
+        companyId: useAuth().session.value?.companyId!,
+        userId: useAuth().session.value?.id!,
+        },
+    },
+    select: {
+        name: true,
+    },
+}
+);
 
 
 watch(() => state.name, (newName) => {
-  isNameChanged.value = newName !== userData.value?.name;
+  isNameChanged.value = newName !== companyUserData.value?.name;
 }, { immediate: true });
 
 watch(() => state.email, (newEmail) => {
@@ -65,13 +78,16 @@ watch(() => state.email, (newEmail) => {
 
 watch(() => userData.value, (newVal) => {
   if (newVal) {
-    state.name = newVal.name || '';
     state.email = newVal.email;
     state.image = newVal.image || '';
   }
 },{ deep: true, immediate: true });
 
-
+watch(() => companyUserData.value, (newVal) => {
+  if (newVal) {
+    state.name = newVal.name || '';
+  }
+},{ deep: true, immediate: true });
 
 
 
@@ -90,7 +106,7 @@ const previewUrl = computed(() => {
 
 function handleAddImageChange(e: Event) {
     const files = (e.target as HTMLInputElement).files;
-
+    isImageChanged.value = true
     if (files && files.length > 0) {
         const file = files[0]; // Take only the first file
         const uuid = uuidv4();
@@ -105,12 +121,24 @@ const onProfileUpdate = async () => {
             id: useAuth().session.value?.id,
         },
         data: {
-            name: state.name,
             ...(selectedFile.value?.file && {
                 image: selectedFile.value?.uuid,
             }),
         }
     });
+
+    await UpdateCompanyUser.mutateAsync({
+        where: {
+            companyId_userId: {
+            companyId: useAuth().session.value?.companyId!,
+            userId: useAuth().session.value?.id!,
+            },
+        },
+        data: {
+            name: state.name,
+        },
+        });
+
 
     
     if (selectedFile.value) {
@@ -121,6 +149,8 @@ const onProfileUpdate = async () => {
 
         await awsService.uploadBase64File(base64file.base64, base64file.uuid);
     }
+
+    await updateProfileDetails(state.name,null,selectedFile.value?.uuid)
 }catch(error){
     console.error(error);
     toast.add({
@@ -254,6 +284,7 @@ const onVerifyOtp = async () => {
             email: state.email,
         }
         });
+         await updateProfileDetails(null,state.email,null)
         toast.add({ title: 'Email updated successfully', icon: 'i-heroicons-check-circle', color: 'green' });
         }catch(error){
             console.log(error)
@@ -394,7 +425,7 @@ const onVerifyOtp = async () => {
                     size="md"
                     class="mt-4"
                     :loading="isUpdatingProfile"
-                    :disabled="!state.name || !isNameChanged "
+                    :disabled="!state.name || (!isNameChanged && !isImageChanged)"
                     @click="onProfileUpdate"
                 />
                 </UFormGroup>
