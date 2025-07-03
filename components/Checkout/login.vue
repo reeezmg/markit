@@ -1,7 +1,7 @@
 
    <script setup lang="ts">
 import { reactive, ref, computed, watch, onMounted, type Ref } from 'vue'
-import { auth } from '~/composables/firebase'
+import { auth } from '~/composables/firebase.client'
 import { useFindUniqueClient, useCreateClient, useUpdateClient, useFindFirstCompany, useFindFirstCartCompanyClient, useCreateCartCompanyClient, useFindFirstLikeCompanyClient, useCreateLikeCompanyClient } from '~/lib/hooks'
 import { RecaptchaVerifier, signInWithPhoneNumber, type ConfirmationResult } from 'firebase/auth'
 import { getCountryCallingCode } from 'libphonenumber-js'

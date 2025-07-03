@@ -1,8 +1,7 @@
-// ~/composables/usePushNotifications.ts
 import { getToken, onMessage } from 'firebase/messaging'
-import { messaging } from './firebase'
+import { useMessaging } from './useMessaging'
 
-export async function usePushNotifications(userId:string, companyId:string) {
+export async function usePushNotifications(userId: string, companyId: string) {
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     console.warn('Notifications not supported in this browser')
     return
@@ -11,6 +10,12 @@ export async function usePushNotifications(userId:string, companyId:string) {
   const permission = await Notification.requestPermission()
   if (permission !== 'granted') {
     console.warn('Notification permission not granted')
+    return
+  }
+
+  const messaging = await useMessaging()
+  if (!messaging) {
+    console.warn('Messaging not available (SSR or error)')
     return
   }
 
@@ -26,14 +31,12 @@ export async function usePushNotifications(userId:string, companyId:string) {
     return
   }
 
-  // Get or generate device ID
   let deviceId = localStorage.getItem('device_id')
   if (!deviceId) {
     deviceId = crypto.randomUUID()
     localStorage.setItem('device_id', deviceId)
   }
 
-  // Save token to backend
   try {
     await $fetch('/api/savefcmtoken', {
       method: 'POST',
@@ -52,7 +55,6 @@ export async function usePushNotifications(userId:string, companyId:string) {
     console.error('❌ Failed to save FCM token:', err)
   }
 
-  // Listen for foreground push
   onMessage(messaging, (payload) => {
     console.log('🔔 Foreground message:', payload)
     if (payload.notification?.title) {
