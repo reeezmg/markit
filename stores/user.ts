@@ -1,8 +1,9 @@
 import { defineStore } from 'pinia'
+
 type ProcessedUser = {
   id: string
   email: string
-  shortCut?: string
+  code?: string
   name?: string
   image?: string | null
 }
@@ -12,11 +13,13 @@ export const useUserStore = defineStore('user', () => {
   const loading = ref(false)
   const error = ref<any>(null)
 
-  async function fetchUsers() {
+  async function fetchUsers(companyId: string) {
     loading.value = true
     error.value = null
     try {
-      const data = await $fetch<ProcessedUser[]>('/api/getuser')
+      const data = await $fetch<ProcessedUser[]>('/api/getuser', {
+        query: { companyId }
+      })
       users.value = data
     } catch (err) {
       error.value = err
@@ -25,29 +28,30 @@ export const useUserStore = defineStore('user', () => {
     }
   }
 
-  async function fetchAllUsers() {
-    if (users.value.length === 0) await fetchUsers()
-  }
-
-  async function refreshUsers() {
-    await fetchUsers()
+  async function refreshUsers(companyId: string) {
+    await fetchUsers(companyId)
   }
 
   function getuserById(id: string) {
     return users.value.find((u) => u.id === id) || null
   }
 
-  function getuserByShortCut(shortCut: string) {
-    return users.value.find((u) => u.shortCut === shortCut) || null
+  function getuserByCode(code: string) {
+    return users.value.find((u) => u.code === code) || null
   }
 
   return {
     users,
     loading,
     error,
-    fetchAllUsers,
+    fetchUsers,
     refreshUsers,
     getuserById,
-    getuserByShortCut,
+    getuserByCode,
+  }
+}, {
+  persist: {
+    pick: ['users'],
+    key: 'users',
   }
 })

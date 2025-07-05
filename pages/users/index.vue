@@ -4,20 +4,21 @@ import { hash } from '~/composables/hash';
 import {
     useFindManyCompanyUser,
     useUpdateUser,
-    useDeleteUser,
     useUpdateManyUser,
-    useUpdateCompanyUser,
+    useDeleteCompanyUser,
     useCreateUser,
     useFindUniqueUser,
-    useFindFirstCompanyUser
 } from '~/lib/hooks';
+const userStore = useUserStore()
 const toast = useToast();
-
+const isSaving = ref(false)
+const isDeleting = ref(false)
+const isDeleteModalOpen = ref(false)
+const deletingRowIdentinty = ref({})
 const CreateUser = useCreateUser();
 const UpdateUser = useUpdateUser();
-const DeleteUser = useDeleteUser();
 const UpdateManyUser = useUpdateManyUser();
-const UpdateCompanyUser = useUpdateCompanyUser();
+const DeleteCompanyUser = useDeleteCompanyUser();
 const router = useRouter();
 const route = useRoute();
 const isOpen = ref(false);
@@ -105,19 +106,42 @@ const active = (selectedRows) => [
     ],
 ];
 
+const formData = reactive({
+    email: '',
+    name: '',
+    role: { label: '', value: '' },
+    code:'',
+    id:''
+});
+
+
+const openEdit = (row) => {
+    isOpen.value = true 
+    formData.email = row.user.email
+    formData.name = row.name
+    formData.role.label = row.role
+    formData.role.value = row.role
+    formData.code = row.code
+    formData.id = row.userId
+    }
+
+
 const action = (row) => [
     [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`products/edit/${row.id}`),
+            click: () => openEdit(row),
         },
     ],
     [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click:() => deleteUser(row.id)
+           click: () => {
+                isDeleteModalOpen.value = true
+                deletingRowIdentinty.value = {name:row.name,id:row.userId}
+                }
         },
     ],
 ];
@@ -139,12 +163,6 @@ const todoStatus = [
 const search = ref('');
 const selectedStatus = ref<any>([]);
 
-const formData = reactive({
-    email: '',
-    name: '',
-    role: { label: '', value: '' },
-    code:''
-});
 
 
 const options = [
@@ -163,20 +181,14 @@ const { data: existingUser, refetch: refetchUser } = useFindUniqueUser(
   { enabled: false }
 );
 
-const {data:existingCode} = useFindFirstCompanyUser({
-    where: computed(() => ({
-        code: formData.code,
-        companyId:useAuth().session.value?.companyId!  
-    })),
+watch(() => formData.code, (newCode) => {
+    console.log(userStore.users)
+    console.log(newCode)
+  const match = userStore.users.find(u => u.code === newCode)
+console.log(match)
+  disableSave.value =
+    !!match && (formData.id === '' || formData.id !== match.id)
 })
-
-watch(existingCode, (newexistingCode) => {
-  if(formData.code && newexistingCode){
-    disableSave.value = true
-  }else{
-    disableSave.value = false
-  }
-});
 
 
 
@@ -191,25 +203,30 @@ const pageTo = computed(() =>
 );
 
 const deleteUser = async (id: string) => {
-  const res = await UpdateUser.mutateAsync({
-    where: {
-      id,
-    },
-    data: {
-    companies: {
-      deleteMany: {
-        companyId: useAuth().session.value?.companyId!, // 👈 add `!` if you're sure it's always defined
-              userId: id,
-      },
-    },
-}
-  });
-  console.log(res)
+  isDeleting.value = true
+  const companyId = useAuth().session.value?.companyId!;
+  const currentUserId = useAuth().session.value?.id;
 
-  if (id === useAuth().session.value?.id) {
-    await authLogout();
+  try {
+    await DeleteCompanyUser.mutateAsync({
+      where: {
+        companyId_userId: {
+          companyId,
+          userId: id,
+        },
+      },
+    });
+
+    if (id === currentUserId) {
+      await authLogout();
+    }
+  } catch (error) {
+    console.error('Failed to delete user:', error);
+  }finally{
+    isDeleting.value = false
   }
 };
+
 const queryArgs = computed(() => {
   const selectedStatusCondition =
     selectedStatus.value.length > 0
@@ -287,7 +304,35 @@ async function toggleStatus(id: string) {
 }
 
 const handleSubmit = async (e: Event) => {
+    isSaving.value = true
     try {
+        if(formData.id){
+            await UpdateUser.mutateAsync({
+    where: { id: formData.id },
+    data: {
+        companies: {
+        update: {
+            where: {
+            companyId_userId: {
+                companyId: useAuth().session.value?.companyId!,
+                userId: formData.id
+            }
+            },
+            data: {
+            name: formData.name,
+            code: formData.code,
+            role: formData.role.value
+            }
+        }
+        }
+    }
+    });
+    toast.add({
+            title: 'user updated !',
+            id: 'modal-success',
+        });
+        }
+    else{
         const { data } = await refetchUser();
          if (data) {
         await UpdateUser.mutateAsync({
@@ -326,18 +371,30 @@ const handleSubmit = async (e: Event) => {
             },
         });
         }
-        
+
         toast.add({
             title: 'user added !',
             id: 'modal-success',
         });
+    }
+
+        formData.email = ''
+        formData.name = ''
+        formData.role = { label: '', value: '' }
+        formData.code = ''
+        formData.id = ''
+        
         isOpen.value = false;
+
+        await userStore.fetchUsers(useAuth().session.value?.companyId!)
     } catch (err: any) {
         console.log(err.info?.message ?? err);
          toast.add({
             title: 'Unable to add user !',
             description: `${err.info?.message ?? err}`
         });
+    }finally{
+        isSaving.value = false
     }
 };
 </script>
@@ -630,11 +687,39 @@ const handleSubmit = async (e: Event) => {
                         class="mb-5"
                         @click="handleSubmit"
                         :disabled = "disableSave"
+                        :loading = "isSaving"
                     >
                         Continue
                     </UButton>
                 </template>
             </UCard>
         </UModal>
+
+         <UDashboardModal
+        v-model="isDeleteModalOpen"
+        title="Delete User"
+        :description="`Are you sure you want to delete user ${deletingRowIdentinty.name}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                :loading="isDeleting"
+                @click="() => deleteUser(deletingRowIdentinty.id)"
+            />
+            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
     </UDashboardPanelContent>
 </template>

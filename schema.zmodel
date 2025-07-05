@@ -17,7 +17,7 @@ plugin hooks {
 abstract model Base {
     id String @id @unique @default(uuid())
 
-    @@allow('read, update', true)
+     @@allow('read, create, update, delete', true)
 }
 
 enum UserRole {
@@ -681,6 +681,7 @@ model CompanyUser {
     status    Boolean       @default(true)
     entries     Entry[]
     @@id([companyId, userId])
+    @@unique([companyId, code])
     @@allow('read,create, update, delete', auth() != null )
     @@map('company_users')
 }
@@ -791,13 +792,12 @@ enum NotificationType {
 
 model PushToken extends Base {
   userId      String
-  companyId   String
   token       String
   userAgent   String
   deviceId    String   
   createdAt   DateTime @default(now())
 
-  @@unique([userId, companyId, deviceId])  
+  @@unique([userId, deviceId])  
   @@map("push_token")
 }
 

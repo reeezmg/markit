@@ -49,16 +49,28 @@ export async function updatePassword(id: string,password:string) {
     });
 }
 
-export async function updateUser(id: string,companyId:string) {
-    return prisma.user.update({
-        where: { id },
-            data: {
-                companies: {
-                    create: [{ company: { connect: { id: companyId} } }],
-                },
-            },
-    });
+export async function updateUser(
+  userId: string,
+  companyId: string,
+  name: string,
+  role: 'admin' | 'user' // or use your `UserRole` enum
+) {
+  return prisma.user.update({
+    where: { id: userId },
+    data: {
+      companies: {
+        create: [
+          {
+            company: { connect: { id: companyId } },
+            name,
+            role,
+          },
+        ],
+      },
+    },
+  });
 }
+
 
 export async function createAddress(address: Omit<Address, 'id'>) {
     return prisma.address.create({

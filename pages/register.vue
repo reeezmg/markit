@@ -12,7 +12,7 @@ const toast = useToast();
 const isSendingOtp = ref(false);
 const isVerifyingOtp = ref(false);
 const showOtpInput = ref(false)
-
+const registerLoading = ref(false)
 
 // Form state
 const state = reactive({
@@ -41,11 +41,14 @@ const formSchema = z.object({
 // Validate function
 const validate = (state: any) => {
   try {
+    if(!emailExist){
     const validated = formSchema.parse(state);
     if (validated.password !== validated.confirmPassword) {
       return [{ path: 'confirmPassword', message: 'Passwords do not match' }];
     }
     return [];
+  }
+  return []
   } catch (error: any) {
     if (error.errors) {
       return error.errors.map((err: any) => ({
@@ -59,6 +62,7 @@ const validate = (state: any) => {
 
 // Form submission
 async function onSubmit() {
+  registerLoading.value = true
   try {
     const res = await authRegister(
       state.email,
@@ -87,6 +91,8 @@ const checkEmail = async (email: string) => {
     }
   } catch (error) {
     console.error(error);
+  } finally{
+     registerLoading.value = false
   }
 };
 
@@ -199,7 +205,7 @@ const onVerifyOtp = async () => {
                 />
         </UFormGroup>
 
-        <template v-if="!emailExist && isEmailVerified">
+        <template v-if="isEmailVerified">
           <UFormGroup name="name" label="Your Name">
             <UInput v-model="state.name" placeholder="Enter your name" />
           </UFormGroup>
@@ -212,7 +218,7 @@ const onVerifyOtp = async () => {
             />
           </UFormGroup>
 
-          <UFormGroup name="confirmPassword" label="Confirm Password">
+          <UFormGroup v-if="!emailExist" name="confirmPassword" label="Confirm Password">
             <UInput
               v-model="state.confirmPassword"
               type="password"
@@ -232,7 +238,7 @@ const onVerifyOtp = async () => {
           />
         </UFormGroup>
 
-        <UButton v-if="isEmailVerified" type="submit" block color="primary">
+        <UButton v-if="isEmailVerified" :loading="registerLoading" type="submit" block color="primary">
           Register Company
         </UButton>
 

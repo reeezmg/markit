@@ -633,6 +633,7 @@ model CompanyUser {
   entries   Entry[]
 
   @@id([companyId, userId])
+  @@unique([companyId, code])
   @@map("company_users")
 }
 
@@ -721,13 +722,12 @@ model Notification {
 model PushToken {
   id        String   @id() @unique() @default(uuid())
   userId    String
-  companyId String
   token     String
   userAgent String
   deviceId  String
   createdAt DateTime @default(now())
 
-  @@unique([userId, companyId, deviceId])
+  @@unique([userId, deviceId])
   @@map("push_token")
 }
 

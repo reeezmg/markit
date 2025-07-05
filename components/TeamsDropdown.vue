@@ -23,26 +23,25 @@ const activeCompany = ref([
     },
 ]);
 
-watchEffect(() => {
-    if (user.value) {
-        companies.value = user.value.companies.map((item) => item.company);
-        console.log(user.value.companies.map((item) => item.company));
-        activeCompany.value = user.value.companies.filter(
-            (item) => item.company.id === useAuth().session.value?.companyId,
-        );
-        console.log(user.value.companies[0]);
-    }
-});
+watch(user, (newUser) => {
+  if (newUser) {
+    companies.value = newUser.companies.map((item) => item);
+    activeCompany.value = newUser.companies.filter(
+      (item) => item.company.id === useAuth().session.value?.companyId
+    );
+  }
+}, { immediate: true });
+
 
 const teams = (items) =>
     items.map((item) => ({
-        label: item.name,
+        label: item.company.name,
         avatar: {
             src: '',
         },
         click: async () => {
-            await updateCompanySession(item.id, item.type, item.name);
-          
+            await updateCompanySession(item.company.id, item.company.type, item.company.name, item.name, item.role);
+            window.location.reload();
         },
     }));
 

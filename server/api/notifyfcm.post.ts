@@ -15,11 +15,28 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing required fields' })
   }
 
-  // 1. Fetch all tokens
+  // 1. Get all userIds for the company
+  const companyUsers = await prisma.companyUser.findMany({
+    where: { 
+      companyId,
+      role:'admin'
+     },
+    select: { userId: true }
+  })
+
+  const userIds = companyUsers.map(cu => cu.userId)
+
+  if (!userIds.length) {
+    return { success: false, message: 'No users in company' }
+  }
+
+  // 2. Fetch all push tokens for those users (excluding specific device if needed)
   const tokens = await prisma.pushToken.findMany({
     where: {
-      companyId,
-      deviceId: { not: excludeDeviceId }
+      userId: { in: userIds },
+      ...(excludeDeviceId && {
+        deviceId: { not: excludeDeviceId }
+      })
     },
     select: { token: true }
   })
@@ -30,7 +47,7 @@ export default defineEventHandler(async (event) => {
     return { success: false, message: 'No devices to notify' }
   }
 
-  // 2. Create OAuth access token
+  // 3. Create OAuth access token
   const auth = new GoogleAuth({
     credentials: {
       client_email: clientEmail,
@@ -44,7 +61,7 @@ export default defineEventHandler(async (event) => {
 
   const results = []
 
-  // 3. Send one-by-one (v1 API doesn't support batch)
+  // 4. Send notifications one-by-one
   for (const token of registrationTokens) {
     const res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
       method: 'POST',
@@ -56,14 +73,13 @@ export default defineEventHandler(async (event) => {
         message: {
           token,
           data: {
-          title,
-          body: msgBody,
-          url: '/' // optional redirect URL
-        },
+            title,
+            body: msgBody,
+            url: '/' // optional
+          },
           android: { priority: 'high' },
           webpush: {
-            headers: { Urgency: 'high' },
-
+            headers: { Urgency: 'high' }
           }
         }
       })

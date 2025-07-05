@@ -2354,6 +2354,9 @@ const metadata = {
                 companyId_userId: {
                     name: "companyId_userId",
                     fields: ["companyId", "userId"]
+                }, companyId_code: {
+                    name: "companyId_code",
+                    fields: ["companyId", "code"]
                 },
             },
         },
@@ -2667,9 +2670,6 @@ const metadata = {
                 }, userId: {
                     name: "userId",
                     type: "String",
-                }, companyId: {
-                    name: "companyId",
-                    type: "String",
                 }, token: {
                     name: "token",
                     type: "String",
@@ -2688,9 +2688,9 @@ const metadata = {
                 id: {
                     name: "id",
                     fields: ["id"]
-                }, userId_companyId_deviceId: {
-                    name: "userId_companyId_deviceId",
-                    fields: ["userId", "companyId", "deviceId"]
+                }, userId_deviceId: {
+                    name: "userId_deviceId",
+                    fields: ["userId", "deviceId"]
                 },
             },
         },

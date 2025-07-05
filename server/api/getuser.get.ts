@@ -1,24 +1,24 @@
-import { defineEventHandler, createError } from 'h3'
 import { prisma } from '~/server/prisma'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
-
-  if (!session?.data?.companyId) {
+  const query = getQuery(event)
+  const companyId = query.companyId as string
+console.log(companyId)
+  if (!companyId) {
     throw createError({
-      statusCode: 401,
-      statusMessage: 'Unauthorized: Company ID missing in session',
+      statusCode: 400,
+      statusMessage: 'Missing companyId in query',
     })
   }
 
   const users = await prisma.companyUser.findMany({
     where: {
-      companyId: session.data.companyId,
+      companyId,
     },
     select: {
       userId: true,
       code: true,
-      name: true, // include name if needed
+      name: true,
       user: {
         select: {
           email: true,
@@ -35,10 +35,9 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  // Flatten response if needed
   return users.map((u) => ({
     id: u.userId,
-    shortCut: u.code,
+    code: u.code,
     name: u.name,
     email: u.user.email,
     image: u.user.image,

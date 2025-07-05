@@ -62,7 +62,7 @@ async function onSubmit(data: any) {
     loginLoading.value = true
     try {
         const res = await authLogin(data.email, data.password);
-        usePushNotifications(useAuth().session.value?.id!,useAuth().session.value?.companyId!)
+        usePushNotifications(useAuth().session.value?.id!)
        
     } catch (error) {
         reject.value = false;

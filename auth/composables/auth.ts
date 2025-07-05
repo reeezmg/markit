@@ -72,6 +72,8 @@ export const updateCompanySession = async (
     companyId: string | undefined,
     companyType: string | undefined,
     companyName: string | undefined,
+    name: string | undefined,
+    role: string | undefined,
     
 ) => {
     await $fetch('/api/auth/session', {
@@ -80,6 +82,8 @@ export const updateCompanySession = async (
             companyId,
             companyType,
             companyName,
+            name,
+            role
         },
     });
     await useAuth().updateSession();

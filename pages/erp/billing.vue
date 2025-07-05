@@ -273,7 +273,7 @@ const addNewRow = async (index) => {
   });
 
   if (hasEmptyRow) {
-  const component = barcodeInputs.value[index + 1];
+  const component = barcodeInputs.value[index];
   const input = component?.$el?.querySelector("input");
   input.focus();
   input.select();
@@ -623,7 +623,7 @@ const handleSave = async () => {
         discount.value = 0;
         paymentMethod.value = 'Cash';
         tokenEntries.value = [''];
-        throw new Error(`No valid items to bill.`);
+        throw new Error(`No valid Entry in bill.`);
       }
    items.value.forEach((item, index) => {
     if (!item.category || !item.category[0]?.id) {
@@ -866,7 +866,7 @@ const payload = {
     body: {
       companyId: useAuth().session.value?.companyId,
       excludeDeviceId: localStorage.getItem('device_id'), // 🧠 Prevent notifying self
-      title: '🧾 New Bill Created',
+      title: `New Bill Created in ${useAuth().session.value?.companyName}`,
       body: `Invoice #${billid.billCounter} for ₹${grandTotal.value} has been created.`,
       // Optional: include click_action URL
       data: {
@@ -1337,7 +1337,7 @@ onMounted(() => {
 
 async function updateUserDetails(index, user) {
 if(!user) return
-  const userdetails = userStore.getuserByShortCut(user)
+  const userdetails = userStore.getuserByCode(user)
 
   if (userdetails) {
     console.log(userdetails)
@@ -1596,7 +1596,7 @@ const handleDiscountEnter = (index) => {
         v-model="row.name" 
         ref="nameInputs"
         size="sm"  
-        @keydown.enter="addNewRow(index)"
+        @keydown.enter="moveFocus(index, 'name', 'right')"
         @keydown.up.prevent="moveFocus(index, 'name', 'up')"
         @keydown.down.prevent="moveFocus(index, 'name', 'down')"
         @keydown.left.prevent="moveFocus(index, 'name', 'left')"
@@ -1650,10 +1650,10 @@ const handleDiscountEnter = (index) => {
         ref="userInputs" 
         size="sm"  
         @keydown.enter="addNewRow(index); updateUserDetails(index,row.user)"
-        @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
-        @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
-        @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
-        @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
+        @keydown.up.prevent="moveFocus(index, 'user', 'up')"
+        @keydown.down.prevent="moveFocus(index, 'user', 'down')"
+        @keydown.left.prevent="moveFocus(index, 'user', 'left')"
+        @keydown.right.prevent="moveFocus(index, 'user', 'right')"
       />
     </td>
     <td class="py-1 whitespace-nowrap">

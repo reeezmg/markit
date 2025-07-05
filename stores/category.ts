@@ -20,12 +20,6 @@ export const useCategoryStore = defineStore('category', () => {
     }
   }
 
-  // ✅ Initial fetch (prevents duplicate fetch if already loaded)
-  async function fetchAllCategories() {
-    if (categories.value.length === 0) {
-      await fetchCategories()
-    }
-  }
 
   // ✅ Refresh (force re-fetch categories from server)
   async function refreshCategories() {
@@ -44,7 +38,7 @@ export const useCategoryStore = defineStore('category', () => {
     categories,
     loading,
     error,
-    fetchAllCategories,
+    fetchCategories,
     refreshCategories,
     getCategoryById,
     getCategoryByShortCut,

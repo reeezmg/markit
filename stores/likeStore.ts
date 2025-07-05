@@ -1,230 +1,158 @@
+import { defineStore } from 'pinia'
+import type { LikedProduct } from '~/types'
 
-import { acceptHMRUpdate, defineStore } from 'pinia';
-import type { LikedProduct, LikeState } from '~/types';
+export const useLikeStore = defineStore('like', () => {
+  const liked = ref<LikedProduct[]>([])
+  const companyId = ref('')
+  const sessionId = ref('')
+  const lastSynced = ref(0)
+  const isLoading = ref(false)
 
-// SSR-safe localStorage helpers
-const safeParse = <T>(key: string, defaultValue: T): T => {
-  if (process.server) return defaultValue;
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch {
-    return defaultValue;
-  }
-};
+  const likedCount = computed(() => liked.value.length)
+  const likedItems = computed(() => liked.value)
+  const isSynced = computed(() => !!lastSynced.value && (Date.now() - lastSynced.value) < 300000)
+  const isLiked = (product: LikedProduct) =>
+    liked.value.some((item) => item.variantId === product.variantId)
 
-const safeSet = (key: string, value: any) => {
-  if (process.server) return;
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error('LocalStorage set failed:', error);
-  }
-};
+  async function toggleLike(product: LikedProduct, newCompanyId: string, newSessionId?: string) {
+    if (!newCompanyId) throw new Error('Company ID is required')
 
-export const useLikeStore = defineStore({
-  id: 'like',
-  state: (): LikeState => ({
-    liked: [],
-    companyId: '',
-    isLoading: false,
-    sessionId: '',
-    lastSynced: 0,
-    isHydrated: false
-  }),
-
-  getters: {
-    likedCount: (state): number => state.liked.length,
-    likedItems: (state): LikedProduct[] => state.liked,
-    isSynced: (state) => !!state.lastSynced && (Date.now() - state.lastSynced) < 300000, // 5 minutes
-    isLiked: (state) => {
-    return (product: LikedProduct) => state.liked.some(
-      (item) => item.variantId === product.variantId
-    );
-  }
-  },
-
-  actions: {
-    // Hydrate from localStorage
-    async hydrate() {
-      if (this.isHydrated || process.server) return;
-      
-      this.$patch({
-        liked: safeParse<LikedProduct[]>('like_items', []),
-        companyId: safeParse<string>('like_companyId', ''),
-        sessionId: safeParse<string>('like_sessionId', ''),
-        lastSynced: safeParse<number>('like_lastSynced', 0),
-        isHydrated: true
-      });
-    },
-
-    // Persist to localStorage
-    persistState() {
-      if (process.server || !this.isHydrated) return;
-      safeSet('like_items', this.liked);
-      safeSet('like_companyId', this.companyId);
-      safeSet('like_sessionId', this.sessionId);
-      safeSet('like_lastSynced', this.lastSynced);
-    },
-
-    // Clear both state and localStorage
-    clearLocalStorage() {
-      if (process.server) return;
-      ['like_items', 'like_companyId', 'like_sessionId', 'like_lastSynced'].forEach(key => {
-        localStorage.removeItem(key);
-      });
-      this.$reset();
-    },
-
-    // Main like modification method
-    async toggleLike(product: LikedProduct, companyId: string, sessionId?: string) {
-      if (!companyId) throw new Error('Company ID is required');
-      
-      // Handle company change
-      if (this.companyId && this.companyId !== companyId) {
-        this.liked = [];
-      }
-
-      // Update company ID if changed
-      this.companyId = companyId;
-
-      // Update session ID if provided (happens on login)
-      if (!this.sessionId && sessionId) {
-        this.sessionId = sessionId;
-      }
-
-      // Find existing item
-      const existingIndex = this.liked.findIndex(i => i.variantId === product.variantId);
-
-      // Toggle like status
-      if (existingIndex >= 0) {
-        this.liked.splice(existingIndex, 1);
-      } else {
-        this.liked.push({ variantId: product.variantId });
-      }
-
-      // Persist changes locally
-      this.persistState();
-      
-      // Sync with server if we have a session
-      if (this.sessionId) {
-        await this._syncWithServer();
-      }
-
-      return existingIndex < 0; // Returns true if item was liked, false if unliked
-    },
-
-    // Remove specific like
-    async removeLike(product: LikedProduct) {
-      this.liked = this.liked.filter(i => i.variantId !== product.variantId);
-      this.persistState();
-      
-      if (this.sessionId) {
-        await this._syncWithServer();
-      }
-    },
-
-    // Clear all likes
-    async clearLikes() {
-      this.liked = [];
-      this.companyId = '';
-      this.sessionId = '';
-      this.lastSynced = 0;
-      this.clearLocalStorage();
-      
-      if (this.sessionId) {
-        await this._syncWithServer();
-      }
-    },
-
-    // Private method to merge guest likes with server likes
-    async _mergeWithServerLikes(sessionId: string, companyId: string) {
-      this.sessionId = sessionId;
-      this.companyId = companyId;
-      
-      if (!this.sessionId || !this.companyId || this.isLoading) return;
-      this.isLoading = true;
-      
-      try {
-        const { items } = await $fetch<{ items: LikedProduct[] }>('/api/like/merge', {
-          method: 'POST',
-          body: { 
-            guestItems: this.liked,
-            companyId: this.companyId,
-            clientId: this.sessionId
-          }
-        });
-        
-        if (items) {
-          this.liked = items;
-          this.lastSynced = Date.now();
-          this.persistState();
-        }
-      } catch (error) {
-        console.error('Like merge failed:', error);
-        throw error;
-      } finally {
-        this.isLoading = false;
-      }
-    },
-
-    // Private method to sync current state with server
-    async _syncWithServer() {
-      if (!this.sessionId || !this.companyId || this.isLoading) return;
-      this.isLoading = true;
-      
-      try {
-        await $fetch('/api/like/update', {
-          method: 'POST',
-          body: { 
-            companyId: this.companyId,
-            clientId: this.sessionId,
-            items: this.liked
-          }
-        });
-        
-        this.lastSynced = Date.now();
-        this.persistState();
-      } catch (error) {
-        console.error('Like sync failed:', error);
-        throw error;
-      } finally {
-        this.isLoading = false;
-      }
-    },
-
-    // Fetch likes from server
-    async fetchLikes(companyId: string, sessionId: string) {
-  if (!companyId || !sessionId) return;
-  
-  this.companyId = companyId;
-  this.sessionId = sessionId;
-  this.isLoading = true;
-  
-  try {
-    const { items } = await $fetch<{ items: LikedProduct[] }>('/api/like/get', {
-      query: { 
-        companyId, 
-        clientId: sessionId,
-        includeVariant: 'true'
-      }
-    });
-    
-    if (items) {
-      this.liked = items;
-      this.lastSynced = Date.now();
-      this.persistState();
+    if (companyId.value && companyId.value !== newCompanyId) {
+      liked.value = []
     }
-  } catch (error) {
-    console.error('Failed to fetch likes:', error);
-    throw error;
-  } finally {
-    this.isLoading = false;
-  }
-}
-  }
-});
 
-if (import.meta.hot) {
-  import.meta.hot.accept(acceptHMRUpdate(useLikeStore, import.meta.hot));
-}
+    companyId.value = newCompanyId
+    if (!sessionId.value && newSessionId) {
+      sessionId.value = newSessionId
+    }
+
+    const existingIndex = liked.value.findIndex((i) => i.variantId === product.variantId)
+    if (existingIndex >= 0) {
+      liked.value.splice(existingIndex, 1)
+    } else {
+      liked.value.push({ variantId: product.variantId })
+    }
+
+    if (sessionId.value) {
+      await _syncWithServer()
+    }    
+
+    return existingIndex < 0
+  }
+
+  async function removeLike(product: LikedProduct) {
+    liked.value = liked.value.filter((i) => i.variantId !== product.variantId)
+    if (sessionId.value) {
+      await _syncWithServer()
+    }
+  }
+
+  async function clearLikes() {
+    liked.value = []
+    companyId.value = ''
+    sessionId.value = ''
+    lastSynced.value = 0
+    if (sessionId.value) {
+      await _syncWithServer()
+    }
+  }
+
+  async function fetchLikes(newCompanyId: string, newSessionId: string) {
+    if (!newCompanyId || !newSessionId) return
+
+    companyId.value = newCompanyId
+    sessionId.value = newSessionId
+    isLoading.value = true
+
+    try {
+      const { items } = await $fetch<{ items: LikedProduct[] }>('/api/like/get', {
+        query: {
+          companyId: newCompanyId,
+          clientId: newSessionId,
+          includeVariant: 'true'
+        }
+      })
+      if (items) {
+        liked.value = items
+        lastSynced.value = Date.now()
+      }
+    } catch (error) {
+      console.error('Failed to fetch likes:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function _syncWithServer() {
+    if (!sessionId.value || !companyId.value || isLoading.value) return
+    isLoading.value = true
+
+    try {
+      await $fetch('/api/like/update', {
+        method: 'POST',
+        body: {
+          companyId: companyId.value,
+          clientId: sessionId.value,
+          items: liked.value
+        }
+      })
+      lastSynced.value = Date.now()
+    } catch (error) {
+      console.error('Like sync failed:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  async function _mergeWithServerLikes(newSessionId: string, newCompanyId: string) {
+    sessionId.value = newSessionId
+    companyId.value = newCompanyId
+
+    if (!sessionId.value || !companyId.value || isLoading.value) return
+    isLoading.value = true
+
+    try {
+      const { items } = await $fetch<{ items: LikedProduct[] }>('/api/like/merge', {
+        method: 'POST',
+        body: {
+          guestItems: liked.value,
+          companyId: companyId.value,
+          clientId: sessionId.value
+        }
+      })
+
+      if (items) {
+        liked.value = items
+        lastSynced.value = Date.now()
+      }
+    } catch (error) {
+      console.error('Like merge failed:', error)
+      throw error
+    } finally {
+      isLoading.value = false
+    }
+  }
+
+  return {
+    liked,
+    companyId,
+    sessionId,
+    lastSynced,
+    isLoading,
+    likedCount,
+    likedItems,
+    isSynced,
+    isLiked,
+    toggleLike,
+    removeLike,
+    clearLikes,
+    fetchLikes,
+    _mergeWithServerLikes
+  }
+}, {
+  persist: {
+    pick: ['liked', 'companyId', 'sessionId', 'lastSynced'],
+  }
+})

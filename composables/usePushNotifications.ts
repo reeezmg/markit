@@ -1,7 +1,7 @@
 import { getToken, onMessage } from 'firebase/messaging'
 import { useMessaging } from './useMessaging'
 
-export async function usePushNotifications(userId: string, companyId: string) {
+export async function usePushNotifications(userId: string) {
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     console.warn('Notifications not supported in this browser')
     return
@@ -42,7 +42,6 @@ export async function usePushNotifications(userId: string, companyId: string) {
       method: 'POST',
       body: {
         userId,
-        companyId,
         fcmToken,
         deviceId,
         deviceInfo: {

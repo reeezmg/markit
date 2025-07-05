@@ -22,10 +22,6 @@ export default defineNuxtConfig({
     ]
   },
 
-  output: {
-    standalone: true
-  },
-
   nitro: {
     preset: 'vercel',
     esbuild: {
@@ -53,6 +49,12 @@ export default defineNuxtConfig({
     'nuxt-headlessui',
     '@nuxtjs/tailwindcss',
     [
+    'pinia-plugin-persistedstate/nuxt',
+    {
+      autoImports:['piniaPluginPersistedstate']
+    }
+    ],
+    [
       '@pinia/nuxt',
       {
         autoImports: ['defineStore', 'acceptHMRUpdate'],
@@ -60,9 +62,11 @@ export default defineNuxtConfig({
     ],
   ],
 
+  piniaPluginPersistedstate: {
+    key: 'markit_%id',
+  },
+
   plugins: [
-    '~/plugins/like.client.ts',
-    '~/plugins/cart.client.ts',
     // ✅ You can register Electric plugin here if needed:
     // '~/plugins/electric.client.ts'
   ],
@@ -72,7 +76,6 @@ export default defineNuxtConfig({
   },
 
   ui: {
-    icons: ['heroicons', 'simple-icons'],
     safelistColors: ['primary', 'red', 'orange', 'green'],
   },
 

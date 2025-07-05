@@ -11,9 +11,8 @@ if (!fcmToken || !userId || !deviceId) {
 // Check if user+device exists
 const existing = await prisma.pushToken.findUnique({
   where: {
-    userId_companyId_deviceId: {
+    userId_deviceId: {
       userId,
-      companyId,
       deviceId
     }
   }
@@ -23,7 +22,6 @@ if (!existing) {
   await prisma.pushToken.create({
     data: {
       userId,
-      companyId,
       token: fcmToken,
       userAgent: deviceInfo?.userAgent || '',
       deviceId
