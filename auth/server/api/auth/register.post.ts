@@ -8,6 +8,8 @@ export default eventHandler(async (event) => {
     const company = await createCompany({
         name: companyname,
         type,
+        variantinput: { create: {} },
+        productinput: { create: {} },
     });
 
     if (existingUser) {
