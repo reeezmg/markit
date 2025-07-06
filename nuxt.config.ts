@@ -1,10 +1,9 @@
 export default defineNuxtConfig({
   extends: ['@nuxt/ui-pro', './auth'],
 
-  ssr: false, // ⚠️ Set false for Electron static rendering
+  ssr: true,
 
   app: {
-    baseURL: './', // ✅ Required for Electron to load local files correctly
     head: {
       link: [
         { rel: 'manifest', href: '/manifest.json' },
@@ -19,18 +18,17 @@ export default defineNuxtConfig({
   build: {
     transpile: [
       'trpc-nuxt',
-      '@electric-sql/pglite',
+      '@electric-sql/pglite', // ✅ ElectricSQL support
     ]
   },
 
   nitro: {
-    // ❌ Remove 'vercel' preset – not compatible with local/Electron
+    preset: 'vercel',
     esbuild: {
       options: {
         target: 'es2022'
       }
-    },
-    preset: 'static', // ✅ Use static generation for Electron
+    }
   },
 
   vite: {
@@ -51,10 +49,10 @@ export default defineNuxtConfig({
     'nuxt-headlessui',
     '@nuxtjs/tailwindcss',
     [
-      'pinia-plugin-persistedstate/nuxt',
-      {
-        autoImports: ['piniaPluginPersistedstate']
-      }
+    'pinia-plugin-persistedstate/nuxt',
+    {
+      autoImports:['piniaPluginPersistedstate']
+    }
     ],
     [
       '@pinia/nuxt',
@@ -63,13 +61,9 @@ export default defineNuxtConfig({
       },
     ],
   ],
-
-  piniaPluginPersistedstate: {
-    key: 'markit_%id',
-  },
-
   plugins: [
-    // Add any client-side only plugin here if needed
+    // ✅ You can register Electric plugin here if needed:
+    // '~/plugins/electric.client.ts'
   ],
 
   imports: {
@@ -85,7 +79,7 @@ export default defineNuxtConfig({
   },
 
   runtimeConfig: {
-    sessionSecret: process.env.SESSION_SECRET,
+    sessionSecret: process.env.SESSION_SECRET, // ✅ Move inside runtimeConfig
     sourceId: process.env.SOURCE_ID,
     secret: process.env.SECRET,
 
