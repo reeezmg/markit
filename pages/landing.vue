@@ -16,10 +16,10 @@
       <!-- Hero Section -->
       <UCard class="text-center space-y-6 shadow-xl">
         <template #header>
-          <h1 class="text-4xl md:text-5xl font-bold text-primary">Smart SaaS for Indian SMEs</h1>
+          <h1 class="text-4xl md:text-5xl font-bold text-primary">All in one software for Fashion & Lifestyle retailers</h1>
         </template>
         <p class="text-gray-600 text-lg max-w-2xl mx-auto">
-          Empower your retail or wholesale business with a platform built for inventory, billing, CRM, B2B marketplace, and hybrid shopping models like Try-at-Home and Book Online, Try in Store.
+          Empower your business with a platform built for inventory, billing, CRM, and hybrid shopping models like Try-at-Home and Book Online, Try in Store.
         </p>
         <UButton size="lg" color="primary" to="/register">Get Started for Free</UButton>
       </UCard>

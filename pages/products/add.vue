@@ -212,7 +212,7 @@ const handleDistributorValue = (data:any) => {
 
 const handleAdd = async (e: Event) => {
 
-  isLoad.value = false
+  isLoad.value = true
   e.preventDefault();
   try {
 
@@ -333,71 +333,6 @@ const handleAdd = async (e: Event) => {
       },
       select: { id: true }
     });
-
-
-       console.log(productRes)
-      // await getItem(res?.variants)
-
-    // const imageData = res?.images.map((item) => (
-    //      `https://images.markit.co.in/${item}`
-    //   ))
-
-  //   const productData: any = {
-  //     title: res?.name,
-  //     body_html: `<strong>${res?.description}</strong>`,
-  //     product_type: res?.categories[0].category.name,
-  //     status: 'active',
-  //     variants: [
-  //       {
-  //         price: res?.price,
-  //       },
-  //     ],
-  //   };
-  //   let productRes :any
-  //   try {
-  //     productRes = await $fetch('/api/shopify/shopifyProduct', {
-  //     method: 'POST',
-  //     body: { productData },
-  //   });
-
-  //   if (productRes.success) {
-  //     console.log('Product created:', productRes);
-  //   } else {
-  //     console.error('Error creating product:', productRes);
-  //   }
-  // } catch (error) {
-  //   console.error('Error creating product:', error);
-  // }
-
-  // console.log("product id:",productRes)
- 
-
-
-    
-
-
-    // try {
- 
-    // const imageRes = await $fetch('/api/shopify/shopifyImage', {
-    //   method: 'POST',
-    //   body: { productId:productRes.product.product.id, base64files },
-    // });
-
-    // if (imageRes.success) {
-    //   console.log('Product image created:', imageRes);
-    // } else {
-    //   console.error('Error creating product:', imageRes);
-    // }
-    // } catch (error) {
-    // console.error('Error creating product:', error);
-    // }
-
-   
-      // console.log(files[0].file)
-      // const resimage = await postImage(files[0].file)
-
-      
-   
   } catch (err: any) {
     console.log(err.info?.message ?? err);
   }finally{
@@ -640,17 +575,24 @@ const {
 },{enabled:false});
 
 watch(
-  () => items.value, // Watch the fetched items
+  () => items.value, 
   (val) => {
     if (!val) return
-
+console.log("Items:", val)
     const variants = val.products.flatMap((product) => product.variants)
 
     totalAmount.value = variants.reduce((sum, variant) => {
-      const qty = variant.qty || 0
-      const pprice = variant.pprice || 0
-      return sum + qty * pprice
+      if (!variant.items || !Array.isArray(variant.items)) return sum
+
+      const variantTotal = variant.items.reduce((itemSum, item) => {
+        const qty = item.qty || 0
+        const pprice = variant.pprice || 0
+        return itemSum + qty * pprice
+      }, 0)
+
+      return sum + variantTotal
     }, 0)
+    console.log("Total Amount:", totalAmount.value)
   },
   { immediate: true, deep: true }
 )
@@ -837,7 +779,7 @@ const handleNewProduct = () => {
                     <UButton
                         @click="handleSave"
                         color="green"
-                         :loading="isLoad && isSave"
+                        :loading="isLoad && isSave"
                     >
                         Save Order
                     </UButton>
@@ -859,7 +801,7 @@ const handleNewProduct = () => {
               <div class="m-3">
                     <UButton
                         @click="handleSave"
-                        :loading="isLoad"
+                        :loading="isLoad && isSave"
                         color="green"
                     >
                         Save Order
