@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { useCompanyEntries } from '~/composables/companyReports'
 
+const useAuth = () => useNuxtApp().$auth;
+const companyName = computed(() => useAuth().session.value?.companyName);
 const entries = ref([])
 const loading = ref(false)
+
+// ✅ Define selectedDate for v-model binding
+const selectedDate = ref({
+  start: new Date(new Date().setHours(0, 0, 0, 0)),
+  end: new Date(new Date().setHours(23, 59, 59, 999)),
+})
 
 const fetchEntries = async (start?: Date, end?: Date) => {
   const todayStart = new Date(new Date().setHours(0, 0, 0, 0))
@@ -10,22 +18,31 @@ const fetchEntries = async (start?: Date, end?: Date) => {
 
   const finalStart = start ?? todayStart
   const finalEnd = end ?? todayEnd
-
   loading.value = true
   entries.value = await useCompanyEntries(finalStart, finalEnd)
   loading.value = false
 }
 
-// fetch default entries (today)
-onMounted(() => {
-  fetchEntries()
-})
+// ✅ Wait until session is ready before fetching
+watch(
+  () => useAuth().session.value,
+  (session) => {
+    if (session?.companyId || session?.companyName) {
+      fetchEntries(selectedDate.value.start, selectedDate.value.end)
+    }
+  },
+  { immediate: true }
+)
 
-// re-fetch when date is updated from child
-const handleDateChange = (range: { start: Date; end: Date }) => {
-  fetchEntries(range.start, range.end)
-}
+// 🔁 Refetch when selectedDate or companyName changes
+watch([selectedDate, companyName], ([newVal, newCompany]) => {
+  if (newCompany) {
+    fetchEntries(newVal.start, newVal.end)
+  }
+})
 </script>
+
+
 
 <template>
   <UDashboardPanelContent class="pb-24">
@@ -39,7 +56,7 @@ const handleDateChange = (range: { start: Date; end: Date }) => {
         <UsersReportTable
           v-if="entries"
           :users="entries"
-          @update:selectedDate="handleDateChange"
+          v-model:selectedDate="selectedDate"
         />
       </div>
       <div class="px-4">

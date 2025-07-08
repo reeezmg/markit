@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
       }
     }
   })
-console.log(entries)
+
   const processed = {}
   const entryGroups = {}
 

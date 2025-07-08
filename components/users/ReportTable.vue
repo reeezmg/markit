@@ -13,21 +13,16 @@ const props = defineProps<{
   }
 }>()
 
-const emit = defineEmits<{
-  (e: 'update:selectedDate', value: { start: Date; end: Date }): void
-}>()
+const selectedDate = defineModel<{ start: Date; end: Date }>('selectedDate', {
+  default: () => ({
+    start: new Date(new Date().setHours(0, 0, 0, 0)),
+    end: new Date(new Date().setHours(23, 59, 59, 999))
+  })
+})
 
 
 const users = ref<{ label: string; sales: number; group: any }[]>([])
 const search = ref('')
-const selectedDate = ref({ 
-    start: new Date(new Date().setHours(0, 0, 0, 0)) , 
-    end: new Date(new Date().setHours(23, 59, 59, 999)) 
-});
-
-watch(selectedDate, (newDate) => {
-  emit('update:selectedDate', newDate)
-}, { deep: true })
 
 
 // Filter users based on search input

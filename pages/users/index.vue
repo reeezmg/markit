@@ -220,6 +220,7 @@ const deleteUser = async (id: string) => {
     if (id === currentUserId) {
       await authLogout();
     }
+    await userStore.fetchUsers(useAuth().session.value?.companyId!)
   } catch (error) {
     console.error('Failed to delete user:', error);
   }finally{
