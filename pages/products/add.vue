@@ -578,7 +578,6 @@ watch(
   () => items.value, 
   (val) => {
     if (!val) return
-console.log("Items:", val)
     const variants = val.products.flatMap((product) => product.variants)
 
     totalAmount.value = variants.reduce((sum, variant) => {

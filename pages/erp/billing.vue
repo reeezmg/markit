@@ -180,15 +180,16 @@ watch(items, async () => {
     // ---------- Step 1: Calculate discounted rate ----------
     let discountedRate = item.rate;
 
-    if (item.discount < 0) {
-      discountedRate -= Math.abs(item.discount);
+    const discount = !isNaN(Number(item.discount)) ? Number(item.discount) : 0;
+
+    if (discount < 0) {
+      discountedRate -= Math.abs(discount);
     } else {
-      discountedRate -= (discountedRate * item.discount) / 100;
+      discountedRate -= (discountedRate * discount) / 100;
     }
 
     // ---------- Step 2: Update tax according to value/qty ----------
 
-   
 
     if (item.category[0]?.id) {
       const category = categoryStore.getCategoryById(item.category[0].id)
@@ -267,19 +268,12 @@ const stopResize = () => {
   document.removeEventListener('mouseup', stopResize);
 };
 
-const addNewRow = async (index) => {
+const addNewRow = async (index,moveTonNextRow = true) => {
   const hasEmptyRow = items.value.some(item => {
     return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim() && !item.category?.length && item.qty > 0;
   });
 
-  if (hasEmptyRow) {
-  const component = barcodeInputs.value[index];
-  const input = component?.$el?.querySelector("input");
-  input.focus();
-  input.select();
-  return;
-  };   
-
+  if (!hasEmptyRow) {
   items.value.push({
     id: '',
     variantId: '',
@@ -300,12 +294,15 @@ const addNewRow = async (index) => {
     user:null,
     userId:null
   });
+  }
+
 
   await nextTick();
-
-  const component = barcodeInputs.value[index + 1];
-  const input = component?.$el?.querySelector("input");
-  if (input) input.focus();
+  if(moveTonNextRow){
+    const component = barcodeInputs.value[index + 1];
+    const input = component?.$el?.querySelector("input");
+    if (input) input.focus();
+  }
 };
 
 
@@ -1325,6 +1322,7 @@ function handleCategoryChange(category, rowIndex) {
 
   if (!isEmpty) {
     rateInputs.value[rowIndex]?.$el?.querySelector('input')?.focus();
+      addNewRow(rowIndex,false)
   }
 }
 

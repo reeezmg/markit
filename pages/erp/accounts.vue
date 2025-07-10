@@ -304,54 +304,55 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                 footer: { padding: 'p-4' },
             }"
         >
-            <!-- Filters -->
+        <!-- Filters -->
             <template #header>
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
-                    <div class="flex sm:flex-row flex-col gap-3 w-full sm:w-auto">
-                    <div class="flex flex-row gap-3 w-full sm:w-auto">    
-                        <UInput
-                            v-model="search"
-                            icon="i-heroicons-magnifying-glass-20-solid"
-                            type="number"
-                            placeholder="Search Invoice"
-                            class="me-3 w-full sm:w-40"
-                        />
-                        <USelectMenu
-                        v-model="selectedStatus"
-                        :options="todoStatus"
-                        multiple
-                        placeholder="Status"
-                        class="w-full sm:w-40"
-                    />
-                    </div>
-                        <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
-                            <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-40">
-                                {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
-                            </UButton>
-
-                            <template #panel="{ close }">
-                                <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
-                                    <div class="hidden sm:flex flex-col py-4">
-                                        <UButton
-                                            v-for="(range, index) in ranges"
-                                            :key="index"
-                                            :label="range.label"
-                                            color="gray"
-                                            variant="ghost"
-                                            class="rounded-none px-6 hidden sm:block"
-                                            :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
-                                            truncate
-                                            @click="selectRange(range.duration)"
-                                        />
-                                    </div>
-                                    <DatePicker v-model="selectedDate" @close="close" />
-                                </div>
-                            </template>
-                        </UPopover>
-                    </div>
-                    
+            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
+                <div class="flex sm:flex-row flex-col gap-3 w-full sm:w-auto">
+                <div class="flex flex-row gap-3 w-full sm:w-auto">    
+                <UInput
+                    v-model="search"
+                    icon="i-heroicons-magnifying-glass-20-solid"
+                    type="number"
+                    placeholder="Search Invoice"
+                    class="w-full sm:w-40"
+                />
+                 <USelectMenu
+                    v-model="selectedStatus"
+                    :options="todoStatus"
+                    multiple
+                    placeholder="Status"
+                    class="w-full sm:w-40"
+                />
                 </div>
-            </template>
+                    <UPopover :popper="{ placement: 'bottom-start' }" class=" z-10 ">
+                        <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
+                        {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
+                        </UButton>
+
+                        <template #panel="{ close }">
+                        <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                            <div class="hidden sm:flex flex-col py-4">
+                            <UButton
+                                v-for="(range, index) in ranges"
+                                :key="index"
+                                :label="range.label"
+                                color="gray"
+                                variant="ghost"
+                                class="rounded-none px-6 hidden sm:block"
+                                :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                                truncate
+                                @click="selectRange(range.duration)"
+                            />
+                            </div>
+
+                            <DatePicker v-model="selectedDate" @close="close" />
+                        </div>
+                        </template>
+                    </UPopover>
+                </div>
+               
+            </div>
+        </template>
 
             <!-- Header and Action buttons -->
             <div class="flex justify-between items-center w-full px-4 py-3">

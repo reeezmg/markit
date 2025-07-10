@@ -79,9 +79,9 @@
               <div class="text-4xl text-primary mb-4">
                 <UIcon name="i-heroicons-chart-bar" />
               </div>
-              <h3 class="text-xl font-semibold">Sales & Performance Analytics</h3>
+              <h3 class="text-xl font-semibold">Sales & Performance Reports</h3>
               <p class="text-gray-600 mt-2">
-                Track product performance, return trends, and booking outcomes with insightful dashboards.
+                Track product performance, return trends, user sales, and booking outcomes with insightful dashboards.
               </p>
             </UCard>
           </div>

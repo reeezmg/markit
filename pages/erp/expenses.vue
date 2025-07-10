@@ -9,26 +9,18 @@ import {
     useDeleteExpense,
 } from '~/lib/hooks';
 
-const CreateExpense = useCreateExpense();
-const UpdateExpense = useUpdateExpense();
-const DeleteExpense = useDeleteExpense();
+
+
+const CreateExpense = useCreateExpense({ optimisticUpdate: true });
+const UpdateExpense = useUpdateExpense({ optimisticUpdate: true });
+const DeleteExpense = useDeleteExpense({ optimisticUpdate: true });
 const toast = useToast();
 const awsService = new AwsService();
 const useAuth = () => useNuxtApp().$auth;
 
-const addExpense = async (expense: any) => {
-
+const addExpense = (expense: any) => {
     try{
-    if (expense.receipt) {
-            const base64 = await prepareFileForApi(expense.receipt.file);
-            const base64file = { base64, uuid: expense.receipt.receipt };
-
-            console.log(base64file);
-
-            const awsres = await awsService.uploadBase64File(base64file.base64, base64file.uuid)
-    }
-        
-    await CreateExpense.mutateAsync({
+        CreateExpense.mutate({
         data: {
             ...(expense.date && {
                 expenseDate: new Date(expense.date).toISOString(),
@@ -38,12 +30,8 @@ const addExpense = async (expense: any) => {
                     id: expense.category.id,
                 },
             },
-            totalAmount: expense.amount,
+            totalAmount: expense.amount || 0,
             paymentMode: expense.paymentMode,
-            ...(expense.receipt && {
-                receipt:expense.receipt.receipt,
-                receiptName:expense.receipt.receiptName
-            }),
             status: expense.status,
             ...(expense.note && { note: expense.note }),
             company: {
@@ -52,11 +40,9 @@ const addExpense = async (expense: any) => {
                 },
             },
         },
-        include: {
-
-    company: true , expensecategory: true  },
+        
     })
-    await $fetch('/api/notifications/notify', {
+    $fetch('/api/notifications/notify', {
       method: 'POST',
       body: {
         userId:useAuth().session.value?.id,
@@ -74,9 +60,9 @@ const addExpense = async (expense: any) => {
 }
 };
 
-const editExpense = async (id: string, editExpense: any) => {
+const editExpense = (id: string, editExpense: any) => {
     console.log(id,editExpense)
-    await UpdateExpense.mutateAsync({
+    UpdateExpense.mutate({
         where: {
             id,
         },
@@ -97,8 +83,8 @@ const editExpense = async (id: string, editExpense: any) => {
     });
 };
 
-const deleteExpense = async (id: string) => {
-    await DeleteExpense.mutateAsync({
+const deleteExpense = (id: string) => {
+        DeleteExpense.mutate({
         where: {
             id,
         },
@@ -120,6 +106,7 @@ const closeForm = () => {
 };
 
 const saveExpense = (form: any) => {
+    try{
     if(!form.category || !form.category.id) {
        toast.add({
             title: 'Please select a category!',
@@ -128,11 +115,17 @@ const saveExpense = (form: any) => {
         return;
     }
     if (selectedExpense.value) {
-        editExpense(selectedExpense.value.id, form);
+       editExpense(selectedExpense.value.id, form);
     } else {
         addExpense(form);
     }
+}
+catch(error){
+    console.log(error)
+}
+finally{
     closeForm();
+};
 };
 </script>
 

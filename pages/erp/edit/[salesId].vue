@@ -143,10 +143,12 @@ watch(items, async () => {
     // ---------- Step 1: Calculate discounted rate ----------
     let discountedRate = item.rate;
 
-    if (item.discount < 0) {
-      discountedRate -= Math.abs(item.discount);
+    const discount = !isNaN(Number(item.discount)) ? Number(item.discount) : 0;
+
+    if (discount < 0) {
+      discountedRate -= Math.abs(discount);
     } else {
-      discountedRate -= (discountedRate * item.discount) / 100;
+      discountedRate -= (discountedRate * discount) / 100;
     }
 
     // ---------- Step 2: Update tax according to value/qty ----------
@@ -229,38 +231,54 @@ const stopResize = () => {
   document.removeEventListener('mouseup', stopResize);
 };
 
-const addNewRow = async (index) => {
-  items.value.push({
-    id: '',
-    variantId:'',
-    sn: items.value.length + 1,
-    barcode: '',
-    category: [], 
-    size:'',
-    name: '',
-    qty: 1,
-    rate: 0,
-    discount: 0,
-    tax: 0,
-    value: 0, 
-    sizes:{},
-    totalQty:0,
-    return:false,
-    userCode:null, 
-    userId:null, 
-    user:null
 
+const addNewRow = async (index,moveTonNextRow = true) => {
+  const hasEmptyRow = items.value.some(item => {
+    return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim() && !item.category?.length && item.qty > 0;
   });
 
-  // Wait for Vue to update the DOM
-  await nextTick();
+  if (!hasEmptyRow) {
+  items.value.push({
+    id: '',
+    variantId: '',
+    sn: items.value.length + 1,
+    barcode: '',
+    category: {},
+    size: '',
+    name: '',
+    qty: 1,
+    rate: null,
+    discount: null,
+    tax: null,
+    value: 0,
+    sizes: {},
+    totalQty: 0,
+    return:false,
+    userCode:null,
+    user:null,
+    userId:null
+  });
+  }
 
-  // Get the new barcode input component
-  const component = barcodeInputs.value[index + 1];
-  const input = component.$el.querySelector("input");
-  input.focus();
-  
+
+  await nextTick();
+  if(moveTonNextRow){
+    const component = barcodeInputs.value[index + 1];
+    const input = component?.$el?.querySelector("input");
+    if (input) input.focus();
+  }
 };
+
+function handleCategoryChange(category, rowIndex) {
+  const isEmpty = !category || Object.keys(category).length === 0;
+
+  if (!isEmpty) {
+    rateInputs.value[rowIndex]?.$el?.querySelector('input')?.focus();
+      addNewRow(rowIndex,false)
+  }
+}
+
+
 
 const selectAllText = (index) => {
   const component = barcodeInputs.value[index];
@@ -522,13 +540,13 @@ const handleEnterPayment = () => {
 const deleteBill = async () => {
     const res = await UpdateBill.mutateAsync({
         where:{
-            id: router.params.salesId
+            id: route.params.salesId
         },
         data:{
             deleted:true
         }
     })
-route.push('/erp/sales')
+router.push('/erp/sales')
     toast.add({
         title: 'Bill Deleted !',
        color: 'red',
@@ -1360,93 +1378,93 @@ const handleDiscountEnter = (index) => {
         <!-- Responsive table wrapper -->  
          
         <!-- Mobile layout with alternating colors -->
-<div  v-if="isMobile" class="block sm:hidden space-y-4 py-1 px-2">
-  <div
-    v-for="(row, index) in items"
-    :key="row.sn"    
-    :class="[
-      'p-4 text-sm space-y-3',   
-      index % 2 === 0 
-        ? 'bg-gray-300 dark:bg-zinc-700'  // Even rows
-        : 'bg-gray-100 dark:bg-zinc-900'     // Odd rows
-    ]"
-  >
-    <!-- SN, Name, Value row -->
-    <div class="flex justify-between text-gray-800 dark:text-gray-200 font-medium">
-      <span>SN: {{ row.sn }}</span>
-      <span>{{ row.name }}</span>
-      <span>₹{{ row.value }}</span>
-    </div>
+        <div  v-if="isMobile" class="block sm:hidden space-y-4 py-1 px-2">
+          <div
+            v-for="(row, index) in items"
+            :key="row.sn"    
+            :class="[
+              'p-4 text-sm space-y-3',   
+              index % 2 === 0 
+                ? 'bg-gray-300 dark:bg-zinc-700'  // Even rows
+                : 'bg-gray-100 dark:bg-zinc-900'     // Odd rows
+            ]"
+          >
+            <!-- SN, Name, Value row -->
+            <div class="flex justify-between text-gray-800 dark:text-gray-200 font-medium">
+              <span>SN: {{ row.sn }}</span>
+              <span>{{ row.name }}</span>
+              <span>₹{{ row.value }}</span>
+            </div>
 
-    <!-- Row 1: Barcode | Qty | Discount -->
-    <div class="grid grid-cols-3 gap-2">
-      <UInput
-        v-model="row.barcode"
-        placeholder="Barcode"
-        size="sm"
-        ref="barcodeInputs"
-        @focus="selectAllText(index)"
-        @keydown.delete="removeRow($event, row.barcode, index)"
-        @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
-      />
-       <UInput
-        v-model="row.rate"
-        ref="rateInputs"
-        placeholder="Rate"
-        type="number"
-        size="sm"
-        @keydown.enter="moveFocus(index, 'rate', 'right')"
-      />
-      
-      <UInput
-        v-model="row.discount"
-        placeholder="Discount"
-        ref="discountInputs" 
-        type="text"
-        inputmode="decimal"
-        pattern="^-?[0-9]*[.,]?[0-9]*$"
-        size="sm"
-        @keydown.enter="addNewRow(index)"
-      />
-    </div>
+            <!-- Row 1: Barcode | Qty | Discount -->
+            <div class="grid grid-cols-3 gap-2">
+              <UInput
+                v-model="row.barcode"
+                placeholder="Barcode"
+                size="sm"
+                ref="barcodeInputs"
+                @focus="selectAllText(index)"
+                @keydown.delete="removeRow($event, row.barcode, index)"
+                @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+              />
+              <UInput
+                v-model="row.rate"
+                ref="rateInputs"
+                placeholder="Rate"
+                type="number"
+                size="sm"
+                @keydown.enter="moveFocus(index, 'rate', 'right')"
+              />
+              
+              <UInput
+                v-model="row.discount"
+                placeholder="Discount"
+                ref="discountInputs" 
+                type="text"
+                inputmode="decimal"
+                pattern="^-?[0-9]*[.,]?[0-9]*$"
+                size="sm"
+                @keydown.enter="addNewRow(index)"
+              />
+            </div>
 
-    <!-- Row 2: Category | Rate | Tax -->
-    <div class="grid grid-cols-3 gap-2 ">
-      <USelectMenu
-        v-model="row.category"
-        :options="categories"
-        option-attribute="name"
-        @update:modelValue="() => handleCategoryChange(row.category, index)"
-        track-by="id"
-        multiple
-        searchable
-        placeholder="Category"
-      >
-        <template #label>
-          <span v-if="row.category.length">{{ row.category.map(c => c.name).join(', ') }}</span>
-          <span v-else class="text-gray-400">Category</span>
-        </template>
-      </USelectMenu>
-      <UInput
-        v-model="row.qty"
-        placeholder="Qty"
-        ref="qtyInputs" 
-        type="number"
-        size="sm"
-       @keydown.enter="moveFocus(index, 'qty', 'right')"
-      />
-     
-      <UInput
-        v-model="row.tax"
-        ref="taxInputs"
-        placeholder="Tax"
-        type="number"
-        size="sm"
-       @keydown.enter="addNewRow(index)"
-      />
-    </div>
-  </div>
-</div>
+            <!-- Row 2: Category | Rate | Tax -->
+            <div class="grid grid-cols-3 gap-2 ">
+              <USelectMenu
+                v-model="row.category"
+                :options="categories"
+                option-attribute="name"
+                @update:modelValue="() => handleCategoryChange(row.category, index)"
+                track-by="id"
+                multiple
+                searchable
+                placeholder="Category"
+              >
+                <template #label>
+                  <span v-if="row.category.length">{{ row.category.map(c => c.name).join(', ') }}</span>
+                  <span v-else class="text-gray-400">Category</span>
+                </template>
+              </USelectMenu>
+              <UInput
+                v-model="row.qty"
+                placeholder="Qty"
+                ref="qtyInputs" 
+                type="number"
+                size="sm"
+              @keydown.enter="moveFocus(index, 'qty', 'right')"
+              />
+            
+              <UInput
+                v-model="row.tax"
+                ref="taxInputs"
+                placeholder="Tax"
+                type="number"
+                size="sm"
+              @keydown.enter="addNewRow(index)"
+              />
+            </div>
+          </div>
+        </div>
 
         <!-- Desktop table layout -->   
         <div v-else class="overflow-x-auto p-3 hidden sm:block">    
@@ -1469,138 +1487,136 @@ const handleDiscountEnter = (index) => {
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
-  <tr v-for="(row, index) in items" :key="row.sn">
-    <td class="py-1 whitespace-nowrap">
-      {{ row.sn }}
-    </td>
-    <td class="py-1 whitespace-nowrap">
-      <UInput
-        v-model="row.barcode"
-        ref="barcodeInputs"
-        size="sm"
-        @focus="selectAllText(index)"
-        @keydown.delete="removeRow($event, row.barcode, index)"
-        @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
-        @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
-        @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
-        @keydown.left.prevent="moveFocus(index, 'barcode', 'left')"
-        @keydown.right.prevent="moveFocus(index, 'barcode', 'right')"
-      />
-    </td>
-    <td class="py-1 whitespace-nowrap"  ref="categoryInputs">
-      <USelectMenu  
-        v-model="row.category" 
-        @update:modelValue="() => handleCategoryChange(row.category, index)"
-        :options="categories" 
-        option-attribute="name"  
-        option-key="id" 
-        track-by="id"
-        multiple 
-        searchable
-        searchable-placeholder="Search a Category..."
-        @keydown.up.prevent="moveFocus(index, 'category', 'up')"
-        @keydown.down.prevent="moveFocus(index, 'category', 'down')"
-        @keydown.left.prevent="movecatgeory(index)"
-        @keydown.right.prevent="movecatgeory(index)"
-        @keydown.enter.prevent="movecatgeory(index)"
-      >
-        <template #label>
-          <span v-if="row.category.length" class="truncate">
-            {{ row.category.map(item => item.name).join(', ') }}
-          </span>
-          <span v-else>Select Category</span>
-        </template>
-        <template  #option="{ option: category }">
-          <span class="truncate">{{ category.name }}</span>
-        </template>
-      </USelectMenu>
-    </td>
-    <td class="py-1 whitespace-nowrap">
-      <UInput 
-        v-model="row.name" 
-        ref="nameInputs"
-        size="sm"  
-        @keydown.enter="addNewRow(index)"
-        @keydown.up.prevent="moveFocus(index, 'name', 'up')"
-        @keydown.down.prevent="moveFocus(index, 'name', 'down')"
-        @keydown.left.prevent="moveFocus(index, 'name', 'left')"
-        @keydown.right.prevent="moveFocus(index, 'name', 'right')"
-      />
-    </td>
-    <td class="py-1 whitespace-nowrap">
-      <UInput 
-        v-model="row.rate" 
-        type="number" 
-        ref="rateInputs"
-        size="sm"  
-        @keydown.enter="moveFocus(index, 'rate', 'right')"
-        @keydown.up.prevent="moveFocus(index, 'rate', 'up')"
-        @keydown.down.prevent="moveFocus(index, 'rate', 'down')"
-        @keydown.left.prevent="moveFocus(index, 'rate', 'left')"
-        @keydown.right.prevent="moveFocus(index, 'rate', 'right')"
-      />
-    </td>
-    <td class="py-1 whitespace-nowrap">
-      <UInput 
-        v-model="row.qty"  
-        ref="qtyInputs" 
-        type="number" 
-        size="sm"  
-         @keydown.enter="moveFocus(index, 'qty', 'right')"
-        @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
-        @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
-        @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
-        @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
-      
-      />
-    </td>
-    <td class="py-1 whitespace-nowrap">
-    <UInput 
-      v-model="row.discount" 
-      type="number"
-      ref="discountInputs" 
-      size="sm"  
-      @keydown.enter="handleDiscountEnter(index)"
-      @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
-      @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
-      @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
-      @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
-    />
-  </td>
+              <tr v-for="(row, index) in items" :key="row.sn">
+                <td class="py-1 whitespace-nowrap">
+                  {{ row.sn }}
+                </td>
+                <td class="py-1 whitespace-nowrap">
+                  <UInput
+                    v-model="row.barcode"
+                    ref="barcodeInputs"
+                    size="sm"
+                    @focus="selectAllText(index)"
+                    @keydown.delete="removeRow($event, row.barcode, index)"
+                    @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+                    @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
+                    @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
+                    @keydown.left.prevent="moveFocus(index, 'barcode', 'left')"
+                    @keydown.right.prevent="moveFocus(index, 'barcode', 'right')"
+                  />
+                </td>
+                <td class="py-1 whitespace-nowrap"  ref="categoryInputs">
+                  <USelectMenu  
+                    v-model="row.category" 
+                    @update:modelValue="() => handleCategoryChange(row.category, index)"
+                    :options="categories" 
+                    option-attribute="name"  
+                    option-key="id" 
+                    track-by="id"
+                    multiple 
+                    searchable
+                    searchable-placeholder="Search a Category..."
+                    @keydown.up.prevent="moveFocus(index, 'category', 'up')"
+                    @keydown.down.prevent="moveFocus(index, 'category', 'down')"
+                    @keydown.left.prevent="movecatgeory(index)"
+                    @keydown.right.prevent="movecatgeory(index)"
+                    @keydown.enter.prevent="movecatgeory(index)"
+                  >
+                    <template #label>
+                      <span v-if="row.category.length" class="truncate">
+                        {{ row.category.map(item => item.name).join(', ') }}
+                      </span>
+                      <span v-else>Select Category</span>
+                    </template>
+                    <template  #option="{ option: category }">
+                      <span class="truncate">{{ category.name }}</span>
+                    </template>
+                  </USelectMenu>
+                </td>
+                <td class="py-1 whitespace-nowrap">
+                  <UInput 
+                    v-model="row.name" 
+                    ref="nameInputs"
+                    size="sm"  
+                    @keydown.enter="addNewRow(index)"
+                    @keydown.up.prevent="moveFocus(index, 'name', 'up')"
+                    @keydown.down.prevent="moveFocus(index, 'name', 'down')"
+                    @keydown.left.prevent="moveFocus(index, 'name', 'left')"
+                    @keydown.right.prevent="moveFocus(index, 'name', 'right')"
+                  />
+                </td>
+                <td class="py-1 whitespace-nowrap">
+                  <UInput 
+                    v-model="row.rate" 
+                    type="number" 
+                    ref="rateInputs"
+                    size="sm"  
+                    @keydown.enter="moveFocus(index, 'rate', 'right')"
+                    @keydown.up.prevent="moveFocus(index, 'rate', 'up')"
+                    @keydown.down.prevent="moveFocus(index, 'rate', 'down')"
+                    @keydown.left.prevent="moveFocus(index, 'rate', 'left')"
+                    @keydown.right.prevent="moveFocus(index, 'rate', 'right')"
+                  />
+                </td>
+                <td class="py-1 whitespace-nowrap">
+                  <UInput 
+                    v-model="row.qty"  
+                    ref="qtyInputs" 
+                    type="number" 
+                    size="sm"  
+                    @keydown.enter="moveFocus(index, 'qty', 'right')"
+                    @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
+                    @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
+                    @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
+                    @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
+                  
+                  />
+                </td>
+                <td class="py-1 whitespace-nowrap">
+                <UInput 
+                  v-model="row.discount" 
+                  type="number"
+                  ref="discountInputs" 
+                  size="sm"  
+                  @keydown.enter="handleDiscountEnter(index)"
+                  @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
+                  @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
+                  @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
+                  @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
+                />
+              </td>
 
-    <td class="py-1 whitespace-nowrap" v-if="isUserTrackIncluded">
-      <UInput 
-        v-model="row.user" 
-        type="text"
-        ref="userInputs" 
-        size="sm"  
-        @keydown.enter="addNewRow(index); updateUserDetails(index,row.user)"
-        @keydown.up.prevent="moveFocus(index, 'discount', 'up')"
-        @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
-        @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
-        @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
-      />
-    </td>
-    <td class="py-1 whitespace-nowrap">
-      <UInput 
-        v-model="row.tax" 
-          ref="taxInputs"
-        type="number" 
-        size="sm" 
-        @keydown.enter="addNewRow(index)"
-        @keydown.up.prevent="moveFocus(index, 'tax', 'up')"
-        @keydown.down.prevent="moveFocus(index, 'tax', 'down')"
-        @keydown.left.prevent="moveFocus(index, 'tax', 'left')"
-        @keydown.right.prevent="moveFocus(index, 'tax', 'right')"
-      />
-    </td>
-    <td class="py-1 ps-2 whitespace-nowrap">
-      {{ row.value }}
-    </td>
-  </tr>
-</tbody>
-
-
+                <td class="py-1 whitespace-nowrap" v-if="isUserTrackIncluded">
+                  <UInput 
+                    v-model="row.user" 
+                    type="text"
+                    ref="userInputs" 
+                    size="sm"  
+                    @keydown.enter="addNewRow(index); updateUserDetails(index,row.user)"
+                    @keydown.up.prevent="moveFocus(index, 'user', 'up')"
+                    @keydown.down.prevent="moveFocus(index, 'user', 'down')"
+                    @keydown.left.prevent="moveFocus(index, 'user', 'left')"
+                    @keydown.right.prevent="moveFocus(index, 'user', 'right')"
+                  />
+                </td>
+                <td class="py-1 whitespace-nowrap">
+                  <UInput 
+                    v-model="row.tax" 
+                      ref="taxInputs"
+                    type="number" 
+                    size="sm" 
+                    @keydown.enter="addNewRow(index)"
+                    @keydown.up.prevent="moveFocus(index, 'tax', 'up')"
+                    @keydown.down.prevent="moveFocus(index, 'tax', 'down')"
+                    @keydown.left.prevent="moveFocus(index, 'tax', 'left')"
+                    @keydown.right.prevent="moveFocus(index, 'tax', 'right')"
+                  />
+                </td>
+                <td class="py-1 ps-2 whitespace-nowrap">
+                  {{ row.value }}
+                </td>
+              </tr>
+            </tbody>
           </table>
           
         </div>
@@ -1801,7 +1817,7 @@ const handleDiscountEnter = (index) => {
         <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden sm:flex">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
-          <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
+          <UButton color="red" class="flex-1" block @click="deleteBill">Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
           <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>

@@ -16,6 +16,8 @@ const UpdateManyExpense = useUpdateManyExpense();
 const selectedRows = ref([]);
 const selectedStatus = ref([]);
 const selectedCategory = ref([]);
+const isDeleteModalOpen = ref(false)
+const deletingRowIdentinty = ref({})
 const selectedDate = ref({ 
     start: new Date(new Date().setHours(0, 0, 0, 0)) , 
     end: new Date(new Date().setHours(23, 59, 59, 999)) 
@@ -70,7 +72,10 @@ const action = (row:any) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => emit('delete',row.id),
+            click: () => {
+                isDeleteModalOpen.value = true
+                deletingRowIdentinty.value = {name:row.expensecategory.name,id:row.id}
+                }
         },
     ],
     // ...(row.receipt ?
@@ -154,12 +159,7 @@ const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
         },
 
         include:{
-            expensecategory:{
-                select:{
-                    id:true,
-                    name:true
-                }
-            }
+            expensecategory:true
         },
         orderBy: {
             [sort.value.column]: sort.value.direction,
@@ -433,4 +433,30 @@ const multiUpdate = async(status:string,ids:any) => {
             </template>
      
     </UCard>
+
+    <UDashboardModal
+        v-model="isDeleteModalOpen"
+        title="Delete User"
+        :description="`Are you sure you want to delete user ${deletingRowIdentinty.name}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  {emit('delete',deletingRowIdentinty.id);isDeleteModalOpen = false;}"
+            />
+            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
 </template>

@@ -879,7 +879,7 @@ const cartItemCount =computed(() => cartStore.cartItemCount);
         <template v-else>
           <!-- Categories Section -->
           <section v-if="allCategories.length > 0 && !search && !selectedCategory" class="mb-12 px-4">
-            <h2 class="text-2xl font-bold mb-6 font-serif">Shop by Category</h2>
+            <h2 class="text-xl font-bold mb-6 font-serif">Shop by Category</h2>
             <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
               <div 
                 v-for="category in allCategories"
@@ -952,7 +952,7 @@ const cartItemCount =computed(() => cartStore.cartItemCount);
           <!-- All Products -->
           <section class="px-4">
             <div class="flex justify-between items-center mb-6">
-              <h2 class="text-2xl font-bold font-serif">All Products</h2>
+              <h2 class="text-xl font-bold font-serif">All Products</h2>
               <span class="text-sm text-gray-500 dark:text-gray-400">
                 Showing {{ flatVariants.length }} products
               </span>
