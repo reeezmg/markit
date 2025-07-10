@@ -11,16 +11,14 @@ import {
 
 
 
-const CreateExpense = useCreateExpense({ optimisticUpdate: true });
-const UpdateExpense = useUpdateExpense({ optimisticUpdate: true });
-const DeleteExpense = useDeleteExpense({ optimisticUpdate: true });
-const toast = useToast();
-const awsService = new AwsService();
+const createExpense = useCreateExpense({ optimisticUpdate: true });
+const updateExpense = useUpdateExpense({ optimisticUpdate: true });
+const deleteExpense = useDeleteExpense({ optimisticUpdate: true });
 const useAuth = () => useNuxtApp().$auth;
 
 const addExpense = (expense: any) => {
     try{
-        CreateExpense.mutate({
+        createExpense.mutate({
         data: {
             ...(expense.date && {
                 expenseDate: new Date(expense.date).toISOString(),
@@ -62,7 +60,7 @@ const addExpense = (expense: any) => {
 
 const editExpense = (id: string, editExpense: any) => {
     console.log(id,editExpense)
-    UpdateExpense.mutate({
+    updateExpense.mutate({
         where: {
             id,
         },
@@ -83,8 +81,8 @@ const editExpense = (id: string, editExpense: any) => {
     });
 };
 
-const deleteExpense = (id: string) => {
-        DeleteExpense.mutate({
+const deleteExpenseRow = (id: string) => {
+        deleteExpense.mutate({
         where: {
             id,
         },
@@ -107,13 +105,6 @@ const closeForm = () => {
 
 const saveExpense = (form: any) => {
     try{
-    if(!form.category || !form.category.id) {
-       toast.add({
-            title: 'Please select a category!',
-            color: 'red',
-        });
-        return;
-    }
     if (selectedExpense.value) {
        editExpense(selectedExpense.value.id, form);
     } else {
@@ -132,7 +123,7 @@ finally{
 <template>
     <UDashboardPanelContent class="pb-24">
             <div>
-                <ExpenseList @edit="openForm" @delete="deleteExpense"  @open="openForm"/>
+                <ExpenseList @edit="openForm" @delete="deleteExpenseRow"  @open="openForm"/>
 
                 <UModal v-model="showForm">
                     <ExpenseForm

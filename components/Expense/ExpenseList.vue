@@ -167,7 +167,7 @@ const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
         skip: (page.value - 1) * parseInt(pageCount.value),
         take: parseInt(pageCount.value),
     };
-});
+},{ enabled: !!useAuth().session.value?.companyId });
 
 const { data: sales, isLoading, error, refetch } = useFindManyExpense(queryArgs);
 const  pageTotal = computed(() => sales.value?.length) ;

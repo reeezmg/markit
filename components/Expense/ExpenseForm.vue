@@ -6,7 +6,6 @@ import {
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
 
-
 const props = defineProps({
     expense: {
         type: Object,
@@ -15,21 +14,17 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['save', 'cancel']);
-
+const toast = useToast();
 const createExpenseCategory = useCreateExpenseCategory({ optimisticUpdate: true });
 const deleteExpenseCategory = useDeleteExpenseCategory({ optimisticUpdate: true });
 const useAuth = () => useNuxtApp().$auth;
-
-watch(() => props.loading, (newLoading) => {
-    console.log('Loading state changed:', newLoading);
-});
 
 // ✅ Form Initialization with category ID
 const expenseData = computed(() => ({
     date: props.expense?.createdAt
         ? new Date(props.expense?.createdAt).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
-    category: props.expense?.expensecategory || {},  // Store only ID
+    category: props.expense?.expensecategory || null,  // Initialize as null if no category
     amount: props.expense?.totalAmount || '',
     status: props.expense?.status || 'Paid',
     paymentMode: props.expense?.paymentMode || 'CASH',
@@ -52,6 +47,11 @@ const queryArgs = computed<Prisma.ExpenseCategoryFindManyArgs>(() => ({
 const { data: categories, isLoading, error, refetch } = useFindManyExpenseCategory(queryArgs);
 
 const handleCategoryChange = async (category) => {
+    if (!category) {
+        form.value.category = null;
+        return;
+    }
+
     if (category.id) {
         form.value.category = category; 
         return;
@@ -69,32 +69,70 @@ const handleCategoryChange = async (category) => {
             }
         });
 
-        form.value.category = newCategory;  // Assign new category ID
+        form.value.category = newCategory;
+        await refetch(); // Refresh the categories list
     } catch (error) {
         console.error('Failed to create category:', error);
+        toast.add({
+            title: 'Failed to create category',
+            description: error.message,
+            color: 'red',
+        });
     }
 };
 
-
 const removeCategory = async(category) => {
-    console.log('Removing category:', category);
     try {
         await deleteExpenseCategory.mutateAsync({
             where: {
                 id: category.id
             }
         });
-        form.value.category = null;  // Clear the category from the form
-    } catch (error) {
-        console.error('Failed to remove category:', error);
+        
+        // If the deleted category is the currently selected one, clear the selection
+        if (form.value.category?.id === category.id) {
+            form.value.category = null;
+        }
+        
+        await refetch(); // Refresh the categories list
+    }catch (error: any) {
+  console.error('Failed to remove category:', error);
+
+  const prismaCode = error?.info?.code;
+
+  if (prismaCode === 'P2003') {
+    toast.add({
+      title: 'Cannot delete category',
+      description: 'This category is used in one or more expenses.',
+      color: 'red',
+    });
+  } else {
+    toast.add({
+      title: 'Error',
+      description: 'Failed to delete category. Please try again.',
+      color: 'red',
+    });
+  }
+}
+
+};
+
+const saveForm = () => {
+    if (!form.value.category || !form.value.category.id) {
+        toast.add({
+            title: 'Please select a category!',
+            color: 'red',
+        });
+        return;
     }
+
+    emit('save', form.value);
 };
 </script>
 
-
 <template>
   <UCard class="p-6">
-    <UForm :state="form" @submit="emit('save', form)">
+    <UForm :state="form" @submit="saveForm">
       <div class="grid grid-cols-2 gap-4">
         <!-- ✅ Date -->
         <UFormGroup label="Date" required>
@@ -119,7 +157,7 @@ const removeCategory = async(category) => {
             <!-- Custom label for selected value -->
             <template #label>
               <div v-if="form.category?.name">{{ form.category.name }}</div>
-              <div v-else>Category</div>
+              <div v-else>Select a category</div>
             </template>
 
             <!-- Custom rendering for dropdown options -->
@@ -128,9 +166,9 @@ const removeCategory = async(category) => {
                 <span class="truncate flex-1">{{ option.name }}</span>
                 <div
                   class="text-primary hover:text-red-500 cursor-pointer"
-                  @mousedown.prevent.stop="removeCategory(option)"
+                   @mousedown.prevent.stop="removeCategory(option)"
                 >
-                  <UIcon name="i-heroicons-x-circle" class="w-4 h-4" />
+                  <UIcon name="i-heroicons-x-circle" color="red" class="w-4 h-4" />
                 </div>
               </div>
             </template>
