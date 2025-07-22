@@ -1,112 +1,92 @@
-<template>
-  <UDashboardPage>
-    <UDashboardPanel grow>
-      <UDashboardNavbar title="Markit">
-        <template #right>
-          <div class="flex items-center gap-4">
-            <UButton color="primary"  to="/login">Login</UButton>
-            <UButton color="primary" to="/register">Register</UButton>
-          </div>
-        </template>
-      </UDashboardNavbar>
-
-      <UDashboardPanelContent>
-        <UContainer class="py-20 space-y-24">
-          <!-- Hero Section -->
-          <UCard class="text-center space-y-6 shadow-xl">
-            <template #header>
-              <h1 class="text-4xl md:text-5xl font-bold text-primary">Software for Fashion & Lifestyle Retailers</h1>
-            </template>
-            <p class="text-gray-600 text-lg max-w-2xl mx-auto">
-               Empower your business with a platform built for inventory, billing, CRM, and hybrid shopping models like Try-at-Home and Book Online, Try in Store.
-            </p>
-            <UButton class="my-3" size="lg" color="primary" to="/register">Get Started for Free</UButton>
-          </UCard>
-
-          <!-- Features Section -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-            <UCard class="text-center py-8 px-6">
-              <div class="text-4xl text-primary mb-4">
-                <UIcon name="i-heroicons-archive-box" />
-              </div>
-              <h3 class="text-xl font-semibold">Inventory Management</h3>
-              <p class="text-gray-600 mt-2">
-                Real-time inventory tracking with automatic updates for online, offline, and trial bookings.
-              </p>
-            </UCard>
-
-            <UCard class="text-center py-8 px-6">
-              <div class="text-4xl text-primary mb-4">
-                <UIcon name="i-heroicons-user-group" />
-              </div>
-              <h3 class="text-xl font-semibold">Client Relationship Management (CRM)</h3>
-              <p class="text-gray-600 mt-2">
-                Track customer and retailer relationships with insights, order history, and messaging support.
-              </p>
-            </UCard>
-
-            <UCard class="text-center py-8 px-6">
-              <div class="text-4xl text-primary mb-4">
-                <UIcon name="i-heroicons-banknotes" />
-              </div>
-              <h3 class="text-xl font-semibold">ERP, Billing & Accounting</h3>
-              <p class="text-gray-600 mt-2">
-                Generate GST-compliant bills, log sales across outlets, and manage online + offline transactions.
-              </p>
-            </UCard>
-
-            <UCard class="text-center py-8 px-6">
-              <div class="text-4xl text-primary mb-4">
-                <UIcon name="i-heroicons-shopping-cart" />
-              </div>
-              <h3 class="text-xl font-semibold">Try-at-Home & Try in Store</h3>
-              <p class="text-gray-600 mt-2">
-                Reduce returns and boost satisfaction by letting customers try products before buying — at home or in-store.
-              </p>
-            </UCard>
-
-            <UCard class="text-center py-8 px-6">
-              <div class="text-4xl text-primary mb-4">
-                <UIcon name="i-heroicons-building-storefront" />
-              </div>
-              <h3 class="text-xl font-semibold">Wholesaler Marketplace</h3>
-              <p class="text-gray-600 mt-2">
-                Retailers can discover and order from trusted wholesalers on a built-in B2B marketplace with role-based access.
-              </p>
-            </UCard>
-
-            <UCard class="text-center py-8 px-6">
-              <div class="text-4xl text-primary mb-4">
-                <UIcon name="i-heroicons-chart-bar" />
-              </div>
-              <h3 class="text-xl font-semibold">Sales & Performance Reports</h3>
-              <p class="text-gray-600 mt-2">
-                Track product performance, return trends, user sales, and booking outcomes with insightful dashboards.
-              </p>
-            </UCard>
-          </div>
-
-          <!-- Call to Action -->
-          <div class="text-center space-y-4">
-            <h2 class="text-3xl font-bold">Start Your 14-Day Free Trial</h2>
-            <p class="text-gray-600">
-              Built for Indian SMEs. No credit card required. Cancel anytime.
-            </p>
-            <UButton size="lg" color="primary" to="/register">Launch Your Store</UButton>
-          </div>
-        </UContainer>
-      </UDashboardPanelContent>
-    </UDashboardPanel>
-  </UDashboardPage>
-</template>
-
-  
-  <script setup>
- definePageMeta({
+<script setup lang="ts">
+const title = 'Shop Smarter. Try Before You Buy.'
+const description = 'Buy products from trusted local retailers with flexible delivery options — Try-at-home, Book now, or Instant delivery. All powered by Markit.'
+useSeoMeta({
+  title,
+  ogTitle: title,
+  description,
+  ogDescription: description
+})
+definePageMeta({
     layout: false,
 });
-  </script>
-  
-  <style scoped>
-  </style>
-  
+</script>
+
+<template>
+  <div>
+    <!-- Hero Section -->
+    <UPageHero
+      :title="title"
+      :description="description"
+      align="center"
+      :links="[
+        { label: 'Explore Stores', to: '/stores', color: 'primary' },
+        { label: 'How It Works', to: '#how-it-works' }
+      ]"
+    >
+      <template #top>
+        <div class="absolute size-96 -translate-x-1/2 left-1/2 -translate-y-72 blur-[300px] bg-primary/30 dark:bg-primary/40 rounded-full" />
+        <LazyStarsBg />
+      </template>
+    </UPageHero>
+
+    <!-- How it Works -->
+    <UPageSection id="how-it-works" title="How Markit Works for Shoppers" description="A smooth and modern way to shop from local stores.">
+      <UPageGrid>
+        <UPageCard
+          icon="search"
+          title="Browse Local Retailers"
+          description="Discover trusted fashion and lifestyle stores in your city."
+        />
+        <UPageCard
+          icon="shopping-bag"
+          title="Choose Your Delivery Style"
+          description="Try at home, book without payment, or get same-day delivery."
+        />
+        <UPageCard
+          icon="thumbs-up"
+          title="Keep What You Love"
+          description="Only pay for what you keep. Returns are picked up by the delivery agent."
+        />
+      </UPageGrid>
+    </UPageSection>
+
+    <!-- Features / Benefits -->
+    <UPageSection title="Why Shoppers Love Markit" description="We make online shopping feel like an in-store experience.">
+      <UPageGrid>
+        <UPageCard title="Try-at-Home Experience" icon="home" description="Select multiple items and try them comfortably before purchasing." />
+        <UPageCard title="Local & Instant Delivery" icon="clock" description="Same-day doorstep delivery from nearby shops." />
+        <UPageCard title="Easy Returns" icon="rotate-ccw" description="Return what you don't want — no hassle, no questions." />
+        <UPageCard title="Verified Retailers Only" icon="shield-check" description="Every seller is trusted, vetted, and service-focused." />
+      </UPageGrid>
+    </UPageSection>
+
+    <!-- Featured Stores (Example section) -->
+    <UPageSection title="Featured Stores Near You">
+      <UPageGrid>
+        <UPageCard
+          v-for="(store, i) in [1, 2, 3]"
+          :key="i"
+          title="Westend Apparel"
+          description="Trendy menswear from your neighborhood. Try at home now."
+          to="/store/westend-apparel"
+        />
+      </UPageGrid>
+    </UPageSection>
+
+    <!-- Call to Action -->
+    <UPageCTA
+      title="Shop from Trusted Local Retailers"
+      description="Get started with Markit and make your shopping experience personal, local, and flexible."
+      :links="[
+        { label: 'Start Shopping', to: '/stores', color: 'primary' },
+        { label: 'Learn More', to: '/about' }
+      ]"
+      class="overflow-hidden"
+      variant="naked"
+    >
+      <div class="absolute size-40 sm:size-52 blur-[250px] bg-primary/30 dark:bg-primary/40 -translate-x-1/2 left-1/2 -translate-y-80 rounded-full" />
+      <LazyStarsBg />
+    </UPageCTA>
+  </div>
+</template>

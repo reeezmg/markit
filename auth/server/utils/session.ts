@@ -13,6 +13,7 @@ const sessionConfig: SessionConfig = {
 
 export type AuthSession = {
     id: string;
+    cleanup: boolean;
     name: string | null;
     email: string;
     image: string | null;
@@ -23,16 +24,19 @@ export type AuthSession = {
     isTaxIncluded: boolean;
     isBarcodeIncluded: boolean;
     isUserTrackIncluded: boolean;
+    pointsValue?: number;
+    currency?: string;
     logo?: string;
     role: string;
     pipelineId: string;
-    shopifyStoreName?:string;
-    shopifyAccessToken?:string;
     address?: any;
     gstin: string;
     accHolderName: string;
     upiId: string;
     type: string;
+    code: string;
+    billCounter: number;
+    authSessionVersion: string;
     productInputs?: {
         name: boolean;
         brand: boolean;

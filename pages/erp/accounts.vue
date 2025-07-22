@@ -3,21 +3,36 @@ import { Switch } from '@headlessui/vue';
 import type { Period, Range } from '~/types';
 import {
     useUpdateBill,
-    useUpdateManyCategory,
     useFindManyAccount,
-    useCountBill,
+    useCreateAccount,
+    useUpdateAccount,
+    useDeleteAccount,
     useCountAccount
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 const toast = useToast();
-const UpdateBill = useUpdateBill();
-const UpdateManyCategory = useUpdateManyCategory();
+const UpdateBill = useUpdateBill({ optimisticUpdate: true });
+const CreateAccount = useCreateAccount({ optimisticUpdate: true });
+const UpdateAccount = useUpdateAccount({ optimisticUpdate: true });
+const DeleteAccount = useDeleteAccount({ optimisticUpdate: true });
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
-
-
-
+const isSavingAcc = ref(false);
+const isOpen = ref(false);
+const account = ref({
+    name: '',
+    phone:'',
+    street: '',
+    locality: '',
+    city: '',
+    state: '',
+    pincode: '',
+});
+const isDeleteAccountModalOpen = ref(false)
+const deletingAccountRowIdentity = ref({});
+const isDeleteBillModalOpen = ref(false)
+const deletingBillRowIdentity = ref({});
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
   { label: 'Last 14 days', duration: { days: 14 } },
@@ -72,7 +87,7 @@ const billColumns = [
 ];
 
 // Columns
-const columns = [
+const columns = ref([
     {
         key: 'name',
         label: 'Name',
@@ -93,21 +108,8 @@ const columns = [
         label: 'Actions',
         sortable: false,
     },
-];
+]);
 
-
-
-// Actions
-const active = (selectedRows) => [
-    [
-        {
-            key: 'delete',
-            label: 'Delete',
-            icon: 'i-heroicons-trash',
-            
-        },
-    ],
-];
 
 const action = (row:any) => [
     [
@@ -121,13 +123,35 @@ const action = (row:any) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => deleteBill(row.id),
+             click: () => {
+                isDeleteBillModalOpen.value = true
+                deletingBillRowIdentity.value = {name:row.invoiceNumber,id:row.id}
+            }
+        },
+    ],
+];
+const actionAccount = (row:any) => [
+    [
+        {
+            label: 'Edit',
+            icon: 'i-heroicons-pencil-square-20-solid',
+            click: () => openEditModal(row),
+        },
+    ],
+    [
+        {
+            label: 'Delete',
+            icon: 'i-heroicons-trash-20-solid',
+            click: () => {
+                isDeleteAccountModalOpen.value = true
+                deletingAccountRowIdentity.value = {name:row.name,id:row.id}
+            }
         },
     ],
 ];
 
 // Filters
-const todoStatus = [
+const status = [
     {
         label: 'Paid',
         value: 'PAID',
@@ -138,11 +162,15 @@ const todoStatus = [
     },
 ];
 
+const selectedColumns = ref([]);
+watch(columns, (newColumns) => {
+  selectedColumns.value = [...newColumns];
+}, { immediate: true });
 
+const columnsTable = computed(() =>
+  columns.value.filter((column) => selectedColumns.value.includes(column))
+);
 
-
-// Selected Rows
-const selectedRows = ref([]);
 const notes = ref<any>({})
 
 const search = ref<number | null>(null);
@@ -163,12 +191,32 @@ const page = ref(1);
 const pageCount = ref('5');
 
 const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
+  const statusFilters = selectedStatus.value?.length
+    ? {
+        bill: {
+          some: {
+            deleted: false,
+            paymentStatus: {
+              in: selectedStatus.value.map((s: any) => s.value),
+            },
+          },
+        },
+      }
+    : {};
+
   return {
     where: {
       companyId: useAuth().session.value?.companyId,
-      ...(search.value && { name: { contains: search.value, mode: 'insensitive' } }),
+      ...(search.value && {
+        OR: [
+          { name: { contains: search.value, mode: 'insensitive' } },
+          { phone: { contains: search.value, mode: 'insensitive' } },
+        ],
+      }),
+      ...statusFilters,
     },
     include: {
+      address: true,
       bill: {
         where: {
           deleted: false,
@@ -193,6 +241,7 @@ const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
     take: parseInt(pageCount.value),
   };
 });
+
 
 
 const {
@@ -223,27 +272,31 @@ function selectRange(duration: Duration) {
 }
 
 
-
-
-
-
-watch(queryArgs, (newsales) => {
-    console.log( newsales);
-});
-
-
-const deleteBill = async (id:string) => {
-    const res = await UpdateBill.mutateAsync({
+const deleteBillRow = () => {
+    try{
+        updateBill.mutate({
         where:{
-            id
+            id: deletingBillRowIdentity.value.id
         },
         data:{
             deleted:true
         }
     })
-
-
+     toast.add({
+            title: `Bill No ${deletingBillRowIdentity.value.name} deleted successfully!`,
+            color: 'green',
+        });
+    }catch(err){
+        toast.add({
+          title: 'Error while deleting the bill entries',
+          description: error.message,
+          color: 'red',
+        });
+    }finally{
+        isDeleteBillModalOpen.value = false;
+    }
 };
+
 
 
 const handleUpdate = async (id:string) => {
@@ -288,6 +341,112 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
     }
 }
 
+const openEditModal = (row:any) => {
+    account.value = {
+        id: row.id,
+        name: row.name,
+        phone: row.phone,
+        street: row.address?.street || '',
+        locality: row.address?.locality || '',
+        city: row.address?.city || '',
+        state: row.address?.state || '',
+        pincode: row.address?.pincode || '',
+    };
+    isOpen.value = true;
+};
+
+
+const submitForm = () => {
+  isSavingAcc.value = true
+  try {
+    
+    if (!account.value.name) {
+        throw new Error(`Plase Fill name`);
+      }
+    
+    if(account.value.id){
+        // Update existing account
+        const res = UpdateAccount.mutate({
+            where: { id: account.value.id },
+            data: {
+                name: account.value.name,
+                phone: account.value.phone,
+                address: {
+                    update: {
+                        street: account.value.street,
+                        locality: account.value.locality,
+                        city: account.value.city,
+                        state: account.value.state,
+                        pincode: account.value.pincode,
+                    },
+                },
+            }
+        });
+        toast.add({
+            title: 'Account updated !',
+            id: 'modal-success',
+        });
+    } else {
+    const res = CreateAccount.mutate({
+      data: {
+                name: account.value.name,
+                phone: account.value.phone,
+                address: {
+                    create: {
+                        street: account.value.street,
+                        locality: account.value.locality,
+                        city: account.value.city,
+                        state: account.value.state,
+                        pincode: account.value.pincode,
+                    },
+                },
+                company:{
+                  connect:{
+                        id:useAuth().session.value?.companyId
+                      }
+                  }
+              }
+    })
+    toast.add({
+            title: 'Account added !',
+            id: 'modal-success',
+        });
+    }
+    isOpen.value = false
+  }catch(error){
+     toast.add({
+        title: 'Account creation failed!',
+        description: error.message,
+        color: 'red',
+      });
+  }finally{
+    isSavingAcc.value = false
+  }
+};
+
+const deleteAccountRow = async () => {
+    try {
+        DeleteAccount.mutate({
+            where: { id: deletingAccountRowIdentity.value.id },
+        });
+        toast.add({
+            title: `Account ${deletingAccountRowIdentity.value.name} deleted successfully!`,
+            color: 'green',
+        });
+    } catch (error) {
+        toast.add({
+            title: 'Error while deleting the account',
+            description: error.message,
+            color: 'red',
+        });
+        console.log(error);
+    } finally {
+        isDeleteAccountModalOpen.value = false;
+    }
+};
+
+
+
 </script>
 <template>
     <UDashboardPanelContent class="pb-24">
@@ -312,13 +471,13 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                 <UInput
                     v-model="search"
                     icon="i-heroicons-magnifying-glass-20-solid"
-                    type="number"
-                    placeholder="Search Invoice"
+                    type="text"
+                    placeholder="Search"
                     class="w-full sm:w-40"
                 />
                  <USelectMenu
                     v-model="selectedStatus"
-                    :options="todoStatus"
+                    :options="status"
                     multiple
                     placeholder="Status"
                     class="w-full sm:w-40"
@@ -350,7 +509,20 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                         </template>
                     </UPopover>
                 </div>
-               
+
+                
+                <!-- Right side: Buttons -->
+                <div class="flex flex-row gap-3 w-full sm:w-auto justify-end">
+                    <UButton
+                    icon="i-heroicons-plus"
+                    size="sm"
+                    color="primary"
+                    variant="solid"
+                    label="Add Account"
+                    class="w-full flex-1 sm:w-auto sm:flex-none"
+                    @click="isOpen = true"
+                    />
+                </div>   
             </div>
         </template>
 
@@ -367,20 +539,6 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                 </div>
 
                 <div class="flex gap-1.5 items-center z-10">
-                    <UDropdown
-                        v-if="selectedRows.length > 1"
-                        :items="active(selectedRows)"
-                        :ui="{ width: 'w-36' }"
-                    >
-                        <UButton
-                            icon="i-heroicons-chevron-down"
-                            trailing
-                            color="gray"
-                            size="xs"
-                        >
-                            Mark as
-                        </UButton>
-                    </UDropdown>
 
                     <USelectMenu
                         v-model="selectedColumns"
@@ -410,11 +568,10 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
 
             <!-- Table -->
             <UTable
-                v-model="selectedRows"
                 v-model:sort="sort"
                 v-model:expand="expand"
                 :rows="accounts"
-                :columns="columns"
+                :columns="columnsTable"
                 :loading="isLoading"
                 :multiple-expand="false"
                 sort-mode="manual"
@@ -428,6 +585,15 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                             .toFixed(2)
                     }}
                 </template>
+                <template #actions-data="{ row }">
+                <UDropdown :items="actionAccount(row)">
+                    <UButton
+                        color="gray"
+                        variant="ghost"
+                        icon="i-heroicons-ellipsis-horizontal-20-solid"
+                    />
+                </UDropdown>
+            </template>
 
                 <template #expand="{ row }">
                     <UTable 
@@ -549,5 +715,82 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                 </div>
             </template>
         </UCard>
+
+        
+  <UModal v-model="isOpen">
+        <div class="p-4 space-y-4">
+          <h2 class="text-lg font-semibold">Enter Account Details</h2>
+
+          <!-- Name -->
+          <h3 class="text-md font-semibold">Personal Details</h3>
+          <UInput v-model="account.name" label="Name" placeholder="Enter full name" required />
+          <UInput v-model="account.phone" label="Phone No" placeholder="Enter Phone Number" required />
+
+          <!-- Address -->
+          <h3 class="text-md font-semibold mt-4">Address Details</h3>
+          <UInput v-model="account.street" label="Street" placeholder="Enter street name" required />
+          <UInput v-model="account.locality" label="Locality" placeholder="Enter locality" required />
+          <UInput v-model="account.city" label="City" placeholder="Enter city name" required />
+          <UInput v-model="account.state" label="State" placeholder="Enter state name" required />
+          <UInput v-model="account.pincode" label="Pincode" placeholder="Enter pincode" required />
+
+
+          <!-- Submit Button -->
+          <UButton @click="submitForm" :loading="isSavingAcc" block>Submit</UButton>
+        </div>
+      </UModal>
+
+      <UDashboardModal
+        v-model="isDeleteAccountModalOpen"
+        title="Delete Account"
+        :description="`Are you sure you want to delete Account ${deletingAccountRowIdentity.name}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  deleteAccountRow()"
+            />
+            <UButton color="white" label="Cancel" @click="isDeleteAccountModalOpen = false" />
+        </template>
+    </UDashboardModal>
+
+      <UDashboardModal
+        v-model="isDeleteBillModalOpen"
+        title="Delete Bill"
+        :description="`Are you sure you want to delete Bill ${deletingBillRowIdentity.name}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  deleteBillRow()"
+            />
+            <UButton color="white" label="Cancel" @click="isDeleteBillModalOpen = false" />
+        </template>
+    </UDashboardModal>
+
     </UDashboardPanelContent>
 </template>

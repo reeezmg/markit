@@ -13,18 +13,20 @@ import {
   useUpdateEntry,
   useCreateEntry,
   useDeleteManyEntry,
-  useUpdateManyItem,
   useFindManyEntry,
+  useUpdateCompanyClient
 } from '~/lib/hooks'; 
+import { v4 as uuidv4 } from 'uuid';
 
-const UpdateBill = useUpdateBill();
-const CreateAccount = useCreateAccount();
-const UpdateVariant = useUpdateVariant();
-const UpdateItem = useUpdateItem();
-const UpdateEntry = useUpdateEntry();
-const CreateEntry = useCreateEntry();
-const DeleteManyEntry = useDeleteManyEntry();
-const UpdateManyItem = useUpdateManyItem();
+const UpdateBill = useUpdateBill({ optimisticUpdate: true });
+const CreateAccount = useCreateAccount({ optimisticUpdate: true });
+const UpdateVariant = useUpdateVariant({ optimisticUpdate: true });
+const UpdateItem = useUpdateItem({ optimisticUpdate: true });
+const UpdateEntry = useUpdateEntry({ optimisticUpdate: true });
+const CreateEntry = useCreateEntry({ optimisticUpdate: true });
+const DeleteManyEntry = useDeleteManyEntry({ optimisticUpdate: true });
+const UpdateCompanyClient = useUpdateCompanyClient({ optimisticUpdate: true });
+const UpdateCompanyClientForRedeem = useUpdateCompanyClient({ invalidateQueries: false });
 const useAuth = () => useNuxtApp().$auth;
 const route = useRoute();
 const toast = useToast();
@@ -37,7 +39,7 @@ const isPrint = ref(false);
 const isSavingAcc = ref(false);
 const issalesReturnModelOpen = ref(false);
 const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
-const date = ref(new Date().toISOString().split('T')[0]);
+const date = ref(new Date().toISOString());
 const discount = ref(0);
 const accountLoaded = ref(false);
 const subtotal = computed(() => {
@@ -45,22 +47,31 @@ const subtotal = computed(() => {
 });
 const grandTotal = computed(() => {
   const baseTotal = items.value.reduce((sum, item) => sum + (item.value || 0), 0);
-
+  let afterDiscount = 0;
   if (discount.value < 0) {
-    return parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
+    afterDiscount = parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
   } else {
-    const discounted = baseTotal - (baseTotal * discount.value) / 100;
-    return parseFloat(discounted.toFixed(2));
+    afterDiscount = parseFloat((baseTotal - (baseTotal * discount.value) / 100).toFixed(2));
   }
+
+  return afterDiscount - redeemedAmt.value;
 });
 
+
 const returnAmt = ref(0);
+const redeemedAmt = ref(0);
+const isRedeemPoint = ref(false);
+const redeeming = ref(false);
+const redeemedPoints = ref(0);
+const isAlreadyRedeemPoint = ref(false);
 const paymentMethod = ref(null);
 const voucherNo = ref('');
 const phoneNo = ref('');
 const clientName = ref('');
 const points = ref(0);
 const clientId = ref('');
+const oldClientId = ref('');
+const newClientId = ref('');
 const scannedBarcode = ref("");
 const categoryStore = useCategoryStore()
 const userStore = useUserStore()
@@ -95,11 +106,22 @@ const account = ref({
     pincode: '',
 });
 const selected = ref(null);
-
+const pastBillPoints = ref(0);
+  const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
 
 const items = ref([
   { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
 ]);
+
+const dateOnly = computed({
+  get: () => date.value.split('T')[0],
+  set: val => {
+    // Preserve original time, but update the date
+    const original = new Date(date.value)
+    const updated = new Date(val + 'T' + original.toISOString().split('T')[1])
+    date.value = updated.toISOString()
+  }
+})
 
 
 const columns = computed(() => [
@@ -319,13 +341,83 @@ const removeRow = (event,barcode,index) => {
 };
 
 onMounted(async () => {
-  await billRefetch()
+  const {data:newData} = await billRefetch()
+   if (!newData || !newData.entries) return;
+    console.log(clientName.value)
+    if (newData?.splitPayments && newData.splitPayments.length > 0) {
+      tempSplits.value = Object.fromEntries(
+        paymentOptions.map((method) => {
+          const match = newData.splitPayments.find((p) => p.method === method);
+          return [method, { method, amount: match?.amount ?? null }];
+        })
+      );
+      splitPayments.value = [...newData.splitPayments];
+    }
+    discount.value = newData.discount;
+    selected.value = newData.accountId;
+    clientId.value = newData.client?.id;
+    oldClientId.value = newData.client?.id;
+    clientName.value = newData.client?.name;
+    phoneNo.value = newData.client?.phone?.replace(/^\+91/, '') || '';
+    pastBillPoints.value = pointsValue > 0 ? Number(newData.grandTotal) / pointsValue : 0;
+    points.value = newData.client?.companies[0]?.points;
+    paymentMethod.value = newData.paymentMethod;
+    date.value = new Date(newData.createdAt).toISOString();
+    redeemedAmt.value = newData.redeemedPoints;
+    redeemedPoints.value = newData.redeemedPoints;
+    isRedeemPoint.value = !!newData.redeemedPoints;
+    console.log(newData.redeemedPoints)
+    items.value = newData.entries.map((entry, index) => ({
+      entryId: entry.id || '',
+      id: entry.item?.id || '',
+      variantId: entry.variant?.id || '',
+      sn: index + 1,
+      name: entry.name || '',
+      barcode: entry.barcode || '',
+      category: categories.value.filter((category) => category.id === entry.categoryId),
+      size: entry.item?.size || '',
+      sizes: entry.sizes || null,
+      qty: entry.qty || 1,
+      rate: entry.rate || 0,
+      discount: entry.discount || 0,
+      tax: entry.tax || 0,
+      value: entry.value || 0,
+      return: entry.return || false,
+      user:entry.userName || null,
+      userId:entry.userId || null
+    }));
+
+    items.value.push({
+      id: '',
+      variantId: '',
+      sn: items.value.length + 1,
+      barcode: '',
+      category: [],
+      size: '',
+      name: '',
+      qty: 1,
+      rate: 0,
+      discount: 0,
+      tax: 0,
+      value: 0,
+      sizes: {},
+      totalQty: 0,
+      return: false
+    });
+
+    // Wait for DOM update
+    await nextTick();
+
+    const component = barcodeInputs.value[items.value.length - 1];
+    const input = component?.$el?.querySelector?.("input");
+    input?.focus(); // Safe access
   // Initialize column widths (optional)
   const ths = resizableTable.value.querySelectorAll('th');
   ths.forEach((th) => {
     th.style.width = `${th.offsetWidth}px`;
   });
 });
+
 
 const args = computed(() => ({
   where: {
@@ -336,7 +428,18 @@ const args = computed(() => ({
       },
     },
   },
+  include: {
+    companies: {
+      where: {
+        companyId: useAuth().session.value?.companyId,
+      },
+      select: {
+        points: true,
+      },
+    },
+  },
 }));
+
 
 
  const {
@@ -434,6 +537,8 @@ const billArgs = computed(() => ({
     discount: true,
     tax: true,
     grandTotal: true,
+    redeemedPoints: true,
+    billPoints: true,
     deliveryFees: true,
     paymentMethod: true,
     paymentStatus: true,
@@ -457,6 +562,14 @@ const billArgs = computed(() => ({
             name:true,
             phone:true,
             id:true,
+            companies: {
+              where: {
+                companyId: useAuth().session.value?.companyId
+              },
+                select: {
+                    points: true
+                }
+            }
         }
     },
     entries: {  
@@ -494,7 +607,7 @@ const billArgs = computed(() => ({
 }));
 
 
-const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs);
+const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs,{enabled:false});
 const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enabled:false});
 const {data: entriesDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
 
@@ -537,7 +650,7 @@ const handleEnterPayment = () => {
 };
 
 
-const deleteBill = async () => {
+const handleDeleteBill = async () => {
     const res = await UpdateBill.mutateAsync({
         where:{
             id: route.params.salesId
@@ -554,79 +667,6 @@ router.push('/erp/sales')
 
 };
 
-
-
-
-watch(
-  () => bill.value,
-  async (newData) => {
-    if (!newData || !newData.entries) return;
-
-    if (newData?.splitPayments && newData.splitPayments.length > 0) {
-      tempSplits.value = Object.fromEntries(
-        paymentOptions.map((method) => {
-          const match = newData.splitPayments.find((p) => p.method === method);
-          return [method, { method, amount: match?.amount ?? null }];
-        })
-      );
-      splitPayments.value = [...newData.splitPayments];
-    }
-
-    discount.value = newData.discount;
-    selected.value = newData.accountId;
-    clientId.value = newData.client?.id;
-    clientName.value = newData.client?.name;
-    phoneNo.value = newData.client?.phone;
-    paymentMethod.value = newData.paymentMethod;
-    date.value = new Date(newData.createdAt).toISOString().split('T')[0];
-
-    items.value = newData.entries.map((entry, index) => ({
-      entryId: entry.id || '',
-      id: entry.item?.id || '',
-      variantId: entry.variant?.id || '',
-      sn: index + 1,
-      name: entry.name || '',
-      barcode: entry.barcode || '',
-      category: categories.value.filter((category) => category.id === entry.categoryId),
-      size: entry.item?.size || '',
-      sizes: entry.sizes || null,
-      qty: entry.qty || 1,
-      rate: entry.rate || 0,
-      discount: entry.discount || 0,
-      tax: entry.tax || 0,
-      value: entry.value || 0,
-      return: entry.return || false,
-      user:entry.userName || null,
-      userId:entry.userId || null
-    }));
-
-    items.value.push({
-      id: '',
-      variantId: '',
-      sn: items.value.length + 1,
-      barcode: '',
-      category: [],
-      size: '',
-      name: '',
-      qty: 1,
-      rate: 0,
-      discount: 0,
-      tax: 0,
-      value: 0,
-      sizes: {},
-      totalQty: 0,
-      return: false
-    });
-
-    // Wait for DOM update
-    await nextTick();
-
-    const component = barcodeInputs.value[items.value.length - 1];
-    const input = component?.$el?.querySelector?.("input");
-    input?.focus(); // Safe access
-  },
-  { deep: true, immediate: true }
-);
 
 
 const fetchItemDataNonBarcode = async (categoryId, sPrice, index) => {
@@ -684,314 +724,183 @@ const fetchItemData = async (barcode, index) => {
 };
 
 
-
-
-
-
 const handleEdit = async () => {
-  isSaving.value = true
+  isSaving.value = true;
+  
   try {
-    items.value = items.value.filter(item =>
-    item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
-  );
 
-  if (items.value.length === 0) {
-    throw new Error(`No valid items to bill.`);
-    return;
+    if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
   }
+    
+    // 1. Validate and filter items
+    items.value = items.value.filter(item =>
+      item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
+    );
 
-  items.value.forEach((item, index) => {
-    if (!item.category || !item.category[0]?.id) {
-      throw new Error(`No category in entry ${index + 1}`);
+    if (items.value.length === 0) {
+      throw new Error(`No valid items to bill.`);
     }
-  });
 
-    if(!isBarcodeIncluded.value){
-      const results = await Promise.all(
+    // 2. Validate each item has a category
+    items.value.forEach((item, index) => {
+      if (!item.category || !item.category[0]?.id) {
+        throw new Error(`No category in entry ${index + 1}`);
+      }
+    });
+
+    // 3. Fetch non-barcode items if needed
+    if (!isBarcodeIncluded.value) {
+      await Promise.all(
         items.value.map((item, index) =>
           fetchItemDataNonBarcode(item.category[0]?.id, item.rate, index)
         )
       );
+    }
+
+    // 4. Calculate bill points
+    const billPoints = (pointsValue > 0 ? Number(grandTotal.value) / pointsValue : 0) - pastBillPoints.value;
+
+    // 5. Prepare print data
+    const preparedPrintData = {
+      invoiceNumber: bill.value.invoiceNumber || '',
+      date: new Date(date.value).toISOString(),
+      entries: items.value.map(entry => {
+        let calculatedDiscount = 0;
+        
+        if (entry.discount < 0) {
+          calculatedDiscount = entry.discount;
+        } else if (entry.discount > 0) {
+          calculatedDiscount = `${entry.discount}%`;
+        } else {
+          calculatedDiscount = 0;
+        }
+
+        return {
+          description: entry.barcode ? entry.name : entry.category[0].name,
+          hsn: entry.category[0].hsn,
+          qty: entry.qty,
+          mrp: entry.rate,
+          discount: calculatedDiscount,
+          tax: entry.tax,
+          value: entry.qty * entry.rate,
+          size: entry.size,
+          barcode: entry.barcode,
+          tvalue: entry.value,
+        };
+      }),
+      subtotal: subtotal.value,
+      discount: Number(discount.value),
+      grandTotal: grandTotal.value,
+      paymentMethod: paymentMethod.value,
+      companyName: useAuth().session.value?.companyName || '',
+      companyAddress: useAuth().session.value?.address || {},
+      gstin: useAuth().session.value?.gstin || '',
+      ...(paymentMethod.value === 'Split' && {
+        splitPayments: splitPayments.value,
+      }),
+      accHolderName: useAuth().session.value?.accHolderName || '',
+      upiId: useAuth().session.value?.upiId || '',
+      clientName: clientName.value,
+      clientPhone: phoneNo.value,
+      tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
+      tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+      ttvalue: items.value.reduce((sum, entry) => sum + (entry.value), 0),
+      tdiscount: items.value.reduce((sum, entry) => {
+        if (entry.discount < 0) {
+          return sum + (Math.abs(entry.discount) * entry.qty);
+        } else {
+          return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
+        }
+      }, 0)
     };
-    const { data: entriesToDelete } = await entriesToDeleteRefetch()
 
-    // Separate items into those with an ID and those without
-    const itemsWithId = items.value.filter(item => item.entryId);
-    const itemsWithoutId = items.value.filter(item => !item.entryId);
-    // Separate create and update logic
-
-    // Create entries for new items (itemsWithoutId)
-    for (const item of itemsWithoutId) {
-    CreateEntry.mutateAsync({
-    data: {
-      barcode: item.barcode || undefined,
-      qty: item.qty || 1,
-      rate: item.rate || 0,
-      name: item.name || '',
-      return: item.return || false,
-      discount: item.discount || 0,
-      ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
-      value: item.value || 0,
-      ...(item.category?.[0]?.id && {
-        category: { connect: { id: item.category[0].id } },
-      }),
-      ...(item.id && {
-        item: { connect: { id: item.id } },
-      }),
-      ...(item.userId && {
-        companyUser: {
-              connect: {
-                companyId_userId: {
-                  companyId: useAuth().session.value?.companyId,
-                  userId: item.userId,
-                }
-              }
-            },
-        userName:item.user
-      }),
-      bill: {
-        connect: {
-          id: route.params.salesId,
-        },
+    // 6. Prepare request data for server
+    const requestData = {
+      items: items.value,
+      entriesToDelete: entriesDelete.value || [],
+      billPoints,
+      billData: {
+        id: route.params.salesId,
+        subtotal: subtotal.value || 0,
+        discount: discount.value || 0,
+        grandTotal: grandTotal.value || 0,
+        redeemedPoints: redeemedPoints.value || 0,
+        paymentMethod: paymentMethod.value,
+        paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
+        splitPayments: paymentMethod.value === 'Split' ? splitPayments.value : null,
+        accountId: selected.value,
+        clientId: clientId.value,
+        date: new Date(date.value).toISOString(),
+        companyId: useAuth().session.value?.companyId
       },
-    },
-  });
-}
+    }    // Increment to new client (if exists)
+    if (newClientId.value && (newClientId.value !== oldClientId.value))  {
 
-
-
-
-    // Update entries for items with an ID (itemsWithId)
-   for (const item of itemsWithId) {
-     UpdateEntry.mutateAsync({
-    where: { id: item.entryId },
-    data: {
-      barcode: item.barcode || undefined,
-      qty: item.qty || 1,
-      rate: item.rate || 0,
-      name: item.name || '',
-      discount: item.discount || 0,
-      ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
-      tax: item.tax || 0,
-      value: item.value || 0,
-      ...(item.category?.[0]?.id && {
-        category: { connect: { id: item.category[0].id } },
-      }),
-      ...(item.id && {
-        item: { connect: { id: item.id } },
-      }),
-       ...(item.userId && {
-        companyUser: {
-              connect: {
-                companyId_userId: {
-                  companyId: useAuth().session.value?.companyId,
-                  userId: item.userId,
-                }
-              }
-            },
-        userName:item.user
-      }),
-      bill: {
-        connect: {
-          id: route.params.salesId,
+      await UpdateCompanyClientForRedeem.mutateAsync({
+        where: {
+          companyId_clientId: {
+            companyId: useAuth().session.value?.companyId,
+            clientId: oldClientId.value,
+          },
         },
-      },
-    },
-  });
-}
-
+        data: {
+          points: { decrement: pastBillPoints.value },
+        },
+      });
+      console.log('Points decremented from old client:', res);
     
 
- // for items that is added to entry
-const withoutIdReturnedItems = itemsWithoutId?.filter(item => item.return);
-const withoutIdNotReturnedItems = itemsWithoutId?.filter(item => !item.return);
 
+      const res = await UpdateCompanyClientForRedeem.mutateAsync({
+        where: {
+          companyId_clientId: {
+            companyId: useAuth().session.value?.companyId,
+            clientId: newClientId.value,
+          },
+        },
+        data: {
+          points: { increment: pastBillPoints.value },
+        },
+      });
+      points.value = res.points;
+      
+      oldClientId.value = newClientId.value
+      newClientId.value = '';
 
-if (withoutIdNotReturnedItems?.length > 0) {
-  for (const item of withoutIdNotReturnedItems) {
-    UpdateVariant.mutateAsync({
-      where: { id: item.variantId }, 
-      data: { 
-        sold: { increment: item.qty }, 
-      }
-    }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-
-    UpdateItem.mutateAsync({
-          where: { id: item.id },
-          data: { 
-            qty: { decrement: item.qty },
-          }
-          }).catch(error => console.error(`Error updating item ${item.id}`, error))
-        }
-    }
-
-    if (withoutIdReturnedItems?.length > 0) {
-    for (const item of withoutIdReturnedItems) {
-      UpdateVariant.mutateAsync({
-        where: { id: item.variantId },
-        data: { 
-          sold: { decrement: item.qty },
-        }
-      }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-
-      UpdateItem.mutateAsync({
-            where: { id: item.id },
-            data: { 
-              qty: { increment: item.qty },
-            }
-            }).catch(error => console.error(`Error updating item ${item.id}`, error))
-          }
+      console.log('Points incremented to new client:', res);
     }
 
 
 
-// for items that is removed from entry
-const entryToDeleteIds = entriesToDelete?.filter(e=>e.id).map(e => e.id);
-const returnedItems = entriesToDelete?.filter(item => item.return);
-const notReturnedItems = entriesToDelete?.filter(item => !item.return);
+    // 7. Call server endpoint
+  $fetch('/api/bill/update', {
+      method: 'POST',
+      body: requestData
+    }).then(() => {
+       queryClient.invalidateQueries({
+        queryKey: ['zenstack', 'Bill', 'findMany'],
+        exact: false
+      });
+    }).catch(error => {
+      // Optional: handle error without blocking UI
+      console.error('Bill creation failed', error);
+    }).finally(() => {
+       isSaving.value = false
+    })
 
-
-if (returnedItems?.length > 0) {
-  for (const item of returnedItems) {
-    UpdateVariant.mutateAsync({
-      where: { id: item.variantId },
-      data: { 
-        sold: { increment: item.qty },
-      }
-    }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-
-    UpdateItem.mutateAsync({
-          where: { id: item.itemId },
-          data: { 
-            qty: { decrement: item.qty },
-          }
-          }).catch(error => console.error(`Error updating item ${item.id}`, error))
-        }
-    }
-
-    if (notReturnedItems?.length > 0) {
-    for (const item of notReturnedItems) {
-      UpdateVariant.mutateAsync({
-        where: { id: item.variantId },
-        data: { 
-          sold: { decrement: item.qty },
-        }
-      }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-
-      UpdateItem.mutateAsync({
-            where: { id: item.itemId },
-            data: { 
-              qty: { increment: item.qty },
-            }
-            }).catch(error => console.error(`Error updating item ${item.id}`, error))
-          }
-    }
-
-
-if (entryToDeleteIds.length > 0) {
-    DeleteManyEntry.mutateAsync({
-    where: { id: { in: entryToDeleteIds } },
-  });
-}
-   
-    // Execute all create, update, and delete promises
-UpdateBill.mutateAsync({
-  where: { id: route.params.salesId },
-  data: {
-    subtotal: subtotal.value || 0,
-    discount: discount.value || 0,
-    grandTotal: grandTotal.value || 0,
-    paymentMethod: paymentMethod.value,
-    paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
-    ...(paymentMethod.value === 'Split' && {
-      splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
-    }),
-    ...(selected.value && {
-    account: { connect: { id: selected.value } },
-    }),
-    ...(clientId.value && {
-    client: {
-      connect: {
-        id: clientId.value,
-      },
-    },
-  }),
-    createdAt: new Date(date.value).toISOString(),
-    company: {
-      connect: {
-        id: useAuth().session.value?.companyId,
-      },
-    },
-  }
-});
-
-
-
+    // 8. Show success notification
     toast.add({
       title: 'Bill edited successfully!',
       color: 'green',
     });
 
-         isPrint.value = true
-           printData = {
-              invoiceNumber: bill.value.invoiceNumber || '',
-              date: new Date(date.value).toISOString(),
-              entries: items.value.map(entry => {
-              let calculatedDiscount = 0;
-    
-              if (entry.discount < 0) {
-                // Fixed discount
-                calculatedDiscount = entry.discount;
-              } else if( entry.discount > 0) {
-                // Percentage discount
-                calculatedDiscount = `${entry.discount}%`;
-              }else if (entry.discount === null || entry.discount === undefined) {
-                calculatedDiscount = 0;
-              }else{
-                calculatedDiscount = 0;
-              }
-    
-              return {
-                description: entry.barcode ? entry.name : entry.category[0].name,
-                hsn: entry.category[0].hsn,
-                qty: entry.qty,
-                mrp: entry.rate,
-                discount: calculatedDiscount || 0, // ✅ set calculated discount
-                tax: entry.tax,
-                value: entry.qty * entry.rate ,
-                size: entry.size,
-                barcode: entry.barcode,
-                tvalue:entry.value,
-              };
-            }),
-    
-          subtotal: subtotal.value,
-         discount: Number(discount.value),
-          grandTotal: grandTotal.value,
-          paymentMethod: paymentMethod.value,
-          companyName: useAuth().session.value?.companyName || '',
-          companyAddress: useAuth().session.value?.address || {},
-          gstin: useAuth().session.value?.gstin || '',
-          ...(paymentMethod.value === 'Split' && {
-            splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
-          }),
-          accHolderName: useAuth().session.value?.accHolderName || '',
-          upiId: useAuth().session.value?.upiId || '',
-          clientName:clientName.value,
-          clientPhone:phoneNo.value,
-          // 🆕 Add total qty
-          tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
-          tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
-          ttvalue: items.value.reduce((sum, entry) => sum + (entry.value), 0),
-          tdiscount: items.value.reduce((sum, entry) => {
-            if (entry.discount < 0) {
-              return sum + (Math.abs(entry.discount) * entry.qty);
-            } else {
-              return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
-            }
-          }, 0)
-        };
-
+    // 9. Prepare for printing
+    isPrint.value = true;
+    printData = preparedPrintData;
 
   } catch (error) {
     console.error('Error updating bill', error);
@@ -1000,12 +909,8 @@ UpdateBill.mutateAsync({
       description: error.message,
       color: 'red',
     });
-  }finally {
-      isSaving.value = false;
-    }
-
+  }
 };
-
 
 
 
@@ -1015,32 +920,34 @@ const {
       where: { companyId: useAuth().session.value?.companyId},
 });
 
-const submitForm = async () => {
+
+const submitForm = () => {
   isSavingAcc.value = true
   try {
     
     if (!account.value.name) {
         throw new Error(`Plase Fill name`);
       }
-    const res = await CreateAccount.mutateAsync({
+    const res = CreateAccount.mutateAsync({
       data: {
-                name: account.value.name,
-                phone: account.value.phone,
-                address: {
-                    create: {
-                        street: account.value.street,
-                        locality: account.value.locality,
-                        city: account.value.city,
-                        state: account.value.state,
-                        pincode: account.value.pincode,
-                    },
-                },
-                company:{
-                  connect:{
-                        id:useAuth().session.value?.companyId
-                      }
-                  }
+        id: uuidv4(),
+        name: account.value.name,
+        phone: account.value.phone,
+        address: {
+            create: {
+                street: account.value.street,
+                locality: account.value.locality,
+                city: account.value.city,
+                state: account.value.state,
+                pincode: account.value.pincode,
+            },
+        },
+        company:{
+          connect:{
+                id:useAuth().session.value?.companyId
               }
+          }
+      }
     })
     toast.add({
             title: 'Account added !',
@@ -1057,7 +964,6 @@ const submitForm = async () => {
     isSavingAcc.value = false
   }
 };
-
 
 const print = async() => {
   try{
@@ -1084,6 +990,8 @@ watch(paymentMethod, (val) => {
     showSplitModal.value = true
   }
 })
+
+
  
 const handleAmountEntry = (method) => {
   const entry = tempSplits.value[method]
@@ -1135,14 +1043,29 @@ function submitSplitPayment() {
   showSplitModal.value = false
 }
 
+
 const handleEnterPhone = async() => {
-const { data } = await refetchClient()
-clientName.value = data?.name
-clientId.value = data?.id
-if(!data){
-  isClientAddModelOpen.value = true
+  console.log('hanlde')
+  const { data } = await refetchClient()
+  clientName.value = data?.name
+  clientId.value = data?.id
+  newClientId.value = data?.id
+  points.value = data?.companies[0]?.points;
+  if(!data){
+    isClientAddModelOpen.value = true;
+    points.value = 0
+  }
 }
-}
+
+const handleClientAdded = (id,name,phone) => {
+  console.log(id,name)
+  clientName.value = name
+  phoneNo.value = phone
+  clientId.value = id
+  newClientId.value = id
+  points.value = 0
+  isClientAddModelOpen.value = false;
+};
 
 const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
   items.value = items.value.filter(item =>
@@ -1320,6 +1243,89 @@ const handleDiscountEnter = (index) => {
   }
 };
 
+
+const handleRedeemPoints = async () => {
+  isRedeemPoint.value = !isRedeemPoint.value;
+  redeeming.value = true;
+
+  if (isRedeemPoint.value) {
+    if (clientId.value) {
+      try {
+        // Determine the redeemable points (not more than grand total)
+        const redeemablePoints = Math.min(points.value, grandTotal.value);
+
+        const res = await UpdateCompanyClientForRedeem.mutateAsync({
+          where: {
+            companyId_clientId: {
+              companyId: useAuth().session.value?.companyId,
+              clientId: clientId.value
+            }
+          },
+          data: {
+            points: { decrement: redeemablePoints }
+          }
+        });
+
+        redeemedPoints.value = redeemablePoints;
+        redeemedAmt.value = redeemablePoints;
+        points.value = res.points- pastBillPoints.value;
+        console.log(res);
+
+      } catch (error) {
+        console.error('Error updating client points', error);
+      }
+    }
+  } else {
+    // Revert redeemed points
+    if (clientId.value) {
+      try {
+        const res = await UpdateCompanyClientForRedeem.mutateAsync({
+          where: {
+            companyId_clientId: {
+              companyId: useAuth().session.value?.companyId,
+              clientId: clientId.value
+            }
+          },
+          data: {
+            points: { increment: redeemedPoints.value }
+          }
+        });
+
+        points.value = res.points- pastBillPoints.value;
+        redeemedPoints.value = 0;
+        redeemedAmt.value = 0;
+        console.log(res);
+
+      } catch (error) {
+        console.error('Error updating client points', error);
+      }
+    }
+  }
+
+  redeeming.value = false;
+};
+
+
+const handleClearClient = async () => {
+  await UpdateCompanyClientForRedeem.mutateAsync({
+      where: {
+        companyId_clientId: {
+          companyId: useAuth().session.value?.companyId,
+          clientId: oldClientId.value,
+        },
+      },
+      data: {
+        points: { decrement: pastBillPoints.value },
+      },
+    });
+  clientId.value = '';
+  clientName.value = '';
+  points.value = '';
+  phoneNo.value = '';
+  oldClientId.value = '';
+}
+
+
 </script>
 
 
@@ -1337,6 +1343,10 @@ const handleDiscountEnter = (index) => {
       },
       footer: {
         base: 'divide-y divide-gray-200 dark:divide-gray-700',
+        padding: ''
+      },
+       header: {
+        base: '',
         padding: ''
       }
     }"
@@ -1366,12 +1376,12 @@ const handleDiscountEnter = (index) => {
         </div>
      
          <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2">
-            <UInput v-model="date" type="date" label="Date" class="flex-1" />
+            <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" />
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1"/>
           </div>
         
-        <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm py-3 hidden">
-        <UInput v-model="date" type="date" label="Date" class="lg:col-span-2"  />
+        <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm py-2 px-2 hidden">
+        <UInput v-model="dateOnly" type="date" label="Date" class="lg:col-span-2"  />
       </div>
 
 
@@ -1625,11 +1635,14 @@ const handleDiscountEnter = (index) => {
          
 
   <template #footer>
-   <div class="px-3 py-2">
-            <div>
-           Qty: {{ tQty }}
-            </div>
-          </div>
+     <div class=" w-full flex justify-between  px-3 py-2">
+      <div>
+          Qty: {{ tQty }}
+      </div>
+      <div>
+          Inv #: {{ bill?.invoiceNumber }}
+      </div>
+    </div>
         <!-- Other form elements -->
          <div v-if="!isMobile" class="sm:grid hidden grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
 
@@ -1673,7 +1686,7 @@ const handleDiscountEnter = (index) => {
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Total Redeemed AMT</label>
-              <UInput  />
+              <UInput v-model="redeemedAmt" />
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
@@ -1686,7 +1699,7 @@ const handleDiscountEnter = (index) => {
                   class="flex-1"
                 />
                 <UButton
-                  icon="i-heroicons-pencil-square"
+                  icon="i-heroicons-scissors"
                   size="sm"
                   color="primary"
                   square
@@ -1724,7 +1737,10 @@ const handleDiscountEnter = (index) => {
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
-              <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
+               <UButtonGroup size="sm" orientation="horizontal">
+                <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
+                <UButton icon="i-heroicons-x-mark" color="red" @click="handleClearClient" />
+              </UButtonGroup>
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
@@ -1735,7 +1751,8 @@ const handleDiscountEnter = (index) => {
               <UInput v-model="points" />
             </div>
             <div>
-              <UButton color="green" class="mt-9" block>Redeem Points</UButton>
+               <UButton v-if="!isRedeemPoint" color="green" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming">Redeem Points</UButton>
+              <UButton v-else-if="isRedeemPoint" color="red" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming">Cancel Redeem</UButton>
             </div>
           </div>
         </div>
@@ -1817,7 +1834,7 @@ const handleDiscountEnter = (index) => {
         <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden sm:flex">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
-          <UButton color="red" class="flex-1" block @click="deleteBill">Delete</UButton>
+          <UButton color="red" class="flex-1" block @click="handleDeleteBill">Delete</UButton>
           <UButton class="flex-1" block>Barcode Search</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
           <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
@@ -1866,6 +1883,7 @@ const handleDiscountEnter = (index) => {
   v-model:model="isClientAddModelOpen"
   v-model:phoneNo="phoneNo"
   :onVerify="handleEnterPhone"
+  :clientAdded="handleClientAdded"
 />
 
 

@@ -19,9 +19,12 @@ export default eventHandler(async (event) => {
 
     await session.update({
         id: user.id,
+        cleanup: user.cleanup || false,
         name: user.companies[0].name || null,
         image: user.image || null,
         email: user.email,
+        billCounter: user.companies[0].billCounter,
+        code: user.companies[0].code,
         storeUniqueName: user.companies[0].company.storeUniqueName,
         isTaxIncluded: user.companies[0].company.isTaxIncluded,
         isBarcodeIncluded: user.companies[0].company.isBarcodeIncluded,
@@ -31,8 +34,8 @@ export default eventHandler(async (event) => {
         companyName: user.companies[0].company.name,
         pipelineId: user.companies[0].company.pipeline?.id,
         role: user.companies[0].role,
-        shopifyStoreName:user.companies[0].company.shopifyStoreName,
-        shopifyAccessToken:user.companies[0].company.shopifyAccessToken,
+        pointsValue: user.companies[0].company.pointsValue || 0,
+        currency: user.companies[0].company.currency || 'INR',
         type:'USER',
         address: user.companies[0].company.address || {},
         gstin: user.companies[0].company.gstin || '',
@@ -43,6 +46,8 @@ export default eventHandler(async (event) => {
 
         variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, sizes, images }) =>
         ({ name, code, sprice, pprice, dprice, discount, qty, sizes, images }))(user.companies[0].company.variantinput || {}),
+
+        authSessionVersion:process.env.AUTH_SESSION_VERSION
     });
 
     return session;

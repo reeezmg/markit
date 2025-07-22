@@ -12,6 +12,7 @@ const isUpdatingName = ref(false);
 const isUpdatingAddress = ref(false);
 const isUpdatingAccount = ref(false);
 const isUpdatingInputs = ref(false);
+const isUpdatingPointsValue = ref(false);
 
 
 interface AccountState {
@@ -52,6 +53,7 @@ const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
 const isBarcodeInclude = ref(useAuth().session.value?.isBarcodeIncluded);
 const isUserTrackInclude = ref(useAuth().session.value?.isUserTrackIncluded);
+const pointsValue = ref(useAuth().session.value?.pointsValue || 0);
 
 const productInputs = reactive([
   { key: 'name', label: 'Name', value: useAuth().session.value?.productInputs?.name  },
@@ -312,6 +314,27 @@ const onInputChange = async () => {
   }
 };
 
+const onPointsValueChange = async() => {
+  isUpdatingPointsValue.value = true;
+  try {
+    const res = UpdateCompany.mutate({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        pointsValue: pointsValue.value,
+      },
+    });
+    await updatePointsValue(pointsValue.value);
+    toast.add({ title: 'Points value updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating points value', color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingPointsValue.value = false;
+  }
+};
+
 
 </script>
 
@@ -391,6 +414,24 @@ const onInputChange = async () => {
       :ui="{ container: '' }"    
     >
       <UCheckbox v-model="isUserTrackInclude" @change="onUserTrackIncludeChange" />
+    </UFormGroup>
+  <UDivider class="mb-4" />
+    <UFormGroup
+      name="pointsValue"
+      label="Points Value"
+      description="What is the value of 1 point in your currency?"
+      required
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"    
+    >
+      <UInput v-model="pointsValue" type="number" class="mb-4" />
+      <UButton
+        class="mt-2"
+        label="Update"
+        size="md"
+        :loading="isUpdatingPointsValue"
+        @click="onPointsValueChange"
+    />
     </UFormGroup>
     
     <UDivider class="mb-4" />
@@ -547,7 +588,9 @@ const onInputChange = async () => {
   </div>
 </div>
 
-<UButton class="mt-4" @click="onInputChange" label="Save Inputs" :loading="isUpdatingInputs" />
+<div class="text-end">
+  <UButton class="mt-4 w-fit" @click="onInputChange" label="Save Inputs" :loading="isUpdatingInputs" />
+</div>
 
   </UDashboardPanelContent>
 </template>

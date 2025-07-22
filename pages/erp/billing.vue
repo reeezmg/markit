@@ -1,87 +1,65 @@
 
 <script setup>
 import { BillingAddClient } from '#components';
-import { useUpdateCompany,useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry,useUpdateManyItem } from '~/lib/hooks';
-import { ShapeStream, Shape } from '@electric-sql/client'
+import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry, useUpdateCompanyClient } from '~/lib/hooks';
+import { v4 as uuidv4 } from 'uuid';
+import { useQueryClient } from '@tanstack/vue-query';
+const queryClient = useQueryClient();
 
-// const config = useRuntimeConfig()
-
-// // 1. Create a stream
-// const stream = new ShapeStream({
-//   url: config.public.electricApiUrl,
-//   params: {
-//     table: 'products',
-//   }
-// })
-
-// const shape = new Shape(stream)
-
-// shape.subscribe(({ rows }) => {
-//    console.log('Stream update:', rows)
-// })
-
-
-
-
-// 4. Wait for rows to load
-// const resshape = await shape.rows
-// console.log('Initial rows:', resshape)
-
-
-const currentRequestIds = ref({}); // Tracks the latest request ID per index
-const lastResponse  = ref({}); // Stores responses by request ID
-
+const currentRequestIds = ref({});
+const lastResponse  = ref({});
 const { printBill } = usePrint();
-const CreateBill = useCreateBill();
-const CreateTokenEntry = useCreateTokenEntry();
-const CreateAccount = useCreateAccount();
-const UpdateVariant = useUpdateVariant();
-const UpdateCompany = useUpdateCompany();
-const UpdateItem = useUpdateItem();
-const UpdateManyItem = useUpdateManyItem();
-const DeleteTokenEntry = useDeleteTokenEntry();
+const CreateBill = useCreateBill({ optimisticUpdate: true });
+const CreateTokenEntry = useCreateTokenEntry({ optimisticUpdate: true });
+const CreateAccount = useCreateAccount({ optimisticUpdate: true });
+const UpdateVariant = useUpdateVariant({ optimisticUpdate: true });
+const UpdateItem = useUpdateItem({ optimisticUpdate: true });
+const DeleteTokenEntry = useDeleteTokenEntry({ optimisticUpdate: true });
+const UpdateCompanyClient = useUpdateCompanyClient({ optimisticUpdate: true });
+const UpdateCompanyClientForRedeem = useUpdateCompanyClient();
+const redeeming = ref(false);
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const router = useRouter();
 const isTaxIncluded = ref(useAuth().session.value?.isTaxIncluded);
 const isBarcodeIncluded = ref(useAuth().session.value?.isBarcodeIncluded);
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
-const date = ref(new Date().toISOString().split('T')[0]);
+const billNo = ref('1');
+
+const paymentOptionsInsplit = ['Cash', 'UPI', 'Card','Credit']
+const paymentOptions = ref(['Cash', 'UPI', 'Card','Credit'])
+const tempSplits = ref(
+  Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }]))
+)
+console.log(tempSplits.value)
+
+const date = ref(new Date().toISOString());
 const discount = ref(0);
-
-const subtotal = computed(() => {
-  return items.value.reduce((sum, item) => sum + ((item.qty || 1) * (item.rate || 0)), 0);
-});
-const grandTotal = computed(() => {
-  const baseTotal = items.value.reduce((sum, item) => sum + (item.value || 0), 0);
-
-  if (discount.value < 0) {
-    return parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
-  } else {``
-    const discounted = baseTotal - (baseTotal * discount.value) / 100;
-    return parseFloat(discounted.toFixed(2));
-  }
-});
-
 const returnAmt = ref(0);
-const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
+const redeemedAmt = ref(0);
+const redeemedPoints = ref(0);
 const paymentMethod = ref('Cash');
-const voucherNo = ref('');
 const phoneNo = ref('');
 const points = ref(0);
 const clientName = ref('');
 const clientId = ref('');
-const scannedBarcode = ref("");
-const activeCategoryId = ref("");
-const activeSPrice = ref(null);
+const voucherNo = ref('');
 const token = ref("")
 const tokenEntries = ref([])
-const showSplitModal = ref(false)
-const tempSplits = ref(
-  Object.fromEntries(paymentOptions.map(method => [method, { method, amount: null }]))
-)
-
 const splitPayments = ref([])
+const isRedeemPoint = ref(false);
+const selected = ref(null);
+
+const account = ref({
+    name: '',
+    phone:'',
+    street: '',
+    locality: '',
+    city: '',
+    state: '',
+    pincode: '',
+});
+const scannedBarcode = ref("");
 const barcodeInputs = ref([]);
 const categoryInputs = ref([]);
 const nameInputs = ref([]);
@@ -102,30 +80,268 @@ const userStore = useUserStore()
 const isPrint = ref(false);
 const isSaving = ref(false);
 let printData = {}
-
 const isMobile = ref(false);
 
 
+const showSplitModal = ref(false)
 const isOpen = ref(false);
 const isSavingAcc = ref(false)
 const isTokenOpen = ref(false);
 const issalesReturnModelOpen = ref(false);
 const isClientAddModelOpen = ref(false);
-const account = ref({
-    name: '',
-    phone:'',
-    street: '',
-    locality: '',
-    city: '',
-    state: '',
-    pincode: '',
+
+
+const subtotal = computed(() => {
+  return items.value.reduce((sum, item) => sum + ((item.qty || 1) * (item.rate || 0)), 0);
 });
-const selected = ref(null);
+
+const grandTotal = computed(() => {
+  const baseTotal = items.value.reduce((sum, item) => sum + (item.value || 0), 0);
+  let afterDiscount = 0;
+  if (discount.value < 0) {
+    afterDiscount = parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
+  } else {
+    afterDiscount = parseFloat((baseTotal - (baseTotal * discount.value) / 100).toFixed(2));
+  }
+
+  return afterDiscount - redeemedAmt.value;
+});
+
+
+const dateOnly = computed({
+  get: () => date.value.split('T')[0],
+  set: val => {
+    // Preserve original time, but update the date
+    const original = new Date(date.value)
+    const updated = new Date(val + 'T' + original.toISOString().split('T')[1])
+    date.value = updated.toISOString()
+  }
+})
+
+watch(date, (newDate) => {
+  console.log('Date changed:', newDate);
+});
 
 
 const items = ref([
   { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: null, discount: null, tax: null, value: 0,sizes:{}, totalQty:0 ,return:false, userCode:null, userId:null, user:null},
 ]);
+
+const selectedDraft = ref(null);
+const draftBills = ref([]);
+const LOCAL_BILLS_KEY = 'bills';
+
+onMounted(() => {
+  const bills = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
+
+  if (bills.length === 0) {
+    const defaultBill = {
+      billNo: '1',
+      date: new Date().toISOString(),
+      discount: 0,
+      returnAmt: 0,
+      redeemedAmt: 0,
+      paymentMethod: 'Cash',
+      phoneNo: '',
+      points: 0,
+      clientName: '',
+      clientId: '',
+      voucherNo: '',
+      token: '',
+      tokenEntries: [],
+      splitPayments: [],
+      isRedeemPoint: false,
+      redeemedPoints: 0,
+      selected: null,
+      tempSplits: Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }])),
+      items: [{
+        id: '', variantId: '', name: '', sn: 1, barcode: '', category: [], size: '',
+        item: '', qty: 1, rate: null, discount: null, tax: null, value: 0,
+        sizes: {}, totalQty: 0, return: false, userCode: null, userId: null, user: null
+      }]
+    };
+    localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify([defaultBill]));
+  }
+
+  const updated = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY));
+  if (updated.length > 0) {
+    loadDraftBills();
+    selectedDraft.value = updated[0];
+    loadBill(updated[0].billNo);
+  }
+});
+
+// ✅ Single computed object to track all changes
+const currentBill = computed(() => ({
+  billNo: billNo.value,
+  date: date.value,
+  discount: discount.value,
+  returnAmt: returnAmt.value,
+  redeemedAmt: redeemedAmt.value,
+  paymentMethod: paymentMethod.value,
+  phoneNo: phoneNo.value,
+  points: points.value,
+  clientName: clientName.value,
+  clientId: clientId.value,
+  voucherNo: voucherNo.value,
+  token: token.value,
+  tokenEntries: tokenEntries.value,
+  splitPayments: splitPayments.value,
+  isRedeemPoint: isRedeemPoint.value,
+  redeemedPoints: redeemedPoints.value,
+  selected: selected.value,
+  tempSplits: tempSplits.value,
+  items: items.value
+}));
+
+// ✅ Watch the whole bill and sync it
+watch(currentBill, (newVal) => {
+  const allBills = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
+  const index = allBills.findIndex(b => b.billNo === newVal.billNo);
+
+  if (index !== -1) {
+    allBills[index] = newVal;
+    localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(allBills));
+  }
+
+  // ✅ Refresh `draftBills` and `selectedDraft` from localStorage
+  const updated = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
+  draftBills.value = updated;
+  selectedDraft.value = updated.find(b => b.billNo === newVal.billNo);
+}, { deep: true });
+
+
+// ✅ Create new bill
+function createNewBill() {
+  const existing = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
+  const maxNo = Math.max(0, ...existing.map(b => parseInt(b.billNo) || 0));
+  const newBillNo = (maxNo + 1).toString();
+
+  billNo.value = newBillNo;
+  date.value = new Date().toISOString();
+  discount.value = 0;
+  returnAmt.value = 0;
+  redeemedAmt.value = 0;
+  paymentMethod.value = 'Cash';
+  phoneNo.value = '';
+  points.value = 0;
+  clientName.value = '';
+  clientId.value = '';
+  voucherNo.value = '';
+  token.value = '';
+  tokenEntries.value = [];
+  splitPayments.value = [];
+  isRedeemPoint.value = false;
+  redeemedPoints.value = 0;
+  selected.value = null;
+  tempSplits.value = Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }]));
+  items.value = [{
+    id: '', variantId: '', name: '', sn: 1, barcode: '', category: [], size: '',
+    item: '', qty: 1, rate: null, discount: null, tax: null, value: 0,
+    sizes: {}, totalQty: 0, return: false, userCode: null, userId: null, user: null
+  }];
+
+  const newBill = currentBill.value;
+  existing.push(newBill);
+  localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(existing));
+  loadDraftBills();
+  selectedDraft.value = newBill;
+}
+
+// ✅ Load all drafts into memory
+function loadDraftBills() {
+  try {
+    draftBills.value = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
+  } catch (e) {
+    console.error('Failed to parse draft bills:', e);
+    draftBills.value = [];
+  }
+}
+
+// ✅ Load a specific bill
+function loadBill(billNumber) {
+  const bill = draftBills.value.find(b => b.billNo === billNumber);
+  if (!bill) return;
+
+  billNo.value = bill.billNo ?? '';
+  date.value = bill.date ?? new Date().toISOString();
+  discount.value = bill.discount ?? 0;
+  returnAmt.value = bill.returnAmt ?? 0;
+  redeemedAmt.value = bill.redeemedAmt ?? 0;
+  paymentMethod.value = bill.paymentMethod ?? 'Cash';
+  phoneNo.value = bill.phoneNo ?? '';
+  points.value = bill.points ?? 0;
+  clientName.value = bill.clientName ?? '';
+  clientId.value = bill.clientId ?? '';
+  voucherNo.value = bill.voucherNo ?? '';
+  token.value = bill.token ?? '';
+  tokenEntries.value = bill.tokenEntries ?? [];
+  splitPayments.value = bill.splitPayments ?? [];
+  isRedeemPoint.value = bill.isRedeemPoint ?? false;
+  redeemedPoints.value = bill.redeemedPoints ?? 0;
+  selected.value = bill.selected ?? null;
+  tempSplits.value = bill.tempSplits ?? {};
+  items.value = bill.items ?? [];
+}
+
+// ✅ Delete bill
+function deleteBill(billNumber) {
+  const deleted = draftBills.value.filter(b => b.billNo !== billNumber);
+  localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(deleted));
+  loadDraftBills();
+
+  const updated = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY));
+  if (updated.length > 0) {
+    selectedDraft.value = updated[0];
+  }
+}
+
+// ✅ Watch for selection change
+watch(selectedDraft, (val) => {
+  if (val && val.billNo !== billNo.value) {
+    loadBill(val.billNo);
+  }
+});
+
+
+const reset = () => {
+  items.value = [
+    {
+      id: '',
+      variantId: '',
+      sn: 1,
+      size: '',
+      barcode: '',
+      category: [],
+      item: '',
+      qty: 1,
+      rate: 0,
+      discount: 0,
+      tax: 0,
+      value: 0,
+      sizes: {},
+      totalQty: 0,
+    },
+  ];
+  discount.value = 0;
+  paymentMethod.value = 'Cash';
+  tokenEntries.value = [''];
+  clientName.value = '';
+  clientId.value = '';
+  phoneNo.value = '';
+  points.value = 0;
+  grandTotal.value = 0;
+  selected.value = null;
+  date.value = new Date().toISOString();
+  isRedeemPoint.value = false;
+  redeemedAmt.value = 0;
+  returnAmt.value = 0;
+
+  // Focus the barcode input
+  const input = barcodeInputs.value[0]?.$el?.querySelector('input');
+  input?.focus();
+};
+
 
 
 
@@ -171,6 +387,27 @@ watch(selected, (newSelected) => {
     paymentMethod.value = 'Credit'
   }
 })
+
+watch(redeemedAmt.value, (newValue) => {
+  if (newValue > 0) {
+    grandTotal.value = grandTotal.value - newValue;
+  }
+});
+
+watch(paymentMethod, (newMethod) => {
+  if (newMethod !== 'Split') {
+     const index = paymentOptions.value.indexOf('Split');
+    if (index !== -1) {
+      paymentOptions.value.splice(index, 1);
+    }
+  }else {
+    if (!paymentOptions.value.includes('Split')) {
+      paymentOptions.value.push('Split');
+    }
+  }
+});
+
+
 
 
 watch(items, async () => {
@@ -350,7 +587,18 @@ const args = computed(() => ({
       },
     },
   },
+  include: {
+    companies: {
+      where: {
+        companyId: useAuth().session.value?.companyId,
+      },
+      select: {
+        points: true,
+      },
+    },
+  },
 }));
+
 
 
  const {
@@ -360,7 +608,7 @@ const args = computed(() => ({
   refetch:refetchClient,
 } = useFindUniqueClient(
   args,
-  { enabled: false } // disabled by default
+  { enabled: false }
 );
 
 
@@ -606,309 +854,286 @@ const handleInvalidBarcode = (index) => {
   delete currentRequestIds.value[index];
 };
 
+const reconstructBill = (data) => {
+   const {
+    payload,
+    items,
+    returnedItems,
+    billPoints,
+    clientId,
+    companyId,
+    userId,
+    tokenEntries
+  } = data
+  const existing = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
+  const maxNo = Math.max(0, ...existing.map(b => parseInt(b.billNo) || 0));
+  const newBillNo = (maxNo + 1).toString();
+
+  billNo.value = newBillNo;
+  date.value = new Date(payload.createdAt).toISOString();
+  discount.value = payload.discount;
+  returnAmt.value = payload.returnAmnt;
+  redeemedAmt.value = payload.redeemedPoints;
+  paymentMethod.value = payload.paymentMethod;
+  phoneNo.value = '';
+  points.value = 0;
+  clientName.value = '';
+  clientId.value = payload.client.connect.id;
+  voucherNo.value = '';
+  token.value = '';
+  tokenEntries.value = [];
+  splitPayments.value = payload.splitPayments;
+  isRedeemPoint.value = payload.redeemedPoints ? true : false;;
+  redeemedPoints.value = payload.redeemedPoints
+  selected.value = payload.selected;
+  tempSplits.value = Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }]));
+  items.value = items;
+
+  const newBill = currentBill.value;
+  existing.push(newBill);
+  localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(existing));
+  loadDraftBills();
+}
+
+
 const handleSave = async () => {
-    isSaving.value = true
-    try {
+  isSaving.value = true;
+
+  try {
+    // 1. Filter valid entries
+    if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
     items.value = items.value.filter(item =>
       item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
     );
-  
-    if (items.value.length === 0) {
-        items.value = [
-          { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
-        ];
-        discount.value = 0;
-        paymentMethod.value = 'Cash';
-        tokenEntries.value = [''];
-        throw new Error(`No valid Entry in bill.`);
-      }
-   items.value.forEach((item, index) => {
-    if (!item.category || !item.category[0]?.id) {
-      throw new Error(`No category in entry ${index + 1}`);
-    }
-  });
 
-  if(!isBarcodeIncluded.value){
-      const results = await Promise.all(
+    if (items.value.length === 0) {
+      items.value = [{
+        id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '',
+        qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0
+      }];
+      discount.value = 0;
+      paymentMethod.value = 'Cash';
+      tokenEntries.value = [''];
+      throw new Error(`No valid Entry in bill.`);
+    }
+
+    items.value.forEach((item, index) => {
+      if (!item.category?.[0]?.id) {
+        throw new Error(`No category in entry ${index + 1}`);
+      }
+    });
+
+    if (!isBarcodeIncluded.value) {
+      await Promise.all(
         items.value.map((item, index) =>
           fetchItemDataNonBarcode(item.category[0]?.id, item.rate, index)
         )
       );
-    };
-
-
-
-  
-   const returnedItems = items.value.filter(item => item.return);
-    
-
-    const billid = await UpdateCompany.mutateAsync({
-      where:{
-        id:useAuth().session.value?.companyId
-      },
-    data: {
-        billCounter: {
-          increment: 1, 
-      },
-    },
-    select:{
-        billCounter:true,
-      }
-    })
-
-
-const entriesData = items.value.map(item => {
-  const entry = {
-    name: item.name || '',
-    qty: Number(item.qty || 1),
-    rate: Number(item.rate || 0),
-    discount: Number(item.discount || 0),
-    tax: Number(item.tax || 0),
-    value: Number(item.value || 0),
-    return: item.return || false,
-    ...(item.size && { size: item.size })
-  };
-
-  if (item.barcode) {
-    entry.barcode = item.barcode;
-  }
-
-  if (item.id) {
-    entry.item = { connect: { id: item.id } };
-  }
-
-  if (item.variantId) {
-    entry.variant = { connect: { id: item.variantId } };
-  }
-
-  if (item.category?.[0]?.id) {
-    entry.category = { connect: { id: item.category[0].id } };
-  }
-
-  if (item.userId) {
-    entry.userName = item.user
-    entry.companyUser = {
-      connect: {
-        companyId_userId: {
-          companyId: useAuth().session.value?.companyId,
-          userId: item.userId,
-        }
-      }
     }
-  }
 
-  return entry;
-});
+    const billInv = `${useAuth().session.value?.code}/${useAuth().session.value?.billCounter}`;
+    const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
+    const billPoints = pointsValue > 0 ? Number(grandTotal.value) / pointsValue : 0;
+    const returnedItems = items.value.filter(item => item.return);
 
-const payload = {
-  invoiceNumber: billid.billCounter,
-  subtotal: Number(subtotal.value) || 0,
-  discount: Number(discount.value) || 0,
-  grandTotal: Number(grandTotal.value) || 0,
-  returnAmt: Number(returnAmt.value) || 0,
-  paymentMethod: paymentMethod.value || 'Cash',
-  createdAt: new Date(date.value).toISOString(),
-  paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
-  type: 'BILL',
-  entries: {
-    create: entriesData,
-  },
-  company: {
-    connect: {
-      id: useAuth().session.value?.companyId,
-    },
-  },
-  ...(clientId.value && {
-    client: {
-      connect: {
-        id: clientId.value,
+    const entriesData = items.value.map(item => {
+      const entry = {
+        name: item.name || '',
+        qty: Number(item.qty || 1),
+        rate: Number(item.rate || 0),
+        discount: Number(item.discount || 0),
+        tax: Number(item.tax || 0),
+        value: Number(item.value || 0),
+        return: item.return || false,
+        ...(item.size && { size: item.size }),
+        ...(item.barcode && { barcode: item.barcode }),
+        ...(item.id && { item: { connect: { id: item.id } } }),
+        ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
+        ...(item.category?.[0]?.id && {
+          category: { connect: { id: item.category[0].id } }
+        }),
+        ...(item.userId && {
+          userName: item.user,
+          companyUser: {
+            connect: {
+              companyId_userId: {
+                companyId: useAuth().session.value?.companyId,
+                userId: item.userId,
+              }
+            }
+          }
+        })
+      };
+      return entry;
+    });
+
+    const payload = {
+      invoiceNumber: billInv,
+      subtotal: Number(subtotal.value) || 0,
+      discount: Number(discount.value) || 0,
+      grandTotal: Number(grandTotal.value) || 0,
+      returnAmt: Number(returnAmt.value) || 0,
+      paymentMethod: paymentMethod.value || 'Cash',
+      ...(redeemedPoints.value && { redeemedPoints: redeemedPoints.value || 0 }),
+      ...(!clientId.value ? { billPoints: 0 } : { billPoints }),
+      createdAt: new Date(date.value).toISOString(),
+      paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
+      type: 'BILL',
+      entries: { create: entriesData },
+      company: {
+        connect: {
+          id: useAuth().session.value?.companyId,
+        },
       },
-    },
-  }),
-  ...(selected.value && {
-    account: { connect: { id: selected.value } },
-  }),
-
-  ...(paymentMethod.value === 'Split' && {
-    splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
-  }),
-};
-
-  isSaving.value = false;
-         isPrint.value = true
-           printData = {
-              invoiceNumber: billid.billCounter,
-              date: new Date(date.value).toISOString(),
-              entries: items.value.map(entry => {
-              let calculatedDiscount = 0;
-    
-              if (entry.discount < 0) {
-                // Fixed discount
-                calculatedDiscount = entry.discount;
-              } else if( entry.discount > 0) {
-                // Percentage discount
-                calculatedDiscount = `${entry.discount}%`;
-              }else if (entry.discount === null || entry.discount === undefined) {
-                calculatedDiscount = 0;
-              }else{
-                calculatedDiscount = 0;
-              }
-    
-              return {
-                description: entry.barcode ? entry.name : entry.category[0].name,
-                hsn: entry.category[0].hsn,
-                qty: entry.qty,
-                mrp: entry.rate,
-                discount: calculatedDiscount || 0, // ✅ set calculated discount
-                tax: entry.tax,
-                value: entry.qty * entry.rate ,
-                size: entry.size,
-                barcode: entry.barcode,
-                tvalue:entry.value,
-              };
-            }),
-    
-          subtotal: subtotal.value,
-         discount: Number(discount.value),
-          grandTotal: grandTotal.value,
-          paymentMethod: paymentMethod.value,
-          companyName: useAuth().session.value?.companyName || '',
-          companyAddress: useAuth().session.value?.address || {},
-          gstin: useAuth().session.value?.gstin || '',
-          ...(paymentMethod.value === 'Split' && {
-            splitPayments: splitPayments.value, // e.g., [{ method: 'Cash', amount: 500 }]
-          }),
-          accHolderName: useAuth().session.value?.accHolderName || '',
-          ...(paymentMethod.value === 'Split' && {
-            splitPayments: splitPayments.value,
-          }),
-          upiId: useAuth().session.value?.upiId || '',
-          clientName: clientName.value,
-          clientPhone:phoneNo.value,
-          // 🆕 Add total qty
-          tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
-          tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
-          ttvalue: items.value.reduce((sum, entry) => sum + (entry.value), 0),
-          tdiscount: items.value.reduce((sum, entry) => {
-            if (entry.discount < 0) {
-              return sum + (Math.abs(entry.discount) * entry.qty);
-            } else {
-              return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
-            }
-          }, 0)
-        };
-
-      CreateBill.mutateAsync({
-        data: payload
-          });
-        toast.add({
-          title: 'Bill created successfully!',
-          color: 'green',
-        });
-
-
-         for (const item of items.value) {
-          if ((item.barcode && item.return === false) || (!isBarcodeIncluded.value && item.variantId && item.return === false)) {
-              UpdateVariant.mutateAsync({
-                where: { id: item.variantId },
-                data: { 
-                  sold: { increment: item.qty },
-                }
-              }).catch(error => console.error(`Error updating variant ${item.variantId}`, error))
-          
-    
-  
-              UpdateItem.mutateAsync({
-              where: { id: item.id },
-              data: { 
-                qty: { decrement: item.qty },
-              }
-              }).catch(error => console.error(`Error updating item ${item.id}`, error))
-            }
-        }
-
-        
-        if (returnedItems.length > 0) {
-         for (const item of returnedItems) {
-            UpdateVariant.mutateAsync({
-              where: { id: item.variantId },
-              data: { 
-                sold: { decrement: item.qty },
-               }
-            }).catch(error => console.error(`Error updating variant`, error))
-         
-              UpdateItem.mutateAsync({
-              where: { id: item.id },
-              data: { 
-                qty: { increment: item.qty },
-              }
-            }).catch(error => console.error(`Error updating item}`, error))
+      companyUser: {
+        connect: {
+          companyId_userId: {
+            companyId: useAuth().session.value?.companyId,
+            userId: useAuth().session.value?.id,
           }
         }
+      },
+      ...(clientId.value && {
+        client: { connect: { id: clientId.value } }
+      }),
+      ...(selected.value && {
+        account: { connect: { id: selected.value } }
+      }),
+      ...(paymentMethod.value === 'Split' && {
+        splitPayments: splitPayments.value
+      }),
+    };
 
-        $fetch('/api/notifications/notify', {
-        method: 'POST',
-        body: {
-          userId:useAuth().session.value?.id,
-          type: 'BILL',
-          companyId: useAuth().session.value?.companyId,
-          // id: billResponse.id,
-          invoiceNumber: billid.billCounter,
-          amount: grandTotal.value
-        }
-      })
-
-    await $fetch('/api/notifyfcm', {
-    method: 'POST',
-    body: {
-      companyId: useAuth().session.value?.companyId,
-      excludeDeviceId: localStorage.getItem('device_id'), // 🧠 Prevent notifying self
-      title: `New Bill Created in ${useAuth().session.value?.companyName}`,
-      body: `Invoice #${billid.billCounter} for ₹${grandTotal.value} has been created.`,
-      // Optional: include click_action URL
-      data: {
-        url: '/erp/sales' // for redirect on click (handled in service worker)
+    // 🔁 Backend call to handle everything with Prisma transaction
+    $fetch('/api/bill/create', {
+      method: 'POST',
+      body: {
+        payload,
+        items: items.value,
+        returnedItems,
+        billPoints,
+        clientId: clientId.value,
+        companyId: useAuth().session.value?.companyId,
+        userId: useAuth().session.value?.id,
+        tokenEntries: tokenEntries.value,
       }
-    }
-  })
+    }).then(() => {
+    toast.add({
+      title: 'Bill created successfully!',
+      color: 'green',
+    });
 
-
-           items.value = [
-      { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
-      ];
-      discount.value = 0;
-      paymentMethod.value = 'Cash';
-      tokenEntries.value = [''];
-        const input = barcodeInputs.value[0]?.$el?.querySelector('input');
-    input?.focus();
-  
-    
-    } catch (error) {
-      isSaving.value = false;
-      console.error('Error creating bill', error);
-      toast.add({
+      queryClient.invalidateQueries({
+        queryKey: ['zenstack', 'Bill', 'findMany'],
+        exact: false
+      });
+    }).catch(error => {
+        reconstructBill(error.data.data)
+       toast.add({
         title: 'Bill creation failed!',
-        description: error.message,
+        description:'Check the last draft',
         color: 'red',
       });
-    }
    
-     
-      
-  
-    try {
-      tokenEntries.value = tokenEntries.value.filter(token => token.trim() !== '');
-      if (tokenEntries.value.length > 0) {
-         DeleteTokenEntry.mutateAsync({
-          where: { tokenNo: { in: tokenEntries.value } }
-        });
-      }
-    } catch (error) {
-      console.error('Error deleting token entries', error);
-    }
-      
+    }).finally(() => {
+       isSaving.value = false
+      updateBillCounter();
+    })
 
-  };
+    // 🧾 Trigger Print
+    isPrint.value = true;
+    printData = {
+      invoiceNumber: billInv,
+      date: new Date(date.value).toISOString(),
+      entries: items.value.map(entry => {
+        const discountVal = entry.discount < 0
+          ? entry.discount
+          : entry.discount > 0
+            ? `${entry.discount}%`
+            : 0;
+        return {
+          description: entry.barcode ? entry.name : entry.category[0].name,
+          hsn: entry.category[0].hsn,
+          qty: entry.qty,
+          mrp: entry.rate,
+          discount: discountVal,
+          tax: entry.tax,
+          value: entry.qty * entry.rate,
+          size: entry.size,
+          barcode: entry.barcode,
+          tvalue: entry.value,
+        };
+      }),
+      subtotal: subtotal.value,
+      discount: Number(discount.value),
+      grandTotal: grandTotal.value,
+      paymentMethod: paymentMethod.value,
+      companyName: useAuth().session.value?.companyName || '',
+      companyAddress: useAuth().session.value?.address || {},
+      gstin: useAuth().session.value?.gstin || '',
+      ...(paymentMethod.value === 'Split' && {
+        splitPayments: splitPayments.value
+      }),
+      accHolderName: useAuth().session.value?.accHolderName || '',
+      upiId: useAuth().session.value?.upiId || '',
+      clientName: clientName.value,
+      clientPhone: phoneNo.value,
+      tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
+      tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+      ttvalue: items.value.reduce((sum, entry) => sum + entry.value, 0),
+      tdiscount: items.value.reduce((sum, entry) => {
+        if (entry.discount < 0) {
+          return sum + (Math.abs(entry.discount) * entry.qty);
+        } else {
+          return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
+        }
+      }, 0)
+    };
+
+    reset();
+
+    // 🔔 Notify users (FCM + backend)
+    // await $fetch('/api/notifications/notify', {
+    //   method: 'POST',
+    //   body: {
+    //     userId: useAuth().session.value?.id,
+    //     type: 'BILL',
+    //     companyId: useAuth().session.value?.companyId,
+    //     invoiceNumber: billInv,
+    //     amount: grandTotal.value
+    //   }
+    // });
+
+     $fetch('/api/notifyfcm', {
+      method: 'POST',
+      body: {
+        companyId: useAuth().session.value?.companyId,
+        excludeDeviceId: localStorage.getItem('device_id'),
+        title: `New Bill Created in ${useAuth().session.value?.companyName}`,
+        body: `Invoice #${billInv} for ₹${grandTotal.value} has been created.`,
+        data: {
+          url: '/erp/sales'
+        }
+      }
+    });
+
+
+
+  } catch (error) {
+    console.error('Error creating bill', error);
+    toast.add({
+      title: 'Bill creation failed!',
+      description: error.message,
+      color: 'red',
+    });
+  }
+};
+
 
 
 const print = async() => {
@@ -936,15 +1161,16 @@ const {
 });
 
 
-const submitForm = async () => {
+const submitForm = () => {
   isSavingAcc.value = true
   try {
     
     if (!account.value.name) {
         throw new Error(`Plase Fill name`);
       }
-    const res = await CreateAccount.mutateAsync({
+    const res = CreateAccount.mutateAsync({
       data: {
+                id: uuidv4(),
                 name: account.value.name,
                 phone: account.value.phone,
                 address: {
@@ -1097,7 +1323,7 @@ const submitEntryForm = async () => {
 };
 
 const newBill = () => {
-  window.open(window.location.href, '_blank');
+  createNewBill()
 
   // items.value = [
   //   { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
@@ -1261,20 +1487,24 @@ const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
 
 
 const handleEnterPhone = async() => {
-const { data } = await refetchClient()
-clientName.value = data?.name
-clientId.value = data?.id
-if(!data){
-  isClientAddModelOpen.value = true
-}
-}
-
-
-watch(paymentMethod, (val) => {
-  if (val === 'Split') {
-    showSplitModal.value = true
+  const { data } = await refetchClient()
+  clientName.value = data?.name
+  clientId.value = data?.id
+  points.value = data?.companies[0]?.points
+  if(!data){
+    isClientAddModelOpen.value = true;
   }
-})
+}
+
+const handleClientAdded = (id,name) => {
+  clientName.value = name
+  clientId.value = id
+  points.value = 0
+  isClientAddModelOpen.value = false;
+};
+
+
+
 
 
 const handleAmountEntry = (method) => {
@@ -1303,7 +1533,6 @@ const totalSplitAmount = computed(() =>
 
 const handleSplit = () => {
   showSplitModal.value = true
-  paymentMethod.value = 'Split'
 }
 
 
@@ -1315,6 +1544,11 @@ function submitSplitPayment() {
     return
   }
   showSplitModal.value = false
+   if (!paymentOptions.value.includes('Split')) {
+    paymentOptions.value.push('Split');
+    paymentMethod.value = 'Split';
+  }
+  
 }
 
 function handleCategoryChange(category, rowIndex) {
@@ -1360,6 +1594,67 @@ const handleDiscountEnter = (index) => {
   }
 };
 
+const handleRedeemPoints = async () => {
+  isRedeemPoint.value = !isRedeemPoint.value;
+  redeeming.value = true;
+
+  if (isRedeemPoint.value) {
+    if (clientId.value) {
+      try {
+        // Determine the redeemable points (not more than grand total)
+        const redeemablePoints = Math.min(points.value, grandTotal.value);
+
+        const res = await UpdateCompanyClientForRedeem.mutateAsync({
+          where: {
+            companyId_clientId: {
+              companyId: useAuth().session.value?.companyId,
+              clientId: clientId.value
+            }
+          },
+          data: {
+            points: { decrement: redeemablePoints }
+          }
+        });
+
+        redeemedPoints.value = redeemablePoints;
+        redeemedAmt.value = redeemablePoints;
+        points.value = res.points;
+        console.log(res);
+
+      } catch (error) {
+        console.error('Error updating client points', error);
+      }
+    }
+  } else {
+    // Revert redeemed points
+    if (clientId.value) {
+      try {
+        const res = await UpdateCompanyClientForRedeem.mutateAsync({
+          where: {
+            companyId_clientId: {
+              companyId: useAuth().session.value?.companyId,
+              clientId: clientId.value
+            }
+          },
+          data: {
+            points: { increment: redeemedPoints.value }
+          }
+        });
+
+        points.value = res.points;
+        redeemedPoints.value = 0;
+        redeemedAmt.value = 0;
+        console.log(res);
+
+      } catch (error) {
+        console.error('Error updating client points', error);
+      }
+    }
+  }
+
+  redeeming.value = false;
+};
+
 
 </script>
 
@@ -1374,15 +1669,20 @@ const handleDiscountEnter = (index) => {
       divide: 'divide-y divide-gray-200 dark:divide-gray-700',
       body: {
         padding: '',
-        base: 'sm:flex-1 sm:flex sm:flex-col sm:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700'
+        base: 'sm:flex-1 sm:flex sm:flex-col sm:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700 z-10'
       },
       footer: {
         base: 'divide-y divide-gray-200 dark:divide-gray-700',
         padding: ''
+      },
+       header: {
+        base: '',
+        padding: ''
       }
     }"
   >
-     <div class="w-full flex flex-wrap gap-4  px-3 py-3 sm:hidden">
+    <template #header>
+     <div class="w-full flex flex-wrap gap-4 sm:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
@@ -1407,21 +1707,66 @@ const handleDiscountEnter = (index) => {
         </div>
         </div>
      
-         <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2">
-            <UInput v-if="!token" v-model="date" type="date" label="Date" class="flex-1" />
+         <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
+            <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="flex-1" />
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1"/>
           </div>
         
-        <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm py-3 hidden">
-        <UInput v-if="!token" v-model="date" type="date" label="Date" class="lg:col-span-2"  />
-        <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2 " />
-        <UButton color="primary" label="Token Entries " block @click="isTokenOpen=true" class="lg:col-start-11 lg:col-span-2" />
-      </div>
+       <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
+  <!-- Date Input: visible only if token is empty -->
+  <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
+
+  <!-- Token Input -->
+  <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2" />
+
+  <!-- Token Entries Button -->
+  <UButton
+    color="primary"
+    label="Token Entries"
+    class="lg:col-start-9 lg:col-span-2"
+    block
+    @click="isTokenOpen = true"
+  />
+
+  <!-- Draft Selector + Reset -->
+  <div class="lg:col-start-11 lg:col-span-3 flex flex-row items-center gap-2">
+    <USelectMenu
+      v-model="selectedDraft"
+      :options="draftBills"
+      placeholder="Select Draft Bill"
+      class="flex-1"
+    >
+      <template #label>
+        <span>Draft {{ selectedDraft?.billNo }}</span>
+      </template>
+
+      <template #option="{ option: bill }">
+        <div class="flex justify-between items-center w-full px-2">
+          <div class="font-medium">Draft {{ bill.billNo }}</div>
+          <UButton
+            v-if="draftBills.length > 1"
+            class="text-red-500 hover:text-red-700 ml-2"
+            icon="i-heroicons-x-circle"
+            variant="ghost"
+            @mousedown.prevent.stop="deleteBill(bill.billNo)"
+          />
+        </div>
+      </template>
+    </USelectMenu>
+
+    <UButton
+      color="primary"
+      icon="i-heroicons-arrow-path"
+      class="flex-shrink-0"
+      @click="reset"
+    />
+  </div>
+</div>
 
 
-        <!-- Responsive table wrapper -->  
-         
-        <!-- Mobile layout with alternating colors -->
+   </template>  
+
+    
 <div  v-if="isMobile" class="block sm:hidden space-y-4 py-1 px-2">
   <div
     v-for="(row, index) in items"
@@ -1480,7 +1825,7 @@ const handleDiscountEnter = (index) => {
     </div>
 
     <!-- Row 2: Category | Rate | Tax -->
-    <div class="grid grid-cols-3 gap-2 ">
+    <div class="grid grid-cols-3 gap-2 z-10 ">
       <USelectMenu
         v-model="row.category"
         :options="categories"
@@ -1678,15 +2023,20 @@ const handleDiscountEnter = (index) => {
           
         </div>
 
-        
          
 
   <template #footer>
-   <div class="px-3 py-2">
-            <div>
+    <div class=" w-full flex justify-between  px-3 py-2">
+        <div>
            Qty: {{ tQty }}
-            </div>
+        </div>
+        <div>
+          <div v-if="!isSaving">
+            Inv #: {{ `${useAuth().session.value?.code}/${useAuth().session.value?.billCounter}` }}
           </div>
+          <UButton v-else :loading="true" variant="ghost" color="grey"/>
+        </div>
+      </div>
         <!-- Other form elements -->
          <div v-if="!token && !isMobile" class="sm:grid hidden grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
 
@@ -1730,7 +2080,7 @@ const handleDiscountEnter = (index) => {
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Total Redeemed AMT</label>
-              <UInput  />
+              <UInput v-model = redeemedAmt  />
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
@@ -1738,12 +2088,12 @@ const handleDiscountEnter = (index) => {
                 <USelect
                   ref="paymentref"
                   v-model="paymentMethod"
-                  :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
+                  :options="paymentOptions"
                   @keydown.enter.prevent="handleEnterPayment(index)"
                   class="flex-1"
                 />
                 <UButton
-                  icon="i-heroicons-pencil-square"
+                  icon="i-heroicons-scissors"
                   size="sm"
                   color="primary"
                   square
@@ -1774,7 +2124,7 @@ const handleDiscountEnter = (index) => {
               <UInput v-model="voucherNo" />
             </div>
             <div class="mt-9">
-              <UButton color="primary" block @click="isOpen=true" :disabled="isSavingAcc">Add Account</UButton>
+              <UButton color="primary" block @click="isOpen=true" :loading="isSavingAcc">Add Account</UButton>
             </div>
           </div>
           
@@ -1792,7 +2142,8 @@ const handleDiscountEnter = (index) => {
               <UInput v-model="points" />
             </div>
             <div>
-              <UButton color="green" class="mt-9" block>Redeem Points</UButton>
+              <UButton v-if="!isRedeemPoint" color="green" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming">Redeem Points</UButton>
+              <UButton v-else-if="isRedeemPoint" color="red" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming">Cancel Redeem</UButton>
             </div>
           </div>
         </div>
@@ -1818,12 +2169,12 @@ const handleDiscountEnter = (index) => {
             <USelect
             ref="paymentref"
             v-model="paymentMethod"
-            :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
+            :options="paymentOptions"
             @keydown.enter.prevent="handleEnterPayment(index)"
             class="flex-1"
             />
             <UButton
-            icon="i-heroicons-pencil-square"
+            icon="i-heroicons-scissors"
             size="sm"
             color="primary"
             square
@@ -1861,7 +2212,7 @@ const handleDiscountEnter = (index) => {
             square
             variant="solid"
             class="w-auto"
-            :disabled="isSavingAcc"
+            :loading="isSavingAcc"
             @click="isOpen=true"
             />
           </div>
@@ -1918,7 +2269,7 @@ const handleDiscountEnter = (index) => {
 
 
           <!-- Submit Button -->
-          <UButton @click="submitForm" :disabled="isSavingAcc" block>Submit</UButton>
+          <UButton @click="submitForm" :loading="isSavingAcc" block>Submit</UButton>
         </div>
       </UModal>
 
@@ -1933,6 +2284,7 @@ const handleDiscountEnter = (index) => {
   v-model:model="isClientAddModelOpen"
   v-model:phoneNo="phoneNo"
   :onVerify="handleEnterPhone"
+  :clientAdded="handleClientAdded"
 />
 
 <!-- token modal -->
@@ -1965,16 +2317,15 @@ const handleDiscountEnter = (index) => {
     <h2 class="text-lg font-semibold">Split Payment</h2>
 
     <div
-      v-for="(method, index) in paymentOptions"
+      v-for="(method, index) in paymentOptionsInsplit"
       :key="method"
       class="flex gap-2 items-center"
     >
-      <USelect
-        v-model="tempSplits[method].method"
-        :options="[method]"
-        disabled
+      <div
         class="w-1/2"
-      />
+      >
+      {{ tempSplits[method].method }}
+      </div>
       <UInput
         v-model.number="tempSplits[method].amount"
         type="number"

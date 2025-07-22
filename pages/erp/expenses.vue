@@ -82,11 +82,24 @@ const editExpense = (id: string, editExpense: any) => {
 };
 
 const deleteExpenseRow = (id: string) => {
+    try{
         deleteExpense.mutate({
         where: {
             id,
         },
     });
+    toast.add({
+        title: `Bill deleted successfully!`,
+        color: 'green',
+    });
+}
+catch(error){
+    toast.add({
+        title: 'Error while deleting the expense',
+        description: error.message,
+        color: 'red',
+    });
+}
 };
 
 const showForm = ref(false);

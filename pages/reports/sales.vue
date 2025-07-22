@@ -7,6 +7,7 @@ import RevenueEChart from '@/components/dashboard/RevenueEChart.vue'
 import CategoryRevenuePie from '@/components/dashboard/CategoryRevenuePie.vue'
 import { useCompanyDashboard } from '@/lib/api/useDashboardData'
 import { exportToCSV } from '~/utils/export-csv'
+import { startOfDay, endOfDay,sub, format, isSameDay, type Duration  } from 'date-fns'
 import type { DashboardComposable, BillWithRelations, KpiItem, PdfReportMeta } from '~/types/dashboard'
 
 
@@ -57,8 +58,7 @@ const loading = ref(true)
 const { printReport } = usePrint();
 let printData = {}
 
-const startDate = ref('')
-const endDate = ref('')
+
 const dashboard = ref({
 })
 const fullReport = ref(false)
@@ -68,24 +68,28 @@ const csvLoading = ref(false)
 const pdfLoading = ref(false)
 const toast = useToast()
 
-// Set default date range (current month)
-const setDefaultDateRange = () => {
-  const now = new Date()
-  const today = now.toLocaleDateString('en-CA')
-  startDate.value = today
-  endDate.value = today
+const selectedDate = ref({ 
+    start: new Date() , 
+    end: new Date() 
+});
+
+function isRangeSelected(duration: Duration) {
+  return isSameDay(selectedDate.value.start, sub(new Date(), duration)) && isSameDay(selectedDate.value.end, new Date())
 }
 
+function selectRange(duration: Duration) {
+  selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
+}
 
 const fetchReportFromServer = async () => {
-  if (!startDate.value || !endDate.value) return;
+  if (!selectedDate.value.start || !selectedDate.value.end) return;
 
   try {
     const res = await $fetch('/api/report', {
       method: 'GET',
       params: {
-        startDate: startDate.value,
-        endDate: endDate.value,
+        startDate: startOfDay(selectedDate.value.start),
+        endDate: endOfDay(selectedDate.value.end),
       },
     });
 
@@ -100,8 +104,8 @@ const fetchReportFromServer = async () => {
   }
 };
 
-watch([startDate, endDate, companyName], ([start, end, companyName]) => {
-  if (start && end && !fullReport.value) {
+watch([selectedDate, companyName], ([date, companyName]) => {
+  if (date && !fullReport.value) {
     fetchReportFromServer();
   }
 });
@@ -110,34 +114,21 @@ watch(dashboard, (newdashboard) => {
   console.log('Dashboard data updated:', newdashboard);
 });
 
-// Watch for quick range changes
-watch(quickRange, async (value) => {
-  if (!value) return;
+const ranges = [
+  { label: 'Last 7 days', duration: { days: 7 } },
+  { label: 'Last 14 days', duration: { days: 14 } },
+  { label: 'Last 30 days', duration: { days: 30 } },
+  { label: 'Last 3 months', duration: { months: 3 } },
+  { label: 'Last 6 months', duration: { months: 6 } },
+  { label: 'Last year', duration: { years: 1 } }
+]
 
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = now.getMonth();
-
-  if (value === 'Today') {
-    const today = now.toLocaleDateString('en-CA');
-    startDate.value = today;
-    endDate.value = today;
-  } else if (value === 'This Month') {
-    startDate.value = new Date(year, month, 1).toLocaleDateString('en-CA');
-    endDate.value = new Date(year, month + 1, 0).toLocaleDateString('en-CA');
-  } else if (value === 'Last Month') {
-    startDate.value = new Date(year, month - 1, 1).toLocaleDateString('en-CA');
-    endDate.value = new Date(year, month, 0).toLocaleDateString('en-CA');
-  }
-
-  await fetchReportFromServer();
-});
 
 
 // Computed properties
 const isDownloadDisabled = computed(() => {
   return loading.value || !dashboard.value.bills || 
-    (!fullReport.value && !startDate.value && !endDate.value && !quickRange.value)
+    (!fullReport.value && !selectedDate.value.start && !selectedDate.value.end && !quickRange.value)
 })
 
 
@@ -229,20 +220,26 @@ const kpiArray = computed<KpiItem[]>(() => ([
     totals.value.totalRevenue / dashboard.value.bills?.length : 0) }
 ]))
 
-const billsCSV = computed(() => dashboard.value.bills.map(bill => ({
-  Invoice: bill.invoiceNumber ?? '-',
-  Date: bill.createdAt ? new Date(bill.createdAt).toLocaleDateString() : 'N/A',
-  Client: bill.client?.name ?? 'N/A',
-  Address: formatAddress(bill.address),
-  Subtotal: bill.subtotal ?? 0,
-  Tax: bill.tax ?? 0,
-  Discount: bill.discount ?? 0,
-  GrandTotal: bill.grandTotal ?? 0,
-  PaymentStatus: bill.paymentStatus,
-  PaymentMethod: bill.paymentMethod ?? 'N/A',
-  TransactionID: bill.transactionId ?? '-',
-  Notes: bill.notes ?? ''
-})))
+const billsCSV = computed(() => dashboard.value.bills.map(bill => {
+  console.log(bill.invoiceNumber)
+  const entryTaxSum = bill.entries?.reduce((sum, entry) => {
+    const value = entry.value ?? 0
+    const taxPercent = entry.tax ?? 0
+    return sum + ((taxPercent / 100) * value)
+  }, 0) ?? 0
+
+  return {
+    Invoice: `="${bill.invoiceNumber}"`,
+    Date: bill.createdAt ? new Date(bill.createdAt).toLocaleDateString() : 'N/A',
+    Client: bill.client?.name ?? 'N/A',
+    Subtotal: bill.subtotal ?? 0,
+    Tax: entryTaxSum, // ✅ accurate tax from entries
+    Discount: bill.discount ?? 0,
+    GrandTotal: bill.grandTotal ?? 0,
+    PaymentMethod: bill.paymentMethod ?? 'N/A',
+    Notes: bill.notes ?? '',
+  }
+}))
 
 // Helper functions
 const formatCurrency = (val: number) => `₹${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
@@ -273,7 +270,7 @@ const downloadCSV = () => {
   csvLoading.value = true
   try {
     exportToCSV(billsCSV.value, csvfilename)
-    toast.add({ title: 'CSV Downloaded', description: 'Your CSV file has been downloaded' })
+    toast.add({ title: 'CSV Downloaded', description: 'Your CSV file has been downloaded', color:'green' })
   } catch (error) {
     toast.add({ title: 'CSV Error', description: 'Failed to generate CSV', color: 'red' })
   } finally {
@@ -298,7 +295,7 @@ const downloadPDF = async () => {
         ? 'Full Report' 
         : quickRange.value 
         ? quickRange.value 
-        : `${startDate.value || 'Start'} to ${endDate.value || 'End'}`,
+        : `${selectedDate.value.start || 'Start'} to ${selectedDate.value.end || 'End'}`,
       reportTitle: 'Sales Report'
     }
 
@@ -338,7 +335,6 @@ const refreshPage = async () => {
 
 // Initialize
 onMounted(() => {
-  setDefaultDateRange()
   fetchReportFromServer()
   loading.value = false
 })
@@ -349,9 +345,9 @@ const printReportHandle = async() => {
       companyName: useAuth().session.value?.companyName || '',
       companyAddress: dashboard.value.company?.address || {},
       expenses: dashboard.value.expenses || [],
-      dateRange: startDate.value === endDate.value
-        ? `${startDate.value || 'Start'}`
-        : `${startDate.value || 'Start'} to ${endDate.value || 'End'}`,
+      dateRange: selectedDate.value.start === selectedDate.value.end
+        ? `${selectedDate.value.start || 'Start'}`
+        : `${selectedDate.value.start || 'Start'} to ${selectedDate.value.end || 'End'}`,
       totalRevenue: totals.value.totalRevenue,
       totalRevenueInCash: totals.value.totalRevenueInCash,
       totalRevenueInUPI: totals.value.totalRevenueInUPI,
@@ -377,16 +373,31 @@ const printReportHandle = async() => {
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
           <h1 class="text-xl font-semibold">Sales Report</h1>
           <div class="flex flex-wrap items-center gap-3">
-            <UInput v-model="startDate" type="date" placeholder="Start Date" class="w-40" :disabled="fullReport" />
-            <UInput v-model="endDate" type="date" placeholder="End Date" class="w-40" :disabled="fullReport" />
-            <!-- <UToggle v-model="fullReport" label="Full Report" /> -->
-            <USelectMenu
-              v-model="quickRange"
-              :options="quickRanges"
-              placeholder="Quick Ranges"
-              class="w-40"
-              :disabled="fullReport"
-            />
+            <UPopover :popper="{ placement: 'bottom-start' }" class=" z-10 ">
+              <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
+              {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
+              </UButton>
+
+              <template #panel="{ close }">
+              <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                  <div class="hidden sm:flex flex-col py-4">
+                  <UButton
+                      v-for="(range, index) in ranges"
+                      :key="index"
+                      :label="range.label"
+                      color="gray"
+                      variant="ghost"
+                      class="rounded-none px-6 hidden sm:block"
+                      :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                      truncate
+                      @click="selectRange(range.duration)"
+                  />
+                  </div>
+
+                  <DatePicker v-model="selectedDate" @close="close" />
+              </div>
+              </template>
+          </UPopover>
             <UButton 
               @click="downloadCSV" 
               icon="i-heroicons-arrow-down-tray" 

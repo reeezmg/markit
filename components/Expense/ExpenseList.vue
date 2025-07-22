@@ -12,12 +12,12 @@ import { sub, format, isSameDay, type Duration } from 'date-fns'
 
 const emit = defineEmits(['edit','delete','open']);
 const useAuth = () => useNuxtApp().$auth;
-const UpdateManyExpense = useUpdateManyExpense();
+const UpdateManyExpense = useUpdateManyExpense({ optimisticUpdate: true });
 const selectedRows = ref([]);
 const selectedStatus = ref([]);
 const selectedCategory = ref([]);
 const isDeleteModalOpen = ref(false)
-const deletingRowIdentinty = ref({})
+const deletingRowIdentity = ref({})
 const selectedDate = ref({ 
     start: new Date(new Date().setHours(0, 0, 0, 0)) , 
     end: new Date(new Date().setHours(23, 59, 59, 999)) 
@@ -74,7 +74,7 @@ const action = (row:any) => [
             icon: 'i-heroicons-trash-20-solid',
             click: () => {
                 isDeleteModalOpen.value = true
-                deletingRowIdentinty.value = {name:row.expensecategory.name,id:row.id}
+                deletingRowIdentity.value = {name:row.expensecategory.name,id:row.id}
                 }
         },
     ],
@@ -436,8 +436,8 @@ const multiUpdate = async(status:string,ids:any) => {
 
     <UDashboardModal
         v-model="isDeleteModalOpen"
-        title="Delete User"
-        :description="`Are you sure you want to delete user ${deletingRowIdentinty.name}?`"
+        title="Delete Expense"
+        :description="`Are you sure you want to delete expense of category ${deletingRowIdentity.name}?`"
         icon="i-heroicons-exclamation-circle"
         prevent-close
         :close-button="null"
@@ -454,7 +454,7 @@ const multiUpdate = async(status:string,ids:any) => {
             <UButton
                 color="red"
                 label="Delete"
-                @click="() =>  {emit('delete',deletingRowIdentinty.id);isDeleteModalOpen = false;}"
+                @click="() =>  {emit('delete',deletingRowIdentity.id);isDeleteModalOpen = false;}"
             />
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
         </template>

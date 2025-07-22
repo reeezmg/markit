@@ -90,42 +90,18 @@ const metadata = {
                     name: "description",
                     type: "String",
                     isOptional: true,
-                }, shopifyStoreName: {
-                    name: "shopifyStoreName",
+                }, currency: {
+                    name: "currency",
                     type: "String",
-                    isOptional: true,
-                }, shopifyAccessToken: {
-                    name: "shopifyAccessToken",
-                    type: "String",
-                    isOptional: true,
-                }, tiktokCipher: {
-                    name: "tiktokCipher",
-                    type: "String",
-                    isOptional: true,
-                }, tiktokStoreName: {
-                    name: "tiktokStoreName",
-                    type: "String",
-                    isOptional: true,
-                }, tiktokAccessToken: {
-                    name: "tiktokAccessToken",
-                    type: "String",
-                    isOptional: true,
-                }, tiktokAccessTokenExpireIn: {
-                    name: "tiktokAccessTokenExpireIn",
-                    type: "Int",
-                    isOptional: true,
-                }, tiktokRefreshToken: {
-                    name: "tiktokRefreshToken",
-                    type: "String",
-                    isOptional: true,
-                }, tiktokRefreshTokenExpireIn: {
-                    name: "tiktokRefreshTokenExpireIn",
-                    type: "Int",
-                    isOptional: true,
+                    attributes: [{ "name": "@default", "args": [{ "value": "INR" }] }],
                 }, images: {
                     name: "images",
                     type: "String",
                     isOptional: true,
+                }, pointsValue: {
+                    name: "pointsValue",
+                    type: "Int",
+                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
                 }, isTaxIncluded: {
                     name: "isTaxIncluded",
                     type: "Boolean",
@@ -289,10 +265,6 @@ const metadata = {
                     isDataModel: true,
                     isArray: true,
                     backLink: 'company',
-                }, billCounter: {
-                    name: "billCounter",
-                    type: "Int",
-                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
                 }, barcodeCounter: {
                     name: "barcodeCounter",
                     type: "Int",
@@ -715,6 +687,10 @@ const metadata = {
                     name: "image",
                     type: "String",
                     isOptional: true,
+                }, cleanup: {
+                    name: "cleanup",
+                    type: "Boolean",
+                    attributes: [{ "name": "@default", "args": [{ "value": false }] }],
                 },
             }, uniqueConstraints: {
                 id: {
@@ -1434,7 +1410,7 @@ const metadata = {
                     type: "DateTime",
                 }, invoiceNumber: {
                     name: "invoiceNumber",
-                    type: "Int",
+                    type: "String",
                     isOptional: true,
                 }, subtotal: {
                     name: "subtotal",
@@ -1463,6 +1439,14 @@ const metadata = {
                 }, paymentMethod: {
                     name: "paymentMethod",
                     type: "String",
+                    isOptional: true,
+                }, redeemedPoints: {
+                    name: "redeemedPoints",
+                    type: "Int",
+                    isOptional: true,
+                }, billPoints: {
+                    name: "billPoints",
+                    type: "Int",
                     isOptional: true,
                 }, splitPayments: {
                     name: "splitPayments",
@@ -1554,6 +1538,21 @@ const metadata = {
                     isOptional: true,
                     isForeignKey: true,
                     relationField: 'client',
+                }, userId: {
+                    name: "userId",
+                    type: "String",
+                    isOptional: true,
+                    isForeignKey: true,
+                    relationField: 'companyUser',
+                }, companyUser: {
+                    name: "companyUser",
+                    type: "CompanyUser",
+                    isDataModel: true,
+                    isOptional: true,
+                    backLink: 'bills',
+                    isRelationOwner: true,
+                    onDeleteAction: 'Cascade',
+                    foreignKeyMapping: { "companyId": "companyId", "userId": "userId" },
                 }, address: {
                     name: "address",
                     type: "Address",
@@ -2343,9 +2342,19 @@ const metadata = {
                     name: "status",
                     type: "Boolean",
                     attributes: [{ "name": "@default", "args": [{ "value": true }] }],
+                }, billCounter: {
+                    name: "billCounter",
+                    type: "Int",
+                    attributes: [{ "name": "@default", "args": [{ "value": 1 }] }],
                 }, entries: {
                     name: "entries",
                     type: "Entry",
+                    isDataModel: true,
+                    isArray: true,
+                    backLink: 'companyUser',
+                }, bills: {
+                    name: "bills",
+                    type: "Bill",
                     isDataModel: true,
                     isArray: true,
                     backLink: 'companyUser',
@@ -2390,6 +2399,10 @@ const metadata = {
                     isRelationOwner: true,
                     onDeleteAction: 'Cascade',
                     foreignKeyMapping: { "id": "clientId" },
+                }, points: {
+                    name: "points",
+                    type: "Int",
+                    attributes: [{ "name": "@default", "args": [{ "value": 0 }] }],
                 },
             }, uniqueConstraints: {
                 companyId_clientId: {
@@ -2981,7 +2994,7 @@ const metadata = {
         product: ['Variant'],
         variant: ['Item', 'VariantSizeBarcode'],
         bill: ['Entry', 'BillHistory'],
-        companyUser: ['Entry'],
+        companyUser: ['Bill', 'Entry'],
 
     },
     authModel: 'User'

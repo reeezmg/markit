@@ -74,6 +74,8 @@ export const updateCompanySession = async (
     companyName: string | undefined,
     name: string | undefined,
     role: string | undefined,
+    code: string | undefined,
+    billCounter: number | undefined
     
 ) => {
     await $fetch('/api/auth/session', {
@@ -83,7 +85,9 @@ export const updateCompanySession = async (
             companyType,
             companyName,
             name,
-            role
+            role,
+            code,
+            billCounter,
         },
     });
     await useAuth().updateSession();
@@ -171,4 +175,24 @@ export const updateProfileDetails = async (
     });
     await useAuth().updateSession();
     console.log('Session updated');
+};
+
+
+export const updateBillCounter = async () => {
+    await $fetch('/api/auth/changeBillCounter', {
+        method: 'PUT',
+    });
+    await useAuth().updateSession();
+};
+
+export const updatePointsValue = async (
+    pointsValue: number
+) => {
+    await $fetch('/api/auth/changePointsValue', {
+        method: 'PUT',
+        body: {
+            pointsValue
+        },
+    });
+    await useAuth().updateSession();
 };

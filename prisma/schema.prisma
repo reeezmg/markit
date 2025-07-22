@@ -9,12 +9,14 @@ datasource db {
 }
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native", "windows", "debian-openssl-3.0.x"]
 }
 
 enum UserRole {
   admin
   user
+  accountant
 }
 
 enum CompanyType {
@@ -100,57 +102,50 @@ model DistributorCompany {
 }
 
 model Company {
-  id                         String               @id() @unique() @default(uuid())
-  name                       String
-  storecode                  Int                  @unique() @default(autoincrement())
-  storeUniqueName            String?              @unique() @map("store_unique_name")
-  logo                       String?
-  description                String?
-  shopifyStoreName           String?              @map("shopify_store_name")
-  shopifyAccessToken         String?              @map("shopify_access_token")
-  tiktokCipher               String?              @map("tiktok_cipher")
-  tiktokStoreName            String?              @map("tiktok_store_name")
-  tiktokAccessToken          String?              @map("tiktok_access_token")
-  tiktokAccessTokenExpireIn  Int?                 @map("tiktok_access_token_expire_in")
-  tiktokRefreshToken         String?              @map("tiktok_refresh_token")
-  tiktokRefreshTokenExpireIn Int?                 @map("tiktok_refresh_token_expire_in")
-  images                     String?
-  isTaxIncluded              Boolean              @default(true) @map("is_tax_included")
-  isBarcodeIncluded          Boolean              @default(true) @map("is_barcode_included")
-  isUserTrackIncluded        Boolean              @default(true) @map("is_usertrack_included")
-  users                      CompanyUser[]
-  promoCodes                 PromoCode[]
-  clients                    CompanyClient[]
-  products                   Product[]
-  categories                 Category[]
-  subcategories              Subcategory[]
-  bills                      Bill[]
-  carts                      CartCompanyClient[]
-  tokenbills                 TokenEntry[]
-  accounts                   Account[]
-  expenseCategories          ExpenseCategory[]
-  expenses                   Expense[]
-  payment                    Payment[]
-  variants                   Variant[]
-  purchaseOrders             PurchaseOrder[]
-  items                      Item[]
-  status                     Boolean              @default(true)
-  type                       CompanyType
-  pipeline                   Pipeline?
-  accHolderName              String?              @map("acc_holder_name")
-  ifsc                       String?
-  accountNo                  String?              @map("account_no")
-  bankName                   String?              @map("bank_name")
-  gstin                      String?
-  upiId                      String?              @map("upi_id")
-  notifications              Notification[]
-  address                    Address?
-  distributor                DistributorCompany[]
-  billCounter                Int                  @default(0) @map("bill_counter")
-  barcodeCounter             Int                  @default(1) @map("barcode_counter")
-  likeCompanies              LikeCompanyClient[]
-  productinput               Productinput?
-  variantinput               Variantinput?
+  id                  String               @id() @unique() @default(uuid())
+  name                String
+  storecode           Int                  @unique() @default(autoincrement())
+  storeUniqueName     String?              @unique() @map("store_unique_name")
+  logo                String?
+  description         String?
+  currency            String               @default("INR")
+  images              String?
+  pointsValue         Int                  @default(0) @map("points_value")
+  isTaxIncluded       Boolean              @default(true) @map("is_tax_included")
+  isBarcodeIncluded   Boolean              @default(true) @map("is_barcode_included")
+  isUserTrackIncluded Boolean              @default(true) @map("is_usertrack_included")
+  users               CompanyUser[]
+  promoCodes          PromoCode[]
+  clients             CompanyClient[]
+  products            Product[]
+  categories          Category[]
+  subcategories       Subcategory[]
+  bills               Bill[]
+  carts               CartCompanyClient[]
+  tokenbills          TokenEntry[]
+  accounts            Account[]
+  expenseCategories   ExpenseCategory[]
+  expenses            Expense[]
+  payment             Payment[]
+  variants            Variant[]
+  purchaseOrders      PurchaseOrder[]
+  items               Item[]
+  status              Boolean              @default(true)
+  type                CompanyType
+  pipeline            Pipeline?
+  accHolderName       String?              @map("acc_holder_name")
+  ifsc                String?
+  accountNo           String?              @map("account_no")
+  bankName            String?              @map("bank_name")
+  gstin               String?
+  upiId               String?              @map("upi_id")
+  notifications       Notification[]
+  address             Address?
+  distributor         DistributorCompany[]
+  barcodeCounter      Int                  @default(1) @map("barcode_counter")
+  likeCompanies       LikeCompanyClient[]
+  productinput        Productinput?
+  variantinput        Variantinput?
 
   @@map("companies")
 }
@@ -253,6 +248,7 @@ model User {
   conversations UserConversation[]
   clients       UserClient[]
   image         String?
+  cleanup       Boolean            @default(false) @map("cleanup")
 
   @@map("users")
 }
@@ -413,7 +409,7 @@ model Item {
 model Bill {
   id             String        @id() @unique() @default(uuid())
   createdAt      DateTime      @map("created_at")
-  invoiceNumber  Int?          @map("invoice_number")
+  invoiceNumber  String?       @map("invoice_number")
   subtotal       Float?
   discount       Float?
   tax            Float?
@@ -421,6 +417,8 @@ model Bill {
   returnAmt      Float?        @map("return_Amt")
   deliveryFees   Float?        @map("delivery_fees")
   paymentMethod  String?       @map("payment_method")
+  redeemedPoints Int?          @map("redeemed_points")
+  billPoints     Int?          @map("bill_points")
   splitPayments  Json?         @map("split_payments")
   paymentStatus  PaymentStatus @default(PENDING) @map("payment_status")
   transactionId  String?       @unique() @map("transaction_id")
@@ -438,6 +436,8 @@ model Bill {
   accountId      String?       @map("account_id")
   client         Client?       @relation(fields: [clientId], references: [id])
   clientId       String?       @map("client_id")
+  userId         String?       @map("user_id")
+  companyUser    CompanyUser?  @relation(fields: [companyId, userId], references: [companyId, userId], onDelete: Cascade)
   address        Address?      @relation(fields: [addressId], references: [id])
   addressId      String?       @map("address_id")
 
@@ -622,15 +622,17 @@ model Message {
 }
 
 model CompanyUser {
-  companyId String   @map("company_id")
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  userId    String   @map("user_id")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  code      String?
-  name      String?
-  role      UserRole @default(user) @map("role")
-  status    Boolean  @default(true)
-  entries   Entry[]
+  companyId   String   @map("company_id")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId      String   @map("user_id")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  code        String?
+  name        String?
+  role        UserRole @default(user) @map("role")
+  status      Boolean  @default(true)
+  billCounter Int      @default(1) @map("bill_counter")
+  entries     Entry[]
+  bills       Bill[]
 
   @@id([companyId, userId])
   @@unique([companyId, code])
@@ -642,6 +644,7 @@ model CompanyClient {
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
   clientId  String  @map("client_id")
   client    Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  points    Int     @default(0)
 
   @@id([companyId, clientId])
   @@map("company_clients")

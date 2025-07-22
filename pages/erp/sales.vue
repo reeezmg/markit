@@ -1,26 +1,28 @@
 <script setup lang="ts">
-import { Switch } from '@headlessui/vue';
-import type { Period, Range } from '~/types';
 import {
     useUpdateBill,
-    useUpdateManyCategory,
     useFindManyBill,
     useCountBill
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
+import { startOfDay, endOfDay } from 'date-fns'
+
+const timeZone = 'Asia/Kolkata'
 const toast = useToast();
-const UpdateBill = useUpdateBill();
-const UpdateManyCategory = useUpdateManyCategory();
+const updateBill = useUpdateBill({ optimisticUpdate: true });
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
 const isMobile = ref(false);
+const isDeleteModalOpen = ref(false)
+const deletingRowIdentity = ref({})
 
 onMounted(() => {
   isMobile.value = window.innerWidth < 640;
   window.addEventListener('resize', () => {
     isMobile.value = window.innerWidth < 640;
   });
+  refetch()
 });
 
 const ranges = [
@@ -135,7 +137,10 @@ const action = (row:any) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => deleteBill(row.id),
+            click: () => {
+                isDeleteModalOpen.value = true
+                deletingRowIdentity.value = {name:row.invoiceNumber,id:row.id}
+                }
         },
     ],
 ];
@@ -178,7 +183,7 @@ const resetFilters = () => {
 
 
 // Pagination
-const sort = ref({ column: 'invoiceNumber', direction: 'desc' as const });
+const sort = ref({ column: 'createdAt', direction: 'desc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('5');
@@ -188,27 +193,22 @@ return {
     where: {
         companyId: useAuth().session.value?.companyId,
         deleted: false,
-        ...(search.value && { invoiceNumber: search.value }),
+        ...(search.value && {
+            invoiceNumber: {
+                contains: search.value,
+                mode: 'insensitive'
+                }
+            }
+        ),
         ...(selectedStatus.value.length && {
             OR: selectedStatus.value.map(item => ({ paymentStatus: item.value }))
         }),
-        ...(selectedDate.value && {
+        ...((selectedDate.value && !search.value) && {
   createdAt: {
-    gte: new Date(Date.UTC(
-      selectedDate.value.start.getFullYear(),
-      selectedDate.value.start.getMonth(),
-      selectedDate.value.start.getDate(),
-      0, 0, 0, 0
-    )).toISOString(),
-    lte: new Date(Date.UTC(
-      selectedDate.value.end.getFullYear(),
-      selectedDate.value.end.getMonth(),
-      selectedDate.value.end.getDate(),
-      23, 59, 59, 999
-    )).toISOString()
+    gte: startOfDay(selectedDate.value.start),
+    lte: endOfDay(selectedDate.value.end),
   }
 })
-
     },
     include:{
         entries:{
@@ -256,32 +256,39 @@ function selectRange(duration: Duration) {
   selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
 }
 
-
-
-
-
-
 watch(queryArgs, (newsales) => {
     console.log( newsales);
 });
 
 
-const deleteBill = async (id:string) => {
-    const res = await UpdateBill.mutateAsync({
+const deleteBill = () => {
+    try{
+        updateBill.mutate({
         where:{
-            id
+            id: deletingRowIdentity.value.id
         },
         data:{
             deleted:true
         }
     })
-
-
+     toast.add({
+            title: `Bill No ${deletingRowIdentity.value.name} deleted successfully!`,
+            color: 'green',
+        });
+    }catch(err){
+        toast.add({
+          title: 'Error while deleting the bill entries',
+          description: error.message,
+          color: 'red',
+        });
+    }finally{
+        isDeleteModalOpen.value = false;
+    }
 };
 
 
 const handleUpdate = async (id:string) => {
-    const res = await UpdateBill.mutateAsync({
+    const res = await updateBill.mutateAsync({
         where:{
             id
         },
@@ -299,7 +306,7 @@ const handleChange = (value:string, row:any) => {
 
 const onPaymentStatusChange = async (id:string, status:string, billNo) => {
     try{
-    const res = await UpdateBill.mutateAsync({
+    const res = await updateBill.mutateAsync({
         where:{
             id
         },
@@ -348,7 +355,7 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                 <UInput
                     v-model="search"
                     icon="i-heroicons-magnifying-glass-20-solid"
-                    type="number"
+                    type="text"
                     placeholder="Search Invoice"
                     class="w-full sm:w-40"
                 />
@@ -467,7 +474,7 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                 </template>
 
                 <template #entries-data="{ row }">
-                    {{ row.entries.length }}
+                    {{ row.entries?.length }}
                 </template>
 
                 <template #grandTotal-data="{ row }">
@@ -493,7 +500,7 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
 
 
                 <template #createdAt-data="{ row }">
-                    {{ row.createdAt.toLocaleDateString('en-GB') }}
+                    {{ new Date(row.createdAt).toLocaleDateString() }}
                 </template>
 
                <template #paymentStatus-data="{ row }">
@@ -591,6 +598,31 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                 </div>
             </template>
         </UCard>
+        <UDashboardModal
+        v-model="isDeleteModalOpen"
+        title="Delete Bill"
+        :description="`Are you sure you want to delete Bill No ${deletingRowIdentity.name}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  deleteBill()"
+            />
+            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
     </UDashboardPanelContent>
     
 </template>

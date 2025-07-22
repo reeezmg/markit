@@ -240,7 +240,7 @@ export function useCountCompanyClient<TArgs extends Prisma.CompanyClientCountArg
     return useModelQuery<TQueryFnData, TData, TError>('CompanyClient', `${endpoint}/companyClient/count`, args, options, fetch);
 }
 
-export function useCheckCompanyClient<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { companyId?: string; clientId?: string }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
+export function useCheckCompanyClient<TError = DefaultError>(args: { operation: PolicyCrudKind; where?: { companyId?: string; clientId?: string; points?: number }; }, options?: (MaybeRefOrGetter<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> | ComputedRef<Omit<UnwrapRef<UseQueryOptions<boolean, TError, boolean>>, 'queryKey'>> & ExtraQueryOptions)) {
     const { endpoint, fetch } = getHooksContext();
     return useModelQuery<boolean, boolean, TError>('CompanyClient', `${endpoint}/companyClient/check`, args, options, fetch);
 }

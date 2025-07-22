@@ -1,16 +1,17 @@
 <script setup>
 import { reactive, ref, watch, computed } from 'vue'
 import { useFindUniqueClient, useCreateClient, useUpdateClient } from '~/lib/hooks'
+import { v4 as uuidv4 } from 'uuid';
 
 const useAuth = () => useNuxtApp().$auth
 
 const model = defineModel('model')        // maps to v-model:model
 const phoneNo = defineModel('phoneNo')    // maps to v-model:phoneNo
-const props = defineProps(['onVerify'])
+const props = defineProps(['onVerify', 'clientAdded'])
 
 const toast = useToast()
-const CreateClient = useCreateClient()
-const UpdateClient = useUpdateClient()
+const CreateClient = useCreateClient({ optimisticUpdate: true,invalidateQueries: false  })
+const UpdateClient = useUpdateClient({ optimisticUpdate: true ,invalidateQueries: false })
 const isSaving = ref(false)
 
 const form = reactive({
@@ -50,12 +51,14 @@ watch(client, (newClient) => {
  
 })
 
-const login = async () => {
-isSaving.value = false;
+const login = () => {
+isSaving.value = true;
+const uuid = uuidv4();
   if (!client.value && form.name) {
     try {
-      const res = await CreateClient.mutateAsync({
+      const res = CreateClient.mutate({
         data: {
+          id: uuid,
           name: form.name,
           phone: `+91${form.phone}`,
           ...(form.email && { email: form.email }),
@@ -68,13 +71,17 @@ isSaving.value = false;
           },
         },
       })
-      console.log(res)
+      props.clientAdded(uuid, form.name,form.phone)
     } catch (err) {
       console.error(err)
+    }finally{
+      isSaving.value = false;
+      form.name = ""
+    form.email = ""
     }
   } else if (client.value) {
     try {
-      const res = await UpdateClient.mutateAsync({
+      const res = UpdateClient.mutate({
         where: { id: client.value.id },
         data: {
           companies: {
@@ -86,11 +93,11 @@ isSaving.value = false;
           },
         },
       })
-      console.log(res)
+      props.clientAdded(client.value.id, form.name)
     } catch (err) {
       console.error(err)
     }finally{
-      isSaving.value = true;
+      isSaving.value = false;
       form.name = ""
     form.email = ""
     }
@@ -101,9 +108,8 @@ isSaving.value = false;
     id: 'login-success',
     color: 'green',
   })
-
-  props.onVerify()
   model.value = false
+
 }
 
 
@@ -158,7 +164,7 @@ isSaving.value = false;
           </UFormGroup>
 
           <div class="text-end w-full mt-4">
-            <UButton type="submit">
+            <UButton type="submit" :loading="isSaving">
               Continue
             </UButton>
           </div>

@@ -15,8 +15,10 @@ export default defineEventHandler(async (event) => {
 
   // Parse query parameters for date filtering
   const query = getQuery(event)
-  const startDate = query.startDate ? new Date(query.startDate as string) : undefined
-  const endDate = query.endDate ? new Date(query.endDate as string) : undefined
+const startDate = query.startDate ? new Date(JSON.parse(query.startDate)) : undefined
+const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : undefined
+
+  console.log(query)
 
   // Fetch all data in parallel
   const [
@@ -36,8 +38,8 @@ export default defineEventHandler(async (event) => {
   where: {
     companyId,
     createdAt: {
-            gte: startDate ? new Date(new Date(startDate).setHours(0, 0, 0, 0)) : undefined,
-            lte: endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : undefined,
+            gte: new Date(startDate),
+            lte: new Date(endDate)
           },
   }
 }),
@@ -51,8 +53,8 @@ export default defineEventHandler(async (event) => {
       where: { 
         companyId,
         createdAt: {
-            gte: startDate ? new Date(new Date(startDate).setHours(0, 0, 0, 0)) : undefined,
-            lte: endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : undefined,
+            gte: new Date(startDate),
+            lte: new Date(endDate)
           },
         deleted: false
       },
@@ -63,6 +65,7 @@ export default defineEventHandler(async (event) => {
           select: {
             rate: true,
             qty: true,
+            tax:true
           },
         },
       }
@@ -71,8 +74,8 @@ export default defineEventHandler(async (event) => {
       where: { 
         companyId,
          expenseDate: {
-            gte: startDate ? new Date(new Date(startDate).setHours(0, 0, 0, 0)) : undefined,
-            lte: endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : undefined,
+            gte: new Date(startDate), 
+            lte: new Date(endDate)
           }
        },
       include: { expensecategory: true }
@@ -83,8 +86,8 @@ export default defineEventHandler(async (event) => {
           companyId,
           deleted: false,
            createdAt: {
-              gte: startDate ? new Date(new Date(startDate).setHours(0, 0, 0, 0)) : undefined,
-              lte: endDate ? new Date(new Date(endDate).setHours(23, 59, 59, 999)) : undefined,
+              gte: new Date(startDate), 
+              lte: new Date(endDate)
             }
         }
       },
@@ -99,6 +102,14 @@ export default defineEventHandler(async (event) => {
       }
     })
   ])
+
+  bills.sort((a, b) => {
+  const [aSeries, aNumber] = a.invoiceNumber.split('/').map(Number)
+  const [bSeries, bNumber] = b.invoiceNumber.split('/').map(Number)
+
+  if (aSeries !== bSeries) return aSeries - bSeries
+  return aNumber - bNumber
+})
 
   // Helper functions for computed values
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']

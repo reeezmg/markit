@@ -1,12 +1,18 @@
 <script setup lang="ts">
+import { useMessaging } from '~/composables/useMessaging'
+import { deleteToken } from 'firebase/messaging';
+
 const { isHelpSlideoverOpen } = useDashboard();
 const { isDashboardSearchModalOpen } = useUIState();
 const { metaSymbol } = useShortcuts();
 const useAuth = () => useNuxtApp().$auth;
 const { $client } = useNuxtApp()
+const messaging = await useMessaging()
 
 const onLogout = async() => {
     await authLogout();
+    await deleteToken(messaging)
+
 }
 
 const items = computed(() => [

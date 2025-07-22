@@ -25,6 +25,7 @@ export default eventHandler(async (event) => {
                 connect: { id: company.id },
                 },
                 role: 'admin',
+                code: 1,
                 name,         
             },
             ],
