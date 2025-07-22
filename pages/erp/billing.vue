@@ -49,6 +49,8 @@ const tokenEntries = ref([])
 const splitPayments = ref([])
 const isRedeemPoint = ref(false);
 const selected = ref(null);
+const isDeleteModalOpen = ref(false)
+const deletingRowIdentity = ref({})
 
 const account = ref({
     name: '',
@@ -543,8 +545,8 @@ const addNewRow = async (index,moveTonNextRow = true) => {
 };
 
 
-const removeRow = (event,barcode,index) => {
-  const inputValue = event.target.value;
+const removeRow = (event,index) => {
+  const inputValue = event.target.value || null;
   if (!inputValue) {
     event.preventDefault();
     if (items.value.length > 1) {
@@ -569,6 +571,8 @@ const removeRow = (event,barcode,index) => {
 
   
 };
+
+
 
 onMounted(() => {
   // Initialize column widths (optional)
@@ -1796,7 +1800,7 @@ const handleRedeemPoints = async () => {
         ref="barcodeInputs"
         @blur="fetchItemData(row.barcode, index)"
         @focus="selectAllText(index)"
-        @keyup.delete="removeRow($event, row.barcode, index)"
+        @keyup.delete="removeRow($event, index)"
         enterkeyhint="enter"
         @keyup.enter.prevent="handleEnterBarcode(row.barcode, index)"
         @keyup.tab.prevent="handleEnterBarcode(row.barcode, index)"
@@ -1890,7 +1894,9 @@ const handleRedeemPoints = async () => {
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
   <tr v-for="(row, index) in items" :key="row.sn">
-    <td class="py-1 whitespace-nowrap">
+    <td class="py-1 whitespace-nowrap" @click="(event) => {
+      isDeleteModalOpen = true;
+      deletingRowIdentity = { index, event };}">
       {{ row.sn }}
     </td>
     <td class="py-1 whitespace-nowrap">
@@ -1901,7 +1907,7 @@ const handleRedeemPoints = async () => {
         :loading="loadingStates[index] || false"
         @focus="selectAllText(index)"
         @blur="fetchItemData(row.barcode, index)"
-        @keydown.delete="removeRow($event, row.barcode, index)"
+        @keydown.delete="removeRow($event, index)"
         @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
         @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
         @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
@@ -2390,6 +2396,32 @@ const handleRedeemPoints = async () => {
         </template>
     </UDashboardModal>
 
+     <UDashboardModal
+        v-model="isDeleteModalOpen"
+        title="Delete Entry"
+        :description="`Are you sure you want to delete Entry No ${deletingRowIdentity.index}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            },
+            footer: {
+                base: 'ml-16',
+            },
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() => {removeRow( deletingRowIdentity.event,deletingRowIdentity.index);isDeleteModalOpen = false; }"
+            />
+            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
+
 </template>
 
 
@@ -2410,4 +2442,3 @@ const handleRedeemPoints = async () => {
   width:1px;
 }
 </style>
-

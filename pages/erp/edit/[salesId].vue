@@ -57,7 +57,7 @@ const grandTotal = computed(() => {
   return afterDiscount - redeemedAmt.value;
 });
 
-
+const loadingStates = ref([]);
 const returnAmt = ref(0);
 const redeemedAmt = ref(0);
 const isRedeemPoint = ref(false);
@@ -108,6 +108,8 @@ const account = ref({
 const selected = ref(null);
 const pastBillPoints = ref(0);
   const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
+const isDeleteModalOpen = ref(false)
+const deletingRowIdentity = ref({})
 
 const items = ref([
   { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
@@ -313,7 +315,7 @@ const selectAllText = (index) => {
 };
 
 
-const removeRow = (event,barcode,index) => {
+const removeRow = (event,index) => {
   const inputValue = event.target.value;
   if (!inputValue) {
     event.preventDefault();
@@ -704,7 +706,7 @@ const fetchItemDataNonBarcode = async (categoryId, sPrice, index) => {
 
 const fetchItemData = async (barcode, index) => {
   if (!barcode) return;
-
+ loadingStates.value[index] = true;
   scannedBarcode.value = barcode;
 
   await itemRefetch();
@@ -718,8 +720,9 @@ const fetchItemData = async (barcode, index) => {
     items.value[index].category = categories.value.filter(category =>category.id === categoryId);
     items.value[index].rate = itemdata.value.variant?.sprice || 0;
     items.value[index].variantId = itemdata.value.variant?.id || '';
+    loadingStates.value[index] = false;
   } else {
-    console.warn("itemdata is undefined");
+    loadingStates.value[index] = false;
   }
 };
 
@@ -1414,7 +1417,7 @@ const handleClearClient = async () => {
                 size="sm"
                 ref="barcodeInputs"
                 @focus="selectAllText(index)"
-                @keydown.delete="removeRow($event, row.barcode, index)"
+                @keydown.delete="removeRow($event, index)"
                 @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
               />
               <UInput
@@ -1498,7 +1501,9 @@ const handleClearClient = async () => {
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
               <tr v-for="(row, index) in items" :key="row.sn">
-                <td class="py-1 whitespace-nowrap">
+                <td class="py-1 whitespace-nowrap"  @click="(event) => {
+                    isDeleteModalOpen = true;
+                    deletingRowIdentity = { index, event };}">
                   {{ row.sn }}
                 </td>
                 <td class="py-1 whitespace-nowrap">
@@ -1506,8 +1511,9 @@ const handleClearClient = async () => {
                     v-model="row.barcode"
                     ref="barcodeInputs"
                     size="sm"
+                    :loading="loadingStates[index] || false"
                     @focus="selectAllText(index)"
-                    @keydown.delete="removeRow($event, row.barcode, index)"
+                    @keydown.delete="removeRow($event, index)"
                     @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
                     @keydown.up.prevent="moveFocus(index, 'barcode', 'up')"
                     @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
@@ -1962,6 +1968,33 @@ const handleClearClient = async () => {
                 @click="print"
             />
             <UButton color="red" label="NO" @click="isPrint = false" />
+        </template>
+    </UDashboardModal>
+
+    
+     <UDashboardModal
+        v-model="isDeleteModalOpen"
+        title="Delete Entry"
+        :description="`Are you sure you want to delete Entry No ${deletingRowIdentity.index}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            },
+            footer: {
+                base: 'ml-16',
+            },
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() => {removeRow( deletingRowIdentity.event,deletingRowIdentity.index);isDeleteModalOpen = false; }"
+            />
+            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
         </template>
     </UDashboardModal>
 
