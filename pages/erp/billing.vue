@@ -25,7 +25,7 @@ const isTaxIncluded = ref(useAuth().session.value?.isTaxIncluded);
 const isBarcodeIncluded = ref(useAuth().session.value?.isBarcodeIncluded);
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
 const billNo = ref('1');
-
+const loadingStates = ref([]);
 const paymentOptionsInsplit = ['Cash', 'UPI', 'Card','Credit']
 const paymentOptions = ref(['Cash', 'UPI', 'Card','Credit'])
 const tempSplits = ref(
@@ -767,7 +767,7 @@ watch(itemdata, (newData) => {
 
 const fetchItemData = async (barcode, index) => {
   if (!barcode) return;
-
+ loadingStates.value[index] = true;
   // Store the current barcode and index
   currentRequestIds.value[index] = barcode;
   scannedBarcode.value = barcode;
@@ -790,6 +790,8 @@ const fetchItemData = async (barcode, index) => {
     if (currentRequestIds.value[index] === barcode) {
       handleInvalidBarcode(index);
     }
+  } finally{
+     loadingStates.value[index] = false;
   }
 };
 
@@ -1896,6 +1898,7 @@ const handleRedeemPoints = async () => {
         v-model="row.barcode"
         ref="barcodeInputs"
         size="sm"
+        :loading="loadingStates[index] || false"
         @focus="selectAllText(index)"
         @blur="fetchItemData(row.barcode, index)"
         @keydown.delete="removeRow($event, row.barcode, index)"
