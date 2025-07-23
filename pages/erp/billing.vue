@@ -1101,8 +1101,6 @@ const handleSave = async () => {
       }, 0)
     };
 
-    reset();
-
     // 🔔 Notify users (FCM + backend)
     // await $fetch('/api/notifications/notify', {
     //   method: 'POST',
@@ -1128,7 +1126,7 @@ const handleSave = async () => {
       }
     });
 
-
+    reset();
 
   } catch (error) {
     console.error('Error creating bill', error);
