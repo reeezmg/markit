@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useMessaging } from '~/composables/useMessaging'
-import { deleteToken } from 'firebase/messaging';
+import { deleteToken,getToken } from 'firebase/messaging';
 
 const { isHelpSlideoverOpen } = useDashboard();
 const { isDashboardSearchModalOpen } = useUIState();
@@ -9,11 +9,21 @@ const useAuth = () => useNuxtApp().$auth;
 const { $client } = useNuxtApp()
 const messaging = await useMessaging()
 
-const onLogout = async() => {
-    await authLogout();
-    await deleteToken(messaging)
 
-}
+const onLogout = async () => {
+  try {
+    // Retrieve the current token first
+    console.log("heer")
+    const currentToken = await getToken(messaging);
+    if (currentToken) {
+      const success = await deleteToken(messaging);
+    }
+  } catch (error) {
+    console.error('Error deleting FCM token:', error);
+  }
+
+  await authLogout();
+};
 
 const items = computed(() => [
     [
