@@ -206,6 +206,9 @@ export default defineEventHandler(async (event) => {
           }
         })
       }
+    },{
+      maxWait: 10000, // wait up to 10s to acquire a connection
+      timeout: 150000000  // run the transaction for up to 15s
     })
 
     return { success: true }
