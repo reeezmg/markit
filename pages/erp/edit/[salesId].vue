@@ -17,6 +17,8 @@ import {
   useUpdateCompanyClient
 } from '~/lib/hooks'; 
 import { v4 as uuidv4 } from 'uuid';
+import { useQueryClient } from '@tanstack/vue-query';
+const queryClient = useQueryClient();
 
 const UpdateBill = useUpdateBill({ optimisticUpdate: true });
 const CreateAccount = useCreateAccount({ optimisticUpdate: true });
