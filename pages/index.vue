@@ -11,6 +11,7 @@ useSeoMeta({
 
 definePageMeta({
   layout: false,
+  colorMode: 'light',
 })
 
 const navLinks = [
