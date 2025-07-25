@@ -14,73 +14,195 @@ definePageMeta({
 })
 
 const navLinks = [
-  { label: 'Docs', icon: 'i-heroicons-book-open', to: '/getting-started' },
-  { label: 'Pro', icon: 'i-heroicons-square-3-stack-3d', to: '/pro' },
-  { label: 'Releases', icon: 'i-heroicons-rocket-launch', to: '/releases' }
-]
-
-const heroLinks = [
-  { label: 'Get Started', icon: 'i-heroicons-rocket-launch', size: 'lg' },
-  { label: 'Learn more', 'trailing-icon': 'i-heroicons-arrow-small-right', color: 'gray', size: 'lg' }
+  { label: 'List Your Shop', icon: 'i-heroicons-building-storefront', to: '/register',size:'lg' },
+  { label: 'Login', icon: 'i-heroicons-arrow-right-on-rectangle', to: '/launching',size:'lg' },
+  { label: 'Register', icon: 'i-heroicons-user-plus', to: '/launching',size:'lg' },
 ]
 
 const features = [
   {
     title: 'Try at Home',
     description: 'Pick multiple items, try them in comfort, pay only for what you love.',
-    reverse: false
+    align: 'right',
+    image: 'try.png'
   },
   {
     title: 'Book Now, Pay Later',
     description: 'Reserve your picks and pay when they arrive.',
-    reverse: true
+    align: 'left',
+    image: 'book.png'
   },
   {
     title: 'Instant Delivery',
     description: 'Get items delivered to your door within 60 minutes.',
-    reverse: false
+    align: 'right',
+    image: 'instant.png'
   },
-  {
-    title: 'Seamless Returns',
-    description: 'Return what you don’t need, hassle-free at pickup time.',
-    reverse: true
-  }
 ]
 
 </script>
 
 <template>
-  <div>
-    <!-- Nuxt UI Pro Header -->
+  <div class="bg-[#F8FDF3] ">
     <UHeader
       title="Markit"
-      :links="navLinks"
-    />
+      class="mb-10 text-[#097D4C]"
+      :ui = "{
+        title: 'text-[#097D4C]',
+      }"
+    >
+      <template #logo>
+        <img
+          src="/icons/logo.png"
+          class="w-auto h-10"
+        />  
+      </template>
+      <template #right>
+       <div class="hidden lg:flex">
+        <UButton
+          to="/shopslanding"
+          class="bg-[#097D4C] text-white hover:bg-[#08643d] me-1"
+        >
+          List Your Shop
+        </UButton>
+        <UButton
+          to="/launching"
+          class="bg-[#097D4C] text-white hover:bg-[#08643d] me-1"
+        >
+          Login
+        </UButton>
+        <UButton
+          to="/launching"
+          class="bg-[#097D4C] text-white hover:bg-[#08643d]"
+        >
+          Register
+        </UButton>
+      </div>
 
-    <!-- Hero Section -->
-    <ULandingHero
+      </template>
+
+      <template #panel>
+      <UNavigationTree :links="navLinks" />
+    </template>
+
+    </UHeader>
+    
+    
+
+   <ULandingHero
       title="Shop Smarter. Try Before You Buy."
       description="Buy products from trusted local retailers with flexible delivery options — Try-at-home, Book now, or Instant delivery. All powered by Markit."
-      :links="heroLinks"
-    />
+      :ui="{ 
+        wrapper: '',
+        title: 'text-5xl font-bold tracking-tight text-gray-900 dark:text-white sm:text-7xl text-[#097D4C]',
+        description: 'mt-6 text-lg tracking-tight text-gray-600 dark:text-gray-300 text-[#097D4C]',
+        links: 'mt-10 flex flex-wrap justify-center gap-x-6 gap-y-3'
+      }"
+    >
+      <template #top>
+        <div class="flex justify-center">
+          <img src="/icons/logo.png" class="w-auto h-20" />
+        </div>
+      </template>
+    </ULandingHero>
 
     <img
-  src="~/assets/images/hero.png"
-  class="-mt-[235px] w-full  object-contain z-0"
-/>
-  </div>
-  <div class="">
-    <ULandingSection
-      v-for="(feature, index) in features"
-      :key="index"
-      :title="feature.title"
-      :description="feature.description"
-      :ui="{ wrapper: 'max-w-7xl mx-auto px-6 sm:py-2y', container: feature.reverse ? 'flex flex-col-reverse md:flex-row-reverse items-center gap-10' : 'flex flex-col-reverse md:flex-row items-center gap-10' }"
-    >
-      <!-- Image or icon placeholder -->
-      <div class="w-full md:w-1/2 bg-gray-100 h-48 md:h-64 rounded-xl flex items-center justify-center">
-        <div class="bg-gray-300 w-20 h-20 rounded-full" />
-      </div>
-    </ULandingSection>
+      src="/images/hero.png"
+      class="w-full object-contain z-0
+             md:-mt-[50px] lg:-mt-[100px] xl:-mt-[100px]"
+    />
+
+   
+
+      <ULandingSection
+        v-for="(feature, index) in features"
+        :key="index"
+        :title="feature.title"
+        :description="feature.description"
+        :align="feature.align"
+        :ui="{
+          wrapper: 'py-24 sm:py-10',
+          title: 'text-[#097D4C]',
+          description: 'text-[#097D4C]'
+        }"
+      >
+
+           <img
+              :src="`/images/${feature.image}`"
+        
+            />
+      </ULandingSection>
+    
+
+   <UContainer >
+    <UDivider class="py-16" />
+      <ULandingLogos title="" align="center">
+        <img src="/images/apparelIcon.png" class="w-28 h-28 object-contain" />
+        <img src="/images/shoeIcon.png" class="w-28 h-28 object-contain" />
+        <img src="/images/fancyIcon.png" class="w-28 h-28 object-contain" />
+        <img src="/images/trendingIcon.png" class="w-28 h-28 object-contain" />
+      </ULandingLogos>
+      <UDivider class="py-20" />
+    </UContainer>
+
+      <UContainer class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
+            <UCard class="text-center py-8 px-6">
+              <div class="text-4xl text-primary mb-4">
+                <UIcon name="i-heroicons-shopping-cart" color="green"/>
+              </div>
+              <h3 class="text-xl font-semibold">Convenient Shopping.</h3>
+              <p class="text-gray-600 mt-2">
+                Skip the traffic. Try at home. No pressure. Along with Multiple Purchase Option.
+              </p>
+            </UCard>
+
+            <UCard class="text-center py-8 px-6">
+              <div class="text-4xl text-primary mb-4">
+                <UIcon name="i-heroicons-building-storefront" color="green" />
+              </div>
+              <h3 class="text-xl font-semibold">Local First</h3>
+              <p class="text-gray-600 mt-2">
+                Buy from verified, nearby shops you already trust. This ensures better product quality, Faster delivery and supports your local economy.
+              </p>
+            </UCard>
+
+            <UCard class="text-center py-8 px-6">
+              <div class="text-4xl text-primary mb-4">
+                <UIcon name="i-heroicons-banknotes" color="green"/>
+              </div>
+              <h3 class="text-xl font-semibold">No Clickbait Offers</h3>
+              <p class="text-gray-600 mt-2">
+                Genuine discounts on real prices, not fake offers on inflated MRP. No tricks, just transparent deals.
+              </p>
+            </UCard>
+    </UContainer>
+
+    
+<UContainer>
+  <UDivider class="py-20" />
+  <ULandingCTA
+    title="Shopping has changed"
+    description="Try the Markit way."
+    :card="false"
+    :links="[{ label: 'Explore Shops Near You', color:'green',to: '/launching', size: 'sm',class:'bg-[#097D4C]' }]"
+  />
+<UDivider class="" />
+</UContainer>
+
+<UContainer>
+  <UFooter >
+    <template #left>
+      Copyright © {{ new Date().getFullYear() }}
+    </template>
+
+    <template #right>
+      <UButton icon="i-simple-icons-x" color="gray" variant="ghost" to="https://x.com/nuxt_js" target="_blank" />
+      <UButton icon="i-simple-icons-instagram" color="gray" variant="ghost" to="https://discord.com/invite/ps2h6QT" target="_blank" />
+      <UButton icon="i-simple-icons-whatsapp" color="gray" variant="ghost" to="https://github.com/nuxt/nuxt" target="_blank" />
+    </template>
+  </UFooter>
+</UContainer>
+
+
   </div>
 </template>
