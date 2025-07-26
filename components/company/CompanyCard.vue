@@ -77,9 +77,6 @@ const handleSave = async () => {
             data: { logo: b64files.uuid }
         });
 
-    
-        
-        // Close modal
         isOpen.value = false;
     } catch (error) {
         console.error("Error updating company logo:", error);

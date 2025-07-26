@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useQueryClient } from '@tanstack/vue-query'
 
-const queryClient = useQueryClient()
 import { useCreateProduct,useCreatePurchaseOrder, useCreateVariant,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
@@ -62,7 +60,7 @@ interface Product {
 
 
 const route = useRoute();
-const poId = route.query.poId as string;
+const poId = computed(() => String(route.query.poId || ''));
 
 const CreateProduct = useCreateProduct()
 const CreatePurchaseOrder = useCreatePurchaseOrder();
@@ -277,7 +275,7 @@ const handleAdd = async (e: Event) => {
           },
         },
         purchaseorder: {
-          connect: { id: poId },
+          connect: { id: poId.value },
         },
         ...(category.value && {
           category: { connect: { id: category.value } }
@@ -333,6 +331,14 @@ const handleAdd = async (e: Event) => {
       },
       select: { id: true }
     });
+
+    handleReset();
+
+    toast.add({
+      title: 'Product Added!',
+      id: 'modal-success',
+    });
+    
   } catch (err: any) {
     console.log(err.info?.message ?? err);
   }finally{
@@ -561,18 +567,21 @@ const removeVariant = (index: number) => {
 
 };
 
+const queryParams = computed(() => (
+  {
+  where: { id: poId.value },
+  include: {
+    products: { include: { variants: { include: { items: true } } } },
+  },
+}
+));
 
 const {
   data: items,
   isLoading,
   error,
   refetch:itemRefetch,
-} = useFindUniquePurchaseOrder({
-  where: { id: poId },
-  include: {
-    products: { include: { variants: { include: { items: true } } } },
-  },
-},{enabled:false});
+} = useFindUniquePurchaseOrder(queryParams,{enabled:false});
 
 watch(
   () => items.value, 
@@ -654,7 +663,7 @@ const handleSave = async () => {
 
     isOpen.value = true;
     await UpdatePurchaseOrder.mutateAsync({
-      where: { id: poId }, // Use .value if poId is a ref
+      where: { id: poId.value }, // Use .value if poId.value is a ref
       data: {
         ...(paymentType.value && {
           paymentType: paymentType.value as PType
@@ -674,7 +683,7 @@ if(distributorId.value){
   data: {
    
     purchaseOrders:{
-      connect:{id:poid}
+      connect:{id:poId.value}
     },
    
   }
@@ -757,6 +766,7 @@ const handleSkip = async() => {
     isAdd.value =false
     isOpen.value = false
 }
+
 const handleNewProduct = () => {
   isOpenAdd.value = true
 }
