@@ -12,6 +12,7 @@ Disallow: /reports
 Disallow: /saleshistory
 Disallow: /settings
 Disallow: /users
+Disallow: /cleanup
 
 Allow: /
 Allow: /store
