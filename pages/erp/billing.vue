@@ -159,101 +159,67 @@ const showCamera = ref(false)
 const codeReader = ref(null)
 const videoRef = ref(null)
 
+
 const requestCameraAccess = async () => {
   try {
-    await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { exact: 'environment' }
-      }
-    })
-    console.log('✅ Camera permission granted')
+   await navigator.mediaDevices.getUserMedia({
+  video: {
+    facingMode: { exact: 'environment' }
+  }
+});
+    console.log('✅ Camera permission granted');
   } catch (err) {
-    console.error('🚫 Error accessing camera:', err)
+    console.error('🚫 Error accessing camera:', err);
     toast.add({
       title: 'Camera Access Blocked',
-      description: 'Please allow camera permission from your browser settings.',
+      description: 'Unable to access camera. Please allow permission from your browser settings.',
       color: 'red',
-      icon: 'i-heroicons-camera',
-    })
+    });
   }
-}
+};
 
-// Only ask permission if Permissions API exists
 const askCameraPermission = async () => {
   if (!('permissions' in navigator)) {
-    return requestCameraAccess()
+    // fallback: always show toast if Permissions API not supported
+    return requestCameraAccess();
   }
 
   try {
-    const result = await navigator.permissions.query({ name: 'camera' })
+    const result = await navigator.permissions.query({ name: 'camera' });
+
     if (result.state === 'granted') {
-      console.log('✅ Permission granted')
-    } else {
-      await requestCameraAccess()
+      console.log('✅ Camera already granted');
+    } else if (result.state === 'prompt' || result.state === 'denied') {
+      requestCameraAccess();
     }
   } catch (e) {
-    console.warn('⚠️ Permissions API error:', e)
-    await requestCameraAccess()
+    console.warn('❗Permissions API error:', e);
+    requestCameraAccess();
   }
-}
-
-// Start scanning with only back camera
+};
+// Start camera and attach barcode scanner
 const startCamera = async () => {
   showCamera.value = true
   result.value = ''
   codeReader.value = new BrowserMultiFormatReader()
-
-  await askCameraPermission()
-
+askCameraPermission();
   try {
     const devices = await BrowserMultiFormatReader.listVideoInputDevices()
+    const selectedDeviceId = devices[0]?.deviceId
 
-    // Only use back-facing camera
-    const backCamera = devices.find(
-      (device) =>
-        device.label.toLowerCase().includes('back') ||
-        device.label.toLowerCase().includes('rear') ||
-        device.label.toLowerCase().includes('environment')
-    )
-
-    if (!backCamera) {
-      toast.add({
-        title: 'Back Camera Not Found',
-        description: 'A rear-facing camera was not detected. Scanning is unavailable.',
-        color: 'orange',
-        icon: 'i-heroicons-video-camera-slash',
-      })
-      stopCamera()
-      return
-    }
-
-    const selectedDeviceId = backCamera.deviceId
-
-    if (videoRef.value) {
+    if (selectedDeviceId && videoRef.value) {
       await codeReader.value.decodeFromVideoDevice(
         selectedDeviceId,
         videoRef.value,
         async (resultData, error) => {
           if (resultData) {
-            const scanned = resultData.getText()
-            console.log('✅ Scanned:', scanned)
-
+            result.value = resultData.getText()
+            console.log(result.value)
             const lastIndex = items.value.length - 1
-            const inputEl = barcodeInputs.value[lastIndex]
-            const input = inputEl?.$el?.querySelector("input")
 
             if (lastIndex >= 0) {
-              items.value[lastIndex].barcode = scanned
-              await nextTick()
-
-              if (input) {
-                input.focus()
-                const event = new KeyboardEvent('keydown', {
-                  key: 'Enter',
-                  bubbles: true,
-                })
-                input.dispatchEvent(event)
-              }
+              items.value[lastIndex].barcode = result.value
+                fetchItemData(result.value, lastIndex)
             }
 
             stopCamera()
@@ -262,37 +228,58 @@ const startCamera = async () => {
       )
     }
   } catch (err) {
-    console.error('Camera access error:', err)
+  console.error('Camera access error:', err)
 
+  if (err.name === 'NotAllowedError') {
     toast.add({
-      title: 'Camera Error',
+      title: 'Camera Permission Denied',
+      description: 'Please allow camera access in your browser settings.',
+      color: 'red',
+      icon: 'i-heroicons-exclamation-triangle',
+    })
+  } else if (err.name === 'NotFoundError') {
+    toast.add({
+      title: 'No Camera Found',
+      description: 'We could not detect a camera on this device.',
+      color: 'orange',
+      icon: 'i-heroicons-video-camera-slash',
+    })
+  } else {
+    toast.add({
+      title: 'Unexpected Error',
       description: err.message || 'Something went wrong while accessing the camera.',
       color: 'gray',
       icon: 'i-heroicons-bug-ant',
     })
-
-    stopCamera()
   }
+
+  stopCamera()
 }
 
-// Stop camera and cleanup
+}
+
+// Stop the camera and reset scanner
 const stopCamera = () => {
   try {
-    codeReader.value?.reset?.()
-
-    const videoElement = videoRef.value
+    // Stop decoding and clean up
+    codeReader.value?.reset?.();
+    result.value = ''
+    // Stop media tracks if videoRef exists
+    const videoElement = videoRef.value;
     if (videoElement?.srcObject) {
-      const stream = videoElement.srcObject
-      stream.getTracks().forEach((track) => track.stop())
-      videoElement.srcObject = null
+      const stream = videoElement.srcObject;
+      stream.getTracks().forEach((track) => track.stop());
+      videoElement.srcObject = null;
     }
   } catch (e) {
-    console.warn('⚠️ Error stopping camera:', e)
+    console.warn('⚠️ Error while stopping camera:', e);
   }
 
-  showCamera.value = false
-}
+  showCamera.value = false;
+};
 
+
+// Cleanup on component unmount
 onUnmounted(() => {
   stopCamera()
 })
