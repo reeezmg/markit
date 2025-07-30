@@ -127,7 +127,7 @@
                 </template>
 
                <template #footer>
-              <UButton to="/register" block color="primary" class="mt-4">
+              <UButton to="/storeLanding" block color="primary" class="mt-4">
                 List Your Store
               </UButton>
               <p class="text-sm text-gray-500 mt-2 text-center">{{ plan.refundNote }}</p>
@@ -156,7 +156,7 @@ const pricingPlans = computed(() => [
     description:'List Your store for free',
     price: isYearly.value ? '₹0/year' : '₹0/month',
     features: [
-      { label: '30 Products', available: true },
+      { label: '50 Products', available: true },
       { label: '1 User', available: true },
       { label: 'Billing', available: false },
       { label: 'Accounts', available: false },
