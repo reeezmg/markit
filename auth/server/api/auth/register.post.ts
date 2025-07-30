@@ -1,19 +1,20 @@
 import { createAddress,createPipeline,updateUser } from '../../utils/db';
 
 export default eventHandler(async (event) => {
-    const { email, name, companyname, password, type } = await readBody(event);
-
+    const { email, name, companyname, password, type, plan } = await readBody(event);
+console.log(plan)
     const existingUser = await findUserByEmail(email);
 
     const company = await createCompany({
         name: companyname,
         type,
+        plan,
         variantinput: { create: {} },
         productinput: { create: {} },
     });
 
     if (existingUser) {
-     await updateUser(existingUser.id, company.id, name, 'admin');
+     await updateUser(existingUser.id, company.id, name, 'admin','1');
     } else {
       await createUser({
         email,
@@ -25,8 +26,8 @@ export default eventHandler(async (event) => {
                 connect: { id: company.id },
                 },
                 role: 'admin',
-                code: 1,
-                name,         
+                code: '1',
+                name,     
             },
             ],
         },

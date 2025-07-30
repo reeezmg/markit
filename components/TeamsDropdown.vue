@@ -40,7 +40,7 @@ const teams = (items) =>
             src: '',
         },
         click: async () => {
-            await updateCompanySession(item.company.id, item.company.type, item.company.name, item.name, item.role, item.code, item.billCounter);
+            await updateCompanySession(item.company.id, item.company.type, item.company.name, item.name, item.role, item.code, item.billCounter, item.company.plan);
             window.location.reload();
         },
     }));

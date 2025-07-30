@@ -431,7 +431,7 @@ function loadBill(billNumber) {
   if (!bill) return;
 
   billNo.value = bill.billNo ?? '';
-  date.value = bill.date ?? new Date().toISOString();
+  date.value = new Date().toISOString();
   discount.value = bill.discount ?? 0;
   returnAmt.value = bill.returnAmt ?? 0;
   redeemedAmt.value = bill.redeemedAmt ?? 0;

@@ -20,6 +20,7 @@ export const authRegister = async (
     name: string,
     companyname: string,
     password: string,
+    plan: string,
     type: string,
 ) => {
     const res = await $fetch('/api/auth/register', {
@@ -29,6 +30,7 @@ export const authRegister = async (
             name,
             companyname,
             password,
+            plan,
             type,
         },
     });
@@ -75,7 +77,8 @@ export const updateCompanySession = async (
     name: string | undefined,
     role: string | undefined,
     code: string | undefined,
-    billCounter: number | undefined
+    billCounter: number | undefined,
+    plan: number | undefined,
     
 ) => {
     await $fetch('/api/auth/session', {
@@ -88,6 +91,7 @@ export const updateCompanySession = async (
             role,
             code,
             billCounter,
+            plan
         },
     });
     await useAuth().updateSession();

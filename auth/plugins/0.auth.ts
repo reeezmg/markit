@@ -9,23 +9,47 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   const { data: session, refresh: updateSession } = await useFetch<AuthSession>('/api/auth/session');
 
   const loggedIn = computed(() => !!session.value?.email);
-  
+  const fallbackUrl = computed(() => 
+  session.value?.plan === 'free' || session.value?.plan === 'lite'
+    ? '/offline'
+    : '/erp/billing'
+)
+
   const redirectTo = useState<string>('redirectTo', () => '/erp/billing');
 
   // Only register middleware on client
   if (process.client) {
     addRouteMiddleware('auth', (to) => {
+      const plan = session.value?.plan
+
       // Redirect away from auth pages if already logged in
       if (loggedIn.value && ['/login', '/register', '/'].includes(to.path)) {
-        return '/erp/billing';
+        return fallbackUrl.value
       }
-      
+
+      // Block access to /erp/billing for free/lite plans
+      if (
+        loggedIn.value &&
+        to.path.startsWith('/erp/billing') &&
+        (plan === 'free' || plan === 'lite')
+      ) {
+        return '/offline'
+      }
+      if (
+        loggedIn.value &&
+        to.path.startsWith('/offline') &&
+        (plan === 'pro')
+      ) {
+        return '/erp/billing'
+      }
+
       // Original auth check
       if (to.meta.auth && !loggedIn.value && session.value?.type !== 'USER') {
-        redirectTo.value = to.path;
-        return '/login';
+        redirectTo.value = to.path
+        return '/login'
       }
-    }, { global: true });
+    }, { global: true })
+
 
     const route = useRoute();
     watch(loggedIn, async (isLoggedIn) => {

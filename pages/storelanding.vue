@@ -127,7 +127,12 @@
                 </template>
 
                <template #footer>
-              <UButton to="/storeLanding" block color="primary" class="mt-4">
+              <UButton
+                  :to="`/register?plan=${encodeURIComponent(plan.title.toLowerCase())}`"
+                  block
+                  color="primary"
+                  class="mt-4"
+                >
                 List Your Store
               </UButton>
               <p class="text-sm text-gray-500 mt-2 text-center">{{ plan.refundNote }}</p>

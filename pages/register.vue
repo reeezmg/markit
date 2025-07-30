@@ -3,7 +3,6 @@ definePageMeta({ layout: false });
 
 import { z } from 'zod';
 import { reactive, ref } from 'vue';
-import { useToast } from '#imports';
 
 const reject = ref(true);
 const emailExist = ref(false);
@@ -14,6 +13,8 @@ const isVerifyingOtp = ref(false);
 const showOtpInput = ref(false)
 const registerLoading = ref(false)
 
+const route = useRoute()
+
 // Form state
 const state = reactive({
   email: '',
@@ -22,7 +23,14 @@ const state = reactive({
   confirmPassword: '',
   companyname: '',
   agree: false,
+  plan: ''
 });
+
+const plans = ['free','lite','pro']
+
+onMounted(() => {
+    state.plan = route.query.plan as string
+})
 
 const otp = ref('');
 
@@ -69,6 +77,7 @@ async function onSubmit() {
       state.name,
       state.companyname,
       state.password,
+      state.plan,
       'buyer'
     );
     console.log(res);
@@ -229,6 +238,10 @@ const onVerifyOtp = async () => {
 
         <UFormGroup v-if="isEmailVerified" name="companyname" label="Company Name">
           <UInput v-model="state.companyname" placeholder="Enter your company name" />
+        </UFormGroup>
+
+        <UFormGroup v-if="isEmailVerified" name="plan" label="Plan">
+           <USelectMenu v-model="state.plan" :options="plans" />
         </UFormGroup>
 
         <UFormGroup v-if="isEmailVerified" name="agree">

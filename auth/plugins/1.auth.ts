@@ -7,7 +7,6 @@ export default defineNuxtPlugin(async (nuxtApp) => {
 
     const { data: session, refresh: updateSession } =
         await useFetch<AuthClientSession>('/api/clientauth/session');
-console.log("dsdsd",session)
     const loggedIn: any = computed(() => !!session.value?.phone);
 
     return {

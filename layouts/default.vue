@@ -3,8 +3,7 @@ import { ref, computed, watch } from 'vue';
 
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
-const isLite = ref(useAuth().session.value?.isLite || false);
-
+const plan = ref(useAuth().session.value?.plan || 'free');
 
 const { isHelpSlideoverOpen } = useDashboard();
 
@@ -366,7 +365,7 @@ const links = computed(() => {
         },
     ];
 
-      if (isLite.value) {
+      if (plan.value === "free" || plan.value === "lite" ) {
     return simplifiedLinks;
   }
 

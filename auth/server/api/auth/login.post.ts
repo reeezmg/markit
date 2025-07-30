@@ -29,7 +29,6 @@ export default eventHandler(async (event) => {
         isTaxIncluded: user.companies[0].company.isTaxIncluded,
         isBarcodeIncluded: user.companies[0].company.isBarcodeIncluded,
         isUserTrackIncluded: user.companies[0].company.isUserTrackIncluded,
-        isLite: user.companies[0].company.isLite,
         companyId: user.companies[0].companyId,
         companyType: user.companies[0].company.type,
         companyName: user.companies[0].company.name,
@@ -42,6 +41,7 @@ export default eventHandler(async (event) => {
         gstin: user.companies[0].company.gstin || '',
         accHolderName: user.companies[0].company.accHolderName || '',
         upiId: user.companies[0].company.upiId || '',
+        plan: user.companies[0].company.plan,
         productInputs: (({ name, brand, category, subcategory, description }) =>
         ({ name, brand, category, subcategory, description }))(user.companies[0].company.productinput || {}),
 

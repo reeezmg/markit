@@ -38,6 +38,7 @@ export type AuthSession = {
     code: string;
     billCounter: number;
     authSessionVersion: string;
+    plan:string,
     productInputs?: {
         name: boolean;
         brand: boolean;

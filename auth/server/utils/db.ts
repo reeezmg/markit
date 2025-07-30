@@ -36,6 +36,7 @@ export async function createUser(user: Prisma.UserCreateInput) {
     });
 }
 export async function createCompany(company: Prisma.CompanyCreateInput) {
+    console.log(company)
     return prisma.company.create({
         data: company,
     });
@@ -53,7 +54,8 @@ export async function updateUser(
   userId: string,
   companyId: string,
   name: string,
-  role: 'admin' | 'user' // or use your `UserRole` enum
+  role: 'admin' | 'user',
+  code: string
 ) {
   return prisma.user.update({
     where: { id: userId },
@@ -64,6 +66,7 @@ export async function updateUser(
             company: { connect: { id: companyId } },
             name,
             role,
+            code
           },
         ],
       },
