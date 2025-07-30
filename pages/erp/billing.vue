@@ -162,7 +162,12 @@ const videoRef = ref(null)
 
 const requestCameraAccess = async () => {
   try {
-    await navigator.mediaDevices.getUserMedia({ video: true });
+   await navigator.mediaDevices.getUserMedia({
+  video: {
+    facingMode: { exact: 'environment' }
+  }
+});
+
     console.log('✅ Camera permission granted');
   } catch (err) {
     console.error('🚫 Error accessing camera:', err);
