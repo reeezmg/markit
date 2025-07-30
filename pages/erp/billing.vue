@@ -32,7 +32,6 @@ const paymentOptions = ref(['Cash', 'UPI', 'Card','Credit'])
 const tempSplits = ref(
   Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }]))
 )
-console.log(tempSplits.value)
 
 const date = ref(new Date().toISOString());
 const discount = ref(0);
@@ -154,11 +153,13 @@ const items = ref([
 const selectedDraft = ref(null);
 const draftBills = ref([]);
 const LOCAL_BILLS_KEY = 'bills';
-const videoRef = ref(null)
+
 const result = ref('')
 const showCamera = ref(false)
-const codeReader = ref(null) // Use ref to preserve instance across reactivity
+const codeReader = ref(null)
+const videoRef = ref(null)
 
+// Start camera and attach barcode scanner
 const startCamera = async () => {
   showCamera.value = true
   result.value = ''
@@ -172,20 +173,72 @@ const startCamera = async () => {
       await codeReader.value.decodeFromVideoDevice(
         selectedDeviceId,
         videoRef.value,
-        (resultData, error) => {
+        async (resultData, error) => {
           if (resultData) {
-            result.value = resultData.getText()
+            const scanned = resultData.getText()
+            console.log(scanned)
+            const lastIndex = items.value.length - 1
+            const inputEl = barcodeInputs.value[lastIndex]
+            const input = inputEl.$el.querySelector("input")
+            if (input) {
+              input.focus()
+            }
+
+           
+            if (lastIndex >= 0) {
+              items.value[lastIndex].barcode = scanned
+
+              await nextTick()
+
+              if (input) {
+                input.focus()
+
+                // Simulate Enter key
+                const event = new KeyboardEvent('keydown', {
+                  key: 'Enter',
+                  bubbles: true,
+                })
+                input.dispatchEvent(event)
+              }
+            }
+
             stopCamera()
           }
         }
       )
     }
   } catch (err) {
-    console.error('Camera error:', err)
-    stopCamera()
+  console.error('Camera access error:', err)
+
+  if (err.name === 'NotAllowedError') {
+    toast.add({
+      title: 'Camera Permission Denied',
+      description: 'Please allow camera access in your browser settings.',
+      color: 'red',
+      icon: 'i-heroicons-exclamation-triangle',
+    })
+  } else if (err.name === 'NotFoundError') {
+    toast.add({
+      title: 'No Camera Found',
+      description: 'We could not detect a camera on this device.',
+      color: 'orange',
+      icon: 'i-heroicons-video-camera-slash',
+    })
+  } else {
+    toast.add({
+      title: 'Unexpected Error',
+      description: err.message || 'Something went wrong while accessing the camera.',
+      color: 'gray',
+      icon: 'i-heroicons-bug-ant',
+    })
   }
+
+  stopCamera()
 }
 
+}
+
+// Stop the camera and reset scanner
 const stopCamera = () => {
   try {
     codeReader.value?.reset?.()
@@ -195,6 +248,7 @@ const stopCamera = () => {
   showCamera.value = false
 }
 
+// Cleanup on component unmount
 onUnmounted(() => {
   stopCamera()
 })
