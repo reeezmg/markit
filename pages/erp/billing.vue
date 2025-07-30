@@ -246,14 +246,9 @@ const startCamera = async () => {
       const lastIndex = items.value.length - 1
       if (lastIndex >= 0) {
         items.value[lastIndex].barcode = result.value
-        fetchItemData(result.value, lastIndex)
-          const isEmpty = !category || Object.keys(category).length === 0;
+        fetchItemData(result.value, lastIndex){
+            addNewRow(lastIndex,true)    
 
-          if (!isEmpty) {
-            addNewRow(lastIndex,true)
-           
-              
-          }
       }
 
       stopCamera()
