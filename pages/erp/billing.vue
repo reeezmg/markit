@@ -159,12 +159,46 @@ const showCamera = ref(false)
 const codeReader = ref(null)
 const videoRef = ref(null)
 
+
+const requestCameraAccess = async () => {
+  try {
+    await navigator.mediaDevices.getUserMedia({ video: true });
+    console.log('✅ Camera permission granted');
+  } catch (err) {
+    console.error('🚫 Error accessing camera:', err);
+    toast.add({
+      title: 'Camera Access Blocked',
+      description: 'Unable to access camera. Please allow permission from your browser settings.',
+      color: 'red',
+    });
+  }
+};
+
+const askCameraPermission = async () => {
+  if (!('permissions' in navigator)) {
+    // fallback: always show toast if Permissions API not supported
+    return requestCameraAccess();
+  }
+
+  try {
+    const result = await navigator.permissions.query({ name: 'camera' });
+
+    if (result.state === 'granted') {
+      console.log('✅ Camera already granted');
+    } else if (result.state === 'prompt' || result.state === 'denied') {
+      requestCameraAccess();
+    }
+  } catch (e) {
+    console.warn('❗Permissions API error:', e);
+    requestCameraAccess();
+  }
+};
 // Start camera and attach barcode scanner
 const startCamera = async () => {
   showCamera.value = true
   result.value = ''
   codeReader.value = new BrowserMultiFormatReader()
-
+askCameraPermission();
   try {
     const devices = await BrowserMultiFormatReader.listVideoInputDevices()
     const selectedDeviceId = devices[0]?.deviceId
@@ -241,12 +275,23 @@ const startCamera = async () => {
 // Stop the camera and reset scanner
 const stopCamera = () => {
   try {
-    codeReader.value?.reset?.()
+    // Stop decoding and clean up
+    codeReader.value?.reset?.();
+
+    // Stop media tracks if videoRef exists
+    const videoElement = videoRef.value;
+    if (videoElement?.srcObject) {
+      const stream = videoElement.srcObject;
+      stream.getTracks().forEach((track) => track.stop());
+      videoElement.srcObject = null;
+    }
   } catch (e) {
-    console.warn('Error while stopping camera:', e)
+    console.warn('⚠️ Error while stopping camera:', e);
   }
-  showCamera.value = false
-}
+
+  showCamera.value = false;
+};
+
 
 // Cleanup on component unmount
 onUnmounted(() => {
