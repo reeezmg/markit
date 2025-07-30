@@ -4,6 +4,7 @@ import { BillingAddClient } from '#components';
 import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry, useUpdateCompanyClient } from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
+import { BrowserMultiFormatReader } from '@zxing/browser'
 const queryClient = useQueryClient();
 
 const currentRequestIds = ref({});
@@ -110,7 +111,11 @@ const subtotal = computed(() => {
 });
 
 const grandTotal = computed(() => {
-  const baseTotal = subtotal.value; // use the computed subtotal instead of re-reducing
+  const baseTotal = items.value.reduce((sum, item) => {
+    const itemValue = item.value || 0;
+    return item.return ? sum - itemValue : sum + itemValue;
+  }, 0);
+
   let afterDiscount = 0;
 
   if (discount.value < 0) {
@@ -121,6 +126,9 @@ const grandTotal = computed(() => {
 
   return afterDiscount - redeemedAmt.value;
 });
+
+
+
 
 
 
@@ -146,6 +154,50 @@ const items = ref([
 const selectedDraft = ref(null);
 const draftBills = ref([]);
 const LOCAL_BILLS_KEY = 'bills';
+const videoRef = ref(null)
+const result = ref('')
+const showCamera = ref(false)
+const codeReader = ref(null) // Use ref to preserve instance across reactivity
+
+const startCamera = async () => {
+  showCamera.value = true
+  result.value = ''
+  codeReader.value = new BrowserMultiFormatReader()
+
+  try {
+    const devices = await BrowserMultiFormatReader.listVideoInputDevices()
+    const selectedDeviceId = devices[0]?.deviceId
+
+    if (selectedDeviceId && videoRef.value) {
+      await codeReader.value.decodeFromVideoDevice(
+        selectedDeviceId,
+        videoRef.value,
+        (resultData, error) => {
+          if (resultData) {
+            result.value = resultData.getText()
+            stopCamera()
+          }
+        }
+      )
+    }
+  } catch (err) {
+    console.error('Camera error:', err)
+    stopCamera()
+  }
+}
+
+const stopCamera = () => {
+  try {
+    codeReader.value?.reset?.()
+  } catch (e) {
+    console.warn('Error while stopping camera:', e)
+  }
+  showCamera.value = false
+}
+
+onUnmounted(() => {
+  stopCamera()
+})
 
 onMounted(() => {
   const bills = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
@@ -1705,6 +1757,20 @@ const handleRedeemPoints = async () => {
     }"
   >
     <template #header>
+      <div v-if="showCamera" class="fixed top-4 left-1/2 transform -translate-x-1/2 w-80 z-50">
+      <div class="relative border border-gray-300 rounded-lg shadow">
+        <video ref="videoRef" class="w-full rounded-t-lg" />
+        <button
+          @click="stopCamera"
+          class="absolute top-1 right-1 bg-red-600 text-white px-2 py-1 text-sm rounded"
+        >
+          ✖
+        </button>
+      </div>
+      </div>
+        <div v-if="result" class="text-green-700 font-bold text-lg">
+      ✅ Scanned Code: {{ result }}
+    </div>
      <div class="w-full flex flex-wrap gap-4 sm:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
@@ -1732,7 +1798,7 @@ const handleRedeemPoints = async () => {
      
          <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
             <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="flex-1" />
-            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1"/>
+            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="startCamera"/>
           </div>
         
        <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
