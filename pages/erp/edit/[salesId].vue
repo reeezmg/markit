@@ -63,8 +63,13 @@ const subtotal = computed(() => {
   }, 0);
 });
 
+
 const grandTotal = computed(() => {
-  const baseTotal = subtotal.value; // use the computed subtotal instead of re-reducing
+  const baseTotal = items.value.reduce((sum, item) => {
+    const itemValue = item.value || 0;
+    return item.return ? sum - itemValue : sum + itemValue;
+  }, 0);
+
   let afterDiscount = 0;
 
   if (discount.value < 0) {
@@ -75,6 +80,9 @@ const grandTotal = computed(() => {
 
   return afterDiscount - redeemedAmt.value;
 });
+
+
+
 
 
 const loadingStates = ref([]);
