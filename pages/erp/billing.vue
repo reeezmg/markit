@@ -4,7 +4,7 @@ import { BillingAddClient } from '#components';
 import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry, useUpdateCompanyClient } from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
-
+import Quagga from '@ericblade/quagga2'
 const queryClient = useQueryClient();
 
 const currentRequestIds = ref({});
@@ -157,60 +157,138 @@ const LOCAL_BILLS_KEY = 'bills';
 
 const result = ref('')
 const showCamera = ref(false)
-let html5QrCode = null
+const videoRef = ref(null)
+
+const requestCameraAccess = async () => {
+  try {
+    await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { exact: 'environment' },
+      },
+    })
+    console.log('✅ Camera permission granted')
+  } catch (err) {
+    console.error('🚫 Error accessing camera:', err)
+    toast.add({
+      title: 'Camera Access Blocked',
+      description:
+        'Unable to access camera. Please allow permission from your browser settings.',
+      color: 'red',
+    })
+  }
+}
+
+const askCameraPermission = async () => {
+  if (!('permissions' in navigator)) return requestCameraAccess()
+
+  try {
+    const res = await navigator.permissions.query({ name: 'camera' })
+    if (res.state === 'granted') {
+      console.log('✅ Camera already granted')
+    } else {
+      requestCameraAccess()
+    }
+  } catch (e) {
+    console.warn('❗Permissions API error:', e)
+    requestCameraAccess()
+  }
+}
 
 const startCamera = async () => {
+  await askCameraPermission()
+
   result.value = ''
   showCamera.value = true
 
-  await nextTick()
+  try {
+    await nextTick()
 
-  const { Html5Qrcode } = await import('html5-qrcode')
+    Quagga.init(
+      {
+        inputStream: {
+          type: 'LiveStream',
+          target: videoRef.value,
+          constraints: {
+            facingMode: 'environment',
+          },
+        },
+        locator: {
+          patchSize: 'medium',
+          halfSample: true,
+        },
+        decoder: {
+          readers: ['code_128_reader', 'ean_reader', 'ean_8_reader'],
+        },
+        locate: true,
+      },
+      (err) => {
+        if (err) {
+          console.error('Quagga init error:', err)
+          toast.add({
+            title: 'Camera Error',
+            description: err.message,
+            color: 'red',
+          })
+          return
+        }
+        Quagga.start()
+        console.log('📷 Quagga started')
+      }
+    )
 
-  html5QrCode = new Html5Qrcode('reader')
+    Quagga.onDetected((data) => {
+      const scanned = data?.codeResult?.code
+      if (!scanned) return
 
-  html5QrCode.start(
-    { facingMode: 'environment' }, // Prefer back camera
-    {
-      fps: 10,
-      qrbox: { width: 250, height: 250 },
-    },
-    async (decodedText, decodedResult) => {
-      // Success callback
-      result.value = decodedText
-      console.log('Scanned:', decodedText)
+      result.value = scanned
+      console.log('📦 Scanned:', result.value)
 
       const lastIndex = items.value.length - 1
       if (lastIndex >= 0) {
-        items.value[lastIndex].barcode = decodedText
-        fetchItemData(decodedText, lastIndex)
+        items.value[lastIndex].barcode = result.value
+        fetchItemData(result.value, lastIndex)
       }
 
-      await stopCamera()
-    },
-    (errorMessage) => {
-      // Optional error callback per frame
-      // console.warn('Scanning error:', errorMessage)
-    }
-  ).catch(err => {
-    console.error('Camera start failed:', err)
-    toast.add({
-      title: 'Camera Error',
-      description: err.message || 'Could not start camera',
-      color: 'red',
+      stopCamera()
     })
+  } catch (err) {
+    console.error('Camera access error:', err)
+
+    if (err.name === 'NotAllowedError') {
+      toast.add({
+        title: 'Camera Permission Denied',
+        description: 'Please allow camera access in your browser settings.',
+        color: 'red',
+        icon: 'i-heroicons-exclamation-triangle',
+      })
+    } else if (err.name === 'NotFoundError') {
+      toast.add({
+        title: 'No Camera Found',
+        description: 'We could not detect a camera on this device.',
+        color: 'orange',
+        icon: 'i-heroicons-video-camera-slash',
+      })
+    } else {
+      toast.add({
+        title: 'Unexpected Error',
+        description:
+          err.message || 'Something went wrong while accessing the camera.',
+        color: 'gray',
+        icon: 'i-heroicons-bug-ant',
+      })
+    }
+
     stopCamera()
-  })
+  }
 }
 
-const stopCamera = async () => {
-  if (html5QrCode?.isScanning) {
-    try {
-      await html5QrCode.stop()
-      await html5QrCode.clear()
-    } catch (e) {
-      console.warn('Error stopping camera:', e)
-    }
+const stopCamera = () => {
+  try {
+    Quagga.stop()
+    Quagga.offDetected()
+    result.value = ''
+  } catch (e) {
+    console.warn('⚠️ Error while stopping Quagga:', e)
   }
   showCamera.value = false
 }
@@ -1777,9 +1855,7 @@ const handleRedeemPoints = async () => {
     }"
   >
     <template #header>
-        <div v-if="showCamera">
-    <div id="reader" class="w-full h-[300px] border rounded" />
-  </div>
+         <div v-if="showCamera" ref="videoRef" class="w-full h-[300px] bg-black rounded" />
      <div class="w-full flex flex-wrap gap-4 sm:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
