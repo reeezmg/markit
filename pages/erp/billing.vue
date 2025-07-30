@@ -4,7 +4,7 @@ import { BillingAddClient } from '#components';
 import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry, useUpdateCompanyClient } from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
-import { BrowserMultiFormatReader } from '@zxing/browser'
+
 const queryClient = useQueryClient();
 
 const currentRequestIds = ref({});
@@ -154,132 +154,67 @@ const selectedDraft = ref(null);
 const draftBills = ref([]);
 const LOCAL_BILLS_KEY = 'bills';
 
+
 const result = ref('')
 const showCamera = ref(false)
-const codeReader = ref(null)
-const videoRef = ref(null)
+let html5QrCode = null
 
-
-const requestCameraAccess = async () => {
-  try {
-   await navigator.mediaDevices.getUserMedia({
-  video: {
-    facingMode: { exact: 'environment' }
-  }
-});
-    console.log('✅ Camera permission granted');
-  } catch (err) {
-    console.error('🚫 Error accessing camera:', err);
-    toast.add({
-      title: 'Camera Access Blocked',
-      description: 'Unable to access camera. Please allow permission from your browser settings.',
-      color: 'red',
-    });
-  }
-};
-
-const askCameraPermission = async () => {
-  if (!('permissions' in navigator)) {
-    // fallback: always show toast if Permissions API not supported
-    return requestCameraAccess();
-  }
-
-  try {
-    const result = await navigator.permissions.query({ name: 'camera' });
-
-    if (result.state === 'granted') {
-      console.log('✅ Camera already granted');
-    } else if (result.state === 'prompt' || result.state === 'denied') {
-      requestCameraAccess();
-    }
-  } catch (e) {
-    console.warn('❗Permissions API error:', e);
-    requestCameraAccess();
-  }
-};
-// Start camera and attach barcode scanner
 const startCamera = async () => {
-  showCamera.value = true
   result.value = ''
-  codeReader.value = new BrowserMultiFormatReader()
-askCameraPermission();
-  try {
-    const devices = await BrowserMultiFormatReader.listVideoInputDevices()
-    const selectedDeviceId = devices[0]?.deviceId
+  showCamera.value = true
 
-    if (selectedDeviceId && videoRef.value) {
-      await codeReader.value.decodeFromVideoDevice(
-        selectedDeviceId,
-        videoRef.value,
-        async (resultData, error) => {
-          if (resultData) {
-            result.value = resultData.getText()
-            console.log(result.value)
-            const lastIndex = items.value.length - 1
+  await nextTick()
 
-            if (lastIndex >= 0) {
-              items.value[lastIndex].barcode = result.value
-                fetchItemData(result.value, lastIndex)
-            }
+  const { Html5Qrcode } = await import('html5-qrcode')
 
-            stopCamera()
-          }
-        }
-      )
+  html5QrCode = new Html5Qrcode('reader')
+
+  html5QrCode.start(
+    { facingMode: 'environment' }, // Prefer back camera
+    {
+      fps: 10,
+      qrbox: { width: 250, height: 250 },
+    },
+    async (decodedText, decodedResult) => {
+      // Success callback
+      result.value = decodedText
+      console.log('Scanned:', decodedText)
+
+      const lastIndex = items.value.length - 1
+      if (lastIndex >= 0) {
+        items.value[lastIndex].barcode = decodedText
+        fetchItemData(decodedText, lastIndex)
+      }
+
+      await stopCamera()
+    },
+    (errorMessage) => {
+      // Optional error callback per frame
+      // console.warn('Scanning error:', errorMessage)
     }
-  } catch (err) {
-  console.error('Camera access error:', err)
-
-  if (err.name === 'NotAllowedError') {
+  ).catch(err => {
+    console.error('Camera start failed:', err)
     toast.add({
-      title: 'Camera Permission Denied',
-      description: 'Please allow camera access in your browser settings.',
+      title: 'Camera Error',
+      description: err.message || 'Could not start camera',
       color: 'red',
-      icon: 'i-heroicons-exclamation-triangle',
     })
-  } else if (err.name === 'NotFoundError') {
-    toast.add({
-      title: 'No Camera Found',
-      description: 'We could not detect a camera on this device.',
-      color: 'orange',
-      icon: 'i-heroicons-video-camera-slash',
-    })
-  } else {
-    toast.add({
-      title: 'Unexpected Error',
-      description: err.message || 'Something went wrong while accessing the camera.',
-      color: 'gray',
-      icon: 'i-heroicons-bug-ant',
-    })
-  }
-
-  stopCamera()
+    stopCamera()
+  })
 }
 
-}
-
-// Stop the camera and reset scanner
-const stopCamera = () => {
-  try {
-    // Stop decoding and clean up
-    codeReader.value?.reset?.();
-    result.value = ''
-    // Stop media tracks if videoRef exists
-    const videoElement = videoRef.value;
-    if (videoElement?.srcObject) {
-      const stream = videoElement.srcObject;
-      stream.getTracks().forEach((track) => track.stop());
-      videoElement.srcObject = null;
+const stopCamera = async () => {
+  if (html5QrCode?.isScanning) {
+    try {
+      await html5QrCode.stop()
+      await html5QrCode.clear()
+    } catch (e) {
+      console.warn('Error stopping camera:', e)
     }
-  } catch (e) {
-    console.warn('⚠️ Error while stopping camera:', e);
   }
+  showCamera.value = false
+}
 
-  showCamera.value = false;
-};
-
-
-// Cleanup on component unmount
 onUnmounted(() => {
   stopCamera()
 })
@@ -1842,20 +1777,9 @@ const handleRedeemPoints = async () => {
     }"
   >
     <template #header>
-      <div v-if="showCamera" class="fixed top-4 left-1/2 transform -translate-x-1/2 w-80 z-50">
-      <div class="relative border border-gray-300 rounded-lg shadow">
-        <video ref="videoRef" class="w-full rounded-t-lg" />
-        <button
-          @click="stopCamera"
-          class="absolute top-1 right-1 bg-red-600 text-white px-2 py-1 text-sm rounded"
-        >
-          ✖
-        </button>
-      </div>
-      </div>
-        <div v-if="result" class="text-green-700 font-bold text-lg">
-      ✅ Scanned Code: {{ result }}
-    </div>
+        <div v-if="showCamera">
+    <div id="reader" class="w-full h-[300px] border rounded" />
+  </div>
      <div class="w-full flex flex-wrap gap-4 sm:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
