@@ -499,9 +499,16 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
                     </template>
 
 
-                <template #createdAt-data="{ row }">
-                    {{ new Date(row.createdAt).toLocaleDateString() }}
-                </template>
+                    <template #createdAt-data="{ row }">
+                    {{ new Date(row.createdAt).toLocaleString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                        hour: '2-digit',
+                        minute: '2-digit'
+                    }) }}
+                    </template>
+
 
                <template #paymentStatus-data="{ row }">
                     <USelect

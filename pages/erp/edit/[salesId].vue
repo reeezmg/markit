@@ -638,7 +638,7 @@ const billArgs = computed(() => ({
 
 const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs,{enabled:false});
 const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enabled:false});
-const {data: entriesDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
+const {data: entrietosDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
 
 
 const handleEnterBarcode = (barcode,index) => {
@@ -791,6 +791,9 @@ const handleEdit = async () => {
       );
     }
 
+    const {data:entriesDelete} = await entriesToDeleteRefetch()
+
+
     // 4. Calculate bill points
     const billPoints = (pointsValue > 0 ? Number(grandTotal.value) / pointsValue : 0) - pastBillPoints.value;
 
@@ -851,7 +854,7 @@ const handleEdit = async () => {
     // 6. Prepare request data for server
     const requestData = {
       items: items.value,
-      entriesToDelete: entriesDelete.value || [],
+      entriesToDelete: entriesDelete || [],
       billPoints,
       billData: {
         id: route.params.salesId,

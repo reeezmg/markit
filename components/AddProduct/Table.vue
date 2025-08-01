@@ -2,7 +2,8 @@
 import { ref, computed, watchEffect } from 'vue';
 import { useFindUniquePurchaseOrder, useDeleteProduct, useUpdateProduct } from '~/lib/hooks';
 
-const emit = defineEmits(['product-selected','clicked']);
+const emit = defineEmits(['product-selected','clicked','total-amount']);
+const totalAmount = ref('');
 
 const DeleteProduct = useDeleteProduct({
   onSuccess: (data) => console.log('Created:', data),
@@ -27,6 +28,30 @@ const {
   error,
   refetch,
 } = useFindUniquePurchaseOrder(queryParams);
+
+
+watch(
+  () => PO.value, 
+  (val) => {
+    if (!val) return
+    const variants = val.products.flatMap((product) => product.variants)
+console.log('variants', variants)
+    totalAmount.value = variants.reduce((sum, variant) => {
+      if (!variant.items || !Array.isArray(variant.items)) return sum
+
+      const variantTotal = variant.items.reduce((itemSum, item) => {
+        const qty = item.qty || 0
+        const pprice = variant.pprice || 0
+        return itemSum + qty * pprice
+      }, 0)
+
+      return sum + variantTotal
+    }, 0)
+    console.log('total', totalAmount.value)
+      emit('total-amount', totalAmount.value);
+  },
+  { immediate: true, deep: true }
+)
 
 
 

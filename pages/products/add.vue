@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
 
-import { useCreateProduct,useCreatePurchaseOrder, useCreateVariant,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany} from '~/lib/hooks';
+import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
 const { printLabel } = usePrint();
@@ -65,7 +65,7 @@ const poId = computed(() => String(route.query.poId || ''));
 const CreateProduct = useCreateProduct()
 const CreatePurchaseOrder = useCreatePurchaseOrder();
 const UpdateProduct = useUpdateProduct()
-
+const CreateDistributorCredit = useCreateDistributorCredit();
 const DeleteManyItem = useDeleteManyItem()
 const UpdateDistributorCompany = useUpdateDistributorCompany();
 const UpdatePurchaseOrder = useUpdatePurchaseOrder();
@@ -122,6 +122,7 @@ const barcodes = ref<BarcodeItem[]>([]);
 const distributorId = ref('');
 const paymentType = ref('');
 const totalAmount = ref(0);
+const billNo = ref('');
 
 const variants = ref<{ 
     id:string;
@@ -170,7 +171,6 @@ const createValue = (data: any) => {
 };
 
 const updateVariant = (index,data: any) => {
-  console.log("update variant",index,data)
   variants.value[index] = { ...variants.value[index], ...data };
 };
 
@@ -189,14 +189,6 @@ watch(isOpenAdd, (newVal) => {
     handleReset()
   }
 });
-watch(isOpenAdd, (newVal) => {
-  if (!newVal) {
-    handleReset()
-  }
-});
-
-
-
 
 const handleProductSelected = (product:any) => {
   selectedProduct.value = product;
@@ -206,6 +198,7 @@ const handleProductSelected = (product:any) => {
 const handleDistributorValue = (data:any) => {
   distributorId.value = data.distributorId;
   paymentType.value = data.paymentType;
+  billNo.value = data.billNo
 };
 
 const handleAdd = async (e: Event) => {
@@ -365,7 +358,6 @@ function calculateTax(variant) {
 
 const handleEdit = async (e: Event) => {
   e.preventDefault();
-      console.log(variants.value);
   isLoad.value = true
   try {
     // Validate product name
@@ -514,8 +506,6 @@ if (variantIdsToDelete.length > 0) {
   select: { id: true }
 })
 
-    // console.log(res?.variants);
-    // await getItem(res?.variants);
     handleReset();
 
     toast.add({
@@ -583,27 +573,6 @@ const {
   refetch:itemRefetch,
 } = useFindUniquePurchaseOrder(queryParams,{enabled:false});
 
-watch(
-  () => items.value, 
-  (val) => {
-    if (!val) return
-    const variants = val.products.flatMap((product) => product.variants)
-
-    totalAmount.value = variants.reduce((sum, variant) => {
-      if (!variant.items || !Array.isArray(variant.items)) return sum
-
-      const variantTotal = variant.items.reduce((itemSum, item) => {
-        const qty = item.qty || 0
-        const pprice = variant.pprice || 0
-        return itemSum + qty * pprice
-      }, 0)
-
-      return sum + variantTotal
-    }, 0)
-    console.log("Total Amount:", totalAmount.value)
-  },
-  { immediate: true, deep: true }
-)
 
 
 const printBarcodes = async() => {
@@ -659,11 +628,9 @@ const handleSave = async () => {
       )
     );
 
-
-
     isOpen.value = true;
-    await UpdatePurchaseOrder.mutateAsync({
-      where: { id: poId.value }, // Use .value if poId.value is a ref
+    UpdatePurchaseOrder.mutate({
+      where: { id: poId.value }, 
       data: {
         ...(paymentType.value && {
           paymentType: paymentType.value as PType
@@ -672,25 +639,42 @@ const handleSave = async () => {
       }
     });
 
-if(distributorId.value){
-  await UpdateDistributorCompany.mutateAsync({
-  where: {
-    distributorId_companyId: {
-      distributorId: distributorId.value,
-      companyId: useAuth().session.value?.companyId!, // Ensure this value is not undefined
-    }
-  },
-  data: {
-   
-    purchaseOrders:{
-      connect:{id:poId.value}
-    },
-   
-  }
-});
-}
 
-  } catch (error) {
+    if(distributorId.value){
+      UpdateDistributorCompany.mutate({
+      where: {
+        distributorId_companyId: {
+          distributorId: distributorId.value,
+          companyId: useAuth().session.value?.companyId!,
+        }
+      },
+      data: {
+      
+        purchaseOrders:{
+          connect:{id:poId.value}
+        },
+      
+      }
+    });
+    }
+  if(paymentType.value == 'CREDIT'){
+     CreateDistributorCredit.mutate({
+        data: {
+          amount: totalAmount.value,
+          billNo: billNo.value,
+          distributorCompany: {
+            connect: {
+              distributorId_companyId: {
+                distributorId: distributorId.value,
+                 companyId: useAuth().session.value?.companyId!,
+              }
+            }
+          }
+        }
+      });
+  } 
+
+  }catch (error) {
     console.error("Failed to save purchase order", error);
     // Consider adding user feedback here
   }
@@ -804,7 +788,7 @@ const handleNewProduct = () => {
                 </div>
 
               <UPageCard class="m-3">
-                <AddProductTable @product-selected="handleProductSelected" @clicked="isOpenAdd = true"/>
+                <AddProductTable @product-selected="handleProductSelected" @clicked="isOpenAdd = true" @total-amount = "(data) => totalAmount = data"/>
               </UPageCard>
 
               <div class="m-3">

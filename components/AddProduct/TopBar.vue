@@ -31,6 +31,7 @@ const supplier = ref({
 
 
 const paymentType = ref('')
+const billNo = ref('')
 
 const emit = defineEmits(['update']);
 
@@ -95,11 +96,18 @@ const emitUpdatedValues = () => {
   emit('update', {
     distributorId: selected.value?.id || null,
     paymentType: paymentType.value,
+    billNo: billNo.value
   });
 };
 
 // Watch for changes and emit updates
-watch([selected, paymentType], emitUpdatedValues, { deep: true });
+watch(
+  [selected, paymentType,billNo],
+  ([newSelected, newPaymentType, newbillNo]) => {
+    emitUpdatedValues(); // call your method here
+  },
+  { deep: true }
+);
 
 </script>
 
@@ -131,9 +139,12 @@ watch([selected, paymentType], emitUpdatedValues, { deep: true });
       @click="isOpen = true"
     />
   </div>
+    <UDivider class="hidden sm:block mx-1" orientation="vertical" />
+
+  <UInput v-model="billNo" type="text" placeholder="billNo"/>
 
   <!-- Divider for larger screens -->
-  <UDivider class="hidden sm:block mx-3" orientation="vertical" />
+  <UDivider class="hidden sm:block mx-1" orientation="vertical" />
 
   <!-- Line 2 (Payment Type) -->
   <USelect
@@ -150,8 +161,8 @@ watch([selected, paymentType], emitUpdatedValues, { deep: true });
   />
 
   <!-- Divider for larger screens -->
-  <UDivider v-if="paymentType === 'CREDIT'" class="hidden sm:block mx-3" orientation="vertical" />
-  <UDivider class="hidden sm:block mx-3" orientation="vertical" />
+  <UDivider v-if="paymentType === 'CREDIT'" class="hidden sm:block mx-1" orientation="vertical" />
+  <UDivider class="hidden sm:block mx-1" orientation="vertical" />
 
   <!-- Line 3 (Total) -->
   <div class="flex items-center">
