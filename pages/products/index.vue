@@ -4,6 +4,7 @@ import { sub } from 'date-fns';
 import type { Period, Range } from '~/types';
 import type { Prisma } from '@prisma/client'
 import AwsService from '~/composables/aws';
+import Quagga from '@ericblade/quagga2'
 import {
     useFindManyProduct,
     useUpdateProduct,
@@ -234,6 +235,7 @@ const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value),
 );
 
+
 // Data
 const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
     const selectedStatusCondition =
@@ -300,6 +302,146 @@ const {
       variant: true,
     },
 },{enabled:false})
+
+
+const result = ref('')
+const showCamera = ref(false)
+const videoRef = ref(null)
+
+const requestCameraAccess = async () => {
+  try {
+    await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { exact: 'environment' },
+      },
+    })
+    console.log('✅ Camera permission granted')
+  } catch (err) {
+    console.error('🚫 Error accessing camera:', err)
+    toast.add({
+      title: 'Camera Access Blocked',
+      description:
+        'Unable to access camera. Please allow permission from your browser settings.',
+      color: 'red',
+    })
+  }
+}
+
+const askCameraPermission = async () => {
+  if (!('permissions' in navigator)) return requestCameraAccess()
+
+  try {
+    const res = await navigator.permissions.query({ name: 'camera' })
+    if (res.state === 'granted') {
+      console.log('✅ Camera already granted')
+    } else {
+      requestCameraAccess()
+    }
+  } catch (e) {
+    console.warn('❗Permissions API error:', e)
+    requestCameraAccess()
+  }
+}
+
+const startCamera = async () => {
+  await askCameraPermission()
+
+  result.value = ''
+  showCamera.value = true
+
+  try {
+    await nextTick()
+
+    Quagga.init(
+      {
+        inputStream: {
+          type: 'LiveStream',
+          target: videoRef.value,
+          constraints: {
+            facingMode: 'environment',
+          },
+        },
+        locator: {
+          patchSize: 'medium',
+          halfSample: true,
+        },
+        decoder: {
+        readers: ['code_128_reader'],
+        },
+        locate: true,
+      },
+      (err) => {
+        if (err) {
+          console.error('Quagga init error:', err)
+          toast.add({
+            title: 'Camera Error',
+            description: err.message,
+            color: 'red',
+          })
+          return
+        }
+        Quagga.start()
+        console.log('📷 Quagga started')
+      }
+    )
+
+    Quagga.onDetected((data) => {
+      const scanned = data?.codeResult?.code
+      if (!scanned) return
+
+      result.value = scanned
+      console.log('📦 Scanned:', result.value)
+
+      itemBarcode.value = scanned
+
+      stopCamera()
+    })
+  } catch (err) {
+    console.error('Camera access error:', err)
+
+    if (err.name === 'NotAllowedError') {
+      toast.add({
+        title: 'Camera Permission Denied',
+        description: 'Please allow camera access in your browser settings.',
+        color: 'red',
+        icon: 'i-heroicons-exclamation-triangle',
+      })
+    } else if (err.name === 'NotFoundError') {
+      toast.add({
+        title: 'No Camera Found',
+        description: 'We could not detect a camera on this device.',
+        color: 'orange',
+        icon: 'i-heroicons-video-camera-slash',
+      })
+    } else {
+      toast.add({
+        title: 'Unexpected Error',
+        description:
+          err.message || 'Something went wrong while accessing the camera.',
+        color: 'gray',
+        icon: 'i-heroicons-bug-ant',
+      })
+    }
+
+    stopCamera()
+  }
+}
+
+const stopCamera = () => {
+  try {
+    Quagga.stop()
+    Quagga.offDetected()
+    result.value = ''
+  } catch (e) {
+    console.warn('⚠️ Error while stopping Quagga:', e)
+  }
+  showCamera.value = false
+}
+
+onUnmounted(() => {
+  stopCamera()
+})
+
 
 const removeProduct = async(id:string) => {
   try {
@@ -460,7 +602,7 @@ isAddPhotoModelOpen.value = false
                 footer: { padding: 'p-4' },
             }"
         >
-         <!-- Filters -->
+         
 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 py-3 w-full">
   <!-- Left side: Search + Status -->
   <div class="flex flex-row gap-3 w-full sm:w-auto">
@@ -802,39 +944,67 @@ isAddPhotoModelOpen.value = false
 
     
     <UModal v-model="isAddPhotoModelOpen">
-      <UCard >
-        <div>
-            <UFormGroup label="Enter Barcode">
-                <UInput
-                placeholder="Enter Barcode"
-                v-model="itemBarcode"
-                @keydown.enter.prevent="handleGetItemInfo()"
-                />
-            </UFormGroup>
-            <div>
-            <div class="my-3" v-if="items?.variant">
-            <p><strong>Name:</strong> {{ items.variant.name }}</p>
-            <p><strong>Code:</strong> {{ items.variant.code }}</p>
-            <p><strong>Selling Price:</strong> ₹{{ items.variant.sprice }}</p>
-            </div>
+  <UCard>
 
-            <AddProductMedia
-            v-if="items?.variant"
-            ref="mediaRefs"
-            :editFile="items?.variant?.images"
-            :index="0" 
-            @update="fileValue"
-            />
+    <!-- 📷 Camera View -->
+    <div class="relative">
+      <div
+        v-if="showCamera"
+        ref="videoRef"
+        class="w-full h-[200px] bg-black rounded-lg overflow-hidden"
+      ></div>
 
-            <UButton
-                class="mt-3"
-                label="Add Photo"
-                :loading="isPhotoSaving"
-                @click="handleAddPhoto"
-            />
-        </div>
-        </div>
-        
-      </UCard>
-    </UModal>
+      <!-- ❌ Close Camera Button -->
+      <UButton
+        v-if="showCamera"
+        icon="i-heroicons-x-mark"
+        size="xs"
+        color="gray"
+        variant="solid"
+        class="absolute top-2 right-2 z-10"
+        @click="() => { showCamera = false; stopCamera() }"
+      />
+    </div>
+
+    <!-- 🔍 Barcode Input + Camera Button -->
+    <div class="flex items-end gap-2 mt-4">
+      <UFormGroup label="Enter Barcode" class="flex-1">
+        <UInput
+          placeholder="Enter Barcode"
+          v-model="itemBarcode"
+          @keydown.enter.prevent="handleGetItemInfo()"
+        />
+      </UFormGroup>
+
+      <!-- 📸 Start Camera Button -->
+      <UButton icon="i-heroicons-viewfinder-circle" @click="startCamera" />
+    </div>
+
+    <!-- 📦 Item Info -->
+    <div v-if="items?.variant" class="mt-4 space-y-1">
+      <p><strong>Name:</strong> {{ items.variant.name }}</p>
+      <p><strong>Code:</strong> {{ items.variant.code }}</p>
+      <p><strong>Selling Price:</strong> ₹{{ items.variant.sprice }}</p>
+    </div>
+
+    <!-- 🖼️ Image Upload -->
+    <AddProductMedia
+      v-if="items?.variant"
+      ref="mediaRefs"
+      :editFile="items?.variant?.images"
+      :index="0"
+      class="mt-4"
+      @update="fileValue"
+    />
+
+    <!-- ✅ Add Photo -->
+    <UButton
+      class="mt-4"
+      label="Add Photo"
+      :loading="isPhotoSaving"
+      @click="handleAddPhoto"
+    />
+  </UCard>
+</UModal>
+
 </template>
