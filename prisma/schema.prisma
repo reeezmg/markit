@@ -114,7 +114,7 @@ model Company {
   isTaxIncluded       Boolean              @default(true) @map("is_tax_included")
   isBarcodeIncluded   Boolean              @default(true) @map("is_barcode_included")
   isUserTrackIncluded Boolean              @default(true) @map("is_usertrack_included")
-  plan                String               @default("pro") @map("plan")
+  plan                String               @default("free") @map("plan")
   users               CompanyUser[]
   promoCodes          PromoCode[]
   clients             CompanyClient[]
@@ -570,26 +570,30 @@ model Payment {
 }
 
 model Address {
-  id            String       @id() @unique() @default(uuid())
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt() @map("updated_at")
+  id            String                                @id() @unique() @default(uuid())
+  createdAt     DateTime                              @default(now()) @map("created_at")
+  updatedAt     DateTime                              @updatedAt() @map("updated_at")
   name          String?
   street        String
   locality      String
   city          String
   state         String
   pincode       String
-  active        Boolean      @default(true)
-  user          User?        @relation(fields: [userId], references: [id])
-  userId        String?      @unique() @map("user_id")
-  client        Client?      @relation(fields: [clientId], references: [id])
-  clientId      String?      @map("client_id")
-  distributor   Distributor? @relation(fields: [distributorId], references: [id])
-  distributorId String?      @unique() @map("distributor_id")
-  company       Company?     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId     String?      @unique() @map("company_id")
-  account       Account?     @relation(fields: [accountId], references: [id])
-  accountId     String?      @unique() @map("account_id")
+  placeId       String?                               @map("place_id")
+  coord         Unsupported("geography(Point,4326)")?
+  lat           Float?                                @map("lat")
+  lng           Float?                                @map("lng")
+  active        Boolean                               @default(true)
+  user          User?                                 @relation(fields: [userId], references: [id])
+  userId        String?                               @unique() @map("user_id")
+  client        Client?                               @relation(fields: [clientId], references: [id])
+  clientId      String?                               @map("client_id")
+  distributor   Distributor?                          @relation(fields: [distributorId], references: [id])
+  distributorId String?                               @unique() @map("distributor_id")
+  company       Company?                              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String?                               @unique() @map("company_id")
+  account       Account?                              @relation(fields: [accountId], references: [id])
+  accountId     String?                               @unique() @map("account_id")
   bill          Bill[]
 
   @@map("addresses")

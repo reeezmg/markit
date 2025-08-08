@@ -18,6 +18,7 @@ import {
 } from '~/lib/hooks'; 
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
+import Quagga from '@ericblade/quagga2'
 const queryClient = useQueryClient();
 
 const UpdateBill = useUpdateBill({ optimisticUpdate: true });
@@ -141,6 +142,147 @@ const deletingRowIdentity = ref({})
 const items = ref([
   { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
 ]);
+
+
+const result = ref('')
+const showCamera = ref(false)
+const videoRef = ref(null)
+
+const requestCameraAccess = async () => {
+  try {
+    await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { exact: 'environment' },
+      },
+    })
+    console.log('✅ Camera permission granted')
+  } catch (err) {
+    console.error('🚫 Error accessing camera:', err)
+    toast.add({
+      title: 'Camera Access Blocked',
+      description:
+        'Unable to access camera. Please allow permission from your browser settings.',
+      color: 'red',
+    })
+  }
+}
+
+const askCameraPermission = async () => {
+  if (!('permissions' in navigator)) return requestCameraAccess()
+
+  try {
+    const res = await navigator.permissions.query({ name: 'camera' })
+    if (res.state === 'granted') {
+      console.log('✅ Camera already granted')
+    } else {
+      requestCameraAccess()
+    }
+  } catch (e) {
+    console.warn('❗Permissions API error:', e)
+    requestCameraAccess()
+  }
+}
+
+const startCamera = async () => {
+  await askCameraPermission()
+
+  result.value = ''
+  showCamera.value = true
+
+  try {
+    await nextTick()
+
+    Quagga.init(
+      {
+        inputStream: {
+          type: 'LiveStream',
+          target: videoRef.value,
+          constraints: {
+            facingMode: 'environment',
+          },
+        },
+        locator: {
+          patchSize: 'medium',
+          halfSample: true,
+        },
+        decoder: {
+          readers: ['code_128_reader', 'ean_reader', 'ean_8_reader'],
+        },
+        locate: true,
+      },
+      (err) => {
+        if (err) {
+          console.error('Quagga init error:', err)
+          toast.add({
+            title: 'Camera Error',
+            description: err.message,
+            color: 'red',
+          })
+          return
+        }
+        Quagga.start()
+        console.log('📷 Quagga started')
+      }
+    )
+
+    Quagga.onDetected((data) => {
+      const scanned = data?.codeResult?.code
+      if (!scanned) return
+
+      result.value = scanned
+      console.log('📦 Scanned:', result.value)
+
+      const lastIndex = items.value.length - 1
+      if (lastIndex >= 0) {
+        items.value[lastIndex].barcode = result.value
+        fetchItemData(result.value, lastIndex)
+         addNewRow(lastIndex,true)  
+      }
+
+      stopCamera()
+    })
+  } catch (err) {
+    console.error('Camera access error:', err)
+
+    if (err.name === 'NotAllowedError') {
+      toast.add({
+        title: 'Camera Permission Denied',
+        description: 'Please allow camera access in your browser settings.',
+        color: 'red',
+        icon: 'i-heroicons-exclamation-triangle',
+      })
+    } else if (err.name === 'NotFoundError') {
+      toast.add({
+        title: 'No Camera Found',
+        description: 'We could not detect a camera on this device.',
+        color: 'orange',
+        icon: 'i-heroicons-video-camera-slash',
+      })
+    } else {
+      toast.add({
+        title: 'Unexpected Error',
+        description:
+          err.message || 'Something went wrong while accessing the camera.',
+        color: 'gray',
+        icon: 'i-heroicons-bug-ant',
+      })
+    }
+
+    stopCamera()
+  }
+}
+
+const stopCamera = () => {
+  try {
+    Quagga.stop()
+    Quagga.offDetected()
+    result.value = ''
+  } catch (e) {
+    console.warn('⚠️ Error while stopping Quagga:', e)
+  }
+  showCamera.value = false
+}
+
 
 const dateOnly = computed({
   get: () => date.value.split('T')[0],
@@ -1384,6 +1526,25 @@ const handleClearClient = async () => {
       }
     }"
   >
+      <template #header>
+        <div class="relative px-2">
+      <div
+        v-if="showCamera"
+        ref="videoRef"
+        class="w-full h-[200px] bg-black rounded-lg overflow-hidden"
+      ></div>
+
+      <!-- ❌ Close Camera Button -->
+      <UButton
+        v-if="showCamera"
+        icon="i-heroicons-x-mark"
+        size="xs"
+        color="gray"
+        variant="solid"
+        class="absolute top-2 right-3 z-10"
+        @click="() => { showCamera = false; stopCamera() }"
+      />
+    </div>
      <div class="w-full flex flex-wrap gap-4  px-3 py-3 sm:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
@@ -1408,15 +1569,15 @@ const handleClearClient = async () => {
         </div>
         </div>
      
-         <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2">
+         <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
             <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" />
-            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1"/>
+            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="startCamera"/>
           </div>
         
         <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm py-2 px-2 hidden">
         <UInput v-model="dateOnly" type="date" label="Date" class="lg:col-span-2"  />
       </div>
-
+   </template>  
 
         <!-- Responsive table wrapper -->  
          
@@ -1787,11 +1948,19 @@ const handleClearClient = async () => {
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
-               <UButtonGroup size="sm" orientation="horizontal">
-                <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
+              
+              <div class="flex items-center gap-2">
+                <UInput
+                  v-model="phoneNo"
+                  :loading="isClientLoading"
+                  icon="i-heroicons-magnifying-glass-20-solid"
+                  @keydown.enter.prevent="handleEnterPhone"
+                  class="flex-1"
+                />
                 <UButton icon="i-heroicons-x-mark" color="red" @click="handleClearClient" />
-              </UButtonGroup>
+              </div>
             </div>
+
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
               <UInput v-model="clientName" />

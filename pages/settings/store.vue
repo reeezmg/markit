@@ -30,6 +30,9 @@ interface AddressState {
   city: string;
   state: string;
   pincode: string;
+  lat: number | null;
+  lng: number | null;
+  placeId: string;
 }
 
 const accstate = reactive<AccountState>({
@@ -47,7 +50,22 @@ const addstate = reactive<AddressState>({
   city: '',
   state: '',
   pincode: '',
+  lat:null,
+  lng:null,
+  placeId: '',
 });
+
+const onLocationSelected = (location) => {
+  console.log('Selected location:', location);
+  addstate.street = location.street;
+  addstate.locality = location.locality;
+  addstate.city = location.city;
+  addstate.state = location.state;
+  addstate.pincode = location.pincode;
+  addstate.lat = location.lat;
+  addstate.lng = location.lng;
+  addstate.placeId = location.placeId;
+};
 
 const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
@@ -96,14 +114,6 @@ function accvalidate(state: AccountState): FormError[] {
   return errors;
 }
 
-function addvalidate(state: AddressState): FormError[] {
-  const errors: FormError[] = [];
-  if (!state.street) errors.push({ path: 'street', message: 'Street is required' });
-  if (!state.city) errors.push({ path: 'city', message: 'City is required' });
-  if (!state.locality) errors.push({ path: 'locality', message: 'Locality is required' });
-  if (!state.pincode) errors.push({ path: 'pincode', message: 'Pincode is required' });
-  return errors;
-}
 
 const { data: info, isLoading, error, refetch } = useFindUniqueCompany({
   where: {
@@ -137,7 +147,7 @@ watch(info, (newInfo) => {
     accstate.accountNo = newInfo.accountNo || '';
     accstate.bankName = newInfo.bankName || '';
     accstate.upiId = newInfo.upiId || '';
-    accstate.gstin = newInfo.gstin || '';
+    accstate.gstin = newInfo.gstin || ''; 
     
     if (newInfo.address) {
       addstate.street = newInfo.address.street || '';
@@ -145,6 +155,9 @@ watch(info, (newInfo) => {
       addstate.city = newInfo.address.city || '';
       addstate.state = newInfo.address.state || '';
       addstate.pincode = newInfo.address.pincode || '';
+      addstate.lat = newInfo.address.lat || null;
+      addstate.lng = newInfo.address.lng || null;
+      addstate.placeId = newInfo.address.placeId || '';
     }
   }
 },{ deep: true, immediate: true });
@@ -211,6 +224,9 @@ async function onaddSubmit(event: FormSubmitEvent<AddressState>) {
         city: addstate.city,
         state: addstate.state,
         pincode: addstate.pincode,
+        lat: addstate.lat,
+        lng: addstate.lng,
+        placeId: addstate.placeId,
       },
       update: {
         street: addstate.street,
@@ -218,6 +234,9 @@ async function onaddSubmit(event: FormSubmitEvent<AddressState>) {
         city: addstate.city,
         state: addstate.state,
         pincode: addstate.pincode,
+        lat: addstate.lat,
+        lng: addstate.lng,
+        placeId: addstate.placeId,
       }
     });
     toast.add({ title: 'Address updated', color: 'green', icon: 'i-heroicons-check-circle' });
@@ -503,10 +522,20 @@ const onPointsValueChange = async() => {
 
     <UDivider class="mb-4" />
 
+    <UFormGroup
+  name="map"
+  label="Pick Store Location"
+  class="grid grid-cols-2 gap-2 mb-4"
+  :ui="{ container: '' }"
+>
+  <div class="col-span-2 ">
+    <MapLocationPicker @locationSelected="onLocationSelected" />
+  </div>
+</UFormGroup>
+
+
     <UForm
       :state="addstate"
-      :validate="addvalidate"
-      :validate-on="['submit']"
       @submit="onaddSubmit"
     >
       <UFormGroup
@@ -522,6 +551,7 @@ const onPointsValueChange = async() => {
           class="mb-4"
           size="md"
           placeholder="Street"
+          disabled
         />
         <UInput
           v-model="addstate.locality"
@@ -529,6 +559,7 @@ const onPointsValueChange = async() => {
           class="mb-4"
           size="md"
           placeholder="Locality"
+          disabled
         />
         <UInput
           v-model="addstate.city"
@@ -536,6 +567,7 @@ const onPointsValueChange = async() => {
           class="mb-4"
           size="md"
           placeholder="City"
+          disabled
         />
         <UInput
           v-model="addstate.state"
@@ -543,6 +575,7 @@ const onPointsValueChange = async() => {
           class="mb-4"
           size="md"
           placeholder="State"
+          disabled
         />
         <UInput
           v-model="addstate.pincode"
@@ -550,11 +583,15 @@ const onPointsValueChange = async() => {
           class="mb-4"
           size="md"
           placeholder="Pincode"
+          disabled
         />
         <UButton class="" type="submit" label="Save Address" :loading="isUpdatingAccount"/>
       </UFormGroup>
     </UForm>
+
     <UDivider class="mb-4" />
+
+   
 
     <!-- Product Inputs Section -->
 <div class="mb-6">

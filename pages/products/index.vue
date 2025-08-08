@@ -81,6 +81,11 @@ const variantcolumns = [
         sortable: true,
     },
     {
+        key: 'barcode',
+        label: 'Barcode',
+        sortable: true,
+    },
+    {
         key: 'qty',
         label: 'Qty',
         sortable: true,
@@ -986,6 +991,7 @@ isAddPhotoModelOpen.value = false
       <p><strong>Code:</strong> {{ items.variant.code }}</p>
       <p><strong>Selling Price:</strong> ₹{{ items.variant.sprice }}</p>
     </div>
+    <div v-else class="mt-4 space-y-1">Not found</div>
 
     <!-- 🖼️ Image Upload -->
     <AddProductMedia

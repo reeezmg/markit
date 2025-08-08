@@ -1856,7 +1856,25 @@ const handleRedeemPoints = async () => {
     }"
   >
     <template #header>
-         <div v-if="showCamera" ref="videoRef" class="w-full h-[300px] bg-black rounded" />
+    <!-- 📷 Camera View -->
+    <div class="relative px-2">
+      <div
+        v-if="showCamera"
+        ref="videoRef"
+        class="w-full h-[200px] bg-black rounded-lg overflow-hidden"
+      ></div>
+
+      <!-- ❌ Close Camera Button -->
+      <UButton
+        v-if="showCamera"
+        icon="i-heroicons-x-mark"
+        size="xs"
+        color="gray"
+        variant="solid"
+        class="absolute top-2 right-2 z-10"
+        @click="() => { showCamera = false; stopCamera() }"
+      />
+    </div>
      <div class="w-full flex flex-wrap gap-4 sm:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>

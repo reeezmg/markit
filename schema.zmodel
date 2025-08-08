@@ -627,6 +627,10 @@ model Address extends Base {
     city    String 
     state    String 
     pincode  String
+    placeId  String? @map("place_id")
+    coord Unsupported("geography(Point,4326)")?
+    lat      Float? @map("lat")
+    lng      Float? @map("lng")
     active  Boolean @default(true)
     user      User? @relation(fields: [userId], references: [id])
     userId    String? @map('user_id') @unique
