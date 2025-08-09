@@ -1060,18 +1060,21 @@ const handleEdit = async () => {
         queryKey: ['zenstack', 'Bill', 'findMany'],
         exact: false
       });
-    }).catch(error => {
-      // Optional: handle error without blocking UI
-      console.error('Bill creation failed', error);
-    }).finally(() => {
-       isSaving.value = false
-    })
-
-    // 8. Show success notification
+       // 8. Show success notification
     toast.add({
       title: 'Bill edited successfully!',
       color: 'green',
     });
+    }).catch(error => {
+      toast.add({
+              title: 'Bill creation failed!',
+              color: 'red',
+            });
+    }).finally(() => {
+       isSaving.value = false
+    })
+
+   
 
     // 9. Prepare for printing
     isPrint.value = true;

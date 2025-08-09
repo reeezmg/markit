@@ -4,6 +4,7 @@ import { BillingAddClient } from '#components';
 import {useFindFirstItem, useFindManyCategory} from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
+import Quagga from '@ericblade/quagga2'
 const queryClient = useQueryClient();
 
 const currentRequestIds = ref({});

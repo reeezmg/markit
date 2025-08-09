@@ -1026,47 +1026,6 @@ const handleInvalidBarcode = (index) => {
   delete currentRequestIds.value[index];
 };
 
-const reconstructBill = (data) => {
-   const {
-    payload,
-    items,
-    returnedItems,
-    billPoints,
-    clientId,
-    companyId,
-    userId,
-    tokenEntries
-  } = data
-  const existing = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
-  const maxNo = Math.max(0, ...existing.map(b => parseInt(b.billNo) || 0));
-  const newBillNo = (maxNo + 1).toString();
-
-  billNo.value = newBillNo;
-  date.value = new Date(payload.createdAt).toISOString();
-  discount.value = payload.discount;
-  returnAmt.value = payload.returnAmnt;
-  redeemedAmt.value = payload.redeemedPoints;
-  paymentMethod.value = payload.paymentMethod;
-  phoneNo.value = '';
-  points.value = 0;
-  clientName.value = '';
-  clientId.value = payload.client.connect.id;
-  voucherNo.value = '';
-  token.value = '';
-  tokenEntries.value = [];
-  splitPayments.value = payload.splitPayments;
-  isRedeemPoint.value = payload.redeemedPoints ? true : false;;
-  redeemedPoints.value = payload.redeemedPoints
-  selected.value = payload.selected;
-  tempSplits.value = Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }]));
-  items.value = items;
-
-  const newBill = currentBill.value;
-  existing.push(newBill);
-  localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(existing));
-  loadDraftBills();
-}
-
 
 const handleSave = async () => {
   isSaving.value = true;
@@ -1208,11 +1167,10 @@ const handleSave = async () => {
         queryKey: ['zenstack', 'Product', 'findMany'],
         exact: false
       });
+          reset();
     }).catch(error => {
-        reconstructBill(error.data.data)
        toast.add({
         title: 'Bill creation failed!',
-        description:'Check the last draft',
         color: 'red',
       });
    
@@ -1296,7 +1254,7 @@ const handleSave = async () => {
       }
     });
 
-    reset();
+
 
   } catch (error) {
     console.error('Error creating bill', error);
