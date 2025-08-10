@@ -1145,13 +1145,14 @@ const submitForm = () => {
 
 const print = async() => {
   try{
-  await printBill(printData)
   isPrint.value = false
+  await printBill(printData)
   toast.add({
         title: 'Printing Sucess!',
         color: 'Green',
       });
   }catch(err){
+     isPrint.value = true
       toast.add({
         title: 'Printing failed!',
         description: err.message,

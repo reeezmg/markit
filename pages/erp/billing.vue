@@ -1,4 +1,3 @@
-
 <script setup>
 import { BillingAddClient } from '#components';
 import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry, useUpdateCompanyClient } from '~/lib/hooks';
@@ -29,8 +28,10 @@ const billNo = ref('1');
 const loadingStates = ref([]);
 const paymentOptionsInsplit = ['Cash', 'UPI', 'Card','Credit']
 const paymentOptions = ref(['Cash', 'UPI', 'Card','Credit'])
-const tempSplits = ref(
-  Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }]))
+const tempSplits = ref({})
+
+tempSplits.value = Object.fromEntries(
+  paymentOptionsInsplit.map(method => [method, { method, amount: null }])
 )
 
 const date = ref(new Date().toISOString());
@@ -1263,6 +1264,8 @@ const handleSave = async () => {
       description: error.message,
       color: 'red',
     });
+  }finally {
+    isSaving.value = false;
   }
 };
 
@@ -1270,13 +1273,14 @@ const handleSave = async () => {
 
 const print = async() => {
   try{
+    isPrint.value = false
   await printBill(printData)
-  isPrint.value = false
   toast.add({
         title: 'Printing Sucess!',
         color: 'Green',
       });
   }catch(err){
+      isPrint.value = true
       toast.add({
         title: 'Printing failed!',
         description: err.message,
@@ -1634,7 +1638,6 @@ const handleClientAdded = (id,name) => {
   points.value = 0
   isClientAddModelOpen.value = false;
 };
-
 
 
 
@@ -2235,7 +2238,7 @@ const handleRedeemPoints = async () => {
    <div class="border border-green-700 dark:border-green-300 rounded-md">
   <div class="flex flex-col items-center justify-center py-3">
     <div class="text-s">Grand Total</div>
-    <div class="text-green-700 dark:text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
+    <div class="text-green-700 dark:textgreen-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
   </div>
 </div>
 
