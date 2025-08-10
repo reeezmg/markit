@@ -242,8 +242,6 @@ const startCamera = async () => {
       if (!scanned) return
 
       result.value = scanned
-      console.log('📦 Scanned:', result.value)
-
       const lastIndex = items.value.length - 1
       if (lastIndex >= 0) {
         items.value[lastIndex].barcode = result.value

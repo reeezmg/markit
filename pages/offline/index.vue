@@ -55,6 +55,150 @@ const selectedDraft = ref(null);
 const draftBills = ref([]);
 const LOCAL_BILLS_KEY = 'bills';
 
+
+const result = ref('')
+const showCamera = ref(false)
+const videoRef = ref(null)
+
+const requestCameraAccess = async () => {
+  try {
+    await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { exact: 'environment' },
+      },
+    })
+    console.log('✅ Camera permission granted')
+  } catch (err) {
+    console.error('🚫 Error accessing camera:', err)
+    toast.add({
+      title: 'Camera Access Blocked',
+      description:
+        'Unable to access camera. Please allow permission from your browser settings.',
+      color: 'red',
+    })
+  }
+}
+
+const askCameraPermission = async () => {
+  if (!('permissions' in navigator)) return requestCameraAccess()
+
+  try {
+    const res = await navigator.permissions.query({ name: 'camera' })
+    if (res.state === 'granted') {
+      console.log('✅ Camera already granted')
+    } else {
+      requestCameraAccess()
+    }
+  } catch (e) {
+    console.warn('❗Permissions API error:', e)
+    requestCameraAccess()
+  }
+}
+
+const startCamera = async () => {
+  await askCameraPermission()
+
+  result.value = ''
+  showCamera.value = true
+
+  try {
+    await nextTick()
+
+    Quagga.init(
+      {
+        inputStream: {
+          type: 'LiveStream',
+          target: videoRef.value,
+          constraints: {
+            facingMode: 'environment',
+          },
+        },
+        locator: {
+          patchSize: 'medium',
+          halfSample: true,
+        },
+        decoder: {
+          readers: ['code_128_reader', 'ean_reader', 'ean_8_reader'],
+        },
+        locate: true,
+      },
+      (err) => {
+        if (err) {
+          console.error('Quagga init error:', err)
+          toast.add({
+            title: 'Camera Error',
+            description: err.message,
+            color: 'red',
+          })
+          return
+        }
+        Quagga.start()
+        console.log('📷 Quagga started')
+      }
+    )
+
+    Quagga.onDetected((data) => {
+      const scanned = data?.codeResult?.code
+      if (!scanned) return
+
+      result.value = scanned
+
+      const lastIndex = items.value.length - 1
+      if (lastIndex >= 0) {
+        items.value[lastIndex].barcode = result.value
+        fetchItemData(result.value, lastIndex)
+         addNewRow(lastIndex,true)  
+      }
+
+      stopCamera()
+    })
+  } catch (err) {
+    console.error('Camera access error:', err)
+
+    if (err.name === 'NotAllowedError') {
+      toast.add({
+        title: 'Camera Permission Denied',
+        description: 'Please allow camera access in your browser settings.',
+        color: 'red',
+        icon: 'i-heroicons-exclamation-triangle',
+      })
+    } else if (err.name === 'NotFoundError') {
+      toast.add({
+        title: 'No Camera Found',
+        description: 'We could not detect a camera on this device.',
+        color: 'orange',
+        icon: 'i-heroicons-video-camera-slash',
+      })
+    } else {
+      toast.add({
+        title: 'Unexpected Error',
+        description:
+          err.message || 'Something went wrong while accessing the camera.',
+        color: 'gray',
+        icon: 'i-heroicons-bug-ant',
+      })
+    }
+
+    stopCamera()
+  }
+}
+
+const stopCamera = () => {
+  try {
+    Quagga.stop()
+    Quagga.offDetected()
+    result.value = ''
+  } catch (e) {
+    console.warn('⚠️ Error while stopping Quagga:', e)
+  }
+  showCamera.value = false
+}
+
+onUnmounted(() => {
+  stopCamera()
+})
+
+
 onMounted(() => {
   const bills = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
 
@@ -741,6 +885,24 @@ onMounted(() => {
     }"
   >
     <template #header>
+      <div class="relative px-2">
+      <div
+        v-if="showCamera"
+        ref="videoRef"
+        class="w-full h-[200px] bg-black rounded-lg overflow-hidden"
+      ></div>
+
+      <!-- ❌ Close Camera Button -->
+      <UButton
+        v-if="showCamera"
+        icon="i-heroicons-x-mark"
+        size="xs"
+        color="gray"
+        variant="solid"
+        class="absolute top-2 right-2 z-10"
+        @click="() => { showCamera = false; stopCamera() }"
+      />
+    </div>
      <div class="w-full flex flex-wrap gap-4 sm:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
@@ -751,7 +913,7 @@ onMounted(() => {
      
          <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
             <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" />
-            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1"/>
+            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="startCamera"/>
           </div>
         
        <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
