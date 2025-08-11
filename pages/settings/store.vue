@@ -7,12 +7,14 @@ const UpsertAddress = useUpsertAddress();
 const useAuth = () => useNuxtApp().$auth;
 
 const isNameChanged = ref(false);
+const isDescriptionChanged = ref(false);
 
 const isUpdatingName = ref(false);
 const isUpdatingAddress = ref(false);
 const isUpdatingAccount = ref(false);
 const isUpdatingInputs = ref(false);
 const isUpdatingPointsValue = ref(false);
+const isUpdatingDescription = ref(false);
 
 
 interface AccountState {
@@ -68,6 +70,7 @@ const onLocationSelected = (location) => {
 };
 
 const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
+const storeDescription = ref(useAuth().session.value?.description || '');
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
 const isBarcodeInclude = ref(useAuth().session.value?.isBarcodeIncluded);
 const isUserTrackInclude = ref(useAuth().session.value?.isUserTrackIncluded);
@@ -96,6 +99,10 @@ const variantInputs = reactive([
 watch(() => storeUniqueName.value, (newName) => {
   isNameChanged.value = newName !== useAuth().session.value?.storeUniqueName;
 }, { immediate: true });
+watch(() => storeDescription.value, (newDescription) => {
+  isDescriptionChanged.value = newDescription !== useAuth().session.value?.description;
+}, { immediate: true });
+
 
 const { data: taken } = useFindUniqueCompany({
   where: computed(() => ({
@@ -182,6 +189,27 @@ async function onNameUpdate() {
     toast.add({ title: 'Error updating store name', color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingName.value = false;
+  }
+}
+
+async function onDescriptionUpdate() {
+  isUpdatingDescription.value = true;
+  try {
+    const res = await UpdateCompany.mutateAsync({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        description: storeDescription.value,  
+      },
+    });
+    toast.add({ title: 'Store description updated', icon: 'i-heroicons-check-circle' });
+    isUpdatingDescription.value = false;
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating store description', color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingDescription.value = false;
   }
 }
 
@@ -359,6 +387,7 @@ const onPointsValueChange = async() => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+
     <UFormGroup
       name="username"
       label="Store Unique Name"
@@ -391,6 +420,39 @@ const onPointsValueChange = async() => {
                 :loading="isUpdatingName"
                 :disabled="!isNameChanged || !!taken"
                 @click="onNameUpdate"
+            />
+        </div>
+    </div>
+
+        <UDivider class="mb-4" />
+
+
+    <UFormGroup
+      name="description"
+      label="Store Description"
+      description="Description of your store."
+      required
+      class="grid grid-cols-2 gap-2"
+      :ui="{ container: '', help: `mt-2 ${taken ? 'text-red-500 dark:text-red-400':'text-green-500 dark:text-green-400'}` }"
+    >
+          <UInput
+        v-model="storeDescription"
+        :maxlength="20"
+      >
+        <template #trailing>
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeDescription?.length }}/{{ 20 }}</span>
+        </template>
+      </UInput>
+    </UFormGroup>
+    <div class="my-4 grid grid-cols-2 gap-2">
+        <div></div>
+        <div>
+            <UButton
+                label="Update Description"
+                size="md"
+                :loading="isUpdatingDescription"
+                :disabled="!isDescriptionChanged"
+                @click="onDescriptionUpdate"
             />
         </div>
     </div>

@@ -104,7 +104,7 @@ model Company extends Base {
     storecode   Int    @unique @default(autoincrement()) 
     storeUniqueName String? @unique @map("store_unique_name")
     logo        String?
-    description String?
+    description String? @default("")
     currency    String @default("INR")
     images      String?
     pointsValue Int @default(0) @map("points_value")

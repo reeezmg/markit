@@ -142,11 +142,6 @@ const dateOnly = computed({
   }
 })
 
-watch(date, (newDate) => {
-  console.log('Date changed:', newDate);
-});
-
-
 const items = ref([
   { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: null, discount: null, tax: null, value: 0,sizes:{}, totalQty:0 ,return:false, userCode:null, userId:null, user:null},
 ]);

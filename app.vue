@@ -11,7 +11,6 @@ const userStore = useUserStore()
 onMounted(async () => {
   await categoryStore.fetchCategories()
   await userStore.fetchUsers(useAuth().session.value?.companyId!)
-  console.log('All Categories:', userStore.users)
 })
 
 onMounted(() => {

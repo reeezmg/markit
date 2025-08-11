@@ -13,6 +13,10 @@ const { data: user }: any = useFindUniqueUser({
     },
 });
 
+watch(user, (newUser) => {
+   console.log('User data updated:', newUser);
+}, { immediate: true });
+
 const isOpen = ref(false);
 const companies = ref([]);
 const activeCompany = ref([
@@ -40,7 +44,7 @@ const teams = (items) =>
             src: '',
         },
         click: async () => {
-            await updateCompanySession(item.company.id, item.company.type, item.company.name, item.name, item.role, item.code, item.billCounter, item.company.plan);
+            await updateCompanySession(item.company.id, item.company.type, item.company.name, item.name, item.role, item.code, item.billCounter, item.company.plan, item.company.description, item.company.storeUniqueName);
             window.location.reload();
         },
     }));

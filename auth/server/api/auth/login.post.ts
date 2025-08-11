@@ -21,6 +21,7 @@ export default eventHandler(async (event) => {
         id: user.id,
         cleanup: user.cleanup || false,
         name: user.companies[0].name || null,
+        description: user.companies[0].description,
         image: user.image || null,
         email: user.email,
         billCounter: user.companies[0].billCounter,

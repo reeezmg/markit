@@ -1,6 +1,6 @@
 export default eventHandler(async (event) => {
     const session = await useAuthSession(event);
-    const { companyId, companyType, companyName, name, role, code, billCounter,plan } = await readBody(event);
+    const { companyId, companyType, companyName, name, role, code, billCounter,plan, description, storeUniqueName } = await readBody(event);
     console.log(plan)
     await session.update({
         name,
@@ -10,7 +10,10 @@ export default eventHandler(async (event) => {
         companyId,
         companyType,
         companyName,
-        plan
+        plan,
+        description,
+        storeUniqueName,
     });
+    console.log('session updated', session.data);
     return session;
 });

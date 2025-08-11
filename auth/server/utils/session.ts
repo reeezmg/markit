@@ -15,6 +15,7 @@ export type AuthSession = {
     id: string;
     cleanup: boolean;
     name: string | null;
+    description?: string ;
     email: string;
     image: string | null;
     companyId: string;

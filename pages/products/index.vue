@@ -386,7 +386,6 @@ const startCamera = async () => {
           return
         }
         Quagga.start()
-        console.log('📷 Quagga started')
       }
     )
 
@@ -395,9 +394,8 @@ const startCamera = async () => {
       if (!scanned) return
 
       result.value = scanned
-      console.log('📦 Scanned:', result.value)
-
       itemBarcode.value = scanned
+      await handleGetItemInfo()
 
       stopCamera()
     })
@@ -543,7 +541,7 @@ const fileValue = (data: any) => {
     images = data.files
 };
 
-const handleGetItemInfo = async() => {
+const await  = async() => {
     const {data} = await imageRefetch()
 }
 const handleAddPhoto = async() => {  
@@ -977,7 +975,7 @@ isAddPhotoModelOpen.value = false
         <UInput
           placeholder="Enter Barcode"
           v-model="itemBarcode"
-          @keydown.enter.prevent="handleGetItemInfo()"
+          @keydown.enter.prevent="await ()"
         />
       </UFormGroup>
 
