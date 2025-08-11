@@ -313,6 +313,10 @@ const result = ref('')
 const showCamera = ref(false)
 const videoRef = ref(null)
 
+const handleGetItemInfo = async() => {
+    const {data} = await imageRefetch()
+}
+
 const requestCameraAccess = async () => {
   try {
     await navigator.mediaDevices.getUserMedia({
@@ -389,13 +393,13 @@ const startCamera = async () => {
       }
     )
 
-    Quagga.onDetected((data) => {
+    Quagga.onDetected(async (data) => {
       const scanned = data?.codeResult?.code
       if (!scanned) return
 
       result.value = scanned
       itemBarcode.value = scanned
-      await handleGetItemInfo()
+        await handleGetItemInfo()
 
       stopCamera()
     })
@@ -541,9 +545,7 @@ const fileValue = (data: any) => {
     images = data.files
 };
 
-const await  = async() => {
-    const {data} = await imageRefetch()
-}
+
 const handleAddPhoto = async() => {  
 try{
 isPhotoSaving.value = true
@@ -975,7 +977,8 @@ isAddPhotoModelOpen.value = false
         <UInput
           placeholder="Enter Barcode"
           v-model="itemBarcode"
-          @keydown.enter.prevent="await ()"
+
+          @keydown.enter.prevent="handleGetItemInfo()"
         />
       </UFormGroup>
 
