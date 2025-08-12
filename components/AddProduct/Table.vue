@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watchEffect } from 'vue';
-import { useFindUniquePurchaseOrder, useDeleteProduct, useUpdateProduct } from '~/lib/hooks';
+import { useFindUniquePurchaseOrder, useDeleteProduct } from '~/lib/hooks';
 
 const emit = defineEmits(['product-selected','clicked','total-amount']);
 const totalAmount = ref('');

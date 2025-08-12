@@ -4,6 +4,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
+import { useQueryClient } from '@tanstack/vue-query';
+const queryClient = useQueryClient();
 const { printLabel } = usePrint();
 const router = useRouter();
 const toast = useToast();
@@ -62,7 +64,17 @@ interface Product {
 const route = useRoute();
 const poId = computed(() => String(route.query.poId || ''));
 
-const CreateProduct = useCreateProduct({ optimisticUpdate: true })
+const CreateProduct = useCreateProduct({
+  optimisticUpdate: true,
+  mutation: {
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ['zenstack', 'PurchaseOrder', 'findUnique'],
+        exact: false
+      });
+    }
+  }
+});
 const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
 const UpdateProduct = useUpdateProduct({ optimisticUpdate: true })
 const CreateDistributorCredit = useCreateDistributorCredit({ optimisticUpdate: true });
