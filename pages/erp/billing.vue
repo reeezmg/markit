@@ -28,10 +28,8 @@ const billNo = ref('1');
 const loadingStates = ref([]);
 const paymentOptionsInsplit = ['Cash', 'UPI', 'Card','Credit']
 const paymentOptions = ref(['Cash', 'UPI', 'Card','Credit'])
-const tempSplits = ref({})
-
-tempSplits.value = Object.fromEntries(
-  paymentOptionsInsplit.map(method => [method, { method, amount: null }])
+const tempSplits = ref(
+  Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }]))
 )
 
 const date = ref(new Date().toISOString());
@@ -2477,7 +2475,7 @@ const handleRedeemPoints = async () => {
         </div>
     </UModal>
 
-   <!-- split payment method modal -->
+<!-- split payment method modal -->
    <UModal v-model="showSplitModal">
   <div class="p-4 space-y-4">
     <h2 class="text-lg font-semibold">Split Payment</h2>
@@ -2487,11 +2485,12 @@ const handleRedeemPoints = async () => {
       :key="method"
       class="flex gap-2 items-center"
     >
-      <div
+      <USelect
+        v-model="tempSplits[method].method"
+        :options="[method]"
+        disabled
         class="w-1/2"
-      >
-      {{ tempSplits[method].method }}
-      </div>
+      />
       <UInput
         v-model.number="tempSplits[method].amount"
         type="number"
