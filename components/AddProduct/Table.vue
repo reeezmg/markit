@@ -35,7 +35,6 @@ watch(
   (val) => {
     if (!val) return
     const variants = val.products.flatMap((product) => product.variants)
-console.log('variants', variants)
     totalAmount.value = variants.reduce((sum, variant) => {
       if (!variant.items || !Array.isArray(variant.items)) return sum
 
@@ -47,7 +46,6 @@ console.log('variants', variants)
 
       return sum + variantTotal
     }, 0)
-    console.log('total', totalAmount.value)
       emit('total-amount', totalAmount.value);
   },
   { immediate: true, deep: true }
@@ -95,6 +93,7 @@ const editProduct = (id: string) => {
   const selected = PO.value?.products?.find(p => p.id === id);
   if (selected) {
     emit('product-selected', selected);
+    console.log('Selected product:', selected);
   }
 };
 

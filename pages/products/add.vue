@@ -40,7 +40,7 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  items: { size: string; qty: number; }[]; // Assuming items are strings, adjust if needed
+  items: {id: string; size: string; qty: number; }[]; // Assuming items are strings, adjust if needed
   images: string[];
 }
 
@@ -62,13 +62,12 @@ interface Product {
 const route = useRoute();
 const poId = computed(() => String(route.query.poId || ''));
 
-const CreateProduct = useCreateProduct()
-const CreatePurchaseOrder = useCreatePurchaseOrder();
-const UpdateProduct = useUpdateProduct()
-const CreateDistributorCredit = useCreateDistributorCredit();
-const DeleteManyItem = useDeleteManyItem()
-const UpdateDistributorCompany = useUpdateDistributorCompany();
-const UpdatePurchaseOrder = useUpdatePurchaseOrder();
+const CreateProduct = useCreateProduct({ optimisticUpdate: true })
+const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
+const UpdateProduct = useUpdateProduct({ optimisticUpdate: true })
+const CreateDistributorCredit = useCreateDistributorCredit({ optimisticUpdate: true });
+const UpdateDistributorCompany = useUpdateDistributorCompany({ optimisticUpdate: true });
+const UpdatePurchaseOrder = useUpdatePurchaseOrder({ optimisticUpdate: true });
 const awsService = new AwsService();
 const selectedProduct: Ref<Product> = ref({
   id: '', 
@@ -134,7 +133,7 @@ const variants = ref<{
     pprice: number; 
     dprice: number; 
     discount: number; 
-    items: { size: string; qty: number }[];
+    items: { id: string; size: string; qty: number }[];
     images: ImageData[];
 }[]>([{ 
     id:'',
@@ -172,6 +171,7 @@ const createValue = (data: any) => {
 
 const updateVariant = (index,data: any) => {
   variants.value[index] = { ...variants.value[index], ...data };
+  console.log('Updated variant:', variants.value[index]);
 };
 
 
@@ -192,6 +192,7 @@ watch(isOpenAdd, (newVal) => {
 
 const handleProductSelected = (product:any) => {
   selectedProduct.value = product;
+  console.log('Selected product:', selectedProduct.value);
   clearInputs.value = false;
 };
 
@@ -256,7 +257,7 @@ const handleAdd = async (e: Event) => {
 }
 
 
-    const productRes = await CreateProduct.mutateAsync({
+    const productRes = CreateProduct.mutate({
       data: {
         name: name.value || '',
         brand: brand.value || '',
@@ -359,6 +360,7 @@ function calculateTax(variant) {
 const handleEdit = async (e: Event) => {
   e.preventDefault();
   isLoad.value = true
+  console.log(variants.value)
   try {
     // Validate product name
     // if (!name.value || name.value.trim() === '') {
@@ -375,19 +377,6 @@ const handleEdit = async (e: Event) => {
       });
       return;
     }
-
-    // Validate variant names
-    // const emptyVariantIndex = variants.value.findIndex(
-    //   (variant) => !variant.name || variant.name.trim() === ''
-    // );
-    
-    // if (emptyVariantIndex !== -1) {
-    //   toast.add({
-    //     title: `Please fill variant ${emptyVariantIndex + 1} name`,
-    //     color: 'red',
-    //   });
-    //   return;
-    // }
 
     const base64files = await Promise.all(
   variants.value.flatMap((variant) =>
@@ -410,19 +399,7 @@ const handleEdit = async (e: Event) => {
     }
 
     const productId = selectedProduct.value.id;
-     const variantIdsToDelete = variants.value
-  .map((v) => v.id)
-  .filter((id): id is string => !!id);
-
-if (variantIdsToDelete.length > 0) {
-  await DeleteManyItem.mutateAsync({
-    where: {
-      variantId: { in: variantIdsToDelete },
-    },
-  });
-}
-
-   const updatedProduct = UpdateProduct.mutateAsync({
+   const updatedProduct = await UpdateProduct.mutate({
   where: { id: productId },
   data: {
     name: name.value || '',
@@ -438,49 +415,75 @@ if (variantIdsToDelete.length > 0) {
     ...(subcategory.value && {
       subcategory: { connect: { id: subcategory.value } }
     }),
-
-    // 1. Delete variants not in the current list
     variants: {
+      // 1. Delete variants not in the current list
       deleteMany: {
         id: {
           notIn: variants.value.filter(v => v.id).map(v => v.id),
         },
       },
- 
 
-      // 2. Update existing variants
+      // 2. Update existing variants - using find to match by ID
       update: variants.value
         .filter(v => v.id)
-        .map((v) => ({
-          where: { id: v.id },
-          data: {
-            name: v.name || '',
-            ...(v.code && { code: v.code }),
-            sprice: v.sprice || 0,
-            pprice: v.pprice || 0,
-            dprice: v.dprice || 0,
-            discount: v.discount || 0,
-            status: true,
-            images: v.images?.map((file) => file.uuid) || [],
-            tax: calculateTax(v), // your tax logic extracted
-            items: {
-              create: v.items.map(size => ({
-                size: size.size || null,
-                qty: size.qty || 0,
-                company: {
-                  connect: { id: useAuth().session.value?.companyId },
+        .map((v) => {
+          // Find the correct variant data by ID
+          const variantData = variants.value.find(vd => vd.id === v.id) || v;
+          return {
+            where: { id: v.id },
+            data: {
+              name: variantData.name || '',
+              code: variantData.code || null,
+              sprice: variantData.sprice || 0,
+              pprice: variantData.pprice || 0,
+              dprice: variantData.dprice || 0,
+              discount: variantData.discount || 0,
+              status: true,
+              images: variantData.images?.map((file) => file.uuid) || [],
+              tax: calculateTax(variantData),
+              company: {
+                connect: { id: useAuth().session.value?.companyId },
+              },
+              items: {
+                // Delete items that aren't in the current list
+                deleteMany: {
+                  id: {
+                    notIn: variantData.items
+                      .filter(item => item.id)
+                      .map(item => item.id)
+                  }
                 },
-              }))
-            },
-          },
-        })),
+                // Update existing items
+                update: variantData.items
+                  .filter(item => item.id)
+                  .map(item => ({
+                    where: { id: item.id },
+                    data: {
+                      size: item.size || null,
+                      qty: item.qty || 0
+                    }
+                  })),
+                // Create new items
+                create: variantData.items
+                  .filter(item => !item.id)
+                  .map(item => ({
+                    size: item.size || null,
+                    qty: item.qty || 0,
+                    company: {
+                      connect: { id: useAuth().session.value?.companyId }
+                    }
+                  }))
+              }
+            }
+          };
+        }),
 
       // 3. Create new variants
       create: variants.value
         .filter(v => !v.id)
         .map((v) => ({
           name: v.name || '',
-          ...(v.code && { code: v.code }),
+          code: v.code || null,
           sprice: v.sprice || 0,
           pprice: v.pprice || 0,
           dprice: v.dprice || 0,
@@ -491,10 +494,13 @@ if (variantIdsToDelete.length > 0) {
           company: {
             connect: { id: useAuth().session.value?.companyId },
           },
+          product: {
+            connect: { id: productId }
+          },
           items: {
-            create: v.items.map(size => ({
-              size: size.size || null,
-              qty: size.qty || 0,
+            create: v.items.map(item => ({
+              size: item.size || null,
+              qty: item.qty || 0,
               company: {
                 connect: { id: useAuth().session.value?.companyId },
               },
@@ -504,7 +510,7 @@ if (variantIdsToDelete.length > 0) {
     }
   },
   select: { id: true }
-})
+});
 
     handleReset();
 
@@ -556,6 +562,11 @@ const removeVariant = (index: number) => {
    
 
 };
+
+watch(variants, (newVariants) => {
+  // Handle variant changes
+  console.log("Variants updated:", newVariants);
+},{immediate: true, deep: true}); 
 
 const queryParams = computed(() => (
   {

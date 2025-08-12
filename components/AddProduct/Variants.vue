@@ -12,7 +12,7 @@ const props = defineProps<{
     editpPrice?: number | null;
     editDiscount?: number | null;
     editdPrice?: number | null;
-    editItems?: { size: string; qty: number }[] | null;
+    editItems?: {id:string; size: string; qty: number }[] | null;
    
 }>();
 
@@ -49,7 +49,7 @@ const [discount, discountAttrs] = defineField('discount');
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 
 // Initialize items with a deep copy of props.editItems
-const items = ref<{ size: string; qty: number | undefined }[]>(
+const items = ref<{ id:string; size: string; qty: number | undefined }[]>(
     props.editItems ? JSON.parse(JSON.stringify(props.editItems)) : []
 );
 
@@ -63,7 +63,7 @@ const addItem = () => {
     if (!hasSizes.value && items.value.length > 0) {
         items.value = [];
     }
-    items.value.push({ size: '', qty: undefined });
+    items.value.push({ id: '', size: '', qty: undefined });
 };
 
 const removeItem = (index: number) => {
@@ -82,6 +82,10 @@ const resetForm = () => {
     resetValidation(); 
 };
 
+
+watch(() => props.id, (newId) => {
+    id.value = newId ?? '';
+}, { immediate: true });
 
 watch(() => props.editName, (newName) => {
     name.value = newName ?? '';
@@ -145,19 +149,19 @@ watch(items, (newItems) => {
 
 
 watch(
-  [items, name, code, qty, sprice, pprice, dprice, discount],
-  ([newItems, newName, newCode, newQty, newSPrice, newPPrice, newDPrice, newDiscount]) => {
-    console.log('watching items', newItems);
+  [id, items, name, code, qty, sprice, pprice, dprice, discount],
+  ([newId, newItems, newName, newCode, newQty, newSPrice, newPPrice, newDPrice, newDiscount]) => {
+    console.log('watching items',newId);
 
     // If newItems is empty, populate it with default value
         const updatedItems =
         newItems.length === 0 ||
         (newItems.length === 1 && (!newItems[0].size || newItems[0].size === ''))
-            ? [{ size: null, qty: newQty }]
+            ? [{id: newItems[0]?.id , size: null, qty: newQty }]
             : newItems;
 
     emit('update', {
-      ...(id.value && { id: id.value }),
+      ...(newId && { id: newId }),
       name: newName,
       code: newCode,
       qty: qty.value,
