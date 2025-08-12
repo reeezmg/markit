@@ -70,7 +70,8 @@ const CreateProduct = useCreateProduct({
     onSuccess: () => {
       queryClient.invalidateQueries({
         queryKey: ['zenstack', 'PurchaseOrder', 'findUnique'],
-        exact: false
+        exact: false,
+        refetchType: 'active' // immediate re-fetch for active queries
       });
     }
   }
