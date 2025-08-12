@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-
+import { v4 as uuidv4 } from 'uuid';
 import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
@@ -40,7 +40,7 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  items: {id: string; size: string; qty: number; }[]; // Assuming items are strings, adjust if needed
+  items: {id: string; size: string | null; qty: number | undefined}[]; // Assuming items are strings, adjust if needed
   images: string[];
 }
 
@@ -70,7 +70,7 @@ const UpdateDistributorCompany = useUpdateDistributorCompany({ optimisticUpdate:
 const UpdatePurchaseOrder = useUpdatePurchaseOrder({ optimisticUpdate: true });
 const awsService = new AwsService();
 const selectedProduct: Ref<Product> = ref({
-  id: '', 
+  id: uuidv4(), 
   name: '',
   brand: '',
   description: '',
@@ -89,7 +89,7 @@ const selectedProduct: Ref<Product> = ref({
     pprice: 0,
     dprice: 0,
     discount: 0,
-    items: [],
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: []
   }]
 });
@@ -133,10 +133,10 @@ const variants = ref<{
     pprice: number; 
     dprice: number; 
     discount: number; 
-    items: { id: string; size: string; qty: number }[];
+    items: { id: string; size: string | null; qty: number | undefined }[];
     images: ImageData[];
 }[]>([{ 
-    id:'',
+    id: uuidv4(),
     key:String(idCounter.value++),
     name: '', 
     code: '', 
@@ -145,7 +145,7 @@ const variants = ref<{
     pprice: 0, 
     dprice: 0, 
     discount: 0, 
-    items: [], 
+    items: [{ id: uuidv4(), size: null, qty: undefined }], 
     images: [] 
 }]);
 
@@ -398,8 +398,9 @@ const handleEdit = async (e: Event) => {
       );
     }
 
-    const productId = selectedProduct.value.id;
-   const updatedProduct = await UpdateProduct.mutate({
+   const productId = selectedProduct.value.id;
+
+const updatedProduct = await UpdateProduct.mutate({
   where: { id: productId },
   data: {
     name: name.value || '',
@@ -415,73 +416,19 @@ const handleEdit = async (e: Event) => {
     ...(subcategory.value && {
       subcategory: { connect: { id: subcategory.value } }
     }),
+
     variants: {
-      // 1. Delete variants not in the current list
+      // 1. Delete removed variants
       deleteMany: {
         id: {
           notIn: variants.value.filter(v => v.id).map(v => v.id),
         },
       },
 
-      // 2. Update existing variants - using find to match by ID
-      update: variants.value
-        .filter(v => v.id)
-        .map((v) => {
-          // Find the correct variant data by ID
-          const variantData = variants.value.find(vd => vd.id === v.id) || v;
-          return {
-            where: { id: v.id },
-            data: {
-              name: variantData.name || '',
-              code: variantData.code || null,
-              sprice: variantData.sprice || 0,
-              pprice: variantData.pprice || 0,
-              dprice: variantData.dprice || 0,
-              discount: variantData.discount || 0,
-              status: true,
-              images: variantData.images?.map((file) => file.uuid) || [],
-              tax: calculateTax(variantData),
-              company: {
-                connect: { id: useAuth().session.value?.companyId },
-              },
-              items: {
-                // Delete items that aren't in the current list
-                deleteMany: {
-                  id: {
-                    notIn: variantData.items
-                      .filter(item => item.id)
-                      .map(item => item.id)
-                  }
-                },
-                // Update existing items
-                update: variantData.items
-                  .filter(item => item.id)
-                  .map(item => ({
-                    where: { id: item.id },
-                    data: {
-                      size: item.size || null,
-                      qty: item.qty || 0
-                    }
-                  })),
-                // Create new items
-                create: variantData.items
-                  .filter(item => !item.id)
-                  .map(item => ({
-                    size: item.size || null,
-                    qty: item.qty || 0,
-                    company: {
-                      connect: { id: useAuth().session.value?.companyId }
-                    }
-                  }))
-              }
-            }
-          };
-        }),
-
-      // 3. Create new variants
-      create: variants.value
-        .filter(v => !v.id)
-        .map((v) => ({
+      // 2. Upsert variants (update if exists, create if not)
+      upsert: variants.value.map(v => ({
+        where: { id: v.id }, // Prisma ignores if no match found
+        update: {
           name: v.name || '',
           code: v.code || null,
           sprice: v.sprice || 0,
@@ -489,7 +436,44 @@ const handleEdit = async (e: Event) => {
           dprice: v.dprice || 0,
           discount: v.discount || 0,
           status: true,
-          images: v.images?.map((file) => file.uuid) || [],
+          images: v.images?.map(file => file.uuid) || [],
+          tax: calculateTax(v),
+          company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
+          items: {
+            // Delete removed items
+            deleteMany: {
+              id: {
+                notIn: v.items.filter(item => item.id).map(item => item.id)
+              }
+            },
+            // Upsert items
+            upsert: v.items.map(item => ({
+              where: { id: item.id },
+              update: {
+                size: item.size || null,
+                qty: item.qty || 0,
+              },
+              create: {
+                size: item.size || null,
+                qty: item.qty || 0,
+                company: {
+                  connect: { id: useAuth().session.value?.companyId },
+                },
+              }
+            }))
+          }
+        },
+        create: {
+          name: v.name || '',
+          code: v.code || null,
+          sprice: v.sprice || 0,
+          pprice: v.pprice || 0,
+          dprice: v.dprice || 0,
+          discount: v.discount || 0,
+          status: true,
+          images: v.images?.map(file => file.uuid) || [],
           tax: calculateTax(v),
           company: {
             connect: { id: useAuth().session.value?.companyId },
@@ -503,14 +487,16 @@ const handleEdit = async (e: Event) => {
               qty: item.qty || 0,
               company: {
                 connect: { id: useAuth().session.value?.companyId },
-              },
+              }
             }))
           }
-        }))
+        }
+      }))
     }
   },
   select: { id: true }
 });
+
 
     handleReset();
 
@@ -532,18 +518,28 @@ const handleEdit = async (e: Event) => {
   }
 };
 
+
 const addVariant = () => {
- 
-    // Create a shallow copy of the variants array to ensure it's not read-only
-    const newVariants = [...selectedProduct.value.variants];
-    newVariants.push({id:'',key:String(idCounter.value++), name: '', code:'',qty: 0, sprice: 0,pprice: 0,dprice: 0,discount: 0,  items: [], images: [] });
-    
-    // Update the selectedProduct with the new variants array
-    selectedProduct.value = {
-      ...selectedProduct.value,
-      variants: newVariants,
-    };
-  }
+  const newVariants = [...selectedProduct.value.variants];
+  newVariants.push({
+    id: uuidv4(), // ✅ generate a unique ID
+    key: String(idCounter.value++),
+    name: '',
+    code: '',
+    qty: 0,
+    sprice: 0,
+    pprice: 0,
+    dprice: 0,
+    discount: 0,
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
+    images: [],
+  });
+
+  selectedProduct.value = {
+    ...selectedProduct.value,
+    variants: newVariants,
+  };
+};
 
 
 const removeVariant = (index: number) => {

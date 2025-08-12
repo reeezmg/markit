@@ -2,6 +2,7 @@
 import * as z from 'zod';
 import { useForm } from 'vee-validate';
 import { toTypedSchema } from '@vee-validate/zod';
+import { v4 as uuidv4 } from 'uuid';
 
 const props = defineProps<{
     id?: string | null;
@@ -37,6 +38,7 @@ const schema = z.object({
 const { errors, defineField,resetForm: resetValidation } = useForm({
     validationSchema: toTypedSchema(schema),
 });
+const items = ref<{ id: string; size: string | null; qty: number | undefined }[]>([]);
 const id = ref(props.id);
 const [name, nameAttrs] = defineField('name');
 const [code, codeAttrs] = defineField('code');
@@ -48,27 +50,27 @@ const [discount, discountAttrs] = defineField('discount');
 
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 
-// Initialize items with a deep copy of props.editItems
-const items = ref<{ id:string; size: string; qty: number | undefined }[]>(
-    props.editItems ? JSON.parse(JSON.stringify(props.editItems)) : []
-);
-
-const hasSizes = computed(() => {
-    return items.value.length > 0 && items.value.some(item => item.size !== null);
-});
 
 
 const addItem = () => {
     // If we're adding the first size item and there's a null size item, remove it first
-    if (!hasSizes.value && items.value.length > 0) {
+    if (items.value.length === 1 && items.value[0].size === null) {
         items.value = [];
     }
-    items.value.push({ id: '', size: '', qty: undefined });
+    items.value.push({ id: uuidv4(), size: '', qty: undefined });
+
+  
 };
 
 const removeItem = (index: number) => {
-    items.value.splice(index, 1);
+    if (items.value.length === 1) {
+        // Instead of removing, reset the single item's size
+        items.value[0].size = null;
+    } else {
+        items.value.splice(index, 1);
+    }
 };
+
 
 const resetForm = () => {
     name.value = '';
@@ -110,6 +112,7 @@ watch(() => props.editpPrice, (newpPrice) => {
 }, { immediate: true });
 
 watch(() => props.editItems, (newItems) => {
+  console.log('watching items', newItems);
     items.value = newItems ? JSON.parse(JSON.stringify(newItems)) : [];
 }, { immediate: true });
 
@@ -213,13 +216,13 @@ defineExpose({ resetForm });
 
     <!-- Quantity (Full Width) -->
     <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2" v-if="variantInputs?.qty">
-      <UInput v-model="qty" v-bind="qtyAttrs" type="number" placeholder="Enter quantity" :disabled="hasSizes" />
+      <UInput v-model="qty" v-bind="qtyAttrs" type="number" placeholder="Enter quantity" :disabled="items.length > 1" />
     </UFormGroup>
   </div>
 
   <!-- Sizes (Full Width) -->
   <div class="w-full" v-if="variantInputs?.sizes">
-    <template v-if="hasSizes">
+    <template v-if="items[0]?.size !== null">
       <label class="block text-sm font-medium leading-6 dark:text-white mt-4">Items & Quantities</label>
       <div v-for="(item, index) in items" :key="index" class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
         <UInput v-model="item.size" type="text" placeholder="Size" class="w-full" />
