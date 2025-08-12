@@ -15,6 +15,10 @@ import {
     useDeleteProduct,
     useFindFirstItem
 } from '~/lib/hooks';
+import { Swiper, SwiperSlide } from 'swiper/vue'
+import { Pagination } from 'swiper/modules'
+import 'swiper/css'
+import 'swiper/css/pagination'
 
 
 interface ImageData {
@@ -33,6 +37,9 @@ const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
 const isAddPhotoModelOpen = ref(false)
+const isBarcodeLoading = ref(false);
+const isModalOpen = ref(false)
+const activeImages = ref<string[]>([])
 let images = reactive<ImageData[]>([]);
 // Columns
 const columns = [
@@ -314,7 +321,9 @@ const showCamera = ref(false)
 const videoRef = ref(null)
 
 const handleGetItemInfo = async() => {
+    isBarcodeLoading.value = true
     const {data} = await imageRefetch()
+    isBarcodeLoading.value = false
 }
 
 const requestCameraAccess = async () => {
@@ -449,6 +458,10 @@ onUnmounted(() => {
   stopCamera()
 })
 
+function openImageViewer(images: string[]) {
+  activeImages.value = images
+  isModalOpen.value = true
+}
 
 const removeProduct = async(id:string) => {
   try {
@@ -832,6 +845,7 @@ isAddPhotoModelOpen.value = false
                             :src="`https://images.markit.co.in/${row.images[0]}`"
                             :alt="row.name"
                             size="lg"
+                            @click="openImageViewer(row.images)"
                         />
                         <div class="ms-3">{{ row.name }}</div>
                     </div>
@@ -986,8 +1000,12 @@ isAddPhotoModelOpen.value = false
       <UButton icon="i-heroicons-viewfinder-circle" @click="startCamera" />
     </div>
 
+    <div v-if="isBarcodeLoading" class="mt-4">
+      <p>Loading...</p>
+    </div>
+
     <!-- 📦 Item Info -->
-    <div v-if="items?.variant" class="mt-4 space-y-1">
+    <div v-if="items?.variant && !isBarcodeLoading" class="mt-4 space-y-1">
       <p><strong>Name:</strong> {{ items.variant.name }}</p>
       <p><strong>Code:</strong> {{ items.variant.code }}</p>
       <p><strong>Selling Price:</strong> ₹{{ items.variant.sprice }}</p>
@@ -1013,5 +1031,24 @@ isAddPhotoModelOpen.value = false
     />
   </UCard>
 </UModal>
+<UModal v-model="isModalOpen" size="xl">
+    <div class="p-4 bg-black rounded-lg">
+      <Swiper
+        :modules="[Pagination]"
+        :pagination="{ clickable: true }"
+        :space-between="10"
+        :slides-per-view="1"
+        :loop="activeImages.length > 1"
+        class="w-full"
+      >
+        <SwiperSlide v-for="(img, index) in activeImages" :key="index">
+          <img
+            :src="`https://images.markit.co.in/${img}`"
+            class="max-h-[80vh] mx-auto object-contain"
+          />
+        </SwiperSlide>
+      </Swiper>
+    </div>
+  </UModal>
 
 </template>

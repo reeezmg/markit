@@ -1134,48 +1134,7 @@ const handleSave = async () => {
       }),
     };
 
-    // 🔁 Backend call to handle everything with Prisma transaction
-    $fetch('/api/bill/create', {
-      method: 'POST',
-      body: {
-        payload,
-        items: items.value,
-        returnedItems,
-        billPoints,
-        clientId: clientId.value,
-        companyId: useAuth().session.value?.companyId,
-        userId: useAuth().session.value?.id,
-        tokenEntries: tokenEntries.value,
-      }
-    }).then(() => {
-    toast.add({
-      title: 'Bill created successfully!',
-      color: 'green',
-    });
-
-      queryClient.invalidateQueries({
-        queryKey: ['zenstack', 'Bill', 'findMany'],
-        exact: false
-      });
-        queryClient.invalidateQueries({
-        queryKey: ['zenstack', 'Product', 'findMany'],
-        exact: false
-      });
-          reset();
-    }).catch(error => {
-       toast.add({
-        title: 'Bill creation failed!',
-        color: 'red',
-      });
-   
-    }).finally(() => {
-       isSaving.value = false
-      updateBillCounter();
-    })
-
-    // 🧾 Trigger Print
-    isPrint.value = true;
-    printData = {
+     printData = {
       invoiceNumber: billInv,
       date: new Date(date.value).toISOString(),
       entries: items.value.map(entry => {
@@ -1247,6 +1206,49 @@ const handleSave = async () => {
         }
       }
     });
+
+    // 🔁 Backend call to handle everything with Prisma transaction
+    $fetch('/api/bill/create', {
+      method: 'POST',
+      body: {
+        payload,
+        items: items.value,
+        returnedItems,
+        billPoints,
+        clientId: clientId.value,
+        companyId: useAuth().session.value?.companyId,
+        userId: useAuth().session.value?.id,
+        tokenEntries: tokenEntries.value,
+      }
+    }).then(() => {
+    toast.add({
+      title: 'Bill created successfully!',
+      color: 'green',
+    });
+
+      queryClient.invalidateQueries({
+        queryKey: ['zenstack', 'Bill', 'findMany'],
+        exact: false
+      });
+        queryClient.invalidateQueries({
+        queryKey: ['zenstack', 'Product', 'findMany'],
+        exact: false
+      });
+          reset();
+    }).catch(error => {
+       toast.add({
+        title: 'Bill creation failed!',
+        color: 'red',
+      });
+   
+    }).finally(() => {
+       isSaving.value = false
+      updateBillCounter();
+    })
+
+    // 🧾 Trigger Print
+    isPrint.value = true;
+   
 
 
 
