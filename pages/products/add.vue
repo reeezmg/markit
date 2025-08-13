@@ -617,16 +617,8 @@ function calculateTax(variant) {
 const handleEdit = async (e: Event) => {
   e.preventDefault();
   isLoad.value = true
-  console.log(variants.value)
   try {
-    // Validate product name
-    // if (!name.value || name.value.trim() === '') {
-    //   toast.add({
-    //     title: 'Please fill product name',
-    //     color: 'red',
-    //   });
-    //   return;
-    // }
+  
     if (!category.value || category.value.trim() === '') {
       toast.add({
         title: 'Please fill product category',

@@ -59,8 +59,8 @@ const columns = [
         sortable: false,
     },
     {
-        key: 'stocks',
-        label: 'Stocks',
+        key: 'qty',
+        label: 'Qty',
         sortable: false,
     },
     {
@@ -745,20 +745,15 @@ isAddPhotoModelOpen.value = false
                 </template>
 
                 <template #variants-data="{ row }"> 
-                    {{
+                    {{row.variants?.length}}
+                </template>
+                <template #qty-data="{ row }">
+                   {{
                         row.variants?.reduce((variantTotal, variant) => {
                             const itemTotal = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
                             return variantTotal + itemTotal;
                         }, 0)
                         }}
-                </template>
-                <template #stocks-data="{ row }">
-                    {{
-                        row.variants.reduce((total, variant) => {
-                        const itemQty = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
-                        return total + (itemQty * (variant.sprice || 0));
-                        }, 0)
-                    }}
                     </template>
 
                 <template #status-data="{ row }">
@@ -850,6 +845,33 @@ isAddPhotoModelOpen.value = false
                         <div class="ms-3">{{ row.name }}</div>
                     </div>
                 </template>
+
+               <template #barcode-data="{ row }">
+                    <UPopover mode="hover">
+                        <!-- Trigger Button -->
+                        <div
+                            class="max-w-[180px] truncate"
+                            >
+                            {{ row.items?.map(i => i.barcode).join(', ') || 'No Barcodes' }}
+                            </div>
+
+                        <!-- Popover Content -->
+                        <template #panel>
+                        <div class="p-2">
+                            <ul class="space-y-1">
+                            <li 
+                                v-for="item in row.items" 
+                                :key="item.id" 
+                                class="text-sm"
+                            >
+                                <span class="font-medium">{{ item.barcode }}</span>
+                                <span class="text-gray-500" v-if="item.size"> - {{ item.size }}</span>
+                            </li>
+                            </ul>
+                        </div>
+                        </template>
+                    </UPopover>
+                    </template>
 
                 <template #qty-data="{ row }">
                     {{

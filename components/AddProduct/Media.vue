@@ -2,21 +2,20 @@
 import { v4 as uuidv4 } from 'uuid';
 import { ref, watch, computed, defineExpose, nextTick } from 'vue';
 
+
 onMounted(async () => {
   const { default: CropperCanvas } = await import('@cropper/element-canvas');
   const { default: CropperImage } = await import('@cropper/element-image');
   const { default: CropperHandle } = await import('@cropper/element-handle');
   const { default: CropperSelection } = await import('@cropper/element-selection');
-  const { default: CropperGrid } = await import('@cropper/element-grid');
-  const { default: CropperCrosshair } = await import('@cropper/element-crosshair');
+  const { default: CropperViewer } = await import('@cropper/element-viewer');
 
 
   CropperCanvas.$define();
   CropperImage.$define();
   CropperHandle.$define();
   CropperSelection.$define();
-    CropperGrid.$define();
-    CropperCrosshair.$define();
+  CropperViewer.$define();
 });
 
 const props = defineProps<{
@@ -29,6 +28,11 @@ interface ImageData {
   uuid: string;
 }
 
+const croppingIndex = ref<number | null>(null);
+const isModalOpen = ref(false)
+const activeImages = ref<string>([])
+
+
 const fileInputId = computed(() => `add-item-${props.index}`);
 const selectedFiles = ref<ImageData[]>([]);
 const imagePreviewUrls = ref<string[]>([]);
@@ -38,6 +42,13 @@ const isCropModalOpen = ref(false);
 const cropImageUrl = ref<string>('');
 const cropperCanvasRef = ref<HTMLElement>();
 const cropperImageRef = ref<HTMLElement>();
+const cropperSelectionRef = ref<HTMLElement>();
+
+
+function openImageViewer(images: string) {
+  activeImages.value = images
+  isModalOpen.value = true
+}
 
 // Watch incoming prop
 watch(
@@ -62,43 +73,41 @@ watchEffect(() => {
 async function handleAddImageChange(e: Event) {
   const input = e.target as HTMLInputElement;
   const files = input.files;
-  
+
   if (files && files[0]) {
     const file = files[0];
     cropImageUrl.value = URL.createObjectURL(file);
+    croppingIndex.value = null; // New image
     isCropModalOpen.value = true;
-
     await nextTick();
   }
-
-  // Reset input value so selecting the same file again still triggers change
   input.value = '';
 }
 
-
 async function confirmCrop() {
-  const cropperCanvas = cropperCanvasRef.value as any;
-  if (!cropperCanvas) return;
+  const cropperSelection = cropperSelectionRef.value as any;
+  if (!cropperSelection) return;
 
-  // Await the generated canvas
-  const canvas: HTMLCanvasElement = await cropperCanvas.$toCanvas();
+  // Directly export cropped area
+  const canvas: HTMLCanvasElement = await cropperSelection.$toCanvas();
 
-  // Convert to base64
   const dataURL = canvas.toDataURL('image/png');
-
-  // Convert base64 to File
   const arr = dataURL.split(',');
   const mime = arr[0].match(/:(.*?);/)?.[1] || 'image/png';
   const bstr = atob(arr[1]);
-  let n = bstr.length;
-  const u8arr = new Uint8Array(n);
-  while (n--) u8arr[n] = bstr.charCodeAt(n);
-  const file = new File([u8arr], `image-${Date.now()}.png`, { type: mime });
+  const u8arr = new Uint8Array(bstr.length);
+  for (let i = 0; i < bstr.length; i++) u8arr[i] = bstr.charCodeAt(i);
 
-  // Push like handleAddImage()
   const uuid = uuidv4();
-  selectedFiles.value.push({ file, uuid });
-  imagePreviewUrls.value.push(dataURL);
+  const file = new File([u8arr], `${uuid}.png`, { type: mime });
+
+  if (croppingIndex.value !== null) {
+    selectedFiles.value[croppingIndex.value] = { file, uuid };
+    imagePreviewUrls.value[croppingIndex.value] = dataURL;
+  } else {
+    selectedFiles.value.push({ file, uuid });
+    imagePreviewUrls.value.push(dataURL);
+  }
 
   closeCropModal();
 }
@@ -120,35 +129,6 @@ function resetForm() {
 }
 
 
-function onCropperImageTransform(event: CustomEvent) {
-  if (!cropperCanvasRef.value) return
-
-  const cropperCanvasRect = cropperCanvasRef.value.getBoundingClientRect()
-
-  const clone = cropperImageRef.value?.cloneNode()
-  if (!clone) return
-
-  clone.style.transform = `matrix(${event.detail.matrix.join(', ')})`
-  clone.style.opacity = '0'
-  cropperCanvasRef.value.appendChild(clone)
-
-  const cropperImageRect = clone.getBoundingClientRect()
-  cropperCanvasRef.value.removeChild(clone)
-
-  // Cover fit logic only
-  if (
-    (cropperImageRect.top > cropperCanvasRect.top &&
-      cropperImageRect.right < cropperCanvasRect.right) ||
-    (cropperImageRect.right < cropperCanvasRect.right &&
-      cropperImageRect.bottom < cropperCanvasRect.bottom) ||
-    (cropperImageRect.bottom < cropperCanvasRect.bottom &&
-      cropperImageRect.left > cropperCanvasRect.left) ||
-    (cropperImageRect.left > cropperCanvasRect.left &&
-      cropperImageRect.top > cropperCanvasRect.top)
-  ) {
-    event.preventDefault()
-  }
-}
 
 defineExpose({ resetForm });
 </script>
@@ -180,12 +160,14 @@ defineExpose({ resetForm });
         :src="imagePreviewUrls[index]"
         alt="Selected Image"
         class="w-32 h-36 flex-none"
+        @click="openImageViewer(imagePreviewUrls[index])"
       />
       <img
         v-else
         :src="`https://images.markit.co.in/${file.uuid}`"
         alt="Selected Image"
         class="w-32 h-36 flex-none"
+        @click="openImageViewer(file.uuid)"
       />
       <UButton
         icon="i-heroicons-x-mark"
@@ -209,18 +191,21 @@ defineExpose({ resetForm });
           scalable
           skewable
           translatable
-          @transform="onCropperImageTransform"
         ></cropper-image>
-        <cropper-selection initial-coverage="1" dynamic movable resizable>
-          <cropper-grid role="grid" covered></cropper-grid>
-          <cropper-crosshair centered></cropper-crosshair>
-          <cropper-handle action="move"></cropper-handle>
-          <cropper-handle action="n-resize"></cropper-handle>
-          <cropper-handle action="e-resize"></cropper-handle>
-          <cropper-handle action="s-resize"></cropper-handle>
-          <cropper-handle action="w-resize"></cropper-handle>
+        <cropper-selection id="cropperSelection"  ref="cropperSelectionRef" initial-coverage="1" dynamic movable resizable>
+        <cropper-handle action="move" ></cropper-handle>
+      <cropper-handle action="n-resize"></cropper-handle>
+      <cropper-handle action="e-resize"></cropper-handle>
+      <cropper-handle action="s-resize"></cropper-handle>
+      <cropper-handle action="w-resize"></cropper-handle>
+      <cropper-handle action="ne-resize"></cropper-handle>
+      <cropper-handle action="nw-resize"></cropper-handle>
+      <cropper-handle action="se-resize"></cropper-handle>
+      <cropper-handle action="sw-resize"></cropper-handle>
         </cropper-selection>
       </cropper-canvas>
+
+       <cropper-viewer selection="#cropperSelection" style="width: 320px;"></cropper-viewer>
 
       <div class="mt-4 flex justify-end gap-2">
         <UButton @click="closeCropModal" color="gray">Cancel</UButton>
@@ -228,4 +213,16 @@ defineExpose({ resetForm });
       </div>
     </div>
   </div>
+
+  <UModal v-model="isModalOpen" size="xl">
+  <div class="p-4 bg-black rounded-lg">
+    <img
+      :src="activeImages.startsWith('data:') || activeImages.startsWith('blob:')
+        ? activeImages
+        : `https://images.markit.co.in/${activeImages}`"
+      class="max-h-[80vh] mx-auto object-contain"
+    />
+  </div>
+</UModal>
+
 </template>

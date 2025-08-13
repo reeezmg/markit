@@ -1,9 +1,7 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useUpsertVariant,useDeleteManyItem, useUpdateProduct, useFindUniqueCategory, useFindUniqueProduct} from '~/lib/hooks';
-import BarcodeComponent from "@/components/BarcodeComponent.vue";
-import type { paymentType as PType } from '@prisma/client';
-
+import {useUpdateProduct, useFindUniqueCategory, useFindUniqueProduct} from '~/lib/hooks';
+import { v4 as uuidv4 } from 'uuid';
 const router = useRouter();
 const toast = useToast();
 const { printLabel } = usePrint();
@@ -31,13 +29,14 @@ interface BarcodeItem {
 interface Variant {
   id:string;
   name: string;
+  key:string;
   code: string;
   qty: number;
   sprice: number;
   pprice: number;
   dprice: number;
   discount: number;
-  sizes: { size: string; qty: number; }[]; // Assuming sizes are strings, adjust if needed
+  items: {id: string; size: string | null; qty: number | undefined}[]; // Assuming items are strings, adjust if needed
   images: string[];
 }
 
@@ -58,21 +57,22 @@ interface Product {
 
 const route = useRoute();
 const UpdateProduct = useUpdateProduct();
-const DeleteManyItem = useDeleteManyItem();
-const UpsertVariant = useUpsertVariant();
+
 const awsService = new AwsService();
 
 const selectedProduct: Ref<Product> = ref({
-  id: '', 
+  id: uuidv4(), 
   name: '',
   brand: '',
   description: '',
+  files: [], 
   category: {}, 
   subcategory: {}, 
   categoryId: '', 
   subcategoryId: '', 
   variants: [{
     id:'',
+    key:'',
     name: '',
     code: '',
     qty: 0,
@@ -80,7 +80,7 @@ const selectedProduct: Ref<Product> = ref({
     pprice: 0,
     dprice: 0,
     discount: 0,
-    sizes: [],
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: []
   }]
 });
@@ -93,9 +93,8 @@ const idCounter = ref(1);
 
 
 
-const isOpen = ref(false)
 const isOpenAdd = ref(false)
-
+const isLoad = ref(false);
 const linkList = ['Create', 'Media', 'Live'];
 
 const name = ref('');
@@ -112,6 +111,7 @@ const paymentType = ref('');
 
 const variants = ref<{ 
     id:string;
+    key:String;
     name: string; 
     code: string; 
     qty: number; 
@@ -119,10 +119,11 @@ const variants = ref<{
     pprice: number; 
     dprice: number; 
     discount: number; 
-    sizes: { size: string; qty: number }[];
+    items: { id: string; size: string | null; qty: number | undefined }[];
     images: ImageData[];
 }[]>([{ 
-    id:String(idCounter.value++),
+    id: uuidv4(),
+    key:String(idCounter.value++),
     name: '', 
     code: '', 
     qty: 0, 
@@ -130,11 +131,13 @@ const variants = ref<{
     pprice: 0, 
     dprice: 0, 
     discount: 0, 
-    sizes: [], 
+    items: [{ id: uuidv4(), size: null, qty: undefined }], 
     images: [] 
 }]);
 
-const { data: categoryTax } = useFindUniqueCategory({
+
+
+const { data:categoryTax } = useFindUniqueCategory({
   where: computed(() => ({ id: category.value })),
   select: {
     fixedTax: true,
@@ -171,6 +174,21 @@ const fileValue = (data: any) => {
 };
 
 
+function calculateTax(variant) {
+  if (!categoryTax.value) return 0;
+
+  if (categoryTax.value.taxType === 'FIXED') {
+    return categoryTax.value.fixedTax || 0;
+  }
+
+  const threshold = categoryTax.value.thresholdAmount || 0;
+  return (variant.sprice || 0) > threshold
+    ? (categoryTax.value.taxAboveThreshold || 0)
+    : (categoryTax.value.taxBelowThreshold || 0);
+}
+
+
+
 const {data: productData, refetch:productRefetch} = useFindUniqueProduct({
   where: { id: route.params.id },
   select: {
@@ -194,6 +212,7 @@ const {data: productData, refetch:productRefetch} = useFindUniqueProduct({
         images:true,
         items: {
           select: {
+            id:true,
             barcode: true,
             size: true,
             qty: true,
@@ -214,162 +233,139 @@ watch(productData, (newValue) => {
 }, { immediate: true });
 
 
-
-
 const handleEdit = async (e: Event) => {
   e.preventDefault();
+  isLoad.value = true
   try {
-    // Validate product name
     if (!category.value || category.value.trim() === '') {
-         toast.add({
-           title: 'Please fill product category',
-           color: 'red',
-         });
-         return;
-       }
-   
-       // Validate variant names
-       // const emptyVariantIndex = variants.value.findIndex(
-       //   (variant) => !variant.name || variant.name.trim() === ''
-       // );
-       
-       // if (emptyVariantIndex !== -1) {
-       //   toast.add({
-       //     title: `Please fill variant ${emptyVariantIndex + 1} name`,
-       //     color: 'red',
-       //   });
-       //   return;
-       // }
-   
-       const base64files = await Promise.all(
-         variants.value.flatMap((variant) =>
-           variant.images
-             .filter((file) => file.file instanceof File) // Only process if file.file is a File
-             .map(async (file) => {
-               const base64 = await prepareFileForApi(file.file);
-               return { base64, uuid: file.uuid };
-             })
-         )
-       );
-   
-       if (base64files.length > 0) {
-         const awsres = await Promise.all(
-           base64files.map((file) =>
-             awsService.uploadBase64File(file.base64, file.uuid)
-           )
-         );
-       }
-   
-       const productId = selectedProduct.value.id;
-   
-   
-       // Step 3: Update product and add new categories
-      const productRes = await UpdateProduct.mutateAsync({
-     where: { id: productId },
-     data: {
-       name: name.value || '',
-       brand: brand.value || '',
-       description: description.value || '',
-       status: live.value ?? undefined,
-       company: {
-         connect: { id: useAuth().session.value?.companyId },
-       },
-       ...(category.value && {
-         category: { connect: { id: category.value } }
-       }),
-       ...(subcategory.value && {
-         subcategory: { connect: { id: subcategory.value } }
-       }),
-       variants: {
-         deleteMany: {
-           id: {
-             notIn: variants.value.filter(v => v.id).map(v => v.id)
-           }
-         }
-       },
-     },
-     select: { id: true }
-   });
-
-   // 1. Collect all variant IDs that need deletion
-const variantIdsToDelete = variants.value
-  .map((v) => v.id)
-  .filter((id): id is string => !!id);
-
-if (variantIdsToDelete.length > 0) {
-  await DeleteManyItem.mutateAsync({
-    where: {
-      variantId: { in: variantIdsToDelete },
-    },
-  });
-}
-
-  for (const variant of variants.value) {
-  let tax = 0;
-  if (categoryTax.value) {
-    if (categoryTax.value.taxType === 'FIXED') {
-      tax = categoryTax.value.fixedTax || 0;
-    } else if (categoryTax.value.taxType === 'VARIABLE') {
-      const threshold = categoryTax.value.thresholdAmount || 0;
-      tax = (variant.sprice || 0) > threshold 
-        ? (categoryTax.value.taxAboveThreshold || 0)
-        : (categoryTax.value.taxBelowThreshold || 0);
+      toast.add({
+        title: 'Please fill product category',
+        color: 'red',
+      });
+      return;
     }
-  }
 
-  // 2. Prepare Item creation
-  const itemsToCreate = (variant.items && variant.items.length > 0)
-    ? variant.items.map((size) => ({
-        size: size.size || null,
-        qty: size.qty || 0,
-        company: {
-          connect: { id: useAuth().session.value?.companyId },
-        }
-      }))
-    : [];
+    const base64files = await Promise.all(
+  variants.value.flatMap((variant) =>
+    (variant.images || []) // ← fallback to empty array
+      .filter((file) => file.file instanceof File)
+      .map(async (file) => {
+        const base64 = await prepareFileForApi(file.file);
+        return { base64, uuid: file.uuid };
+      })
+  )
+);
 
-  // 3. Common variant data
-  const variantData = {
-    name: variant.name || '',
-    ...(variant.code && { code: variant.code }),
-    sprice: variant.sprice || 0,
-    pprice: variant.pprice || 0,
-    ...(variant.sprice !== variant.dprice && {
-      dprice: variant.dprice || 0,
-    }),
-    discount: variant.discount || 0,
-    status: true,
-    images: variant.images?.map((file) => file.uuid) || [],
-    tax,
-    product: {
-      connect: { id: productId },
-    },
+
+    if (base64files.length > 0) {
+      const awsres = await Promise.all(
+        base64files.map((file) =>
+          awsService.uploadBase64File(file.base64, file.uuid)
+        )
+      );
+    }
+
+   const productId = selectedProduct.value.id;
+
+const updatedProduct =  await UpdateProduct.mutateAsync({
+  where: { id: productId },
+  data: {
+    name: name.value || '',
+    brand: brand.value || '',
+    description: description.value || '',
+    status: live.value ?? undefined,
     company: {
       connect: { id: useAuth().session.value?.companyId },
     },
-  };
+    ...(category.value && {
+      category: { connect: { id: category.value } }
+    }),
+    ...(subcategory.value && {
+      subcategory: { connect: { id: subcategory.value } }
+    }),
 
-
-  // 5. Upsert the variant
-  await UpsertVariant.mutateAsync({
-    where: { id: variant.id },
-    create: {
-      ...variantData,
-      items: {
-        create: itemsToCreate,
+    variants: {
+      // 1. Delete removed variants
+      deleteMany: {
+        id: {
+          notIn: variants.value.filter(v => v.id).map(v => v.id),
+        },
       },
-    },
-    update: {
-      ...variantData,
-      items: {
-        create: itemsToCreate, // only create since we already deleted
-      },
-    },
-  });
-}
 
-
-    await handleSave()
+      // 2. Upsert variants (update if exists, create if not)
+      upsert: variants.value.map(v => ({
+        where: { id: v.id }, // Prisma ignores if no match found
+        update: {
+          name: v.name || '',
+          code: v.code || null,
+          sprice: v.sprice || 0,
+          pprice: v.pprice || 0,
+          dprice: v.dprice || 0,
+          discount: v.discount || 0,
+          status: true,
+          images: v.images?.map(file => file.uuid) || [],
+          tax: calculateTax(v),
+          company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
+          items: {
+            // Delete removed items
+            deleteMany: {
+              id: {
+                notIn: v.items.filter(item => item.id).map(item => item.id)
+              }
+            },
+            // Upsert items
+            upsert: v.items.map(item => ({
+              where: { id: item.id },
+              update: {
+                size: item.size || null,
+                qty: item.qty || 0,
+              },
+              create: {
+                id:item.id,
+                size: item.size || null,
+                qty: item.qty || 0,
+                company: {
+                  connect: { id: useAuth().session.value?.companyId },
+                },
+              }
+            }))
+          }
+        },
+        create: {
+          id: v.id,
+          name: v.name || '',
+          code: v.code || null,
+          sprice: v.sprice || 0,
+          pprice: v.pprice || 0,
+          dprice: v.dprice || 0,
+          discount: v.discount || 0,
+          status: true,
+          images: v.images?.map(file => file.uuid) || [],
+          tax: calculateTax(v),
+          company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
+          product: {
+            connect: { id: productId }
+          },
+          items: {
+            create: v.items.map(item => ({
+              id: item.id,
+              size: item.size || null,
+              qty: item.qty || 0,
+              company: {
+                connect: { id: useAuth().session.value?.companyId },
+              }
+            }))
+          }
+        }
+      }))
+    }
+  },
+  select: { id: true }
+});
 
     toast.add({
       title: 'Product Edited!',
@@ -377,25 +373,39 @@ if (variantIdsToDelete.length > 0) {
     });
     
   } catch (err: any) {
-    console.error(err);
+    console.log(err)
     toast.add({
         title: `Something went wrong!`,
         color: 'red',
       });
   }
-};
-
-const addVariant = async() => {
-    // Create a shallow copy of the variants array to ensure it's not read-only
-    const newVariants = [...selectedProduct.value.variants];
-    newVariants.push({id:String(idCounter.value++), name: '', code:'',qty: 0, sprice: 0,pprice: 0,dprice: 0,discount: 0,  sizes: [], images: [] });
-    
-    // Update the selectedProduct with the new variants array
-    selectedProduct.value = {
-      ...selectedProduct.value,
-      variants: newVariants,
-    }; 
+  finally{
+    isLoad.value = false
+    isOpenAdd.value = false
   }
+}
+
+const addVariant = () => {
+  const newVariants = [...selectedProduct.value.variants];
+  newVariants.push({
+    id: uuidv4(), // ✅ generate a unique ID
+    key: String(idCounter.value++),
+    name: '',
+    code: '',
+    qty: 0,
+    sprice: 0,
+    pprice: 0,
+    dprice: 0,
+    discount: 0,
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
+    images: [],
+  });
+
+  selectedProduct.value = {
+    ...selectedProduct.value,
+    variants: newVariants,
+  };
+};
 
 
 const removeVariant = (index: number) => {
@@ -491,43 +501,6 @@ console.log(barcodes.value)
 
 
 
-const handleSave  = async () => {
-  try {
-     await productRefetch();
-    if (!productData.value) {
-      throw new Error("No items found");
-    }
-
-    console.log(productData.value)
-
-    // Generate printable barcode format
-    barcodes.value = productData.value?.variants?.flatMap(variant =>
-        variant.items?.map(item => ({
-            barcode: item.barcode ?? '',
-            code: variant.code ?? '',
-            shopname:useAuth().session.value?.companyName,
-            productName: productData.value.name,
-            brand: productData.value.brand,
-            name: variant.name,
-            sprice: variant.sprice,
-             ...(variant.sprice !== variant.dprice && 
-                {  dprice: variant.dprice }
-              ),
-            size: item.size,
-        })) ?? []
-        ) ?? [];
-
-
-    console.log(barcodes.value)
-
-    isOpen.value = true;
-
-  } catch (error) {
-    console.error("Failed to save purchase order", error);
-    // Consider adding user feedback here
-  }
-};
-
 
 </script>
 
@@ -556,8 +529,10 @@ const handleSave  = async () => {
           </div>
           <div  class="flex flex-col space-y-2 sm:flex-row sm:justify-between sm:space-y-0">
           <div class="mt-2 flex flex-wrap gap-4 text-sm text-gray-600 dark:text-gray-300">
-            <span>Price: ${{ variant.price }}</span>
-            <span>Qty: {{ variant.qty }}</span>
+            <span>Price: Rs {{ variant.sprice }}</span>
+            <span>Qty: {{ variant.items?.reduce((variantTotal, item) => {
+                        return variantTotal + (item.qty || 0);
+                    }, 0)}}</span>
             <span>Discount: {{ variant.discount || 0 }}%</span>
           </div>
           <UButton
@@ -637,6 +612,7 @@ const handleSave  = async () => {
       <div class="m-3">
         <UButton
           @click="handleEdit"
+          :loading="isLoad"
         >
           Edit Product
         </UButton>
@@ -644,41 +620,6 @@ const handleSave  = async () => {
         </div>
       </div>
       
-  
-      <UModal v-model="isOpen" fullscreen>
-        <UCard :ui="{
-          base: 'h-full flex flex-col overflow-y-auto',
-          rounded: '',
-          divide: 'divide-y divide-gray-100 dark:divide-gray-800',
-          body: {
-            base: 'grow'
-          }
-        }">
-          <BarcodeComponent v-if="barcodes.length" :barcodes="barcodes" />
-          
-          <template #header>
-            <div class="flex items-end justify-end">
-              <UButton type="submit" class="me-3 px-5" @click="printBarcodes">
-                Print
-              </UButton>
-              <UButton type="submit" class="me-3 px-5" @click="handleSkip">
-                Skip
-              </UButton>
-            </div>
-          </template>
-          
-          <template #footer>
-            <div class="flex items-end justify-end">
-              <UButton type="submit" class="me-3 px-5" @click="printBarcodes">
-                Print
-              </UButton>
-              <UButton type="submit" class="me-3 px-5" @click="handleSkip">
-                Skip
-              </UButton>
-            </div>
-          </template>
-        </UCard>
-      </UModal>
   
       <UModal v-model="isOpenAdd">
         <UCard>
@@ -689,6 +630,7 @@ const handleSave  = async () => {
                 <button
                   class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                   @click="handleEdit"
+                  :loading="isLoad"
                 >
                   Edit Product
                 </button>
@@ -754,6 +696,7 @@ const handleSave  = async () => {
               <button
                 class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                 @click="handleEdit"
+                :loading="isLoad"
               >
                 Edit Product
               </button>
