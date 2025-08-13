@@ -3,12 +3,13 @@ import { ref, computed, watchEffect } from 'vue';
 import { useFindUniquePurchaseOrder, useDeleteProduct } from '~/lib/hooks';
 
 const emit = defineEmits(['product-selected','clicked','total-amount']);
+const props = defineProps<{
+  settledMap: Map<string, boolean>;
+}>();
+const isSettled = (productId: string) => props.settledMap.get(productId) ?? true;
 const totalAmount = ref('');
 
 const DeleteProduct = useDeleteProduct({
-  onSuccess: (data) => console.log('Created:', data),
-  onError: (err) => console.error('Error:', err),
-  invalidate: true,
   optimisticUpdate: true
 });
 
@@ -80,9 +81,9 @@ const variantColumns = [
 const expand = ref({ openedRows: [], row: null });
 
 // 🟢 Remove product function
-const removeProduct = async(id:string) => {
+const removeProduct = (id:string) => {
   try {
-    await DeleteProduct.mutateAsync({ where: { id } });
+     DeleteProduct.mutate({ where: { id } });
   } catch (err) {
     console.log(err);
   }
@@ -121,7 +122,13 @@ const editProductsm = (id: string) => {
     </template>
       <template #action-data="{ row }">
         <div class="hidden md:block">
+          <UButton :loading="!isSettled(row.id)" v-if="!isSettled(row.id)"
+            size="sm"
+            color="gray"
+            variant="ghost"
+        />
         <UButton
+          v-if="isSettled(row.id)"
           icon="i-heroicons-trash"
           size="sm"
           color="red"
@@ -131,6 +138,7 @@ const editProductsm = (id: string) => {
           class="me-2"
         />
         <UButton
+         v-if="isSettled(row.id)"
           icon="i-heroicons-pencil"
           size="sm"
           color="blue"
@@ -142,6 +150,7 @@ const editProductsm = (id: string) => {
 
         <div class="md:hidden">
         <UButton
+         v-if="isSettled(row.id)"
           icon="i-heroicons-trash"
           size="sm"
           color="red"
@@ -151,6 +160,7 @@ const editProductsm = (id: string) => {
           class="me-2"
         />
         <UButton
+         v-if="isSettled(row.id)"
           icon="i-heroicons-pencil"
           size="sm"
           color="blue"

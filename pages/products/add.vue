@@ -12,6 +12,15 @@ const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
 const isAdd = ref(false);
 const variantInputs = ref(useAuth().session.value?.variantInputs)
+const settledMap = ref(new Map());
+
+const isSaveDisable = computed(() => {
+  // If any value is false → disable
+  for (const val of settledMap.value.values()) {
+    if (!val) return true;
+  }
+  return false; // all are true → enable
+});
 
 
 interface ImageData {
@@ -64,20 +73,263 @@ interface Product {
 const route = useRoute();
 const poId = computed(() => String(route.query.poId || ''));
 
+
 const CreateProduct = useCreateProduct({
-  optimisticUpdate: true,
-  mutation: {
-    onSuccess: () => {
+  invalidate: false, // we'll manually invalidate
+
+  onMutate: async (newProduct) => {
+  const purchaseOrderId = newProduct.data.purchaseorder?.connect?.id
+
+const cacheKey = [
+    'zenstack', 'PurchaseOrder', 'findUnique',
+    {
+      where: { id: purchaseOrderId },
+      include: { products: { include: { variants: { include: { items: true } } } } }
+    },
+    {
+      infinite: false,
+      optimisticUpdate: true
+    }
+]
+
+
+  const previous = queryClient.getQueryData(cacheKey)
+  settledMap.value.set(newProduct.data.id, false);
+  // ✅ Transform payload to match cached DB structure
+  const optimisticProduct = {
+    id: newProduct.data.id,
+    name: newProduct.data.name,
+    brand: newProduct.data.brand,
+    description: newProduct.data.description,
+    status: newProduct.data.status,
+    companyId: newProduct.data.company?.connect?.id ?? null,
+    categoryId: newProduct.data.category?.connect?.id ?? null,
+    subcategoryId: newProduct.data.subcategory?.connect?.id ?? null,
+    purchaseorderId: purchaseOrderId,
+    variants: newProduct.data.variants?.create?.map(v => ({
+      id: v.id,
+      name: v.name,
+      sprice: v.sprice,
+      pprice: v.pprice,
+      dprice: v.dprice,
+      discount: v.discount,
+      status: v.status,
+      tax: v.tax,
+      images: v.images ?? [],
+      companyId: v.company?.connect?.id ?? null,
+      productId: newProduct.data.id,
+      items: v.items?.create?.map(i => ({
+        id: i.id,
+        size: i.size,
+        qty: i.qty,
+        companyId: i.company?.connect?.id ?? null,
+        variantId: v.id
+      })) ?? []
+    })) ?? []
+  }
+
+  if (previous && typeof previous === 'object') {
+   
+    queryClient.setQueryData(cacheKey, {
+      ...previous,
+      products: [...(previous.products ?? []), optimisticProduct]
+    })
+  }
+
+  return { previous, cacheKey, productId: optimisticProduct.id }
+},
+
+  onError: (_err, _newData, ctx) => {
+    if (ctx?.previous) {
+      queryClient.setQueryData(ctx.cacheKey, ctx.previous)
+    }
+  },
+
+  onSettled: (_data, _error, _vars, ctx) => {
+    settledMap.value.set(ctx?.productId, true);
+    if (ctx?.cacheKey) {
       queryClient.invalidateQueries({
-        queryKey: ['zenstack', 'PurchaseOrder', 'findUnique'],
-        exact: false,
-        refetchType: 'active' // immediate re-fetch for active queries
+        queryKey: ctx.cacheKey,
+        exact: true
+      })
+    }
+  }
+})
+
+const UpdateProduct = useUpdateProduct({
+
+  invalidate: false, // we'll manually invalidate
+
+  onMutate: async (updatedProductInput) => {
+  const purchaseOrderId = poId.value;
+
+  if (!purchaseOrderId) return;
+
+  const cacheKey = [
+    'zenstack', 'PurchaseOrder', 'findUnique',
+    {
+      where: { id: purchaseOrderId },
+      include: { products: { include: { variants: { include: { items: true } } } } }
+    },
+    {
+      infinite: false,
+      optimisticUpdate: true
+    }
+  ];
+
+  const previous = queryClient.getQueryData(cacheKey);
+
+
+  if (!previous || typeof previous !== 'object') return;
+
+  const input = updatedProductInput.data;
+  const productId = updatedProductInput.where.id;
+  settledMap.value.set(productId, false);
+  // First, handle the product-level updates
+  const updatedProducts = (previous.products ?? []).map(product => {
+    if (product.id !== productId) return product;
+
+    // Update the product fields
+    const updatedProduct = {
+      ...product,
+      name: input.name ?? product.name,
+      brand: input.brand ?? product.brand,
+      description: input.description ?? product.description,
+      status: input.status ?? product.status,
+      companyId: input.company?.connect?.id ?? product.companyId,
+      categoryId: input.category?.connect?.id ?? product.categoryId,
+      subcategoryId: input.subcategory?.connect?.id ?? product.subcategoryId,
+    };
+
+    // Handle variants
+    if (!input.variants) return updatedProduct;
+
+    // First apply deleteMany (remove variants not in the input)
+    const variantsToKeep = input.variants.upsert?.map(v => v.where.id) ?? [];
+    let updatedVariants = product.variants.filter(v => 
+      variantsToKeep.includes(v.id)
+    );
+
+    // Then handle upsert operations
+    input.variants.upsert?.forEach(variantInput => {
+      const existingVariantIndex = updatedVariants.findIndex(
+        v => v.id === variantInput.where.id
+      );
+
+      const variantData = variantInput.update ?? variantInput.create;
+      
+      if (existingVariantIndex >= 0) {
+        // Update existing variant
+        const existingVariant = updatedVariants[existingVariantIndex];
+        updatedVariants[existingVariantIndex] = {
+          ...existingVariant,
+          name: variantData?.name ?? existingVariant.name,
+          sprice: variantData?.sprice ?? existingVariant.sprice,
+          pprice: variantData?.pprice ?? existingVariant.pprice,
+          dprice: variantData?.dprice ?? existingVariant.dprice,
+          discount: variantData?.discount ?? existingVariant.discount,
+          status: variantData?.status ?? existingVariant.status,
+          tax: variantData?.tax ?? existingVariant.tax,
+          images: variantData?.images ?? existingVariant.images,
+        };
+
+        // Handle items for this variant
+        if (variantData?.items) {
+          // First apply deleteMany (remove items not in the input)
+          const itemsToKeep = variantData.items.upsert?.map(i => i.where?.id) ?? [];
+          let updatedItems = existingVariant.items.filter(i => 
+            i.id && itemsToKeep.includes(i.id)
+          );
+
+          // Then handle upsert operations for items
+          variantData.items.upsert?.forEach(itemInput => {
+            const existingItemIndex = updatedItems.findIndex(
+              i => i.id === itemInput.where?.id
+            );
+
+            const itemData = itemInput.update ?? itemInput.create;
+            
+            if (existingItemIndex >= 0) {
+              // Update existing item
+              updatedItems[existingItemIndex] = {
+                ...updatedItems[existingItemIndex],
+                size: itemData?.size ?? updatedItems[existingItemIndex].size,
+                qty: itemData?.qty ?? updatedItems[existingItemIndex].qty,
+              };
+            } else {
+              // Add new item
+              updatedItems.push({
+                id: itemInput.where?.id ?? null,
+                size: itemData?.size ?? null,
+                qty: itemData?.qty ?? 0,
+                companyId: useAuth().session.value?.companyId ?? null,
+                variantId: variantInput.where.id,
+              });
+            }
+          });
+
+          updatedVariants[existingVariantIndex].items = updatedItems;
+        }
+      } else {
+        // Add new variant
+        const newVariant = {
+          id: variantInput.where.id,
+          name: variantData?.name ?? '',
+          sprice: variantData?.sprice ?? 0,
+          pprice: variantData?.pprice ?? 0,
+          dprice: variantData?.dprice ?? 0,
+          discount: variantData?.discount ?? 0,
+          status: variantData?.status ?? true,
+          tax: variantData?.tax ?? 0,
+          images: variantData?.images ?? [],
+          companyId: useAuth().session.value?.companyId ?? null,
+          productId: productId,
+          items: (variantData?.items?.upsert ?? []).map(itemInput => ({
+            id: itemInput.where?.id ?? null,
+            size: (itemInput.update ?? itemInput.create)?.size ?? null,
+            qty: (itemInput.update ?? itemInput.create)?.qty ?? 0,
+            companyId: useAuth().session.value?.companyId ?? null,
+            variantId: variantInput.where.id,
+          })),
+        };
+        updatedVariants.push(newVariant);
+      }
+    });
+
+    return {
+      ...updatedProduct,
+      variants: updatedVariants,
+    };
+  });
+
+
+
+  queryClient.setQueryData(cacheKey, {
+    ...previous,
+    products: updatedProducts
+  });
+  return { previous, cacheKey, productId : productId };
+},
+
+  onError: (_err, _newData, ctx) => {
+    if (ctx?.previous) {
+      queryClient.setQueryData(ctx.cacheKey, ctx.previous);
+    }
+  },
+
+  onSettled: (_data, _error, _vars, ctx) => {
+      settledMap.value.set(ctx?.productId, true);
+    if (ctx?.cacheKey) {
+      queryClient.invalidateQueries({
+        queryKey: ctx.cacheKey,
+        exact: true
       });
     }
   }
 });
+
+
 const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
-const UpdateProduct = useUpdateProduct({ optimisticUpdate: true })
 const CreateDistributorCredit = useCreateDistributorCredit({ optimisticUpdate: true });
 const UpdateDistributorCompany = useUpdateDistributorCompany({ optimisticUpdate: true });
 const UpdatePurchaseOrder = useUpdatePurchaseOrder({ optimisticUpdate: true });
@@ -236,18 +488,7 @@ const handleAdd = async (e: Event) => {
       return;
     }
 
-    // Validate variant names
-    // const emptyVariantIndex = variants.value.findIndex(
-    //   (variant) => !variant.name || variant.name.trim() === ''
-    // );
-    
-    // if (emptyVariantIndex !== -1) {
-    //   toast.add({
-    //     title: `Please fill variant ${emptyVariantIndex + 1} name`,
-    //     color: 'red',
-    //   });
-    //   return;
-    // }
+ 
 
 
  const base64files = await Promise.all(
@@ -272,6 +513,7 @@ const handleAdd = async (e: Event) => {
 
     const productRes = CreateProduct.mutate({
       data: {
+        id: uuidv4(),
         name: name.value || '',
         brand: brand.value || '',
         description: description.value || '',
@@ -306,6 +548,7 @@ const handleAdd = async (e: Event) => {
 
             const itemsToCreate = (variant.items && variant.items.length > 0)
               ? variant.items.map((size) => ({
+                id: uuidv4(),
                   size: size.size || null,
                   qty: size.qty || 0,
                   company: {
@@ -315,6 +558,7 @@ const handleAdd = async (e: Event) => {
               : [];
 
             return {
+              id: uuidv4(),
               name: variant.name || '',
               ...(variant.code && { code: variant.code }),
               sprice: variant.sprice || 0,
@@ -413,7 +657,7 @@ const handleEdit = async (e: Event) => {
 
    const productId = selectedProduct.value.id;
 
-const updatedProduct = await UpdateProduct.mutate({
+const updatedProduct =  UpdateProduct.mutate({
   where: { id: productId },
   data: {
     name: name.value || '',
@@ -469,6 +713,7 @@ const updatedProduct = await UpdateProduct.mutate({
                 qty: item.qty || 0,
               },
               create: {
+                id:item.id,
                 size: item.size || null,
                 qty: item.qty || 0,
                 company: {
@@ -479,6 +724,7 @@ const updatedProduct = await UpdateProduct.mutate({
           }
         },
         create: {
+          id: v.id,
           name: v.name || '',
           code: v.code || null,
           sprice: v.sprice || 0,
@@ -496,6 +742,7 @@ const updatedProduct = await UpdateProduct.mutate({
           },
           items: {
             create: v.items.map(item => ({
+              id: item.id,
               size: item.size || null,
               qty: item.qty || 0,
               company: {
@@ -704,11 +951,7 @@ const handleSave = async () => {
 };
 
 
-
-
-
-
-const handleReset = async() => {
+const handleReset = () => {
 
   clearInputs.value = true
   // createRef.value?.resetForm()
@@ -793,6 +1036,7 @@ const handleNewProduct = () => {
                         @click="handleSave"
                         color="green"
                         :loading="isLoad && isSave"
+                        :disabled="isSaveDisable"
                     >
                         Save Order
                     </UButton>
@@ -808,7 +1052,7 @@ const handleNewProduct = () => {
                 </div>
 
               <UPageCard class="m-3">
-                <AddProductTable @product-selected="handleProductSelected" @clicked="isOpenAdd = true" @total-amount = "(data) => totalAmount = data"/>
+                <AddProductTable @product-selected="handleProductSelected" @clicked="isOpenAdd = true" @total-amount = "(data) => totalAmount = data" :settledMap="settledMap"/>
               </UPageCard>
 
               <div class="m-3">
@@ -816,11 +1060,11 @@ const handleNewProduct = () => {
                         @click="handleSave"
                         :loading="isLoad && isSave"
                         color="green"
+                        :disabled="isSaveDisable"
                     >
                         Save Order
                     </UButton>
                 </div>
-              
             </div>
             
 
