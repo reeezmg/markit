@@ -28,9 +28,9 @@ export default defineEventHandler(async (event) => {
   const originalSizeMB = buffer.length / 1024 / 1024
 
   // 🔧 Dynamic compression quality
-  let quality = 80
-  if (originalSizeMB > 2) quality = 70
-  else if (originalSizeMB <= 0.5) quality = 90
+  let quality = 70
+  if (originalSizeMB > 2) quality = 60
+  else if (originalSizeMB <= 0.5) quality = 80
 
   const compressedBuffer = await sharp(buffer)
     .resize({ width: 1000 }) // optional resize
