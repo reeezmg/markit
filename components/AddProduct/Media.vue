@@ -192,7 +192,7 @@ defineExpose({ resetForm });
           skewable
           translatable
         ></cropper-image>
-        <cropper-selection id="cropperSelection"  ref="cropperSelectionRef" initial-coverage="0.95" dynamic movable resizable>
+        <cropper-selection id="cropperSelection"  ref="cropperSelectionRef" initial-coverage="0.98" dynamic movable resizable>
         <cropper-handle action="move" ></cropper-handle>
       <cropper-handle action="n-resize"></cropper-handle>
       <cropper-handle action="e-resize"></cropper-handle>
