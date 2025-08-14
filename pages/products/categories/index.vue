@@ -35,8 +35,8 @@ const columns = [
         sortable: true,
     },
     {
-        key: 'stocks',
-        label: 'Stocks',
+        key: 'qty',
+        label: 'Qty',
         sortable: true,
     },
     {
@@ -64,8 +64,8 @@ const productcolumns = [
         sortable: false,
     },
      {
-        key: 'stocks',
-        label: 'Stocks',
+        key: 'qty',
+        label: 'Qty',
         sortable: true,
     },
     {
@@ -520,19 +520,20 @@ async function toggleStatus(id) {
                     </NuxtLink>
                 </template>
 
-                <template #stocks-data="{ row }">
+                <template #qty-data="{ row }">
                     {{
                         row.products?.reduce((productTotal, product) => {
-                            const variantStock = product.variants?.reduce((variantTotal, variant) => {
+                        const variantQty = product.variants?.reduce((variantTotal, variant) => {
                             const itemQty = variant.items?.reduce((itemTotal, item) => {
-                                return itemTotal + (item.qty || 0);
+                            return itemTotal + (item.qty || 0);
                             }, 0) || 0;
-                            return variantTotal + (itemQty * (variant.sprice || 0));
-                            }, 0) || 0;
-                            return productTotal + variantStock;
+                            return variantTotal + itemQty;
+                        }, 0) || 0;
+                        return productTotal + variantQty;
                         }, 0) || 0
-                        }}
+                    }}
                     </template>
+
 
 
                 <template #products-data="{ row }">
@@ -568,14 +569,15 @@ async function toggleStatus(id) {
                         }}
                 </template>
 
-                 <template #stocks-data="{ row }">
+                 <template #qty-data="{ row }">
                     {{
-                        row.variants.reduce((total, variant) => {
+                        row.variants?.reduce((total, variant) => {
                         const itemQty = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
-                        return total + (itemQty * (variant.sprice || 0));
-                        }, 0)
+                        return total + itemQty;
+                        }, 0) || 0
                     }}
-                </template>
+                    </template>
+
 
 
                   <template #actions-data="{ row }">
