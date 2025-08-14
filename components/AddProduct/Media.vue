@@ -192,7 +192,7 @@ defineExpose({ resetForm });
           skewable
           translatable
         ></cropper-image>
-        <cropper-selection id="cropperSelection"  ref="cropperSelectionRef" initial-coverage="0.98" dynamic movable resizable>
+        <cropper-selection id="cropperSelection"  ref="cropperSelectionRef" initial-coverage="0.99" dynamic movable resizable>
         <cropper-handle action="move" ></cropper-handle>
       <cropper-handle action="n-resize"></cropper-handle>
       <cropper-handle action="e-resize"></cropper-handle>
@@ -207,7 +207,7 @@ defineExpose({ resetForm });
 
       <div class="mt-4 flex justify-end gap-2">
         <UButton @click="closeCropModal" color="gray">Cancel</UButton>
-        <UButton @click="confirmCrop" color="primary">Crop</UButton>
+        <UButton @click="confirmCrop" color="primary">Save</UButton>
       </div>
     </div>
   </div>
