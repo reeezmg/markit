@@ -179,38 +179,47 @@ defineExpose({ resetForm });
   </div>
 
   <!-- Crop Modal -->
-  <div v-if="isCropModalOpen" class="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
-    <div class="bg-white p-4 rounded shadow-lg max-w-lg w-full">
-      <h2 class="text-lg font-semibold mb-4">Crop Image</h2>
-      <cropper-canvas style="height: 360px" ref="cropperCanvasRef" background>
-        <cropper-image
-          ref="cropperImageRef"
-          :src="cropImageUrl"
-          alt="Crop Image"
-          rotatable
-          scalable
-          skewable
-          translatable
-        ></cropper-image>
-        <cropper-selection id="cropperSelection"  ref="cropperSelectionRef" initial-coverage="0.99" dynamic movable resizable>
-        <cropper-handle action="move" ></cropper-handle>
-      <cropper-handle action="n-resize"></cropper-handle>
-      <cropper-handle action="e-resize"></cropper-handle>
-      <cropper-handle action="s-resize"></cropper-handle>
-      <cropper-handle action="w-resize"></cropper-handle>
-      <cropper-handle action="ne-resize"></cropper-handle>
-      <cropper-handle action="nw-resize"></cropper-handle>
-      <cropper-handle action="se-resize"></cropper-handle>
-      <cropper-handle action="sw-resize"></cropper-handle>
-        </cropper-selection>
-      </cropper-canvas>
+<UModal v-model="isCropModalOpen" :overlay="true">
+  <div class="p-4">
+    <h2 class="text-lg font-semibold mb-4">Crop Image</h2>
 
-      <div class="mt-4 flex justify-end gap-2">
-        <UButton @click="closeCropModal" color="gray">Cancel</UButton>
-        <UButton @click="confirmCrop" color="primary">Save</UButton>
-      </div>
+    <cropper-canvas style="height: 360px" ref="cropperCanvasRef" background>
+      <cropper-image
+        ref="cropperImageRef"
+        :src="cropImageUrl"
+        alt="Crop Image"
+        rotatable
+        scalable
+        skewable
+        translatable
+      ></cropper-image>
+      <cropper-selection
+        id="cropperSelection"
+        ref="cropperSelectionRef"
+        initial-coverage="0.99"
+        bounded
+        movable
+        resizable
+      >
+        <cropper-handle action="move"></cropper-handle>
+        <cropper-handle action="n-resize"></cropper-handle>
+        <cropper-handle action="e-resize"></cropper-handle>
+        <cropper-handle action="s-resize"></cropper-handle>
+        <cropper-handle action="w-resize"></cropper-handle>
+        <cropper-handle action="ne-resize"></cropper-handle>
+        <cropper-handle action="nw-resize"></cropper-handle>
+        <cropper-handle action="se-resize"></cropper-handle>
+        <cropper-handle action="sw-resize"></cropper-handle>
+      </cropper-selection>
+    </cropper-canvas>
+
+    <div class="mt-4 flex justify-end gap-2">
+      <UButton @click="closeCropModal" color="gray">Cancel</UButton>
+      <UButton @click="confirmCrop" color="primary">Save</UButton>
     </div>
   </div>
+</UModal>
+
 
   <UModal v-model="isModalOpen" size="xl">
   <div class="p-4 bg-black rounded-lg">
