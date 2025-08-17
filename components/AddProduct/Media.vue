@@ -18,6 +18,7 @@ onMounted(async () => {
   CropperViewer.$define();
 });
 
+
 const props = defineProps<{
   editFile?: string[];
   index?: number;
@@ -43,6 +44,104 @@ const cropImageUrl = ref<string>('');
 const cropperCanvasRef = ref<HTMLElement>();
 const cropperImageRef = ref<HTMLElement>();
 const cropperSelectionRef = ref<HTMLElement>();
+
+type Selection = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+
+function inSelection(selection: Selection, maxSelection: Selection): boolean {
+  return (
+    selection.x >= maxSelection.x &&
+    selection.y >= maxSelection.y &&
+    selection.x + selection.width <= maxSelection.x + maxSelection.width &&
+    selection.y + selection.height <= maxSelection.y + maxSelection.height
+  );
+}
+
+
+
+function onCropperSelectionChange(
+  event: CustomEvent,
+  cropperCanvas: HTMLElement,
+  cropperImage: HTMLElement
+) {
+  if (!cropperCanvas) {
+    return;
+  }
+
+  const cropperCanvasRect = cropperCanvas.getBoundingClientRect();
+  const selection = event.detail as Selection;
+  
+
+  // Always bound to image
+  const cropperImageRect = cropperImage.getBoundingClientRect();
+  const maxSelection: Selection = {
+    x: 0,
+    y: 0,
+    width: cropperCanvasRect.width,
+    height: cropperCanvasRect.height,
+  };
+  console.log('Cropper selection:', selection, 'Max selection:', maxSelection);
+
+  if (!inSelection(selection, maxSelection)) {
+    console.warn('Selection is out of bounds:', selection, maxSelection);
+    event.preventDefault();
+  }
+}
+
+function onCropperImageTransform(
+  event: CustomEvent,
+  cropperCanvasRef: Ref<HTMLElement | null>,
+  cropperImageRef: Ref<HTMLElement | null>,
+  cropperSelectionRef: Ref<HTMLElement | null>,
+) {
+  const cropperCanvas = cropperCanvasRef.value
+  const cropperImage = cropperImageRef.value
+  const cropperSelection = cropperSelectionRef.value
+
+  if (!cropperCanvas || !cropperImage || !cropperSelection) {
+    return
+  }
+
+  const cropperCanvasRect = cropperCanvas.getBoundingClientRect()
+
+  // 1. Clone the cropper image.
+  const cropperImageClone = cropperImage.cloneNode() as HTMLElement
+
+  // 2. Apply the new matrix to the clone.
+  cropperImageClone.style.transform = `matrix(${(event.detail as any).matrix.join(", ")})`
+
+  // 3. Make it invisible.
+  cropperImageClone.style.opacity = "0"
+
+  // 4. Append to canvas.
+  cropperCanvas.appendChild(cropperImageClone)
+
+  // 5. Get boundaries.
+  const cropperImageRect = cropperImageClone.getBoundingClientRect()
+
+  // 6. Remove clone.
+  cropperCanvas.removeChild(cropperImageClone)
+
+  const selection: Selection = cropperSelection as any
+  const maxSelection: Selection = {
+    x: cropperImageRect.left - cropperCanvasRect.left,
+    y: cropperImageRect.top - cropperCanvasRect.top,
+    width: cropperImageRect.width,
+    height: cropperImageRect.height,
+  }
+
+  console.log('Cropper selection:', selection, 'Max selection:', maxSelection)
+
+  if (!inSelection(selection, maxSelection)) {
+        console.warn('Selection is out of bounds:', selection, maxSelection);
+
+    event.preventDefault()
+  }
+}
 
 
 function openImageViewer(images: string) {
@@ -83,6 +182,8 @@ async function handleAddImageChange(e: Event) {
   }
   input.value = '';
 }
+
+
 
 async function confirmCrop() {
   const cropperSelection = cropperSelectionRef.value as any;
@@ -188,18 +289,16 @@ defineExpose({ resetForm });
         ref="cropperImageRef"
         :src="cropImageUrl"
         alt="Crop Image"
-        rotatable
         scalable
-        skewable
         translatable
+        @transform="onCropperImageTransform($event, cropperCanvasRef, cropperImageRef, cropperSelectionRef)"
       ></cropper-image>
       <cropper-selection
         id="cropperSelection"
         ref="cropperSelectionRef"
-        initial-coverage="0.99"
-        bounded
-        movable
+        initial-coverage="0.98"
         resizable
+        @change="onCropperSelectionChange($event, cropperCanvasRef, cropperImageRef)"
       >
         <cropper-handle action="move"></cropper-handle>
         <cropper-handle action="n-resize"></cropper-handle>
