@@ -138,20 +138,27 @@ const startCamera = async () => {
     )
 
     Quagga.onDetected((data) => {
-      const scanned = data?.codeResult?.code
-      if (!scanned) return
+  const scanned = data?.codeResult?.code
+  if (!scanned) return
 
-      result.value = scanned
+  const pattern = /^\d+[A-Z]\d{6}$/ // required format
 
-      const lastIndex = items.value.length - 1
-      if (lastIndex >= 0) {
-        items.value[lastIndex].barcode = result.value
-        fetchItemData(result.value, lastIndex)
-         addNewRow(lastIndex,true)  
-      }
+  if (!pattern.test(scanned)) {
+    console.warn('❌ Invalid code format:', scanned)
+    return // keep scanning, don't stop
+  }
 
-      stopCamera()
-    })
+  result.value = scanned
+
+  const lastIndex = items.value.length - 1
+  if (lastIndex >= 0) {
+    items.value[lastIndex].barcode = result.value
+    fetchItemData(result.value, lastIndex)
+    addNewRow(lastIndex, true)
+  }
+
+  stopCamera() // only stop when valid
+})
   } catch (err) {
     console.error('Camera access error:', err)
 
@@ -616,26 +623,6 @@ const handleInvalidBarcode = (index) => {
   delete currentRequestIds.value[index];
 };
 
-const reconstructBill = (data) => {
-   const {
-    payload,
-    items,
-    companyId,
-  } = data
-  const existing = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
-  const maxNo = Math.max(0, ...existing.map(b => parseInt(b.billNo) || 0));
-  const newBillNo = (maxNo + 1).toString();
-
-  billNo.value = newBillNo;
-  date.value = new Date(payload.createdAt).toISOString();
-  items.value = items;
-
-  const newBill = currentBill.value;
-  existing.push(newBill);
-  localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(existing));
-  loadDraftBills();
-}
-
 
 const handleSave = async () => {
   isSaving.value = true;
@@ -683,24 +670,25 @@ const handleSave = async () => {
       title: 'Stock updated successfully!',
       color: 'green',
     });
+
       queryClient.invalidateQueries({
         queryKey: ['zenstack', 'Product', 'findMany'],
         exact: false
       });
+         reset();
     }).catch(error => {
         reconstructBill(error.data.data)
        toast.add({
         title: 'Stock updation failed!',
-        description:'Check the last draft',
+        description: 'Check the last draft',
         color: 'red',
       });
    
     }).finally(() => {
-       isSaving.value = false
-      updateBillCounter();
-    })
+       isSaving.value = false;
+    });
 
-   reset();
+
 
   } catch (error) {
     console.error('Error creating bill', error);
