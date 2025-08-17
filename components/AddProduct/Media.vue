@@ -280,9 +280,17 @@ defineExpose({ resetForm });
   </div>
 
   <!-- Crop Modal -->
-<UModal v-model="isCropModalOpen" :overlay="true">
-  <div class="p-4">
-    <h2 class="text-lg font-semibold mb-4">Crop Image</h2>
+<UModal v-model="isCropModalOpen" :overlay="true" prevent-close>
+  <UCard>
+    <template #header>
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
+              Crop Image
+            </h3>
+            <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark-20-solid" class="-my-1" @click="isAddPhotoModelOpen = false" />
+          </div>
+        </template>
+  <div>
 
     <cropper-canvas style="height: 360px" ref="cropperCanvasRef" background>
       <cropper-image
@@ -317,6 +325,7 @@ defineExpose({ resetForm });
       <UButton @click="confirmCrop" color="primary">Save</UButton>
     </div>
   </div>
+   </UCard>
 </UModal>
 
 
