@@ -2,14 +2,15 @@ import type { H3Event, SessionConfig } from 'h3';
 import crypto from 'uncrypto';
 
 const runtimeAuth = useRuntimeConfig().auth;
-
+console.log('Auth Config:', runtimeAuth);
 const sessionConfig: SessionConfig = {
   name: runtimeAuth.name,
   password: runtimeAuth.password,
   cookie: {
     maxAge: 60 * 60 * 24 * 365, // 1 year
     sameSite: 'none',           // allow cross-site
-    secure: true,               // required for 'none'
+    secure: true,  
+     httpOnly: true,                // required for 'none'
     // domain: '.markit.co.in',    // allow all subdomains (important!)
     // path: '/',                  
   }
