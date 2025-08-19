@@ -7,10 +7,13 @@ const sessionConfig: SessionConfig = {
   name: runtimeAuth.name,
   password: runtimeAuth.password,
   cookie: {
-    maxAge: 60 * 60 * 24 * 365,
+    maxAge: 60 * 60 * 24 * 365, // 1 year
+    sameSite: 'none',           // allow cross-site
+    secure: true,               // required for 'none'
+    // domain: '.markit.co.in',    // allow all subdomains (important!)
+    // path: '/',                  
   }
 };
-
 export type AuthSession = {
     id: string;
     cleanup: boolean;
