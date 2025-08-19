@@ -4,6 +4,7 @@ export default defineEventHandler((event) => {
   // Allowed origins: browser frontend + capacitor
   const allowedOrigins = [
     "http://localhost",          // Capacitor Android
+    "https://localhost",          // Capacitor Android
     "capacitor://localhost", 
     "http://localhost:3000",    // Capacitor iOS
   ]
