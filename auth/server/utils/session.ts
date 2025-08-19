@@ -11,7 +11,7 @@ const sessionConfig: SessionConfig = {
     sameSite: 'none',           // allow cross-site
     secure: true,  
      httpOnly: true,                // required for 'none'
-    // domain: '.markit.co.in',    // allow all subdomains (important!)
+    domain: 'markit.co.in',    // allow all subdomains (important!)
     // path: '/',                  
   }
 };
