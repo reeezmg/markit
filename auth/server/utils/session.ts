@@ -8,10 +8,11 @@ const sessionConfig: SessionConfig = {
   password: runtimeAuth.password,
   cookie: {
      httpOnly: true,
-  secure: false, // Only secure in production
-  sameSite: 'lax', // Use 'lax' instead of 'none' for HTTP
+  secure: true,
+  sameSite: 'none',
+  domain: '.markit.co.in', // allow across subdomains
+  path: '/',
   maxAge: 31536000,
-  path: '/'
   }
 };
 export type AuthSession = {
