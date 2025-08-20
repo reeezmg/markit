@@ -9,8 +9,8 @@ const sessionConfig: SessionConfig = {
   cookie: {
     maxAge: 60 * 60 * 24 * 365, // 1 year
     sameSite: 'none',           // allow cross-site
-    secure: true,  
-     httpOnly: true,                // required for 'none'
+    secure: false,  
+     httpOnly: false,                // required for 'none'
   }
 };
 export type AuthSession = {
