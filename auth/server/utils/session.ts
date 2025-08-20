@@ -7,12 +7,9 @@ const sessionConfig: SessionConfig = {
   name: runtimeAuth.name,
   password: runtimeAuth.password,
   cookie: {
-     httpOnly: true,
-  secure: true,
-  sameSite: 'none',
-  domain: '.markit.co.in', // allow across subdomains
-  path: '/',
+
   maxAge: 31536000,
+
   }
 };
 export type AuthSession = {
