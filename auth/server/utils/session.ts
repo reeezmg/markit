@@ -8,8 +8,8 @@ const sessionConfig: SessionConfig = {
   password: runtimeAuth.password,
   cookie: {
      httpOnly: true,
-  secure: true,          // REQUIRED for SameSite=None
-  sameSite: 'none',      // Required for cross-origin in Capacitor
+  secure: false, // Only secure in production
+  sameSite: 'lax', // Use 'lax' instead of 'none' for HTTP
   maxAge: 31536000,
   path: '/'
   }
