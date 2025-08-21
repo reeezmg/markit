@@ -13,6 +13,11 @@ onMounted(async () => {
   await userStore.fetchUsers(useAuth().session.value?.companyId!)
 })
 
+
+onMounted(() => {
+  console.log('Running from origin:', window.location.origin);
+});
+
 onMounted(() => {
   if ('serviceWorker' in navigator) {
     navigator.serviceWorker.register('/sw.js');
