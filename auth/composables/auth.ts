@@ -6,7 +6,7 @@ export const authLogin = async (email: string, password: string) => {
     const res = await $fetch('/api/auth/login', {
         method: 'POST',
         body: { email, password },
-
+        credentials: 'include',
     });
     await useAuth().updateSession();
     await navigateTo(useAuth().redirectTo.value || '/dashboard');
