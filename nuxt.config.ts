@@ -87,20 +87,22 @@ export default defineNuxtConfig({
     enabled: true,
   },
 
-  runtimeConfig: {
+   runtimeConfig: {
     sessionSecret: process.env.SESSION_SECRET, // ✅ Move inside runtimeConfig
     sourceId: process.env.SOURCE_ID,
     secret: process.env.SECRET,
-
+    // private runtime config is irrelevant in client-only mode
     public: {
       r2Id: process.env.R2_ID,
       r2Secret: process.env.R2_SECRET,
       r2Bucket: process.env.R2_BUCKET,
       r2AccountId: process.env.R2_ACCOUNT_ID,
       baseUrl: process.env.BASE_URL,
+      serverUrl: process.env.SERVER_URL,
       electricApiUrl: process.env.ELECTRIC_API_URL
     }
   },
+
 
   image: {},
 
