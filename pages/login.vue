@@ -5,7 +5,6 @@ definePageMeta({
 import { z } from 'zod';
 import type { FormError } from '#ui/types';
 import { usePushNotifications } from '~/composables/usePushNotifications'
-import { Capacitor } from '@capacitor/core'
 const reject = ref(true);
 const route = useRoute();
 const router = useRouter();
@@ -17,8 +16,6 @@ const code = Array.isArray(route.query.code) ? route.query.code[0] : route.query
 watchEffect(() => {
    console.log(useAuth().session.value?.id);
 });
-
-
 
 
 const fields = [
@@ -66,11 +63,8 @@ async function onSubmit(data: any) {
     console.log(useAuth().session.value?.id);
     try {
         const res = await authLogin(data.email, data.password);
-
-        if (!Capacitor.isNativePlatform()) {
-            usePushNotifications(useAuth().session.value?.id!)
-        }
-
+        console.log(useAuth().session.value?.id!);
+        usePushNotifications(useAuth().session.value?.id!)
        
     } catch (error) {
         reject.value = false;
