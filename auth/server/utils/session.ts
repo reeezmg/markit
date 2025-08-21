@@ -8,9 +8,6 @@ const sessionConfig: SessionConfig = {
   password: runtimeAuth.password,
   cookie: {
     maxAge: 60 * 60 * 24 * 365, // 1 year
-    sameSite: 'none',           // allow cross-site
-    secure: true,  
-     httpOnly: true,                // required for 'none'
   }
 };
 export type AuthSession = {

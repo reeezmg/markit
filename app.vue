@@ -20,20 +20,24 @@ onMounted(() => {
 });
 
 provideHooksContext({
-  endpoint: config.public.baseUrl,
-  fetch: async (input, init: RequestInit = {}) => {
-    const result = await $fetch(input, {
-      ...init,
-      credentials: 'include',
-    });
-
-    // Wrap into a Response-like object
-    return new Response(JSON.stringify(result), {
-      headers: { 'Content-Type': 'application/json' },
-    });
-  },
-  logging: true,
+  endpoint: config.public.baseUrl
 });
+
+// provideHooksContext({
+//   endpoint: config.public.baseUrl,
+//   fetch: async (input, init: RequestInit = {}) => {
+//     const result = await $fetch(input, {
+//       ...init,
+//       credentials: 'include',
+//     });
+
+//     // Wrap into a Response-like object
+//     return new Response(JSON.stringify(result), {
+//       headers: { 'Content-Type': 'application/json' },
+//     });
+//   },
+//   logging: true,
+// });
 
 
 const colorMode = useColorMode();

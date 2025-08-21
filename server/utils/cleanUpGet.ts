@@ -11,14 +11,6 @@ type BillPreviewOptions = {
   valuePref: 'lowest' | 'highest';
 };
 
-function parseInvoice(inv: string) {
-  const [prefix, num] = inv.split('/');
-  return {
-    prefix: prefix,
-    num: parseInt(num),
-  };
-}
-
 export async function previewBillsForReduction(opts: BillPreviewOptions) {
   const {
     companyId,
@@ -47,31 +39,33 @@ export async function previewBillsForReduction(opts: BillPreviewOptions) {
     return [bills];
   });
 
+  console.log(bills, 'bills found for cleanup:', bills.length);
+
   const allTotal = bills.reduce((sum, b) => sum + (b.grandTotal ?? 0), 0);
   const allCount = bills.length;
-  const deleteTarget = allTotal - targetAmount;
 
-  const leastInvoiceByPrefix: Record<string, number> = {};
+  // track least invoice number (just numeric now)
+  let leastInvoice: number | null = null;
   const preview: any[] = [];
 
   let deletedTotal = 0;
 
   for (const bill of bills) {
-    if (!bill.invoiceNumber) continue;
+    // if (!bill.invoiceNumber) continue;
 
     const billTotal = bill.grandTotal ?? 0;
+    const num = bill.invoiceNumber ?? 0;
 
     // Always track least invoice number
-    const { prefix, num } = parseInvoice(bill.invoiceNumber);
-    if (!leastInvoiceByPrefix[prefix] || leastInvoiceByPrefix[prefix] > num) {
-      leastInvoiceByPrefix[prefix] = num;
+    if (leastInvoice === null || num < leastInvoice) {
+      leastInvoice = num;
     }
 
     // IGNORE: if paymentMethod doesn't match
     if (paymentMethod && bill.paymentMethod !== paymentMethod) {
       preview.push({
         action: 'ignore',
-        invoiceNumber: bill.invoiceNumber,
+        invoiceNumber: bill.invoiceNumber ,
         billId: bill.id,
         paymentMethod: bill.paymentMethod,
         billTotal,
@@ -79,15 +73,19 @@ export async function previewBillsForReduction(opts: BillPreviewOptions) {
       continue;
     }
 
-    // DELETE if needed and bill is eligible (above minBillAmount)
+    const remainingAfterDelete = allTotal - deletedTotal - billTotal;
+
+    // DELETE only if:
+    // 1. bill >= minBillAmount
+    // 2. remaining total won't drop below target
     if (
-      deletedTotal < deleteTarget &&
-      billTotal >= minBillAmount
+      billTotal >= minBillAmount &&
+      remainingAfterDelete >= targetAmount
     ) {
       deletedTotal += billTotal;
       preview.push({
         action: 'delete',
-        invoiceNumber: bill.invoiceNumber,
+        invoiceNumber: bill.invoiceNumber ,
         billId: bill.id,
         paymentMethod: bill.paymentMethod,
         billTotal,
@@ -95,7 +93,7 @@ export async function previewBillsForReduction(opts: BillPreviewOptions) {
     } else {
       preview.push({
         action: 'keep',
-        invoiceNumber: bill.invoiceNumber,
+        invoiceNumber: bill.invoiceNumber ,
         billId: bill.id,
         paymentMethod: bill.paymentMethod,
         billTotal,
@@ -113,7 +111,7 @@ export async function previewBillsForReduction(opts: BillPreviewOptions) {
     deleteBillIds: preview
       .filter(b => b.action === 'delete')
       .map(b => b.billId),
-    leastInvoiceByPrefix,
+    leastInvoice, // now a single number instead of per-prefix
     preview,
   };
 }

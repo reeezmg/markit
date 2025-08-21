@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useFetch } from '#app'
 
 const useAuth = () => useNuxtApp().$auth;
@@ -38,7 +38,7 @@ const billsValueBefore = ref<number | null>(null)
 const billsCountBefore = ref<number | null>(null)
 const billsCountAfter = ref<number | null>(null)
 const deleteBillIds = ref<string[]>([])
-const leastInvoiceByPrefix = ref<Record<string, number>>({})
+const leastInvoice = ref<number | null>(null)   // 🔄 changed from object to single number
 const errorMessage = ref<string | null>(null)
 
 const page = ref(1)
@@ -53,7 +53,7 @@ async function handleSubmit() {
       method: 'POST',
       body: {
         ...form.value,
-       startDate: new Date(new Date(form.value.startDate).setHours(0, 0, 0, 0)),
+        startDate: new Date(new Date(form.value.startDate).setHours(0, 0, 0, 0)),
         endDate: new Date(new Date(form.value.endDate).setHours(23, 59, 59, 999)),
         companyId: useAuth().session.value?.companyId
       }
@@ -63,18 +63,15 @@ async function handleSubmit() {
       throw error.value
     }
 
-    // Ensure we always have an array, even if empty
     previewResults.value = data.value?.preview ?? []
     billsValueAfter.value = data.value?.billsValueAfter ?? null
     billsValueBefore.value = data.value?.billsValueBefore ?? null
     billsCountBefore.value = data.value?.billsCountBefore ?? null
     billsCountAfter.value = data.value?.billsCountAfter ?? null
     deleteBillIds.value = data.value?.deleteBillIds ?? []
-    leastInvoiceByPrefix.value = data.value?.leastInvoiceByPrefix ?? {}
+    leastInvoice.value = data.value?.leastInvoice ?? null   // 🔄 updated to match backend
 
-    // Reset to first page when new results come in
     page.value = 1
-
   } catch (error) {
     errorMessage.value = 'Failed to preview bills. Please try again.'
     console.error('Error previewing bills:', error)
@@ -95,7 +92,7 @@ async function handleDelete() {
         startDate: new Date(form.value.startDate),
         companyId: useAuth().session.value?.companyId,
         deleteBillIds: deleteBillIds.value,
-        leastInvoiceByPrefix: leastInvoiceByPrefix.value
+        leastInvoice: leastInvoice.value   // 🔄 send number instead of object
       }
     })
 
@@ -103,16 +100,13 @@ async function handleDelete() {
       throw error.value
     }
 
-    // After successful deletion, clear the preview
     previewResults.value = []
     billsValueAfter.value = null
     billsValueBefore.value = null
     billsCountBefore.value = null
     billsCountAfter.value = null
 
-    // Show success message or redirect
     alert('Bills deleted successfully!')
-
   } catch (error) {
     errorMessage.value = 'Failed to delete bills. Please try again.'
     console.error('Error deleting bills:', error)
