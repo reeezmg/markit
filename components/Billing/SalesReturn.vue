@@ -131,7 +131,6 @@ const entryArgs = computed(() => ({
   where: {
     barcode: scannedBarcode.value,
     bill: {
-      invoiceNumber: invoiceNumber.value, // integer, not string
       companyId: useAuth().session.value?.companyId,
     },
     // item:{
