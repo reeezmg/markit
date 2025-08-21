@@ -9,6 +9,7 @@ type ProcessedUser = {
 }
 
 export const useUserStore = defineStore('user', () => {
+  const config = useRuntimeConfig();
   const users = ref<ProcessedUser[]>([])
   const loading = ref(false)
   const error = ref<any>(null)
@@ -17,7 +18,7 @@ export const useUserStore = defineStore('user', () => {
     loading.value = true
     error.value = null
     try {
-      const data = await $fetch<ProcessedUser[]>('/api/getuser', {
+      const data = await $fetch<ProcessedUser[]>(config.public.prismaUrl + '/api/getuser', {
         query: { companyId }
       })
       users.value = data

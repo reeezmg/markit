@@ -2,6 +2,7 @@
 import { useFindUniqueUser } from '~/lib/hooks';
 const useAuth = () => useNuxtApp().$auth;
 const router = useRouter();
+
 const { data: user }: any = useFindUniqueUser({
     where: { id: useAuth().session.value?.id },
     include: {
@@ -15,6 +16,7 @@ const { data: user }: any = useFindUniqueUser({
 
 watch(user, (newUser) => {
    console.log('User data updated:', newUser);
+   console.log('Active company ID:', useAuth().session.value?.id);
 }, { immediate: true });
 
 const isOpen = ref(false);
@@ -35,7 +37,6 @@ watch(user, (newUser) => {
     );
   }
 }, { immediate: true });
-
 
 const teams = (items) =>
     items.map((item) => ({

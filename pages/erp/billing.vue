@@ -4,6 +4,7 @@ import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'
+
 const queryClient = useQueryClient();
 
 const currentRequestIds = ref({});
@@ -124,8 +125,6 @@ const grandTotal = computed(() => {
 
   return afterDiscount - redeemedAmt.value;
 });
-
-
 
 
 
@@ -1059,7 +1058,15 @@ const handleSave = async () => {
       );
     }
 
-    const billInv = `${useAuth().session.value?.code}/${useAuth().session.value?.billCounter}`;
+    const billcounter = await $fetch('/api/bill/findBillCounter', {
+    method: 'POST',
+    body: {
+      companyId: useAuth().session.value?.companyId,
+      userId: useAuth().session.value?.id,
+    }
+  });
+
+    const billInv = billcounter;
     const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
     const billPoints = pointsValue > 0 ? Number(grandTotal.value) / pointsValue : 0;
     const returnedItems = items.value.filter(item => item.return);
@@ -1239,9 +1246,9 @@ const handleSave = async () => {
         color: 'red',
       });
    
-    }).finally(() => {
+    }).finally(async () => {
        isSaving.value = false
-      updateBillCounter();
+       await useAuth().updateSession();
     })
 
     // 🧾 Trigger Print
@@ -2194,12 +2201,7 @@ const handleRedeemPoints = async () => {
         <div>
            Qty: {{ tQty }}
         </div>
-        <div>
-          <div v-if="!isSaving">
-            Inv #: {{ `${useAuth().session.value?.code}/${useAuth().session.value?.billCounter}` }}
-          </div>
-          <UButton v-else :loading="true" variant="ghost" color="grey"/>
-        </div>
+  
       </div>
         <!-- Other form elements -->
          <div v-if="!token && !isMobile" class="sm:grid hidden grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">

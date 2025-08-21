@@ -1,17 +1,15 @@
 export const useAuth = () => useNuxtApp().$auth;
+
 export const authLogin = async (email: string, password: string) => {
-    const res = await $fetch('/api/auth/login', {
+    const config = useRuntimeConfig();
+    
+    const res = await $fetch(config.public.serverUrl + '/api/auth/login', {
         method: 'POST',
-        body: {
-            email: email,
-            password: password,
-        },
+        body: { email, password },
+        credentials: 'include',
     });
     await useAuth().updateSession();
-    await navigateTo(
-        useAuth().redirectTo.value ||
-            '/dashboard',
-    );
+    await navigateTo(useAuth().redirectTo.value || '/dashboard');
     return res;
 };
 
@@ -23,51 +21,48 @@ export const authRegister = async (
     plan: string,
     type: string,
 ) => {
-    const res = await $fetch('/api/auth/register', {
+    const config = useRuntimeConfig();
+    const res = await $fetch(config.public.serverUrl + '/api/auth/register', {
         method: 'POST',
-        body: {
-            email,
-            name,
-            companyname,
-            password,
-            plan,
-            type,
-        },
+        body: { email, name, companyname, password, plan, type },
+        credentials: 'include',
     });
     await authLogin(email, password);
     return res;
 };
 
-export const authForgetPassword = async (
-    current_password: string,
-    password: string
-) => {
-    const res = await $fetch('/api/auth/forgetPassword', {
+export const authForgetPassword = async (current_password: string, password: string) => {
+    const config = useRuntimeConfig();
+    const res = await $fetch(config.public.serverUrl + '/api/auth/forgetPassword', {
         method: 'POST',
         body: {
             current_password,
             password,
             id: useAuth().session.value?.id,
         },
+        credentials: 'include',
     });
     return res;
 };
 
 export const authLogout = async () => {
-    await $fetch('/api/auth/logout', {
+    const config = useRuntimeConfig();
+    await $fetch(config.public.serverUrl + '/api/auth/logout', {
         method: 'POST',
+        credentials: 'include',
     });
     await useAuth().updateSession();
     await navigateTo('/login');
 };
-export const checkEmailExist = async (email:string) => {
-    const res = await $fetch('/api/auth/existinguser', {
+
+export const checkEmailExist = async (email: string) => {
+    const config = useRuntimeConfig();
+    const res = await $fetch(config.public.serverUrl + '/api/auth/existinguser', {
         method: 'POST',
-        body: {
-            email: email
-        },
+        body: { email },
+        credentials: 'include',
     });
-    return res
+    return res;
 };
 
 export const updateCompanySession = async (
@@ -81,126 +76,84 @@ export const updateCompanySession = async (
     plan: number | undefined,
     description: string | undefined,
     storeUniqueName: string | undefined
-    
 ) => {
-    await $fetch('/api/auth/session', {
+    const config = useRuntimeConfig();
+    await $fetch(config.public.serverUrl + '/api/auth/session', {
         method: 'PUT',
-        body: {
-            companyId,
-            companyType,
-            companyName,
-            name,
-            role,
-            code,
-            billCounter,
-            plan,
-            description,
-            storeUniqueName
-        },
+        body: { companyId, companyType, companyName, name, role, code, billCounter, plan, description, storeUniqueName },
+        credentials: 'include',
     });
     await useAuth().updateSession();
 };
 
-export const updateStoreUniqueName = async (
-    storeUniqueName: string,
-    
-) => {
-    await $fetch('/api/auth/changeStoreUniqueName', {
+export const updateStoreUniqueName = async (storeUniqueName: string) => {
+    const config = useRuntimeConfig();
+    await $fetch(config.public.serverUrl + '/api/auth/changeStoreUniqueName', {
         method: 'PUT',
-        body: {
-            storeUniqueName
-        },
+        body: { storeUniqueName },
+        credentials: 'include',
     });
     await useAuth().updateSession();
 };
 
-export const updateIsTaxIncluded = async (
-    isTaxIncluded: boolean,
-    
-) => {
-    await $fetch('/api/auth/changeIncludeTax', {
+export const updateIsTaxIncluded = async (isTaxIncluded: boolean) => {
+    const config = useRuntimeConfig();
+    await $fetch(config.public.serverUrl + '/api/auth/changeIncludeTax', {
         method: 'PUT',
-        body: {
-            isTaxIncluded
-        },
+        body: { isTaxIncluded },
+        credentials: 'include',
     });
     await useAuth().updateSession();
 };
 
-export const updateIsBarcodeIncluded = async (
-    isBarcodeIncluded: boolean,
-    
-) => {
-    await $fetch('/api/auth/changeIncludeBarcode', {
+export const updateIsBarcodeIncluded = async (isBarcodeIncluded: boolean) => {
+    const config = useRuntimeConfig();
+    await $fetch(config.public.serverUrl + '/api/auth/changeIncludeBarcode', {
         method: 'PUT',
-        body: {
-            isBarcodeIncluded
-        },
-    });
-    await useAuth().updateSession();
-};
-export const updateIsUserTrackIncluded = async (
-    isUserTrackIncluded: boolean,
-    
-) => {
-    await $fetch('/api/auth/changeIncludeUserTrack', {
-        method: 'PUT',
-        body: {
-            isUserTrackIncluded
-        },
+        body: { isBarcodeIncluded },
+        credentials: 'include',
     });
     await useAuth().updateSession();
 };
 
-export const updateSession = async (
-    productinputData: any,
-    variantinputData: any,
-    
-) => {
-    await $fetch('/api/auth/changeInputs', {
+export const updateIsUserTrackIncluded = async (isUserTrackIncluded: boolean) => {
+    const config = useRuntimeConfig();
+    await $fetch(config.public.serverUrl + '/api/auth/changeIncludeUserTrack', {
         method: 'PUT',
-        body: {
-            productinputData,
-            variantinputData
-        },
+        body: { isUserTrackIncluded },
+        credentials: 'include',
+    });
+    await useAuth().updateSession();
+};
+
+export const updateSession = async (productinputData: any, variantinputData: any) => {
+    const config = useRuntimeConfig();
+    await $fetch(config.public.serverUrl + '/api/auth/changeInputs', {
+        method: 'PUT',
+        body: { productinputData, variantinputData },
+        credentials: 'include',
     });
     await useAuth().updateSession();
     console.log('Session updated');
 };
 
-export const updateProfileDetails = async (
-    name: string | null,
-    email: string | null,
-    image: string | null
-) => {
-    await $fetch('/api/auth/changeprofiledetails', {
+export const updateProfileDetails = async (name: string | null, email: string | null, image: string | null) => {
+    const config = useRuntimeConfig();
+    await $fetch(config.public.serverUrl + '/api/auth/changeprofiledetails', {
         method: 'PUT',
-        body: {
-            name,
-            email,
-            image,
-        },
+        body: { name, email, image },
+        credentials: 'include',
     });
     await useAuth().updateSession();
     console.log('Session updated');
 };
 
-
-export const updateBillCounter = async () => {
-    await $fetch('/api/auth/changeBillCounter', {
+export const updatePointsValue = async (pointsValue: number) => {
+    const config = useRuntimeConfig();
+    await $fetch(config.public.serverUrl + '/api/auth/changePointsValue', {
         method: 'PUT',
-    });
-    await useAuth().updateSession();
-};
-
-export const updatePointsValue = async (
-    pointsValue: number
-) => {
-    await $fetch('/api/auth/changePointsValue', {
-        method: 'PUT',
-        body: {
-            pointsValue
-        },
+        body: { pointsValue },
+        credentials: 'include',
     });
     await useAuth().updateSession();
 };

@@ -108,7 +108,7 @@ model Company extends Base {
     currency    String @default("INR")
     images      String?
     pointsValue Int @default(0) @map("points_value")
-
+    billCounter Int @default(1) @map("bill_counter")
     isTaxIncluded Boolean @default(true) @map("is_tax_included")
     isBarcodeIncluded Boolean @default(true) @map("is_barcode_included")
     isUserTrackIncluded Boolean @default(true) @map("is_usertrack_included")
@@ -451,7 +451,7 @@ model Item {
 
 model Bill extends Base {
     createdAt       DateTime @map("created_at")
-    invoiceNumber   String? @map("invoice_number")  
+    invoiceNumber   Int? @map("invoice_number")  
     subtotal        Float?    
     discount        Float?    
     tax             Float?    
@@ -684,7 +684,6 @@ model CompanyUser {
     name      String?
     role      UserRole      @default(user) @map('role')
     status    Boolean       @default(true)
-    billCounter Int @default(1) @map("bill_counter")
     entries     Entry[]
     bills       Bill[]
     @@id([companyId, userId])

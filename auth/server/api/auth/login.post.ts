@@ -1,5 +1,16 @@
 export default eventHandler(async (event) => {
-    const session = await useAuthSession(event);
+
+   const sessionCookie = getCookie(event, 'session')
+  console.log('Session cookie:', sessionCookie)
+
+  // Or get all cookies sent by the client
+  const cookies = parseCookies(event)
+  console.log('All cookies:', cookies)
+
+  const session = await useAuthSession(event)
+  console.log('Session data:', session.data)
+
+    
     const { email, password } = await readBody(event);
     const user = await findUserByEmail(email);
 

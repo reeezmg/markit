@@ -16,6 +16,9 @@ export default defineNuxtConfig({
             password: process.env.NUXT_AUTH_PASSWORD || '',
             
         },
+        public: {
+            prismaUrl: process.env.PRISMA_URL,
+        },
     },
     nitro: {
         storage: {

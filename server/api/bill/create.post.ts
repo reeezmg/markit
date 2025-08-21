@@ -14,11 +14,10 @@ export default defineEventHandler(async (event) => {
     tokenEntries
   } = body;
 
-   await session.update({
-        billCounter:session.data.billCounter + 1,
-    });
+ 
 
   try {
+
     await prisma.$transaction(async (tx) => {
       // 1. Create Bill with Entries
       await tx.bill.create({
@@ -87,12 +86,9 @@ export default defineEventHandler(async (event) => {
         });
       }
 
-    await tx.companyUser.update({        
+    await tx.company.update({        
         where: {
-            companyId_userId: {
-            companyId,
-            userId,
-            },
+            id: companyId,
         },
         data: {
             billCounter: {
@@ -108,10 +104,6 @@ export default defineEventHandler(async (event) => {
     return { success: true };
 
   } catch (error) {
-    console.log('session', session.data.billCounter);
-     await session.update({
-        billCounter:session.data.billCounter - 1,
-    });
    return sendError(event, createError({
       statusCode: 500,
       statusMessage: 'Failed to Create bill',

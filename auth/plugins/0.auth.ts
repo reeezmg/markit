@@ -1,12 +1,15 @@
 import type { AuthSession } from '~~/auth/server/utils/session';
 
 export default defineNuxtPlugin(async (nuxtApp) => {
+  const config = useRuntimeConfig();
   // Skip on error pages
   if (nuxtApp.payload.error) {
     return {};
   }
 
-  const { data: session, refresh: updateSession } = await useFetch<AuthSession>('/api/auth/session');
+const { data: session, refresh: updateSession } = await useFetch<AuthSession>(config.public.serverUrl + '/api/auth/session', {
+  credentials: 'include',
+});
 
   const loggedIn = computed(() => !!session.value?.email);
   const fallbackUrl = computed(() => 

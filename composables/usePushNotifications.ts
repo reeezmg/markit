@@ -2,6 +2,7 @@ import { getToken, onMessage } from 'firebase/messaging'
 import { useMessaging } from './useMessaging'
 
 export async function usePushNotifications(userId: string) {
+      const config = useRuntimeConfig();
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     console.warn('Notifications not supported in this browser')
     return
@@ -38,7 +39,7 @@ export async function usePushNotifications(userId: string) {
   }
 
   try {
-    await $fetch('/api/savefcmtoken', {
+    await $fetch(config.public.prismaUrl+ '/api/savefcmtoken', {
       method: 'POST',
       body: {
         userId,

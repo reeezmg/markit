@@ -15,6 +15,16 @@ const links = [
             icon: 'i-heroicons-banknotes',
             to: '/settings/store',
         },
+        {
+            label: 'Printer',
+            icon: 'i-heroicons-printer',
+            to: '/settings/printer',
+        },
+        {
+            label: 'test',
+            icon: 'i-heroicons-printer',
+            to: '/settings/test',
+        },
        
     ],
 ];
