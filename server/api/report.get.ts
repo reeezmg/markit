@@ -103,13 +103,10 @@ const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : undefined
     })
   ])
 
-  bills.sort((a, b) => {
-  const [aSeries, aNumber] = a.invoiceNumber.split('/').map(Number)
-  const [bSeries, bNumber] = b.invoiceNumber.split('/').map(Number)
-
-  if (aSeries !== bSeries) return aSeries - bSeries
-  return aNumber - bNumber
+ bills.sort((a, b) => {
+  return Number(a.invoiceNumber) - Number(b.invoiceNumber)
 })
+
 
   // Helper functions for computed values
   const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
