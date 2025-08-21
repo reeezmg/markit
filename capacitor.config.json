@@ -1,0 +1,19 @@
+{
+  "appId": "com.markit.app",
+  "appName": "Markit",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https",
+    "hostname": "markit.co.in",
+    "url": "https://markit.co.in",
+    "allowNavigation": ["markit.co.in"]
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    },
+    "CapacitorCookies": {
+      "enabled": true
+    }
+  }
+}
