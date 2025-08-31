@@ -1,13 +1,25 @@
 <script setup lang="ts">
 import type { FormError, FormSubmitEvent } from '#ui/types';
 import { useUpdateCompany, useFindUniqueCompany, useUpsertAddress } from '~/lib/hooks';
+import { v4 as uuidv4 } from 'uuid';
+import AwsService from '~/composables/aws';
+
+interface ImageData {
+    file: File;
+    uuid: string;
+}
 
 const UpdateCompany = useUpdateCompany();
 const UpsertAddress = useUpsertAddress();
 const useAuth = () => useNuxtApp().$auth;
+const awsService = new AwsService();
 
+const fileRef = ref<HTMLInputElement>();
 const isNameChanged = ref(false);
 const isDescriptionChanged = ref(false);
+const isImageChanged = ref(false);
+
+const selectedFile = ref<ImageData | null>(null);
 
 const isUpdatingName = ref(false);
 const isUpdatingAddress = ref(false);
@@ -15,6 +27,7 @@ const isUpdatingAccount = ref(false);
 const isUpdatingInputs = ref(false);
 const isUpdatingPointsValue = ref(false);
 const isUpdatingDescription = ref(false);
+const isUpdatingLogo = ref(false);
 
 
 interface AccountState {
@@ -70,6 +83,8 @@ const onLocationSelected = (location) => {
 };
 
 const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
+const storeName = ref(useAuth().session.value?.companyName);
+const storeLogo = ref(useAuth().session.value?.logo);
 const storeDescription = ref(useAuth().session.value?.description || '');
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
 const isBarcodeInclude = ref(useAuth().session.value?.isBarcodeIncluded);
@@ -383,6 +398,76 @@ const onPointsValueChange = async() => {
 };
 
 
+const onLogoUpdate = async () => {
+  isUpdatingLogo.value = true;
+    try{
+    await UpdateCompany.mutateAsync({
+        where: {
+            id: useAuth().session.value?.companyId,
+        },
+        data: {
+            ...(selectedFile.value?.file && {
+                logo: selectedFile.value?.uuid,
+            }),
+        }
+    });
+
+
+    
+    if (selectedFile.value) {
+        const base64 = await prepareFileForApi(selectedFile.value.file);
+        const base64file = { base64, uuid: selectedFile.value.uuid };
+
+        console.log(base64file);
+
+        await awsService.uploadBase64File(base64file.base64, base64file.uuid);
+    }
+
+
+}catch(error){
+    console.error(error);
+    toast.add({
+        title: 'Error updating profile',
+        icon: 'i-heroicons-exclamation-circle',
+        color: 'red',
+    });
+}finally {
+        isUpdatingLogo.value = false;
+        await useAuth().updateSession();
+        toast.add({
+            title: 'Profile updated successfully',
+            icon: 'i-heroicons-check-circle',
+            color: 'green',
+        });
+    }
+
+};
+
+
+function onFileClick() {
+    fileRef.value?.click();
+}
+
+function handleAddImageChange(e: Event) {
+    const files = (e.target as HTMLInputElement).files;
+    isImageChanged.value = true
+    if (files && files.length > 0) {
+        const file = files[0]; // Take only the first file
+        const uuid = uuidv4();
+        selectedFile.value = { file, uuid };
+    }
+}
+
+
+const previewUrl = computed(() => {
+  if (selectedFile.value?.file) {
+    return URL.createObjectURL(selectedFile.value.file);
+  }
+  return null;
+});
+
+
+
 </script>
 
 <template>
@@ -411,20 +496,52 @@ const onPointsValueChange = async() => {
         </template>
       </UInput>
     </UFormGroup>
+ 
+    <UDivider class="mb-4" />
+
+    <UFormGroup
+      name="logo"
+      label="Logo"
+      class="grid grid-cols-2 gap-2"
+      help="JPG, GIF or PNG. 1MB Max."
+      :ui="{
+          container: 'flex flex-wrap items-center gap-3',
+          help: 'mt-0',
+      }"
+  >
+      <UAvatar v-if="previewUrl" :src="previewUrl" :alt="storeName" size="lg" />
+      <UAvatar v-else :src="`https://images.markit.co.in/${storeLogo|| ''}`" :alt="storeName" size="lg" />
+
+      <UButton
+          label="Choose"
+          color="white"
+          size="md"
+          @click="onFileClick"
+      />
+
+      <input
+          ref="fileRef"
+          type="file"
+          class="hidden"
+          accept=".jpg, .jpeg, .png, .gif"
+          @change="handleAddImageChange"
+      />
+      
+  </UFormGroup>
     <div class="my-4 grid grid-cols-2 gap-2">
         <div></div>
         <div>
             <UButton
-                label="Update Name"
-                size="md"
-                :loading="isUpdatingName"
-                :disabled="!isNameChanged || !!taken"
-                @click="onNameUpdate"
+              label="Update Logo"
+              size="md"
+              :loading="isUpdatingLogo"
+              :disabled="!isImageChanged"
+              @click="onLogoUpdate"
             />
         </div>
     </div>
 
-        <UDivider class="mb-4" />
+    <UDivider class="mb-4" />
 
 
     <UFormGroup

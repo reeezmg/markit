@@ -1,22 +1,29 @@
 <script setup lang="ts">
 import { useMessaging } from '~/composables/useMessaging'
-import { deleteToken,getToken } from 'firebase/messaging';
+import { deleteToken, getToken } from 'firebase/messaging';
+import { Capacitor } from '@capacitor/core';
 
 const { isHelpSlideoverOpen } = useDashboard();
 const { isDashboardSearchModalOpen } = useUIState();
 const { metaSymbol } = useShortcuts();
 const useAuth = () => useNuxtApp().$auth;
-const { $client } = useNuxtApp()
-const messaging = await useMessaging()
+const { $client } = useNuxtApp();
 
+let messaging;
+if (!Capacitor.isNativePlatform()) {
+  messaging = await useMessaging();
+}
 
 const onLogout = async () => {
   try {
-    // Retrieve the current token first
-    console.log("heer")
-    const currentToken = await getToken(messaging);
-    if (currentToken) {
-      const success = await deleteToken(messaging);
+    // Only run Firebase messaging in the browser
+    if (!Capacitor.isNativePlatform() && messaging) {
+      console.log("Deleting FCM token in browser...");
+      const currentToken = await getToken(messaging);
+      if (currentToken) {
+        await deleteToken(messaging);
+        console.log("FCM token deleted.");
+      }
     }
   } catch (error) {
     console.error('Error deleting FCM token:', error);
@@ -26,41 +33,42 @@ const onLogout = async () => {
 };
 
 const items = computed(() => [
-    [
-        {
-            slot: 'account',
-            label: '',
-            disabled: true,
-        },
-    ],
-    [
-        {
-            label: 'Settings',
-            icon: 'i-heroicons-cog-8-tooth',
-            to: '/settings',
-        },
-        {
-            label: 'Help & Support',
-            icon: 'i-heroicons-question-mark-circle',
-            shortcuts: ['?'],
-            click: () => (isHelpSlideoverOpen.value = true),
-        },
-    ],
-    [
-        {
-            label: 'Sign out',
-            icon: 'i-heroicons-arrow-left-on-rectangle',
-            click: async () => {
-                onLogout()
-            },
-        },
-    ],
+  [
+    {
+      slot: 'account',
+      label: '',
+      disabled: true,
+    },
+  ],
+  [
+    {
+      label: 'Settings',
+      icon: 'i-heroicons-cog-8-tooth',
+      to: '/settings',
+    },
+    {
+      label: 'Help & Support',
+      icon: 'i-heroicons-question-mark-circle',
+      shortcuts: ['?'],
+      click: () => (isHelpSlideoverOpen.value = true),
+    },
+  ],
+  [
+    {
+      label: 'Sign out',
+      icon: 'i-heroicons-arrow-left-on-rectangle',
+      click: async () => {
+        onLogout();
+      },
+    },
+  ],
 ]);
 </script>
 
+
 <template>
     <UDropdown
-        mode="hover"
+        mode="click"
         :items="items"
         :ui="{ width: 'w-full', item: { disabled: 'cursor-text select-text' } }"
         :popper="{ strategy: 'absolute', placement: 'top' }"

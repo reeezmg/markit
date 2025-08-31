@@ -1,91 +1,113 @@
-import type { AuthSession } from '~~/auth/server/utils/session';
+import type { AuthSession } from '~~/auth/server/utils/session'
 
 export default defineNuxtPlugin(async (nuxtApp) => {
-  const config = useRuntimeConfig();
+  const config = useRuntimeConfig()
   // Skip on error pages
   if (nuxtApp.payload.error) {
-    return {};
+    return {}
   }
 
-const { data: session, refresh: updateSession } = await useFetch<AuthSession>(
-  '/api/auth/session',
-  {
-    credentials: 'include'
-  }
-)
+  const { data: session, refresh: updateSession } = await useFetch<AuthSession>(
+    '/api/auth/session',
+    { credentials: 'include' }
+  )
 
+  const loggedIn = computed(() => !!session.value?.email)
+  const fallbackUrl = computed(() =>
+    session.value?.plan === 'free' || session.value?.plan === 'lite'
+      ? '/offline'
+      : '/erp/billing'
+  )
 
-  const loggedIn = computed(() => !!session.value?.email);
-  const fallbackUrl = computed(() => 
-  session.value?.plan === 'free' || session.value?.plan === 'lite'
-    ? '/offline'
-    : '/erp/billing'
-)
+  const redirectTo = useState<string>('redirectTo', () => '/erp/billing')
 
-  const redirectTo = useState<string>('redirectTo', () => '/erp/billing');
+  // ✅ Route persistence key
+  const LAST_ROUTE_KEY = 'lastRoute'
 
-  // Only register middleware on client
   if (process.client) {
-    addRouteMiddleware('auth', (to) => {
-      const plan = session.value?.plan
+    // 🔹 Save last route on each navigation
+    addRouteMiddleware(
+      'persist-last-route',
+      (to) => {
+        // Don’t persist auth-related pages
+        if (!['/login', '/register'].includes(to.path)) {
+          localStorage.setItem(LAST_ROUTE_KEY, to.fullPath)
+        }
+      },
+      { global: true }
+    )
 
-      // Redirect away from auth pages if already logged in
-      if (loggedIn.value && ['/login', '/register', '/'].includes(to.path)) {
-        return fallbackUrl.value
-      }
+    // 🔹 Auth & plan restrictions middleware
+    addRouteMiddleware(
+      'auth',
+      (to) => {
+        const plan = session.value?.plan
 
-      // Block access to /erp/billing for free/lite plans
-      if (
-        loggedIn.value &&
-        to.path.startsWith('/erp/billing') &&
-        (plan === 'free' || plan === 'lite')
-      ) {
-        return '/offline'
-      }
-      if (
-        loggedIn.value &&
-        to.path.startsWith('/offline') &&
-        (plan === 'pro')
-      ) {
-        return '/erp/billing'
-      }
+        if (loggedIn.value && ['/login', '/register', '/'].includes(to.path)) {
+          return fallbackUrl.value
+        }
 
-      // Original auth check
-      if (to.meta.auth && !loggedIn.value && session.value?.type !== 'USER') {
-        redirectTo.value = to.path
-        return '/login'
-      }
-    }, { global: true })
+        if (
+          loggedIn.value &&
+          to.path.startsWith('/erp/billing') &&
+          (plan === 'free' || plan === 'lite')
+        ) {
+          return '/offline'
+        }
+        if (
+          loggedIn.value &&
+          to.path.startsWith('/offline') &&
+          plan === 'pro'
+        ) {
+          return '/erp/billing'
+        }
 
+        if (to.meta.auth && !loggedIn.value && session.value?.type !== 'USER') {
+          redirectTo.value = to.path
+          return '/login'
+        }
+      },
+      { global: true }
+    )
 
-    const route = useRoute();
+    const route = useRoute()
     watch(loggedIn, async (isLoggedIn) => {
-      const isStoreRoute = route.path.startsWith('/store/');
-      // Handle logout case
+      const isStoreRoute = route.path.startsWith('/store/')
+
       if (!isLoggedIn && route.meta.auth && !isStoreRoute) {
-        redirectTo.value = route.path;
-        await navigateTo('/login');
+        redirectTo.value = route.path
+        await navigateTo('/login')
+      } else if (
+        isLoggedIn &&
+        ['/login', '/register', '/'].includes(route.path)
+      ) {
+        await navigateTo(redirectTo.value || '/erp/billing')
       }
-      // Handle login case - redirect from auth pages
-      else if (isLoggedIn && ['/login', '/register', '/'].includes(route.path)) {
-        await navigateTo(redirectTo.value || '/erp/billing');
-      }
-    });
+    })
 
-    // Initial check for logged-in users on public routes
-    if (
-      loggedIn.value &&
-      ['/login', '/register', '/'].includes(route.path)
-    ) {
-      const currentRoute = useRoute();
-      const query = currentRoute.query;
-      const queryString = Object.keys(query).length > 0
-        ? '?' + new URLSearchParams(query as Record<string, string>).toString()
-        : '';
+    // 🔹 Initial restore of last route
+    if (loggedIn.value) {
+      const savedRoute = localStorage.getItem(LAST_ROUTE_KEY)
+      const currentRoute = useRoute()
 
-      const target = redirectTo.value || '/erp/billing';
-      if (target !== currentRoute.path) {
-        await navigateTo(`${target}${queryString}`);
+      if (
+        savedRoute &&
+        savedRoute !== currentRoute.fullPath &&
+        !['/login', '/register', '/'].includes(currentRoute.path)
+      ) {
+        await navigateTo(savedRoute)
+      } else if (['/login', '/register', '/'].includes(currentRoute.path)) {
+        const query = currentRoute.query
+        const queryString =
+          Object.keys(query).length > 0
+            ? '?' +
+              new URLSearchParams(query as Record<string, string>).toString()
+            : ''
+
+        const target = redirectTo.value || '/erp/billing'
+        if (target !== currentRoute.path) {
+          await navigateTo(`${target}${queryString}`)
+        }
       }
     }
   }
@@ -96,8 +118,7 @@ const { data: session, refresh: updateSession } = await useFetch<AuthSession>(
         session,
         loggedIn,
         updateSession,
-        redirectTo,
       },
     },
-  };
-});
+  }
+})

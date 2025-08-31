@@ -1,18 +1,43 @@
 package com.markit.app;
 
+import android.content.Context;
+import android.net.ConnectivityManager;
+import android.net.Network;
+import android.net.NetworkCapabilities;
+import android.os.Bundle;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+
 import com.getcapacitor.BridgeActivity;
 
-import android.os.Bundle;
-import android.webkit.CookieManager;
-
 public class MainActivity extends BridgeActivity {
+
   @Override
-  protected void onCreate(Bundle savedInstanceState) {
+  public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
 
-    // ✅ allow cookies in WebView
-    CookieManager cookieManager = CookieManager.getInstance();
-    cookieManager.setAcceptCookie(true);
-    cookieManager.setAcceptThirdPartyCookies(getBridge().getWebView(), true);
+    WebView webView = getBridge().getWebView();
+    webView.setWebViewClient(new WebViewClient());
+
+    if (isNetworkAvailable()) {
+      // Load your login URL if network is available
+      webView.loadUrl("https://markit.co.in/login");
+    } else {
+      // Load offline page if network is not available
+      webView.loadUrl("file:///android_asset/offline.html");
+    }
+  }
+
+  private boolean isNetworkAvailable() {
+    ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+    if (cm == null) return false;
+
+    Network network = cm.getActiveNetwork();
+    if (network == null) return false;
+
+    NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
+    return capabilities != null &&
+      (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR));
   }
 }

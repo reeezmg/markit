@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { useFindUniqueUser } from '~/lib/hooks';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { Capacitor } from '@capacitor/core'
 const useAuth = () => useNuxtApp().$auth;
 const router = useRouter();
 
@@ -25,6 +27,7 @@ const activeCompany = ref([
     {
         company: {
             name: 'defult',
+            logo:''
         },
     },
 ]);
@@ -42,12 +45,29 @@ const teams = (items) =>
     items.map((item) => ({
         label: item.company.name,
         avatar: {
-            src: '',
+            src:`https://images.markit.co.in/${item.company.logo}` ,
         },
-        click: async () => {
-            await updateCompanySession(item.company.id, item.company.type, item.company.name, item.name, item.role, item.code, item.billCounter, item.company.plan, item.company.description, item.company.storeUniqueName);
-            window.location.reload();
-        },
+       click: async () => {
+        await updateCompanySession(
+            item.company.id,
+            item.company.type,
+            item.company.name,
+            item.company.logo,
+            item.name,
+            item.role,
+            item.code,
+            item.billCounter,
+            item.company.plan,
+            item.company.description,
+            item.company.storeUniqueName
+        );
+
+        if (Capacitor.isNativePlatform()) {
+            SplashScreen.show({ autoHide: false });
+        }
+
+        setTimeout(() => window.location.reload(), 50);
+        }
     }));
 
 const actions = computed(() => {
@@ -71,7 +91,7 @@ const actions = computed(() => {
 <template>
     <UDropdown
         v-slot="{ open }"
-        mode="hover"
+        mode="click"
         :items="[teams(companies)]"
         class="w-full"
         :ui="{ width: 'w-full' }"
@@ -83,7 +103,7 @@ const actions = computed(() => {
             :class="[open && 'bg-gray-50 dark:bg-gray-800']"
             class="w-full"
         >
-            <!-- <UAvatar :src="team.avatar.src" size="2xs" /> -->
+            <UAvatar :src="`https://images.markit.co.in/${activeCompany[0]?.company?.logo}`" size="sm" />
 
             <span
                 class="truncate text-gray-900 dark:text-white font-semibold"

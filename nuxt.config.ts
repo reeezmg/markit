@@ -33,7 +33,7 @@ export default defineNuxtConfig({
 
   vite: {
     optimizeDeps: {
-      exclude: ['@electric-sql/pglite'],
+      exclude: ['@electric-sql/pglite','@point-of-sale/receipt-printer-encoder'],
     },
     ssr: {
       noExternal: ['@electric-sql/pglite'],

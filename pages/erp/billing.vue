@@ -4,6 +4,10 @@ import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'
+import {
+  CapacitorBarcodeScanner,
+  CapacitorBarcodeScannerTypeHint
+} from '@capacitor/barcode-scanner'
 
 const queryClient = useQueryClient();
 
@@ -289,6 +293,51 @@ onUnmounted(() => {
   stopCamera()
 })
 
+
+const scannerResult = ref('')
+
+const scanCode128 = async () => {
+  try {
+    const result =
+      await CapacitorBarcodeScanner.scanBarcode({
+        hint: CapacitorBarcodeScannerTypeHint.CODE_128, // ✅ Only Code 128
+        scanInstructions: 'Align barcode within the frame',
+      })
+
+    if (result.ScanResult) {
+        const pattern = /^\d+[A-Z]\d{6}$/ // required format
+
+        if (!pattern.test(result.ScanResult)) {
+         toast.add({
+              title: 'Scanned Barcode Is Invalid!',
+              color: 'red',
+            });
+          return
+        }
+      scannerResult.value = result.ScanResult
+
+      // Example: update last item
+      const lastIndex = items.value.length - 1
+      if (lastIndex >= 0) {
+        items.value[lastIndex].barcode = scannerResult.value
+        fetchItemData(scannerResult.value, lastIndex)
+        addNewRow(lastIndex, true)
+      }
+    }
+  } catch (err) {
+    console.error('🚫 Scan error:', err)
+  }
+}
+
+const handleScan = () => {
+  if (Capacitor.isNativePlatform()) {
+    scanCode128()
+  } else {
+    startCamera()
+  }
+}
+
+
 onMounted(() => {
   const bills = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
 
@@ -372,8 +421,7 @@ watch(currentBill, (newVal) => {
 // ✅ Create new bill
 function createNewBill() {
   const existing = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
-  const maxNo = Math.max(0, ...existing.map(b => parseInt(b.billNo) || 0));
-  const newBillNo = (maxNo + 1).toString();
+  const newBillNo = (existing.length + 1).toString(); // ✅ sequential (index + 1)
 
   billNo.value = newBillNo;
   date.value = new Date().toISOString();
@@ -401,10 +449,15 @@ function createNewBill() {
 
   const newBill = currentBill.value;
   existing.push(newBill);
+
+  // ✅ Re-sequence all bills after push
+  existing.forEach((b, i) => { b.billNo = (i + 1).toString(); });
+
   localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(existing));
   loadDraftBills();
   selectedDraft.value = newBill;
 }
+
 
 // ✅ Load all drafts into memory
 function loadDraftBills() {
@@ -445,6 +498,10 @@ function loadBill(billNumber) {
 // ✅ Delete bill
 function deleteBill(billNumber) {
   const deleted = draftBills.value.filter(b => b.billNo !== billNumber);
+
+  // ✅ Re-sequence after deletion
+  deleted.forEach((b, i) => { b.billNo = (i + 1).toString(); });
+
   localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(deleted));
   loadDraftBills();
 
@@ -453,6 +510,7 @@ function deleteBill(billNumber) {
     selectedDraft.value = updated[0];
   }
 }
+
 
 // ✅ Watch for selection change
 watch(selectedDraft, (val) => {
@@ -1696,9 +1754,9 @@ function handleCategoryChange(category, rowIndex) {
 }
 
 onMounted(() => {
-  isMobile.value = window.innerWidth < 640;
+  isMobile.value = window.innerWidth < 1024;
   window.addEventListener('resize', () => {
-    isMobile.value = window.innerWidth < 640;
+    isMobile.value = window.innerWidth < 1024;
   });
 });
 
@@ -1800,11 +1858,11 @@ const handleRedeemPoints = async () => {
     :ui="{
       base: 'h-full flex flex-col',
       rounded: '',
-      ring: 'ring-0 sm:ring-1 sm:ring-gray-200 sm:dark:ring-gray-800', // force no ring on mobile
+      ring: 'ring-0 lg:ring-1 lg:ring-gray-200 lg:dark:ring-gray-800', // force no ring on mobile
       divide: 'divide-y divide-gray-200 dark:divide-gray-700',
       body: {
         padding: '',
-        base: 'sm:flex-1 sm:flex sm:flex-col sm:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700 z-10'
+        base: 'lg:flex-1 lg:flex lg:flex-col lg:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700 z-10'
       },
       footer: {
         base: 'divide-y divide-gray-200 dark:divide-gray-700',
@@ -1836,14 +1894,14 @@ const handleRedeemPoints = async () => {
         @click="() => { showCamera = false; stopCamera() }"
       />
     </div>
-     <div class="w-full flex flex-wrap gap-4 sm:hidden  py-2 px-2">
+     <div class="w-full flex flex-wrap gap-4 lg:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
           <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
     
-        <div  class="sm:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2 px-2">
+        <div  class="lg:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2 px-2">
         <div class="flex-1 border border-primary-700 dark:border-primary-300 rounded-md">
           <div class="flex flex-col items-center justify-center py-3">
             <div class="text-s">Sub Total</div>
@@ -1861,12 +1919,12 @@ const handleRedeemPoints = async () => {
         </div>
         </div>
      
-         <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
+         <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
             <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="flex-1" />
-            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="startCamera"/>
+            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
-       <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
+       <div class="lg:grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
   <!-- Date Input: visible only if token is empty -->
   <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
 
@@ -1921,7 +1979,7 @@ const handleRedeemPoints = async () => {
    </template>  
 
     
-<div  v-if="isMobile" class="block sm:hidden space-y-4 py-1 px-2">
+<div  v-if="isMobile" class="block lg:hidden space-y-4 py-1 px-2">
   <div
     v-for="(row, index) in items"
     :key="row.sn"    
@@ -2027,8 +2085,8 @@ const handleRedeemPoints = async () => {
 </div>
 
          <!-- pc view -->
-        <div v-else class="overflow-x-auto p-3 hidden sm:block">    
-          <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
+        <div v-else class="overflow-x-auto p-3 hidden lg:block">    
+          <table class=" divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
                 <th
@@ -2204,7 +2262,7 @@ const handleRedeemPoints = async () => {
   
       </div>
         <!-- Other form elements -->
-         <div v-if="!token && !isMobile" class="sm:grid hidden grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
+         <div v-if="!token && !isMobile" class="lg:grid hidden grid-cols-1 lg:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
 
           <div class="">
 
@@ -2315,7 +2373,7 @@ const handleRedeemPoints = async () => {
         </div>
 
         <!-- mobile view -->
-        <div  v-if="isMobile" class="sm:hidden flex flex-col gap-3 py-3 text-sm px-2" >
+        <div  v-if="isMobile" class="lg:hidden flex flex-col gap-3 py-3 text-sm px-2" >
         <div class="">
           <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
@@ -2356,16 +2414,22 @@ const handleRedeemPoints = async () => {
           <UInput v-model="returnAmt" />
         </div>
 
-        <div class=" flex flex-row gap-2">
-          <div class="">
-            <label class="block text-gray-700 font-medium">Cell No.</label>
-            <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
-          </div>
-          <div class="">
-            <label class="block text-gray-700 font-medium">Name</label>
-            <UInput v-model="clientName" />
-          </div>
-        </div>
+     <div class="flex flex-row gap-2 w-full">
+  <div class="flex-1">
+    <label class="block text-gray-700 font-medium">Cell No.</label>
+    <UInput
+      v-model="phoneNo"
+      :loading="isClientLoading"
+      icon="i-heroicons-magnifying-glass-20-solid"
+      @keydown.enter.prevent="handleEnterPhone"
+    />
+  </div>
+  <div class="flex-1">
+    <label class="block text-gray-700 font-medium">Name</label>
+    <UInput v-model="clientName" />
+  </div>
+</div>
+
 
         <div class="">
           <label class="block text-gray-700 font-medium">Account Name</label>
@@ -2396,7 +2460,7 @@ const handleRedeemPoints = async () => {
 
          
 
-        <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden sm:flex">
+        <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden lg:flex">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
@@ -2406,7 +2470,7 @@ const handleRedeemPoints = async () => {
           <UButton v-if="!token" class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
         </div>
 
-          <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 sm:hidden">
+          <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>

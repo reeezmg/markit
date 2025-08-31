@@ -69,6 +69,7 @@ export const updateCompanySession = async (
     companyId: string | undefined,
     companyType: string | undefined,
     companyName: string | undefined,
+    companyLogo: string | undefined,
     name: string | undefined,
     role: string | undefined,
     code: string | undefined,
@@ -80,7 +81,7 @@ export const updateCompanySession = async (
     const config = useRuntimeConfig();
     await $fetch('/api/auth/session', {
         method: 'PUT',
-        body: { companyId, companyType, companyName, name, role, code, billCounter, plan, description, storeUniqueName },
+        body: { companyId, companyType, companyName, companyLogo, name, role, code, billCounter, plan, description, storeUniqueName },
 
     });
     await useAuth().updateSession();

@@ -19,13 +19,7 @@ const links = [
             label: 'Printer',
             icon: 'i-heroicons-printer',
             to: '/settings/printer',
-        },
-        {
-            label: 'test',
-            icon: 'i-heroicons-printer',
-            to: '/settings/test',
-        },
-       
+        }
     ],
 ];
 </script>

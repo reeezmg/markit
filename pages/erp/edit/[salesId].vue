@@ -19,6 +19,10 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'
+import {
+  CapacitorBarcodeScanner,
+  CapacitorBarcodeScannerTypeHint
+} from '@capacitor/barcode-scanner'
 const queryClient = useQueryClient();
 
 const UpdateBill = useUpdateBill({ optimisticUpdate: true });
@@ -282,6 +286,52 @@ const stopCamera = () => {
   }
   showCamera.value = false
 }
+
+
+const scannerResult = ref('')
+
+const scanCode128 = async () => {
+  try {
+    const result =
+      await CapacitorBarcodeScanner.scanBarcode({
+        hint: CapacitorBarcodeScannerTypeHint.CODE_128, // ✅ Only Code 128
+        scanInstructions: 'Align barcode within the frame',
+      })
+
+    if (result.ScanResult) {
+        const pattern = /^\d+[A-Z]\d{6}$/ // required format
+
+        if (!pattern.test(result.ScanResult)) {
+            toast.add({
+              title: 'Scanned Barcode Is Invalid!',
+              color: 'red',
+            });
+          return
+        }
+      scannerResult.value = result.ScanResult
+
+      // Example: update last item
+      const lastIndex = items.value.length - 1
+      if (lastIndex >= 0) {
+        items.value[lastIndex].barcode = scannerResult.value
+        fetchItemData(scannerResult.value, lastIndex)
+        addNewRow(lastIndex, true)
+      }
+    }
+  } catch (err) {
+    console.error('🚫 Scan error:', err)
+  }
+}
+
+const handleScan = () => {
+  if (Capacitor.isNativePlatform()) {
+    scanCode128()
+  } else {
+    startCamera()
+  }
+}
+
+
 
 
 const dateOnly = computed({
@@ -1402,9 +1452,9 @@ onMounted(() => {
 });
 
 onMounted(() => {
-  isMobile.value = window.innerWidth < 640;
+  isMobile.value = window.innerWidth < 1024;
   window.addEventListener('resize', () => {
-    isMobile.value = window.innerWidth < 640;
+    isMobile.value = window.innerWidth < 1024;
   });
 });
 
@@ -1514,11 +1564,11 @@ const handleClearClient = async () => {
     :ui="{
       base: 'h-full flex flex-col',
       rounded: '',
-      ring: 'ring-0 sm:ring-1 sm:ring-gray-200 sm:dark:ring-gray-800', // force no ring on mobile
+      ring: 'ring-0 lg:ring-1 lg:ring-gray-200 lg:dark:ring-gray-800', // force no ring on mobile
       divide: 'divide-y divide-gray-200 dark:divide-gray-700',
       body: {
         padding: '',
-        base: 'sm:flex-1 sm:flex sm:flex-col sm:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700'
+        base: 'lg:flex-1 lg:flex lg:flex-col lg:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700'
       },
       footer: {
         base: 'divide-y divide-gray-200 dark:divide-gray-700',
@@ -1549,13 +1599,13 @@ const handleClearClient = async () => {
         @click="() => { showCamera = false; stopCamera() }"
       />
     </div>
-     <div class="w-full flex flex-wrap gap-4  px-3 py-3 sm:hidden">
+     <div class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
     
-        <div  class="sm:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2 px-2">
+        <div  class="lg:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2 px-2">
         <div class="flex-1 border border-primary-700 dark:border-primary-300 rounded-md">
           <div class="flex flex-col items-center justify-center py-3">
             <div class="text-s">Sub Total</div>
@@ -1573,12 +1623,12 @@ const handleClearClient = async () => {
         </div>
         </div>
      
-         <div class="sm:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
+         <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
             <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" />
-            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="startCamera"/>
+            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
-        <div class="sm:grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm py-2 px-2 hidden">
+        <div class="lg:grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-12 gap-4 text-sm py-2 px-2 hidden">
         <UInput v-model="dateOnly" type="date" label="Date" class="lg:col-span-2"  />
       </div>
    </template>  
@@ -1586,7 +1636,7 @@ const handleClearClient = async () => {
         <!-- Responsive table wrapper -->  
          
         <!-- Mobile layout with alternating colors -->
-        <div  v-if="isMobile" class="block sm:hidden space-y-4 py-1 px-2">
+        <div  v-if="isMobile" class="block lg:hidden space-y-4 py-1 px-2">
           <div
             v-for="(row, index) in items"
             :key="row.sn"    
@@ -1681,7 +1731,7 @@ const handleClearClient = async () => {
         </div>
 
         <!-- Desktop table layout -->   
-        <div v-else class="overflow-x-auto p-3 hidden sm:block">    
+        <div v-else class="overflow-x-auto p-3 hidden lg:block">    
           <table class="min-w-full divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
             <thead class="">
               <tr>
@@ -1859,7 +1909,7 @@ const handleClearClient = async () => {
       </div>
     </div>
         <!-- Other form elements -->
-         <div v-if="!isMobile" class="sm:grid hidden grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
+         <div v-if="!isMobile" class="lg:grid hidden grid-cols-1 lg:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
 
           <div class="">
 
@@ -1981,7 +2031,7 @@ const handleClearClient = async () => {
         </div>
 
         <!-- mobile view -->
-        <div  v-if="isMobile" class="sm:hidden flex flex-col gap-3 py-3 text-sm px-2" >
+        <div  v-if="isMobile" class="lg:hidden flex flex-col gap-3 py-3 text-sm px-2" >
         <div class="">
           <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
           <UInput
@@ -2022,16 +2072,21 @@ const handleClearClient = async () => {
           <UInput v-model="returnAmt" />
         </div>
 
-        <div class=" flex flex-row gap-2">
-          <div class="">
-            <label class="block text-gray-700 font-medium">Cell No.</label>
-            <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
-          </div>
-          <div class="">
-            <label class="block text-gray-700 font-medium">Name</label>
-            <UInput v-model="clientName" />
-          </div>
-        </div>
+        <div class="flex flex-row gap-2 w-full">
+  <div class="flex-1">
+    <label class="block text-gray-700 font-medium">Cell No.</label>
+    <UInput
+      v-model="phoneNo"
+      :loading="isClientLoading"
+      icon="i-heroicons-magnifying-glass-20-solid"
+      @keydown.enter.prevent="handleEnterPhone"
+    />
+  </div>
+  <div class="flex-1">
+    <label class="block text-gray-700 font-medium">Name</label>
+    <UInput v-model="clientName" />
+  </div>
+</div>
 
         <div class="">
           <label class="block text-gray-700 font-medium">Account Name</label>
@@ -2054,7 +2109,7 @@ const handleClearClient = async () => {
 
          
 
-        <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden sm:flex">
+        <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden lg:flex">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
           <UButton color="red" class="flex-1" block @click="handleDeleteBill">Delete</UButton>
@@ -2063,7 +2118,7 @@ const handleClearClient = async () => {
           <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
         </div>
 
-          <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 sm:hidden">
+          <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
