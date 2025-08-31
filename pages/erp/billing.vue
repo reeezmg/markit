@@ -82,7 +82,7 @@ const tokenInputs = ref(['']);
 const categoryStore = useCategoryStore()
 const userStore = useUserStore()
 
-const isPrint = ref(false);
+const printModel = ref(false);
 const isSaving = ref(false);
 let printData = {}
 const isMobile = ref(false);
@@ -1310,7 +1310,7 @@ const handleSave = async () => {
     })
 
     // 🧾 Trigger Print
-    isPrint.value = true;
+    printModel.value = true;
    
 
 
@@ -1330,15 +1330,15 @@ const handleSave = async () => {
 
 
 const print = async() => {
+  printModel.value = false
   try{
-    isPrint.value = false
   await printBill(printData)
   toast.add({
         title: 'Printing Sucess!',
         color: 'Green',
       });
   }catch(err){
-      isPrint.value = true
+      printModel.value = true
       toast.add({
         title: 'Printing failed!',
         description: err.message,
@@ -2593,7 +2593,7 @@ const handleRedeemPoints = async () => {
 
 
     <UDashboardModal
-        v-model="isPrint"
+        v-model="printModel"
         title="Print Bill"
         description="Would You Like to print?"
         icon="i-heroicons-exclamation-circle"
@@ -2612,9 +2612,10 @@ const handleRedeemPoints = async () => {
             <UButton
                 color="green"
                 label="Yes"
+                :disabled = "!printModel"
                 @click="print"
             />
-            <UButton color="red" label="NO" @click="isPrint = false" />
+            <UButton color="red" label="NO" @click="printModel = false" />
         </template>
     </UDashboardModal>
 
