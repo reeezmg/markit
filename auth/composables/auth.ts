@@ -9,7 +9,6 @@ export const authLogin = async (email: string, password: string) => {
         credentials: 'include',
     });
     await useAuth().updateSession();
-    await navigateTo(useAuth().redirectTo.value || '/dashboard');
     return res;
 };
 

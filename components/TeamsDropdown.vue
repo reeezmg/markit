@@ -10,34 +10,29 @@ const { data: user }: any = useFindUniqueUser({
     include: {
         companies: {
             include: {
-                company: true,
+                company: {
+                    include:{
+                        productinput:true,
+                        variantinput:true
+                    }
+                },
             },
         },
     },
 });
 
-watch(user, (newUser) => {
-   console.log('User data updated:', newUser);
-   console.log('Active company ID:', useAuth().session.value?.id);
-}, { immediate: true });
+
 
 const isOpen = ref(false);
 const companies = ref([]);
-const activeCompany = ref([
-    {
-        company: {
-            name: 'defult',
-            logo:''
-        },
-    },
-]);
+const activeCompany = ref({});
 
 watch(user, (newUser) => {
   if (newUser) {
     companies.value = newUser.companies.map((item) => item);
-    activeCompany.value = newUser.companies.filter(
+    activeCompany.value = newUser.companies.find(
       (item) => item.company.id === useAuth().session.value?.companyId
-    );
+    )?.company;
   }
 }, { immediate: true });
 
@@ -48,8 +43,9 @@ const teams = (items) =>
             src:`https://images.markit.co.in/${item.company.logo}` ,
         },
        click: async () => {
+        activeCompany.value =  item.company
        await updateCompanySession(
-        item.id,
+        item.userId,
         item.cleanup || false,
         item.name || null,
         item.company.description ?? undefined,
@@ -63,7 +59,7 @@ const teams = (items) =>
         item.company.isTaxIncluded,
         item.company.isBarcodeIncluded,
         item.company.isUserTrackIncluded,
-        item.companyId,
+        item.company.id,
         item.company.type,
         item.company.name,
         item.company.pipeline?.id,
@@ -85,12 +81,11 @@ const teams = (items) =>
         )(item.company.variantinput || {}),
         );
 
+        // if (Capacitor.isNativePlatform()) {
+        //     SplashScreen.show({ autoHide: false });
+        // }
 
-        if (Capacitor.isNativePlatform()) {
-            SplashScreen.show({ autoHide: false });
-        }
-
-        setTimeout(() => window.location.reload(), 50);
+        // setTimeout(() => window.location.reload(), 50);
         }
     }));
 
@@ -127,11 +122,15 @@ const actions = computed(() => {
             :class="[open && 'bg-gray-50 dark:bg-gray-800']"
             class="w-full"
         >
-            <UAvatar :src="`https://images.markit.co.in/${activeCompany[0]?.company?.logo}`" size="sm" />
+            <UAvatar 
+                :src="activeCompany?.logo ? `https://images.markit.co.in/${activeCompany.logo}` : undefined"
+                :alt="activeCompany?.name"
+                size="sm" 
+            />
 
             <span
                 class="truncate text-gray-900 dark:text-white font-semibold"
-                >{{ activeCompany[0]?.company?.name }}</span
+                >{{ activeCompany?.name }}</span
             >
         </UButton>
     </UDropdown>
