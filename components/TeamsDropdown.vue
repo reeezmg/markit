@@ -48,19 +48,45 @@ const teams = (items) =>
             src:`https://images.markit.co.in/${item.company.logo}` ,
         },
        click: async () => {
-        await updateCompanySession(
-            item.company.id,
-            item.company.type,
-            item.company.name,
-            item.company.logo,
-            item.name,
-            item.role,
-            item.code,
-            item.billCounter,
-            item.company.plan,
-            item.company.description,
-            item.company.storeUniqueName
+       await updateCompanySession(
+        item.id,
+        item.cleanup || false,
+        item.name || null,
+        item.company.description ?? undefined,
+        item.company.thankYouNote ?? undefined,
+        item.company.refundPolicy ?? undefined,
+        item.company.returnPolicy ?? undefined,
+        item.company.phone ?? undefined,
+        item.image || null,
+        item.email,
+        item.code ?? undefined,
+        item.company.storeUniqueName ?? undefined,
+        item.company.isTaxIncluded,
+        item.company.isBarcodeIncluded,
+        item.company.isUserTrackIncluded,
+        item.companyId,
+        item.company.type,
+        item.company.name,
+        item.company.pipeline?.id,
+        item.role,
+        item.company.pointsValue || 0,
+        item.company.currency || 'INR',
+        'USER',
+        item.company.address || {},
+        item.company.gstin || '',
+        item.company.accHolderName || '',
+        item.company.upiId || '',
+        item.company.plan,
+        item.company.logo,
+        (({ name, brand, category, subcategory, description }) =>
+            ({ name, brand, category, subcategory, description })
+        )(item.company.productinput || {}),
+        (({ name, code, sprice, pprice, dprice, discount, qty, sizes, images }) =>
+            ({ name, code, sprice, pprice, dprice, discount, qty, sizes, images })
+        )(item.company.variantinput || {}),
+        process.env.AUTH_SESSION_VERSION
         );
+
 
         if (Capacitor.isNativePlatform()) {
             SplashScreen.show({ autoHide: false });

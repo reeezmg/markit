@@ -17,6 +17,9 @@ const awsService = new AwsService();
 const fileRef = ref<HTMLInputElement>();
 const isNameChanged = ref(false);
 const isDescriptionChanged = ref(false);
+const isThankYouNoteChanged = ref(false);
+const isRefundPolicyChanged = ref(false);
+const isReturnPolicyChanged = ref(false);
 const isImageChanged = ref(false);
 
 const selectedFile = ref<ImageData | null>(null);
@@ -38,6 +41,16 @@ interface AccountState {
   upiId?: string;
   gstin?: string;
 }
+
+const storePhone = ref(useAuth().session.value?.companyPhone || '');
+const isPhoneChanged = ref(false);
+const isUpdatingPhone = ref(false);
+
+watch(() => storePhone.value, (newPhone) => {
+  isPhoneChanged.value = newPhone !== useAuth().session.value?.companyPhone;
+}, { immediate: true });
+
+
 
 interface AddressState {
   street: string;
@@ -86,6 +99,9 @@ const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
 const storeName = ref(useAuth().session.value?.companyName);
 const storeLogo = ref(useAuth().session.value?.logo);
 const storeDescription = ref(useAuth().session.value?.description || '');
+const storeThankYouNote = ref(useAuth().session.value?.thankYouNote || '');
+const storeRefundPolicy = ref(useAuth().session.value?.refundPolicy || '');
+const storeReturnPolicy = ref(useAuth().session.value?.returnPolicy || '');
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
 const isBarcodeInclude = ref(useAuth().session.value?.isBarcodeIncluded);
 const isUserTrackInclude = ref(useAuth().session.value?.isUserTrackIncluded);
@@ -114,8 +130,18 @@ const variantInputs = reactive([
 watch(() => storeUniqueName.value, (newName) => {
   isNameChanged.value = newName !== useAuth().session.value?.storeUniqueName;
 }, { immediate: true });
+
 watch(() => storeDescription.value, (newDescription) => {
   isDescriptionChanged.value = newDescription !== useAuth().session.value?.description;
+}, { immediate: true });
+watch(() => storeThankYouNote.value, (newThankYouNote) => {
+  isThankYouNoteChanged.value = newThankYouNote !== useAuth().session.value?.thankYouNote;
+}, { immediate: true });
+watch(() => storeRefundPolicy.value, (newRefundPolicy) => {
+  isRefundPolicyChanged.value = newRefundPolicy !== useAuth().session.value?.refundPolicy;
+}, { immediate: true });
+watch(() => storeReturnPolicy.value, (newReturnPolicy) => {
+  isReturnPolicyChanged.value = newReturnPolicy !== useAuth().session.value?.returnPolicy;
 }, { immediate: true });
 
 
@@ -199,6 +225,7 @@ async function onNameUpdate() {
     });
     toast.add({ title: 'Store name updated', icon: 'i-heroicons-check-circle' });
     isNameChanged.value = false;
+    await updateStoreUniqueName(storeUniqueName.value)
   } catch (error) {
     console.error(error);
     toast.add({ title: 'Error updating store name', color: 'red', icon: 'i-heroicons-x-circle' });
@@ -207,7 +234,29 @@ async function onNameUpdate() {
   }
 }
 
-async function onDescriptionUpdate() {
+async function onPhoneUpdate() {
+  isUpdatingPhone.value = true;
+  try {
+    await UpdateCompany.mutateAsync({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        phone: storePhone.value,
+      },
+    });
+    toast.add({ title: 'Store phone updated', icon: 'i-heroicons-check-circle' });
+    isPhoneChanged.value = false;
+     await updateStorePhone(storePhone.value)
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating store phone', color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingPhone.value = false;
+  }
+}
+
+async function onNotesUpdate() {
   isUpdatingDescription.value = true;
   try {
     const res = await UpdateCompany.mutateAsync({
@@ -216,10 +265,19 @@ async function onDescriptionUpdate() {
       },
       data: {
         description: storeDescription.value,  
+        thankYouNote: storeThankYouNote.value,  
+        refundPolicy: storeRefundPolicy.value,  
+        returnPolicy: storeReturnPolicy.value,  
       },
     });
     toast.add({ title: 'Store description updated', icon: 'i-heroicons-check-circle' });
     isUpdatingDescription.value = false;
+    await updateStoreNote(
+      storeDescription.value,
+      storeThankYouNote.value,
+      storeRefundPolicy.value,
+      storeReturnPolicy.value
+    )
   } catch (error) {
     console.error(error);
     toast.add({ title: 'Error updating store description', color: 'red', icon: 'i-heroicons-x-circle' });
@@ -366,7 +424,6 @@ const onInputChange = async () => {
     });
     console.log(productinputData, variantinputData);
     const resu = await updateSession(productinputData, variantinputData);
-    console.log(resu);
     toast.add({ title: 'Product and Variant inputs updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.error(error);
@@ -423,7 +480,7 @@ const onLogoUpdate = async () => {
         await awsService.uploadBase64File(base64file.base64, base64file.uuid);
     }
 
-
+await useAuth().updateSession();
 }catch(error){
     console.error(error);
     toast.add({
@@ -433,7 +490,6 @@ const onLogoUpdate = async () => {
     });
 }finally {
         isUpdatingLogo.value = false;
-        await useAuth().updateSession();
         toast.add({
             title: 'Profile updated successfully',
             icon: 'i-heroicons-check-circle',
@@ -496,6 +552,54 @@ const previewUrl = computed(() => {
         </template>
       </UInput>
     </UFormGroup>
+
+      <div class="my-4 grid grid-cols-2 gap-2">
+        <div></div>
+        <div>
+            <UButton
+              label="Update Name"
+              size="md"
+              :loading="isUpdatingName"
+              :disabled="!isNameChanged"
+              @click="onNameUpdate"
+            />
+        </div>
+    </div>
+ 
+    <UDivider class="mb-4" />
+
+    <UFormGroup
+      name="phone"
+      label="Store Phone"
+      description="Phone number for your store"
+      required
+      class="grid grid-cols-2 gap-2"
+    >
+      <UInput
+        v-model="storePhone"
+        type="tel"
+        autocomplete="tel"
+        size="md"
+        placeholder="Enter store phone number"
+      >
+        <template #leading>
+          <span class="text-gray-500 dark:text-gray-400 text-sm">+91</span>
+        </template>
+      </UInput>
+    </UFormGroup>
+
+      <div class="my-4 grid grid-cols-2 gap-2">
+        <div></div>
+        <div>
+            <UButton
+              label="Update Phone"
+              size="md"
+              :loading="isUpdatingPhone"
+              :disabled="!isPhoneChanged"
+              @click="onPhoneUpdate"
+            />
+        </div>
+    </div>
  
     <UDivider class="mb-4" />
 
@@ -543,7 +647,6 @@ const previewUrl = computed(() => {
 
     <UDivider class="mb-4" />
 
-
     <UFormGroup
       name="description"
       label="Store Description"
@@ -552,15 +655,72 @@ const previewUrl = computed(() => {
       class="grid grid-cols-2 gap-2"
       :ui="{ container: '', help: `mt-2 ${taken ? 'text-red-500 dark:text-red-400':'text-green-500 dark:text-green-400'}` }"
     >
-          <UInput
+      <UInput
         v-model="storeDescription"
-        :maxlength="20"
+        :maxlength="40"
+        class="mb-5"
       >
         <template #trailing>
-          <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeDescription?.length }}/{{ 20 }}</span>
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeDescription?.length }}/{{ 40 }}</span>
         </template>
       </UInput>
     </UFormGroup>
+
+    <UFormGroup
+      name="thankYouNote"
+      label="Thank You Note"
+      description="Displayed after order completion."
+      required
+      class="grid grid-cols-2 gap-2"
+    >
+      <UInput
+        v-model="storeThankYouNote"
+        :maxlength="40"
+        class="mb-5"
+      >
+        <template #trailing>
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeThankYouNote?.length }}/{{ 40 }}</span>
+        </template>
+      </UInput>
+    </UFormGroup>
+
+    <UFormGroup
+      name="refundPolicy"
+      label="Refund Policy"
+      description="Refund policy of your store."
+      required
+      class="grid grid-cols-2 gap-2"
+    >
+      <UInput
+        v-model="storeRefundPolicy"
+        :maxlength="40"
+        class="mb-5"
+      >
+        <template #trailing>
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeRefundPolicy?.length }}/{{ 40 }}</span>
+        </template>
+      </UInput>
+    </UFormGroup>
+
+    <UFormGroup
+      name="returnPolicy"
+      label="Return Policy"
+      description="Return policy of your store."
+      required
+      class="grid grid-cols-2 gap-2"
+    >
+      <UInput
+        v-model="storeReturnPolicy"
+        :maxlength="40"
+        class="mb-5"
+      >
+        <template #trailing>
+          <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeReturnPolicy?.length }}/{{ 40 }}</span>
+        </template>
+      </UInput>
+    </UFormGroup>
+
+
     <div class="my-4 grid grid-cols-2 gap-2">
         <div></div>
         <div>
@@ -568,8 +728,8 @@ const previewUrl = computed(() => {
                 label="Update Description"
                 size="md"
                 :loading="isUpdatingDescription"
-                :disabled="!isDescriptionChanged"
-                @click="onDescriptionUpdate"
+                :disabled="!(isDescriptionChanged || isThankYouNoteChanged || isRefundPolicyChanged || isReturnPolicyChanged)"
+                @click="onNotesUpdate"
             />
         </div>
     </div>

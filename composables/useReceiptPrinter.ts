@@ -304,11 +304,12 @@ export function useReceiptPrinter() {
             // Footer
             encoder
                 .align('center')
-                .text('Thank you for shopping!')
+                .text(bill.thankYouNote)
                 .newline(1)
-                .text('Returns accepted within 7 days with original receipt')
+                .text(bill.returnPolicy)
+                .text(bill.refundPolicy)
                 .newline(2)
-                .text('Customer care: +91 9876543210')
+                .text(`Customer care: +91 ${bill.phone}`)
                 .newline(8)
                 .cut();
 

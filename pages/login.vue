@@ -63,9 +63,8 @@ const validate = (state: any) => {
 
 async function onSubmit(data: any) {
     loginLoading.value = true
-    console.log(useAuth().session.value?.id);
     try {
-        const res = await authLogin(data.email, data.password);
+       const res = await authLogin(data.email.trim().toLowerCase(), data.password.trim());
 
         if (!Capacitor.isNativePlatform()) {
             usePushNotifications(useAuth().session.value?.id!)

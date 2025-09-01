@@ -7,6 +7,10 @@ import {
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
+import { useQueryClient } from '@tanstack/vue-query'
+import { getQueryKey } from '@zenstackhq/tanstack-query/runtime-v5'
+
+const queryClient = useQueryClient()
 
 const timeZone = 'Asia/Kolkata'
 const toast = useToast();
@@ -229,12 +233,52 @@ return {
 };
 });
 
+
+
 const {
     data: sales,
     isLoading,
     error,
     refetch,
 } = useFindManyBill(queryArgs);
+
+const deleteBillMutate = useUpdateBill({
+  invalidate: false,
+  optimisticUpdate: true,
+    onMutate: async (variables) => {
+    const cacheKey = getQueryKey(
+        'Bill',
+        'findMany',
+        queryArgs.value,
+        { infinite: false, optimisticUpdate: true }
+    );
+
+    const previous = queryClient.getQueryData(cacheKey);
+
+    queryClient.setQueryData(cacheKey, (old: any) => {
+        if (!old || !Array.isArray(old)) return old;
+        
+        return old.filter((bill: any) => bill.id !== variables.where.id);
+    });
+
+    return { previous, cacheKey };
+    },
+
+  onError: (_err, _vars, ctx) => {
+    console.error('Mutation error:', _err);
+
+    if (ctx?.previous) {
+      queryClient.setQueryData(ctx.cacheKey, ctx.previous);
+    }
+  },
+
+  onSettled: (_data, _err, _vars, ctx) => {
+    console.log('Mutation success:', _data);
+    if (ctx?.cacheKey) {
+      queryClient.invalidateQueries({ queryKey: ctx.cacheKey, exact: true });
+    }
+  },
+});
 
 
 const countArgs = computed(() => ({
@@ -260,35 +304,35 @@ watch(queryArgs, (newsales) => {
     console.log( newsales);
 });
 
-
-const deleteBill = () => {
-    try{
-        updateBill.mutate({
-        where:{
-            id: deletingRowIdentity.value.id
-        },
-        data:{
-            deleted:true
-        }
-    })
-     toast.add({
-            title: `Bill No ${deletingRowIdentity.value.name} deleted successfully!`,
-            color: 'green',
-        });
-    }catch(err){
-        toast.add({
-          title: 'Error while deleting the bill entries',
-          description: error.message,
-          color: 'red',
-        });
-    }finally{
-        isDeleteModalOpen.value = false;
-    }
+const deleteBill = async () => {
+  try {
+    await deleteBillMutate.mutate({
+      where: {
+        id: deletingRowIdentity.value.id
+      },
+      data: {
+        deleted: true
+      }
+    });
+    
+    toast.add({
+      title: `Bill No ${deletingRowIdentity.value.name} deleted successfully!`,
+      color: 'green',
+    });
+  } catch (error) {
+    toast.add({
+      title: 'Error while deleting the bill entries',
+      description: error.message,
+      color: 'red',
+    });
+  } finally {
+    isDeleteModalOpen.value = false;
+  }
 };
 
 
-const handleUpdate = async (id:string) => {
-    const res = await updateBill.mutateAsync({
+const handleUpdate = (id:string) => {
+    const res = updateBill.mutate({
         where:{
             id
         },
@@ -304,9 +348,9 @@ const handleChange = (value:string, row:any) => {
     notes.value[row.id] = value;
 };
 
-const onPaymentStatusChange = async (id:string, status:string, billNo) => {
+const onPaymentStatusChange =  (id:string, status:string, billNo) => {
     try{
-    const res = await updateBill.mutateAsync({
+    const res = updateBill.mutate({
         where:{
             id
         },

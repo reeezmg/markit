@@ -991,7 +991,15 @@ const handleReset = () => {
 }
 
 
-const handleSkip = async() => {
+const handleSkip = () => {
+     isAdd.value =true
+   router.push(`/products`)
+    isAdd.value =false
+    isOpen.value = false
+}
+
+
+const handleAddNew = async() => {
      isAdd.value =true
     const res = await CreatePurchaseOrder.mutateAsync({
         data:{
@@ -1192,17 +1200,23 @@ const handleNewProduct = () => {
           <UButton type="submit"  class="me-3 px-5" @click="printBarcodes" :disabled="!barcodes.length">
                 Print
                 </UButton>
-                <UButton type="submit"  class="me-3 px-5" @click="handleSkip" :loading=isAdd>
+                 <UButton color="green" type="submit"  class="me-3 px-5" @click="handleAddNew" :loading=isAdd>
+                  Add New
+                </UButton>
+                <UButton color="red" type="submit"  class="me-3 px-5" @click="handleSkip" :loading=isAdd>
                   Skip
                 </UButton>
               </div>
         </template>
         <template #footer>
           <div class="flex items-end justify-end">
-          <UButton type="submit"  class="me-3 px-5" @click="printBarcodes" :disabled="!barcodes.length ">
+             <UButton type="submit"  class="me-3 px-5" @click="printBarcodes" :disabled="!barcodes.length">
                 Print
                 </UButton>
-                <UButton type="submit"  class="me-3 px-5" @click="handleSkip">
+                 <UButton color="green" type="submit"  class="me-3 px-5" @click="handleAddNew" :loading=isAdd>
+                  Add New
+                </UButton>
+                <UButton color="red" type="submit"  class="me-3 px-5" @click="handleSkip" :loading=isAdd>
                   Skip
                 </UButton>
               </div>

@@ -993,6 +993,11 @@ const handleEdit = async () => {
     const preparedPrintData = {
       invoiceNumber: bill.value.invoiceNumber || '',
       date: new Date(date.value).toISOString(),
+      phone:useAuth().session.value?.companyPhone,
+      description:useAuth().session.value?.description,
+      thankYouNote:useAuth().session.value?.thankYouNote,
+      refundPolicy:useAuth().session.value?.refundPolicy,
+      returnPolicy:useAuth().session.value?.returnPolicy,
       entries: items.value.map(entry => {
         let calculatedDiscount = 0;
         
@@ -1120,15 +1125,14 @@ const handleEdit = async () => {
               title: 'Bill creation failed!',
               color: 'red',
             });
-    }).finally(() => {
-       isSaving.value = false
     })
 
    
 
     // 9. Prepare for printing
-    isPrint.value = true;
     printData = preparedPrintData;
+    isPrint.value = true;
+
 
   } catch (error) {
     console.error('Error updating bill', error);
@@ -1137,6 +1141,8 @@ const handleEdit = async () => {
       description: error.message,
       color: 'red',
     });
+  }finally{
+    isSaving.value = false
   }
 };
 
@@ -1628,7 +1634,7 @@ const handleClearClient = async () => {
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
-        <div class="lg:grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-12 gap-4 text-sm py-2 px-2 hidden">
+        <div class="lg:grid grid-cols-1 lg:grid-cols-12 gap-4 text-sm py-2 px-2 hidden">
         <UInput v-model="dateOnly" type="date" label="Date" class="lg:col-span-2"  />
       </div>
    </template>  

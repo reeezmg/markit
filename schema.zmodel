@@ -105,6 +105,10 @@ model Company extends Base {
     storeUniqueName String? @unique @map("store_unique_name")
     logo        String?
     description String? @default("")
+    thankYouNote String? @default("") @map("thank_you_note")
+    refundPolicy String? @default("") @map("refund_policy")
+    returnPolicy String? @default("") @map("return_policy")
+    phone     String?   
     currency    String @default("INR")
     images      String?
     pointsValue Int @default(0) @map("points_value")
@@ -681,6 +685,7 @@ model CompanyUser {
     userId    String @map('user_id')
     user      User @relation(fields: [userId], references: [id],onDelete: Cascade)
     code      String?
+    phone     String?   
     name      String?
     role      UserRole      @default(user) @map('role')
     status    Boolean       @default(true)

@@ -1,20 +1,76 @@
 export default eventHandler(async (event) => {
-    const session = await useAuthSession(event);
-    const { companyId, companyType, companyName,companyLogo, name, role, code, billCounter,plan, description, storeUniqueName } = await readBody(event);
-    console.log("companylogo",companyLogo)
-    await session.update({
-        name,
-        role,
-        code,
-        billCounter,
-        companyId,
-        companyType,
-        companyName,
-        logo:companyLogo,
-        plan,
-        description,
-        storeUniqueName,
-    });
-    console.log('session updated', session.data);
-    return session;
+  const session = await useAuthSession(event);
+  const body = await readBody(event);
+
+  const {
+    id,
+    cleanup,
+    name,
+    description,
+    thankYouNote,
+    refundPolicy,
+    returnPolicy,
+    companyPhone,
+    email,
+    image,
+    companyId,
+    companyType,
+    companyName,
+    storeUniqueName,
+    isTaxIncluded,
+    isBarcodeIncluded,
+    isUserTrackIncluded,
+    pointsValue,
+    currency,
+    role,
+    pipelineId,
+    address,
+    gstin,
+    accHolderName,
+    upiId,
+    type,
+    code,
+    authSessionVersion,
+    plan,
+    logo,
+    productInputs,
+    variantInputs
+  } = body;
+
+  await session.update({
+    id,
+    cleanup,
+    name,
+    description,
+    thankYouNote,
+    refundPolicy,
+    returnPolicy,
+    companyPhone,
+    email,
+    image,
+    companyId,
+    companyType,
+    companyName,
+    storeUniqueName,
+    isTaxIncluded,
+    isBarcodeIncluded,
+    isUserTrackIncluded,
+    pointsValue,
+    currency,
+    role,
+    pipelineId,
+    address,
+    gstin,
+    accHolderName,
+    upiId,
+    type,
+    code,
+    authSessionVersion,
+    plan,
+    logo,
+    productInputs,
+    variantInputs
+  });
+
+  return session;
 });

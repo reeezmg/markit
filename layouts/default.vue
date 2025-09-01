@@ -360,6 +360,15 @@ const links = computed(() => {
                         shortcuts: ['S', 'S'],
                     },
                 },
+                {
+                    label: 'Printer',
+                    to: `/settings/printer`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Settings',
+                        shortcuts: ['S', 'P'],
+                    },
+                },
             ],
 
         },

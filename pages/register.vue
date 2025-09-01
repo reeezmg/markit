@@ -73,10 +73,10 @@ async function onSubmit() {
   registerLoading.value = true
   try {
     const res = await authRegister(
-      state.email,
+      state.email.trim().toLowerCase(),
       state.name,
       state.companyname,
-      state.password,
+      state.password.trim(),
       state.plan,
       'buyer'
     );

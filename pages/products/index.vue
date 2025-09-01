@@ -122,6 +122,7 @@ const variantcolumns = [
 
 const selectedColumns = ref(columns);
 const STORAGE_KEY = 'selectedColumns';
+
 onMounted(() => {
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
@@ -259,41 +260,60 @@ const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
               }
             : {};
 
-            return {
-    where: {
-        AND: [
-            { companyId: useAuth().session.value?.companyId },
-            {
-                OR: [
-                    { name: { contains: search.value, mode: 'insensitive' } },
-                    {
-                        variants: {
-                            some: {
-                                code: { contains: search.value, mode: 'insensitive' }
-                            }
-                        }
-                    }
-                ]
-            },
-            selectedStatusCondition,
-        ],
-    },
-    include: {
-        variants: {
-            include:{
-                items: true,
-            }
-        },
-        category: true,
-    },
-    orderBy: {
-        [sort.value.column]: sort.value.direction,
-    },
-    skip: (page.value - 1) * parseInt(pageCount.value),
-    take: parseInt(pageCount.value),
-};
+    return {
+        where: {
+            AND: [
+                { companyId: useAuth().session.value?.companyId },
+                {
+                    OR: [
+                        // ✅ Product name
+                        { name: { contains: search.value, mode: 'insensitive' } },
 
+                        // ✅ Variant code
+                        {
+                            variants: {
+                                some: {
+                                    code: { contains: search.value, mode: 'insensitive' },
+                                },
+                            },
+                        },
+
+                        // ✅ Item barcode (via variants → items)
+                        {
+                            variants: {
+                                some: {
+                                    items: {
+                                        some: {
+                                            barcode: {
+                                                contains: search.value,
+                                                mode: 'insensitive',
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                        },
+                    ],
+                },
+                selectedStatusCondition,
+            ],
+        },
+        include: {
+            variants: {
+                include: {
+                    items: true,
+                },
+            },
+            category: true,
+        },
+        orderBy: {
+            [sort.value.column]: sort.value.direction,
+        },
+        skip: (page.value - 1) * parseInt(pageCount.value),
+        take: parseInt(pageCount.value),
+    };
 });
+
 
 const {
     data: products,

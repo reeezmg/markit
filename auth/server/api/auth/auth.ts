@@ -66,81 +66,25 @@ export const checkEmailExist = async (email: string) => {
 };
 
 export const updateCompanySession = async (
-  id: string | undefined,
-  cleanup: boolean | undefined,
-  name: string | null | undefined,
-  description: string | undefined,
-  thankYouNote: string | undefined,
-  refundPolicy: string | undefined,
-  returnPolicy: string | undefined,
-  companyPhone: string | undefined,
-  image: string | null | undefined,
-  email: string | undefined,
-  code: string | undefined,
-  storeUniqueName: string | undefined,
-  isTaxIncluded: boolean | undefined,
-  isBarcodeIncluded: boolean | undefined,
-  isUserTrackIncluded: boolean | undefined,
-  companyId: string | undefined,
-  companyType: string | undefined,
-  companyName: string | undefined,
-  pipelineId: string | undefined,
-  role: string | undefined,
-  pointsValue: number | undefined,
-  currency: string | undefined,
-  type: string,
-  address: Record<string, any>,
-  gstin: string,
-  accHolderName: string,
-  upiId: string,
-  plan: string,
-  logo: string | undefined,
-  productInputs: Record<string, any>,
-  variantInputs: Record<string, any>,
-  authSessionVersion: string | undefined
+    companyId: string | undefined,
+    companyType: string | undefined,
+    companyName: string | undefined,
+    companyLogo: string | undefined,
+    name: string | undefined,
+    role: string | undefined,
+    code: string | undefined,
+    plan: number | undefined,
+    description: string | undefined,
+    storeUniqueName: string | undefined
 ) => {
-  const config = useRuntimeConfig();
-  await $fetch('/api/auth/session', {
-    method: 'PUT',
-    body: {
-      id,
-      cleanup,
-      name,
-      description,
-      thankYouNote,
-      refundPolicy,
-      returnPolicy,
-      companyPhone,
-      image,
-      email,
-      code,
-      storeUniqueName,
-      isTaxIncluded,
-      isBarcodeIncluded,
-      isUserTrackIncluded,
-      companyId,
-      companyType,
-      companyName,
-      pipelineId,
-      role,
-      pointsValue,
-      currency,
-      type,
-      address,
-      gstin,
-      accHolderName,
-      upiId,
-      plan,
-      logo,
-      productInputs,
-      variantInputs,
-      authSessionVersion,
-    },
-  });
+    const config = useRuntimeConfig();
+    await $fetch('/api/auth/session', {
+        method: 'PUT',
+        body: { companyId, companyType, companyName, companyLogo, name, role, code, plan, description, storeUniqueName },
 
-  await useAuth().updateSession();
+    });
+    await useAuth().updateSession();
 };
-
 
 export const updateStoreUniqueName = async (storeUniqueName: string) => {
     const config = useRuntimeConfig();
@@ -151,18 +95,16 @@ export const updateStoreUniqueName = async (storeUniqueName: string) => {
     });
     await useAuth().updateSession();
 };
-export const updateStorePhone = async (companyPhone: string) => {
-    const config = useRuntimeConfig();
+export const updateStorePhone = async (storePhone: string) => {
     await $fetch('/api/auth/changeStorePhone', {
         method: 'PUT',
-        body: { companyPhone },
+        body: { storePhone },
 
     });
     await useAuth().updateSession();
 };
 
 export const updateStoreNote = async (description: string, thankYouNote: string, refundPolicy: string, returnPolicy: string) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeNotes', {
         method: 'PUT',
         body: { description, thankYouNote, refundPolicy, returnPolicy },

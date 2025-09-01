@@ -20,7 +20,11 @@ export type AuthSession = {
     id: string;
     cleanup: boolean;
     name: string | null;
-    description?: string ;
+    description?: string;
+    thankYouNote?: string;
+    refundPolicy?: string;
+    returnPolicy?: string;
+    companyPhone?: string;
     email: string;
     image: string | null;
     companyId: string;
@@ -42,7 +46,6 @@ export type AuthSession = {
     upiId: string;
     type: string;
     code: string;
-    billCounter: number;
     authSessionVersion: string;
     plan:string,
     productInputs?: {

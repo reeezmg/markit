@@ -1199,6 +1199,11 @@ const handleSave = async () => {
 
      printData = {
       invoiceNumber: billInv,
+      phone:useAuth().session.value?.companyPhone,
+      description:useAuth().session.value?.description,
+      thankYouNote:useAuth().session.value?.thankYouNote,
+      refundPolicy:useAuth().session.value?.refundPolicy,
+      returnPolicy:useAuth().session.value?.returnPolicy,
       date: new Date(date.value).toISOString(),
       entries: items.value.map(entry => {
         const discountVal = entry.discount < 0
@@ -1209,14 +1214,14 @@ const handleSave = async () => {
         return {
           description: entry.barcode ? entry.name : entry.category[0].name,
           hsn: entry.category[0].hsn,
-          qty: entry.qty,
-          mrp: entry.rate,
+          qty: entry.qty || 1,
+          mrp: entry.rate || 0,
           discount: discountVal,
-          tax: entry.tax,
-          value: entry.qty * entry.rate,
-          size: entry.size,
+          tax: entry.tax || 0,
+          value: entry.qty * entry.rate || 0,
+          size: entry.size || '',
           barcode: entry.barcode,
-          tvalue: entry.value,
+          tvalue: entry.value || 0,
         };
       }),
       subtotal: subtotal.value,
@@ -1297,24 +1302,20 @@ const handleSave = async () => {
         queryKey: ['zenstack', 'Product', 'findMany'],
         exact: false
       });
-          reset();
     }).catch(error => {
        toast.add({
         title: 'Bill creation failed!',
         color: 'red',
       });
    
-    }).finally(async () => {
-       isSaving.value = false
-       await useAuth().updateSession();
     })
 
     // 🧾 Trigger Print
-    printModel.value = true;
+
    
 
-
-
+      reset();
+      printModel.value = true;
   } catch (error) {
     console.error('Error creating bill', error);
     toast.add({
@@ -1322,8 +1323,8 @@ const handleSave = async () => {
       description: error.message,
       color: 'red',
     });
-  }finally {
-    isSaving.value = false;
+  } finally{
+     isSaving.value = false
   }
 };
 
@@ -1924,7 +1925,7 @@ const handleRedeemPoints = async () => {
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
-       <div class="lg:grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
+       <div class="lg:grid grid-cols-1 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
   <!-- Date Input: visible only if token is empty -->
   <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
 

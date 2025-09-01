@@ -310,7 +310,7 @@ const onVerifyOtp = async () => {
         >
             <template #links>
                 <UColorModeButton color="primary" />
-                <ColorPicker/>
+                <!-- <ColorPicker/> -->
             </template>
         </UDashboardSection>
 
