@@ -41,6 +41,7 @@ const teams = (items) =>
         label: item.company.name,
         avatar: {
             src:`https://images.markit.co.in/${item.company.logo}` ,
+            alt: item.company.name
         },
        click: async () => {
         activeCompany.value =  item.company
