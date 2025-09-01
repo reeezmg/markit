@@ -75,7 +75,6 @@ export const updateCompanySession = async (
   returnPolicy: string | undefined,
   companyPhone: string | undefined,
   image: string | null | undefined,
-  email: string | undefined,
   code: string | undefined,
   storeUniqueName: string | undefined,
   isTaxIncluded: boolean | undefined,
@@ -97,9 +96,9 @@ export const updateCompanySession = async (
   logo: string | undefined,
   productInputs: Record<string, any>,
   variantInputs: Record<string, any>,
-  authSessionVersion: string | undefined
 ) => {
   const config = useRuntimeConfig();
+  try{
   await $fetch('/api/auth/session', {
     method: 'PUT',
     body: {
@@ -112,7 +111,6 @@ export const updateCompanySession = async (
       returnPolicy,
       companyPhone,
       image,
-      email,
       code,
       storeUniqueName,
       isTaxIncluded,
@@ -134,11 +132,13 @@ export const updateCompanySession = async (
       logo,
       productInputs,
       variantInputs,
-      authSessionVersion,
     },
   });
 
   await useAuth().updateSession();
+}catch(err){
+    console.log(err)
+}
 };
 
 

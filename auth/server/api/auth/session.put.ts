@@ -5,13 +5,11 @@ export default eventHandler(async (event) => {
   const {
     id,
     cleanup,
-    name,
     description,
     thankYouNote,
     refundPolicy,
     returnPolicy,
     companyPhone,
-    email,
     image,
     companyId,
     companyType,
@@ -30,7 +28,6 @@ export default eventHandler(async (event) => {
     upiId,
     type,
     code,
-    authSessionVersion,
     plan,
     logo,
     productInputs,
@@ -40,13 +37,11 @@ export default eventHandler(async (event) => {
   await session.update({
     id,
     cleanup,
-    name,
     description,
     thankYouNote,
     refundPolicy,
     returnPolicy,
     companyPhone,
-    email,
     image,
     companyId,
     companyType,
@@ -65,12 +60,11 @@ export default eventHandler(async (event) => {
     upiId,
     type,
     code,
-    authSessionVersion,
     plan,
     logo,
     productInputs,
     variantInputs
   });
-
+console.log("session",session.data)
   return session;
 });

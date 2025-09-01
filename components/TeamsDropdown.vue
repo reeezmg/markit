@@ -58,7 +58,6 @@ const teams = (items) =>
         item.company.returnPolicy ?? undefined,
         item.company.phone ?? undefined,
         item.image || null,
-        item.email,
         item.code ?? undefined,
         item.company.storeUniqueName ?? undefined,
         item.company.isTaxIncluded,
@@ -84,7 +83,6 @@ const teams = (items) =>
         (({ name, code, sprice, pprice, dprice, discount, qty, sizes, images }) =>
             ({ name, code, sprice, pprice, dprice, discount, qty, sizes, images })
         )(item.company.variantinput || {}),
-        process.env.AUTH_SESSION_VERSION
         );
 
 
