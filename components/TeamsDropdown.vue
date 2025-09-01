@@ -82,11 +82,11 @@ const teams = (items) =>
         )(item.company.variantinput || {}),
         );
 
-        // if (Capacitor.isNativePlatform()) {
-        //     SplashScreen.show({ autoHide: false });
-        // }
+        if (Capacitor.isNativePlatform()) {
+            SplashScreen.show({ autoHide: false });
+        }
 
-        // setTimeout(() => window.location.reload(), 50);
+        setTimeout(() => window.location.reload(), 50);
         }
     }));
 
