@@ -1864,7 +1864,7 @@ const handleRedeemPoints = async () => {
       divide: 'divide-y divide-gray-200 dark:divide-gray-700',
       body: {
         padding: '',
-        base: 'lg:flex-1 lg:flex lg:flex-col lg:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700 z-10'
+        base: 'lg:flex-1 lg:min-h-40 lg:flex lg:flex-col lg:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700 z-10'
       },
       footer: {
         base: 'divide-y divide-gray-200 dark:divide-gray-700',
@@ -2100,7 +2100,7 @@ const handleRedeemPoints = async () => {
 </div>
 
          <!-- pc view -->
-        <div v-else class="overflow-x-auto p-3 hidden lg:block pb-24">    
+        <div v-else class="overflow-x-auto p-3 hidden lg:block pb-24 h-full relative">    
           <table class="divide-y divide-gray-50 dark:divide-gray-800 w-full" ref="resizableTable">
             <thead class="">
               <tr>
