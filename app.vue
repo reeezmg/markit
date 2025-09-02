@@ -4,6 +4,8 @@ import { VueQueryDevtools } from '@tanstack/vue-query-devtools';
 import { Capacitor } from '@capacitor/core'
 import { BleClient } from '@capacitor-community/bluetooth-le'
 import { SplashScreen } from '@capacitor/splash-screen';
+import { Device, Permissions } from '@capacitor/core';
+
 const config = useRuntimeConfig();
 const useAuth = () => useNuxtApp().$auth;
 // Provide tanstack-query context
@@ -23,6 +25,16 @@ const loadSavedPrinters = () => {
   return saved ? JSON.parse(saved) : []
 }
 
+
+async function requestBtPermissions() {
+  const sdkInt = parseInt((await Device.getInfo()).osVersion.split('.')[0]);
+
+  if (sdkInt >= 12) {
+    await Permissions.request({ name: 'bluetooth' });
+  } else {
+    await Permissions.request({ name: 'location' });
+  }
+}
 
 onMounted(async () => {
   if (!Capacitor.isNativePlatform()) {
@@ -53,7 +65,11 @@ onMounted(async () => {
   } catch (err) {
     console.error('BLE init failed:', err)
   }
+
+  await requestBtPermissions();
 })
+
+
 
 onBeforeUnmount(async () => {
   console.log('🔌 Disconnecting from all printers...')
