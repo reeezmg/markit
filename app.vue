@@ -4,8 +4,6 @@ import { VueQueryDevtools } from '@tanstack/vue-query-devtools';
 import { Capacitor } from '@capacitor/core'
 import { BleClient } from '@capacitor-community/bluetooth-le'
 import { SplashScreen } from '@capacitor/splash-screen';
-import { Device } from '@capacitor/device';
-import { Permissions } from '@capacitor/core';
 
 const config = useRuntimeConfig();
 const useAuth = () => useNuxtApp().$auth;
@@ -59,18 +57,7 @@ onMounted(async () => {
 
 })
 
-if (process.client) {
-  onMounted(async () => {
-    const info = await Device.getInfo();
-    const sdkInt = parseInt(info.osVersion.split('.')[0]);
 
-    if (sdkInt >= 12) {
-      await Permissions.request({ name: 'bluetooth' });
-    } else {
-      await Permissions.request({ name: 'location' });
-    }
-  });
-}
 
 
 
