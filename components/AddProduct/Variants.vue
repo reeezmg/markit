@@ -124,20 +124,24 @@ watch(() => props.editDiscount, (newDiscount) => {
     discount.value = newDiscount ?? 0;
 }, { immediate: true });
 
+
+const isEditingDPrice = ref(false);
+const isEditingDiscount = ref(false);
+
 watch([sprice, dprice], ([newSPrice, newDPrice], [oldSPrice, oldDPrice]) => {
-    // Only calculate discount if dprice was actually changed by user input
-    if (newDPrice !== oldDPrice && newDPrice !== undefined && newSPrice > 0) {
-        const calculatedDiscount = ((newSPrice - newDPrice) / newSPrice) * 100;
-        discount.value = parseFloat(calculatedDiscount.toFixed(2));
-    }
+  if (isEditingDPrice.value && newSPrice > 0) {
+    const calculatedDiscount = ((newSPrice - newDPrice) / newSPrice) * 100;
+    discount.value = parseFloat(calculatedDiscount.toFixed(2));
+  }
 });
 
-watch([sprice, discount], ([newSPrice, newDiscount]) => {
-    if (newDiscount !== undefined && newSPrice > 0) {
-        const calculatedDPrice = newSPrice * (1 - (newDiscount / 100));
-        dprice.value = parseFloat(calculatedDPrice.toFixed(2));
-    }
+watch([sprice, discount], ([newSPrice, newDiscount], [oldSPrice, oldDiscount]) => {
+  if (isEditingDiscount.value && newSPrice > 0) {
+    const calculatedDPrice = newSPrice * (1 - (newDiscount / 100));
+    dprice.value = parseFloat(calculatedDPrice.toFixed(2));
+  }
 });
+
 
 watch(items, (newItems) => {
   if (
@@ -204,15 +208,22 @@ defineExpose({ resetForm });
       <UInput v-model="pprice" v-bind="ppriceAttrs" type="number" placeholder="Enter purchase price" step="0.01" />
     </UFormGroup>
 
-    <!-- Discount Price -->
-    <UFormGroup label="Discount Price" v-if="variantInputs?.dprice">
-      <UInput v-model="dprice" v-bind="dpriceAttrs" type="number" placeholder="Enter discounted price" step="0.01" />
-    </UFormGroup>
+      <UInput
+      v-model="dprice"
+      type="number"
+      step="0.01"
+      @focus="isEditingDPrice = true; isEditingDiscount = false"
+      @blur="isEditingDPrice = false"
+    />
 
-    <!-- Discount % -->
-    <UFormGroup label="Discount %" v-if="variantInputs?.discount">
-      <UInput v-model="discount" v-bind="discountAttrs" type="number" placeholder="Enter discount percentage" step="0.01" />
-    </UFormGroup>
+    <UInput
+      v-model="discount"
+      type="number"
+      step="0.01"
+      @focus="isEditingDiscount = true; isEditingDPrice = false"
+      @blur="isEditingDiscount = false"
+    />
+
 
     <!-- Quantity (Full Width) -->
     <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2" v-if="variantInputs?.qty">

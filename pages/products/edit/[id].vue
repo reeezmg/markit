@@ -536,9 +536,9 @@ console.log(barcodes.value)
             <span>Discount: {{ variant.discount || 0 }}%</span>
           </div>
           <UButton
-        label='Print'
-         @click="printBarcodesVariant(variant)"
-        />
+            label="Print"
+            @click.stop.prevent="printBarcodesVariant(variant)"
+          />
         </div>
         </ULink>
        
