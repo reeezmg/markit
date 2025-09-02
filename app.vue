@@ -26,16 +26,6 @@ const loadSavedPrinters = () => {
 }
 
 
-async function requestBtPermissions() {
-  const sdkInt = parseInt((await Device.getInfo()).osVersion.split('.')[0]);
-
-  if (sdkInt >= 12) {
-    await Permissions.request({ name: 'bluetooth' });
-  } else {
-    await Permissions.request({ name: 'location' });
-  }
-}
-
 onMounted(async () => {
   if (!Capacitor.isNativePlatform()) {
     console.log('BLE not supported in browser ❌')
@@ -66,8 +56,16 @@ onMounted(async () => {
     console.error('BLE init failed:', err)
   }
 
-  await requestBtPermissions();
 })
+
+onMounted(async () => {
+  const sdkInt = parseInt((await Device.getInfo()).osVersion.split('.')[0]);
+  if (sdkInt >= 12) {
+    await Permissions.request({ name: 'bluetooth' });
+  } else {
+    await Permissions.request({ name: 'location' });
+  }
+});
 
 
 
