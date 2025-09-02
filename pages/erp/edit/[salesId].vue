@@ -23,6 +23,7 @@ import {
   CapacitorBarcodeScanner,
   CapacitorBarcodeScannerTypeHint
 } from '@capacitor/barcode-scanner'
+import { Capacitor } from '@capacitor/core';
 const queryClient = useQueryClient();
 
 const UpdateBill = useUpdateBill({ optimisticUpdate: true });
@@ -1635,8 +1636,24 @@ const handleClearClient = async () => {
           </div>
         
         <div class="lg:grid grid-cols-1 lg:grid-cols-12 gap-4 text-sm py-2 px-2 hidden">
-        <UInput v-model="dateOnly" type="date" label="Date" class="lg:col-span-2"  />
-      </div>
+          <UInput 
+            v-model="dateOnly" 
+            type="date" 
+            label="Date" 
+            class="lg:col-span-2"  
+          />
+
+          <UButton  
+            v-if="Capacitor.isNativePlatform()"
+            color="primary" 
+            icon="i-heroicons-camera" 
+            label="Scan" 
+            block
+            class="lg:col-span-2 lg:col-start-11"
+            @click="handleScan"
+          />
+        </div>
+
    </template>  
 
         <!-- Responsive table wrapper -->  

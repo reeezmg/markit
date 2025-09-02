@@ -8,6 +8,7 @@ import {
   CapacitorBarcodeScanner,
   CapacitorBarcodeScannerTypeHint
 } from '@capacitor/barcode-scanner'
+import { Capacitor } from '@capacitor/core';
 
 const queryClient = useQueryClient();
 
@@ -1936,13 +1937,25 @@ const handleRedeemPoints = async () => {
   <UButton
     color="primary"
     label="Token Entries"
-    class="lg:col-start-9 lg:col-span-2"
+   :class="[
+    Capacitor.isNativePlatform()
+      ? 'lg:col-start-6 lg:col-span-2'
+      : 'lg:col-start-8 lg:col-span-2'
+  ]"
     block
     @click="isTokenOpen = true"
   />
 
   <!-- Draft Selector + Reset -->
-  <div class="lg:col-start-11 lg:col-span-3 flex flex-row items-center gap-2">
+<div
+  :class="[
+    Capacitor.isNativePlatform()
+      ? 'lg:col-start-8 lg:col-span-3'
+      : 'lg:col-start-10 lg:col-span-3',
+    'flex flex-row items-center gap-2'
+  ]"
+>
+
     <USelectMenu
       v-model="selectedDraft"
       :options="draftBills"
@@ -1974,6 +1987,7 @@ const handleRedeemPoints = async () => {
       @click="reset"
     />
   </div>
+   <UButton  v-if="Capacitor.isNativePlatform()" color="primary" icon="i-heroicons-camera" label="Scan" block class="lg:col-start-11 lg:col-span-2" @click="handleScan"/>
 </div>
 
 
@@ -2086,8 +2100,8 @@ const handleRedeemPoints = async () => {
 </div>
 
          <!-- pc view -->
-        <div v-else class="overflow-x-auto p-3 hidden lg:block">    
-          <table class=" divide-y divide-gray-50 dark:divide-gray-800" ref="resizableTable">
+        <div v-else class="overflow-x-auto p-3 hidden lg:block pb-24">    
+          <table class="divide-y divide-gray-50 dark:divide-gray-800 w-full" ref="resizableTable">
             <thead class="">
               <tr>
                 <th
@@ -2263,7 +2277,7 @@ const handleRedeemPoints = async () => {
   
       </div>
         <!-- Other form elements -->
-         <div v-if="!token && !isMobile" class="lg:grid hidden grid-cols-1 lg:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
+         <div v-if="!token && !isMobile" class="lg:grid hidden grid-cols-1  lg:grid-cols-4 gap-4 text-sm px-3 py-3">
 
           <div class="">
 
