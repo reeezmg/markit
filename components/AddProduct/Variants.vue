@@ -208,22 +208,31 @@ defineExpose({ resetForm });
       <UInput v-model="pprice" v-bind="ppriceAttrs" type="number" placeholder="Enter purchase price" step="0.01" />
     </UFormGroup>
 
-      <UInput
+    <!-- Discount Price -->
+    <UFormGroup label="Discount Price" v-if="variantInputs?.dprice">
+    <UInput
       v-model="dprice"
       type="number"
       step="0.01"
       @focus="isEditingDPrice = true; isEditingDiscount = false"
       @blur="isEditingDPrice = false"
     />
+    </UFormGroup>
 
-    <UInput
+    <!-- Discount % -->
+    <UFormGroup label="Discount %" v-if="variantInputs?.discount">
+      <UInput
       v-model="discount"
       type="number"
       step="0.01"
       @focus="isEditingDiscount = true; isEditingDPrice = false"
       @blur="isEditingDiscount = false"
     />
+    </UFormGroup>
 
+
+
+    
 
     <!-- Quantity (Full Width) -->
     <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2" v-if="variantInputs?.qty">
