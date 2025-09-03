@@ -125,6 +125,7 @@ const variantInputs = reactive([
   { key: 'qty', label: 'Quantity', value: useAuth().session.value?.variantInputs?.qty  },
   { key: 'sizes', label: 'Sizes', value: useAuth().session.value?.variantInputs?.sizes  },
   { key: 'images', label: 'Images', value: useAuth().session.value?.variantInputs?.images  },
+  { key: 'button', label: 'Button', value: useAuth().session.value?.variantInputs?.button  },
 ])
 
 watch(() => storeUniqueName.value, (newName) => {

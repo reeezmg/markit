@@ -11,9 +11,8 @@ const router = useRouter();
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
 const isAdd = ref(false);
-const variantInputs = ref(useAuth().session.value?.variantInputs)
 const settledMap = ref(new Map());
-
+const variantInputs = ref(useAuth().session.value?.variantInputs)
 const isSaveDisable = computed(() => {
   // If any value is false → disable
   for (const val of settledMap.value.values()) {
@@ -366,6 +365,7 @@ const mediaRefs = ref<any>([]);
 const idCounter = ref(1);
 const isLoad = ref(false)
 const isSave = ref(false)
+const isPrint = ref(false)
 
 
 const isOpen = ref(false)
@@ -830,13 +830,13 @@ const {
   isLoading,
   error,
   refetch:itemRefetch,
-} = useFindUniquePurchaseOrder(queryParams,{enabled:false});
+} = useFindUniquePurchaseOrder(queryParams)
 
 
 
 const printBarcodes = async() => {
+  isPrint.value = true
   try{
- 
     const response = await printLabel(barcodes.value);
     toast.add({
         title: 'Printing success!',
@@ -850,13 +850,14 @@ const printBarcodes = async() => {
         description: err.message,
         color: 'red',
       });
+  }finally{
+    isPrint.value = false
   }
 }
 
 
 const handleSave = async () => {
   isSave.value = true
-  await itemRefetch()
 
   try {
     if (!items.value?.products) {
@@ -1001,14 +1002,10 @@ const handleSkip = () => {
 
 const handleAddNew = async() => {
      isAdd.value =true
-    const res = await CreatePurchaseOrder.mutateAsync({
-        data:{
-            company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-        },
-        select: { id: true }
-    })
+    
+    const res = await $fetch('/api/purchaseorder/create', {
+      method: 'POST',
+    });
    router.push(`/products/add?poId=${res?.id}`)
     isAdd.value =false
     isOpen.value = false
@@ -1119,6 +1116,7 @@ const handleNewProduct = () => {
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
                      
                       <UButton
+                       v-if="variantInputs?.button"
                         @click="removeVariant(index)"
                         variant="outline"
                         color="red"
@@ -1150,6 +1148,7 @@ const handleNewProduct = () => {
                   </div>
 
                 <UButton
+                    v-if="variantInputs?.button"
                     @click="addVariant"
                     color="green"
                     block
@@ -1164,7 +1163,6 @@ const handleNewProduct = () => {
 
                 <div v-if="clearInputs" class="m-3">
                     <UButton
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
                            :loading="isLoad"
                     >
@@ -1196,8 +1194,10 @@ const handleNewProduct = () => {
 
       
           <template #header>
+          <div class="flex items-end justify-between">
+          <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark-20-solid" class="-my-1" @click="isOpen = false" />
           <div class="flex items-end justify-end">
-          <UButton type="submit"  class="me-3 px-5" @click="printBarcodes" :disabled="!barcodes.length">
+          <UButton type="submit"  class="me-3 px-5" @click="printBarcodes" :disabled="!barcodes.length" :loading="isPrint">
                 Print
                 </UButton>
                  <UButton color="green" type="submit"  class="me-3 px-5" @click="handleAddNew" :loading=isAdd>
@@ -1206,11 +1206,12 @@ const handleNewProduct = () => {
                 <UButton color="red" type="submit"  class="me-3 px-5" @click="handleSkip" :loading=isAdd>
                   Skip
                 </UButton>
+            </div>
               </div>
         </template>
         <template #footer>
           <div class="flex items-end justify-end">
-             <UButton type="submit"  class="me-3 px-5" @click="printBarcodes" :disabled="!barcodes.length">
+             <UButton type="submit"  class="me-3 px-5" @click="printBarcodes" :disabled="!barcodes.length" :loading="isPrint">
                 Print
                 </UButton>
                  <UButton color="green" type="submit"  class="me-3 px-5" @click="handleAddNew" :loading=isAdd>
@@ -1234,7 +1235,6 @@ const handleNewProduct = () => {
           <div class="flex items-center justify-between">
              <div v-if="clearInputs" class="m-3">
                     <UButton
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
                          :loading="isLoad"
                     >
@@ -1243,7 +1243,6 @@ const handleNewProduct = () => {
                 </div>
                 <div v-else class="m-3">
                     <UButton
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
                          :loading="isLoad"
                     >
@@ -1276,6 +1275,7 @@ const handleNewProduct = () => {
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
                      
                       <UButton
+                       v-if="variantInputs?.button"
                         @click="removeVariant(index)"
                         variant="outline"
                         color="red"
@@ -1307,6 +1307,7 @@ const handleNewProduct = () => {
                   </div>
 
                 <UButton
+                    v-if="variantInputs?.button"
                     @click="addVariant"
                     color="green"
                     block
@@ -1321,7 +1322,6 @@ const handleNewProduct = () => {
 
                 <div v-if="clearInputs" class="m-3">
                     <UButton
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleAdd"
                          :loading="isLoad"
                     >
@@ -1330,7 +1330,6 @@ const handleNewProduct = () => {
                 </div>
                 <div v-else class="m-3">
                     <UButton
-                        class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm"
                         @click="handleEdit"
                          :loading="isLoad"
                     >

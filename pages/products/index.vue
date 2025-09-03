@@ -558,20 +558,21 @@ async function toggleVariantStatus(id: string, status:boolean) {
     }
 
 
-const handleAdd = async() => {
-    isAdd.value =true
-    const res = await CreatePurchaseOrder.mutateAsync({
-        data:{
-            company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-        },
-        select: { id: true }
-    })
-    console.log(res)
-    router.push(`products/add?poId=${res?.id}`)
-    isAdd.value =false
-}
+const handleAdd = async () => {
+  try {
+    isAdd.value = true;
+
+    const res = await $fetch('/api/purchaseorder/create', {
+      method: 'POST',
+    });
+    router.push(`products/add?poId=${res?.id}`);
+  } catch (error) {
+    console.error('Failed to create purchase order:', error);
+  } finally {
+    isAdd.value = false;
+  }
+};
+
 
 const fileValue = (data: any) => {
    console.log(data)

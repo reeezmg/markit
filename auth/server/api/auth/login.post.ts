@@ -51,8 +51,8 @@ export default eventHandler(async (event) => {
         productInputs: (({ name, brand, category, subcategory, description }) =>
         ({ name, brand, category, subcategory, description }))(user.companies[0].company.productinput || {}),
 
-        variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, sizes, images }) =>
-        ({ name, code, sprice, pprice, dprice, discount, qty, sizes, images }))(user.companies[0].company.variantinput || {}),
+        variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, sizes, images, button }) =>
+        ({ name, code, sprice, pprice, dprice, discount, qty, sizes, images, button }))(user.companies[0].company.variantinput || {}),
 
         authSessionVersion:process.env.AUTH_SESSION_VERSION
     });

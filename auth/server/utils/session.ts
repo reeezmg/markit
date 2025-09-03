@@ -65,6 +65,7 @@ export type AuthSession = {
         qty: boolean;
         sizes: boolean;
         images: boolean;
+        button: boolean;
     };
 };
 

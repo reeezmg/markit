@@ -6,8 +6,8 @@ const router = useRouter();
 const toast = useToast();
 const { printLabel } = usePrint();
 const useAuth = () => useNuxtApp().$auth;
-let hasLoaded = false;
 
+const variantInputs = ref(useAuth().session.value?.variantInputs)
 interface ImageData {
     file: File;
     uuid: string;
@@ -59,31 +59,6 @@ const route = useRoute();
 const UpdateProduct = useUpdateProduct();
 
 const awsService = new AwsService();
-
-const selectedProduct: Ref<Product> = ref({
-  id: uuidv4(), 
-  name: '',
-  brand: '',
-  description: '',
-  files: [], 
-  category: {}, 
-  subcategory: {}, 
-  categoryId: '', 
-  subcategoryId: '', 
-  variants: [{
-    id:'',
-    key:'',
-    name: '',
-    code: '',
-    qty: 0,
-    sprice: 0,
-    pprice: 0,
-    dprice: 0,
-    discount: 0,
-    items: [{ id: uuidv4(), size: null, qty: undefined }],
-    images: []
-  }]
-});
 
 const clearInputs = ref(true)
 const createRef = ref<any>(null);
@@ -189,7 +164,7 @@ function calculateTax(variant) {
 
 
 
-const {data: productData, refetch:productRefetch} = useFindUniqueProduct({
+const {data: selectedProduct, isLoading, refetch:productRefetch} = useFindUniqueProduct({
   where: { id: route.params.id },
   select: {
     id: true,
@@ -223,14 +198,7 @@ const {data: productData, refetch:productRefetch} = useFindUniqueProduct({
   }
 });
 
-watch(productData, (newValue) => {
-  if (newValue && !hasLoaded) {
-    console.log(newValue)
-    selectedProduct.value = newValue;
-    console.log(newValue);
-    hasLoaded = true;
-  }
-}, { immediate: true });
+
 
 
 const handleEdit = async (e: Event) => {
@@ -471,7 +439,9 @@ const printBarcodesVariant = async(variant:any) => {
             brand: productData?.value?.brand,
             name: variant.name,
             sprice: variant.sprice,
-            dprice: variant.dprice,
+             ...(variant.sprice !== variant.dprice && 
+                {  dprice: variant.dprice }
+              ),
             size: item.size,
         })) ?? [];
        
@@ -505,8 +475,11 @@ console.log(barcodes.value)
 </script>
 
 <template>
+  <div v-if="isLoading" class="flex items-center justify-center">
+  <UIcon name="i-heroicons-arrow-path-20-solid" class="animate-spin w-5 h-5 mt-10 text-gray-500" />
+</div>
     
-    <UDashboardPanelContent class="pb-24">
+    <UDashboardPanelContent v-else class="pb-24">
       <div class="flex flex-row gap-4">
         <div class="w-1/2">
   <UPageCard class="m-3">
@@ -570,6 +543,7 @@ console.log(barcodes.value)
           <div class="flex justify-between items-centerp-3 rounded-lg">
             <div class="text-xl mb-4">Variant {{index+1}}</div>
             <button
+             v-if="variantInputs?.button"
               @click="removeVariant(index)"
               class="text-red-500 hover:text-red-700 text-sm"
             >
@@ -590,6 +564,7 @@ console.log(barcodes.value)
             :editItems="selectedProduct?.variants[index]?.items"
             @update="updateVariant(index,$event)" />
           <AddProductMedia
+           v-if="variantInputs?.images"
             ref="mediaRefs"
             :editFile="selectedProduct && selectedProduct.variants[index]?.images"
             :index="index" 
@@ -599,15 +574,16 @@ console.log(barcodes.value)
       </div>
   
       <button
+        v-if="variantInputs?.button"
         class="w-full rounded-md bg-green-500 hover:bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm m-3"
         @click="addVariant"
       >
         + Add Variant
       </button>
   
-      <UPageCard class="m-3" id="Live">
+      <!-- <UPageCard class="m-3" id="Live">
         <AddProductLive @update="liveValue" />
-      </UPageCard>
+      </UPageCard> -->
 
       <div class="m-3">
         <UButton
@@ -655,7 +631,7 @@ console.log(barcodes.value)
                 <div class="flex justify-between items-centerp-3 rounded-lg">
                   <div class="text-xl mb-4">Variant {{index+1}}</div>
                   <button
-                    v-if="!(index === 0)"
+                    v-if="variantInputs?.button"
                     @click="removeVariant(index)"
                     class="text-red-500 hover:text-red-700 text-sm"
                   >
@@ -672,6 +648,7 @@ console.log(barcodes.value)
                   :editSizes="selectedProduct?.variants[index].sizes"
                   @update="updateVariant(index,$event)" />
                 <AddProductMedia
+                  v-if="variantInputs?.images"
                   :key="index"
                   :editFile="selectedProduct && selectedProduct.variants[index].images"
                   :index="index" 
@@ -681,15 +658,16 @@ console.log(barcodes.value)
             </div>
   
             <button
+            v-if="variantInputs?.button"
               class="rounded-md bg-green-500 hover:bg-green-600 px-3 py-2 text-sm font-semibold text-white shadow-sm m-3"
               @click="addVariant"
             >
               + Add Variant
             </button>
   
-            <UPageCard class="m-3" id="Live">
+            <!-- <UPageCard class="m-3" id="Live">
               <AddProductLive @update="liveValue" />
-            </UPageCard>
+            </UPageCard> -->
   
            
             <div class="m-3">

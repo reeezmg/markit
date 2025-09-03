@@ -180,6 +180,7 @@ model Variantinput {
   qty       Boolean @default(true)
   sizes     Boolean @default(true)
   images    Boolean @default(true)
+  button    Boolean @default(true)
   company   Company @relation(fields: [companyId], references: [id])
   companyId String  @unique() @map("company_id")
 

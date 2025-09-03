@@ -293,11 +293,10 @@ const scrollToSection = (sectionId: string) => {
         <!-- Submit Button -->
         <div class="mt-5 text-end">
           <UButton
-            class="rounded-md me-3 dark:text-gray-900 bg-primary-400 hover:bg-primary-500 px-3 py-2 text-sm font-semibold text-white shadow-sm w-40"
             @click="handleSubmit"
              :loading="isLoading"
         >
-            Finish
+            Save
         </UButton>
         </div>
       </div>
