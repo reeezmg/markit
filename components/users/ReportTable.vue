@@ -52,13 +52,6 @@ watch(
 )
 
 
-
-watch(users.value, (newuser) => {
-    console.log(newuser)
-});
-
-const useAuth = () => useNuxtApp().$auth;
-console.log(props.users)
 // Columns
 const columns = [
     {

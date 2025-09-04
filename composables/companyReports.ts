@@ -1,10 +1,9 @@
 export const useCompanyEntries = async (startDate?: Date, endDate?: Date) => {
-  console.log(startDate,endDate)
-  const { data } = await useFetch('/api/user/report', {
+  const res = await $fetch('/api/user/report', {
     query: {
-      startDate: startDate?.toISOString(),
-      endDate: endDate?.toISOString()
+      startDate: startDate ? startDate.toISOString() : undefined,
+      endDate: endDate ? endDate.toISOString() : undefined
     }
   })
-  return data.value || []
+  return res
 }

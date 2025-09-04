@@ -11,8 +11,9 @@ export default defineEventHandler(async (event) => {
   }
 
   const query = getQuery(event)
-  const startDate = query.startDate ? new Date(query.startDate) : null
-  const endDate = query.endDate ? new Date(query.endDate) : null
+
+const startDate = query.startDate ? new Date(query.startDate as string) : undefined
+const endDate = query.endDate ? new Date(query.endDate as string) : undefined
 
   const entries = await prisma.entry.findMany({
     where: {
@@ -20,18 +21,8 @@ export default defineEventHandler(async (event) => {
       ...(startDate && endDate && {
         bill: {
           createdAt: {
-            gte: new Date(Date.UTC(
-            startDate.getFullYear(),
-            startDate.getMonth(),
-            startDate.getDate(),
-            0, 0, 0, 0
-          )).toISOString(),
-           lte: new Date(Date.UTC(
-            endDate.getFullYear(),
-            endDate.getMonth(),
-            endDate.getDate(),
-            23, 59, 59, 999
-          )).toISOString()
+            gte: new Date(startDate),
+           lte: new Date(endDate)
           },
           deleted:false
         }
@@ -76,6 +67,5 @@ export default defineEventHandler(async (event) => {
   const labels = Object.keys(processed)
   const countData = labels.map(name => processed[name].count)
   const salesData = labels.map(name => processed[name].total)
-
   return { labels, countData, salesData, entryGroups }
 })

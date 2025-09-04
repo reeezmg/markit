@@ -2,6 +2,7 @@ import { prisma } from '~/server/prisma';
 import { defineEventHandler, getQuery } from 'h3';
 
 export default defineEventHandler(async (event) => {
+  console.log("here")
   // Get auth data from the request
   const session = await useAuthSession(event);
   const companyId = session.data.companyId 
@@ -15,10 +16,10 @@ export default defineEventHandler(async (event) => {
 
   // Parse query parameters for date filtering
   const query = getQuery(event)
+
 const startDate = query.startDate ? new Date(JSON.parse(query.startDate)) : undefined
 const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : undefined
 
-  console.log(query)
 
   // Fetch all data in parallel
   const [

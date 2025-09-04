@@ -19,7 +19,9 @@ const fetchEntries = async (start?: Date, end?: Date) => {
   const finalStart = start ?? todayStart
   const finalEnd = end ?? todayEnd
   loading.value = true
+  console.log(finalStart,finalEnd)
   entries.value = await useCompanyEntries(finalStart, finalEnd)
+  console.log(entries.value)
   loading.value = false
 }
 
