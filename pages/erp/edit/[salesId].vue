@@ -1321,7 +1321,7 @@ const handleReturnData = ({ totalreturnvalue, returnedItems }) => {
 
 async function updateUserDetails(index, user) {
 
-  const userdetails = userStore.getuserByShortCut(user)
+  const userdetails = userStore.getuserByCode(user)
 
   if (userdetails) {
     console.log(userdetails)
