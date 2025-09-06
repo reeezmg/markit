@@ -297,7 +297,8 @@ export function useReceiptPrinter() {
                 .align('center')
                 .newline(1)
                 .text('Scan to pay via UPI')
-                .qrcode(qrLink, { model: 2, size: 6, ecc: 'M' }) // QR code
+                .newline(1)
+                .qrcode(qrLink, { model: 2, size: 8, errorlevel: 'h' }) // QR code
                 .newline(1);
             }
 
