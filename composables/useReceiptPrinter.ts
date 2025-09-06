@@ -54,7 +54,7 @@ const sendDataInChunks = async (deviceId: string, data: Uint8Array) => {
 
 let encoder = new ReceiptPrinterEncoder({
     newlineBeforeCut: 8,
-    columns: 42
+    columns: 48
 });
 
 const selectedDevice = ref<any | null>(null);
@@ -294,11 +294,10 @@ export function useReceiptPrinter() {
             if (upiPayment) {
                 const qrLink = `upi://pay?pa=${bill.upiId}&am=${upiPayment.amount}&cu=INR`;
                 encoder
-                .align('center')
                 .newline(1)
                 .text('Scan to pay via UPI')
-                .newline(1)
-                .qrcode(qrLink, { model: 2, size: 8, errorlevel: 'h' }) // QR code
+                .newline(2)
+                .qrcode(qrLink, { model: 1, size: 8, errorlevel: 'h' }) // QR code
                 .newline(1);
             }
 
