@@ -435,8 +435,8 @@ const printBarcodesVariant = async(variant:any) => {
             barcode: item.barcode ?? '',
             code: variant.code ?? '',
             shopname:useAuth().session.value?.companyName,
-            productName: productData?.value?.name,
-            brand: productData?.value?.brand,
+            productName: selectedProduct?.value?.name,
+            brand: selectedProduct?.value?.brand,
             name: variant.name,
             sprice: variant.sprice,
              ...(variant.sprice !== variant.dprice && 
