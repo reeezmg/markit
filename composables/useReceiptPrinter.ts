@@ -3,6 +3,7 @@ import { ref } from 'vue';
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import moment from 'moment';
 import { BleClient } from '@capacitor-community/bluetooth-le';
+import { Capacitor } from '@capacitor/core';
 
 // BLE chunked data sender
 const chunkSize = 512;
@@ -25,12 +26,13 @@ let encoder = new ReceiptPrinterEncoder({
 });
 
 const selectedDevice = ref<any | null>(null);
-if (typeof window !== 'undefined') {
+if (Capacitor.isNativePlatform()) {
   const selectedPrinter = localStorage.getItem('selectedPrinter');
   if (!selectedPrinter) {
-    throw new Error('No printer found. Please add a printer first.');
+    selectedDevice.value = null;
+  } else {
+    selectedDevice.value = JSON.parse(selectedPrinter);
   }
-  selectedDevice.value = JSON.parse(selectedPrinter);
 }
 
 const PRINTER_SERVICES = {
