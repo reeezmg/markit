@@ -324,6 +324,7 @@ model Category {
   thresholdAmount   Float?
   taxBelowThreshold Float?
   taxAboveThreshold Float?
+  margin            Float?
   writeId           String?       @default(uuid()) @map("write_id")
 
   @@map("categories")

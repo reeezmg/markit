@@ -33,6 +33,7 @@ const fixedTax = ref(0);
 const thresholdAmount = ref(0);
 const taxBelowThreshold = ref(0);
 const taxAboveThreshold = ref(0);
+const margin = ref(0);
 const live = ref(true);
 const files = reactive<ImageData[]>([]);
 const subcategories = ref<Array<Partial<Subcategory & { isNew?: boolean }>>>([]);
@@ -54,6 +55,7 @@ watchEffect(() => {
     thresholdAmount.value = category.value.thresholdAmount || 0;
     taxBelowThreshold.value = category.value.taxBelowThreshold || 0;
     taxAboveThreshold.value = category.value.taxAboveThreshold || 0;
+    margin.value = category.value.margin || 0;
     live.value = category.value.status;
     
     if (category.value.image) {
@@ -79,6 +81,7 @@ const createValue = (data: any) => {
   thresholdAmount.value = data.thresholdAmount;
   taxBelowThreshold.value = data.taxBelowThreshold;
   taxAboveThreshold.value = data.taxAboveThreshold;
+  margin.value = data.margin;
   if (data.file) {
     files.push(data.file);
   }
@@ -136,7 +139,7 @@ const handleSubmit = async (e: Event) => {
       awsService.uploadBase64File(file.base64, file.uuid)
     );
 
-    console.log(live.value)
+    console.log(margin.value)
 
     // 2. Update category
     const categoryUpdate = UpdateCategory.mutateAsync({
@@ -153,6 +156,7 @@ const handleSubmit = async (e: Event) => {
         thresholdAmount: thresholdAmount.value,
         taxBelowThreshold: taxBelowThreshold.value,
         taxAboveThreshold: taxAboveThreshold.value,
+        margin: margin.value,
       }
     });
 
@@ -242,7 +246,7 @@ const scrollToSection = (sectionId: string) => {
             :taxType="category?.taxType"
             :thresholdAmount="category?.thresholdAmount"
             :taxBelowThreshold="category?.taxBelowThreshold"
-            :taxAboveThreshold="category?.taxAboveThreshold"
+            :margin="category?.margin"
             :fixedTax="category?.fixedTax"
             :editFile="category?.image"
             @update="createValue"

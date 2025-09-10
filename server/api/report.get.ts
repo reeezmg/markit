@@ -244,65 +244,68 @@ const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : undefined
     .sort((a, b) => b.total - a.total)
 
 
-
-     const profitData = entries.map(entry => {
-    if (!entry.variant || !entry.qty || entry.qty <= 0 || entry.return) {
-      return null;
-    }
-
-    const salePricePerUnit = (entry.value ?? 0) / entry.qty;
-    const purchasePrice = entry.variant.pprice ?? 0;
-    const profitPerUnit = salePricePerUnit - purchasePrice;
-    const totalProfit = profitPerUnit * entry.qty;
-
-    return {
-      entryId: entry.id,
-      variantId: entry.variantId,
-      productName: entry.variant.product?.name || 'Unknown',
-      variantName: entry.variant.name,
-      qty: entry.qty,
-      salePricePerUnit,
-      purchasePrice,
-      profitPerUnit,
-      totalProfit,
-      date: entry.bill?.createdAt
-    };
-  }).filter(Boolean); // Remove null entries
-
-  // Calculate total profit
-  const totalProfit = profitData.reduce((sum, item) => sum + (item.totalProfit || 0), 0);
-
-  // Calculate profit by month
-  const profitByMonth = Array.from({ length: 12 }, (_, i) => {
-    const month = i + 1;
-    const monthProfit = profitData
-      .filter(item => item.date && new Date(item.date).getMonth() + 1 === month)
-      .reduce((sum, item) => sum + (item.totalProfit || 0), 0);
-    
-    return {
-      month: monthNames[i],
-      profit: monthProfit
-    };
-  });
-
-  // Calculate profit by category
-  const profitByCategoryMap = new Map<string, { name: string; profit: number }>();
-  for (const entry of entries) {
-    if (!entry.variant || !entry.qty || entry.qty <= 0 || entry.return) continue;
-
-    const categoryName = entry.category?.name || 'Uncategorized';
-    const salePricePerUnit = (entry.value ?? 0) / entry.qty;
-    const purchasePrice = entry.variant.pprice ?? 0;
-    const profit = (salePricePerUnit - purchasePrice) * entry.qty;
-
-    if (!profitByCategoryMap.has(categoryName)) {
-      profitByCategoryMap.set(categoryName, { name: categoryName, profit: 0 });
-    }
-    profitByCategoryMap.get(categoryName)!.profit += profit;
+const profitData = entries.map(entry => {
+  
+   if (!entry.qty || entry.qty <= 0 || entry.return) {
+    return null;
   }
-  const profitByCategory = Array.from(profitByCategoryMap.values())
-    .sort((a, b) => b.profit - a.profit);
 
+
+  const salePricePerUnit = (entry.value ?? 0) / entry.qty;
+
+  // If variant has purchase price, use it; otherwise use category margin
+  let purchasePrice: number | null;
+  if (entry.variant != null) {
+    purchasePrice = entry.variant.pprice;
+     console.log(purchasePrice)
+  } else {
+    const margin = entry.category?.margin ?? 0; // percentage
+    console.log(margin)
+    purchasePrice = salePricePerUnit * (1 - margin / 100);
+  }
+
+  const profitPerUnit = salePricePerUnit - purchasePrice!;
+  const totalProfit = profitPerUnit * entry.qty;
+
+  return {
+    entryId: entry.id,
+    profitPerUnit,
+    totalProfit,
+  };
+}).filter(Boolean);
+
+// Total profit
+const totalProfit = profitData.reduce((sum, item) => sum + (item.totalProfit || 0), 0);
+
+
+
+// Profit by category
+const profitByCategoryMap = new Map<string, { name: string; profit: number }>();
+for (const entry of entries) {
+  if (!entry.variant || !entry.qty || entry.qty <= 0 || entry.return) continue;
+
+  const categoryName = entry.category?.name || 'Uncategorized';
+  const salePricePerUnit = (entry.value ?? 0) / entry.qty;
+
+  let purchasePrice: number | null;
+  if (entry.variant != null) {
+    purchasePrice = entry.variant.pprice;
+  } else {
+    const margin = entry.category?.margin ?? 0;
+    purchasePrice = salePricePerUnit * (1 - margin / 100);
+  }
+
+  const profit = (salePricePerUnit - purchasePrice!) * entry.qty;
+
+  if (!profitByCategoryMap.has(categoryName)) {
+    profitByCategoryMap.set(categoryName, { name: categoryName, profit: 0 });
+  }
+  profitByCategoryMap.get(categoryName)!.profit += profit;
+}
+const profitByCategory = Array.from(profitByCategoryMap.values())
+  .sort((a, b) => b.profit - a.profit);
+
+console.log(totalProfit)
   return {
     company,
     productsCount,
@@ -326,8 +329,7 @@ const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : undefined
     expenses,
     entries,
     totalProfit,
-    profitByMonth,
-    profitByCategory,
-    profitData,
+    // profitByCategory,
+    // profitData,
   }
 })

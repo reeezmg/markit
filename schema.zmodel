@@ -312,6 +312,8 @@ model Client extends Base {
     closePipelineId   String?         @map("close_pipeline_id")
     notifications  Notification[]
     likeCompanies LikeCompanyClient[]
+    otp        String?
+    otpExpiry  DateTime?
     
     @@allow('read, create, update, delete', true)
 
@@ -347,10 +349,11 @@ model Category {
   shortCut          String?         @map("short_cut")
   hsn               String?
   taxType           TaxType         @default(FIXED)
-  fixedTax          Float?          // used if taxType == FIXED
-  thresholdAmount   Float?          // used if taxType == VARIABLE
-  taxBelowThreshold Float?          // used if taxType == VARIABLE
-  taxAboveThreshold Float?          // used if taxType == VARIABLE
+  fixedTax          Float?          
+  thresholdAmount   Float?        
+  taxBelowThreshold Float?        
+  taxAboveThreshold Float?          
+  margin            Float?          
   writeId           String?            @default(uuid()) @map('write_id')
   @@allow("read", true)
   @@allow("create, update, delete", company.users?[user == auth()])
@@ -627,11 +630,15 @@ model Address extends Base {
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt @map("updated_at")
     name       String?
-    street    String
-    locality  String
-    city    String 
-    state    String 
-    pincode  String
+    street    String?
+    locality  String?
+    landmark      String?
+    city    String?
+    state    String?
+    pincode  String?
+    houseDetails String?
+    type          String?
+    formattedAddress       String?                @map("formatted_address")
     placeId  String? @map("place_id")
     coord Unsupported("geography(Point,4326)")?
     lat      Float? @map("lat")

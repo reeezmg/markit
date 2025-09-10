@@ -23,6 +23,7 @@ interface Category {
     shortCut?: string;
     hsn: string;
     description: string;
+    margin: string;
     files: ImageData | null;
 }
 
@@ -37,6 +38,7 @@ const fixedTax = ref(0);
 const thresholdAmount = ref(0);
 const taxBelowThreshold = ref(0);
 const taxAboveThreshold = ref(0);
+const margin = ref(0);
 const isLoading = ref(false);
 
 const live = ref<boolean>();
@@ -55,6 +57,7 @@ const createValue = (data: any) => {
     thresholdAmount.value = data.thresholdAmount;
     taxBelowThreshold.value = data.taxBelowThreshold;
     taxAboveThreshold.value = data.taxAboveThreshold;
+    margin.value = data.margin;
 
 };
 
@@ -89,7 +92,6 @@ const handleDeleteSubCategory = (index: number) => {
 
 const handleSubmit = async (e: Event) => {
     isLoading.value = true;
- console.log(subcategory.value)
     e.preventDefault();
     try {
         const res = await CreateCategory.mutateAsync({
@@ -105,6 +107,7 @@ const handleSubmit = async (e: Event) => {
         thresholdAmount: thresholdAmount.value || undefined,
         taxBelowThreshold: taxBelowThreshold.value || undefined,
         taxAboveThreshold: taxAboveThreshold.value || undefined,
+        margin: margin.value || undefined,
         company: {
             connect: {
                 id: useAuth().session.value?.companyId,

@@ -2,366 +2,205 @@
 import { ref } from 'vue';
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import moment from 'moment';
-import { Capacitor } from '@capacitor/core';
 import { BleClient } from '@capacitor-community/bluetooth-le';
 
-// Debug logger
-const debugLog = ref<string[]>([]);
-const DEBUG = true;
-
-const log = (message: string, type: 'info' | 'error' | 'success' = 'info') => {
-  const timestamp = new Date().toISOString();
-  const logMessage = `${timestamp} [${type}] ${message}`;
-  console.log(logMessage);
-  debugLog.value.push(logMessage);
-};
-
-// Add error handler for BLE operations
-const handleBleOperation = async (operation: () => Promise<any>, errorMessage: string) => {
-  try {
-    return await operation();
-  } catch (error: any) {
-    log(`${errorMessage}: ${error.message}`, 'error');
-    throw error;
-  }
-};
-
-// Chunk data for BLE transmission
-const chunkSize = 512; // Adjust based on your printer's capabilities
+// BLE chunked data sender
+const chunkSize = 512;
 const sendDataInChunks = async (deviceId: string, data: Uint8Array) => {
-  log(`Starting data transmission. Total size: ${data.length} bytes`, 'info');
-  
   for (let i = 0; i < data.length; i += chunkSize) {
     const chunk = data.slice(i, i + chunkSize);
-    log(`Sending chunk ${Math.floor(i/chunkSize) + 1}/${Math.ceil(data.length/chunkSize)}. Size: ${chunk.length} bytes`, 'info');
-    
-    await handleBleOperation(
-      async () => {
-        await BleClient.write(
-          deviceId,
-          PRINTER_SERVICES.SERVICE,
-          PRINTER_SERVICES.CHARACTERISTIC,
-          new DataView(chunk.buffer)
-        );
-        // Add a small delay between chunks to prevent overwhelming the printer
-        await new Promise(resolve => setTimeout(resolve, 50));
-      },
-      `Failed to send chunk ${Math.floor(i/chunkSize) + 1}`
+    await BleClient.write(
+      deviceId,
+      PRINTER_SERVICES.SERVICE,
+      PRINTER_SERVICES.CHARACTERISTIC,
+      new DataView(chunk.buffer)
     );
+    await new Promise(resolve => setTimeout(resolve, 50));
   }
-  log('Data transmission completed successfully', 'success');
 };
 
 let encoder = new ReceiptPrinterEncoder({
-    newlineBeforeCut: 8,
-    columns: 48
+  newlineBeforeCut: 8,
+  columns: 42
 });
 
 const selectedDevice = ref<any | null>(null);
 if (typeof window !== 'undefined') {
- const selectedPrinter = localStorage.getItem('selectedPrinter');
-  if (selectedPrinter) {
-    console.log('Loaded selected printer from localStorage:', JSON.parse(selectedPrinter));
-    selectedDevice.value = JSON.parse(selectedPrinter);
-  } else {
-    console.log('No selected printer found in localStorage.');
+  const selectedPrinter = localStorage.getItem('selectedPrinter');
+  if (!selectedPrinter) {
+    throw new Error('No printer found. Please add a printer first.');
   }
+  selectedDevice.value = JSON.parse(selectedPrinter);
 }
+
 const PRINTER_SERVICES = {
   SERVICE: '000018f0-0000-1000-8000-00805f9b34fb',
   CHARACTERISTIC: '00002af1-0000-1000-8000-00805f9b34fb'
 };
 
-
-// Configure receipt layout
-const RECEIPT_WIDTH = 42; // Characters per line 48 total
 const COLUMN_WIDTHS = {
   sl: 4,
   description: 24,
   hsn: 10,
   tax: 10,
-  category: 14,
   qty: 4,
-  No: 4,
-  date: 8,
   mrp: 10,
   value: 10,
   disc: 10,
   tvalue: 10,
   amount: 8,
-  note: 18,
 };
 
 function centerText(text: string, width: number): string {
   const textStr = (text ?? " ").toString();
-  const textLength = textStr.length;
-  
-  // If text is longer than width, return as-is
-  if (textLength >= width) return textStr;
-  
-  // Calculate left and right padding
-  const totalPadding = width - textLength;
+  if (textStr.length >= width) return textStr;
+  const totalPadding = width - textStr.length;
   const leftPadding = Math.floor(totalPadding / 2);
-  const rightPadding = totalPadding - leftPadding; // Accounts for odd widths
-  
+  const rightPadding = totalPadding - leftPadding;
   return ' '.repeat(leftPadding) + textStr + ' '.repeat(rightPadding);
 }
 
 function textStart(text: string, width: number): string {
   const textStr = (text ?? " ").toString();
-  
-  // If text is longer than width, return as-is
   if (textStr.length >= width) return textStr;
-  
-  // Left-align text and pad remaining space on the right
   return textStr + ' '.repeat(width - textStr.length);
 }
 
-// Helper function to format money values
 const formatMoney = (amount: number): string => parseFloat((amount ?? " ").toString()).toFixed(2);
 
 export function useReceiptPrinter() {
-  // Print a bill receipt
-  const printMobileBill = async (bill: any): Promise<{ success: boolean; message: string; logs?: string[] }> => {
-    log('Starting print job for invoice: ' + bill.invoiceNumber, 'info');
-    
-    // Validate printer connection
+  const printMobileBill = async (bill: any): Promise<{ success: boolean; message: string }> => {
     if (!selectedDevice.value) {
-      log('No printer selected', 'error');
-      return { 
-        success: false, 
-        message: 'No printer selected. Please connect a printer first.',
-        logs: debugLog.value
-      };
+      return { success: false, message: 'No printer selected. Please connect a printer first.' };
     }
 
-    // Validate request
     if (!bill.invoiceNumber || !bill.entries || !bill.entries.length) {
-      log('Invalid bill data provided', 'error');
-      return { 
-        success: false, 
-        message: 'Invalid bill data', 
-        logs: debugLog.value 
-      };
+      return { success: false, message: 'Invalid bill data' };
     }
 
-    // Check printer connection status
     try {
-      const connectedDevices = await BleClient.getConnectedDevices([PRINTER_SERVICES.SERVICE]);
-      if (!connectedDevices.find(d => d.deviceId === selectedDevice.value.deviceId)) {
-        log('Printer disconnected. Attempting to reconnect...', 'info');
-        await BleClient.connect(selectedDevice.value.deviceId);
-      }
-    } catch (error: any) {
-      log(`Failed to verify printer connection: ${error.message}`, 'error');
-      return { 
-        success: false, 
-        message: 'Printer connection failed. Please power on the printer.',
-        logs: debugLog.value
-      };
+      await BleClient.connect(selectedDevice.value.deviceId);
+    } catch {
+      return { success: false, message: 'Printer connection failed. Please power on the printer.' };
     }
 
     const upiPayment = bill.paymentMethod?.toLowerCase() === 'upi'
-      ? { amount: bill.grandTotal } // Full amount in case of normal UPI
+      ? { amount: bill.grandTotal }
       : bill.paymentMethod?.toLowerCase() === 'split'
         ? bill.splitPayments?.find((p: any) => p.method.toLowerCase() === 'upi')
         : null;
 
     const calculatedDiscount = bill.discount < 0
-      ? Math.abs(bill.discount) // if negative, make positive
-      : (bill.subtotal * bill.discount) / 100; // if positive, treat as %
+      ? Math.abs(bill.discount)
+      : (bill.subtotal * bill.discount) / 100;
 
+    try {
+      encoder.initialize();
+      encoder
+        .bold(true).align('center').size(2, 2).text(bill.companyName).newline(1)
+        .bold(false).size(1, 1)
+        .text(`${bill.companyAddress.name}, ${bill.companyAddress.street}`)
+        .text(`${bill.companyAddress.locality}, ${bill.companyAddress.city}`)
+        .text(`${bill.companyAddress.state}- ${bill.companyAddress.pincode}`)
+        .newline(1).text(`GSTIN:${bill.gstin}`)
+        .newline(1).rule({ style: 'single' })
+        .align('left')
+        .text(`Invoice: #${bill.invoiceNumber}`).newline(1)
+        .text(`Date  : ${moment(bill.date).format('DD-MM-YYYY hh:mm')}`).newline(1)
+        .text(`Payment Method: ${bill.paymentMethod}`).newline(1)
+        .rule({ style: 'single' });
 
-    return new Promise(async(resolve) => {
-       try {
-            // Header
-            encoder.initialize();
-   
-            encoder
-                .bold(true)
-                .text('')
-                .align('center')
-                .size(2,2)
-                .text(bill.companyName)
-                .newline(1)
-                .bold(false)
-                .size(1, 1);
+      if (bill.clientName) encoder.text(`Customer Name: ${bill.clientName}`);
+      if (bill.clientPhone) encoder.text(`Customer Phone No: ${bill.clientPhone}`).rule({ style: 'single' });
 
-            encoder
-                .text(`${bill.companyAddress.name}, ${bill.companyAddress.street}`)
-                .text(`${bill.companyAddress.locality}, ${bill.companyAddress.city}`)
-                .text(`${bill.companyAddress.state}- ${bill.companyAddress.pincode}`)
-                .newline(1)
-                .text(`GSTIN:${bill.gstin}`)
-                .newline(1)
-                 .rule({ style: 'single' })  
-                .align('left')
-                .text(`Invoice: #${bill.invoiceNumber}`)
-                 .newline(1)
-                .text(`Date  : ${moment(bill.date).format('DD-MM-YYYY hh:mm')}`)
-                 .newline(1)
-                .text(`Payment Method: ${bill.paymentMethod}`)
-                .newline(1)
-                 .rule({ style: 'single' })  ;
+      encoder.text(
+        textStart("SL", COLUMN_WIDTHS.sl) +
+        textStart("DESCRIPTION", COLUMN_WIDTHS.description) +
+        textStart("HSN", COLUMN_WIDTHS.hsn) +
+        textStart("TAX", COLUMN_WIDTHS.tax)
+      );
 
-            if (bill.clientName) {
-                encoder.text(`Customer Name: ${bill.clientName}`);
-            }
+      encoder.text(
+        '    ' +
+        textStart("QTY", COLUMN_WIDTHS.qty) +
+        textStart("MRP", COLUMN_WIDTHS.mrp) +
+        textStart("VALUE", COLUMN_WIDTHS.value) +
+        textStart("DISC", COLUMN_WIDTHS.disc) +
+        textStart("T.VALUE", COLUMN_WIDTHS.tvalue)
+      ).rule({ style: 'single' });
 
-            if (bill.clientPhone) {
-                encoder.text(`Customer Phone No: ${bill.clientPhone}`) .rule({ style: 'single' })  ;
-            }
+      bill.entries.forEach((item: any, index: number) => {
+        encoder.text(
+          textStart((index + 1).toString(), COLUMN_WIDTHS.sl) +
+          textStart(item.description, COLUMN_WIDTHS.description) +
+          textStart(item.hsn, COLUMN_WIDTHS.hsn) +
+          textStart(item.tax, COLUMN_WIDTHS.tax)
+        );
+        encoder.text(
+          '    ' +
+          textStart(item.qty, COLUMN_WIDTHS.qty) +
+          textStart(formatMoney(item.mrp), COLUMN_WIDTHS.mrp) +
+          textStart(formatMoney(item.value), COLUMN_WIDTHS.value) +
+          textStart(`${item.discount}%`, COLUMN_WIDTHS.disc) +
+          textStart(formatMoney(item.tvalue), COLUMN_WIDTHS.tvalue)
+        );
+      });
 
-            // Column headers
-            encoder.text(
-                textStart("SL", COLUMN_WIDTHS.sl) +
-                textStart("DESCRIPTION", COLUMN_WIDTHS.description) +
-                textStart("HSN", COLUMN_WIDTHS.hsn) +
-                textStart("TAX", COLUMN_WIDTHS.tax)
-            );
+      encoder.rule({ style: 'single' }).bold(true).text(
+        '    ' +
+        textStart(bill.tqty, COLUMN_WIDTHS.qty) +
+        '          ' +
+        textStart(formatMoney(bill.tvalue), COLUMN_WIDTHS.value) +
+        textStart(formatMoney(bill.tdiscount), COLUMN_WIDTHS.disc) +
+        textStart(formatMoney(bill.ttvalue), COLUMN_WIDTHS.tvalue)
+      ).bold(false).rule({ style: 'single' });
 
-            encoder.text(
-                '    ' +
-                textStart("QTY", COLUMN_WIDTHS.qty) +
-                textStart("MRP", COLUMN_WIDTHS.mrp) +
-                textStart("VALUE", COLUMN_WIDTHS.value) +
-                textStart("DISC", COLUMN_WIDTHS.disc) +
-                textStart("T.VALUE", COLUMN_WIDTHS.tvalue)
-            ) .rule({ style: 'single' })  ;
+      encoder.align('center').text(centerText('DISC/ROUND OFF(+/-)', 38) + textStart(formatMoney(calculatedDiscount), 10)).newline(2);
 
-            // Items
-            bill.entries.forEach((item: any, index: number) => {
-                encoder.text(
-                textStart((index + 1).toString(), COLUMN_WIDTHS.sl) +
-                textStart(item.description, COLUMN_WIDTHS.description) +
-                textStart(item.hsn, COLUMN_WIDTHS.hsn) +
-                textStart(item.tax, COLUMN_WIDTHS.tax)
-                );
+      encoder.bold(true).align('center').size(2, 2).text(" GRAND TOTAL: " + formatMoney(bill.grandTotal))
+        .bold(false).size(1, 1).newline(1);
 
-                encoder.text(
-                '    ' +
-                textStart(item.qty, COLUMN_WIDTHS.qty) +
-                textStart(formatMoney(item.mrp), COLUMN_WIDTHS.mrp) +
-                textStart(formatMoney(item.value), COLUMN_WIDTHS.value) +
-                textStart(`${item.discount}%`, COLUMN_WIDTHS.disc) +
-                textStart(formatMoney(item.tvalue), COLUMN_WIDTHS.tvalue)
-                );
-            });
+      encoder.rule({ style: 'single' }).size(2, 2).bold(true).invert(true)
+        .text(" YOUR SAVING: " + formatMoney(calculatedDiscount + bill.tdiscount))
+        .bold(false).invert(false).size(1, 1).newline(1).rule({ style: 'single' }).newline(1);
 
+      if (upiPayment) {
+        const qrLink = `upi://pay?pa=${bill.upiId}&am=${upiPayment.amount}&cu=INR`;
+        encoder.newline(1).text('Scan to pay via UPI').newline(2)
+          .qrcode(qrLink, { model: 1, size: 8, errorlevel: 'h' }).newline(1);
+      }
 
-                  encoder
-                .rule({ style: 'single' })
-                .bold(true)
-                .text(
-                '    ' +
-                textStart(bill.tqty, COLUMN_WIDTHS.qty) +
-                '          ' +
-                textStart(formatMoney(bill.tvalue), COLUMN_WIDTHS.value) +
-                textStart(formatMoney(bill.tdiscount), COLUMN_WIDTHS.disc) +
-                textStart(formatMoney(bill.ttvalue), COLUMN_WIDTHS.tvalue)
-                )
-                .bold(false)
-                .rule({ style: 'single' });
+      encoder.align('center').text(bill.thankYouNote).newline(1)
+        .text(bill.returnPolicy).text(bill.refundPolicy).newline(2)
+        .text(`Customer care: +91 ${bill.phone}`).newline(8).cut();
 
-            encoder
-                .align('center')
-                .text(centerText('DISC/ROUND OFF(+/-)', 38) + textStart(formatMoney(calculatedDiscount),10))
-                .newline(2);
-
-            encoder
-                .bold(true)
-                .align('center')
-                .size(2, 2)
-                .text(" GRAND TOTAL: " + formatMoney(bill.grandTotal))
-                .bold(false)
-                .size(1, 1)
-                .newline(1);
-
-            encoder
-                 .rule({ style: 'single' })  
-                 .size(2, 2)
-                .bold(true)
-                .invert(true)
-                .text(" YOUR SAVING: " + formatMoney(calculatedDiscount + bill.tdiscount))
-                .bold(false)
-                .invert(false)
-                .size(1, 1)
-                .newline(1)
-                 .rule({ style: 'single' })  
-                  .newline(1);
-
-            // UPI QR
-            if (upiPayment) {
-                const qrLink = `upi://pay?pa=${bill.upiId}&am=${upiPayment.amount}&cu=INR`;
-                encoder
-                .newline(1)
-                .text('Scan to pay via UPI')
-                .newline(2)
-                .qrcode(qrLink, { model: 1, size: 8, errorlevel: 'h' }) // QR code
-                .newline(1);
-            }
-
-            // Footer
-            encoder
-                .align('center')
-                .text(bill.thankYouNote)
-                .newline(1)
-                .text(bill.returnPolicy)
-                .text(bill.refundPolicy)
-                .newline(2)
-                .text(`Customer care: +91 ${bill.phone}`)
-                .newline(8)
-                .cut();
-
-            // Encode and send to BLE printer
-            const data = encoder.encode();
-            await sendDataInChunks(selectedDevice.value.deviceId, data);
-
-            resolve({ success: true, message: 'Receipt printed successfully' });
-            } catch (err: any) {
-            console.error('Print error:', err);
-            resolve({ success: false, message: 'Failed to print receipt: ' + err.message });
-            }
-    });
+      const data = encoder.encode();
+      await sendDataInChunks(selectedDevice.value.deviceId, data);
+      await BleClient.disconnect(selectedDevice.value.deviceId);
+      return { success: true, message: 'Receipt printed successfully' };
+    } catch (err: any) {
+      return { success: false, message: 'Failed to print receipt: ' + err.message };
+    }
   };
-
-  
-
 
   const stringToBytes = (str: string) => new TextEncoder().encode(str + '\r\n');
 
-  const printMobileLabel = async (items: any[]): Promise<{ success: boolean; message: string; logs?: string[] }> => {
+  const printMobileLabel = async (items: any[]): Promise<{ success: boolean; message: string }> => {
     if (!selectedDevice.value) {
-      return { success: false, message: 'No printer selected', logs: debugLog.value };
-    }
-
-      try {
-      const connectedDevices = await BleClient.getConnectedDevices([PRINTER_SERVICES.SERVICE]);
-      if (!connectedDevices.find(d => d.deviceId === selectedDevice.value.deviceId)) {
-        log('Printer disconnected. Attempting to reconnect...', 'info');
-        await BleClient.connect(selectedDevice.value.deviceId);
-      }
-    } catch (error: any) {
-      log(`Failed to verify printer connection: ${error.message}`, 'error');
-      return { 
-        success: false, 
-        message: 'Printer connection failed. Please power on the printer.',
-        logs: debugLog.value
-      };
+      return { success: false, message: 'No printer selected' };
     }
 
     try {
-      log(`Processing ${items.length} labels`, 'info');
+      await BleClient.connect(selectedDevice.value.deviceId);
+    } catch {
+      return { success: false, message: 'Printer connection failed. Please power on the printer.' };
+    }
+
+    try {
       let successCount = 0;
 
       for (const item of items) {
-        const { shopname = '', barcode = '', code = '', productName = '', 
-                name = '', sprice, dprice, size = '', brand = '' } = item;
-
-        // if (!barcode || !productName || !name || !sprice || !shopname) {
-        //   log(`Skipping item: missing required fields`, 'error');
-        //   continue;
-        // }
+        const { shopname = '', barcode = '', code = '', productName = '', name = '', sprice, dprice, size = '', brand = '' } = item;
 
         const tsplCommands = `
         SIZE 50 mm,38 mm
@@ -386,40 +225,22 @@ export function useReceiptPrinter() {
         PRINT 1,1`;
 
         try {
-          log(`Printing label for: ${productName}`, 'info');
           const commandData = stringToBytes(tsplCommands);
           await sendDataInChunks(selectedDevice.value.deviceId, commandData);
-          
-          // Add a delay between labels to prevent printer buffer overflow
           await new Promise(resolve => setTimeout(resolve, 300));
           successCount++;
-          log(`Label printed successfully for: ${productName}`, 'success');
-        } catch (error: any) {
-          log(`Failed to print label for ${productName}: ${error.message}`, 'error');
-        }
+        } catch {}
       }
 
-      const message = `Printed ${successCount} of ${items.length} labels`;
-      return {
-        success: successCount > 0,
-        message,
-        logs: debugLog.value
-      };
-
+      await BleClient.disconnect(selectedDevice.value.deviceId);
+      return { success: successCount > 0, message: `Printed ${successCount} of ${items.length} labels` };
     } catch (err: any) {
-      log(`Print job failed: ${err.message}`, 'error');
-      return {
-        success: false,
-        message: 'Failed to print labels: ' + err.message,
-        logs: debugLog.value
-      };
+      return { success: false, message: 'Failed to print labels: ' + err.message };
     }
   };
 
   return {
     printMobileBill,
-    printMobileLabel,
-    debugLog,
-    clearDebugLog: () => debugLog.value = []
+    printMobileLabel
   };
 }

@@ -24,6 +24,7 @@ const props = defineProps<{
     taxBelowThreshold?: number | null;
     taxAboveThreshold?: number | null;
     fixedTax?: number | null;
+    margin?: number | null;
 }>();
 const emit = defineEmits(['update']);
 
@@ -37,6 +38,7 @@ const schemas = z.object({
     thresholdAmount: z.number().optional(),
     taxBelowThreshold: z.number().optional(),
     taxAboveThreshold: z.number().optional(),
+    margin: z.number().optional(),
 });
 
 
@@ -60,6 +62,7 @@ const [fixedTax, fixedTaxAttrs] = defineField('fixedTax');
 const [thresholdAmount, thresholdAmountAttrs] = defineField('thresholdAmount');
 const [taxBelowThreshold, taxBelowThresholdAttrs] = defineField('taxBelowThreshold');
 const [taxAboveThreshold, taxAboveThresholdAttrs] = defineField('taxAboveThreshold');
+const [margin, marginAttrs] = defineField('margin');
 
 
 
@@ -75,7 +78,6 @@ watchEffect(() => {
     }
     if (props.editDescription) {
         description.value = props.editDescription;
-        console.log(props.editDescription);
     }
     if (props.editFile) {
         selectedFile.value = { uuid: props.editFile };
@@ -83,23 +85,21 @@ watchEffect(() => {
     }
     if (props.taxType) {
         taxType.value = props.taxType;
-        console.log(props.taxType);
     }
     if (props.fixedTax) {
         fixedTax.value = props.fixedTax;
-        console.log(props.fixedTax);
     }
     if (props.thresholdAmount) {
         thresholdAmount.value = props.thresholdAmount;
-        console.log(props.thresholdAmount);
     }
     if (props.taxBelowThreshold) {
         taxBelowThreshold.value = props.taxBelowThreshold;
-        console.log(props.taxBelowThreshold);
     }
     if (props.taxAboveThreshold) {
         taxAboveThreshold.value = props.taxAboveThreshold;
-        console.log(props.taxAboveThreshold);
+    }
+    if (props.margin) {
+        margin.value = props.margin;
     }
 });
 
@@ -133,6 +133,7 @@ watchEffect(() => {
         thresholdAmount: thresholdAmount.value,
         taxBelowThreshold: taxBelowThreshold.value,
         taxAboveThreshold: taxAboveThreshold.value,
+        margin: margin.value,
     });
 });
 
@@ -282,6 +283,15 @@ watch(hsn, (newVal) => {
                     v-model="shortCut"
                     v-bind="shortCutAttrs"
                     type="text"
+                    class="w-full"
+                />
+            </UFormGroup>
+          <UFormGroup label="Profit Margin" class="w-full my-3">
+                <UInput
+                    id="margin"
+                    v-model="margin"
+                    v-bind="marginAttrs"
+                    type="number"
                     class="w-full"
                 />
             </UFormGroup>
