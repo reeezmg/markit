@@ -22,7 +22,7 @@ const sendDataInChunks = async (deviceId: string, data: Uint8Array) => {
 
 let encoder = new ReceiptPrinterEncoder({
   newlineBeforeCut: 8,
-  columns: 42
+  columns: 48
 });
 
 const selectedDevice = ref<any | null>(null);
@@ -99,7 +99,13 @@ export function useReceiptPrinter() {
     try {
       encoder.initialize();
       encoder
-        .bold(true).align('center').size(2, 2).text(bill.companyName).newline(1)
+        .bold(true).
+        align('center')
+        .text('')
+        .align('center')
+        .size(2, 2)
+        .text(bill.companyName)
+        .newline(1)
         .bold(false).size(1, 1)
         .text(`${bill.companyAddress.name}, ${bill.companyAddress.street}`)
         .text(`${bill.companyAddress.locality}, ${bill.companyAddress.city}`)
