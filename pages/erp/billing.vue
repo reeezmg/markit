@@ -859,6 +859,7 @@ const itemargs = computed(() => ({
       select: {
         id: true,
         sprice: true,
+        dprice:true,
         name: true,
         tax: true,
         discount: true,
@@ -1058,7 +1059,7 @@ const processItemResponse = (itemData, index) => {
   items.value[index].name = `${itemData.variant?.name}-${itemData.variant.product.name}` || '';
   items.value[index].category = categories.value.filter(category => category.id === categoryId);
   items.value[index].rate = itemData.variant?.sprice || 0;
-  items.value[index].discount = itemData.variant?.discount || 0;
+  items.value[index].discount = itemData.variant?.dprice - itemData.variant?.sprice || 0;
   items.value[index].tax = itemData.variant?.tax || 0;
   items.value[index].totalQty = itemData.variant?.qty || 0;
   items.value[index].sizes = itemData.variant?.sizes || null;
