@@ -189,8 +189,20 @@ const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : undefined
   }))
 
   // Unpaid bills
-  const unpaidBills = bills.filter(b => b.paymentStatus !== 'PAID')
-  const totalUnpaid = unpaidBills.reduce((sum, b) => sum + (b.grandTotal ?? 0), 0)
+  const unpaidBills = bills.filter(b => b.paymentStatus !== 'PAID');
+
+  const totalUnpaid = unpaidBills.reduce((sum, b) => {
+    if (b.paymentMethod === 'Split' && b.splitPayments) {
+      // Add only the credit portion from split
+      const creditAmount = b.splitPayments
+        .filter(sp => sp.method === 'Credit')
+        .reduce((cSum, sp) => cSum + (sp.amount ?? 0), 0);
+      return sum + creditAmount;
+    } else {
+      // For Credit (non-split) or other unpaid → full grandTotal
+      return sum + (b.grandTotal ?? 0);
+    }
+  }, 0);
   const recentUnpaidBills = unpaidBills.slice(0, 5)
 
   // Tax calculations

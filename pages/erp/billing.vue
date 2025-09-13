@@ -1162,6 +1162,12 @@ const handleSave = async () => {
       return entry;
     });
 
+        const hasCreditPayment =
+          paymentMethod.value === 'Credit' ||
+          (paymentMethod.value === 'Split' &&
+          splitPayments.value?.some(p => p.method === 'Credit'));
+    
+
     const payload = {
       invoiceNumber: billInv,
       subtotal: Number(subtotal.value) || 0,
@@ -1172,7 +1178,7 @@ const handleSave = async () => {
       ...(redeemedPoints.value && { redeemedPoints: redeemedPoints.value || 0 }),
       ...(!clientId.value ? { billPoints: 0 } : { billPoints }),
       createdAt: new Date(date.value).toISOString(),
-      paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
+      paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
       type: 'BILL',
       entries: { create: entriesData },
       company: {

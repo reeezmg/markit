@@ -141,9 +141,6 @@ const totals = computed(() => {
     .filter(bill => bill.paymentStatus === 'PAID')
     .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
 
-  const totalCredit = bills
-    .filter(bill => bill.paymentStatus === 'PENDING')
-    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
 
   let totalRevenueInCash = 0;
   let totalRevenueInUPI = 0;
@@ -177,7 +174,6 @@ const totals = computed(() => {
 
   return {
     totalBills,
-    totalCredit,
     totalSales,
     totalRevenue,
     totalDiscount,
@@ -436,7 +432,7 @@ const printReportHandle = async() => {
             </template>
           </UPopover>
 
-           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(totals?.totalCredit)"/>
+           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(dashboard?.totalUnpaid)"/>
 
             <UPopover mode="hover">
               <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(totalsExpense.totalExpense)"/>

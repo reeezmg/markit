@@ -1049,6 +1049,11 @@ const handleEdit = async () => {
       }, 0)
     };
 
+    const hasCreditPayment =
+      paymentMethod.value === 'Credit' ||
+      (paymentMethod.value === 'Split' &&
+      splitPayments.value?.some(p => p.method === 'Credit'));
+    console.log(selected.value, 'selected account');
     // 6. Prepare request data for server
     const requestData = {
       items: items.value,
@@ -1061,7 +1066,7 @@ const handleEdit = async () => {
         grandTotal: grandTotal.value || 0,
         redeemedPoints: redeemedPoints.value || 0,
         paymentMethod: paymentMethod.value,
-        paymentStatus: paymentMethod.value === 'Credit' ? 'PENDING' : 'PAID',
+        paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
         splitPayments: paymentMethod.value === 'Split' ? splitPayments.value : null,
         accountId: selected.value,
         clientId: clientId.value,

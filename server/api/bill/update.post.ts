@@ -166,7 +166,7 @@ export default defineEventHandler(async (event) => {
       }
 
       // 8. Update the bill
-      await tx.bill.update({
+      const res = await tx.bill.update({
         where: { id: billData.id },
         data: {
           subtotal: billData.subtotal,
@@ -178,19 +178,26 @@ export default defineEventHandler(async (event) => {
           ...(billData.splitPayments && {
             splitPayments: billData.splitPayments
           }),
-           ...(billData.clientId
-            ? { client: { connect: { id: billData.clientId } } }
-            : billData.clientId === '' // explicitly check for empty string
-              ? { client: { disconnect: true } }
-              : {}
-          ),
-          ...(billData.clientId && {
-            client: { connect: { id: billData.clientId } }
-          }),
+            ...(billData.clientId
+              ? { client: { connect: { id: billData.clientId } } }
+              : billData.clientId === '' 
+                ? { client: { disconnect: true } }
+                : {}
+            ),
+
+            // ✅ Handle account relation
+            ...(billData.accountId
+              ? { account: { connect: { id: billData.accountId } } }
+              : billData.accountId === '' 
+                ? { account: { disconnect: true } }
+                : {}
+            ),
           createdAt: billData.date,
           company: { connect: { id: billData.companyId } }
         }
       })
+
+      console.log('Bill updated:', res)
 
       // 9. Update client points
       if (billData.clientId) {

@@ -577,14 +577,28 @@ const deleteAccountRow = async () => {
                 sort-mode="manual"
                 class="w-full"
             >
-                <template #pending-data="{ row }">
-                    {{
-                        row.bill
-                            ?.filter(b => b.paymentStatus === 'PENDING')
-                            .reduce((sum, b) => sum + (b.grandTotal ?? 0), 0)
-                            .toFixed(2)
-                    }}
-                </template>
+
+            <template #pending-data="{ row }">
+            {{
+                row.bill
+                ?.filter(b => b.paymentStatus === 'PENDING')
+                .reduce((sum, b) => {
+                    if (b.paymentMethod === 'Split' && b.splitPayments) {
+                    // Sum only the credit part
+                    const creditAmount = b.splitPayments
+                        .filter(sp => sp.method === 'Credit')
+                        .reduce((cSum, sp) => cSum + (sp.amount ?? 0), 0);
+                    return sum + creditAmount;
+                    } else {
+                    // Normal case → take full grandTotal
+                    return sum + (b.grandTotal ?? 0);
+                    }
+                }, 0)
+                .toFixed(2)
+            }}
+            </template>
+
+
                 <template #actions-data="{ row }">
                 <UDropdown :items="actionAccount(row)">
                     <UButton
