@@ -1635,23 +1635,27 @@ const handleClearClient = async () => {
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
-        <div class="lg:grid grid-cols-1 lg:grid-cols-12 gap-4 text-sm py-2 px-2 hidden">
+        <div class="lg:flex lg:flex-row lg:justify-between text-sm py-2 px-2 hidden">
           <UInput 
             v-model="dateOnly" 
             type="date" 
             label="Date" 
-            class="lg:col-span-2"  
           />
-
+          <div class="lg:flex lg:flex-row">
+           <UButton
+                color="primary"
+                icon="i-heroicons-plus"
+                class="flex-shrink-0 me-2"
+                @click="addNewRow(0,false)"
+              />
           <UButton  
-            v-if="Capacitor.isNativePlatform()"
+       
             color="primary" 
             icon="i-heroicons-camera" 
             label="Scan" 
-            block
-            class="lg:col-span-2 lg:col-start-11"
             @click="handleScan"
           />
+          </div>
         </div>
 
    </template>  
@@ -1784,6 +1788,7 @@ const handleClearClient = async () => {
                   <UInput
                     v-model="row.barcode"
                     ref="barcodeInputs"
+                    enterkeyhint="enter"
                     size="sm"
                     :loading="loadingStates[index] || false"
                     :color="row.return ? 'red' : undefined"
@@ -1887,6 +1892,7 @@ const handleClearClient = async () => {
                     v-model="row.user" 
                     type="text"
                     ref="userInputs" 
+                    enterkeyhint="enter"
                     size="sm"  
                     :color="row.return ? 'red' : undefined"
                     @keydown.enter="addNewRow(index); updateUserDetails(index,row.user)"
@@ -1900,6 +1906,7 @@ const handleClearClient = async () => {
                   <UInput 
                     v-model="row.tax" 
                       ref="taxInputs"
+                      enterkeyhint="enter"
                     type="number" 
                     size="sm" 
                     :color="row.return ? 'red' : undefined"

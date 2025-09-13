@@ -1987,8 +1987,15 @@ const handleRedeemPoints = async () => {
       class="flex-shrink-0"
       @click="reset"
     />
+    <UButton
+      color="primary"
+      icon="i-heroicons-plus"
+      class="flex-shrink-0"
+      @click="addNewRow(0,false)"
+    />
   </div>
    <UButton  v-if="Capacitor.isNativePlatform()" color="primary" icon="i-heroicons-camera" label="Scan" block class="lg:col-start-11 lg:col-span-2" @click="handleScan"/>
+  
 </div>
 
 
@@ -2131,6 +2138,7 @@ const handleRedeemPoints = async () => {
       <UInput
         v-model="row.barcode"
         ref="barcodeInputs"
+        enterkeyhint="enter"
         size="sm"
         :loading="loadingStates[index] || false"
          :color="row.return ? 'red' : undefined"
@@ -2234,6 +2242,7 @@ const handleRedeemPoints = async () => {
         v-model="row.user" 
         type="text"
         ref="userInputs" 
+        enterkeyhint="enter"
         size="sm"  
          :color="row.return ? 'red' : undefined"
         @keydown.enter="addNewRow(index); updateUserDetails(index,row.user)"
@@ -2247,6 +2256,7 @@ const handleRedeemPoints = async () => {
       <UInput 
         v-model="row.tax" 
           ref="taxInputs"
+          enterkeyhint="enter"
         type="number" 
         size="sm" 
          :color="row.return ? 'red' : undefined"
