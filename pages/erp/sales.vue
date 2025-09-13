@@ -358,7 +358,9 @@ const onPaymentStatusChange =  (id:string, status:string, billNo) => {
             paymentStatus:status,
             ...(status === 'PAID' && {
                 createdAt: new Date().toISOString()
-            })
+            }),
+            paymentMethod: status === 'PAID' ? 'Cash' : 'Credit'
+
         }
     })
      toast.add({

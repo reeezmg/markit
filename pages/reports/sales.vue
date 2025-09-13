@@ -127,48 +127,67 @@ const isDownloadDisabled = computed(() => {
     (!fullReport.value && !selectedDate.value.start && !selectedDate.value.end && !quickRange.value)
 })
 
-
 const totals = computed(() => {
   const bills = dashboard.value.bills || [];
 
-  const totalBills = bills?.length;
+  const totalBills = bills.length;
 
+  // Sales = sum of all entry rates * qty
   const totalSales = bills
     .flatMap(b => b.entries ?? [])
     .reduce((sum, entry) => sum + ((entry.rate ?? 0) * (entry.qty ?? 0)), 0);
 
-  const totalRevenue = bills
-    .filter(bill => bill.paymentStatus === 'PAID')
-    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0);
+  // Revenue calculation
+const totalRevenue = bills.reduce((sum, bill) => {
+  if (bill.paymentStatus === 'PAID') {
+    return sum + (bill.grandTotal ?? 0);
+  }
+
+  if (bill.paymentStatus !== 'PAID' && bill.paymentMethod === 'Split' && bill.splitPayments) {
+    // Add only non-credit split payments
+    const nonCreditAmount = bill.splitPayments
+      .filter(sp => sp.method !== 'Credit')
+      .reduce((cSum, sp) => cSum + (sp.amount ?? 0), 0);
+    return sum + nonCreditAmount;
+  }
+
+  return sum; // unpaid non-split credit → ignore
+}, 0);
 
 
+  // Method-wise breakdown
   let totalRevenueInCash = 0;
   let totalRevenueInUPI = 0;
+  let totalRevenueInCredit = 0;
 
   bills.forEach(bill => {
     if (bill.splitPayments && Array.isArray(bill.splitPayments)) {
       bill.splitPayments.forEach(payment => {
-        if (payment.method === 'Cash') {
-          totalRevenueInCash += payment.amount ?? 0;
-        } else if (payment.method === 'UPI') {
-          totalRevenueInUPI += payment.amount ?? 0;
+        if (bill.paymentStatus === 'PAID') {
+          // Add all payment amounts
+          if (payment.method === 'Cash') totalRevenueInCash += payment.amount ?? 0;
+          else if (payment.method === 'UPI') totalRevenueInUPI += payment.amount ?? 0;
+          else if (payment.method === 'Credit') totalRevenueInCredit += payment.amount ?? 0;
+        } else if (bill.paymentStatus !== 'PAID') {
+          // Only add non-credit parts
+          if (payment.method === 'Cash') totalRevenueInCash += payment.amount ?? 0;
+          else if (payment.method === 'UPI') totalRevenueInUPI += payment.amount ?? 0;
+          else if (payment.method === 'Credit') {
+            // credit is unpaid → don’t add here
+          }
         }
       });
     } else {
-      // Fallback for non-split payments
-      const method = bill.paymentMethod;
       const amount = bill.grandTotal ?? 0;
-      if (method === 'Cash') {
-        totalRevenueInCash += amount;
-      } else if (method === 'UPI') {
-        totalRevenueInUPI += amount;
+      if (bill.paymentStatus === 'PAID') {
+        if (bill.paymentMethod === 'Cash') totalRevenueInCash += amount;
+        else if (bill.paymentMethod === 'UPI') totalRevenueInUPI += amount;
+        else if (bill.paymentMethod === 'Credit') totalRevenueInCredit += amount;
+      } else {
+        // unpaid non-split → only credit possible → skip for cash/upi
       }
     }
   });
-
-  const totalRevenueInCredit = bills
-    .filter(bill => bill.paymentMethod === 'Credit')
-    .reduce((sum, bill) => sum + (bill.grandTotal ?? 0), 0)
 
   const totalDiscount = totalSales - totalRevenue;
 
@@ -182,6 +201,7 @@ const totals = computed(() => {
     totalRevenueInCredit
   };
 });
+
 
 
 
