@@ -245,11 +245,10 @@ const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : undefined
 
 
 const profitData = entries.map(entry => {
-  
-   if (!entry.qty || entry.qty <= 0 || entry.return) {
+  // skip if qty invalid, return=true, or bill not paid
+  if (!entry.qty || entry.qty <= 0 || entry.return || entry.bill?.paymentStatus !== 'PAID') {
     return null;
   }
-
 
   const salePricePerUnit = (entry.value ?? 0) / entry.qty;
 
@@ -257,15 +256,14 @@ const profitData = entries.map(entry => {
   let purchasePrice: number | null;
   if (entry.variant != null) {
     purchasePrice = entry.variant.pprice;
-     console.log(purchasePrice)
   } else {
     const margin = entry.category?.margin ?? 0; // percentage
-    console.log(margin)
     purchasePrice = salePricePerUnit * (1 - margin / 100);
   }
 
   const profitPerUnit = salePricePerUnit - purchasePrice!;
   const totalProfit = profitPerUnit * entry.qty;
+  console.log('totalProfit', totalProfit, salePricePerUnit, purchasePrice);
 
   return {
     entryId: entry.id,
@@ -278,11 +276,11 @@ const profitData = entries.map(entry => {
 const totalProfit = profitData.reduce((sum, item) => sum + (item.totalProfit || 0), 0);
 
 
-
 // Profit by category
 const profitByCategoryMap = new Map<string, { name: string; profit: number }>();
 for (const entry of entries) {
-  if (!entry.variant || !entry.qty || entry.qty <= 0 || entry.return) continue;
+  // skip if no variant, qty invalid, return=true, or bill not paid
+  if (!entry.variant || !entry.qty || entry.qty <= 0 || entry.return || entry.bill?.paymentStatus !== 'PAID') continue;
 
   const categoryName = entry.category?.name || 'Uncategorized';
   const salePricePerUnit = (entry.value ?? 0) / entry.qty;
@@ -302,10 +300,12 @@ for (const entry of entries) {
   }
   profitByCategoryMap.get(categoryName)!.profit += profit;
 }
+
 const profitByCategory = Array.from(profitByCategoryMap.values())
   .sort((a, b) => b.profit - a.profit);
 
-console.log(totalProfit)
+console.log(totalProfit);
+
   return {
     company,
     productsCount,
