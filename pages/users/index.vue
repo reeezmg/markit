@@ -6,6 +6,7 @@ import {
     useUpdateUser,
     useUpdateManyUser,
     useDeleteCompanyUser,
+    useUpdateCompanyUser,
     useCreateUser,
     useFindUniqueUser,
 } from '~/lib/hooks';
@@ -19,6 +20,7 @@ const CreateUser = useCreateUser();
 const UpdateUser = useUpdateUser();
 const UpdateManyUser = useUpdateManyUser();
 const DeleteCompanyUser = useDeleteCompanyUser();
+const UpdateCompanyUser = useUpdateCompanyUser();
 const router = useRouter();
 const route = useRoute();
 const isOpen = ref(false);
@@ -208,13 +210,18 @@ const deleteUser = async (id: string) => {
   const currentUserId = useAuth().session.value?.id;
 
   try {
-    await DeleteCompanyUser.mutateAsync({
+    await UpdateCompanyUser.mutateAsync({
       where: {
         companyId_userId: {
           companyId,
           userId: id,
         },
       },
+        data: {
+            deleted: true,
+            code:'',
+            status: false
+        },
     });
 
     if (id === currentUserId) {
