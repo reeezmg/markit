@@ -12,9 +12,8 @@ import type { DashboardComposable, BillWithRelations, KpiItem, PdfReportMeta } f
 
 
 const scrollContainer = ref<HTMLElement | null>(null)
-
 const colorMode = useColorMode()
-
+const loading = ref(false)
 const iconColorClass = computed(() =>
   colorMode.value === 'dark' ? 'text-white' : 'text-gray-800'
 )
@@ -54,7 +53,6 @@ onUnmounted(() => {
 
 const useAuth = () => useNuxtApp().$auth;
 const companyName = computed(() => useAuth().session.value?.companyName);
-const loading = ref(true)
 const { printReport } = usePrint();
 let printData = {}
 
@@ -82,6 +80,7 @@ function selectRange(duration: Duration) {
 }
 
 const fetchReportFromServer = async () => {
+  loading.value = true;
   if (!selectedDate.value.start || !selectedDate.value.end) return;
 
   try {
@@ -92,15 +91,12 @@ const fetchReportFromServer = async () => {
         endDate: endOfDay(selectedDate.value.end),
       },
     });
-
+  
     dashboard.value = res;
   } catch (error) {
     console.error('Failed to fetch server report:', error);
-    toast.add({
-      title: 'Server Error',
-      description: 'Could not fetch server-side report.',
-      color: 'red',
-    });
+  }finally {
+    loading.value = false;
   }
 };
 
@@ -336,7 +332,6 @@ const refreshPage = async () => {
 // Initialize
 onMounted(() => {
   fetchReportFromServer()
-  loading.value = false
 })
 
 const printReportHandle = async() => {
@@ -367,7 +362,11 @@ const printReportHandle = async() => {
 
 <template>
   <UDashboardPanelContent>
-    <div ref="scrollContainer" class="scroll-container">
+        <div v-if="loading" class="w-full flex justify-center items-center py-20">
+        <UIcon name="i-heroicons-arrow-path-20-solid" class="animate-spin w-5 h-5 text-gray-500 mr-2" />
+        <span>Loading data...</span>
+    </div>
+    <div v-else ref="scrollContainer" class="scroll-container">
     <ClientOnly>
       <div class="space-y-6 p-6"  >
         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
@@ -431,8 +430,8 @@ const printReportHandle = async() => {
               <KpiCard class="w-full"  title="Total Revenue" :value="formatCurrency(totals.totalRevenue)"/> 
               <template #panel>
                 <div class="p-4 flex flex-col">
-                  <div>Revenue in Cash: {{ totals?.totalRevenueInCash }}</div>
-                  <div>Revenue in UPI: {{ totals?.totalRevenueInUPI }}</div>
+                  <div>Revenue in Cash: {{ formatCurrency(totals?.totalRevenueInCash) }}</div>
+                  <div>Revenue in UPI: {{ formatCurrency(totals?.totalRevenueInUPI) }}</div>
                 </div>
             </template>
           </UPopover>
@@ -443,8 +442,8 @@ const printReportHandle = async() => {
               <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(totalsExpense.totalExpense)"/>
               <template #panel>
                 <div class="p-4 flex flex-col">
-                  <div>Expense in Cash: {{ totalsExpense.totalExpensesInCash }}</div>
-                  <div>Expense in UPI: {{ totalsExpense.totalExpensesInUPI }}</div>
+                  <div>Expense in Cash: {{ formatCurrency(totalsExpense.totalExpensesInCash) }}</div>
+                  <div>Expense in UPI: {{ formatCurrency(totalsExpense.totalExpensesInUPI) }}</div>
                 </div>
               </template>
             </UPopover>
@@ -476,7 +475,6 @@ const printReportHandle = async() => {
         {
           key: 'sales',
           label: 'Sales',
-          format: val => `₹${val.toFixed(2)}`
         }
       ]"
     />
@@ -494,28 +492,6 @@ const printReportHandle = async() => {
       :topProducts="dashboard.topProducts"
     />
 
-        
-
-        <div v-if="loading" class="text-center py-6">
-          <UIcon name="i-heroicons-arrow-path" class="animate-spin h-6 w-6 mx-auto" />
-          <p class="mt-2">Loading report data...</p>
-        </div>
-
-        <div v-if="!loading && !dashboard.bills?.length" class="text-center py-6">
-          <UIcon name="i-heroicons-exclamation-circle" class="h-8 w-8 text-red-500 mx-auto" />
-          <p class="text-red-500 mt-2">No data available for this report</p>
-          <p class="text-sm text-gray-500 mt-1">
-            {{ (dashboard.bills?.length ?? 0) > 0 ? 'Filters may be too restrictive' : 'No bills found' }}
-          </p>
-          <UButton 
-            icon="i-heroicons-arrow-path" 
-            @click="refreshPage" 
-            class="mt-4"
-            :loading="loading"
-          >
-            Retry
-          </UButton>
-        </div>
       </div>
     </ClientOnly>
   </div>

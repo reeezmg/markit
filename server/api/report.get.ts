@@ -151,9 +151,11 @@ const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : undefined
       salesMap.set(name, { name, sales: 0 })
     }
 
-    salesMap.get(name)!.sales += entry.value ?? 0
+      salesMap.get(name)!.sales += entry.value ?? 0
   }
-  const categorySales = [...salesMap.values()].sort((a, b) => b.sales - a.sales)
+  const categorySales = [...salesMap.values()]
+  .map(c => ({ ...c, sales: Number(c.sales.toFixed(2)) }))
+  .sort((a, b) => b.sales - a.sales);
 
   // Calculate counts
   const productsCount = products.length
@@ -183,7 +185,7 @@ const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : undefined
   }
   const revenueByCategory = Array.from(revenueByCategoryMap.entries()).map(([name, total]) => ({
     name,
-    value: total
+    value: total.toFixed(2)
   }))
 
   // Unpaid bills
@@ -263,7 +265,7 @@ const profitData = entries.map(entry => {
 
   const profitPerUnit = salePricePerUnit - purchasePrice!;
   const totalProfit = profitPerUnit * entry.qty;
-  console.log('totalProfit', totalProfit, salePricePerUnit, purchasePrice);
+  // console.log('totalProfit', totalProfit, salePricePerUnit, purchasePrice);
 
   return {
     entryId: entry.id,
@@ -304,7 +306,6 @@ for (const entry of entries) {
 const profitByCategory = Array.from(profitByCategoryMap.values())
   .sort((a, b) => b.profit - a.profit);
 
-console.log(totalProfit);
 
   return {
     company,
