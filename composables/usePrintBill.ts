@@ -1,7 +1,7 @@
 import { Capacitor } from '@capacitor/core';
 import {useReceiptPrinter} from '~/composables/useReceiptPrinter';
 export const usePrint = () => {
-  const { printMobileBill,printMobileLabel } = useReceiptPrinter();
+  const { printMobileBill,printMobileLabel, printMobileReport } = useReceiptPrinter();
 
   const printBill = async (printData: any) => {
     try {
@@ -31,6 +31,12 @@ export const usePrint = () => {
 
   const printReport = async (printData: any) => {
     try {
+      if (Capacitor.isNativePlatform()) {
+        const res = await printMobileReport(printData)
+       if(!res.success){
+        throw res.message
+       }
+      }else{
       const data = await $fetch('/api/print-report', {
         method: 'POST',
         body: printData,
@@ -40,6 +46,7 @@ export const usePrint = () => {
         },
       });
       return data;
+    }
     } catch (err: any) {
       console.error('🛑 Print Report error:', err.message || err);
       throw err;
