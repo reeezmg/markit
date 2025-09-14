@@ -128,6 +128,12 @@ watch(() => props.editDiscount, (newDiscount) => {
 const isEditingDPrice = ref(false);
 const isEditingDiscount = ref(false);
 
+watch(sprice, (newSPrice)=> {
+  if(newSPrice) {
+    dprice.value = newSPrice;
+  }
+}, { immediate: true });
+
 watch([sprice, dprice], ([newSPrice, newDPrice], [oldSPrice, oldDPrice]) => {
   if (isEditingDPrice.value && newSPrice > 0) {
     const calculatedDiscount = ((newSPrice - newDPrice) / newSPrice) * 100;
