@@ -361,7 +361,7 @@ onMounted(() => {
       isRedeemPoint: false,
       redeemedPoints: 0,
       selected: null,
-      tempSplits: Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }])),
+      tempSplits: Object.fromEntries(['Cash', 'UPI', 'Card','Credit'].map(method => [method, { method, amount: null }])),
       items: [{
         id: '', variantId: '', name: '', sn: 1, barcode: '', category: [], size: '',
         item: '', qty: 1, rate: null, discount: null, tax: null, value: 0,

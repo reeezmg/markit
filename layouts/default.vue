@@ -8,6 +8,7 @@ const plan = ref(useAuth().session.value?.plan || 'free');
 const { isHelpSlideoverOpen } = useDashboard();
 
 const auth = useAuth();
+const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
 
 const links = computed(() => {
     const simplifiedLinks = [
@@ -186,29 +187,33 @@ const links = computed(() => {
                 },
             ],
         },
-        {   
-            id: 'reports',     
-            label: 'Reports',
-            to: '/reports',
-            icon: 'i-heroicons-book-open',
-            children: [
-                  {
-                    label: 'Sales',
-                    to: `/reports/sales`,
-                    tooltip: {
-                        text: 'Reports',
-                        shortcuts: ['R', 'S'],
-                    },
-                    },
-                  {
+        {
+        id: 'reports',
+        label: 'Reports',
+        to: '/reports',
+        icon: 'i-heroicons-book-open',
+        children: [
+            {
+            label: 'Sales',
+            to: `/reports/sales`,
+            tooltip: {
+                text: 'Reports',
+                shortcuts: ['R', 'S'],
+            },
+            },
+            ...(isUserTrackIncluded.value
+            ? [
+                {
                     label: 'Users',
                     to: `/reports/users`,
                     tooltip: {
-                        text: 'Reports',
-                        shortcuts: ['R', 'U'],
+                    text: 'Reports',
+                    shortcuts: ['R', 'U'],
                     },
-                    },
-            ],
+                },
+                ]
+            : []),
+        ],
         },
         {
             id: 'products',
