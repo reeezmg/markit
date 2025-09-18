@@ -128,8 +128,8 @@ watch(() => props.editDiscount, (newDiscount) => {
 const isEditingDPrice = ref(false);
 const isEditingDiscount = ref(false);
 
-watch(sprice, (newSPrice)=> {
-  if(newSPrice) {
+watch([sprice, dprice], ([newSPrice, newDPrice])=> {
+  if(newSPrice && !newDPrice) {
     dprice.value = newSPrice;
   }
 }, { immediate: true });
