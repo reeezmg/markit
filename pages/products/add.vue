@@ -488,6 +488,17 @@ const handleAdd = async (e: Event) => {
       return;
     }
 
+     for (const v of variants.value) {
+      if (v.dprice > v.sprice) {
+        console.log(v)
+        toast.add({
+          title: `In variant : Discount price cannot be greater than selling price`,
+          color: 'red',
+        });
+        return; // stop execution if any variant is invalid
+      }
+    }
+
  
 
 
@@ -625,6 +636,16 @@ const handleEdit = async (e: Event) => {
         color: 'red',
       });
       return;
+    }
+     for (const v of variants.value) {
+      if (v.dprice > v.sprice) {
+        console.log(v)
+        toast.add({
+          title: `In variant : Discount price cannot be greater than selling price`,
+          color: 'red',
+        });
+        return; // stop execution if any variant is invalid
+      }
     }
 
     const base64files = await Promise.all(
