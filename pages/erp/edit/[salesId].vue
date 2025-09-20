@@ -934,12 +934,16 @@ const fetchItemData = async (barcode, index) => {
   if (itemdata.value) {
     
     const categoryId = itemdata.value.variant.product.categoryId;
-
-    items.value[index].id = itemdata.value?.id || '';
-    items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant.product.name}` || '';
-    items.value[index].category = categories.value.filter(category =>category.id === categoryId);
-    items.value[index].rate = itemdata.value.variant?.sprice || 0;
-    items.value[index].variantId = itemdata.value.variant?.id || '';
+  items.value[index].id = itemData.id || '';
+  items.value[index].size = itemData.size || '';
+  items.value[index].name = `${itemData.variant?.name}-${itemData.variant.product.name}` || '';
+  items.value[index].category = categories.value.filter(category => category.id === categoryId);
+  items.value[index].rate = itemData.variant?.sprice || 0;
+  items.value[index].discount = itemData.variant?.dprice - itemData.variant?.sprice || 0;
+  items.value[index].tax = itemData.variant?.tax || 0;
+  items.value[index].totalQty = itemData.variant?.qty || 0;
+  items.value[index].sizes = itemData.variant?.sizes || null;
+  items.value[index].variantId = itemData.variant?.id || '';
     loadingStates.value[index] = false;
   } else {
     loadingStates.value[index] = false;
