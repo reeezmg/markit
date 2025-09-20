@@ -701,6 +701,7 @@ const itemargs = computed(() => ({
       select: {
         id: true,
         sprice: true,
+        dprice:true,
         name: true,
         tax: true,
         discount: true,
