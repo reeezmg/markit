@@ -1037,7 +1037,7 @@ const fetchItemDataNonBarcode = async (categoryId, sPrice, index) => {
         rate: sPrice || 0,
         discount: itemData.variant?.discount || 0,
         tax: itemData.variant?.tax || 0,
-        totalQty: itemData.variant?.qty || 0,
+        totalQty: itemData?.qty || 0,
         sizes: itemData.variant?.sizes || null,
         variantId: itemData.variant?.id || ''
       };
@@ -1061,7 +1061,7 @@ const processItemResponse = (itemData, index) => {
   items.value[index].rate = itemData.variant?.sprice || 0;
   items.value[index].discount = itemData.variant?.dprice - itemData.variant?.sprice || 0;
   items.value[index].tax = itemData.variant?.tax || 0;
-  items.value[index].totalQty = itemData.variant?.qty || 0;
+  items.value[index].totalQty = itemData?.qty || 0;
   items.value[index].sizes = itemData.variant?.sizes || null;
   items.value[index].variantId = itemData.variant?.id || '';
 
