@@ -136,6 +136,7 @@ model Company {
   variants            Variant[]
   purchaseOrders      PurchaseOrder[]
   items               Item[]
+  trybuys             Trynbuy[]
   status              Boolean              @default(true)
   type                CompanyType
   pipeline            Pipeline?
@@ -289,6 +290,7 @@ model Client {
   likeCompanies      LikeCompanyClient[]
   otp                String?
   otpExpiry          DateTime?
+  trynbuys           Trynbuy[]
 
   @@map("clients")
 }
@@ -370,48 +372,57 @@ model Product {
   purchaseorderId String        @map("purchaseorder_id")
   writeId         String?       @default(uuid()) @map("write_id")
 
+  @@index([categoryId])
+  @@index([subcategoryId])
+  @@index([companyId])
   @@map("products")
 }
 
 model Variant {
-  id                 String               @id() @default(uuid())
-  createdAt          DateTime             @default(now()) @map("created_at")
-  updatedAt          DateTime             @updatedAt() @map("updated_at")
+  id                 String                @id() @default(uuid())
+  createdAt          DateTime              @default(now()) @map("created_at")
+  updatedAt          DateTime              @updatedAt() @map("updated_at")
   name               String
   code               String?
-  status             Boolean              @default(true)
-  sprice             Float                @map("s_price")
-  pprice             Float?               @map("p_price")
+  status             Boolean               @default(true)
+  sprice             Float                 @map("s_price")
+  pprice             Float?                @map("p_price")
   discount           Float?
-  dprice             Float?               @map("d_price")
+  dprice             Float?                @map("d_price")
   images             String[]
-  tax                Float                @default(0.0)
-  product            Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
-  productId          String               @map("product_id")
+  tax                Float                 @default(0.0)
+  product            Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  productId          String                @map("product_id")
   items              Item[]
   entries            Entry[]
-  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId          String               @map("company_id")
+  company            Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String                @map("company_id")
   VariantSizeBarcode VariantSizeBarcode[]
   sold               Int?
-  writeId            String?              @default(uuid()) @map("write_id")
+  writeId            String?               @default(uuid()) @map("write_id")
+  cartItems          TrynbuyCartItem[]
+  returnedItems      TrynbuyReturnedItem[]
 
+  @@index([productId])
+  @@index([companyId])
   @@map("variants")
 }
 
 model Item {
-  id        String   @id() @default(uuid())
-  barcode   String?  @db.Text()
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt() @map("updated_at")
-  variant   Variant  @relation(fields: [variantId], references: [id], onDelete: Cascade)
-  variantId String   @map("variant_id")
-  size      String?
-  qty       Int?     @default(0)
-  entry     Entry[]
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId String   @map("company_id")
-  writeId   String?  @default(uuid()) @map("write_id")
+  id            String                @id() @default(uuid())
+  barcode       String?               @db.Text()
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt() @map("updated_at")
+  variant       Variant               @relation(fields: [variantId], references: [id], onDelete: Cascade)
+  variantId     String                @map("variant_id")
+  size          String?
+  qty           Int?                  @default(0)
+  entry         Entry[]
+  company       Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String                @map("company_id")
+  writeId       String?               @default(uuid()) @map("write_id")
+  cartItems     TrynbuyCartItem[]
+  returnedItems TrynbuyReturnedItem[]
 
   @@map("items")
 }
@@ -450,8 +461,69 @@ model Bill {
   companyUser    CompanyUser?  @relation(fields: [companyId, userId], references: [companyId, userId])
   address        Address?      @relation(fields: [addressId], references: [id])
   addressId      String?       @map("address_id")
+  trynbuy        Trynbuy?
 
+  @@index([companyId, createdAt, deleted])
   @@map("bills")
+}
+
+model Trynbuy {
+  id              String                @id() @default(uuid())
+  orderNumber     Int                   @default(autoincrement()) @map("order_number")
+  createdAt       DateTime              @default(now()) @map("created_at")
+  checkoutMethod  String                @map("checkout_method")
+  subtotal        Float                 @map("subtotal")
+  productDiscount Float                 @map("product_discount")
+  totalDiscount   Float                 @map("total_discount")
+  shipping        Float                 @map("shipping")
+  deliveryType    String                @map("delivery_type")
+  deliveryTime    DateTime?             @map("delivery_time")
+  orderStatus     String?               @default("ORDER_RECEIVED") @map("order_status")
+  location        Address?              @relation(fields: [locationId], references: [id])
+  locationId      String?               @map("location_id")
+  cartItems       TrynbuyCartItem[]
+  returnedItems   TrynbuyReturnedItem[]
+  bill            Bill?                 @relation(fields: [billId], references: [id])
+  billId          String?               @unique() @map("bill_id")
+  client          Client?               @relation(fields: [clientId], references: [id])
+  clientId        String?               @map("client_id")
+  company         Company               @relation(fields: [companyId], references: [id])
+  companyId       String                @map("company_id")
+  packingStatus   String?               @map("packing_status")
+
+  @@index([clientId])
+  @@index([companyId])
+  @@map("trynbuys")
+}
+
+model TrynbuyCartItem {
+  id        String  @id() @default(uuid())
+  trynbuy   Trynbuy @relation(fields: [trynbuyId], references: [id])
+  trynbuyId String  @map("trynbuy_id")
+  variant   Variant @relation(fields: [variantId], references: [id])
+  variantId String  @map("variant_id")
+  item      Item    @relation(fields: [itemId], references: [id])
+  itemId    String  @map("item_id")
+  quantity  Int
+
+  @@index([trynbuyId])
+  @@index([variantId])
+  @@map("trynbuy_cart_items")
+}
+
+model TrynbuyReturnedItem {
+  id        String  @id() @default(uuid())
+  trynbuy   Trynbuy @relation(fields: [trynbuyId], references: [id])
+  trynbuyId String  @map("trynbuy_id")
+  variant   Variant @relation(fields: [variantId], references: [id])
+  variantId String  @map("variant_id")
+  item      Item    @relation(fields: [itemId], references: [id])
+  itemId    String  @map("item_id")
+  quantity  Int
+
+  @@index([trynbuyId])
+  @@index([variantId])
+  @@map("trynbuy_returned_items")
 }
 
 model Entry {
@@ -479,6 +551,9 @@ model Entry {
   itemId      String?      @map("item_id")
   return      Boolean      @default(false) @map("return")
 
+  @@index([billId])
+  @@index([variantId])
+  @@index([categoryId])
   @@map("entries")
 }
 
@@ -559,6 +634,7 @@ model Expense {
   company           Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId         String          @map("company_id")
 
+  @@index([companyId, expenseDate])
   @@map("expenses")
 }
 
@@ -608,6 +684,7 @@ model Address {
   account          Account?                              @relation(fields: [accountId], references: [id])
   accountId        String?                               @unique() @map("account_id")
   bill             Bill[]
+  trynbuy          Trynbuy[]
 
   @@map("addresses")
 }

@@ -7,7 +7,9 @@ import {
     useUpdateBill,
     useUpdateManyCategory,
     useFindManyBill,
-    useCountBill
+    useCountBill,
+    useFindManyTrynbuy,
+    useCountTrynbuy
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
@@ -29,85 +31,23 @@ const selectedDate = ref({ start: sub(new Date(), { days: 14 }), end: new Date()
 
 // Columns
 const columns = [
-    {
-        key: 'invoiceNumber',
-        label: 'Inv#',
-        sortable: true,
-    },
-    {
-        key: 'createdAt',
-        label: 'Date',
-        sortable: true,
-    },
-    {
-        key: 'entries',
-        label: 'Entries',
-        sortable: true,
-    },
-    {
-        key: 'grandTotal',
-        label: 'Total',
-        sortable: true,
-    },
-    {
-        key: 'paymentStatus',
-        label: 'Payment',
-        sortable: true,
-    },
-    {
-        key: 'status',
-        label: 'Status',
-        sortable: true,
-    },
-    {
-        key: 'notes',
-        label: 'Notes',
-        sortable: true,
-    },
-    {
-        key: 'actions',
-        label: 'Actions',
-        sortable: false,
-    },
-];
+  { key: 'orderNumber', label: 'Order#', sortable: true },
+  { key: 'createdAt', label: 'Date', sortable: true },
+  { key: 'deliveryType', label: 'Delivery', sortable: true },
+  { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
+  { key: 'orderStatus', label: 'Status', sortable: true },
+  { key: 'actions', label: 'Actions', sortable: false }
+]
 
-const entrycolumns = [
-    {
-        key: 'barcode',
-        label: 'Barcode',
-        sortable: true,
-    },
-    {
-        key: 'category.name',
-        label: 'Category',
-        sortable: true,
-    },
-    {
-        key: 'name',
-        label: 'Name',
-        sortable: true,
-    },
-    {
-        key: 'qty',
-        label: 'Quantity',
-        sortable: true,
-    },
-    {
-        key: 'discount',
-        label: 'Discount',
-        sortable: true,
-    },
-    {
-        key: 'tax',
-        label: 'Tax',
-        sortable: true,
-    },
-    {
-        key: 'rate',
-        label: 'Rate',
-        sortable: true,
-    }
-];
+// Subtable: Cart Items with Variant + Item size
+const itemColumns = [
+  { key: 'item.barcode', label: 'Barcode', sortable: true },
+  { key: 'variant.name', label: 'Variant', sortable: true },
+  { key: 'item.size', label: 'Size', sortable: true },
+  { key: 'quantity', label: 'Qty', sortable: true },
+  { key: 'variant.sprice', label: 'Rate', sortable: true },
+  { key: 'variant.tax', label: 'Tax', sortable: true }
+]
 
 
 
@@ -135,7 +75,7 @@ const action = (row) => [
             label: 'Bill',
             icon: 'i-heroicons-clipboard-document-check-20-solid',
             click: () => router.push(`/erp/edit/${row.id}`),
-        },
+        }
     ],
     
 ];
@@ -178,7 +118,7 @@ const sort = ref({ column: 'id', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('3');
-const { data: pageTotal } = useCountBill({where:{companyId: useAuth().session.value?.companyId}});
+const { data: pageTotal } = useCountTrynbuy({where:{companyId: useAuth().session.value?.companyId}});
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -193,63 +133,49 @@ function selectRange(duration: Duration) {
 }
 
 // Data
-const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
+// Prisma query for Trynbuy
+const queryArgs = computed<Prisma.TrynbuyFindManyArgs>(() => {
+  return {
+    where: {
+      AND: [
+        { companyId: useAuth().session.value?.companyId },
+        ...(search.value ? [{ orderNumber: search.value }] : []),
+        ...(selectedStatus.value.length
+          ? [
+              {
+                OR: selectedStatus.value.map((item: any) => ({
+                  orderStatus: item.value
+                }))
+              }
+            ]
+          : []),
+        ...(selectedDate.value
+          ? [
+              { createdAt: { gte: selectedDate.value.start.toISOString() } },
+              { createdAt: { lte: selectedDate.value.end.toISOString() } }
+            ]
+          : [])
+      ]
+    },
+    include: {
+      cartItems: {
+        include: {
+          variant: true,
+          item: true,
+        }
+      }
+    },
+    orderBy: { [sort.value.column]: sort.value.direction },
+    skip: (page.value - 1) * parseInt(pageCount.value),
+    take: parseInt(pageCount.value)
+  }
+})
 
+const { data: trynbuys, isLoading } = useFindManyTrynbuy(queryArgs)
 
-    return {
-        where: {
-            AND: [
-                { companyId: useAuth().session.value?.companyId },
-                ...(search.value ? [{ invoiceNumber: search.value }] : []),
-                ...(selectedStatus.value.length
-                ? [{ OR: selectedStatus.value.map((item) => ({ paymentStatus: item.value })) }]
-                : []),
-                ...(selectedDate.value
-                ? [
-                    { createdAt: { gte: new Date(selectedDate.value.start).toISOString() } },
-                    { createdAt: { lte: new Date(selectedDate.value.end).toISOString() } },
-                    ]
-                : []),
-                {
-                OR: [
-                    { type: 'TRY_AT_HOME' },
-                    { type: 'STANDARD' },
-                ],
-                },
-            ],
-            },
-        
-        include:{
-            entries:{
-                include:{
-                    category:{
-                        select:{
-                            name:true
-                        }
-                    }
-                }
-            }
-        },
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
-        },
-        skip: (page.value - 1) * parseInt(pageCount.value),
-        take: parseInt(pageCount.value),
-    };
-});
-
-const {
-    data: sales,
-    isLoading,
-    error,
-    refetch,
-} = useFindManyBill(queryArgs);
-
-
-watch(sales, (newsales) => {
-    console.log( newsales);
-});
-
+watch(trynbuys,(newtrynbuys) => {
+    console.log(newtrynbuys)
+})
 
 
 
@@ -396,11 +322,10 @@ const handleChange = (value:string, row:any) => {
 
             <!-- Table -->
             <UTable
-                v-model="selectedRows"
                 v-model:sort="sort"
                 v-model:expand="expand"
-                :rows="sales"
-                :columns="columnsTable"
+                :rows="trynbuys"
+                :columns="columns"
                 :loading="isLoading"
                 :multiple-expand="false"
                 sort-mode="manual"
@@ -417,88 +342,62 @@ const handleChange = (value:string, row:any) => {
                     </UDropdown>
                 </template>
 
-                <template #paymentStatus-data="{row}">
-                <UBadge 
-                    size="sm" 
-                    :color="row.paymentStatus === 'PAID' ? 'green' 
-                        : row.paymentStatus === 'PENDING' ? 'orange' 
-                        : row.paymentStatus === 'APPROVED' ? 'blue' 
-                        : 'red'" 
+                <template #createdAt-data="{ row }">
+                {{ new Date(row.createdAt).toLocaleString('en-GB', { 
+                    day: '2-digit', month: '2-digit', year: 'numeric',
+                    hour: '2-digit', minute: '2-digit' 
+                }) }}
+                </template>
+
+                <template #deliveryTime-data="{ row }">
+                {{ row.deliveryTime 
+                    ? new Date(row.deliveryTime).toLocaleString('en-GB', { 
+                        day: '2-digit', month: '2-digit', year: 'numeric',
+                        hour: '2-digit', minute: '2-digit' 
+                        }) 
+                    : '-' }}
+                </template>
+                
+
+
+               
+               <template #orderStatus-data="{ row }">
+                <UBadge
+                    size="sm"
+                    :color="
+                    row.orderStatus === 'BILLED'
+                        ? 'green'
+                        : row.orderStatus === 'ALL_RETURNED'
+                        ? 'purple'
+                        : row.orderStatus === 'CANCELLED'
+                        ? 'red'
+                        : row.orderStatus === 'DELIVERED'
+                        ? 'orange'
+                        : row.orderStatus === 'ORDER_RECEIVED'
+                        ? 'yellow'
+                        : 'gray'
+                    "
                     variant="subtle"
                 >
-                {{ row.paymentStatus.toUpperCase() }}
+                     {{
+                    row.orderStatus
+                    ? row.orderStatus
+                        .split('_')
+                        .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+                        .join(' ')
+                    : '-'
+                }}
                 </UBadge>
-            </template>
-
-                <template #status-data="{row}">
-                <UBadge 
-                    size="sm" 
-                    color="gray"
-                    
-                >
-                    {{ row.status }}
-                </UBadge>
-            </template>
-
-                <template #entries-data="{ row }">
-                    {{ row.entries.length }}
-                </template>
-
-                <template #createdAt-data="{ row }">
-                    {{ row.createdAt.toLocaleDateString('en-GB') }}
                 </template>
 
 
 
-                <template #notes-data="{ row }">
-                    <UPopover> 
-                        <UButton 
-                            color="white" 
-                            :label="row.notes ? 'Open' : 'Add'" 
-                            trailing-icon="i-heroicons-chevron-down-20-solid" 
-                        />
-                        <template #panel>
-                            <div class="p-4">
-                                <UTextarea 
-                                    :model-value="row.notes" 
-                                    color="white" 
-                                    variant="outline" 
-                                    placeholder="Notes..." 
-                                    :autoresize="true" 
-                                    @update:modelValue="handleChange($event, row)"
-                                />
-                                <UButton
-                                    trailingIcon="i-heroicons-cloud-arrow-up"
-                                    size="sm"
-                                    color="green"
-                                    variant="solid"
-                                    label="Update"
-                                    :trailing="false"
-                                    class="mt-3"
-                                    @click="handleUpdate(row.id)"
-                                />
-                            </div>
-                        </template>
-                    </UPopover>
-                </template>
 
                 
-                <template #expand="{ row }">
-                    <UTable 
-                        :rows="row.entries" 
-                        :columns="entrycolumns"
-                    >
-                    <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
-                        <UButton
-                            color="gray"
-                            variant="ghost"
-                            icon="i-heroicons-ellipsis-horizontal-20-solid"
-                        />
-                    </UDropdown>
-                </template>
-                    </UTable>
-                </template>
+                
+                  <template #expand="{ row }">
+                    <UTable :rows="row.cartItems" :columns="itemColumns" />
+                    </template>
 
             </UTable>
 

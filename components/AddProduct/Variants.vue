@@ -20,20 +20,30 @@ const props = defineProps<{
 const emit = defineEmits(['update']);
 
 const schema = z.object({
-    name: z.string(),
-    code: z.string().optional(),
-    qty: z.number(),
-    sprice: z.number().min(0, 'Price must be at least 0'),
-    pprice: z.number().optional(),
-    dprice: z.number().optional(),
-    discount: z.number().optional(),
-    items: z.array(
-        z.object({
-            size: z.string().min(1, 'Size is required'),
-            qty: z.number().min(1, 'Quantity must be at least 1'),
-        })
-    ).optional(),
+  name: z.string(),
+  code: z.string().optional(),
+  qty: z.number(),
+  sprice: z.number().min(0, 'Price must be at least 0'),
+  pprice: z.number().optional(),
+  dprice: z.number().optional(),
+  discount: z.number().optional(),
+  items: z.array(
+    z.object({
+      size: z.string().min(1, 'Size is required'),
+      qty: z.number().min(1, 'Quantity must be at least 1'),
+    })
+  ).optional(),
+}).refine((data) => {
+  // if dprice is defined, ensure it is not greater than sprice
+  if (data.dprice !== undefined && data.sprice !== undefined) {
+    return data.dprice <= data.sprice;
+  }
+  return true;
+}, {
+  path: ['dprice'], // attach error to dprice field
+  message: 'Discount price cannot be greater than selling price',
 });
+
 
 const { errors, defineField,resetForm: resetValidation } = useForm({
     validationSchema: toTypedSchema(schema),
@@ -215,15 +225,21 @@ defineExpose({ resetForm });
     </UFormGroup>
 
     <!-- Discount Price -->
-    <UFormGroup label="Discount Price" v-if="variantInputs?.dprice">
+   <UFormGroup 
+    label="Discount Price" 
+    v-if="variantInputs?.dprice" 
+    :error="errors.dprice && errors.dprice"
+  >
     <UInput
       v-model="dprice"
+      v-bind="dpriceAttrs"
       type="number"
       step="0.01"
       @focus="isEditingDPrice = true; isEditingDiscount = false"
       @blur="isEditingDPrice = false"
     />
-    </UFormGroup>
+  </UFormGroup>
+
 
     <!-- Discount % -->
     <UFormGroup label="Discount %" v-if="variantInputs?.discount">

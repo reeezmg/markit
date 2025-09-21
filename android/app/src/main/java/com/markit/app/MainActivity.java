@@ -21,7 +21,7 @@ public class MainActivity extends BridgeActivity {
 
     if (isNetworkAvailable()) {
       // Load your login URL if network is available
-      webView.loadUrl("http://172.20.10.4:3000/login");
+      webView.loadUrl("https://markit.co.in/login");
     } else {
       // Load offline page if network is not available
       webView.loadUrl("file:///android_asset/offline.html");

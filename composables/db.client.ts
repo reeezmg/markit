@@ -66,11 +66,11 @@ await pglite.electric.syncShapesToTables({
       primaryKey: ['id']
     }
   },
-  key: 'my-sync', // Optional: remove or rename as needed
+  key: 'my-sync-v2', // Optional: remove or rename as needed
   onInitialSync: () => {
     console.log('Initial sync complete')
   }
-})
+}).catch(err => console.error('❌ Sync failed', err))
 
 
   return pglite

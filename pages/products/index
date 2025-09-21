@@ -19,6 +19,15 @@ import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Pagination } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/pagination'
+const { $db, $sync } = useNuxtApp()
+
+onMounted(async () => {
+  // Example: Query products
+  const ret = $db.live.query('SELECT * FROM products;', [], (res) => {
+  console.log(res)
+})
+
+})
 
 
 interface ImageData {
@@ -238,7 +247,7 @@ const resetFilters = () => {
 };
 
 // Pagination
-const sort = ref({ column: 'createdAt', direction: 'desc' as const });
+const sort = ref({ column: 'created_at', direction: 'desc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('10');
@@ -248,79 +257,114 @@ const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value),
 );
 
+const products = ref<any[]>([])
+const isLoading = ref(false)
+const error = ref<any>(null)
 
-// Data
-const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
-    const selectedStatusCondition =
-        selectedStatus.value.length > 0
-            ? {
-                  OR: selectedStatus.value.map((item) => {
-                      return { status: item.value };
-                  }),
-              }
-            : {};
+async function fetchProducts() {
+  try {
+    isLoading.value = true
 
-    return {
-        where: {
-            AND: [
-                { companyId: useAuth().session.value?.companyId },
-                {
-                    OR: [
-                        // ✅ Product name
-                        { name: { contains: search.value, mode: 'insensitive' } },
+    const offset = (page.value - 1) * parseInt(pageCount.value)
+    const limit = parseInt(pageCount.value)
 
-                        // ✅ Variant code
-                        {
-                            variants: {
-                                some: {
-                                    code: { contains: search.value, mode: 'insensitive' },
-                                },
-                            },
-                        },
+    const companyId = useAuth().session.value?.companyId
+    const searchVal = search.value
 
-                        // ✅ Item barcode (via variants → items)
-                        {
-                            variants: {
-                                some: {
-                                    items: {
-                                        some: {
-                                            barcode: {
-                                                contains: search.value,
-                                                mode: 'insensitive',
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    ],
-                },
-                selectedStatusCondition,
-            ],
-        },
-        include: {
-            variants: {
-                include: {
-                    items: true,
-                },
-            },
-            category: true,
-        },
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
-        },
-        skip: (page.value - 1) * parseInt(pageCount.value),
-        take: parseInt(pageCount.value),
-    };
-});
+    const conditions: string[] = []
+    const params: any[] = []
+
+    if (companyId) {
+      params.push(companyId)
+      conditions.push(`p.company_id = $${params.length}`)
+    }
+
+    if (searchVal) {
+      params.push(`%${searchVal}%`)
+      conditions.push(`(
+        p.name ILIKE $${params.length}
+        OR EXISTS (
+          SELECT 1 FROM variants_synced v
+          WHERE v.product_id = p.id AND v.code ILIKE $${params.length}
+        )
+        OR EXISTS (
+          SELECT 1 FROM variants_synced v
+          JOIN items_synced i ON i.variant_id = v.id
+          WHERE v.product_id = p.id AND i.barcode ILIKE $${params.length}
+        )
+      )`)
+    }
+
+    const whereSQL = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
+        const sql = `
+        SELECT p.*, 
+                COALESCE(
+                    json_agg(
+                    json_build_object(
+                        'id', v.id,
+                        'name', v.name,
+                        'code', v.code,
+                        'images', v.images,
+                        'sprice', v.s_price,
+                        'dprice', v.d_price,
+                        'pprice', v.p_price,
+                        'discount', v.discount,
+                        'tax', v.tax,
+                        'status', v.status,
+                        'items', (
+                            SELECT json_agg(i.*) 
+                            FROM items_synced i 
+                            WHERE i.variant_id = v.id
+                        )
+                    )
+                    ) FILTER (WHERE v.id IS NOT NULL),
+                    '[]'
+                ) as variants,
+                to_json(c.*) as category
+        FROM products_synced p
+        LEFT JOIN variants_synced v ON v.product_id = p.id
+        LEFT JOIN categories_synced c ON c.id = p.category_id
+        ${whereSQL}
+        GROUP BY p.id, c.id
+        ORDER BY p.${sort.value.column} ${sort.value.direction}
+        OFFSET ${offset}
+        LIMIT ${limit};
+        `
 
 
-const {
-    data: products,
-    isLoading,
-    error,
-    refetch,
-} = useFindManyProduct(queryArgs);
+     const ret = $db.live.query({
+  query: sql,
+  params,   // 👈 this is the array you built earlier
+  offset,
+  limit,
+  callback: (res) => {
+    products.value = res.rows
+    pageTotal.value = res.totalCount
+    isLoading.value = false
+  }
+})
+    console.log('Live query set up:', ret)
+  } catch (err) {
+    error.value = err
+    console.error("Error fetching products:", err)
+  } finally {
+    isLoading.value = false
+  }
+}
+
+
+// 🚀 Run on mount or when filters change
+watch([page, search, sort], fetchProducts, { immediate: true })
+
+onMounted(fetchProducts)
+
+
+watch(products,(newProducts) => {
+  console.log('Products updated:', newProducts)
+}, { immediate: true })
+
+
+
 
 const {
     data:items,

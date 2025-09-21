@@ -498,15 +498,15 @@ const printReportHandle = async() => {
 
   <!-- Top Products -->
   <div class="flex-1">
-    <CategoryRevenuePie v-if="!loading && dashboard?.topProducts" :revenueByCategory="dashboard?.revenueByCategory" title="Category" />
+    <CategoryRevenuePie v-if="!loading && dashboard?.revenueByCategory" :revenueByCategory="dashboard?.revenueByCategory" title="Category" />
   </div>
 </div>
 
-
+<!-- 
  <TopProducts
       v-if="!loading && dashboard?.topProducts"
       :topProducts="dashboard.topProducts"
-    />
+    /> -->
 
       </div>
     </ClientOnly>

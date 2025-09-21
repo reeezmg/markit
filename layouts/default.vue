@@ -84,13 +84,13 @@ const links = computed(() => {
       },
     },
     {
-      id: 'orders',
-      label: 'Orders',
-      to: `/order/orders`,
+      id: 'trynbuy',
+      label: 'Try N Buy',
+      to: `/order/trynbuy`,
       icon: 'i-heroicons-shopping-bag',
       tooltip: {
-        text: 'Orders',
-        shortcuts: ['O', 'O'],
+        text: 'trynbuy',
+        shortcuts: ['O', 'T'],
       },
     },
     {
@@ -296,12 +296,12 @@ const links = computed(() => {
             ...(auth.session.value?.companyType === 'seller' || auth.session.value?.companyType === 'buyer'
                     ? [
                         {
-                        label: 'Orders',
-                        to: `/order/orders`,
-                        exact: true,
+                        id: 'trynbuy',
+                        label: 'Try N Buy',
+                        to: `/order/trynbuy`,
                         tooltip: {
-                            text: 'Orders',
-                            shortcuts: ['O', 'O'],
+                            text: 'trynbuy',
+                            shortcuts: ['O', 'T'],
                         },
                         },
                         {

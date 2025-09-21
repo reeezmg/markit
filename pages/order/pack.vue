@@ -1,7 +1,7 @@
 
 <script setup>
 import { item } from '@unovis/ts/components/bullet-legend/style';
-import { useFindUniqueBill,useUpdateItem, useFindUniqueItem,useUpdateEntry,useUpdateBill } from '~/lib/hooks';
+import { useFindUniqueTrynbuy,useUpdateItem, useFindUniqueItem,useUpdateEntry,useUpdateBill } from '~/lib/hooks';
 
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
@@ -44,7 +44,6 @@ const columns = ref([
   { key: 'sn', label: 'S.N' },
   { key: 'image', label: 'IMAGE' },
   { key: 'barcode', label: 'BAR CODE' },
-  { key: 'category', label: 'CATEGORY' },
   { key: 'name', label: 'NAME' },
   { key: 'qty', label: 'QTY' },
   { key: 'rate', label: 'RATE' },
@@ -130,197 +129,107 @@ onMounted(() => {
   });
 });
 
-
-
-const billArgs = computed(() => ({
+// ✅ Replace Bill with Trynbuy
+const trynbuyArgs = computed(() => ({
   where: { id: orderId },
   select: {
-    createdAt:true,
-    invoiceNumber: true,
+    createdAt: true,
+    orderNumber: true,
     subtotal: true,
-    discount: true,
-    tax: true,
-    grandTotal: true,
-    deliveryFees: true,
-    paymentMethod: true,
-    paymentStatus: true,
-    notes:true,
-    returnDeadline: true,
-    type: true,
-    status: true,
-    address: {
-        select:{
-            street:true,
-            locality:true,
-            city:true,
-            state:true,
-            pincode:true
-        }
+    productDiscount: true,
+    totalDiscount: true,
+    shipping: true,
+    deliveryType: true,
+    deliveryTime: true,
+    orderStatus: true,
+    location:{
+      select:{
+          name:true,
+          formattedAddress:true,
+          houseDetails:true
+      }
     },
+    // notes: true,
     client: {
-        select:{
-            name:true,
-            phone:true,
-        }
-    },
-    entries: {  
       select: {
-        id:true,
-        barcode:true,
         name: true,
-        qty: true,
-        rate: true,
-        discount: true,
-        tax: true,
-        value: true,
-        size: true,
-        outOfStock: true,
-        category: {
-            select:{
-                name:true
-            }
-        },
-        variant: {  
+        phone: true,
+      },
+    },
+    cartItems: {
+      select: {
+        id: true,
+        quantity: true,
+        variant: {
           select: {
-            id:true,
+            id: true,
+            name: true,
             images: true,
-          }
-        }
-      }
-    }
-  }
-}));
-
-
-const { data: bill ,refetch:itemRefetch} = useFindUniqueBill(billArgs);
-
-watch(() => bill.value, (newData) => {
-  if (!newData || !newData.entries) return;
-
-  items.value = newData.entries.map((entry, index) => {
-   
-    return {
-      id: entry.id || '',
-      variantId: entry.variant?.id || '',
-      sn: index + 1,
-      name:entry.name || '',
-      barcode: entry.barcode || '', 
-      category: entry.category.name,
-      size: entry.size || '',
-      qty: entry.qty || 1,
-      rate: entry.rate || 0,
-      discount: entry.discount || 0,
-      tax: entry.tax || 0,
-      value: entry.value || 0,
-      image:entry.variant.images[0] || null,
-      outOfStock:entry.outOfStock || false
-    };
-  });
-}, { deep: true, immediate: true });
-
-
-const itemArgs = computed(() => ({
-  where: { barcode:  scannedBarcode.value },
-  select:{
-    id:true,
-    variantId:true
-  }
-}));
-
-const { data: itemData ,refetch:itemDataRefetch} = useFindUniqueItem(itemArgs);
-
-
-const discount = ref(bill.value?.discount || 0);
-const subtotal = computed(() => {
-  return items.value?.reduce((sum, item) => {
-    return sum + (item.outOfStock ? 0 : item.value || 0);
-  }, 0);
-});
-
-const grandTotal = ref( 0);
-const tax = ref(bill.value?.tax || 0);
-
-watch(items, () => {
-  items.value.forEach((item) => {
-    let baseValue = item.qty * item.rate;
-
-    if (item.discount < 0) {
-      baseValue -= Math.abs(item.discount);
-    } else {
-      baseValue -= (baseValue * item.discount) / 100;
-    }
-
-    baseValue -= (baseValue * item.tax) / 100;
-    
-    item.value = Math.max(baseValue, 0); 
-    
-  });
-
-}, { deep: true });
-
-
-watch([discount, subtotal, tax], ([newDiscount, newSubtotal, newTax]) => {
-  let baseValue = newSubtotal;
-
-  // Apply discount
-  if (newDiscount < 0) {
-    baseValue -= Math.abs(newDiscount);
-  } else {
-    baseValue -= (baseValue * newDiscount) / 100;
-  }
-
-  // Apply tax
-  if (newTax > 0) {
-    baseValue += (baseValue * newTax) / 100;
-  }
-
-  grandTotal.value = parseFloat(Math.max(baseValue, 0).toFixed(2)) ; // Prevent negative values
-});
-
-
-
-const handleEnterBarcode = async(barcode,id,variantId,outOfStock,value) => {
-  scannedBarcode.value = barcode;
-  await itemDataRefetch();
-  if(itemData.value){
-    if(itemData.value.variantId === variantId){
-      if(outOfStock){
-        await handleInStock(id,value,outOfStock)
-      }
-      const res = await UpdateEntry.mutateAsync({
-      where: { id },
-      data: {
-        barcode: barcode,
-        item: {
-          connect: { id: itemData.value.id },
+            sprice: true,
+            tax: true,
+            discount: true,
+            product:{
+              select:{
+                name:true
+              }
+            }
+          },
         },
-    }});
-      if (res) {
-        toast.add({
-          title: 'Item Packed successfully!',
-          color: 'green',
-        });
-      } else {
-        toast.add({
-          title: 'Failed to pack item.',
-          color: 'red',
-        });
-      }
-    }
+        item: {
+          select: {
+            id: true,
+            barcode: true,
+            size: true,
+          },
+        },
+      },
+    },
+  },
+}))
 
-    else{
-      toast.add({
-        title: 'Item not matched',
-        color: 'red',
-      });
-    }
-  }else{
-    toast.add({
-        title: 'Barcode Unavailable',
-        color: 'red',
-      });
-  }
-  } 
+// ✅ New hook
+const { data: bill, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyArgs)
+
+// ✅ Map cartItems instead of entries
+watch(
+  () => bill.value,
+  (newData) => {
+    if (!newData || !newData.cartItems) return
+    console.log(bill)
+    items.value = newData.cartItems.map((cartItem, index) => {
+      const variant = cartItem.variant || {}
+      const item = cartItem.item || {}
+
+      const baseRate = variant.sprice || 0
+      const qty = cartItem.quantity || 1
+      const discount = variant.discount || 0
+      const tax = variant.tax || 0
+
+      let value = qty * baseRate
+      if (discount > 0) value -= (value * discount) / 100
+      // if (tax > 0) value += (value * tax) / 100
+
+      return {
+        id: cartItem.id,
+        variantId: variant.id,
+        sn: index + 1,
+        name: `${variant.product?.name}-${variant.name}` || '',
+        barcode: item.barcode || '',
+        size: item.size || '',
+        qty,
+        rate: baseRate,
+        discount,
+        tax,
+        value,
+        image: variant.images?.[0] || null,
+        outOfStock: false, // no direct field in cartItem, so manual
+      }
+    })
+  },
+  { deep: true, immediate: true }
+)
+
+
 
   const handleOutOfStock = async (row) => {
   if (row.outOfStock) return;
@@ -499,16 +408,24 @@ const handleSave = async () => {
             }">
               <template #header>
                 <div class="flex flex-wrap justify-between gap-6 text-sm">
-                    <!-- Order ID -->
+
+                   <!-- Order Number  -->
                     <div class="flex flex-col ">
-                    <span class="text-gray-500">inv#</span>
-                    <span class="font-medium">{{ bill?.invoiceNumber }}</span>
+                    <span class="text-gray-500">Order #</span>
+                    <span class="font-medium">{{ bill?.orderNumber }} </span>
                     </div>
 
                      <!-- Delivery Date -->
                      <div class="flex flex-col w-fit">
-                    <span class="text-gray-500">Delivery Time</span>
+                    <span class="text-gray-500">Ordered Time</span>
                     <span class="font-medium">{{ bill?.createdAt?.toLocaleString('en-GB', {
+                dateStyle: 'short',
+                timeStyle: 'short',
+                })}}</span>
+                    </div>
+                     <div class="flex flex-col w-fit">
+                    <span class="text-gray-500">Delivery Time</span>
+                    <span class="font-medium">{{ bill?.deliveryTime?.toLocaleString('en-GB', {
                 dateStyle: 'short',
                 timeStyle: 'short',
                 })}}</span>
@@ -530,15 +447,11 @@ const handleSave = async () => {
                     <UPopover mode="hover">
                             <div class="flex flex-col ">
                     <span class="text-gray-500">Address</span>
-                    <span class="font-medium">{{ bill?.address?.street }} </span>
+                    <span class="font-medium">{{ bill?.location?.houseDetails || bill?.location?.name }} </span>
                     </div>
                         <template #panel>
                             <div class="flex flex-col p-3">
-                                <span>{{bill?.address?.street}}</span>
-                                <span>{{bill?.address?.locality}}</span>
-                                <span>{{bill?.address?.city}}</span>
-                                <span>{{bill?.address?.state}}</span>
-                                <span>{{bill?.address?.pincode}}</span>
+                                <span>{{bill?.location?.formattedAddress}}</span>
                             </div>
                         </template>
                       </UPopover>
@@ -558,7 +471,7 @@ const handleSave = async () => {
 
                     <!-- Order Type -->
                     <div class="flex flex-col ">
-                    <span class="text-gray-500">Order Type</span>
+                    <span class="text-gray-500">Order Status</span>
                     <UBadge
                 size="sm"
                 color="blue"
@@ -568,18 +481,9 @@ const handleSave = async () => {
                 variant="subtle"
                 class="text-center"
                 >
-                {{ bill?.type.replace(/_/g, ' ') }}
+                {{ bill?.orderStatus }}
                 </UBadge>
                     </div>
-
-                      <!-- Payment Type -->
-                      <div class="flex flex-col">
-                    <span class="text-gray-500">Payment</span>
-                    <span class="font-medium">{{ bill?.paymentMethod }} </span>
-                    </div>
-
-                   
-
                 </div>
             </template>
 
@@ -617,10 +521,7 @@ const handleSave = async () => {
                 />
               </td>
                 <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.barcode" ref="barcodeInputs"  size="sm" @keydown.enter.prevent="handleEnterBarcode(row.barcode,row.id,row.variantId,row.outOfStock,row.value)"/>
-                </td>
-                <td class="py-1 whitespace-nowrap">
-                    <UInput v-model="row.category" size="sm" disabled  />
+                  <UInput v-model="row.barcode" ref="barcodeInputs"  size="sm" />
                 </td>
                 <td class="py-1 whitespace-nowrap">
                   <UInput v-model="row.name" size="sm"  @keydown.enter="addNewRow(index)" disabled/>
@@ -661,40 +562,18 @@ const handleSave = async () => {
 
         <!-- Other form elements -->
         <template #footer>
-        <div v-if="!token" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-4 text-sm mt-4 justify-end items-end">
-            <div class="mb-4">
-              <label class="block  font-medium">Sub Total</label>
-              <UInput :model-value="subtotal"  disabled />
-            </div>
-            <div class="mb-4">
-              <label class="block  font-medium">Delivery fees</label>
-              <UInput :model-value="bill?.deliveryFees"  disabled />
-            </div>
+        
+          <div class="mb-4 w-full p-1 flex justify-end">
+            <UButton
+              ref="packref"
+              icon="i-heroicons-clipboard-document-check"
+              @click="handlePack"
+            >
+              Pack
+            </UButton>
+          </div>
 
-            <div class="mb-4">
-              <label class="block  font-medium">Discount %</label>
-              <UInput ref="discountref"  type="number" v-model="discount"  @keydown.enter.prevent="handleEnterMainDiscount()" />
-            </div>
-
-            <div class="mb-4">
-              <label class="block  font-medium">Tax %</label>
-              <UInput type="number" :model-value="bill?.tax || 0" disabled/>
-            </div>
-            <div class="mb-4">
-              <label class="block  text-primary font-medium">Grand Total</label>
-              <UInput
-                 :model-value="grandTotal + bill?.deliveryFees"
-                type="number"
-                disabled
-                class="font-bold rounded-md border-2 border-primary-300"
-                />
-            </div>
-            <div class="mb-4 p-1">
-                 <UButton ref="packref" block @click="handlePack">Pack</UButton>
-            </div>
-   
-         
-        </div>
+        
     </template>
       </UCard>
  

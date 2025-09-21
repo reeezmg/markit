@@ -26,11 +26,12 @@ CREATE TABLE IF NOT EXISTS categories_synced (
   company_id UUID NOT NULL,
   short_cut TEXT,
   hsn TEXT,
-  tax_type TEXT NOT NULL DEFAULT 'FIXED',
-  fixed_tax FLOAT,
-  threshold_amount FLOAT,
-  tax_below_threshold FLOAT,
-  tax_above_threshold FLOAT,
+  "taxType" TEXT NOT NULL DEFAULT 'FIXED',         
+  "fixedTax" FLOAT,                                
+  "thresholdAmount" FLOAT,                         
+  "taxBelowThreshold" FLOAT,                       
+  "taxAboveThreshold" FLOAT,                       
+  margin FLOAT,
   write_id UUID
 );
 
