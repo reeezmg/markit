@@ -26,7 +26,6 @@
         "@electric-sql/client": "^1.0.4",
         "@electric-sql/pglite": "^0.3.5",
         "@electric-sql/pglite-sync": "^0.3.8",
-        "@electric-sql/pglite-vue": "^0.2.26",
         "@ericblade/quagga2": "^1.8.4",
         "@headlessui/vue": "^1.7.22",
         "@iconify-json/heroicons": "^1.1.21",
