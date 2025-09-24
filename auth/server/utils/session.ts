@@ -32,7 +32,6 @@ export type AuthSession = {
     companyName: string;
     storeUniqueName?: string;
     isTaxIncluded: boolean;
-    isBarcodeIncluded: boolean;
     isUserTrackIncluded: boolean;
     isLite:Boolean;
     pointsValue?: number;

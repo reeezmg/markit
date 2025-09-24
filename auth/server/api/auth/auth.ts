@@ -123,15 +123,7 @@ export const updateIsTaxIncluded = async (isTaxIncluded: boolean) => {
     await useAuth().updateSession();
 };
 
-export const updateIsBarcodeIncluded = async (isBarcodeIncluded: boolean) => {
-    const config = useRuntimeConfig();
-    await $fetch('/api/auth/changeIncludeBarcode', {
-        method: 'PUT',
-        body: { isBarcodeIncluded },
 
-    });
-    await useAuth().updateSession();
-};
 
 export const updateIsUserTrackIncluded = async (isUserTrackIncluded: boolean) => {
     const config = useRuntimeConfig();

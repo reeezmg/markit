@@ -13,13 +13,6 @@ definePageMeta({
     <UDashboardPage>
         <UDashboardPanel grow>
             <UDashboardNavbar title="Checkout">
-                <template #right>
-
-<ClientOnly>
-<NotificationIcon />
-</ClientOnly>
-
-</template>
 
             </UDashboardNavbar>
             <NuxtPage />

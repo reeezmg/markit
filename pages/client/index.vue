@@ -1,8 +1,7 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue';
-import { sub } from 'date-fns';
-import type { Period, Range } from '~/types';
 import type { Prisma } from '@prisma/client'
+import { BillingAddClient } from '#components';
 
 import {
     useFindManyClient,
@@ -20,7 +19,8 @@ const UpdateBill = useUpdateBill();
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
-
+const isClientAddModelOpen = ref(false);
+const phoneNo = ref('');
 
 // Columns
 const columns = [
@@ -365,6 +365,18 @@ const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
     };
 });
 
+
+const handleEnterPhone = async() => {
+  
+}
+
+const handleClientAdded = (id,name) => {
+ 
+};
+
+
+
+
 const {
     data: clients,
     isLoading,
@@ -423,6 +435,40 @@ const handleUpdate = async (id:string) => {
 const handleChange = (value:string, row:any) => {
     notes.value[row.id] = value;
 };
+
+const downloadClientsAsVCF = () => {
+  if (!clients.value || clients.value.length === 0) {
+    return;
+  }
+
+  // Build vCard entries for each client
+  const vcfData = clients.value
+    .map((client) => {
+      return [
+        'BEGIN:VCARD',
+        'VERSION:3.0',
+        `FN:${client.name || ''}`, // Full Name
+        client.phone ? `TEL;TYPE=CELL:${client.phone}` : '',
+        client.email ? `EMAIL:${client.email}` : '',
+        'END:VCARD',
+      ]
+        .filter(Boolean) // remove empty lines
+        .join('\n');
+    })
+    .join('\n');
+
+  // Create Blob and trigger download
+  const blob = new Blob([vcfData], { type: 'text/vcard;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'clients.vcf';
+  a.click();
+
+  URL.revokeObjectURL(url);
+};
+
 </script>
 
 <template>
@@ -462,14 +508,24 @@ const handleChange = (value:string, row:any) => {
                 <div class="w-full sm:w-auto flex justify-end">
                   
                     <UButton
-                       class="w-full sm:w-40"
+                       class="w-full sm:w-40 me-3"
                         icon="i-heroicons-plus"
                         size="sm"
                         color="primary"
                         variant="solid"
                         label="Add Client"
-                        @click="() => router.push('products/add')"
+                        @click="isClientAddModelOpen = true" 
                     />
+                    <UButton
+                        class="w-full sm:w-40"
+                        icon="i-heroicons-arrow-down-tray"
+                        size="sm"
+                        color="primary"
+                        variant="solid"
+                        label="Download"
+                        @click="downloadClientsAsVCF"
+                        />
+
                 </div>
             </div>
         </template>
@@ -721,5 +777,12 @@ const handleChange = (value:string, row:any) => {
                 </div>
             </template>
         </UCard>
+
+<BillingAddClient
+  v-model:model="isClientAddModelOpen"
+  v-model:phoneNo="phoneNo"
+  :onVerify="handleEnterPhone"
+  :clientAdded="handleClientAdded"
+/>
     </UDashboardPanelContent>
 </template>

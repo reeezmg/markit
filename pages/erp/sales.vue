@@ -9,7 +9,7 @@ import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
 import { useQueryClient } from '@tanstack/vue-query'
 import { getQueryKey } from '@zenstackhq/tanstack-query/runtime-v5'
-
+const paymentOptions = ['Cash', 'UPI', 'Card']
 const queryClient = useQueryClient()
 
 const timeZone = 'Asia/Kolkata'
@@ -18,8 +18,11 @@ const updateBill = useUpdateBill({ optimisticUpdate: true });
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
 const isMobile = ref(false);
+const isOpen = ref(false);
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
+const paymentMethod = ref('Cash');
+const activeBillInfo = ref({});
 
 onMounted(() => {
   isMobile.value = window.innerWidth < 640;
@@ -242,44 +245,7 @@ const {
     refetch,
 } = useFindManyBill(queryArgs);
 
-const deleteBillMutate = useUpdateBill({
-  invalidate: false,
-  optimisticUpdate: true,
-    onMutate: async (variables) => {
-    const cacheKey = getQueryKey(
-        'Bill',
-        'findMany',
-        queryArgs.value,
-        { infinite: false, optimisticUpdate: true }
-    );
-
-    const previous = queryClient.getQueryData(cacheKey);
-
-    queryClient.setQueryData(cacheKey, (old: any) => {
-        if (!old || !Array.isArray(old)) return old;
-        
-        return old.filter((bill: any) => bill.id !== variables.where.id);
-    });
-
-    return { previous, cacheKey };
-    },
-
-  onError: (_err, _vars, ctx) => {
-    console.error('Mutation error:', _err);
-
-    if (ctx?.previous) {
-      queryClient.setQueryData(ctx.cacheKey, ctx.previous);
-    }
-  },
-
-  onSettled: (_data, _err, _vars, ctx) => {
-    console.log('Mutation success:', _data);
-    if (ctx?.cacheKey) {
-      queryClient.invalidateQueries({ queryKey: ctx.cacheKey, exact: true });
-    }
-  },
-});
-
+const deleteBillMutate = useUpdateBill({ optimisticUpdate: true})
 
 const countArgs = computed(() => ({
   where: queryArgs.value.where,
@@ -306,7 +272,7 @@ watch(queryArgs, (newsales) => {
 
 const deleteBill = async () => {
   try {
-    await deleteBillMutate.mutate({
+     deleteBillMutate.mutate({
       where: {
         id: deletingRowIdentity.value.id
       },
@@ -359,12 +325,12 @@ const onPaymentStatusChange =  (id:string, status:string, billNo) => {
             ...(status === 'PAID' && {
                 createdAt: new Date().toISOString()
             }),
-            paymentMethod: status === 'PAID' ? 'Cash' : 'Credit'
+            paymentMethod: status === 'PAID' ? paymentMethod.value : 'Credit'
 
         }
     })
      toast.add({
-          title: `Bill ${billNo} status changed to ${status}`,
+          title: `Bill ${billNo} payment status changed to ${status}`,
           color: 'green',
         });
     }catch(err){
@@ -374,6 +340,19 @@ const onPaymentStatusChange =  (id:string, status:string, billNo) => {
         });
     }
 }
+
+const handleEnterPayment = (id:string, status:string, billNo:string) => {
+    if(status === 'PENDING'){
+        onPaymentStatusChange(id, status, billNo)
+    }else{
+        isOpen.value = true
+        activeBillInfo.value = {id,billNo}
+    }
+};
+const handlePaid = () => {
+    onPaymentStatusChange(activeBillInfo.value.id, 'PAID', activeBillInfo.value.billNo)
+     isOpen.value = false
+};
 
 </script>
 
@@ -560,7 +539,7 @@ const onPaymentStatusChange =  (id:string, status:string, billNo) => {
                     <USelect
                         v-model="row.paymentStatus"
                         :options="['PAID', 'PENDING']"
-                        @update:model-value="status => onPaymentStatusChange(row.id, status,row.invoiceNumber)"
+                        @update:model-value="status => handleEnterPayment(row.id, status,row.invoiceNumber)"
                         size="xs"
                         class="w-28"
                     />
@@ -676,6 +655,33 @@ const onPaymentStatusChange =  (id:string, status:string, billNo) => {
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
         </template>
     </UDashboardModal>
+
+      
+  <UModal v-model="isOpen">
+    <UCard :ui="{ ring: '', divide: 'divide-y divide-gray-100 dark:divide-gray-800' }">
+    <template #header>
+      Payment method
+    </template>
+
+    <!-- default slot = body -->
+    <div class="space-y-4">
+      <USelect
+        ref="paymentref"
+        v-model="paymentMethod"
+        :options="paymentOptions"
+        class="w-full"
+        placeholder="Choose payment method"
+      />
+    </div>
+
+    <template #footer>
+      <div class="flex gap-2 w-full">
+        <UButton @click="handlePaid" >Submit</UButton>
+      </div>
+    </template>
+    </UCard>
+  </UModal>
+
     </UDashboardPanelContent>
     
 </template>

@@ -27,7 +27,7 @@ const ranges = [
   { label: 'Last 6 months', duration: { months: 6 } },
   { label: 'Last year', duration: { years: 1 } }
 ]
-const selectedDate = ref({ start: sub(new Date(), { days: 14 }), end: new Date() })
+const selectedDate = ref({ start: sub(new Date(), { days: 2 }), end: new Date() })
 
 // Columns
 const columns = [
@@ -117,8 +117,8 @@ const resetFilters = () => {
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
-const pageCount = ref('3');
-const { data: pageTotal } = useCountTrynbuy({where:{companyId: useAuth().session.value?.companyId}});
+const pageCount = ref('10');
+
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -171,7 +171,16 @@ const queryArgs = computed<Prisma.TrynbuyFindManyArgs>(() => {
   }
 })
 
+
+const countArgs = computed(() => ({
+  where: queryArgs.value.where,
+}));
+
+
 const { data: trynbuys, isLoading, refetch } = useFindManyTrynbuy(queryArgs)
+const { data: pageTotal } = useCountTrynbuy(countArgs);
+
+
 
 watch(trynbuys,(newtrynbuys) => {
     console.log(newtrynbuys)

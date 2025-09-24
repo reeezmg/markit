@@ -77,7 +77,6 @@ export const updateCompanySession = async (
   code: string | undefined,
   storeUniqueName: string | undefined,
   isTaxIncluded: boolean | undefined,
-  isBarcodeIncluded: boolean | undefined,
   isUserTrackIncluded: boolean | undefined,
   companyId: string | undefined,
   companyType: string | undefined,
@@ -113,7 +112,6 @@ export const updateCompanySession = async (
       code,
       storeUniqueName,
       isTaxIncluded,
-      isBarcodeIncluded,
       isUserTrackIncluded,
       companyId,
       companyType,
@@ -175,16 +173,6 @@ export const updateIsTaxIncluded = async (isTaxIncluded: boolean) => {
     await $fetch('/api/auth/changeIncludeTax', {
         method: 'PUT',
         body: { isTaxIncluded },
-
-    });
-    await useAuth().updateSession();
-};
-
-export const updateIsBarcodeIncluded = async (isBarcodeIncluded: boolean) => {
-    const config = useRuntimeConfig();
-    await $fetch('/api/auth/changeIncludeBarcode', {
-        method: 'PUT',
-        body: { isBarcodeIncluded },
 
     });
     await useAuth().updateSession();

@@ -58,7 +58,6 @@ const teams = (items) =>
         item.code ?? undefined,
         item.company.storeUniqueName ?? undefined,
         item.company.isTaxIncluded,
-        item.company.isBarcodeIncluded,
         item.company.isUserTrackIncluded,
         item.company.id,
         item.company.type,

@@ -114,7 +114,6 @@ model Company extends Base {
     pointsValue Int @default(0) @map("points_value")
     billCounter Int @default(1) @map("bill_counter")
     isTaxIncluded Boolean @default(true) @map("is_tax_included")
-    isBarcodeIncluded Boolean @default(true) @map("is_barcode_included")
     isUserTrackIncluded Boolean @default(true) @map("is_usertrack_included")
     plan String @default('free') @map("plan")
     openTime String @default('9:30') @map("open_time")

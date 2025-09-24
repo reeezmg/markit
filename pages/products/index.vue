@@ -28,17 +28,19 @@ interface ImageData {
 
 const awsService = new AwsService();
 const toast = useToast();
-const UpdateProduct = useUpdateProduct();
-const DeleteProduct = useDeleteProduct();
-const UpdateManyProduct = useUpdateManyProduct();
-const Updatevariant = useUpdateVariant();
-const CreatePurchaseOrder = useCreatePurchaseOrder();
+const UpdateProduct = useUpdateProduct({ optimisticUpdate: true });
+const DeleteProduct = useDeleteProduct({ optimisticUpdate: true });
+const UpdateManyProduct = useUpdateManyProduct({ optimisticUpdate: true });
+const Updatevariant = useUpdateVariant({ optimisticUpdate: true });
+const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
 const isAddPhotoModelOpen = ref(false)
 const isBarcodeLoading = ref(false);
 const isModalOpen = ref(false)
+const isDeleteModalOpen = ref(false)
+const deletingRowIdentity = ref({})
 const activeImages = ref<string[]>([])
 let images = reactive<ImageData[]>([]);
 // Columns
@@ -205,7 +207,10 @@ const action = (row) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => removeProduct(row.id),
+            click: () => {
+                isDeleteModalOpen.value = true
+                deletingRowIdentity.value = {name:row.name,id:row.id}
+                }
         },
     ],
 ];
@@ -483,11 +488,13 @@ function openImageViewer(images: string[]) {
   isModalOpen.value = true
 }
 
-const removeProduct = async(id:string) => {
+const removeProduct = async() => {
   try {
-    await DeleteProduct.mutateAsync({ where: { id } });
+    DeleteProduct.mutate({ where: { id :deletingRowIdentity.value.id} });
   } catch (err) {
     console.log(err);
+  }finally{
+     isDeleteModalOpen.value = false;
   }
 };
 
@@ -1101,5 +1108,31 @@ isAddPhotoModelOpen.value = false
       </Swiper>
     </div>
   </UModal>
+
+  <UDashboardModal
+        v-model="isDeleteModalOpen"
+        title="Delete Product"
+        :description="`Are you sure you want to delete Product ${deletingRowIdentity.name}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  removeProduct()"
+            />
+            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
 
 </template>

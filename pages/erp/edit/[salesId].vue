@@ -41,7 +41,6 @@ const toast = useToast();
 const { printBill } = usePrint();
 const router = useRouter();
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
-const isBarcodeIncluded = ref(useAuth().session.value?.isBarcodeIncluded);
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
 const isPrint = ref(false);
 const isSavingAcc = ref(false);
@@ -892,39 +891,6 @@ router.push('/erp/sales')
 
 
 
-const fetchItemDataNonBarcode = async (categoryId, sPrice, index) => {
-  if (!categoryId || !sPrice) return;
-
-  try {
-    const { data } = await useFetch('/api/items/findFirst', {
-      query: {
-        categoryId,
-        sPrice: Math.abs(sPrice),
-      }
-    });
-
-    if (data.value?.data) {
-      const itemData = data.value.data;
-      items.value[index] = {
-        ...items.value[index],
-        id: itemData.id || '',
-        size: itemData.size || '',
-        name: `${itemData.variant?.name}-${itemData.variant?.product?.name}` || '',
-        rate: sPrice || 0,
-        discount: itemData.variant?.discount || 0,
-        tax: itemData.variant?.tax || 0,
-        totalQty: itemData.variant?.qty || 0,
-        sizes: itemData.variant?.sizes || null,
-        variantId: itemData.variant?.id || ''
-      };
-    }
-  } catch (error) {
-    console.error('Error fetching item:', error);
-  }
-};
-
-
-
 const fetchItemData = async (barcode, index) => {
   if (!barcode) return;
  loadingStates.value[index] = true;
@@ -980,14 +946,6 @@ const handleEdit = async () => {
       }
     });
 
-    // 3. Fetch non-barcode items if needed
-    if (!isBarcodeIncluded.value) {
-      await Promise.all(
-        items.value.map((item, index) =>
-          fetchItemDataNonBarcode(item.category[0]?.id, item.rate, index)
-        )
-      );
-    }
 
     const {data:entriesDelete} = await entriesToDeleteRefetch()
 
@@ -1236,6 +1194,21 @@ watch(paymentMethod, (val) => {
     showSplitModal.value = true
   }
 })
+
+watch(
+  items,
+  (newItems) => {
+    newItems.forEach((item, index) => {
+      if (item.category.length > 1) {
+        // Keep only the latest selected category
+        const lastCategory = item.category[item.category.length - 1];
+        items.value[index].category = [lastCategory];
+      }
+    });
+  },
+  { deep: true }
+);
+
 
 
  

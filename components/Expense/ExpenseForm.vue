@@ -21,15 +21,17 @@ const useAuth = () => useNuxtApp().$auth;
 
 // ✅ Form Initialization with category ID
 const expenseData = computed(() => ({
-    date: props.expense?.createdAt
-        ? new Date(props.expense?.createdAt).toISOString().split('T')[0]
-        : new Date().toISOString().split('T')[0],
-    category: props.expense?.expensecategory || null,  // Initialize as null if no category
-    amount: props.expense?.totalAmount || '',
-    status: props.expense?.status || 'Paid',
-    paymentMode: props.expense?.paymentMode || 'CASH',
-    note: props.expense?.note || '',
+  date: props.expense?.createdAt
+    ? new Date(props.expense.createdAt).toLocaleDateString('en-CA') // ✅ local YYYY-MM-DD
+    : new Date().toLocaleDateString('en-CA'),
+
+  category: props.expense?.expensecategory || null,
+  amount: props.expense?.totalAmount || '',
+  status: props.expense?.status || 'Paid',
+  paymentMode: props.expense?.paymentMode || 'CASH',
+  note: props.expense?.note || '',
 }));
+
 
 const form = ref({ ...expenseData.value });
 
@@ -163,7 +165,7 @@ const saveForm = () => {
             <!-- Custom rendering for dropdown options -->
             <template #option="{ option }">
               <div class="flex items-center justify-between w-full space-x-2">
-                <span class="truncate flex-1">{{ option.name }}</span>
+                <span class="truncate">{{ option.name }}</span>
                 <div
                   class="text-primary hover:text-red-500 cursor-pointer"
                    @mousedown.prevent.stop="removeCategory(option)"

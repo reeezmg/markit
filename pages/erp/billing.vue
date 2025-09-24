@@ -28,7 +28,6 @@ const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const router = useRouter();
 const isTaxIncluded = ref(useAuth().session.value?.isTaxIncluded);
-const isBarcodeIncluded = ref(useAuth().session.value?.isBarcodeIncluded);
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
 const billNo = ref('1');
 const loadingStates = ref([]);
@@ -1016,36 +1015,6 @@ const fetchItemData = async (barcode, index) => {
   }
 };
 
-const fetchItemDataNonBarcode = async (categoryId, sPrice, index) => {
-  if (!categoryId || !sPrice) return;
-
-  try {
-    const { data } = await useFetch('/api/items/findFirst', {
-      query: {
-        categoryId,
-        sPrice: Math.abs(sPrice),
-      }
-    });
-
-    if (data.value?.data) {
-      const itemData = data.value.data;
-      items.value[index] = {
-        ...items.value[index],
-        id: itemData.id || '',
-        size: itemData.size || '',
-        name: `${itemData.variant?.name}-${itemData.variant?.product?.name}` || '',
-        rate: sPrice || 0,
-        discount: itemData.variant?.discount || 0,
-        tax: itemData.variant?.tax || 0,
-        totalQty: itemData?.qty || 0,
-        sizes: itemData.variant?.sizes || null,
-        variantId: itemData.variant?.id || ''
-      };
-    }
-  } catch (error) {
-    console.error('Error fetching item:', error);
-  }
-};
 
 const processItemResponse = (itemData, index) => {
   if (!items.value[index]) {
@@ -1110,13 +1079,6 @@ const handleSave = async () => {
       }
     });
 
-    if (!isBarcodeIncluded.value) {
-      await Promise.all(
-        items.value.map((item, index) =>
-          fetchItemDataNonBarcode(item.category[0]?.id, item.rate, index)
-        )
-      );
-    }
 
     const billcounter = await $fetch('/api/bill/findBillCounter', {
     method: 'POST',

@@ -12,13 +12,7 @@ definePageMeta({
     <UDashboardPage>
         <UDashboardPanel grow>
             <UDashboardNavbar title="Offline">
-                <template #right>
-                    <UTooltip text="Notifications" :shortcuts="['N']">
-                        <ClientOnly>
-                        <NotificationIcon />
-                    </ClientOnly>
-                    </UTooltip>
-                </template>
+                
             </UDashboardNavbar>
             <NuxtPage />
         </UDashboardPanel>

@@ -137,9 +137,10 @@ watch(() => props.editDiscount, (newDiscount) => {
 
 const isEditingDPrice = ref(false);
 const isEditingDiscount = ref(false);
+const isdPriceChanged = ref(false);
 
-watch([sprice, dprice], ([newSPrice, newDPrice])=> {
-  if(newSPrice && !newDPrice) {
+watch(sprice, (newSPrice)=> {
+  if(newSPrice && !isdPriceChanged.value) {
     dprice.value = newSPrice;
   }
 }, { immediate: true });
@@ -236,7 +237,7 @@ defineExpose({ resetForm });
       type="number"
       step="0.01"
       @focus="isEditingDPrice = true; isEditingDiscount = false"
-      @blur="isEditingDPrice = false"
+      @blur="isEditingDPrice = false; isdPriceChanged=true"
     />
   </UFormGroup>
 

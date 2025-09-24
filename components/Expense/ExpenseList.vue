@@ -8,7 +8,7 @@ import {
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 // import { saveAs } from 'file-saver';
-
+import { startOfDay, endOfDay } from 'date-fns'
 
 const emit = defineEmits(['edit','delete','open']);
 const useAuth = () => useNuxtApp().$auth;
@@ -142,16 +142,12 @@ const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
                 OR: selectedStatus.value.map((item) => ({ status: item }))
             }),
 
-            ...(selectedDate.value && (
-                selectedDate.value.start === selectedDate.value.end
-                    ? { expenseDate: { gte: new Date(selectedDate.value.start).toISOString(), lt: new Date(new Date(selectedDate.value.start).setHours(23, 59, 59, 999)).toISOString() } }
-                    : {
-                        expenseDate: {
-                            gte: new Date(new Date(selectedDate.value.start).setHours(0, 0, 0, 0)).toISOString(),
-                            lte: new Date(new Date(selectedDate.value.end).setHours(23, 59, 59, 999)).toISOString()
-                        }
-                    }
-            )),
+                ...(selectedDate.value && {
+                expenseDate: {
+                    gte: startOfDay(selectedDate.value.start),
+                    lte: endOfDay(selectedDate.value.end),
+                }
+                }),
 
             ...(selectedCategory.value.length && {
                 expensecategoryId: { in: selectedCategory }

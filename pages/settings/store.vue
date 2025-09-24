@@ -112,7 +112,6 @@ const storeThankYouNote = ref(useAuth().session.value?.thankYouNote || '');
 const storeRefundPolicy = ref(useAuth().session.value?.refundPolicy || '');
 const storeReturnPolicy = ref(useAuth().session.value?.returnPolicy || '');
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
-const isBarcodeInclude = ref(useAuth().session.value?.isBarcodeIncluded);
 const isUserTrackInclude = ref(useAuth().session.value?.isUserTrackIncluded);
 const pointsValue = ref(useAuth().session.value?.pointsValue || 0);
 
@@ -387,23 +386,6 @@ const onTaxIncludeChange = async () => {
   }
 };
 
-const onBarcodeIncludeChange = async () => {
-  try {
-    const res = await UpdateCompany.mutateAsync({
-      where: {
-        id: useAuth().session.value?.companyId,
-      },
-      data: {
-        isBarcodeIncluded: isBarcodeInclude.value,
-      },
-    });
-    await updateIsBarcodeIncluded(isBarcodeInclude.value);
-    toast.add({ title: 'Barcode include updated', icon: 'i-heroicons-check-circle' });
-  } catch (error) {
-    console.error(error);
-    toast.add({ title: 'Error updating Barcode setting', color: 'red', icon: 'i-heroicons-x-circle' });
-  }
-};
 
 const onUserTrackIncludeChange = async () => {
   try {
@@ -791,16 +773,6 @@ const previewUrl = computed(() => {
     
     <UDivider class="mb-4" />
 
-    <UFormGroup
-      name="barcodeInclude"
-      label="Include barcode in Billing"
-      description="Check if you want to include barcode in the Billing."
-      required
-      class="grid grid-cols-2 gap-2 mb-4"
-      :ui="{ container: '' }"    
-    >
-      <UCheckbox v-model="isBarcodeInclude" @change="onBarcodeIncludeChange" />
-    </UFormGroup>
     
     <UDivider class="mb-4" />
 
