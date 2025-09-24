@@ -117,7 +117,8 @@ model Company extends Base {
     isBarcodeIncluded Boolean @default(true) @map("is_barcode_included")
     isUserTrackIncluded Boolean @default(true) @map("is_usertrack_included")
     plan String @default('free') @map("plan")
-
+    openTime String @default('9:30') @map("open_time")
+    closeTime String @default('9:30') @map("close_time")
     users       CompanyUser[]
     promoCodes  PromoCode[]
     clients     CompanyClient[]
@@ -472,6 +473,7 @@ model Item {
 
 model Bill extends Base {
     createdAt       DateTime @map("created_at")
+    updatedAt       DateTime @updatedAt @map("updated_at")
     invoiceNumber   Int? @map("invoice_number")  
     subtotal        Float?    
     discount        Float?    
@@ -897,15 +899,27 @@ enum NotificationType {
 }
 
 model PushToken extends Base {
-  userId      String
-  token       String
-  userAgent   String
-  deviceId    String   
-  createdAt   DateTime @default(now())
+  userId     String @map('user_id')
+  token      String
+  userAgent  String   @map('user_agent')
+  deviceId   String   @map('device_id')
+  createdAt  DateTime @default(now()) @map('created_at')
 
   @@unique([userId, deviceId])  
   @@map("push_token")
 }
+
+model CapPushToken extends Base {
+  userId     String @map('user_id')
+  token      String
+  userAgent  String   @map('user_agent')
+  deviceId   String   @map('device_id')
+  createdAt  DateTime @default(now()) @map('created_at')
+
+  @@unique([userId, deviceId])  
+  @@map("cap_push_token")
+}
+
 
 
 model PromoCode {

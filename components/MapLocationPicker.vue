@@ -1,7 +1,7 @@
 <template>
   <div class="flex flex-col w-full h-full bg-gray-50">
     <!-- Search and Info Area -->
-    <div class="p-4 border-b bg-white space-y-2 shadow-sm">
+    <div class="py-3 border-b bg-white space-y-2">
       <div @click="openSearchModal">
         <UInput
           placeholder="Search..."
@@ -15,6 +15,17 @@
         <p class="text-xl font-semibold truncate">{{ name }}</p>
         <p class="text-gray-600 text-sm truncate">{{ formattedAddress }}</p>
       </div>
+
+      <!-- Confirm Button -->
+      <UButton
+        v-if="selectedLocation"
+        class="mt-2"
+        color="primary"
+        icon="i-heroicons-check-circle"
+        @click="confirmLocation"
+      >
+        Confirm Location
+      </UButton>
     </div>
 
     <!-- Map Area -->
@@ -71,21 +82,23 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { UInput, UButton, USlideover } from '#components'
+
 const emit = defineEmits(['locationSelected'])
 
 const mapContainer = ref(null)
 const isSearchModalOpen = ref(false)
 
-const lat = ref(null)
-const lng = ref(null)
 const name = ref('')
 const formattedAddress = ref('')
+const selectedLocation = ref(null) // ✅ store latest selection
 
 const searchQuery = ref('')
 const searchResults = ref([])
 const isSearching = ref(false)
 
 let map, marker, geocoder, placesService
+
+const useAuth = () => useNuxtApp().$auth
 
 function useCurrentLocation() {
   if (navigator.geolocation) {
@@ -106,16 +119,22 @@ function useCurrentLocation() {
 }
 
 function updateAddressFromMarker(pos) {
-  lat.value = pos.lat
-  lng.value = pos.lng
   if (geocoder) {
     geocoder.geocode({ location: pos }, (results, status) => {
       if (status === 'OK' && results && results.length > 0) {
         name.value = results[0].address_components?.[0]?.long_name || ''
         formattedAddress.value = results[0].formatted_address || ''
+        selectedLocation.value = {
+          pos,
+          placeId: null,
+          components: results[0].address_components || [],
+          name: name.value,
+          formattedAddress: formattedAddress.value,
+        }
       } else {
         name.value = ''
         formattedAddress.value = ''
+        selectedLocation.value = null
       }
     })
   }
@@ -134,12 +153,11 @@ function handleSearchInput() {
   }
 
   if (!placesService) return
-
   isSearching.value = true
 
   const request = {
     query: searchQuery.value,
-   fields: ['address_components', 'geometry', 'formatted_address'],
+    fields: ['address_components', 'geometry', 'formatted_address'],
     region: 'in',
     locationBias: {
       north: 37.6,
@@ -151,7 +169,6 @@ function handleSearchInput() {
 
   placesService.textSearch(request, (results, status) => {
     if (status === google.maps.places.PlacesServiceStatus.OK) {
-        console.log('Search results:', results)
       searchResults.value = results
     } else {
       searchResults.value = []
@@ -159,7 +176,6 @@ function handleSearchInput() {
     isSearching.value = false
   })
 }
-
 
 function selectPlace(place) {
   if (!place.place_id) return
@@ -180,39 +196,50 @@ function selectPlace(place) {
     map.setZoom(15)
     marker.setPosition(location)
 
-    lat.value = location.lat()
-    lng.value = location.lng()
+    const pos = { lat: location.lat(), lng: location.lng() }
     name.value = details.name
     formattedAddress.value = details.formatted_address
 
-    const components = details.address_components || []
-
-    const getComponent = (types) =>
-      components.find(c => types.every(t => c.types.includes(t)))?.long_name || ''
-
-    const street = getComponent(['route'])
-    const locality = getComponent(['sublocality', 'sublocality_level_1'])
-    const city = getComponent(['locality']) || getComponent(['administrative_area_level_2'])
-    const state = getComponent(['administrative_area_level_1'])
-    const pincode = getComponent(['postal_code'])
-
-   emit('locationSelected', {
-      lat: lat.value,
-      lng: lng.value,
+    selectedLocation.value = {
+      pos,
+      placeId: place.place_id,
+      components: details.address_components || [],
       name: name.value,
       formattedAddress: formattedAddress.value,
-      street,
-      locality,
-      city,
-      state,
-      pincode,
-      placeId: place.place_id,
-    })
+    }
 
     isSearchModalOpen.value = false
   })
 }
 
+function confirmLocation() {
+  if (!selectedLocation.value) return
+
+  const { pos, placeId, components, name: locName, formattedAddress: addr } =
+    selectedLocation.value
+
+  const getComponent = (types) =>
+    components.find((c) => types.every((t) => c.types.includes(t)))?.long_name || ''
+
+  const street = getComponent(['route'])
+  const locality = getComponent(['sublocality', 'sublocality_level_1'])
+  const city = getComponent(['locality']) || getComponent(['administrative_area_level_2'])
+  const state = getComponent(['administrative_area_level_1'])
+  const pincode = getComponent(['postal_code'])
+
+  emit('locationSelected', {
+    lat: pos.lat,
+    lng: pos.lng,
+    name: locName,
+    formattedAddress: addr,
+    street,
+    locality,
+    city,
+    state,
+    pincode,
+    placeId,
+  })
+}
 
 function initMap() {
   geocoder = new google.maps.Geocoder()
@@ -226,7 +253,6 @@ function initMap() {
 
   marker = new google.maps.Marker({
     map,
-    position: map.getCenter(),
     draggable: true,
   })
 
@@ -239,7 +265,19 @@ function initMap() {
     updateAddressFromMarker(e.latLng.toJSON())
   })
 
-  useCurrentLocation()
+  // ✅ Prefer saved session address if available
+  const savedLat = useAuth().session.value?.address.lat
+  const savedLng = useAuth().session.value?.address.lng
+
+  if (savedLat && savedLng) {
+    const location = { lat: savedLat, lng: savedLng }
+    map.setCenter(location)
+    map.setZoom(15)
+    marker.setPosition(location)
+    updateAddressFromMarker(location)
+  } else {
+    useCurrentLocation()
+  }
 }
 
 onMounted(() => {
@@ -256,6 +294,3 @@ onMounted(() => {
   }
 })
 </script>
-
-<style scoped>
-</style>

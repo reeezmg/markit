@@ -44,6 +44,8 @@ export default eventHandler(async (event) => {
         currency: user.companies[0].company.currency || 'INR',
         type:'USER',
         address: user.companies[0].company.address || {},
+        openTime: user.companies[0].company.openTime || '',
+        closeTime: user.companies[0].company.closeTime || '',
         gstin: user.companies[0].company.gstin || '',
         accHolderName: user.companies[0].company.accHolderName || '',
         upiId: user.companies[0].company.upiId || '',

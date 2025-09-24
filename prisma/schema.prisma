@@ -120,6 +120,8 @@ model Company {
   isBarcodeIncluded   Boolean              @default(true) @map("is_barcode_included")
   isUserTrackIncluded Boolean              @default(true) @map("is_usertrack_included")
   plan                String               @default("free") @map("plan")
+  openTime            String               @default("9:30") @map("open_time")
+  closeTime           String               @default("9:30") @map("close_time")
   users               CompanyUser[]
   promoCodes          PromoCode[]
   clients             CompanyClient[]
@@ -430,6 +432,7 @@ model Item {
 model Bill {
   id             String        @id() @unique() @default(uuid())
   createdAt      DateTime      @map("created_at")
+  updatedAt      DateTime      @updatedAt() @map("updated_at")
   invoiceNumber  Int?          @map("invoice_number")
   subtotal       Float?
   discount       Float?
@@ -820,14 +823,26 @@ model Notification {
 
 model PushToken {
   id        String   @id() @unique() @default(uuid())
-  userId    String
+  userId    String   @map("user_id")
   token     String
-  userAgent String
-  deviceId  String
-  createdAt DateTime @default(now())
+  userAgent String   @map("user_agent")
+  deviceId  String   @map("device_id")
+  createdAt DateTime @default(now()) @map("created_at")
 
   @@unique([userId, deviceId])
   @@map("push_token")
+}
+
+model CapPushToken {
+  id        String   @id() @unique() @default(uuid())
+  userId    String   @map("user_id")
+  token     String
+  userAgent String   @map("user_agent")
+  deviceId  String   @map("device_id")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@unique([userId, deviceId])
+  @@map("cap_push_token")
 }
 
 model PromoCode {

@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import {
+    useCountTrynbuy
+} from '~/lib/hooks';
 
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
@@ -9,6 +12,17 @@ const { isHelpSlideoverOpen } = useDashboard();
 
 const auth = useAuth();
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
+
+const { data: orderCount, refetch } = useCountTrynbuy({where:{
+    companyId: useAuth().session.value?.companyId,
+    orderStatus: 'ORDER_RECEIVED'
+}});
+
+watch(orderCount,(val) => {
+    console.log(val)
+})
+useCheckoutEvents(refetch)
+
 
 const links = computed(() => {
     const simplifiedLinks = [
@@ -88,6 +102,7 @@ const links = computed(() => {
       label: 'Try N Buy',
       to: `/order/trynbuy`,
       icon: 'i-heroicons-shopping-bag',
+      ...(orderCount.value ? { badge: `${orderCount.value}` } : {}),
       tooltip: {
         text: 'trynbuy',
         shortcuts: ['O', 'T'],
@@ -295,15 +310,17 @@ const links = computed(() => {
             children: [
             ...(auth.session.value?.companyType === 'seller' || auth.session.value?.companyType === 'buyer'
                     ? [
-                        {
+                       {
                         id: 'trynbuy',
                         label: 'Try N Buy',
                         to: `/order/trynbuy`,
+                        ...(orderCount.value ? { badge: `${orderCount.value}` } : {}),
                         tooltip: {
                             text: 'trynbuy',
                             shortcuts: ['O', 'T'],
                         },
                         },
+
                         {
                         label: 'Bookings',
                         to: `/order/bookings`, 

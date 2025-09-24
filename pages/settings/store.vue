@@ -29,6 +29,7 @@ const isUpdatingAddress = ref(false);
 const isUpdatingAccount = ref(false);
 const isUpdatingInputs = ref(false);
 const isUpdatingPointsValue = ref(false);
+const isUpdatingtiming = ref(false);
 const isUpdatingDescription = ref(false);
 const isUpdatingLogo = ref(false);
 
@@ -54,13 +55,15 @@ watch(() => storePhone.value, (newPhone) => {
 
 interface AddressState {
   street: string;
-  locality: string;
+  landmark: string;
   city: string;
   state: string;
   pincode: string;
   lat: number | null;
   lng: number | null;
   placeId: string;
+  formattedAddress: string;
+  name: string;
 }
 
 const accstate = reactive<AccountState>({
@@ -74,25 +77,31 @@ const accstate = reactive<AccountState>({
 
 const addstate = reactive<AddressState>({
   street: '',
-  locality: '',
+  landmark: '',
   city: '',
   state: '',
   pincode: '',
   lat:null,
   lng:null,
   placeId: '',
+  formattedAddress:'',
+  name:'',
+});
+const timing = reactive<{open:string | undefined,close:string | undefined}>({
+ open: useAuth().session.value?.openTime,
+ close: useAuth().session.value?.closeTime
 });
 
 const onLocationSelected = (location) => {
   console.log('Selected location:', location);
-  addstate.street = location.street;
-  addstate.locality = location.locality;
   addstate.city = location.city;
   addstate.state = location.state;
   addstate.pincode = location.pincode;
   addstate.lat = location.lat;
   addstate.lng = location.lng;
   addstate.placeId = location.placeId;
+  addstate.formattedAddress = location.formattedAddress;
+  addstate.name = location.name;
 };
 
 const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
@@ -180,10 +189,14 @@ const { data: info, isLoading, error, refetch } = useFindUniqueCompany({
       select: {
         id: true,
         street: true,
-        locality: true,
+        landmark: true,
         city: true,
         state: true,
         pincode: true,
+        formattedAddress:true,
+        name:true,
+        lat:true,
+        lng:true,
       },
     },
   },
@@ -200,13 +213,14 @@ watch(info, (newInfo) => {
     
     if (newInfo.address) {
       addstate.street = newInfo.address.street || '';
-      addstate.locality = newInfo.address.locality || '';
+      addstate.formattedAddress = newInfo.address.formattedAddress || '';
+      addstate.name = newInfo.address.name || '';
+      addstate.landmark = newInfo.address.landmark || '';
       addstate.city = newInfo.address.city || '';
       addstate.state = newInfo.address.state || '';
       addstate.pincode = newInfo.address.pincode || '';
       addstate.lat = newInfo.address.lat || null;
       addstate.lng = newInfo.address.lng || null;
-      addstate.placeId = newInfo.address.placeId || '';
     }
   }
 },{ deep: true, immediate: true });
@@ -322,7 +336,9 @@ async function onaddSubmit(event: FormSubmitEvent<AddressState>) {
       create: {
         company: { connect: { id: useAuth().session.value?.companyId } },
         street: addstate.street,
-        locality: addstate.locality,
+        formattedAddress:addstate.formattedAddress,
+        name:addstate.name,
+        landmark: addstate.landmark,
         city: addstate.city,
         state: addstate.state,
         pincode: addstate.pincode,
@@ -332,7 +348,9 @@ async function onaddSubmit(event: FormSubmitEvent<AddressState>) {
       },
       update: {
         street: addstate.street,
-        locality: addstate.locality,
+        formattedAddress: addstate.formattedAddress,
+        name: addstate.name,
+        landmark: addstate.landmark,
         city: addstate.city,
         state: addstate.state,
         pincode: addstate.pincode,
@@ -341,6 +359,7 @@ async function onaddSubmit(event: FormSubmitEvent<AddressState>) {
         placeId: addstate.placeId,
       }
     });
+    await updateAddress(addstate);
     toast.add({ title: 'Address updated', color: 'green', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.log(error);
@@ -452,6 +471,27 @@ const onPointsValueChange = async() => {
     toast.add({ title: 'Error updating points value', color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingPointsValue.value = false;
+  }
+};
+const ontimingChange = async() => {
+  isUpdatingtiming.value = true;
+  try {
+    const res = UpdateCompany.mutate({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        openTime: timing.open,
+        closeTime: timing.close,
+      },
+    });
+    await updateTimeValue(timing.open,timing.close);
+    toast.add({ title: 'Timing updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating Timing', color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingtiming.value = false;
   }
 };
 
@@ -786,10 +826,39 @@ const previewUrl = computed(() => {
       <UInput v-model="pointsValue" type="number" class="mb-4" />
       <UButton
         class="mt-2"
-        label="Update"
+        label="Update Points"
         size="md"
         :loading="isUpdatingPointsValue"
         @click="onPointsValueChange"
+    />
+    </UFormGroup>
+    
+    <UDivider class="mb-4" />
+
+    <UFormGroup
+      name="timing"
+      label="Timing"
+      description="Your opening and closing time?"
+      required
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"    
+    >
+    <div class="mb-2">
+      <div class="text-sx text-gray-500">Open time</div>
+      <UInput v-model="timing.open" type="time" label="Open time" class="mb-4" />
+    </div>
+    <div class="mb-2">
+      <div class="text-sx text-gray-500">Close time</div>
+     <UInput v-model="timing.close" type="time" label="Close time" class="mb-4" />
+    </div>
+
+      
+      <UButton
+        class="mt-2"
+        label="Update Timing"
+        size="md"
+        :loading="isUpdatingtiming"
+        @click="ontimingChange"
     />
     </UFormGroup>
     
@@ -808,14 +877,17 @@ const previewUrl = computed(() => {
         class="grid grid-cols-2 gap-2 mb-4"
         :ui="{ container: '' }"
       >
+        <div class="text-sx text-gray-500">Account Holder Name</div>
         <UInput
           v-model="accstate.accHolderName"
           type="text"
           class="mb-4"
           autocomplete="off"
           size="md"
+          label="Account Holder Name"
           placeholder="Account Holder Name"
         />
+        <div class="text-sx text-gray-500">Account No</div>
         <UInput
           v-model="accstate.accountNo"
           type="text"
@@ -824,6 +896,7 @@ const previewUrl = computed(() => {
           size="md"
           placeholder="Account No"
         />
+         <div class="text-sx text-gray-500">IFSC Code</div>
         <UInput
           v-model="accstate.ifsc"
           type="text"
@@ -832,6 +905,7 @@ const previewUrl = computed(() => {
           size="md"
           placeholder="IFSC Code"
         />
+         <div class="text-sx text-gray-500">Bank Name</div>
         <UInput
           v-model="accstate.bankName"
           type="text"
@@ -840,6 +914,7 @@ const previewUrl = computed(() => {
           size="md"
           placeholder="Bank Name"
         />
+         <div class="text-sx text-gray-500">UPI ID</div>
         <UInput
           v-model="accstate.upiId"
           type="text"
@@ -848,6 +923,7 @@ const previewUrl = computed(() => {
           size="md"
           placeholder="UPI ID"
         />
+         <div class="text-sx text-gray-500">GSTIN</div>
         <UInput
           v-model="accstate.gstin"
           type="text"
@@ -885,47 +961,41 @@ const previewUrl = computed(() => {
         class="grid grid-cols-2 gap-2 mb-4"
         :ui="{ container: '' }"
       >
+      <div class="text-sx text-gray-500">Name</div>
+        <UInput
+          v-model="addstate.name"
+          type="text"
+          class="mb-4"
+          size="md"
+          placeholder="Name"
+          disabled
+        />
+         <div class="text-sx text-gray-500">Full address</div>
+        <UInput
+          v-model="addstate.formattedAddress"
+          type="text"
+          class="mb-4"
+          size="md"
+          placeholder="Full address"
+          disabled
+        />
+         <div class="text-sx text-gray-500">Street</div>
         <UInput
           v-model="addstate.street"
           type="text"
           class="mb-4"
           size="md"
           placeholder="Street"
-          disabled
         />
+         <div class="text-sx text-gray-500">Landmark</div>
         <UInput
-          v-model="addstate.locality"
+          v-model="addstate.landmark"
           type="text"
           class="mb-4"
           size="md"
-          placeholder="Locality"
-          disabled
+          placeholder="Landmark"
         />
-        <UInput
-          v-model="addstate.city"
-          type="text"
-          class="mb-4"
-          size="md"
-          placeholder="City"
-          disabled
-        />
-        <UInput
-          v-model="addstate.state"
-          type="text"
-          class="mb-4"
-          size="md"
-          placeholder="State"
-          disabled
-        />
-        <UInput
-          v-model="addstate.pincode"
-          type="text"
-          class="mb-4"
-          size="md"
-          placeholder="Pincode"
-          disabled
-        />
-        <UButton class="" type="submit" label="Save Address" :loading="isUpdatingAccount"/>
+        <UButton class="" type="submit" label="Save Address" :loading="isUpdatingAddress"/>
       </UFormGroup>
     </UForm>
 

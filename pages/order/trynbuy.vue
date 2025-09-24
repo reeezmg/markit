@@ -171,7 +171,7 @@ const queryArgs = computed<Prisma.TrynbuyFindManyArgs>(() => {
   }
 })
 
-const { data: trynbuys, isLoading } = useFindManyTrynbuy(queryArgs)
+const { data: trynbuys, isLoading, refetch } = useFindManyTrynbuy(queryArgs)
 
 watch(trynbuys,(newtrynbuys) => {
     console.log(newtrynbuys)

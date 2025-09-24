@@ -41,6 +41,8 @@ export type AuthSession = {
     role: string;
     pipelineId: string;
     address?: any;
+    openTime?: string;
+    closeTime?: string;
     gstin: string;
     accHolderName: string;
     upiId: string;
