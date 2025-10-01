@@ -17,7 +17,13 @@ const props = defineProps<{
    
 }>();
 
+
 const emit = defineEmits(['update']);
+
+const isEditingDPrice = ref(false);
+const isEditingDiscount = ref(false);
+const isdPriceChanged = ref(false);
+
 
 const schema = z.object({
   name: z.string(),
@@ -117,8 +123,13 @@ watch(() => props.editsPrice, (newsPrice) => {
     sprice.value = newsPrice ?? 0;
 }, { immediate: true });
 
-watch(() => props.editpPrice, (newpPrice) => {
-    pprice.value = newpPrice ?? 0;
+watch(() => props.editdPrice, (newdPrice) => {
+  dprice.value = newdPrice ?? 0;
+
+  // If it has a value *different from sprice*, consider it user-changed
+  if (newdPrice !== null && newdPrice !== undefined && newdPrice !== props.editsPrice) {
+    isdPriceChanged.value = true;
+  }
 }, { immediate: true });
 
 watch(() => props.editItems, (newItems) => {
@@ -135,9 +146,6 @@ watch(() => props.editDiscount, (newDiscount) => {
 }, { immediate: true });
 
 
-const isEditingDPrice = ref(false);
-const isEditingDiscount = ref(false);
-const isdPriceChanged = ref(false);
 
 watch(sprice, (newSPrice)=> {
   if(newSPrice && !isdPriceChanged.value) {
