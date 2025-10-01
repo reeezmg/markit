@@ -140,7 +140,6 @@ export const updateCompanySession = async (
 
 
 export const updateStoreUniqueName = async (storeUniqueName: string) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeStoreUniqueName', {
         method: 'PUT',
         body: { storeUniqueName },
@@ -149,7 +148,6 @@ export const updateStoreUniqueName = async (storeUniqueName: string) => {
     await useAuth().updateSession();
 };
 export const updateStorePhone = async (companyPhone: string) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeStorePhone', {
         method: 'PUT',
         body: { companyPhone },
@@ -159,7 +157,6 @@ export const updateStorePhone = async (companyPhone: string) => {
 };
 
 export const updateStoreNote = async (description: string, thankYouNote: string, refundPolicy: string, returnPolicy: string) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeNotes', {
         method: 'PUT',
         body: { description, thankYouNote, refundPolicy, returnPolicy },
@@ -169,7 +166,6 @@ export const updateStoreNote = async (description: string, thankYouNote: string,
 };
 
 export const updateIsTaxIncluded = async (isTaxIncluded: boolean) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeIncludeTax', {
         method: 'PUT',
         body: { isTaxIncluded },
@@ -179,7 +175,6 @@ export const updateIsTaxIncluded = async (isTaxIncluded: boolean) => {
 };
 
 export const updateIsUserTrackIncluded = async (isUserTrackIncluded: boolean) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeIncludeUserTrack', {
         method: 'PUT',
         body: { isUserTrackIncluded },
@@ -189,7 +184,6 @@ export const updateIsUserTrackIncluded = async (isUserTrackIncluded: boolean) =>
 };
 
 export const updateSession = async (productinputData: any, variantinputData: any) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeInputs', {
         method: 'PUT',
         body: { productinputData, variantinputData },
@@ -200,7 +194,6 @@ export const updateSession = async (productinputData: any, variantinputData: any
 };
 
 export const updateProfileDetails = async (name: string | null, email: string | null, image: string | null) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeprofiledetails', {
         method: 'PUT',
         body: { name, email, image },
@@ -211,7 +204,6 @@ export const updateProfileDetails = async (name: string | null, email: string | 
 };
 
 export const updatePointsValue = async (pointsValue: number) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changePointsValue', {
         method: 'PUT',
         body: { pointsValue },
@@ -220,7 +212,6 @@ export const updatePointsValue = async (pointsValue: number) => {
     await useAuth().updateSession();
 };
 export const updateTimeValue = async (openTime: string, closeTime:string) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeTiming', {
         method: 'PUT',
         body: { openTime,closeTime },
@@ -228,8 +219,17 @@ export const updateTimeValue = async (openTime: string, closeTime:string) => {
     });
     await useAuth().updateSession();
 };
+
+export const updateCategoryValue = async (category: string[]) => {
+    await $fetch('/api/auth/changeCategory', {
+        method: 'PUT',
+        body: { category },
+
+    });
+    await useAuth().updateSession();
+};
+
 export const updateAddress = async (addstate: any) => {
-    const config = useRuntimeConfig();
     await $fetch('/api/auth/changeAddress', {
         method: 'PUT',
         body: { addstate },

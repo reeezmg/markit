@@ -32,6 +32,7 @@ const isUpdatingPointsValue = ref(false);
 const isUpdatingtiming = ref(false);
 const isUpdatingDescription = ref(false);
 const isUpdatingLogo = ref(false);
+const isUpdatingCategory = ref(false);
 
 
 interface AccountState {
@@ -84,7 +85,7 @@ const addstate = reactive<AddressState>({
   lat:null,
   lng:null,
   placeId: '',
-  formattedAddress:'',
+  formattedAddress:'ted',
   name:'',
 });
 const timing = reactive<{open:string | undefined,close:string | undefined}>({
@@ -162,6 +163,10 @@ const { data: taken } = useFindUniqueCompany({
     id: true
   }
 });
+
+const category = ['Men','Women','Kids','Newborn']
+
+const selectedCategory = ref(useAuth().session.value?.category || [])
 
 const toast = useToast();
 
@@ -477,6 +482,27 @@ const ontimingChange = async() => {
   }
 };
 
+const onCategoryChange = async() => {
+  isUpdatingCategory.value = true;
+  try {
+    const res = UpdateCompany.mutate({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        category: selectedCategory.value,
+      },
+    });
+    await updateCategoryValue(selectedCategory.value);
+    toast.add({ title: 'Category updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating Category', color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingCategory.value = false;
+  }
+};
+
 
 const onLogoUpdate = async () => {
   isUpdatingLogo.value = true;
@@ -668,6 +694,20 @@ const previewUrl = computed(() => {
         </div>
     </div>
 
+        <UDivider class="mb-4" />
+
+      <UFormGroup
+        name="categories"
+        label="Categories"
+        description="Your Store Categories"
+        class="grid grid-cols-2 gap-2 mb-4"
+        :ui="{ container: '' }"
+      >
+       <USelectMenu v-model="selectedCategory" :options="category" multiple placeholder="Select Category" />
+        <UButton class="my-2" type="submit" label="Save Categories" :loading="isUpdatingCategory" @click="onCategoryChange"/>
+      </UFormGroup>
+
+
     <UDivider class="mb-4" />
 
     <UFormGroup
@@ -771,7 +811,6 @@ const previewUrl = computed(() => {
       <UCheckbox v-model="isTaxInclude" @change="onTaxIncludeChange" />
     </UFormGroup>
     
-    <UDivider class="mb-4" />
 
     
     <UDivider class="mb-4" />
@@ -972,7 +1011,6 @@ const previewUrl = computed(() => {
     </UForm>
 
     <UDivider class="mb-4" />
-
    
 
     <!-- Product Inputs Section -->

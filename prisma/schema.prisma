@@ -123,6 +123,7 @@ model Company {
   closeTime           String               @default("9:30") @map("close_time")
   users               CompanyUser[]
   promoCodes          PromoCode[]
+  category            String[]
   clients             CompanyClient[]
   products            Product[]
   categories          Category[]
@@ -267,6 +268,8 @@ model Client {
   email              String?              @unique()
   name               String
   password           String?
+  gender             String?
+  dob                String?
   phone              String               @unique()
   status             Boolean              @default(true)
   pipelineStatus     String               @default("new") @map("pipeline_status")
@@ -292,6 +295,7 @@ model Client {
   otp                String?
   otpExpiry          DateTime?
   trynbuys           Trynbuy[]
+  deleted            Boolean              @default(false)
 
   @@map("clients")
 }

@@ -1336,10 +1336,10 @@ const handleNewProduct = () => {
                     + Add Variant
                   </UButton>
 
-
+<!-- 
                 <UPageCard class="m-3" id="Live">
                     <AddProductLive @update="liveValue" />
-                </UPageCard>
+                </UPageCard> -->
 
                 <div v-if="clearInputs" class="m-3">
                     <UButton

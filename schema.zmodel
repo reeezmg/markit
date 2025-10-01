@@ -120,6 +120,7 @@ model Company extends Base {
     closeTime String @default('9:30') @map("close_time")
     users       CompanyUser[]
     promoCodes  PromoCode[]
+    category    String[]
     clients     CompanyClient[]
     products    Product[]
     categories  Category[]
@@ -291,6 +292,8 @@ model Client extends Base {
     email     String?        @unique @email
     name      String
     password  String?
+    gender    String?
+    dob    String?
     phone     String        @unique
     status    Boolean       @default(true)
     pipelineStatus    String       @default('new') @map("pipeline_status")
@@ -316,6 +319,7 @@ model Client extends Base {
     otp        String?
     otpExpiry  DateTime?
     trynbuys           Trynbuy[]
+    deleted       Boolean   @default(false)
     @@allow('read, create, update, delete', true)
 
     @@map('clients')

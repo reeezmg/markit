@@ -19,6 +19,7 @@ const sessionConfig: SessionConfig = {
 export type AuthSession = {
     id: string;
     cleanup: boolean;
+    category: string[];
     name: string | null;
     description?: string;
     thankYouNote?: string;
