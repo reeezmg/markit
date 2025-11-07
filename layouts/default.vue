@@ -60,7 +60,7 @@ const links = computed(() => {
     {
       id: 'reports',
       label: 'Reports',
-      to: `/reports/sales`,
+      to: `/reports/online`,
       icon: 'i-heroicons-book-open',
       tooltip: {
         text: 'Reports',
@@ -214,6 +214,14 @@ const links = computed(() => {
             tooltip: {
                 text: 'Reports',
                 shortcuts: ['R', 'S'],
+            },
+            },
+            {
+            label: 'online',
+            to: `/reports/online`,
+            tooltip: {
+                text: 'Reports',
+                shortcuts: ['O', 'S'],
             },
             },
             ...(isUserTrackIncluded.value

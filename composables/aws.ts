@@ -57,19 +57,49 @@ export default class CloudflareService {
     }
   }
 
-  public async uploadBase64File(base64String: string, key: string) {
+  public async uploadBase64File(base64String: string, key: string, view?: string, categoryName?: string, targetAudience?: string, isAiImage?: boolean): Promise<void> {
      try {
     const result = await $fetch('/api/upload', {
       method: 'POST',
       body: {
         base64: base64String,
         key: key, // R2 object key
+        view,
+        categoryName,
+        targetAudience,
+        isAiImage
       },
     });
-
-    console.log('Upload successful:', result);
   } catch (err) {
     console.error('Upload failed:', err);
   }
 };
+
+public async aify(
+    uuid: string,
+    view?: string,
+    categoryName?: string,
+    targetAudience?: string,
+    isAiImage: boolean = true
+  ): Promise<any> {
+    try {
+        console.log(uuid,view,categoryName,targetAudience)
+      const result = await $fetch('/api/aify', {
+        method: 'POST',
+        body: {
+          url:`https://images.markit.co.in/${uuid}`,
+          key:uuid,
+          view,
+          categoryName,
+          targetAudience,
+        },
+      });
+
+      console.log('✅ AI upload success:', result);
+      return result;
+    } catch (err) {
+      console.error('❌ Upload failed:', err);
+      throw err;
+    }
+  }
 }  

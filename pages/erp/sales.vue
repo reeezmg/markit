@@ -52,7 +52,8 @@ const getColumns = (isMobile) => {
       { key: 'invoiceNumber', label: 'Inv#', sortable: true },
       { key: 'createdAt', label: 'Date', sortable: true },
       { key: 'entries', label: 'Entries', sortable: true },
-      { key: 'grandTotal', label: 'Total', sortable: true },
+      { key: 'subtotal', label: 'Sub Total', sortable: true },
+      { key: 'grandTotal', label: 'Grand Total', sortable: true },
       { key: 'paymentStatus', label: 'Payment', sortable: true },
       { key: 'notes', label: 'Notes', sortable: true },
       { key: 'actions', label: 'Actions', sortable: false },
@@ -61,7 +62,8 @@ const getColumns = (isMobile) => {
 
   return [
     { key: 'invoiceNumber', label: 'Inv#', sortable: true },
-    { key: 'grandTotal', label: 'Total', sortable: true },
+    { key: 'subtotal', label: 'Sub Total', sortable: true },
+    { key: 'grandTotal', label: 'Grand Total', sortable: true },
     { key: 'createdAt', label: 'Date', sortable: true },
     { key: 'entries', label: 'Entries', sortable: true },
     { key: 'paymentStatus', label: 'Payment', sortable: true },
@@ -91,6 +93,11 @@ const entrycolumns = [
         sortable: true,
     },
     {
+        key: 'rate',
+        label: 'Rate',
+        sortable: true,
+    },
+    {
         key: 'qty',
         label: 'Quantity',
         sortable: true,
@@ -106,8 +113,8 @@ const entrycolumns = [
         sortable: true,
     },
     {
-        key: 'rate',
-        label: 'Rate',
+        key: 'value',
+        label: 'Value',
         sortable: true,
     },
     {
@@ -131,26 +138,40 @@ const active = (selectedRows) => [
         },
     ],
 ];
+const action = (row: any) => {
+  if (row.isMarkit) {
+    return [
+      [
+        {
+          label: 'Open',
+          icon: 'i-heroicons-eye-20-solid',
+          click: () => router.push(`./edit/${row.id}`),
+        },
+      ],
+    ];
+  }
 
-const action = (row:any) => [
+  return [
     [
-        {
-            label: 'Edit',
-            icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`./edit/${row.id}`),
-        },
+      {
+        label: 'Edit',
+        icon: 'i-heroicons-pencil-square-20-solid',
+        click: () => router.push(`./edit/${row.id}`),
+      },
     ],
     [
-        {
-            label: 'Delete',
-            icon: 'i-heroicons-trash-20-solid',
-            click: () => {
-                isDeleteModalOpen.value = true
-                deletingRowIdentity.value = {name:row.invoiceNumber,id:row.id}
-                }
+      {
+        label: 'Delete',
+        icon: 'i-heroicons-trash-20-solid',
+        click: () => {
+          isDeleteModalOpen.value = true;
+          deletingRowIdentity.value = { name: row.invoiceNumber, id: row.id };
         },
+      },
     ],
-];
+  ];
+};
+
 
 // Filters
 const todoStatus = [
@@ -489,7 +510,7 @@ const handlePaid = () => {
             >
        
                 <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
+                    <UDropdown  :items="action(row)">
                         <UButton
                             color="gray"
                             variant="ghost"

@@ -164,7 +164,7 @@ const uuid = uuidv4();
           </UFormGroup>
 
           <div class="text-end w-full mt-4">
-            <UButton type="submit" :loading="isSaving">
+            <UButton type="submit" :loading="isSaving" :disabled="!form.name">
               Continue
             </UButton>
           </div>

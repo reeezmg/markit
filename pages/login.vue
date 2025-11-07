@@ -5,6 +5,7 @@ definePageMeta({
 import { z } from 'zod';
 import type { FormError } from '#ui/types';
 import { usePushNotifications } from '~/composables/usePushNotifications'
+import { registerPush } from '~/composables/useCapPush'
 import { Capacitor } from '@capacitor/core'
 const reject = ref(true);
 const route = useRoute();
@@ -68,6 +69,8 @@ async function onSubmit(data: any) {
 
         if (!Capacitor.isNativePlatform()) {
             usePushNotifications(useAuth().session.value?.id!)
+        }else{
+             registerPush(useAuth().session.value?.id!)
         }
 
        

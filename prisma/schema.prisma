@@ -78,6 +78,24 @@ enum PayableStatus {
   CANCELLED
 }
 
+enum CouponType {
+  PERCENTAGE
+  FLAT
+  GIFT
+}
+
+enum CouponTarget {
+  ALL
+  CATEGORY
+  PRODUCT
+}
+
+enum CouponAudience {
+  ALL
+  GENERATE
+  SPECIFIC
+}
+
 enum NotificationType {
   ORDER_RECEIVED
   BILL_CREATED
@@ -91,8 +109,8 @@ enum NotificationType {
 model DistributorCompany {
   distributorId       String               @map("distributor_id")
   companyId           String               @map("company_id")
-  distributor         Distributor          @relation(fields: [distributorId], references: [id], onDelete: Cascade)
-  company             Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  distributor         Distributor          @relation(fields: [distributorId], references: [id])
+  company             Company              @relation(fields: [companyId], references: [id])
   distributorPayments DistributorPayment[]
   distributorCredits  DistributorCredit[]
   purchaseOrders      PurchaseOrder[]
@@ -102,59 +120,70 @@ model DistributorCompany {
 }
 
 model Company {
-  id                  String               @id() @unique() @default(uuid())
-  name                String
-  storecode           Int                  @unique() @default(autoincrement())
-  storeUniqueName     String?              @unique() @map("store_unique_name")
-  logo                String?
-  description         String?              @default("")
-  thankYouNote        String?              @default("") @map("thank_you_note")
-  refundPolicy        String?              @default("") @map("refund_policy")
-  returnPolicy        String?              @default("") @map("return_policy")
-  phone               String?
-  currency            String               @default("INR")
-  images              String?
-  pointsValue         Int                  @default(0) @map("points_value")
-  billCounter         Int                  @default(1) @map("bill_counter")
-  isTaxIncluded       Boolean              @default(true) @map("is_tax_included")
-  isUserTrackIncluded Boolean              @default(true) @map("is_usertrack_included")
-  plan                String               @default("free") @map("plan")
-  openTime            String               @default("9:30") @map("open_time")
-  closeTime           String               @default("9:30") @map("close_time")
-  users               CompanyUser[]
-  promoCodes          PromoCode[]
-  category            String[]
-  clients             CompanyClient[]
-  products            Product[]
-  categories          Category[]
-  subcategories       Subcategory[]
-  bills               Bill[]
-  carts               CartCompanyClient[]
-  tokenbills          TokenEntry[]
-  accounts            Account[]
-  expenseCategories   ExpenseCategory[]
-  expenses            Expense[]
-  payment             Payment[]
-  variants            Variant[]
-  purchaseOrders      PurchaseOrder[]
-  items               Item[]
-  trybuys             Trynbuy[]
-  status              Boolean              @default(true)
-  type                CompanyType
-  pipeline            Pipeline?
-  accHolderName       String?              @map("acc_holder_name")
-  ifsc                String?
-  accountNo           String?              @map("account_no")
-  bankName            String?              @map("bank_name")
-  gstin               String?
-  upiId               String?              @map("upi_id")
-  notifications       Notification[]
-  address             Address?
-  distributor         DistributorCompany[]
-  barcodeCounter      Int                  @default(1) @map("barcode_counter")
-  likeCompanies       LikeCompanyClient[]
-  productinput        Productinput?
-  variantinput        Variantinput?
+  id                        String               @id() @unique() @default(uuid())
+  name                      String
+  storecode                 Int                  @unique() @default(autoincrement())
+  storeUniqueName           String?              @unique() @map("store_unique_name")
+  logo                      String?
+  description               String?              @default("")
+  thankYouNote              String?              @default("") @map("thank_you_note")
+  refundPolicy              String?              @default("") @map("refund_policy")
+  returnPolicy              String?              @default("") @map("return_policy")
+  phone                     String?
+  currency                  String               @default("INR")
+  images                    String?
+  pointsValue               Int                  @default(0) @map("points_value")
+  billCounter               Int                  @default(1) @map("bill_counter")
+  isTaxIncluded             Boolean              @default(true) @map("is_tax_included")
+  isUserTrackIncluded       Boolean              @default(true) @map("is_usertrack_included")
+  isAiImage                 Boolean              @default(true) @map("is_ai_image")
+  deliveryType              String[]             @map("delivery_type")
+  deliveryMode              String[]             @map("delivery_mode")
+  fundDeliveryFees          Boolean              @default(false) @map("fund_delivery_fees")
+  deliveryRadius            Float?               @map("delivery_radius")
+  deliveryFeesPerKm         Float?               @map("delivery_fees_per_km")
+  waitingTime               Int?                 @map("waiting_time")
+  waitingChargesPerMin      Float?               @map("waiting_charges_per_min")
+  minDeliveryCharges        Float?               @map("min_delivery_charges")
+  deliveryDiscountThreshold Float?               @map("delivery_discount_threshold")
+  deliveryDiscountAmount    Float?               @map("delivery_discount_amount")
+  plan                      String               @default("free") @map("plan")
+  openTime                  String               @default("9:30") @map("open_time")
+  closeTime                 String               @default("9:30") @map("close_time")
+  users                     CompanyUser[]
+  category                  String[]
+  clients                   CompanyClient[]
+  products                  Product[]
+  categories                Category[]
+  subcategories             Subcategory[]
+  bills                     Bill[]
+  carts                     CartCompanyClient[]
+  tokenbills                TokenEntry[]
+  accounts                  Account[]
+  expenseCategories         ExpenseCategory[]
+  expenses                  Expense[]
+  payment                   Payment[]
+  variants                  Variant[]
+  purchaseOrders            PurchaseOrder[]
+  items                     Item[]
+  trybuys                   Trynbuy[]
+  status                    Boolean              @default(true)
+  type                      CompanyType
+  pipeline                  Pipeline?
+  coupon                    Coupon[]
+  accHolderName             String?              @map("acc_holder_name")
+  ifsc                      String?
+  accountNo                 String?              @map("account_no")
+  bankName                  String?              @map("bank_name")
+  gstin                     String?
+  upiId                     String?              @map("upi_id")
+  notifications             Notification[]
+  address                   Address?
+  distributor               DistributorCompany[]
+  barcodeCounter            Int                  @default(1) @map("barcode_counter")
+  likeCompanies             LikeCompanyClient[]
+  productinput              Productinput?
+  variantinput              Variantinput?
 
   @@map("companies")
 }
@@ -217,7 +246,7 @@ model PurchaseOrder {
   paymentType        paymentType?        @map("payment_type")
   totalAmount        Float               @default(0) @map("total_amount")
   distributorId      String?             @map("distributor_id")
-  distributorCompany DistributorCompany? @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+  distributorCompany DistributorCompany? @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
 
   @@map("purchase_orders")
 }
@@ -264,51 +293,217 @@ model User {
 }
 
 model Client {
-  id                 String               @id() @unique() @default(uuid())
-  email              String?              @unique()
-  name               String
-  password           String?
-  gender             String?
-  dob                String?
-  phone              String               @unique()
-  status             Boolean              @default(true)
-  pipelineStatus     String               @default("new") @map("pipeline_status")
-  companies          CompanyClient[]
-  clientPromoCodes   ClientPromoCode[]
-  cart               CartCompanyClient[]
-  address            Address[]
-  bills              Bill[]
-  conversations      ClientConversation[]
-  users              UserClient[]
-  newPipeline        Pipeline?            @relation("PipelineNewClients", fields: [newPipelineId], references: [id])
-  newPipelineId      String?              @map("new_pipeline_id")
-  prospectPipeline   Pipeline?            @relation("PipelineProspectClients", fields: [prospectPipelineId], references: [id])
-  prospectPipelineId String?              @map("prospect_pipeline_id")
-  viewingPipeline    Pipeline?            @relation("PipelineViewingClients", fields: [viewingPipelineId], references: [id])
-  viewingPipelineId  String?              @map("viewing_pipeline_id")
-  rejectPipeline     Pipeline?            @relation("PipelineRejectClients", fields: [rejectPipelineId], references: [id])
-  rejectPipelineId   String?              @map("reject_pipeline_id")
-  closePipeline      Pipeline?            @relation("PipelineCloseClients", fields: [closePipelineId], references: [id])
-  closePipelineId    String?              @map("close_pipeline_id")
-  notifications      Notification[]
-  likeCompanies      LikeCompanyClient[]
-  otp                String?
-  otpExpiry          DateTime?
-  trynbuys           Trynbuy[]
-  deleted            Boolean              @default(false)
+  id             String               @id() @unique() @default(uuid())
+  email          String?              @unique()
+  name           String
+  password       String?
+  gender         String?
+  dob            String?
+  phone          String               @unique()
+  status         Boolean              @default(true)
+  pipelineStatus String               @default("new") @map("pipeline_status")
+  companies      CompanyClient[]
+  cart           CartCompanyClient[]
+  address        Address[]
+  bills          Bill[]
+  conversations  ClientConversation[]
+  users          UserClient[]
+  notifications  Notification[]
+  likeCompanies  LikeCompanyClient[]
+  otp            String?
+  otpExpiry      DateTime?            @map("otp_expiry")
+  trynbuys       Trynbuy[]
+  coupons        CouponClient[]
+  couponUsage    CouponUsage[]
+  deleted        Boolean              @default(false)
 
   @@map("clients")
+}
+
+model DeliveryPartner {
+  id                      String                    @id() @unique() @default(uuid())
+  partnerId               Int?                      @default(autoincrement()) @map("partner_id")
+  email                   String?                   @unique()
+  name                    String
+  password                String?
+  gender                  String?
+  dob                     String?
+  profilePic              String?                   @map("profile_pic")
+  phone                   String                    @unique()
+  status                  Boolean                   @default(true)
+  address                 Address[]
+  bloodGroup              String?                   @map("blood_group")
+  ifsc                    String?
+  accountNo               String?                   @map("account_no")
+  bankName                String?                   @map("bank_name")
+  upiId                   String?                   @map("upi_id")
+  branch                  String?
+  Adharnumber             String?                   @map("adharnumber")
+  PanNumber               String?                   @map("pan_number")
+  DrivingLicenseDoc       String?                   @map("driving_license_doc")
+  AadhaarCardDocs         String?                   @map("aadhaar_card_docs")
+  PanCardDoc              String?                   @map("pan_card_doc")
+  deliveryNotification    DeliveryNotification[]
+  otp                     String?
+  otpExpiry               DateTime?                 @map("otp_expiry")
+  referral                String?
+  deleted                 Boolean                   @default(false)
+  trynbuys                Trynbuy[]
+  deliveryPartnerEarnings DeliveryPartnerEarnings[]
+
+  @@map("delivery_partners")
+}
+
+model Trynbuy {
+  id                      String                   @id() @default(uuid())
+  orderNumber             Int                      @default(autoincrement()) @map("order_number")
+  createdAt               DateTime                 @default(now()) @map("created_at")
+  checkoutMethod          String                   @map("checkout_method")
+  subtotal                Float                    @map("subtotal")
+  productDiscount         Float                    @map("product_discount")
+  totalDiscount           Float                    @map("total_discount")
+  shipping                Float                    @map("shipping")
+  deliveryType            String                   @map("delivery_type")
+  deliveryTime            DateTime?                @map("delivery_time")
+  orderStatus             String?                  @default("ORDER_RECEIVED") @map("order_status")
+  location                Address?                 @relation(fields: [locationId], references: [id])
+  locationId              String?                  @map("location_id")
+  cartItems               TrynbuyCartItem[]
+  returnedItems           TrynbuyReturnedItem[]
+  bill                    Bill?
+  client                  Client?                  @relation(fields: [clientId], references: [id])
+  clientId                String?                  @map("client_id")
+  company                 Company                  @relation(fields: [companyId], references: [id])
+  companyId               String                   @map("company_id")
+  deliveryPartnerEarnings DeliveryPartnerEarnings?
+  deliveryPartner         DeliveryPartner?         @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId       String?                  @map("delivery_partner_id")
+  packingStatus           String?                  @map("packing_status")
+
+  @@index([clientId])
+  @@index([companyId])
+  @@map("trynbuys")
+}
+
+model DeliveryPartnerEarnings {
+  id                String          @id() @unique() @default(uuid())
+  deliveryFees      String?         @map("deliverFees")
+  waitingFees       String?         @map("waitingFees")
+  tips              String?
+  surge             String?
+  distance          Float?
+  waitingTime       Float?          @map("waiting_time")
+  trynbuy           Trynbuy         @relation(fields: [trynbuyId], references: [id])
+  trynbuyId         String          @unique() @map("trynbuy_id")
+  deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId String          @map("delivery_partner_id")
+
+  @@map("delivery_partner_earnings")
+}
+
+model DeliveryNotification {
+  id                String          @id() @unique() @default(uuid())
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @default(now()) @map("updated_at")
+  text              String
+  deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id], onDelete: Cascade)
+  deliveryPartnerId String          @map("delivery_partner_id")
+
+  @@map("delivery_notifications")
+}
+
+model TrynbuyCartItem {
+  id        String  @id() @default(uuid())
+  trynbuy   Trynbuy @relation(fields: [trynbuyId], references: [id])
+  trynbuyId String  @map("trynbuy_id")
+  variant   Variant @relation(fields: [variantId], references: [id])
+  variantId String  @map("variant_id")
+  item      Item    @relation(fields: [itemId], references: [id])
+  itemId    String  @map("item_id")
+  quantity  Int
+
+  @@index([trynbuyId])
+  @@index([variantId])
+  @@map("trynbuy_cart_items")
+}
+
+model TrynbuyReturnedItem {
+  id        String  @id() @default(uuid())
+  trynbuy   Trynbuy @relation(fields: [trynbuyId], references: [id])
+  trynbuyId String  @map("trynbuy_id")
+  variant   Variant @relation(fields: [variantId], references: [id])
+  variantId String  @map("variant_id")
+  item      Item    @relation(fields: [itemId], references: [id])
+  itemId    String  @map("item_id")
+  quantity  Int
+
+  @@index([trynbuyId])
+  @@index([variantId])
+  @@map("trynbuy_returned_items")
+}
+
+model Coupon {
+  id                String         @id() @default(uuid())
+  code              String         @unique()
+  type              CouponType
+  discountValue     Float?         @map("discount_value")
+  maxDiscountAmount Float?         @map("max_discount_amount")
+  minOrderValue     Float?         @map("min_order_value")
+  startDate         DateTime       @map("start_date")
+  endDate           DateTime       @map("end_date")
+  isActive          Boolean        @default(true) @map("is_active")
+  minBillAmount     Float?         @map("min_bill_amount")
+  isBillCombine     Boolean        @default(false) @map("is_bill_combine")
+  usageLimit        Int?           @map("usage_limit")
+  perClientLimit    Int?           @map("per_client_limit")
+  timesUsed         Int            @default(0) @map("times_used")
+  targetType        CouponTarget   @default(ALL) @map("target_type")
+  audienceType      CouponAudience @default(ALL) @map("audience_type")
+  clients           CouponClient[]
+  couponUsage       CouponUsage[]
+  company           Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId         String         @map("company_id")
+  createdAt         DateTime       @default(now()) @map("created_at")
+  updatedAt         DateTime       @updatedAt() @map("updated_at")
+  isMarkit          Boolean        @default(false) @map("is_markit")
+
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id       String   @id() @default(uuid())
+  coupon   Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  couponId String   @map("coupon_id")
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId String   @map("client_id")
+  bill     Bill?    @relation(fields: [billId], references: [id])
+  billId   String?  @map("bill_id")
+  usedAt   DateTime @default(now()) @map("used_at")
+
+  @@unique([couponId, clientId, billId])
+  @@map("coupon_usages")
+}
+
+model CouponClient {
+  id        String   @id() @default(uuid())
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  couponId  String
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String
+  createdAt DateTime @default(now())
+
+  @@map("coupon_clients")
 }
 
 model Pipeline {
   id              String   @id() @unique() @default(uuid())
   company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId       String   @unique() @map("company_id")
-  newClients      Client[] @relation("PipelineNewClients")
-  prospectClients Client[] @relation("PipelineProspectClients")
-  viewingClients  Client[] @relation("PipelineViewingClients")
-  rejectClients   Client[] @relation("PipelineRejectClients")
-  closeClients    Client[] @relation("PipelineCloseClients")
+  newClients      String[]
+  prospectClients String[]
+  viewingClients  String[]
+  rejectClients   String[]
+  closeClients    String[]
 
   @@map("pipelines")
 }
@@ -334,6 +529,7 @@ model Category {
   taxBelowThreshold Float?
   taxAboveThreshold Float?
   margin            Float?
+  targetAudience    String?       @map("target_audience")
   writeId           String?       @default(uuid()) @map("write_id")
 
   @@map("categories")
@@ -404,6 +600,7 @@ model Variant {
   companyId          String                @map("company_id")
   VariantSizeBarcode VariantSizeBarcode[]
   sold               Int?
+  deliveryType       String                @default("trynbuy") @map("delivery_type")
   writeId            String?               @default(uuid()) @map("write_id")
   cartItems          TrynbuyCartItem[]
   returnedItems      TrynbuyReturnedItem[]
@@ -457,79 +654,26 @@ model Bill {
   returnDeadline String?       @map("return_deadline")
   entries        Entry[]
   billHistories  BillHistory[]
+  couponUsage    CouponUsage[]
   company        Company       @relation(fields: [companyId], references: [id])
   companyId      String        @map("company_id")
   account        Account?      @relation(fields: [accountId], references: [id])
   accountId      String?       @map("account_id")
   client         Client?       @relation(fields: [clientId], references: [id])
   clientId       String?       @map("client_id")
+  handlingFee    Float?        @map("handling_fee")
+  waitingFee     Float?        @map("waiting_fee")
+  deliveryFee    Float?        @map("delivery_fee")
   userId         String?       @map("user_id")
   companyUser    CompanyUser?  @relation(fields: [companyId, userId], references: [companyId, userId])
   address        Address?      @relation(fields: [addressId], references: [id])
   addressId      String?       @map("address_id")
-  trynbuy        Trynbuy?
+  trynbuy        Trynbuy?      @relation(fields: [trynbuyId], references: [id])
+  trynbuyId      String?       @unique() @map("trynbuy_id")
+  isMarkit       Boolean       @default(false) @map("is_markit")
 
   @@index([companyId, createdAt, deleted])
   @@map("bills")
-}
-
-model Trynbuy {
-  id              String                @id() @default(uuid())
-  orderNumber     Int                   @default(autoincrement()) @map("order_number")
-  createdAt       DateTime              @default(now()) @map("created_at")
-  checkoutMethod  String                @map("checkout_method")
-  subtotal        Float                 @map("subtotal")
-  productDiscount Float                 @map("product_discount")
-  totalDiscount   Float                 @map("total_discount")
-  shipping        Float                 @map("shipping")
-  deliveryType    String                @map("delivery_type")
-  deliveryTime    DateTime?             @map("delivery_time")
-  orderStatus     String?               @default("ORDER_RECEIVED") @map("order_status")
-  location        Address?              @relation(fields: [locationId], references: [id])
-  locationId      String?               @map("location_id")
-  cartItems       TrynbuyCartItem[]
-  returnedItems   TrynbuyReturnedItem[]
-  bill            Bill?                 @relation(fields: [billId], references: [id])
-  billId          String?               @unique() @map("bill_id")
-  client          Client?               @relation(fields: [clientId], references: [id])
-  clientId        String?               @map("client_id")
-  company         Company               @relation(fields: [companyId], references: [id])
-  companyId       String                @map("company_id")
-  packingStatus   String?               @map("packing_status")
-
-  @@index([clientId])
-  @@index([companyId])
-  @@map("trynbuys")
-}
-
-model TrynbuyCartItem {
-  id        String  @id() @default(uuid())
-  trynbuy   Trynbuy @relation(fields: [trynbuyId], references: [id])
-  trynbuyId String  @map("trynbuy_id")
-  variant   Variant @relation(fields: [variantId], references: [id])
-  variantId String  @map("variant_id")
-  item      Item    @relation(fields: [itemId], references: [id])
-  itemId    String  @map("item_id")
-  quantity  Int
-
-  @@index([trynbuyId])
-  @@index([variantId])
-  @@map("trynbuy_cart_items")
-}
-
-model TrynbuyReturnedItem {
-  id        String  @id() @default(uuid())
-  trynbuy   Trynbuy @relation(fields: [trynbuyId], references: [id])
-  trynbuyId String  @map("trynbuy_id")
-  variant   Variant @relation(fields: [variantId], references: [id])
-  variantId String  @map("variant_id")
-  item      Item    @relation(fields: [itemId], references: [id])
-  itemId    String  @map("item_id")
-  quantity  Int
-
-  @@index([trynbuyId])
-  @@index([variantId])
-  @@map("trynbuy_returned_items")
 }
 
 model Entry {
@@ -661,36 +805,38 @@ model Payment {
 }
 
 model Address {
-  id               String                                @id() @unique() @default(uuid())
-  createdAt        DateTime                              @default(now()) @map("created_at")
-  updatedAt        DateTime                              @updatedAt() @map("updated_at")
-  name             String?
-  street           String?
-  locality         String?
-  landmark         String?
-  city             String?
-  state            String?
-  pincode          String?
-  houseDetails     String?
-  type             String?
-  formattedAddress String?                               @map("formatted_address")
-  placeId          String?                               @map("place_id")
-  coord            Unsupported("geography(Point,4326)")?
-  lat              Float?                                @map("lat")
-  lng              Float?                                @map("lng")
-  active           Boolean                               @default(true)
-  user             User?                                 @relation(fields: [userId], references: [id])
-  userId           String?                               @unique() @map("user_id")
-  client           Client?                               @relation(fields: [clientId], references: [id])
-  clientId         String?                               @map("client_id")
-  distributor      Distributor?                          @relation(fields: [distributorId], references: [id])
-  distributorId    String?                               @unique() @map("distributor_id")
-  company          Company?                              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId        String?                               @unique() @map("company_id")
-  account          Account?                              @relation(fields: [accountId], references: [id])
-  accountId        String?                               @unique() @map("account_id")
-  bill             Bill[]
-  trynbuy          Trynbuy[]
+  id                String                                @id() @unique() @default(uuid())
+  createdAt         DateTime                              @default(now()) @map("created_at")
+  updatedAt         DateTime                              @updatedAt() @map("updated_at")
+  name              String?
+  street            String?
+  locality          String?
+  landmark          String?
+  city              String?
+  state             String?
+  pincode           String?
+  houseDetails      String?                               @map("house_details")
+  type              String?
+  formattedAddress  String?                               @map("formatted_address")
+  placeId           String?                               @map("place_id")
+  coord             Unsupported("geography(Point,4326)")?
+  lat               Float?                                @map("lat")
+  lng               Float?                                @map("lng")
+  active            Boolean                               @default(true)
+  user              User?                                 @relation(fields: [userId], references: [id])
+  userId            String?                               @unique() @map("user_id")
+  client            Client?                               @relation(fields: [clientId], references: [id])
+  clientId          String?                               @map("client_id")
+  distributor       Distributor?                          @relation(fields: [distributorId], references: [id])
+  distributorId     String?                               @unique() @map("distributor_id")
+  company           Company?                              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId         String?                               @unique() @map("company_id")
+  account           Account?                              @relation(fields: [accountId], references: [id])
+  accountId         String?                               @unique() @map("account_id")
+  deliveryPartner   DeliveryPartner?                      @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId String?                               @unique() @map("deliveryPartner_id")
+  bill              Bill[]
+  trynbuy           Trynbuy[]
 
   @@map("addresses")
 }
@@ -846,35 +992,6 @@ model CapPushToken {
 
   @@unique([userId, deviceId])
   @@map("cap_push_token")
-}
-
-model PromoCode {
-  id              String            @id() @default(cuid())
-  code            String            @unique()
-  discountPercent Int
-  minAmount       Float
-  expiresAt       DateTime
-  isActive        Boolean           @default(true)
-  company         Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId       String
-  usageLimit      Int?
-  usageCount      Int?
-  clientsUsed     ClientPromoCode[] @relation("PromoCodeToClientPromoCode")
-
-  @@index([companyId])
-  @@map("promo_codes")
-}
-
-model ClientPromoCode {
-  id          String    @id() @default(cuid())
-  clientId    String
-  promoCodeId String
-  usedAt      DateTime  @default(now())
-  client      Client    @relation(fields: [clientId], references: [id])
-  promoCode   PromoCode @relation("PromoCodeToClientPromoCode", fields: [promoCodeId], references: [id])
-
-  @@index([promoCodeId])
-  @@map("client_promo_code")
 }
 
 model Cart {

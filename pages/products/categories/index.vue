@@ -10,12 +10,17 @@ import {
     useDeleteCategory,
     useDeleteProduct
 } from '~/lib/hooks';
-const DeleteCategory = useDeleteCategory();
-const UpdateCategory = useUpdateCategory();
-const DeleteProduct = useDeleteProduct();
-const UpdateManyCategory = useUpdateManyCategory();
+const DeleteCategory = useDeleteCategory({ optimisticUpdate: true });
+const UpdateCategory = useUpdateCategory({ optimisticUpdate: true });
+const DeleteProduct = useDeleteProduct({ optimisticUpdate: true });
+const UpdateManyCategory = useUpdateManyCategory({ optimisticUpdate: true });
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
+const toast = useToast();
+const isCategoryDeleteModalOpen = ref(false)
+const deletingCategoryRowIdentity = ref({})
+const isProductDeleteModalOpen = ref(false)
+const deletingProductRowIdentity = ref({})
 
 // Columns
 const columns = [
@@ -140,7 +145,10 @@ const action = (row) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => removeCategory(row.id),
+            click: () => {
+                isCategoryDeleteModalOpen.value = true
+                deletingCategoryRowIdentity.value = {name:row.name,id:row.id, productsLength:row.products.length}
+                }
         },
     ],
 ];
@@ -157,7 +165,10 @@ const productAction = (row) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => removeProduct(row.id),
+             click: () => {
+                isProductDeleteModalOpen.value = true
+                deletingProductRowIdentity.value = {name:row.name,id:row.id}
+                }
         },
     ],
 ];
@@ -267,27 +278,40 @@ watchEffect(() => {
     refetch();
 });
 
-const removeCategory = async(id:string) => {
+const removeCategory = () => {
+    if(deletingCategoryRowIdentity.value.productsLength){
+        toast.add({
+            title: 'Category Deletion failed!',
+            description:`Please clear product of category "${deletingCategoryRowIdentity.value.name}" either by deleting or changing its category.`,
+            color: 'red'
+        });
+    }else{
   try {
-    await DeleteCategory.mutateAsync({ where: { id } });
+     DeleteCategory.mutate({ where: { id:deletingCategoryRowIdentity.value.id } });
+  } catch (err) {
+    console.log(err);
+  }finally{
+    isCategoryDeleteModalOpen.value = false;
+    }
+}
+};
+
+const removeProduct = () => {
+  try {
+     DeleteProduct.mutate({ where: { id:deletingProductRowIdentity.value.id } });
   } catch (err) {
     console.log(err);
   }
-};
-
-const removeProduct = async(id:string) => {
-  try {
-    await DeleteProduct.mutateAsync({ where: { id } });
-  } catch (err) {
-    console.log(err);
-  }
+  finally{
+    isProductDeleteModalOpen.value = false;
+    }
 };
 
 
-async function multiToggle(ids, status: boolean) {
+ function multiToggle(ids, status: boolean) {
     console.log(ids);
     try {
-        await UpdateManyCategory.mutateAsync({
+         UpdateManyCategory.mutate({
             where: { id: { in: ids } },
             data: { status: status },
         });
@@ -297,14 +321,14 @@ async function multiToggle(ids, status: boolean) {
     }
 }
 
-async function toggleStatus(id) {
+ function toggleStatus(id) {
     const productToUpdate = products.value.find((item) => item.id === id);
     if (!productToUpdate) return;
 
     const updatedStatus = !productToUpdate.status;
 
     try {
-        await UpdateCategory.mutateAsync({
+         UpdateCategory.mutate({
             where: { id },
             data: { status: updatedStatus },
         });
@@ -632,4 +656,57 @@ async function toggleStatus(id) {
             </template>
         </UCard>
     </UDashboardPanelContent>
+
+    
+  <UDashboardModal
+        v-model="isCategoryDeleteModalOpen"
+        title="Delete Category"
+        :description="`Are you sure you want to delete category ${deletingCategoryRowIdentity.name}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  removeCategory()"
+            />
+            <UButton color="white" label="Cancel" @click="isCategoryDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
+
+  <UDashboardModal
+        v-model="isProductDeleteModalOpen"
+        title="Delete Product"
+        :description="`Are you sure you want to delete Product ${deletingProductRowIdentity.name}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  removeProduct()"
+            />
+            <UButton color="white" label="Cancel" @click="isProductDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
 </template>

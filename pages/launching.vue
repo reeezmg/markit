@@ -42,7 +42,7 @@ const navLinks = [
       <template #right>
        <div class="hidden lg:flex">
         <UButton
-          to="/shopslanding"
+          to="/storelanding"
           class="bg-[#097D4C] text-white hover:bg-[#08643d] me-1"
         >
           List Your Shop

@@ -1,28 +1,22 @@
 
 <script setup>
 import { item } from '@unovis/ts/components/bullet-legend/style';
-import { useFindUniqueTrynbuy,useUpdateItem, useFindUniqueItem,useUpdateEntry,useUpdateBill } from '~/lib/hooks';
+import { useFindUniqueTrynbuy,useUpdateItem, useFindUniqueItem,useUpdateEntry,useUpdateTrynbuy } from '~/lib/hooks';
 
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const route = useRoute();
 const router = useRouter();
 const UpdateEntry = useUpdateEntry()
-const UpdateItem = useUpdateItem()
-const UpdateBill = useUpdateBill()
+const UpdateTrynbuy = useUpdateTrynbuy()
 const orderId = route.query.id;
 
 const paymentMethod = ref('Cash');
-const scannedBarcode = ref("");
-const token = ref("")
 const tokenEntries = ref([])
 
 const qtyInputs = ref([]);
 const barcodeInputs = ref([]);  
-const discountref = ref();
 const packref = ref();
-const savetokenref = ref();
-const selected = ref({});
 
 
 const items = ref([
@@ -129,10 +123,11 @@ onMounted(() => {
   });
 });
 
-// ✅ Replace Bill with Trynbuy
+// ✅ Replace trynbuy with Trynbuy
 const trynbuyArgs = computed(() => ({
   where: { id: orderId },
   select: {
+    id:true,
     createdAt: true,
     orderNumber: true,
     subtotal: true,
@@ -152,6 +147,7 @@ const trynbuyArgs = computed(() => ({
     // notes: true,
     client: {
       select: {
+        id:true,
         name: true,
         phone: true,
       },
@@ -187,15 +183,15 @@ const trynbuyArgs = computed(() => ({
   },
 }))
 
-// ✅ New hook
-const { data: bill, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyArgs)
+
+const { data: trynbuy, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyArgs)
 
 // ✅ Map cartItems instead of entries
 watch(
-  () => bill.value,
+  () => trynbuy.value,
   (newData) => {
     if (!newData || !newData.cartItems) return
-    console.log(bill)
+    console.log(trynbuy)
     items.value = newData.cartItems.map((cartItem, index) => {
       const variant = cartItem.variant || {}
       const item = cartItem.item || {}
@@ -309,59 +305,45 @@ const handleUnPack = async (row) => {
     }
 };
 
-//Unpack all items
+//pack all items
+
 const handlePack = async () => {
   const allOutOfStock = items.value.every(item => item.outOfStock);
-try{
-  const res = await UpdateBill.mutateAsync({
-    where: { id: orderId },
-    data: {
-      subtotal: subtotal.value,
-      discount: discount.value,
-      grandTotal: grandTotal.value,
-      status: allOutOfStock ? 'OUTOFSTOCK' : 'PACKED'
-    }
-  });
-   // Collect all async operations in an array
-   const updatePromises = [];
+  const clientId = trynbuy.value?.client?.id || null;
+  const trynbuyId = trynbuy.value?.id || null;
 
-for (const item of items.value) {
- 
-  updatePromises.push(
-        UpdateItem.mutateAsync({
-          where: { id: item.id },
-          data: { status: 'packed' }
-        }).catch(error => console.error(`Error updating item ${item.id}`, error))
-      );
-}
+  try {
+    // 1. Update Trynbuy status (PACKED)
+    await UpdateTrynbuy.mutateAsync({
+      where: { id: orderId },
+      data: {
+        orderStatus: 'PACKED'
+      }
+    });
 
-// Wait for all updates to finish before proceeding
-await Promise.all(updatePromises);
-  if (allOutOfStock) {
-      toast.add({
-        title: 'Item Marked OUTOFSTOCK',
-        color: 'green',
-      });
-    } else{
-      toast.add({
-        title: 'Item PACKED successfully!',
-        color: 'green',
+    // 2. Call backend endpoint to fetch & emit data
+    if (trynbuyId) {
+      await $fetch(`/api/pack/${trynbuyId}/${clientId}`, {
+        baseURL: 'http://localhost:3005',   // or use runtimeConfig.apiBase
       });
     }
-}catch(err){
-  toast.add({
-        title: 'Something went wrong',
-        color: 'red',
-      });
-}
+
+    toast.add({
+      title: 'Order packed & client notified',
+      color: 'green',
+    });
+
+  } catch (err) {
+    console.error(err);
+    toast.add({
+      title: 'Something went wrong',
+      color: 'red',
+    });
+  }
 };
 
 
-const handleEnterMainDiscount = () => {
-  const component = packref.value;
-  const button = component.$el;
-  button.focus();;
-};
+
 
 
 const handleSave = async () => {
@@ -371,7 +353,7 @@ const handleSave = async () => {
    
 
   } catch (error) {
-    console.error('Error creating bill', error);
+    console.error('Error creating trynbuy', error);
   }
 
  
@@ -412,20 +394,20 @@ const handleSave = async () => {
                    <!-- Order Number  -->
                     <div class="flex flex-col ">
                     <span class="text-gray-500">Order #</span>
-                    <span class="font-medium">{{ bill?.orderNumber }} </span>
+                    <span class="font-medium">{{ trynbuy?.orderNumber }} </span>
                     </div>
 
                      <!-- Delivery Date -->
                      <div class="flex flex-col w-fit">
                     <span class="text-gray-500">Ordered Time</span>
-                    <span class="font-medium">{{ bill?.createdAt?.toLocaleString('en-GB', {
+                    <span class="font-medium">{{ trynbuy?.createdAt?.toLocaleString('en-GB', {
                 dateStyle: 'short',
                 timeStyle: 'short',
                 })}}</span>
                     </div>
                      <div class="flex flex-col w-fit">
                     <span class="text-gray-500">Delivery Time</span>
-                    <span class="font-medium">{{ bill?.deliveryTime?.toLocaleString('en-GB', {
+                    <span class="font-medium">{{ trynbuy?.deliveryTime?.toLocaleString('en-GB', {
                 dateStyle: 'short',
                 timeStyle: 'short',
                 })}}</span>
@@ -434,24 +416,24 @@ const handleSave = async () => {
                     <!-- Customer Name  -->
                     <div class="flex flex-col ">
                     <span class="text-gray-500">Name</span>
-                    <span class="font-medium">{{ bill?.client?.name ? bill?.client?.name :'-' }} </span>
+                    <span class="font-medium">{{ trynbuy?.client?.name ? trynbuy?.client?.name :'-' }} </span>
                     </div>
 
                     <!-- Customer Phone -->
                     <div class="flex flex-col ">
                     <span class="text-gray-500">Phone</span>
-                    <span class="font-medium">{{ bill?.client?.phone ? bill?.client?.phone : '-' }} </span>
+                    <span class="font-medium">{{ trynbuy?.client?.phone ? trynbuy?.client?.phone : '-' }} </span>
                     </div>
 
                     <!-- Customer Address -->
                     <UPopover mode="hover">
                             <div class="flex flex-col ">
                     <span class="text-gray-500">Address</span>
-                    <span class="font-medium">{{ bill?.location?.houseDetails || bill?.location?.name }} </span>
+                    <span class="font-medium">{{ trynbuy?.location?.houseDetails || trynbuy?.location?.name }} </span>
                     </div>
                         <template #panel>
                             <div class="flex flex-col p-3">
-                                <span>{{bill?.location?.formattedAddress}}</span>
+                                <span>{{trynbuy?.location?.formattedAddress}}</span>
                             </div>
                         </template>
                       </UPopover>
@@ -460,10 +442,10 @@ const handleSave = async () => {
                  <UPopover mode="hover">
                             <div class="flex flex-col ">
                     <span class="text-gray-500">Note</span>
-                    <span class="font-medium truncate">{{ bill?.notes ? bill?.notes :' N/A' }} </span>
+                    <span class="font-medium truncate">{{ trynbuy?.notes ? trynbuy?.notes :' N/A' }} </span>
                     </div>
-                        <template v-if="bill?.notes" #text>
-                            <span>{{ bill?.notes }}</span>
+                        <template v-if="trynbuy?.notes" #text>
+                            <span>{{ trynbuy?.notes }}</span>
                         </template>
                       </UPopover>
                 
@@ -481,7 +463,7 @@ const handleSave = async () => {
                 variant="subtle"
                 class="text-center"
                 >
-                {{ bill?.orderStatus }}
+                {{ trynbuy?.orderStatus }}
                 </UBadge>
                     </div>
                 </div>

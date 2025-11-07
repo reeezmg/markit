@@ -237,3 +237,35 @@ export const updateAddress = async (addstate: any) => {
     });
     await useAuth().updateSession();
 };
+
+export const updateDeliveryConfig = async (deliveryConfig: any) => {
+    await $fetch('/api/auth/changeDeliveryConfig', {
+        method: 'PUT',
+        body: deliveryConfig,
+    });
+    await useAuth().updateSession();
+};
+
+export const updateLogo = async (logo: string) => {
+    await $fetch('/api/auth/changeLogo', {
+        method: 'PUT',
+        body: { logo },
+    });
+    await useAuth().updateSession();
+};
+
+export const updateDeliveryType = async (deliveryType: string[]) => {
+    await $fetch('/api/auth/changeDeliveryType', {
+        method: 'PUT',
+        body: { deliveryType },
+    });
+    await useAuth().updateSession();
+};
+
+export const updateIsAiImage = async (isAiImage: boolean) => {
+    await $fetch('/api/auth/changeisaiimage', {
+        method: 'PUT',
+        body: { isAiImage },
+    });
+    await useAuth().updateSession();
+};

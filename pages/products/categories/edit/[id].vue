@@ -1,13 +1,18 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useUpdateCategory, useFindUniqueCategory, useUpdateSubcategory, useCreateSubcategory, useDeleteSubcategory } from '~/lib/hooks';
+import {
+  useUpdateCategory,
+  useFindUniqueCategory,
+  useUpdateSubcategory,
+  useCreateSubcategory,
+  useDeleteSubcategory,
+} from '~/lib/hooks';
 import type { Category, Subcategory } from '@prisma/client';
-
 
 const route = useRoute();
 const router = useRouter();
 const toast = useToast();
-const categoryStore = useCategoryStore()
+const categoryStore = useCategoryStore();
 const UpdateCategory = useUpdateCategory();
 const UpdateSubcategory = useUpdateSubcategory();
 const CreateSubcategory = useCreateSubcategory();
@@ -35,13 +40,14 @@ const taxBelowThreshold = ref(0);
 const taxAboveThreshold = ref(0);
 const margin = ref(0);
 const live = ref(true);
+const targetAudience = ref<string | null>(null); // ✅ Added field here
 const files = reactive<ImageData[]>([]);
 const subcategories = ref<Array<Partial<Subcategory & { isNew?: boolean }>>>([]);
 
-// Initialize form with category data
+// Fetch and populate category data
 const { data: category } = useFindUniqueCategory({
   where: { id: route.params.id as string },
-  include: { subcategories: true }
+  include: { subcategories: true },
 });
 
 watchEffect(() => {
@@ -57,20 +63,20 @@ watchEffect(() => {
     taxAboveThreshold.value = category.value.taxAboveThreshold || 0;
     margin.value = category.value.margin || 0;
     live.value = category.value.status;
-    
+    targetAudience.value = category.value.targetAudience || null; // ✅ Pre-fill
+
     if (category.value.image) {
       files.push({ uuid: category.value.image } as ImageData);
     }
 
-    // Initialize subcategories
-    subcategories.value = category.value.subcategories.map(sc => ({
+    subcategories.value = category.value.subcategories.map((sc) => ({
       ...sc,
-      isNew: false
+      isNew: false,
     }));
   }
 });
 
-// Form handlers
+// Handle main category updates
 const createValue = (data: any) => {
   name.value = data.name;
   hsn.value = data.hsn;
@@ -82,6 +88,7 @@ const createValue = (data: any) => {
   taxBelowThreshold.value = data.taxBelowThreshold;
   taxAboveThreshold.value = data.taxAboveThreshold;
   margin.value = data.margin;
+  targetAudience.value = data.targetAudience || null; // ✅ Capture from emitted event
   if (data.file) {
     files.push(data.file);
   }
@@ -95,19 +102,20 @@ const liveValue = (data: boolean) => {
   live.value = data;
 };
 
+// Add / Delete subcategory handlers
 const handleAddSubCategory = () => {
   subcategories.value.push({
     id: `new-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     name: '',
     description: '',
     status: true,
-    isNew: true
+    isNew: true,
   });
 };
 
 const handleDeleteSubCategory = async (index: number) => {
   const subcat = subcategories.value[index];
-  
+
   if (!subcat.isNew && subcat.id) {
     try {
       await DeleteSubcategory.mutateAsync({ where: { id: subcat.id } });
@@ -117,37 +125,35 @@ const handleDeleteSubCategory = async (index: number) => {
       return;
     }
   }
-  
+
   subcategories.value.splice(index, 1);
 };
 
+// Submit updated category
 const handleSubmit = async (e: Event) => {
   isLoading.value = true;
   e.preventDefault();
   try {
-    // 1. Upload images
+    // 1️⃣ Upload image if changed
     const base64files = await Promise.all(
       files
-        .filter(file => file.file)
+        .filter((file) => file.file)
         .map(async (file) => {
           const base64 = await prepareFileForApi(file.file);
           return { base64, uuid: file.uuid };
         })
     );
-
-    const uploads = base64files.map(file => 
+    const uploads = base64files.map((file) =>
       awsService.uploadBase64File(file.base64, file.uuid)
     );
 
-    console.log(margin.value)
-
-    // 2. Update category
+    // 2️⃣ Update main category
     const categoryUpdate = UpdateCategory.mutateAsync({
       where: { id: route.params.id as string },
       data: {
         name: name.value,
         description: description.value,
-        status: live.value.live,
+        status: live.value,
         image: files[0]?.uuid || category.value?.image,
         hsn: hsn.value,
         ...(shortCut.value && { shortCut: shortCut.value }),
@@ -157,10 +163,11 @@ const handleSubmit = async (e: Event) => {
         taxBelowThreshold: taxBelowThreshold.value,
         taxAboveThreshold: taxAboveThreshold.value,
         margin: margin.value,
-      }
+        targetAudience: targetAudience.value || undefined, // ✅ Include target audience
+      },
     });
 
-    // 3. Handle subcategories
+    // 3️⃣ Handle subcategories
     const subcategoryUpdates = subcategories.value.map(async (subcat) => {
       const data = {
         name: subcat.name,
@@ -168,11 +175,11 @@ const handleSubmit = async (e: Event) => {
         status: subcat.status,
         image: subcat.image,
         company: {
-          connect: { id: useAuth().session.value?.companyId }
+          connect: { id: useAuth().session.value?.companyId },
         },
         category: {
-          connect: { id: route.params.id as string }
-        }
+          connect: { id: route.params.id as string },
+        },
       };
 
       if (subcat.isNew) {
@@ -180,43 +187,41 @@ const handleSubmit = async (e: Event) => {
       } else if (subcat.id) {
         return UpdateSubcategory.mutateAsync({
           where: { id: subcat.id },
-          data
+          data,
         });
       }
     });
 
-    // Execute all operations
     await Promise.all([categoryUpdate, ...subcategoryUpdates, ...uploads]);
 
     toast.add({
       title: 'Category updated successfully!',
-      color: 'green'
+      color: 'green',
     });
     await categoryStore.refreshCategories();
     router.push('/products/categories');
-  } catch (error) {
+  } catch (error: any) {
     toast.add({
       title: 'Error updating category',
       description: error.message,
-      color: 'red'
+      color: 'red',
     });
   } finally {
     isLoading.value = false;
   }
 };
 
+// Smooth scroll for quick links
 const scrollToSection = (sectionId: string) => {
   const section = document.getElementById(sectionId);
-  if (section) {
-    section.scrollIntoView({ behavior: 'smooth' });
-  }
+  if (section) section.scrollIntoView({ behavior: 'smooth' });
 };
 </script>
 
 <template>
   <UDashboardPanelContent class="pb-24">
     <div class="flex flex-row">
-      <!-- Quick Links Sidebar -->
+      <!-- Sidebar -->
       <div class="w-1/4 sm:block hidden">
         <UPageCard class="m-3">
           <div class="text-lg"> Quick Links</div>
@@ -234,10 +239,10 @@ const scrollToSection = (sectionId: string) => {
         </UPageCard>
       </div>
 
-      <!-- Main Form Content -->
+      <!-- Main Form -->
       <div class="flex flex-col sm:w-3/4 w-full">
-        <!-- Category Form -->
         <UPageCard class="m-3" id="Create">
+          <!-- ✅ Now emits targetAudience too -->
           <AddCategoryCreate
             :editName="category?.name"
             :editHsn="category?.hsn"
@@ -249,16 +254,16 @@ const scrollToSection = (sectionId: string) => {
             :margin="category?.margin"
             :fixedTax="category?.fixedTax"
             :editFile="category?.image"
+            :targetAudience="category?.targetAudience"
             @update="createValue"
           />
         </UPageCard>
 
-        <!-- Subcategories Section -->
         <UPageCard class="m-3" id="Subcategories">
           <div class="text-xl mb-4">Subcategories</div>
-          
+
           <div v-for="(subcat, index) in subcategories" :key="subcat.id">
-            <AddCategorySubcategory 
+            <AddCategorySubcategory
               :index="index"
               :id="subcat.id"
               :editName="subcat.name"
@@ -289,19 +294,12 @@ const scrollToSection = (sectionId: string) => {
           />
         </UPageCard>
 
-        <!-- Status Toggle -->
         <UPageCard class="m-3" id="Live">
           <AddCategoryLive :editLive="live" @update="liveValue" />
         </UPageCard>
 
-        <!-- Submit Button -->
         <div class="mt-5 text-end">
-          <UButton
-            @click="handleSubmit"
-             :loading="isLoading"
-        >
-            Save
-        </UButton>
+          <UButton @click="handleSubmit" icon="i-heroicons-check" :loading="isLoading"> Save </UButton>
         </div>
       </div>
     </div>

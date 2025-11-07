@@ -1,17 +1,32 @@
+let audio: HTMLAudioElement | null = null
+let unlocked = false
+
 export function useCheckoutEvents(refetch: () => void) {
   const { $socket } = useNuxtApp()
 
   onMounted(() => {
-    console.log("dadadad")
+    // unlock audio on first interaction
+    const unlock = () => {
+      if (!audio) audio = new Audio("/sounds/alert.mp3")
+      audio.play().then(() => {
+        audio!.pause()
+        audio!.currentTime = 0
+        unlocked = true
+        window.removeEventListener("click", unlock)
+      }).catch(() => {})
+    }
+
+    window.addEventListener("click", unlock)
+
     $socket.on("checkout:success", (data) => {
       console.log("Checkout success:", data)
 
-      // Run your page's refetch
       refetch()
 
-      // Play alarm
-      const audio = new Audio("/sounds/alert.mp3")
-      audio.play()
+      if (unlocked && audio) {
+        audio.currentTime = 0
+        audio.play()
+      }
     })
   })
 

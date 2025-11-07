@@ -14,6 +14,7 @@ import type { DashboardComposable, BillWithRelations, KpiItem, PdfReportMeta } f
 const scrollContainer = ref<HTMLElement | null>(null)
 const colorMode = useColorMode()
 const loading = ref(false)
+const recieptLoading = ref(false)
 const iconColorClass = computed(() =>
   colorMode.value === 'dark' ? 'text-white' : 'text-gray-800'
 )
@@ -59,6 +60,10 @@ let printData = {}
 
 const dashboard = ref({
 })
+const bills = ref({
+})
+const expenses = ref({
+})
 const fullReport = ref(false)
 const quickRange = ref('Today')
 const quickRanges = ['Today','This Month', 'Last Month']
@@ -84,14 +89,14 @@ const fetchReportFromServer = async () => {
   if (!selectedDate.value.start || !selectedDate.value.end) return;
 
   try {
-    const res = await $fetch('/api/report', {
+    const res = await $fetch('/api/report/report', {
       method: 'GET',
       params: {
         startDate: startOfDay(selectedDate.value.start),
         endDate: endOfDay(selectedDate.value.end),
       },
     });
-  
+    console.log(res)
     dashboard.value = res;
   } catch (error) {
     console.error('Failed to fetch server report:', error);
@@ -100,14 +105,45 @@ const fetchReportFromServer = async () => {
   }
 };
 
+const fetchBillFromServer = async () => {
+  if (!selectedDate.value.start || !selectedDate.value.end) return;
+
+  try {
+    const res = await $fetch('/api/report/bills', {
+      method: 'GET',
+      params: {
+        startDate: startOfDay(selectedDate.value.start),
+        endDate: endOfDay(selectedDate.value.end),
+      },
+    });
+    console.log(res)
+    bills.value = res;
+  } catch (error) {
+    console.error('Failed to fetch server report:', error);
+  }
+};
+const fetchexpenseFromServer = async () => {
+  if (!selectedDate.value.start || !selectedDate.value.end) return;
+
+  try {
+    const res = await $fetch('/api/report/expenses', {
+      method: 'GET',
+      params: {
+        startDate: startOfDay(selectedDate.value.start),
+        endDate: endOfDay(selectedDate.value.end),
+      },
+    });
+    console.log(res)
+    expenses.value = res;
+  } catch (error) {
+    console.error('Failed to fetch server report:', error);
+  }
+};
+
 watch([selectedDate, companyName], ([date, companyName]) => {
   if (date && !fullReport.value) {
     fetchReportFromServer();
   }
-});
-
-watch(dashboard, (newdashboard) => {
-  console.log('Dashboard data updated:', newdashboard);
 });
 
 const ranges = [
@@ -119,137 +155,51 @@ const ranges = [
   { label: 'Last year', duration: { years: 1 } }
 ]
 
+const actions = () => [
+  [
+    {
+      label: 'Download CSV',
+      icon: 'i-heroicons-arrow-down-tray',
+      click: downloadCSV,
+      loading: csvLoading
+    },
+  ],
+  [
+    {
+      label: 'Download PDF',
+      icon: 'i-heroicons-document',
+      click: downloadPDF,
+      loading: pdfLoading
+    },
+  ],
+  [
+    {
+      label: 'Print Report',
+      icon: 'i-heroicons-printer',
+      click: printReportHandle,
+      loading: recieptLoading
+    },
+  ],
+]
 
-
-// Computed properties
-const isDownloadDisabled = computed(() => {
-  return loading.value || !dashboard.value.bills || 
-    (!fullReport.value && !selectedDate.value.start && !selectedDate.value.end && !quickRange.value)
-})
-
-const totals = computed(() => {
-  const bills = dashboard.value.bills || [];
-
-  const totalBills = bills.length;
-
-  // Sales = sum of all entry rates * qty
-  const totalSales = bills
-    .flatMap(b => b.entries ?? [])
-    .reduce((sum, entry) => sum + ((entry.rate ?? 0) * (entry.qty ?? 0)), 0);
-
-  // Revenue calculation
-const totalRevenue = bills.reduce((sum, bill) => {
-  if (bill.paymentStatus === 'PAID') {
-    return sum + (bill.grandTotal ?? 0);
-  }
-
-  if (bill.paymentStatus !== 'PAID' && bill.paymentMethod === 'Split' && bill.splitPayments) {
-    // Add only non-credit split payments
-    const nonCreditAmount = bill.splitPayments
-      .filter(sp => sp.method !== 'Credit')
-      .reduce((cSum, sp) => cSum + (sp.amount ?? 0), 0);
-    return sum + nonCreditAmount;
-  }
-
-  return sum; // unpaid non-split credit → ignore
-}, 0);
-
-
-  // Method-wise breakdown
-  let totalRevenueInCash = 0;
-  let totalRevenueInUPI = 0;
-  let totalRevenueInCredit = 0;
-
-  bills.forEach(bill => {
-    if (bill.splitPayments && Array.isArray(bill.splitPayments)) {
-      bill.splitPayments.forEach(payment => {
-        if (bill.paymentStatus === 'PAID') {
-          // Add all payment amounts
-          if (payment.method === 'Cash') totalRevenueInCash += payment.amount ?? 0;
-          else if (payment.method === 'UPI') totalRevenueInUPI += payment.amount ?? 0;
-          else if (payment.method === 'Credit') totalRevenueInCredit += payment.amount ?? 0;
-        } else if (bill.paymentStatus !== 'PAID') {
-          // Only add non-credit parts
-          if (payment.method === 'Cash') totalRevenueInCash += payment.amount ?? 0;
-          else if (payment.method === 'UPI') totalRevenueInUPI += payment.amount ?? 0;
-          else if (payment.method === 'Credit') {
-            // credit is unpaid → don’t add here
-          }
-        }
-      });
-    } else {
-      const amount = bill.grandTotal ?? 0;
-      if (bill.paymentStatus === 'PAID') {
-        if (bill.paymentMethod === 'Cash') totalRevenueInCash += amount;
-        else if (bill.paymentMethod === 'UPI') totalRevenueInUPI += amount;
-        else if (bill.paymentMethod === 'Credit') totalRevenueInCredit += amount;
-      } else {
-        // unpaid non-split → only credit possible → skip for cash/upi
-      }
-    }
-  });
-
-  const totalDiscount = totalSales - totalRevenue;
-
-  return {
-    totalBills,
-    totalSales,
-    totalRevenue,
-    totalDiscount,
-    totalRevenueInCash,
-    totalRevenueInUPI,
-    totalRevenueInCredit
-  };
-});
-
-
-
-
-const totalsExpense = computed(() => {
-  const expenses = dashboard.value.expenses || [];
-
-  const totalExpense = expenses.reduce((sum,expense) => sum + (expense.totalAmount ?? 0),0) ?? 0
-
-  const totalExpensesInCash = expenses
-    .filter(expense => expense.paymentMode === 'CASH')
-    .reduce((sum, expense) => sum + (expense.totalAmount ?? 0), 0)
-
-  const totalExpensesInUPI = expenses
-    .filter(expense => expense.paymentMode === 'UPI')
-    .reduce((sum, expense) => sum + (expense.totalAmount ?? 0), 0)
-    
-  return {
-    totalExpense,
-    totalExpensesInCash,
-    totalExpensesInUPI,
-  };
-})
 
 const kpiArray = computed<KpiItem[]>(() => ([
-  { KPI: 'Total Revenue', Value: formatCurrency(dashboard.value.bills.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0) },
-  { KPI: 'Total Bills', Value: dashboard.value.bills?.length },
-  { KPI: 'Avg. Bill Value', Value: formatCurrency(dashboard.value.bills.length > 0 ? 
-    totals.value.totalRevenue / dashboard.value.bills?.length : 0) }
+  { KPI: 'Total Revenue', Value: formatCurrency(bills.value.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0) },
+  { KPI: 'Total Bills', Value: bills.value?.length },
+  { KPI: 'Avg. Bill Value', Value: formatCurrency(bills.value.length > 0 ? 
+    dashboard?.totalSales / bills.value?.length : 0) }
 ]))
 
-const billsCSV = computed(() => dashboard.value.bills.map(bill => {
+const billsCSV = computed(() => bills.value.map(bill => {
   console.log(bill.invoiceNumber)
-  const entryTaxSum = bill.entries?.reduce((sum, entry) => {
-    const value = entry.value ?? 0
-    const taxPercent = entry.tax ?? 0
-    return sum + ((taxPercent / 100) * value)
-  }, 0) ?? 0
 
   return {
     Invoice: `="${bill.invoiceNumber}"`,
     Date: bill.createdAt ? new Date(bill.createdAt).toLocaleDateString() : 'N/A',
     Client: bill.client?.name ?? 'N/A',
     Subtotal: bill.subtotal ?? 0,
-    Tax: entryTaxSum, // ✅ accurate tax from entries
-    Discount: bill.discount ?? 0,
     GrandTotal: bill.grandTotal ?? 0,
     PaymentMethod: bill.paymentMethod ?? 'N/A',
-    Notes: bill.notes ?? '',
   }
 }))
 
@@ -273,13 +223,14 @@ const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
 const csvfilename = `sales-report-${timestamp}.csv`
 const pdfFilename = `sales-report-${timestamp}.pdf`
 
-const downloadCSV = () => {
-  if (!dashboard.value.bills?.length) {
+const downloadCSV = async() => { 
+  csvLoading.value = true
+  await fetchBillFromServer()
+  if (!bills.value?.length) {
     toast.add({ title: 'No Data', description: 'No report data available to download', color: 'red' })
     return
   }
-  
-  csvLoading.value = true
+
   try {
     exportToCSV(billsCSV.value, csvfilename)
     toast.add({ title: 'CSV Downloaded', description: 'Your CSV file has been downloaded', color:'green' })
@@ -291,18 +242,18 @@ const downloadCSV = () => {
 }
 
 const downloadPDF = async () => {
-  if (!dashboard.value.bills || !dashboard.value.bills?.length) {
+  pdfLoading.value = true
+  await fetchBillFromServer()
+  if (!bills.value || !bills.value?.length) {
     toast.add({ title: 'No Data', description: 'No report data available to export', color: 'red' })
     return
   }
-
-  pdfLoading.value = true
   try {
     const { generateSalesReportPDF } = await import('~/utils/generate-sales-report-pdf.client')
     
     const reportMeta: PdfReportMeta = {
-      companyName: 'Your Company Name',
-      logoUrl: '/logo.png',
+      companyName: useAuth().session.value?.companyName || '',
+      logoUrl: useAuth().session.value?.companyLogo || '/logo.png',
       dateRange: fullReport.value 
         ? 'Full Report' 
         : quickRange.value 
@@ -313,7 +264,7 @@ const downloadPDF = async () => {
 
     await generateSalesReportPDF(
       kpiArray.value,
-      dashboard.value.bills,
+      bills.value,
       reportMeta,
       pdfFilename
     )
@@ -351,26 +302,30 @@ onMounted(() => {
 })
 
 const printReportHandle = async() => {
+    recieptLoading.value = true
+    await fetchexpenseFromServer()
   try {
     printData = {
       companyName: useAuth().session.value?.companyName || '',
-      companyAddress: dashboard.value.company?.address || {},
-      expenses: dashboard.value.expenses || [],
+      companyAddress: useAuth().session.value?.address || {},
+      expenses: expenses.value || [],
       dateRange: selectedDate.value.start === selectedDate.value.end
         ? `${selectedDate.value.start || 'Start'}`
         : `${selectedDate.value.start || 'Start'} to ${selectedDate.value.end || 'End'}`,
-      totalRevenue: totals.value.totalRevenue,
-      totalRevenueInCash: totals.value.totalRevenueInCash,
-      totalRevenueInUPI: totals.value.totalRevenueInUPI,
-      totalExpense: totalsExpense.value.totalExpense,
-      totalExpensesInUPI: totalsExpense.value.totalExpensesInUPI,
-      totalExpensesInCash: totalsExpense.value.totalExpensesInCash,
-      amountInUPI: totals.value.totalRevenueInUPI - totalsExpense.value.totalExpensesInUPI,
-      amountInDrawer: totals.value.totalRevenueInCash - totalsExpense.value.totalExpensesInCash,
+      totalRevenue: dashboard?.value.totalSales,
+      totalRevenueInCash: dashboard?.value.salesByPaymentMethod.Cash,
+      totalRevenueInUPI: dashboard?.value.salesByPaymentMethod.UPI,
+      totalExpense: dashboard?.value.totalExpense,
+      totalExpensesInUPI: dashboard?.value.expensesByPaymentMethod.UPI,
+      totalExpensesInCash: dashboard?.value.expensesByPaymentMethod.Cash,
+      amountInUPI: dashboard?.value.balances.bankBalance,
+      amountInDrawer: dashboard?.value.balances.cashBalance
     }
     printReport(printData)
   } catch(err) {
     console.log(err)
+  }finally{
+    recieptLoading.value = false
   }
 }
 </script>
@@ -413,69 +368,57 @@ const printReportHandle = async() => {
               </div>
               </template>
           </UPopover>
-            <UButton 
-              @click="downloadCSV" 
-              icon="i-heroicons-arrow-down-tray" 
-              :loading="csvLoading" 
-              :disabled="isDownloadDisabled"
-            >
-              Download CSV
-            </UButton>
-            <UButton 
-              @click="downloadPDF" 
-              icon="i-heroicons-document" 
-              :loading="pdfLoading" 
-              :disabled="isDownloadDisabled"
-            >
-              Download PDF
-            </UButton>
-            <UButton 
-              @click="printReportHandle" 
-              icon="i-heroicons-document" 
-              :loading="pdfLoading" 
-              :disabled="isDownloadDisabled"
-            >
-             Print Report
-            </UButton>
+            <UDropdown :items="actions()">
+                <UButton
+                  icon="i-heroicons-chevron-down"
+                  label="Export / Print"
+                  color="primary"
+                />
+            </UDropdown>
+
           </div>
         </div>
 
         <div v-if="!loading && dashboard" class="grid grid-cols-1 sm:grid-cols-5 gap-4">
 
             <UPopover mode="hover">
-              <KpiCard class="w-full"  title="Total Revenue" :value="formatCurrency(totals.totalRevenue)"/> 
+              <KpiCard class="w-full"  title="Total Revenue" :value="formatCurrency(dashboard?.totalSales)"/> 
               <template #panel>
                 <div class="p-4 flex flex-col">
-                  <div>Revenue in Cash: {{ formatCurrency(totals?.totalRevenueInCash) }}</div>
-                  <div>Revenue in UPI: {{ formatCurrency(totals?.totalRevenueInUPI) }}</div>
+                  <div>Revenue in Cash: {{ formatCurrency(dashboard?.salesByPaymentMethod.Cash) }}</div>
+                  <div>Revenue in UPI: {{ formatCurrency(dashboard?.salesByPaymentMethod.UPI) }}</div>
+                  <div>Revenue in Card: {{ formatCurrency(dashboard?.salesByPaymentMethod.Card) }}</div>
                 </div>
             </template>
           </UPopover>
 
-           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(dashboard?.totalUnpaid)"/>
+           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(dashboard?.salesByPaymentMethod.Credit)"/>
 
             <UPopover mode="hover">
-              <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(totalsExpense.totalExpense)"/>
+              <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(dashboard?.totalExpenses)"/>
               <template #panel>
                 <div class="p-4 flex flex-col">
-                  <div>Expense in Cash: {{ formatCurrency(totalsExpense.totalExpensesInCash) }}</div>
-                  <div>Expense in UPI: {{ formatCurrency(totalsExpense.totalExpensesInUPI) }}</div>
+                  <div>Expense in Cash: {{ formatCurrency(dashboard?.expensesByPaymentMethod.Cash) }}</div>
+                  <div>Expense in UPI: {{ formatCurrency(dashboard?.expensesByPaymentMethod.UPI) }}</div>
+                  <div>Expense in Card: {{ formatCurrency(dashboard?.expensesByPaymentMethod.Card) }}</div>
+                  <div>Expense in BankTransfer: {{ formatCurrency(dashboard?.expensesByPaymentMethod.BankTransfer) }}</div>
+                  <div>Expense in Cheque: {{ formatCurrency(dashboard?.expensesByPaymentMethod.Cheque) }}</div>
                 </div>
               </template>
             </UPopover>
       
 
             <UPopover mode="hover">
-              <KpiCard class="w-full" title="Balance" :value="formatCurrency(totals.totalRevenue - totalsExpense.totalExpense)"/>
+              <KpiCard class="w-full" title="Balance" :value="formatCurrency(dashboard?.balances.totalBalance)"/>
               <template #panel>
                 <div class="p-4 flex flex-col">
-                  <div>Balance in Cash: {{ formatCurrency(totals.totalRevenueInCash - totalsExpense.totalExpensesInCash) }}</div>
-                  <div>Balance in UPI: {{ formatCurrency(totals.totalRevenueInUPI - totalsExpense.totalExpensesInUPI) }}</div>
+                  <div>Balance in Cash: {{ formatCurrency(dashboard?.balances.cashBalance) }}</div>
+                  <div>Balance in UPI: {{ formatCurrency(dashboard?.balances.bankBalance) }}</div>
                 </div>
               </template>
             </UPopover>
 
-              <KpiCard title="Profit" :value="formatCurrency(dashboard.totalProfit - totalsExpense.totalExpense) || 0.00"/>
+              <KpiCard title="Profit" :value="formatCurrency(dashboard?.profit) || 0.00"/>
 
 
         </div>
@@ -485,7 +428,7 @@ const printReportHandle = async() => {
   <!-- Table -->
   <div class="flex-1 bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4 overflow-auto">
     <UTable
-      :rows="dashboard.categorySales"
+      :rows="dashboard?.categorySales"
       :columns="[
         { key: 'name', label: 'Category' },
         {

@@ -52,7 +52,7 @@
     BanknoteIcon,
     ReceiptIcon,
     TrendingUpIcon,
-PercentIcon,
+    PercentIcon,
   } from 'lucide-vue-next'
   
   import { useCompanyDashboard } from '@/lib/api/useDashboardData'

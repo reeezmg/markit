@@ -1,12 +1,10 @@
+
+
 {
-  "appId": "com.markitretail.app",
+  "appId": "com.markit.app",
   "appName": "Markit",
-  "server": {
-    "androidScheme": "https",
-    "hostname": "markit.co.in",
-    "url": "https://markit.co.in/login",
-    "allowNavigation": ["markit.co.in"]
-  },
+  "bundledWebRuntime": false,
+  "webDir": ".output/public",
   "plugins": {
     "SplashScreen": {
       "launchShowDuration": 0,
@@ -16,3 +14,4 @@
     }
   }
 }
+

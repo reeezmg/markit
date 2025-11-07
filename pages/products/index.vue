@@ -42,6 +42,7 @@ const isModalOpen = ref(false)
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
 const activeImages = ref<string[]>([])
+const activeImagesDate = ref<string[]>([])
 let images = reactive<ImageData[]>([]);
 // Columns
 const columns = [
@@ -336,9 +337,29 @@ const {
         barcode: itemBarcode.value,
     })),
     include: {
-      variant: true,
-    },
-},{enabled:false})
+        variant: {
+            include: {
+            product: {
+                select: {
+                category: true,
+                id: true,
+                updatedAt: true
+                },
+            },
+            },
+        },
+},
+
+},{enabled:!!itemBarcode})
+
+watch(items, (newItems) => {
+    console.log('Item data updated:', newItems);
+});
+
+const handleRefetch = async() => {
+    console.log("refetching parent" )
+    await handleGetItemInfo();
+}
 
 
 const result = ref('')
@@ -483,8 +504,9 @@ onUnmounted(() => {
   stopCamera()
 })
 
-function openImageViewer(images: string[]) {
+function openImageViewer(images: string[], updatedAt: Date) {
   activeImages.value = images
+  activeImagesDate.value = updatedAt
   isModalOpen.value = true
 }
 
@@ -594,27 +616,24 @@ isPhotoSaving.value = true
         where: { id:items.value?.variant.id },
         data: { images: images.map((image) => image.uuid) },
     });
-    console.log(res)
     if(images.length > 0 && res){
-        console.log(images)
    const base64files = await Promise.all(
       images
         .filter((file) => file.file instanceof File) // Only process if file.file is a File
         .map(async (file) => {
           const base64 = await prepareFileForApi(file.file);
-          return { base64, uuid: file.uuid };
+          return { base64, uuid: file.uuid, view: file.view };
         }
     )
   );
-console.log(base64files)
+
   if (base64files.length > 0) {
     const awsres = await Promise.all(
       base64files.map((file) =>
-        awsService.uploadBase64File(file.base64, file.uuid)
+        awsService.uploadBase64File(file.base64, file.uuid,file.view, items.value.variant.product.category.name, items.value.variant.product.category.targetAudience, useAuth().session.value?.isAiImage)
       )
     );
-    console.log(awsres)
-}
+}itemBarcode.value = ''
     }
 }catch(err:any){
     console.log(err)
@@ -849,7 +868,7 @@ isAddPhotoModelOpen.value = false
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
                         <UAvatar
-                            :src="`https://images.markit.co.in/${row.variants[0]?.images[0]}`"
+                            :src="`https://images.markit.co.in/${row.variants[0]?.images[0]}?t=${row.updatedAt}`"
                             :alt="row.name"
                             size="lg"
                         />
@@ -862,17 +881,20 @@ isAddPhotoModelOpen.value = false
                         :rows="row.variants" 
                         :columns="variantcolumns"
                     >
-                    <template #name-data="{ row }">
-                    <div class="flex flex-row items-center">
-                        <UAvatar
-                            :src="`https://images.markit.co.in/${row.images[0]}`"
-                            :alt="row.name"
-                            size="lg"
-                            @click="openImageViewer(row.images)"
-                        />
-                        <div class="ms-3">{{ row.name }}</div>
-                    </div>
-                </template>
+                       <template #name-data="{ row: variant }">
+        <div class="flex flex-row items-center">
+          <UAvatar
+            :src="`https://images.markit.co.in/${variant.images[0]}?t=${row.updatedAt}`"
+            :alt="variant.name"
+            size="lg"
+            @click="openImageViewer(variant.images, row.updatedAt)"
+          />
+          <div class="ms-3">
+            {{ variant.name }}
+           
+          </div>
+        </div>
+      </template>
 
                <template #barcode-data="{ row }">
                     <UPopover mode="hover">
@@ -1067,6 +1089,7 @@ isAddPhotoModelOpen.value = false
       <p><strong>Name:</strong> {{ items.variant.name }}</p>
       <p><strong>Code:</strong> {{ items.variant.code }}</p>
       <p><strong>Selling Price:</strong> ₹{{ items.variant.sprice }}</p>
+      {{ items.variant.product.category.name }}
     </div>
     <div v-else class="mt-4 space-y-1">Not found</div>
 
@@ -1077,6 +1100,11 @@ isAddPhotoModelOpen.value = false
       :editFile="items?.variant?.images"
       :index="0"
       class="mt-4"
+       :categoryName="items.variant.product.category.name"
+       :targetAudience="items.variant.product.category.targetAudience"
+       :productId="items.variant.product.id"
+        :updatedAt="items.variant.product.updatedAt"
+        @refetch="handleRefetch"
       @update="fileValue"
     />
 
@@ -1101,7 +1129,7 @@ isAddPhotoModelOpen.value = false
       >
         <SwiperSlide v-for="(img, index) in activeImages" :key="index">
           <img
-            :src="`https://images.markit.co.in/${img}`"
+            :src="`https://images.markit.co.in/${img}?t=${activeImagesDate}`"
             class="max-h-[80vh] mx-auto object-contain"
           />
         </SwiperSlide>

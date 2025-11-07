@@ -33,6 +33,7 @@ export type AuthSession = {
     companyName: string;
     storeUniqueName?: string;
     isTaxIncluded: boolean;
+    isAiImage: boolean;
     isUserTrackIncluded: boolean;
     isLite:Boolean;
     pointsValue?: number;
@@ -45,11 +46,24 @@ export type AuthSession = {
     closeTime?: string;
     gstin: string;
     accHolderName: string;
+    ifsc: string;
+    accountNo: string;
+    bankName: string;
     upiId: string;
     type: string;
     code: string;
     authSessionVersion: string;
-    plan:string,
+    plan:string;
+    deliveryType: string[];
+    deliveryMode: string[];
+    fundDeliveryFees?: boolean;
+    deliveryRadius?: number;
+    deliveryFeesPerKm?: number;
+    waitingTime?: number;
+    waitingChargesPerMin?: number;
+    minDeliveryCharges?: number;
+    deliveryDiscountThreshold?: number;
+    deliveryDiscountAmount?: number;
     productInputs?: {
         name: boolean;
         brand: boolean;

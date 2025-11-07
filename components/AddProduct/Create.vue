@@ -105,7 +105,7 @@ watch(
       name: newName,
       brand: newBrand,
       description: newDescription,
-      category: newCategoryRow?.id,
+      category: newCategoryRow,
       subcategory: newSubcategoryRow?.id,
     });
   },

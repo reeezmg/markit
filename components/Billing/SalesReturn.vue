@@ -1,5 +1,11 @@
 <script setup >
 import { useFindFirstEntry,useFindManyCategory } from '~/lib/hooks';
+import Quagga from '@ericblade/quagga2'
+import {
+  CapacitorBarcodeScanner,
+  CapacitorBarcodeScannerTypeHint
+} from '@capacitor/barcode-scanner'
+import { Capacitor } from '@capacitor/core';
 
 const model = defineModel();
 const emit = defineEmits(['totalreturnvalue']);
@@ -37,6 +43,194 @@ onMounted(() => {
     isMobile.value = window.innerWidth < 1024;
   });
 });
+
+
+
+
+const result = ref('')
+const showCamera = ref(false)
+const videoRef = ref(null)
+
+const requestCameraAccess = async () => {
+  try {
+    await navigator.mediaDevices.getUserMedia({
+      video: {
+        facingMode: { exact: 'environment' },
+      },
+    })
+    console.log('✅ Camera permission granted')
+  } catch (err) {
+    console.error('🚫 Error accessing camera:', err)
+    toast.add({
+      title: 'Camera Access Blocked',
+      description:
+        'Unable to access camera. Please allow permission from your browser settings.',
+      color: 'red',
+    })
+  }
+}
+
+const askCameraPermission = async () => {
+  if (!('permissions' in navigator)) return requestCameraAccess()
+
+  try {
+    const res = await navigator.permissions.query({ name: 'camera' })
+    if (res.state === 'granted') {
+      console.log('✅ Camera already granted')
+    } else {
+      requestCameraAccess()
+    }
+  } catch (e) {
+    console.warn('❗Permissions API error:', e)
+    requestCameraAccess()
+  }
+}
+
+const startCamera = async () => {
+  await askCameraPermission()
+
+  result.value = ''
+  showCamera.value = true
+
+  try {
+    await nextTick()
+
+    Quagga.init(
+      {
+        inputStream: {
+          type: 'LiveStream',
+          target: videoRef.value,
+          constraints: {
+            facingMode: 'environment',
+          },
+        },
+        locator: {
+          patchSize: 'medium',
+          halfSample: true,
+        },
+        decoder: {
+          readers: ['code_128_reader', 'ean_reader', 'ean_8_reader'],
+        },
+        locate: true,
+      },
+      (err) => {
+        if (err) {
+          console.error('Quagga init error:', err)
+          toast.add({
+            title: 'Camera Error',
+            description: err.message,
+            color: 'red',
+          })
+          return
+        }
+        Quagga.start()
+        console.log('📷 Quagga started')
+      }
+    )
+
+    Quagga.onDetected((data) => {
+      const scanned = data?.codeResult?.code
+      if (!scanned) return
+
+      result.value = scanned
+      const lastIndex = returnedItems.value.length - 1
+      if (lastIndex >= 0) {
+        returnedItems.value[lastIndex].barcode = result.value
+        fetchItemData(result.value, lastIndex)
+         addNewRow(lastIndex,true)  
+      }
+
+      stopCamera()
+    })
+  } catch (err) {
+    console.error('Camera access error:', err)
+
+    if (err.name === 'NotAllowedError') {
+      toast.add({
+        title: 'Camera Permission Denied',
+        description: 'Please allow camera access in your browser settings.',
+        color: 'red',
+        icon: 'i-heroicons-exclamation-triangle',
+      })
+    } else if (err.name === 'NotFoundError') {
+      toast.add({
+        title: 'No Camera Found',
+        description: 'We could not detect a camera on this device.',
+        color: 'orange',
+        icon: 'i-heroicons-video-camera-slash',
+      })
+    } else {
+      toast.add({
+        title: 'Unexpected Error',
+        description:
+          err.message || 'Something went wrong while accessing the camera.',
+        color: 'gray',
+        icon: 'i-heroicons-bug-ant',
+      })
+    }
+
+    stopCamera()
+  }
+}
+
+const stopCamera = () => {
+  try {
+    Quagga.stop()
+    Quagga.offDetected()
+    result.value = ''
+  } catch (e) {
+    console.warn('⚠️ Error while stopping Quagga:', e)
+  }
+  showCamera.value = false
+}
+
+onUnmounted(() => {
+  stopCamera()
+})
+
+
+const scannerResult = ref('')
+
+const scanCode128 = async () => {
+  try {
+    const result =
+      await CapacitorBarcodeScanner.scanBarcode({
+        hint: CapacitorBarcodeScannerTypeHint.CODE_128, // ✅ Only Code 128
+        scanInstructions: 'Align barcode within the frame',
+      })
+
+    if (result.ScanResult) {
+        const pattern = /^\d+[A-Z]\d{6}$/ // required format
+
+        if (!pattern.test(result.ScanResult)) {
+         toast.add({
+              title: 'Scanned Barcode Is Invalid!',
+              color: 'red',
+            });
+          return
+        }
+      scannerResult.value = result.ScanResult
+
+      // Example: update last item
+      const lastIndex = returnedItems.value.length - 1
+      if (lastIndex >= 0) {
+        returnedItems.value[lastIndex].barcode = scannerResult.value
+        fetchItemData(scannerResult.value, lastIndex)
+        addNewRow(lastIndex, true)
+      }
+    }
+  } catch (err) {
+    console.error('🚫 Scan error:', err)
+  }
+}
+
+const handleScan = () => {
+  if (Capacitor.isNativePlatform()) {
+    scanCode128()
+  } else {
+    startCamera()
+  }
+}
 
 
 
@@ -523,6 +717,25 @@ const sendReturnValue = () => {
       >
 
          <template #header>
+          <!-- 📷 Camera View -->
+    <div class="relative px-2">
+      <div
+        v-if="showCamera"
+        ref="videoRef"
+        class="w-full h-[200px] bg-black rounded-lg overflow-hidden"
+      ></div>
+
+      <!-- ❌ Close Camera Button -->
+      <UButton
+        v-if="showCamera"
+        icon="i-heroicons-x-mark"
+        size="xs"
+        color="gray"
+        variant="solid"
+        class="absolute top-2 right-2 z-10"
+        @click="() => { showCamera = false; stopCamera() }"
+      />
+    </div>
           <div class="flex items-center justify-between">
             <h3 class="text-base font-semibold leading-6 text-gray-900 dark:text-white">
               Return
@@ -532,10 +745,23 @@ const sendReturnValue = () => {
         </template>
 
         <div class="p-4 space-y-4">
-             <div class="mb-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
-        <UInput  v-model="invoiceNumber" label="Inv No" type="text" placeholder="Invoice No" class="lg:col-span-2" />
+          <div class="mb-3 flex items-center justify-between gap-4 text-sm">
+          <UInput
+            v-model="invoiceNumber"
+            label="Inv No"
+            type="text"
+            placeholder="Invoice No"
+            class="flex-1 max-w-xs"
+          />
+          <UButton
+            class="lg:hidden"
+            color="primary"
+            icon="i-heroicons-camera"
+            label="Scan"
+            @click="handleScan"
+          />
+        </div>
 
-      </div>
       <!-- mobile -->
         <div  v-if="isMobile" class=" space-y-4 py-1">
           <div

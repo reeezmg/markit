@@ -1,6 +1,6 @@
 <script setup>
 import { BillingAddClient } from '#components';
-import { useCreateBill,useFindUniqueClient,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry, useUpdateCompanyClient } from '~/lib/hooks';
+import { useCreateBill,useFindUniqueClient,useFindManyCoupon,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry, useUpdateCompanyClient } from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'
@@ -11,7 +11,7 @@ import {
 import { Capacitor } from '@capacitor/core';
 
 const queryClient = useQueryClient();
-
+const { generatableCoupons, loading:generatableCouponsLoading, error:generatableCouponsError, generateCoupons } = useGenerateCoupons()
 const currentRequestIds = ref({});
 const lastResponse  = ref({});
 const { printBill } = usePrint();
@@ -46,7 +46,7 @@ const phoneNo = ref('');
 const points = ref(0);
 const clientName = ref('');
 const clientId = ref('');
-const voucherNo = ref('');
+const couponValue = ref(0);
 const token = ref("")
 const tokenEntries = ref([])
 const splitPayments = ref([])
@@ -163,7 +163,6 @@ const requestCameraAccess = async () => {
         facingMode: { exact: 'environment' },
       },
     })
-    console.log('✅ Camera permission granted')
   } catch (err) {
     console.error('🚫 Error accessing camera:', err)
     toast.add({
@@ -181,7 +180,6 @@ const askCameraPermission = async () => {
   try {
     const res = await navigator.permissions.query({ name: 'camera' })
     if (res.state === 'granted') {
-      console.log('✅ Camera already granted')
     } else {
       requestCameraAccess()
     }
@@ -229,7 +227,6 @@ const startCamera = async () => {
           return
         }
         Quagga.start()
-        console.log('📷 Quagga started')
       }
     )
 
@@ -353,7 +350,7 @@ onMounted(() => {
       points: 0,
       clientName: '',
       clientId: '',
-      voucherNo: '',
+      couponValue: 0,
       token: '',
       tokenEntries: [],
       splitPayments: [],
@@ -390,7 +387,7 @@ const currentBill = computed(() => ({
   points: points.value,
   clientName: clientName.value,
   clientId: clientId.value,
-  voucherNo: voucherNo.value,
+  couponValue: couponValue.value,
   token: token.value,
   tokenEntries: tokenEntries.value,
   splitPayments: splitPayments.value,
@@ -433,7 +430,7 @@ function createNewBill() {
   points.value = 0;
   clientName.value = '';
   clientId.value = '';
-  voucherNo.value = '';
+  couponValue.value = '';
   token.value = '';
   tokenEntries.value = [];
   splitPayments.value = [];
@@ -484,7 +481,7 @@ function loadBill(billNumber) {
   points.value = bill.points ?? 0;
   clientName.value = bill.clientName ?? '';
   clientId.value = bill.clientId ?? '';
-  voucherNo.value = bill.voucherNo ?? '';
+  couponValue.value = bill.couponValue ?? 0;
   token.value = bill.token ?? '';
   tokenEntries.value = bill.tokenEntries ?? [];
   splitPayments.value = bill.splitPayments ?? [];
@@ -551,12 +548,14 @@ const reset = () => {
   selected.value = null;
   date.value = new Date().toISOString();
   isRedeemPoint.value = false;
+  couponValue.value = 0
   redeemedAmt.value = 0;
   returnAmt.value = 0;
 
   // Focus the barcode input
   const input = barcodeInputs.value[0]?.$el?.querySelector('input');
   input?.focus();
+  couponRefetch()
 };
 
 
@@ -1058,9 +1057,13 @@ const handleSave = async () => {
       statusMessage: 'No internet connection',
     })
   }
-    items.value = items.value.filter(item =>
+    const finalitems = items.value.filter(item =>
       item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
     );
+
+    if (items.value.length === 0) {
+      throw new Error(`No valid items to bill.`);
+    }
 
     if (items.value.length === 0) {
       items.value = [{
@@ -1073,7 +1076,7 @@ const handleSave = async () => {
       throw new Error(`No valid Entry in bill.`);
     }
 
-    items.value.forEach((item, index) => {
+    finalitems.forEach((item, index) => {
       if (!item.category?.[0]?.id) {
         throw new Error(`No category in entry ${index + 1}`);
       }
@@ -1087,13 +1090,15 @@ const handleSave = async () => {
       userId: useAuth().session.value?.id,
     }
   });
-
+  if(clientId.value){
+    await generateCoupons(clientId.value, grandTotal.value);
+  }
     const billInv = billcounter;
     const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
     const billPoints = pointsValue > 0 ? Number(grandTotal.value) / pointsValue : 0;
-    const returnedItems = items.value.filter(item => item.return);
+    const returnedItems = finalitems.filter(item => item.return);
 
-    const entriesData = items.value.map(item => {
+    const entriesData = finalitems.map(item => {
       const entry = {
         name: item.name || '',
         qty: Number(item.qty || 1),
@@ -1175,7 +1180,7 @@ const handleSave = async () => {
       refundPolicy:useAuth().session.value?.refundPolicy,
       returnPolicy:useAuth().session.value?.returnPolicy,
       date: new Date(date.value).toISOString(),
-      entries: items.value.map(entry => {
+      entries: finalitems.map(entry => {
         const discountVal = entry.discount < 0
           ? entry.discount
           : entry.discount > 0
@@ -1208,10 +1213,10 @@ const handleSave = async () => {
       upiId: useAuth().session.value?.upiId || '',
       clientName: clientName.value,
       clientPhone: phoneNo.value,
-      tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
-      tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
-      ttvalue: items.value.reduce((sum, entry) => sum + entry.value, 0),
-      tdiscount: items.value.reduce((sum, entry) => {
+      tqty: finalitems.reduce((sum, entry) => sum + entry.qty, 0),
+      tvalue: finalitems.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+      ttvalue: finalitems.reduce((sum, entry) => sum + entry.value, 0),
+      tdiscount: finalitems.reduce((sum, entry) => {
         if (entry.discount < 0) {
           return sum + (Math.abs(entry.discount) * entry.qty);
         } else {
@@ -1250,15 +1255,16 @@ const handleSave = async () => {
       method: 'POST',
       body: {
         payload,
-        items: items.value,
+        items: finalitems,
         returnedItems,
         billPoints,
         clientId: clientId.value,
         companyId: useAuth().session.value?.companyId,
+        couponId: selectedCouponId.value?.value || null,
         userId: useAuth().session.value?.id,
         tokenEntries: tokenEntries.value,
       }
-    }).then(() => {
+    }).then(async() => {
     toast.add({
       title: 'Bill created successfully!',
       color: 'green',
@@ -1272,6 +1278,7 @@ const handleSave = async () => {
         queryKey: ['zenstack', 'Product', 'findMany'],
         exact: false
       });
+      await couponRefetch()
     }).catch(error => {
        toast.add({
         title: 'Bill creation failed!',
@@ -1503,7 +1510,7 @@ const newBill = () => {
   // phoneNo.value = '';
   // points.value = 0;
   // name.value = '';
-  // voucherNo.value = '';
+  // couponValue.value = '';
   // selected.value = {};
   // account.value = {
   //   name: '',
@@ -1736,7 +1743,6 @@ if(!user) return
   const userdetails = userStore.getuserByCode(user)
 
   if (userdetails) {
-    console.log(userdetails)
     items.value[index].userCode = user
     items.value[index].user = userdetails.name || null
     items.value[index].userId = userdetails.id || null
@@ -1781,9 +1787,8 @@ const handleRedeemPoints = async () => {
         });
 
         redeemedPoints.value = redeemablePoints;
-        redeemedAmt.value = redeemablePoints;
+        redeemedAmt.value = redeemedAmt.value + redeemablePoints;
         points.value = res.points;
-        console.log(res);
 
       } catch (error) {
         console.error('Error updating client points', error);
@@ -1808,7 +1813,6 @@ const handleRedeemPoints = async () => {
         points.value = res.points;
         redeemedPoints.value = 0;
         redeemedAmt.value = 0;
-        console.log(res);
 
       } catch (error) {
         console.error('Error updating client points', error);
@@ -1818,6 +1822,138 @@ const handleRedeemPoints = async () => {
 
   redeeming.value = false;
 };
+function isCouponEligible(coupon, orderValue, clientId) {
+  const now = new Date();
+  const clientUsage = coupon.couponUsage.filter(u => u.clientId === clientId).length;
+  const clientAppearances = coupon.clients.filter(c => c.clientId === clientId).length;
+  if (!coupon.isActive) return false;
+  if (now < new Date(coupon.startDate) || now > new Date(coupon.endDate)) return false;
+
+  if (coupon.minOrderValue && orderValue < coupon.minOrderValue) return false;
+
+  if (coupon.usageLimit !== null && coupon.timesUsed >= coupon.usageLimit) return false;
+
+  if (coupon.perClientLimit !== null && clientUsage >= coupon.perClientLimit) {
+    return false;
+  }
+
+  // Audience rules
+  if (coupon.audienceType === 'SPECIFIC') {
+    if (!coupon.clients.some(c => c.clientId === clientId)) {
+      return false;
+    }
+  }
+
+  if (coupon.audienceType === 'GENERATE') {
+    // If client has already used as many times as appearances allow, block
+    if (clientUsage >= clientAppearances) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
+const couponQueryArgs = computed(() => {
+  const now = new Date();
+  return {
+    where: {
+      companyId: useAuth().session.value?.companyId,
+      isActive: true,
+      startDate: { lte: now },
+      endDate: { gte: now },
+    },
+    include: {
+      clients: { select: { clientId: true } },   // ✅ fix here
+      couponUsage: { select: { clientId: true } },
+    },
+  }
+});
+
+
+const { data: allCoupons, refetch: couponRefetch } = useFindManyCoupon(couponQueryArgs);
+
+
+const eligibleCoupons = computed(() => {
+  if (!clientId.value) return [];
+  return (allCoupons.value || [])
+    .filter(coupon => isCouponEligible(coupon, grandTotal.value, clientId.value))
+    .map(coupon => {
+      const clientUsageCount = coupon.couponUsage.filter(u => u.clientId === clientId.value).length;
+
+      let usageInfo = '∞';
+      if (coupon.perClientLimit !== null) {
+        const remaining = coupon.perClientLimit - clientUsageCount;
+        usageInfo = remaining > 0 ? `${remaining}` : '0';
+      }
+
+      return {
+        label: `${coupon.code} (${coupon.type}) - ${usageInfo}`,
+        value: coupon.id,
+      };
+    });
+});
+
+
+
+const selectedCouponId = ref(null);
+
+
+function calculateDiscount(coupon, orderValue) {
+  if (!coupon) return { discount: 0, finalAmount: orderValue };
+
+  // 🎁 If Gift coupon → no calculation, just treat as 0 discount
+  if (coupon.type === 'GIFT') {
+    return 0;
+  }
+
+  let discount = 0;
+
+  if (coupon.type === 'PERCENTAGE') {
+    discount = (orderValue * (coupon.discountValue ?? 0)) / 100;
+
+    // apply max discount cap if set
+    if (coupon.maxDiscountAmount && discount > coupon.maxDiscountAmount) {
+      discount = coupon.maxDiscountAmount;
+    }
+  }
+
+  if (coupon.type === 'FLAT') {
+    discount = coupon.discountValue ?? 0;
+  }
+
+  // Prevent discount > orderValue
+  if (discount > orderValue) discount = orderValue;
+
+  return discount
+}
+
+watch(selectedCouponId, (newSelectedCouponId) => {
+  if(newSelectedCouponId){
+  redeemedAmt.value = redeemedAmt.value - couponValue.value;
+  const chosen = allCoupons.value?.find(c => c.id === newSelectedCouponId?.value);
+  if (chosen) {
+      const result = calculateDiscount(chosen, grandTotal.value);
+      couponValue.value = result;
+      redeemedAmt.value = redeemedAmt.value + result;
+    }
+}
+});
+
+watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
+  if (newItems) {
+    // reset coupon state when items or client changes
+    selectedCouponId.value = null;
+    redeemedAmt.value = redeemedAmt.value - couponValue.value;
+    couponValue.value = 0;
+  }
+}, { deep: true });
+
+
+
+
+
 
 
 </script>
@@ -2328,16 +2464,22 @@ const handleRedeemPoints = async () => {
           </div>
 
           <div>
-            <div class="mb-4 mt-5">
-              <UButton color="primary" block>Add Voucher</UButton>
+            <div class="mb-4">
+              <label class="block text-gray-700 font-medium">Apply Coupon</label>
+              <USelectMenu 
+                v-model="selectedCouponId" 
+                :options="eligibleCoupons" 
+                placeholder="Select a coupon"
+              />
+
             </div>
             <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Total Scanned</label>
-              <UInput v-model="voucherNo" />
+              <label class="block text-gray-700 font-medium">Eligible Coupons</label>
+              <UInput :value="eligibleCoupons.length" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Total Value</label>
-              <UInput v-model="voucherNo" />
+              <UInput v-model="couponValue" />
             </div>
             <div class="mt-9">
               <UButton color="primary" block @click="isOpen=true" :loading="isSavingAcc">Add Account</UButton>

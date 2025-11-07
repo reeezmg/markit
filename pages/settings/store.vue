@@ -9,8 +9,8 @@ interface ImageData {
     uuid: string;
 }
 
-const UpdateCompany = useUpdateCompany();
-const UpsertAddress = useUpsertAddress();
+const UpdateCompany = useUpdateCompany({ optimisticUpdate: true });
+const UpsertAddress = useUpsertAddress({ optimisticUpdate: true });
 const useAuth = () => useNuxtApp().$auth;
 const awsService = new AwsService();
 
@@ -21,6 +21,14 @@ const isThankYouNoteChanged = ref(false);
 const isRefundPolicyChanged = ref(false);
 const isReturnPolicyChanged = ref(false);
 const isImageChanged = ref(false);
+const isCategoryChanged = ref(false);
+const isDeliveryConfigChanged = ref(false);
+const isPointChanged = ref(false);
+const isTimeChanged = ref(false);
+const isAccountStateChanged = ref(false);
+const isAddressStateChanged = ref(false);
+const isInputsChanged = ref(false);
+const isDeliveryTypeChanged =ref(false)
 
 const selectedFile = ref<ImageData | null>(null);
 
@@ -33,6 +41,14 @@ const isUpdatingtiming = ref(false);
 const isUpdatingDescription = ref(false);
 const isUpdatingLogo = ref(false);
 const isUpdatingCategory = ref(false);
+const isUpdatingDeliveryConfig = ref(false);
+const isUpdatingDeliveryType = ref(false);
+
+
+const category = ['Men','Women','Girl','Boy']
+
+const selectedCategory = ref(useAuth().session.value?.category || [])
+
 
 
 interface AccountState {
@@ -113,6 +129,7 @@ const storeThankYouNote = ref(useAuth().session.value?.thankYouNote || '');
 const storeRefundPolicy = ref(useAuth().session.value?.refundPolicy || '');
 const storeReturnPolicy = ref(useAuth().session.value?.returnPolicy || '');
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
+const isAiImage = ref(useAuth().session.value?.isAiImage);
 const isUserTrackInclude = ref(useAuth().session.value?.isUserTrackIncluded);
 const pointsValue = ref(useAuth().session.value?.pointsValue || 0);
 
@@ -137,6 +154,30 @@ const variantInputs = reactive([
   { key: 'button', label: 'Button', value: useAuth().session.value?.variantInputs?.button  },
 ])
 
+
+
+const deliveryType = ref<string[]>(useAuth().session.value?.deliveryType || [])
+const deliveryMode = ref<string[]>(useAuth().session.value?.deliveryMode || [])
+const fundDeliveryFees = ref<boolean>(useAuth().session.value?.fundDeliveryFees || false)
+
+const deliveryRadius = ref<number | null>(useAuth().session.value?.deliveryRadius || null)
+const deliveryFeesPerKm = ref<number | null>(useAuth().session.value?.deliveryFeesPerKm || null)
+const waitingTime = ref<number | null>(useAuth().session.value?.waitingTime || null)
+const waitingChargesPerMin = ref<number | null>(useAuth().session.value?.waitingChargesPerMin || null)
+const minDeliveryCharges = ref<number | null>(useAuth().session.value?.minDeliveryCharges || null)
+
+const deliveryDiscountThreshold = ref<number | null>(useAuth().session.value?.deliveryDiscountThreshold || null)
+const deliveryDiscountAmount = ref<number | null>(useAuth().session.value?.deliveryDiscountAmount || null)
+
+// Dropdown options
+const deliveryModeOptions = ['markit','self']
+const deliveryTypeOptions = ['trynbuy','booking','delivery']
+
+// Check which mode is selected
+const isMarkit = computed(() => deliveryMode.value.includes('markit'))
+const isSelf = computed(() => deliveryMode.value.includes('self'))
+
+
 watch(() => storeUniqueName.value, (newName) => {
   isNameChanged.value = newName !== useAuth().session.value?.storeUniqueName;
 }, { immediate: true });
@@ -153,7 +194,78 @@ watch(() => storeRefundPolicy.value, (newRefundPolicy) => {
 watch(() => storeReturnPolicy.value, (newReturnPolicy) => {
   isReturnPolicyChanged.value = newReturnPolicy !== useAuth().session.value?.returnPolicy;
 }, { immediate: true });
+watch(() => selectedCategory.value, (newCategory) => {
+  isCategoryChanged.value = newCategory !== useAuth().session.value?.category;
+}, { immediate: true });
 
+watch(() => deliveryMode.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.deliveryMode;
+}, { immediate: true });
+watch(() => fundDeliveryFees.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.fundDeliveryFees;
+}, { immediate: true });
+watch(() => deliveryRadius.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.deliveryRadius;
+}, { immediate: true });
+watch(() => deliveryFeesPerKm.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.deliveryFeesPerKm;
+}, { immediate: true });
+watch(() => waitingTime.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.waitingTime;
+}, { immediate: true });
+watch(() => waitingChargesPerMin.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.waitingChargesPerMin;
+}, { immediate: true });
+watch(() => minDeliveryCharges.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.minDeliveryCharges;
+}, { immediate: true });
+watch(() => deliveryDiscountThreshold.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.deliveryDiscountThreshold;
+}, { immediate: true });
+watch(() => deliveryDiscountAmount.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.deliveryDiscountAmount;
+}, { immediate: true });
+watch(() => deliveryType.value, (newType) => {
+  isDeliveryTypeChanged.value = newType.sort().toString() !== (useAuth().session.value?.deliveryType || []).sort().toString();
+}, { immediate: true });
+
+watch(() => pointsValue.value, (newPointsValue) => {
+  isPointChanged.value = newPointsValue !== useAuth().session.value?.pointsValue;
+}, { immediate: true });
+watch(timing, (newTiming) => {
+  isTimeChanged.value = 
+    newTiming.open !== useAuth().session.value?.openTime ||
+    newTiming.close !== useAuth().session.value?.closeTime;
+}, { deep: true, immediate: true });
+watch(accstate, (newState) => {
+  isAccountStateChanged.value = 
+    newState.accHolderName !== (useAuth().session.value?.accHolderName || '') ||
+    newState.ifsc !== (useAuth().session.value?.ifsc || '') ||
+    newState.accountNo !== (useAuth().session.value?.accountNo || '') ||
+    newState.bankName !== (useAuth().session.value?.bankName || '') ||
+    newState.upiId !== (useAuth().session.value?.upiId || '') ||
+    newState.gstin !== (useAuth().session.value?.gstin || '');
+}, { deep: true, immediate: true });
+
+watch(addstate, (newState) => {
+  isAddressStateChanged.value = 
+    newState.street !== (useAuth().session.value?.address?.street || '') ||
+    newState.landmark !== (useAuth().session.value?.address?.landmark || '') ||
+    newState.city !== (useAuth().session.value?.address?.city || '') ||
+    newState.state !== (useAuth().session.value?.address?.state || '') ||
+    newState.pincode !== (useAuth().session.value?.address?.pincode || '') ||
+    newState.lat !== (useAuth().session.value?.address?.lat || null) ||
+    newState.lng !== (useAuth().session.value?.address?.lng || null) ||
+    newState.formattedAddress !== (useAuth().session.value?.address?.formattedAddress || '') ||
+    newState.name !== (useAuth().session.value?.address?.name || '');
+}, { deep: true, immediate: true });
+
+watch(productInputs, (newInputs) => {
+  isInputsChanged.value = newInputs.some(input => input.value !== useAuth().session.value?.productInputs?.[input.key]);
+}, { deep: true, immediate: true });
+watch(variantInputs, (newInputs) => {
+  isInputsChanged.value = isInputsChanged.value || newInputs.some(input => input.value !== useAuth().session.value?.variantInputs?.[input.key]);
+}, { deep: true, immediate: true });
 
 const { data: taken } = useFindUniqueCompany({
   where: computed(() => ({
@@ -164,9 +276,6 @@ const { data: taken } = useFindUniqueCompany({
   }
 });
 
-const category = ['Men','Women','Kids','Newborn']
-
-const selectedCategory = ref(useAuth().session.value?.category || [])
 
 const toast = useToast();
 
@@ -231,10 +340,16 @@ watch(info, (newInfo) => {
 
 
 
-async function onNameUpdate() {
+function onNameUpdate() {
   isUpdatingName.value = true;
   try {
-    const res = await UpdateCompany.mutateAsync({
+  if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+   UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -244,19 +359,27 @@ async function onNameUpdate() {
     });
     toast.add({ title: 'Store name updated', icon: 'i-heroicons-check-circle' });
     isNameChanged.value = false;
-    await updateStoreUniqueName(storeUniqueName.value)
+    updateStoreUniqueName(storeUniqueName.value)
   } catch (error) {
-    console.error(error);
-    toast.add({ title: 'Error updating store name', color: 'red', icon: 'i-heroicons-x-circle' });
+    toast.add({ title: 'Error updating store name',
+                description: error.statusMessage,
+                color: 'red', 
+                icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingName.value = false;
   }
 }
 
-async function onPhoneUpdate() {
+function onPhoneUpdate() {
   isUpdatingPhone.value = true;
   try {
-    await UpdateCompany.mutateAsync({
+  if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+    UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -266,19 +389,24 @@ async function onPhoneUpdate() {
     });
     toast.add({ title: 'Store phone updated', icon: 'i-heroicons-check-circle' });
     isPhoneChanged.value = false;
-     await updateStorePhone(storePhone.value)
+    updateStorePhone(storePhone.value)
   } catch (error) {
-    console.error(error);
-    toast.add({ title: 'Error updating store phone', color: 'red', icon: 'i-heroicons-x-circle' });
+    toast.add({ title: 'Error updating store phone',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingPhone.value = false;
   }
 }
 
-async function onNotesUpdate() {
+function onNotesUpdate() {
   isUpdatingDescription.value = true;
   try {
-    const res = await UpdateCompany.mutateAsync({
+  if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+    UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -291,7 +419,7 @@ async function onNotesUpdate() {
     });
     toast.add({ title: 'Store description updated', icon: 'i-heroicons-check-circle' });
     isUpdatingDescription.value = false;
-    await updateStoreNote(
+    updateStoreNote(
       storeDescription.value,
       storeThankYouNote.value,
       storeRefundPolicy.value,
@@ -299,16 +427,23 @@ async function onNotesUpdate() {
     )
   } catch (error) {
     console.error(error);
-    toast.add({ title: 'Error updating store description', color: 'red', icon: 'i-heroicons-x-circle' });
+    toast.add({ title: 'Error updating store description', color: 'red',description: error.statusMessage, icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingDescription.value = false;
   }
 }
 
-async function onaccSubmit(event: FormSubmitEvent<AccountState>) {
+function onaccSubmit(event: FormSubmitEvent<AccountState>) {
     isUpdatingAccount.value = true;
   try {
-    const res = await UpdateCompany.mutateAsync({
+  if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+  
+    UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -321,7 +456,7 @@ async function onaccSubmit(event: FormSubmitEvent<AccountState>) {
         upiId: accstate.upiId,
       }
     });
-    toast.add({ title: 'Account details updated', color: 'green', icon: 'i-heroicons-check-circle' });
+    toast.add({ title: 'Account details updated',description: error.statusMessage, color: 'green', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.log(error);
     toast.add({ title: 'Error updating account details', color: 'red', icon: 'i-heroicons-x-circle' });
@@ -330,10 +465,16 @@ async function onaccSubmit(event: FormSubmitEvent<AccountState>) {
   }
 }
 
-async function onaddSubmit(event: FormSubmitEvent<AddressState>) {
+function onaddSubmit(event: FormSubmitEvent<AddressState>) {
     isUpdatingAddress.value = true;
   try {
-    const res = await UpsertAddress.mutateAsync({
+  if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+  UpsertAddress.mutate({
       where: {
         companyId: useAuth().session.value?.companyId,
       },
@@ -363,19 +504,24 @@ async function onaddSubmit(event: FormSubmitEvent<AddressState>) {
         placeId: addstate.placeId,
       }
     });
-    await updateAddress(addstate);
+    updateAddress(addstate);
     toast.add({ title: 'Address updated', color: 'green', icon: 'i-heroicons-check-circle' });
   } catch (error) {
-    console.log(error);
-    toast.add({ title: 'Error updating address', color: 'red', icon: 'i-heroicons-x-circle' });
+    toast.add({ title: 'Error updating address',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingAddress.value = false;
   }
 }
 
-const onTaxIncludeChange = async () => {
+const onTaxIncludeChange = () => {
   try {
-    const res = await UpdateCompany.mutateAsync({
+    if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+    UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -383,18 +529,48 @@ const onTaxIncludeChange = async () => {
         isTaxIncluded: isTaxInclude.value,
       },
     });
-    await updateIsTaxIncluded(isTaxInclude.value);
-    toast.add({ title: 'Tax include updated', icon: 'i-heroicons-check-circle' });
+    updateIsTaxIncluded(isTaxInclude.value);
+    toast.add({ title: 'Tax include updated', description: error.statusMessage, icon: 'i-heroicons-check-circle' });
   } catch (error) {
-    console.error(error);
     toast.add({ title: 'Error updating tax setting', color: 'red', icon: 'i-heroicons-x-circle' });
   }
 };
 
 
-const onUserTrackIncludeChange = async () => {
+
+const onAiImageChange = () => {
   try {
-    const res = await UpdateCompany.mutateAsync({
+    if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+    UpdateCompany.mutate({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        isAiImage: isAiImage.value,
+      },
+    });
+    updateIsAiImage(isAiImage.value);
+    toast.add({ title: 'AI Image setting updated', description: error.statusMessage, icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    toast.add({ title: 'Error updating AI Image setting', color: 'red', icon: 'i-heroicons-x-circle' });
+  }
+};
+
+
+const onUserTrackIncludeChange = () => {
+  try {
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+    UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -402,21 +578,26 @@ const onUserTrackIncludeChange = async () => {
         isUserTrackIncluded: isUserTrackInclude.value,
       },
     });
-    await updateIsUserTrackIncluded(isUserTrackInclude.value);
-    toast.add({ title: 'UserTrack include updated', icon: 'i-heroicons-check-circle' });
+    updateIsUserTrackIncluded(isUserTrackInclude.value);
+    toast.add({ title: 'UserTrack include updated',description: error.statusMessage, icon: 'i-heroicons-check-circle' });
   } catch (error) {
-    console.error(error);
     toast.add({ title: 'Error updating UserTrack setting', color: 'red', icon: 'i-heroicons-x-circle' });
   }
 };
 
-const onInputChange = async () => {
+const onInputChange = () => {
   isUpdatingInputs.value = true;
   try {
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
     const productinputData = Object.fromEntries(productInputs.map(input => [input.key, input.value]));
     const variantinputData = Object.fromEntries(variantInputs.map(input => [input.key, input.value]));
 
-    const res= await UpdateCompany.mutateAsync({
+    const res= UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -429,21 +610,25 @@ const onInputChange = async () => {
         },
       },
     });
-    console.log(productinputData, variantinputData);
-    const resu = await updateSession(productinputData, variantinputData);
+    updateSession(productinputData, variantinputData);
     toast.add({ title: 'Product and Variant inputs updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
-    console.error(error);
-    toast.add({ title: 'Error updating Product and Variant inputs', color: 'red', icon: 'i-heroicons-x-circle' });
+    toast.add({ title: 'Error updating Product and Variant inputs',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingInputs.value = false;
   }
 };
 
-const onPointsValueChange = async() => {
+const onPointsValueChange = () => {
   isUpdatingPointsValue.value = true;
   try {
-    const res = UpdateCompany.mutate({
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+    UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -451,19 +636,24 @@ const onPointsValueChange = async() => {
         pointsValue: pointsValue.value,
       },
     });
-    await updatePointsValue(pointsValue.value);
+   updatePointsValue(pointsValue.value);
     toast.add({ title: 'Points value updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
-    console.error(error);
-    toast.add({ title: 'Error updating points value', color: 'red', icon: 'i-heroicons-x-circle' });
+    toast.add({ title: 'Error updating points value',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingPointsValue.value = false;
   }
 };
-const ontimingChange = async() => {
+const ontimingChange = () => {
   isUpdatingtiming.value = true;
   try {
-    const res = UpdateCompany.mutate({
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+   UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -472,20 +662,25 @@ const ontimingChange = async() => {
         closeTime: timing.close,
       },
     });
-    await updateTimeValue(timing.open,timing.close);
+    updateTimeValue(timing.open,timing.close);
     toast.add({ title: 'Timing updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
-    console.error(error);
-    toast.add({ title: 'Error updating Timing', color: 'red', icon: 'i-heroicons-x-circle' });
+    toast.add({ title: 'Error updating Timing',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingtiming.value = false;
   }
 };
 
-const onCategoryChange = async() => {
+const onCategoryChange = () => {
   isUpdatingCategory.value = true;
   try {
-    const res = UpdateCompany.mutate({
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+   UpdateCompany.mutate({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -493,11 +688,11 @@ const onCategoryChange = async() => {
         category: selectedCategory.value,
       },
     });
-    await updateCategoryValue(selectedCategory.value);
+    updateCategoryValue(selectedCategory.value);
     toast.add({ title: 'Category updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.error(error);
-    toast.add({ title: 'Error updating Category', color: 'red', icon: 'i-heroicons-x-circle' });
+    toast.add({ title: 'Error updating Category',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
     isUpdatingCategory.value = false;
   }
@@ -507,7 +702,13 @@ const onCategoryChange = async() => {
 const onLogoUpdate = async () => {
   isUpdatingLogo.value = true;
     try{
-    await UpdateCompany.mutateAsync({
+        if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+    UpdateCompany.mutate({
         where: {
             id: useAuth().session.value?.companyId,
         },
@@ -523,27 +724,21 @@ const onLogoUpdate = async () => {
     if (selectedFile.value) {
         const base64 = await prepareFileForApi(selectedFile.value.file);
         const base64file = { base64, uuid: selectedFile.value.uuid };
-
-        console.log(base64file);
-
         await awsService.uploadBase64File(base64file.base64, base64file.uuid);
     }
 
-await useAuth().updateSession();
+updateLogo(selectedFile.value?.uuid);
+toast.add({ title: 'Logo updated', icon: 'i-heroicons-check-circle' });
 }catch(error){
     console.error(error);
     toast.add({
         title: 'Error updating profile',
         icon: 'i-heroicons-exclamation-circle',
         color: 'red',
+        description: error.statusMessage,
     });
 }finally {
         isUpdatingLogo.value = false;
-        toast.add({
-            title: 'Profile updated successfully',
-            icon: 'i-heroicons-check-circle',
-            color: 'green',
-        });
     }
 
 };
@@ -571,7 +766,79 @@ const previewUrl = computed(() => {
   return null;
 });
 
+const saveDeliveryConfig = () => {
+  isUpdatingDeliveryConfig.value = true;
+  const payload = {
+    deliveryMode: deliveryMode.value,
+    fundDeliveryFees: fundDeliveryFees.value,
+    deliveryRadius: deliveryRadius.value,
+    deliveryFeesPerKm: deliveryFeesPerKm.value,
+    waitingTime: waitingTime.value,
+    waitingChargesPerMin: waitingChargesPerMin.value,
+    minDeliveryCharges: minDeliveryCharges.value,
+    deliveryDiscountThreshold: deliveryDiscountThreshold.value,
+    deliveryDiscountAmount: deliveryDiscountAmount.value
+  }
+   isUpdatingAccount.value = true;
+  try {
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+    UpdateCompany.mutate({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        deliveryMode: deliveryMode.value,
+        fundDeliveryFees: fundDeliveryFees.value,
+        deliveryRadius: deliveryRadius.value,
+        deliveryFeesPerKm: deliveryFeesPerKm.value,
+        waitingTime: waitingTime.value,
+        waitingChargesPerMin: waitingChargesPerMin.value,
+        minDeliveryCharges: minDeliveryCharges.value,
+        deliveryDiscountThreshold: deliveryDiscountThreshold.value,
+        deliveryDiscountAmount: deliveryDiscountAmount.value
+      }
+    });
+    updateDeliveryConfig(payload);
+    toast.add({ title: 'Account details updated', color: 'green', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.log(error);
+    toast.add({ title: 'Error updating account details',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingDeliveryConfig.value = false;
+  }
+}
 
+const onDeliveryTypeChange = () => {
+  isUpdatingDeliveryType.value = true;
+  try {
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+   UpdateCompany.mutate({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        deliveryType: deliveryType.value,
+      },
+    });
+    updateDeliveryType(deliveryType.value);
+    toast.add({ title: 'Delivery Type updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating Delivery Type',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingDeliveryType.value = false;
+  }
+};
 
 </script>
 
@@ -663,7 +930,7 @@ const previewUrl = computed(() => {
       }"
   >
       <UAvatar v-if="previewUrl" :src="previewUrl" :alt="storeName" size="lg" />
-      <UAvatar v-else :src="`https://images.markit.co.in/${storeLogo|| ''}`" :alt="storeName" size="lg" />
+      <UAvatar v-else :src="`https://images.markit.co.in/${storeLogo}`" :alt="storeName" size="lg" />
 
       <UButton
           label="Choose"
@@ -704,11 +971,131 @@ const previewUrl = computed(() => {
         :ui="{ container: '' }"
       >
        <USelectMenu v-model="selectedCategory" :options="category" multiple placeholder="Select Category" />
-        <UButton class="my-2" type="submit" label="Save Categories" :loading="isUpdatingCategory" @click="onCategoryChange"/>
+        <UButton class="my-2" type="submit" label="Save Categories" :loading="isUpdatingCategory" @click="onCategoryChange" :disabled="!isCategoryChanged"/>
+      </UFormGroup>
+      <UDivider class="mb-4" />
+      <UFormGroup
+        name="deliveryType"
+        label="Delivery Type"
+        description="Your Store Delivery Type"
+        class="grid grid-cols-2 gap-2 mb-4"
+        :ui="{ container: '' }"
+      >
+       <USelectMenu v-model="deliveryType" :options="deliveryTypeOptions" multiple placeholder="Select Delivery Type" />
+        <UButton class="my-2" type="submit" label="Save Delivery Type" :loading="isUpdatingDeliveryType" @click="onDeliveryTypeChange" :disabled="!isDeliveryTypeChanged"/>
       </UFormGroup>
 
 
     <UDivider class="mb-4" />
+      <UFormGroup
+        name="deliveryMode"
+        label="Delivery Mode"
+        description="Choose your delivery mode"
+        class="grid grid-cols-2 gap-2 mb-4"
+        :ui="{ container: '' }"
+    >
+    <USelectMenu
+      v-model="deliveryMode"
+      :options="deliveryModeOptions"
+      multiple
+      placeholder="Select delivery mode"
+    />
+  </UFormGroup>
+
+  <UFormGroup
+      name="deliveryRadius"
+        label="Delivery Radius (km)"
+        class="grid grid-cols-2 gap-2 mb-4"
+          :ui="{ container: '' }"
+        >
+      <UInput v-model="deliveryRadius" type="number" placeholder="Enter radius in km" />
+    </UFormGroup>
+
+  <!-- If Markit → Only Fund Delivery Fees -->
+  <UFormGroup
+    v-if="isMarkit"
+    name="fundDeliveryFees"
+    label="Fund Delivery Fees"
+    description="Enable if you want to pay for customers delivery fees"
+     class="grid grid-cols-2 gap-2"
+        :ui="{ container: '' }"
+  >
+    <UCheckbox v-model="fundDeliveryFees" label="Fund Delivery Fees" />
+    
+  </UFormGroup>
+
+  <!-- If Self → Show all fields -->
+  <div v-if="isSelf" >
+
+    <UFormGroup
+      name="deliveryFeesPerKm"
+      label="Delivery Fees / Km"
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"
+    >
+      <UInput v-model="deliveryFeesPerKm" type="number" placeholder="Enter fee per km" />
+    </UFormGroup>
+
+    <UFormGroup
+      name="waitingTime"
+      label="Free Waiting Time (min)"
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"
+    >
+      <UInput v-model="waitingTime" type="number" placeholder="Enter minutes" />
+    </UFormGroup>
+
+    <UFormGroup
+      name="waitingChargesPerMin"
+      label="Waiting Charges / Min"
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"
+    >
+      <UInput v-model="waitingChargesPerMin" type="number" placeholder="Enter charge per minute" />
+    </UFormGroup>
+
+    <UFormGroup
+      name="minDeliveryCharges"
+      label="Minimum Delivery Charges"
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"
+    >
+      <UInput v-model="minDeliveryCharges" type="number" placeholder="Enter minimum delivery fee" />
+    </UFormGroup>
+
+    <UFormGroup
+      name="deliveryDiscountThreshold"
+      label="Deduction Threshold Amount"
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"
+    >
+      <UInput v-model="deliveryDiscountThreshold" type="number" placeholder="Enter deduction amount" />
+    </UFormGroup>
+
+    <UFormGroup
+      name="deliveryDiscountAmount"
+      label="Deduction Per Threshold Amount"
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"
+    >
+      <UInput v-model="deliveryDiscountAmount" type="number" placeholder="Enter deduction per threshold amount" />
+    </UFormGroup>
+    
+  </div>
+  <UFormGroup  class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }">
+     <UButton 
+     class="mt-4" 
+     label="Save Delivery Settings" 
+     @click="saveDeliveryConfig" 
+     :disabled="!isDeliveryConfigChanged"
+     :loading="isUpdatingDeliveryConfig"
+     />
+  </UFormGroup>
+
+
+<UDivider class="mb-4" />
+
 
     <UFormGroup
       name="description"
@@ -816,6 +1203,21 @@ const previewUrl = computed(() => {
     <UDivider class="mb-4" />
 
     <UFormGroup
+      name="aiImage"
+      label="AI Image"
+      description="Check if you want to enable AI Image generation."
+      required
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"    
+    >
+      <UCheckbox v-model="isAiImage" @change="onAiImageChange" />
+    </UFormGroup>
+    
+
+    
+    <UDivider class="mb-4" />
+
+    <UFormGroup
       name="usersReport"
       label="Users Sales Track "
       description="Check if you want to track user sales."
@@ -841,6 +1243,7 @@ const previewUrl = computed(() => {
         size="md"
         :loading="isUpdatingPointsValue"
         @click="onPointsValueChange"
+        :disabled="!isPointChanged"
     />
     </UFormGroup>
     
@@ -869,6 +1272,7 @@ const previewUrl = computed(() => {
         label="Update Timing"
         size="md"
         :loading="isUpdatingtiming"
+        :disabled="!isTimeChanged"
         @click="ontimingChange"
     />
     </UFormGroup>
@@ -943,7 +1347,7 @@ const previewUrl = computed(() => {
           size="md"
           placeholder="GSTIN"
         />
-        <UButton class="" type="submit" label="Save Account" :loading="isUpdatingAccount"/>
+        <UButton class="" type="submit" label="Save Account" :loading="isUpdatingAccount" :disabled="!isAccountStateChanged"/>
       </UFormGroup>
     </UForm>
 
@@ -961,10 +1365,7 @@ const previewUrl = computed(() => {
 </UFormGroup>
 
 
-    <UForm
-      :state="addstate"
-      @submit="onaddSubmit"
-    >
+
       <UFormGroup
         name="addressDetails"
         label="Address Details"
@@ -1006,9 +1407,15 @@ const previewUrl = computed(() => {
           size="md"
           placeholder="Landmark"
         />
-        <UButton class="" type="submit" label="Save Address" :loading="isUpdatingAddress"/>
+        <UButton 
+        class="" 
+        type="submit" 
+        label="Save Address" 
+        :loading="isUpdatingAddress" 
+        :disabled="!isAddressStateChanged"  
+        @click="onaddSubmit"/>
       </UFormGroup>
-    </UForm>
+
 
     <UDivider class="mb-4" />
    
@@ -1046,7 +1453,13 @@ const previewUrl = computed(() => {
 </div>
 
 <div class="text-end">
-  <UButton class="mt-4 w-fit" @click="onInputChange" label="Save Inputs" :loading="isUpdatingInputs" />
+  <UButton 
+  class="mt-4 w-fit" 
+  @click="onInputChange" 
+  label="Save Inputs" 
+  :loading="isUpdatingInputs" 
+  :disabled="!isInputsChanged"
+/>
 </div>
 
   </UDashboardPanelContent>

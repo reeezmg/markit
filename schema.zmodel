@@ -89,8 +89,8 @@ enum PayableStatus {
 model DistributorCompany {
     distributorId String @map("distributor_id")
     companyId     String @map("company_id")
-    distributor   Distributor @relation(fields: [distributorId], references: [id], onDelete: Cascade)
-    company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    distributor   Distributor @relation(fields: [distributorId], references: [id])
+    company       Company @relation(fields: [companyId], references: [id])
     distributorPayments DistributorPayment[]
     distributorCredits DistributorCredit[]
     purchaseOrders   PurchaseOrder[]
@@ -115,11 +115,25 @@ model Company extends Base {
     billCounter Int @default(1) @map("bill_counter")
     isTaxIncluded Boolean @default(true) @map("is_tax_included")
     isUserTrackIncluded Boolean @default(true) @map("is_usertrack_included")
+    isAiImage Boolean @default(true) @map("is_ai_image")
+
+    deliveryType String[] @map("delivery_type")
+    deliveryMode String[] @map("delivery_mode")
+    fundDeliveryFees Boolean @default(false) @map("fund_delivery_fees")
+
+    deliveryRadius Float? @map("delivery_radius")
+    deliveryFeesPerKm Float? @map("delivery_fees_per_km")   
+    waitingTime Int? @map("waiting_time")
+    waitingChargesPerMin Float? @map("waiting_charges_per_min")
+    minDeliveryCharges Float? @map("min_delivery_charges")
+
+    deliveryDiscountThreshold Float? @map("delivery_discount_threshold")
+    deliveryDiscountAmount Float? @map("delivery_discount_amount")
+
     plan String @default('free') @map("plan")
     openTime String @default('9:30') @map("open_time")
     closeTime String @default('9:30') @map("close_time")
     users       CompanyUser[]
-    promoCodes  PromoCode[]
     category    String[]
     clients     CompanyClient[]
     products    Product[]
@@ -139,7 +153,7 @@ model Company extends Base {
     status      Boolean       @default(true)
     type        CompanyType
     pipeline    Pipeline?
-
+    coupon      Coupon[]
     accHolderName String? @map("acc_holder_name")
     ifsc String?
     accountNo String? @map("account_no")
@@ -231,7 +245,7 @@ model PurchaseOrder {
     totalAmount     Float          @default(0) @map("total_amount")
 
     distributorId   String?       @map("distributor_id")
-    distributorCompany     DistributorCompany?  @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+    distributorCompany     DistributorCompany?  @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
 
     @@allow('read, create, update,delete', true)
     @@map("purchase_orders")
@@ -288,6 +302,7 @@ model User extends Base {
     @@map('users')
 }
 
+
 model Client extends Base {
     email     String?        @unique @email
     name      String
@@ -298,41 +313,266 @@ model Client extends Base {
     status    Boolean       @default(true)
     pipelineStatus    String       @default('new') @map("pipeline_status")
     companies CompanyClient[]
-    clientPromoCodes ClientPromoCode[]
     cart CartCompanyClient[]
     address   Address[]
     bills      Bill[]
     conversations ClientConversation[]
     users     UserClient[]
-    newPipeline     Pipeline?        @relation("PipelineNewClients", fields: [newPipelineId], references: [id])
-    newPipelineId   String?         @map("new_pipeline_id")
-    prospectPipeline     Pipeline?        @relation("PipelineProspectClients", fields: [prospectPipelineId], references: [id])
-    prospectPipelineId   String?         @map("prospect_pipeline_id")
-    viewingPipeline     Pipeline?        @relation("PipelineViewingClients", fields: [viewingPipelineId], references: [id])
-    viewingPipelineId   String?         @map("viewing_pipeline_id")
-    rejectPipeline     Pipeline?        @relation("PipelineRejectClients", fields: [rejectPipelineId], references: [id])
-    rejectPipelineId   String?         @map("reject_pipeline_id")
-    closePipeline     Pipeline?        @relation("PipelineCloseClients", fields: [closePipelineId], references: [id])
-    closePipelineId   String?         @map("close_pipeline_id")
     notifications  Notification[]
     likeCompanies LikeCompanyClient[]
     otp        String?
-    otpExpiry  DateTime?
+    otpExpiry  DateTime? @map("otp_expiry")
     trynbuys           Trynbuy[]
+    coupons   CouponClient[]  
+    couponUsage      CouponUsage[]
     deleted       Boolean   @default(false)
     @@allow('read, create, update, delete', true)
 
     @@map('clients')
 }
 
+model DeliveryPartner extends Base {
+  partnerId Int?        @default(autoincrement()) @map("partner_id")
+  email     String?     @unique @email
+  name      String
+  password  String?
+  gender    String?
+  dob       String?
+  profilePic String?    @map("profile_pic")
+  phone     String      @unique
+  status    Boolean     @default(true)
+  address   Address[]
+  bloodGroup String?    @map("blood_group")
+  ifsc       String?
+  accountNo  String?    @map("account_no")
+  bankName   String?    @map("bank_name")
+  upiId      String?    @map("upi_id")
+  branch     String?
+
+  // Docs
+  Adharnumber      String? @map("adharnumber")
+  PanNumber        String? @map("pan_number")
+  DrivingLicenseDoc String? @map("driving_license_doc")
+  AadhaarCardDocs   String? @map("aadhaar_card_docs")
+  PanCardDoc        String? @map("pan_card_doc")
+
+  deliveryNotification DeliveryNotification[]
+  otp           String?
+  otpExpiry     DateTime? @map("otp_expiry")
+  referral      String?
+  deleted       Boolean   @default(false)
+
+  // 👇 One-to-many relation
+  trynbuys      Trynbuy[]  // DeliveryPartner has many Trynbuys
+  deliveryPartnerEarnings DeliveryPartnerEarnings[] 
+
+  @@allow('read, create, update, delete', true)
+  @@map("delivery_partners")
+}
+
+model Trynbuy {
+  id              String       @id @default(uuid())
+  orderNumber     Int          @default(autoincrement()) @map("order_number")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  checkoutMethod  String       @map("checkout_method")
+  subtotal        Float        @map("subtotal")
+  productDiscount Float        @map("product_discount")
+  totalDiscount   Float        @map("total_discount")
+  shipping        Float        @map("shipping")
+  deliveryType    String       @map("delivery_type")
+  deliveryTime    DateTime?    @map("delivery_time")
+  orderStatus     String?      @default("ORDER_RECEIVED") @map("order_status") 
+  location        Address?     @relation(fields: [locationId], references: [id])
+  locationId      String?      @map("location_id")
+  cartItems       TrynbuyCartItem[]
+  returnedItems   TrynbuyReturnedItem[]
+  bill            Bill?
+  client          Client?      @relation(fields: [clientId], references: [id])
+  clientId        String?      @map("client_id")
+  company         Company      @relation(fields: [companyId], references: [id])
+  companyId       String       @map("company_id")
+  deliveryPartnerEarnings DeliveryPartnerEarnings?
+
+  // 👇 Many Trynbuy → One DeliveryPartner
+  deliveryPartner   DeliveryPartner? @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId String?          @map("delivery_partner_id")
+
+  packingStatus   String?      @map("packing_status")
+
+  @@index([clientId])   
+  @@index([companyId])  
+  @@allow("create, read, update, delete", true)
+  @@map("trynbuys")
+}
+
+
+model DeliveryPartnerEarnings extends Base {
+  deliveryFees String? @map("deliverFees")
+  waitingFees  String? @map("waitingFees")
+  tips         String?
+  surge        String?
+  distance     Float?
+  waitingTime  Float?  @map("waiting_time")
+
+  // 👇 Each earning belongs to one Trynbuy
+  trynbuy      Trynbuy  @relation(fields: [trynbuyId], references: [id])
+  trynbuyId    String   @unique @map("trynbuy_id")
+
+  // 👇 Each earning belongs to one DeliveryPartner
+  deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId String          @map("delivery_partner_id")
+
+  @@allow("read, create, update, delete", true)
+  @@map("delivery_partner_earnings")
+}
+
+
+
+model DeliveryNotification extends Base {
+      createdAt              DateTime            @default(now()) @map("created_at")
+    updatedAt              DateTime            @default(now()) @map("updated_at")
+    text      String
+    deliveryPartner     DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id], onDelete: Cascade)
+    deliveryPartnerId   String          @map('delivery_partner_id')
+    @@allow('read, create, update, delete', true)
+
+    @@map('delivery_notifications')
+}
+
+
+
+model TrynbuyCartItem {
+  id        String   @id() @default(uuid())
+  trynbuy   Trynbuy  @relation(fields: [trynbuyId], references: [id])
+  trynbuyId String   @map("trynbuy_id")
+  variant   Variant  @relation(fields: [variantId], references: [id])
+  variantId String   @map("variant_id")
+  item      Item  @relation(fields: [itemId], references: [id])
+  itemId    String   @map("item_id")
+  quantity  Int  
+        
+   @@index([trynbuyId])  
+  @@index([variantId])
+  @@allow("create, read, update, delete", true)
+  @@map("trynbuy_cart_items")
+}
+
+model TrynbuyReturnedItem {
+  id        String   @id() @default(uuid())
+  trynbuy   Trynbuy  @relation(fields: [trynbuyId], references: [id])
+  trynbuyId String   @map("trynbuy_id")
+  variant   Variant  @relation(fields: [variantId], references: [id])
+  variantId String   @map("variant_id")
+  item      Item  @relation(fields: [itemId], references: [id])
+  itemId    String   @map("item_id")
+  quantity  Int 
+
+  @@index([trynbuyId])  
+  @@index([variantId])  
+  @@allow("create, read, update, delete", true)
+  @@map("trynbuy_returned_items")
+}
+
+model Coupon {
+  id                 String             @id @default(uuid())
+  code               String             @unique
+  type               CouponType
+  discountValue      Float?              @map("discount_value")
+  maxDiscountAmount  Float?             @map("max_discount_amount")
+  minOrderValue      Float?             @map("min_order_value")
+  startDate          DateTime           @map("start_date")
+  endDate            DateTime           @map("end_date")
+  isActive           Boolean            @default(true) @map("is_active")
+
+  //To generate
+  minBillAmount      Float?             @map("min_bill_amount")
+  isBillCombine      Boolean            @default(false) @map('is_bill_combine')
+
+  usageLimit         Int?               @map("usage_limit")
+  perClientLimit     Int?               @map("per_client_limit")
+  timesUsed          Int                @default(0) @map("times_used")
+
+  // ✅ Applicability
+  targetType         CouponTarget       @default(ALL) @map("target_type")
+
+  // ✅ Audience
+  audienceType       CouponAudience     @default(ALL) @map("audience_type")
+  clients            CouponClient[]           
+
+  couponUsage        CouponUsage[]  
+
+  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String             @map("company_id")
+
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt      @map("updated_at")
+
+  isMarkit           Boolean            @default(false) @map('is_markit')
+
+  @@allow("read, create, update, delete", true)
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id         String   @id @default(uuid())
+  coupon     Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  couponId   String   @map("coupon_id")
+  client     Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId   String   @map("client_id")
+  bill       Bill?    @relation(fields: [billId], references: [id])
+  billId     String?  @map("bill_id")
+
+  usedAt     DateTime @default(now()) @map("used_at")
+
+  @@unique([couponId, clientId, billId]) 
+  @@allow("read, create, update, delete", true)
+
+  @@map("coupon_usages")
+}
+
+model CouponClient {
+  id        String   @id @default(uuid())   // each row is unique
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  couponId  String
+
+  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId  String
+
+  createdAt DateTime @default(now())
+  @@allow("read, create, update, delete", true)
+  @@map("coupon_clients")
+}
+
+
+
+enum CouponType {
+  PERCENTAGE
+  FLAT
+  GIFT
+}
+
+enum CouponTarget {
+  ALL
+  CATEGORY
+  PRODUCT
+}
+
+enum CouponAudience {
+  ALL
+  GENERATE
+  SPECIFIC
+}
+
+
+
 model Pipeline extends Base {
     company     Company           @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId   String            @map('company_id') @unique
-    newClients      Client[] @relation("PipelineNewClients")
-    prospectClients Client[] @relation("PipelineProspectClients")
-    viewingClients  Client[] @relation("PipelineViewingClients")
-    rejectClients   Client[] @relation("PipelineRejectClients")
-    closeClients    Client[] @relation("PipelineCloseClients")
+    newClients      String[] 
+    prospectClients String[] 
+    viewingClients  String[] 
+    rejectClients   String[] 
+    closeClients    String[]
 
     @@map("pipelines")
 }
@@ -358,7 +598,8 @@ model Category {
   thresholdAmount   Float?        
   taxBelowThreshold Float?        
   taxAboveThreshold Float?          
-  margin            Float?          
+  margin            Float?  
+  targetAudience    String?        @map("target_audience")     
   writeId           String?            @default(uuid()) @map('write_id')
   @@allow("read", true)
   @@allow("create, update, delete", company.users?[user == auth()])
@@ -438,6 +679,7 @@ model Variant {
     companyId   String            @map('company_id')
     VariantSizeBarcode VariantSizeBarcode[]
     sold        Int?
+    deliveryType    String  @default('trynbuy')  @map("delivery_type") 
     writeId           String?            @default(uuid()) @map('write_id')
     cartItems       TrynbuyCartItem[]
     returnedItems   TrynbuyReturnedItem[]
@@ -497,7 +739,8 @@ model Bill extends Base {
     bookingDate     DateTime? @map("booking_date")
     returnDeadline  String? @map("return_deadline")
     entries         Entry[] 
-    billHistories   BillHistory[]    
+    billHistories   BillHistory[] 
+    couponUsage      CouponUsage[]   
     company         Company @relation(fields: [companyId], references: [id])
     companyId       String @map("company_id")   
     account         Account? @relation(fields: [accountId], references: [id])
@@ -505,11 +748,18 @@ model Bill extends Base {
     client          Client? @relation(fields: [clientId], references: [id])   
     clientId        String?  @map("client_id") 
 
+    handlingFee    Float? @map("handling_fee")
+    waitingFee    Float? @map("waiting_fee")
+    deliveryFee   Float? @map("delivery_fee")
+
     userId          String? @map("user_id")
     companyUser     CompanyUser? @relation(fields: [companyId, userId], references: [companyId, userId])
     address         Address? @relation(fields: [addressId], references: [id])   
     addressId       String? @map("address_id") 
-    trynbuy        Trynbuy?     
+    trynbuy        Trynbuy? @relation(fields: [trynbuyId], references: [id])
+    trynbuyId      String? @unique @map("trynbuy_id")   
+
+    isMarkit        Boolean            @default(false) @map('is_markit') 
 
     @@index([companyId, createdAt, deleted])
     @@allow("create, read, update, delete", true)
@@ -517,70 +767,6 @@ model Bill extends Base {
 
 }
 
-
-model Trynbuy {
-  id              String       @id @default(uuid())
-  orderNumber     Int          @default(autoincrement()) @map("order_number")
-  createdAt       DateTime     @default(now()) @map("created_at")
-  checkoutMethod  String       @map("checkout_method")
-  subtotal        Float        @map("subtotal")
-  productDiscount Float        @map("product_discount")
-  totalDiscount   Float        @map("total_discount")
-  shipping        Float        @map("shipping")
-  deliveryType    String       @map("delivery_type")
-  deliveryTime    DateTime?    @map("delivery_time")
-  orderStatus  String?      @default('ORDER_RECEIVED') @map("order_status") 
-  location        Address?     @relation(fields: [locationId], references: [id])
-  locationId      String?      @map("location_id")
-  cartItems       TrynbuyCartItem[]
-  returnedItems   TrynbuyReturnedItem[]
-  bill            Bill?        @relation(fields: [billId], references: [id])
-  billId          String?      @unique() @map("bill_id")
-  client          Client?      @relation(fields: [clientId], references: [id])
-  clientId        String?      @map("client_id")
-  company         Company      @relation(fields: [companyId], references: [id])
-  companyId       String       @map("company_id")
-  packingStatus   String?      @map("packing_status")
-
-  @@index([clientId])   
-  @@index([companyId])  
-  @@allow('create, read, update, delete', true)
-  @@map("trynbuys")
-
-}
-
-
-model TrynbuyCartItem {
-  id        String   @id() @default(uuid())
-  trynbuy   Trynbuy  @relation(fields: [trynbuyId], references: [id])
-  trynbuyId String   @map("trynbuy_id")
-  variant   Variant  @relation(fields: [variantId], references: [id])
-  variantId String   @map("variant_id")
-  item      Item  @relation(fields: [itemId], references: [id])
-  itemId    String   @map("item_id")
-  quantity  Int  
-        
-   @@index([trynbuyId])  
-  @@index([variantId])
-  @@allow("create, read, update, delete", true)
-  @@map("trynbuy_cart_items")
-}
-
-model TrynbuyReturnedItem {
-  id        String   @id() @default(uuid())
-  trynbuy   Trynbuy  @relation(fields: [trynbuyId], references: [id])
-  trynbuyId String   @map("trynbuy_id")
-  variant   Variant  @relation(fields: [variantId], references: [id])
-  variantId String   @map("variant_id")
-  item      Item  @relation(fields: [itemId], references: [id])
-  itemId    String   @map("item_id")
-  quantity  Int 
-
-  @@index([trynbuyId])  
-  @@index([variantId])  
-  @@allow("create, read, update, delete", true)
-  @@map("trynbuy_returned_items")
-}
 
 
 model Entry extends Base {
@@ -696,8 +882,6 @@ model Expense extends Base {
     @@index([companyId, expenseDate])
     @@allow("create, read, update, delete", true)
     @@map("expenses")
-
-    
 }
 
 model Payment extends Base {
@@ -726,7 +910,7 @@ model Address extends Base {
     city    String?
     state    String?
     pincode  String?
-    houseDetails String?
+    houseDetails String? @map("house_details")
     type          String?
     formattedAddress       String?                @map("formatted_address")
     placeId  String? @map("place_id")
@@ -742,8 +926,13 @@ model Address extends Base {
     distributorId String? @map('distributor_id') @unique
     company Company? @relation(fields: [companyId], references: [id],onDelete:Cascade)
     companyId String? @map('company_id') @unique
+
     account     Account? @relation(fields: [accountId], references: [id])
     accountId    String? @map('account_id') @unique
+
+    deliveryPartner     DeliveryPartner? @relation(fields: [deliveryPartnerId], references: [id])
+    deliveryPartnerId    String? @map('deliveryPartner_id') @unique
+
     bill     Bill[]
     trynbuy          Trynbuy[]      
 
@@ -921,38 +1110,6 @@ model CapPushToken extends Base {
 
   @@unique([userId, deviceId])  
   @@map("cap_push_token")
-}
-
-
-
-model PromoCode {
-  id              String   @id @default(cuid())
-  code            String   @unique
-  discountPercent Int
-  minAmount       Float
-  expiresAt       DateTime
-  isActive        Boolean  @default(true)
-  company         Company  @relation(fields: [companyId], references: [id],onDelete:Cascade)
-  companyId       String
-  usageLimit      Int?
-  usageCount      Int?
-  clientsUsed     ClientPromoCode[] @relation("PromoCodeToClientPromoCode") // <-- fix here
-
-  @@index([companyId])
-  @@allow('read, create, update, delete', true)
-  @@map("promo_codes")
-}
-
-model ClientPromoCode {
-  id          String   @id @default(cuid())
-  clientId    String
-  promoCodeId String
-  usedAt      DateTime @default(now())
-  client      Client   @relation(fields: [clientId], references: [id])
-  promoCode   PromoCode @relation("PromoCodeToClientPromoCode", fields: [promoCodeId], references: [id]) // <-- fix here
-  @@index([promoCodeId])
-  @@allow('read, create, update, delete', true)
-  @@map("client_promo_code")
 }
 
 model Cart extends Base {

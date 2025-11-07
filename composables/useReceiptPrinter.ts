@@ -242,8 +242,8 @@ export function useReceiptPrinter() {
         TEXT 30,83,"2",0,1,1,"${name}${size ? ' - ' + size : ''}"
         TEXT 30,110,"2",0,1,1,"MRP Rs.${parseFloat(sprice).toFixed(2)}"
 
-        ${dprice ? `BAR 30,116,230,4` : ''}
-        ${dprice ? `TEXT 30,136,"2",0,1,1,"Discount Rs.${parseFloat(dprice).toFixed(2)}"` : ''}
+       ${dprice !== null && dprice !== undefined ? `BAR 30,116,230,4` : ''}
+       ${dprice !== null && dprice !== undefined ? `TEXT 30,136,"2",0,1,1,"Discount Rs.${parseFloat(dprice).toFixed(2)}"` : ''}
 
         TEXT 30,168,"1",0,1,1,"${code}-${brand}"
         BARCODE 30,185,"128",100,0,0,3,3,"${barcode}"

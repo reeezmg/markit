@@ -32,6 +32,19 @@ const supplier = ref({
 
 const paymentType = ref('')
 const billNo = ref('')
+const DELIVERY_TYPE_KEY = 'lastDeliveryType'
+const deliveryTypeOptions = ref<string[]>(useAuth().session.value?.deliveryType || [])
+const deliveryType = ref<string>()
+
+if (process.client) {
+  deliveryType.value = localStorage.getItem(DELIVERY_TYPE_KEY) || deliveryTypeOptions.value[0]
+}
+// Watch for changes in deliveryType and update localStorage
+watch(deliveryType, (newValue) => {
+  if (typeof window !== 'undefined' && newValue) {
+    localStorage.setItem(DELIVERY_TYPE_KEY, newValue)
+  }
+})
 
 const emit = defineEmits(['update']);
 
@@ -96,15 +109,16 @@ const emitUpdatedValues = () => {
   emit('update', {
     distributorId: selected.value?.id || null,
     paymentType: paymentType.value,
-    billNo: billNo.value
+    billNo: billNo.value,
+    deliveryType: deliveryType.value
   });
 };
 
 // Watch for changes and emit updates
 watch(
-  [selected, paymentType,billNo],
-  ([newSelected, newPaymentType, newbillNo]) => {
-    emitUpdatedValues(); // call your method here
+  [selected, paymentType, billNo, deliveryType],
+  ([newSelected, newPaymentType, newBillNo, newDeliveryType]) => {
+    emitUpdatedValues();
   },
   { deep: true }
 );
@@ -112,63 +126,82 @@ watch(
 </script>
 
 <template>
-  <div class="grid grid-cols-1 sm:flex gap-3 items-center">
-  <!-- Line 1 (Select Menu + Button) -->
-  <div class="flex items-center gap-2">
-    <USelectMenu
-      class="min-w-44 w-full sm:w-auto"
-      v-model="selected"
-      :options="distributors"
-      searchable
-      searchable-placeholder="Search a distributor"
-    >
-      <template #label>
-        <span v-if="!selected.name">Select Distributor</span>
-        <span>{{ selected.name }}</span>
-      </template>
-      <template #option="{ option: name }">
-        <span>{{ name.name }}</span>
-      </template>
-    </USelectMenu>
-    <UButton
-      icon="i-heroicons-plus"
-      size="sm"
-      color="primary"
-      square
-      variant="solid"
-      @click="isOpen = true"
+  <div class="flex flex-col sm:flex-row sm:justify-between gap-3 w-full">
+  <!-- Left section (Distributor, Add button, Bill No, Payment) -->
+  <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
+    <!-- Distributor + Add button -->
+    <div class="flex items-center gap-2 w-full sm:w-auto">
+      <USelectMenu
+        class="flex-1 min-w-44"
+        v-model="selected"
+        :options="distributors"
+        searchable
+        searchable-placeholder="Search a distributor"
+      >
+        <template #label>
+          <span v-if="!selected.name">Select Distributor</span>
+          <span>{{ selected.name }}</span>
+        </template>
+        <template #option="{ option: name }">
+          <span>{{ name.name }}</span>
+        </template>
+      </USelectMenu>
+
+      <UButton
+        icon="i-heroicons-plus"
+        size="sm"
+        color="primary"
+        square
+        variant="solid"
+        @click="isOpen = true"
+      />
+    </div>
+
+    <!-- Bill No -->
+    <UInput
+      v-model="billNo"
+      type="text"
+      placeholder="Bill No"
+      class="w-full sm:w-auto"
+    />
+
+    <!-- Payment Type -->
+    <USelect
+      v-model="paymentType"
+      :options="[
+        { label: 'Credit', value: 'CREDIT' },
+        { label: 'Cash', value: 'CASH' },
+        { label: 'UPI', value: 'UPI' },
+      ]"
+      option-attribute="label"
+      value-attribute="value"
+      placeholder="Payment Type"
+      class="w-full sm:w-auto"
     />
   </div>
-    <UDivider class="hidden sm:block mx-1" orientation="vertical" />
 
-  <UInput v-model="billNo" type="text" placeholder="billNo"/>
+  <!-- Right section (Delivery Type + Total) -->
+  <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto justify-end">
+    <!-- Delivery Type -->
+    <div class="flex items-center gap-2 w-full sm:w-auto">
+      <span class="whitespace-nowrap">Delivery Type:</span>
+      <USelectMenu
+        v-model="deliveryType"
+        :options="deliveryTypeOptions"
+        placeholder="Select Delivery Type"
+        class="flex-1 sm:w-auto"
+      />
+    </div>
 
-  <!-- Divider for larger screens -->
-  <UDivider class="hidden sm:block mx-1" orientation="vertical" />
-
-  <!-- Line 2 (Payment Type) -->
-  <USelect
-    v-model="paymentType"
-    :options="[
-      { label: 'Credit', value: 'CREDIT' },
-      { label: 'Cash', value: 'CASH' },
-      { label: 'UPI', value: 'UPI' },
-    ]"
-    option-attribute="label"
-    value-attribute="value"
-    placeholder="Payment Type"
-    class="w-full sm:w-auto"
-  />
-
-  <!-- Divider for larger screens -->
-  <UDivider v-if="paymentType === 'CREDIT'" class="hidden sm:block mx-1" orientation="vertical" />
-  <UDivider class="hidden sm:block mx-1" orientation="vertical" />
-
-  <!-- Line 3 (Total) -->
-  <div class="flex items-center">
-    <span class="font-semibold whitespace-nowrap">Total: ₹{{ totalAmount.toFixed(2) }}</span>
+    <!-- Total -->
+    <div class="flex items-center justify-end sm:justify-start w-full sm:w-auto">
+      <span class="font-semibold whitespace-nowrap">
+        Total: ₹{{ totalAmount.toFixed(2) }}
+      </span>
+    </div>
   </div>
 </div>
+
 
 
   <template>

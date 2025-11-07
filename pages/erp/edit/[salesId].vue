@@ -14,7 +14,8 @@ import {
   useCreateEntry,
   useDeleteManyEntry,
   useFindManyEntry,
-  useUpdateCompanyClient
+  useUpdateCompanyClient,
+  useFindManyCoupon
 } from '~/lib/hooks'; 
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
@@ -49,6 +50,11 @@ const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
 const date = ref(new Date().toISOString());
 const discount = ref(0);
 const accountLoaded = ref(false);
+const couponValue = ref(0);
+const clientFound = ref(false);
+const couponFound = ref(false);
+const selectedCouponId = ref("");
+
 
 const returnAmt = computed(() => {
   return items.value.reduce((sum, item) => {
@@ -564,7 +570,6 @@ const removeRow = (event,index) => {
 onMounted(async () => {
   const {data:newData} = await billRefetch()
    if (!newData || !newData.entries) return;
-    console.log(clientName.value)
     if (newData?.splitPayments && newData.splitPayments.length > 0) {
       tempSplits.value = Object.fromEntries(
         paymentOptions.map((method) => {
@@ -573,6 +578,17 @@ onMounted(async () => {
         })
       );
       splitPayments.value = [...newData.splitPayments];
+    }
+
+    if(newData.client?.id){
+      clientFound.value = true
+    }
+    if (newData.couponUsage[0]?.couponId) {
+      couponFound.value = true;
+      selectedCouponId.value = {
+        label:`${newData.couponUsage[0].coupon.code} (${newData.couponUsage[0].coupon.type})`,
+        value:newData.couponUsage[0].couponId
+      }
     }
     discount.value = newData.discount;
     selected.value = newData.accountId;
@@ -770,6 +786,7 @@ const billArgs = computed(() => ({
     accountId:true,
     type: true,
     status: true,
+    isMarkit:true,
     address: {
         select:{
             street:true,
@@ -824,6 +841,17 @@ const billArgs = computed(() => ({
           }
         }
       }
+    },
+    couponUsage:{
+      select:{
+        couponId:true,
+        coupon:{
+          select:{
+            code:true,
+            type:true
+          }
+        }
+      }
     }
   }
 }));
@@ -832,6 +860,10 @@ const billArgs = computed(() => ({
 const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs,{enabled:false});
 const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enabled:false});
 const {data: entrietosDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
+
+watch(bill ,(newBill) => {
+  console.log(newBill)
+})
 
 
 const handleEnterBarcode = (barcode,index) => {
@@ -931,7 +963,7 @@ const handleEdit = async () => {
   }
     
     // 1. Validate and filter items
-    items.value = items.value.filter(item =>
+    const finalitems = items.value.filter(item =>
       item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
     );
 
@@ -940,7 +972,7 @@ const handleEdit = async () => {
     }
 
     // 2. Validate each item has a category
-    items.value.forEach((item, index) => {
+    finalitems.forEach((item, index) => {
       if (!item.category || !item.category[0]?.id) {
         throw new Error(`No category in entry ${index + 1}`);
       }
@@ -962,7 +994,7 @@ const handleEdit = async () => {
       thankYouNote:useAuth().session.value?.thankYouNote,
       refundPolicy:useAuth().session.value?.refundPolicy,
       returnPolicy:useAuth().session.value?.returnPolicy,
-      entries: items.value.map(entry => {
+      entries: finalitems.map(entry => {
         let calculatedDiscount = 0;
         
         if (entry.discount < 0) {
@@ -1000,10 +1032,10 @@ const handleEdit = async () => {
       upiId: useAuth().session.value?.upiId || '',
       clientName: clientName.value,
       clientPhone: phoneNo.value,
-      tqty: items.value.reduce((sum, entry) => sum + entry.qty, 0),
-      tvalue: items.value.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
-      ttvalue: items.value.reduce((sum, entry) => sum + (entry.value), 0),
-      tdiscount: items.value.reduce((sum, entry) => {
+      tqty: finalitems.reduce((sum, entry) => sum + entry.qty, 0),
+      tvalue: finalitems.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
+      ttvalue: finalitems.reduce((sum, entry) => sum + (entry.value), 0),
+      tdiscount: finalitems.reduce((sum, entry) => {
         if (entry.discount < 0) {
           return sum + (Math.abs(entry.discount) * entry.qty);
         } else {
@@ -1019,8 +1051,9 @@ const handleEdit = async () => {
     console.log(selected.value, 'selected account');
     // 6. Prepare request data for server
     const requestData = {
-      items: items.value,
+      items: finalitems,
       entriesToDelete: entriesDelete || [],
+      couponId: selectedCouponId.value?.value || null,
       billPoints,
       billData: {
         id: route.params.salesId,
@@ -1544,9 +1577,152 @@ const handleClearClient = async () => {
   oldClientId.value = '';
 }
 
+function isCouponEligible(coupon, orderValue, clientId) {
+  const now = new Date();
+  const clientUsage = coupon.couponUsage.filter(u => u.clientId === clientId).length;
+  const clientAppearances = coupon.clients.filter(c => c.clientId === clientId).length;
+  if (!coupon.isActive) return false;
+  if (now < new Date(coupon.startDate) || now > new Date(coupon.endDate)) return false;
+
+  if (coupon.minOrderValue && orderValue < coupon.minOrderValue) return false;
+
+  if (coupon.usageLimit !== null && coupon.timesUsed >= coupon.usageLimit) return false;
+
+  if (coupon.perClientLimit !== null && clientUsage >= coupon.perClientLimit) {
+    return false;
+  }
+
+  // Audience rules
+  if (coupon.audienceType === 'SPECIFIC') {
+    if (!coupon.clients.some(c => c.clientId === clientId)) {
+      return false;
+    }
+  }
+
+  if (coupon.audienceType === 'GENERATE') {
+    // If client has already used as many times as appearances allow, block
+    if (clientUsage >= clientAppearances) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
+
+const couponQueryArgs = computed(() => {
+  const now = new Date();
+  return {
+    where: {
+      companyId: useAuth().session.value?.companyId,
+      isActive: true,
+      startDate: { lte: now },
+      endDate: { gte: now },
+    },
+    include: {
+      clients: { select: { clientId: true } },   // ✅ fix here
+      couponUsage: { select: { clientId: true } },
+    },
+  }
+});
+
+
+const { data: allCoupons, refetch: couponRefetch } = useFindManyCoupon(couponQueryArgs);
+
+
+const eligibleCoupons = computed(() => {
+  if (!clientId.value) return [];
+  return (allCoupons.value || [])
+    .filter(coupon => isCouponEligible(coupon, grandTotal.value, clientId.value))
+    .map(coupon => {
+      const clientUsageCount = coupon.couponUsage.filter(u => u.clientId === clientId.value).length;
+
+      let usageInfo = '∞';
+      if (coupon.perClientLimit !== null) {
+        const remaining = coupon.perClientLimit - clientUsageCount;
+        usageInfo = remaining > 0 ? `${remaining}` : '0';
+      }
+
+      return {
+        label: `${coupon.code} (${coupon.type}) - ${usageInfo}`,
+        value: coupon.id,
+      };
+    });
+});
+
+
+function calculateDiscount(coupon, orderValue) {
+  if (!coupon) return { discount: 0, finalAmount: orderValue };
+
+  // 🎁 If Gift coupon → no calculation, just treat as 0 discount
+  if (coupon.type === 'GIFT') {
+    return 0;
+  }
+
+  let discount = 0;
+
+  if (coupon.type === 'PERCENTAGE') {
+    discount = (orderValue * (coupon.discountValue ?? 0)) / 100;
+
+    // apply max discount cap if set
+    if (coupon.maxDiscountAmount && discount > coupon.maxDiscountAmount) {
+      discount = coupon.maxDiscountAmount;
+    }
+  }
+
+  if (coupon.type === 'FLAT') {
+    discount = coupon.discountValue ?? 0;
+  }
+
+  // Prevent discount > orderValue
+  if (discount > orderValue) discount = orderValue;
+
+  return discount
+}
+
+watch(selectedCouponId, (newSelectedCouponId) => {
+  if(newSelectedCouponId){
+  console.log(newSelectedCouponId)
+  redeemedAmt.value = redeemedAmt.value - couponValue.value;
+  const chosen = allCoupons.value?.find(c => c.id === newSelectedCouponId?.value);
+  if (chosen) {
+    console.log(chosen)
+      const result = calculateDiscount(chosen, grandTotal.value);
+      couponValue.value = result;
+      redeemedAmt.value = redeemedAmt.value + result;
+    }
+}
+});
+
+watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
+  if (newItems && !couponFound.value) {
+    // reset coupon state when items or client changes
+    selectedCouponId.value = null;
+    redeemedAmt.value = redeemedAmt.value - couponValue.value;
+    couponValue.value = 0;
+  }
+}, { deep: true });
+
+watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
+  if (newItems && couponFound.value) {
+    redeemedAmt.value = redeemedAmt.value - couponValue.value;
+    console.log(selectedCouponId?.value)
+  const chosen = allCoupons.value?.find(c => c.id === selectedCouponId?.value.value);
+  if (chosen) {
+    console.log(chosen)
+      const result = calculateDiscount(chosen, grandTotal.value);
+      console.log(result)
+      couponValue.value = result;
+      redeemedAmt.value = redeemedAmt.value + result;
+    }
+  }
+}, { deep: true });
+
+
+
+
 
 </script>
-
 
 <template>
   <UDashboardPanelContent class="p-1">
@@ -1587,12 +1763,13 @@ const handleClearClient = async () => {
         variant="solid"
         class="absolute top-2 right-3 z-10"
         @click="() => { showCamera = false; stopCamera() }"
+        :disabled="bill?.isMarkit"
       />
     </div>
      <div class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
-          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
-          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
+          <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Return</UButton>
         </div>
     
         <div  class="lg:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2 px-2">
@@ -1614,8 +1791,8 @@ const handleClearClient = async () => {
         </div>
      
          <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
-            <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" />
-            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
+            <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" :disabled="bill?.isMarkit" />
+            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan" :disabled="bill?.isMarkit"/>
           </div>
         
         <div class="lg:flex lg:flex-row lg:justify-between text-sm py-2 px-2 hidden">
@@ -1623,6 +1800,7 @@ const handleClearClient = async () => {
             v-model="dateOnly" 
             type="date" 
             label="Date" 
+            :disabled="bill?.isMarkit"
           />
           <div class="lg:flex lg:flex-row">
            <UButton
@@ -1630,13 +1808,14 @@ const handleClearClient = async () => {
                 icon="i-heroicons-plus"
                 class="flex-shrink-0 me-2"
                 @click="addNewRow(0,false)"
+                :disabled="bill?.isMarkit"
               />
           <UButton  
-       
             color="primary" 
             icon="i-heroicons-camera" 
             label="Scan" 
             @click="handleScan"
+            :disabled="bill?.isMarkit"
           />
           </div>
         </div>
@@ -1671,10 +1850,11 @@ const handleClearClient = async () => {
                 placeholder="Barcode"
                 size="sm"
                 ref="barcodeInputs"
-                 :color="row.return ? 'red' : undefined"
+                :color="row.return ? 'red' : undefined"
                 @focus="selectAllText(index)"
                 @keydown.delete="removeRow($event, index)"
                 @keydown.enter.prevent="handleEnterBarcode(row.barcode, index)"
+                :disabled="bill?.isMarkit"
               />
               <UInput
                 v-model="row.rate"
@@ -1682,13 +1862,14 @@ const handleClearClient = async () => {
                 placeholder="Rate"
                 type="number"
                 size="sm"
-                 :color="row.return ? 'red' : undefined"
+                :color="row.return ? 'red' : undefined"
                 @keydown.enter="moveFocus(index, 'rate', 'right')"
+                :disabled="bill?.isMarkit"
               />
               
               <UInput
                 v-model="row.discount"
-                 :color="row.return ? 'red' : undefined"
+                :color="row.return ? 'red' : undefined"
                 placeholder="Discount"
                 ref="discountInputs" 
                 type="text"
@@ -1696,6 +1877,7 @@ const handleClearClient = async () => {
                 pattern="^-?[0-9]*[.,]?[0-9]*$"
                 size="sm"
                 @keydown.enter="addNewRow(index)"
+                :disabled="bill?.isMarkit"
               />
             </div>
 
@@ -1705,12 +1887,13 @@ const handleClearClient = async () => {
                 v-model="row.category"
                 :options="categories"
                 option-attribute="name"
-                 :color="row.return ? 'red' : undefined"
+                :color="row.return ? 'red' : undefined"
                 @update:modelValue="() => handleCategoryChange(row.category, index)"
                 track-by="id"
                 multiple
                 searchable
                 placeholder="Category"
+                :disabled="bill?.isMarkit"
               >
                 <template #label>
                   <span v-if="row.category.length">{{ row.category.map(c => c.name).join(', ') }}</span>
@@ -1724,7 +1907,8 @@ const handleClearClient = async () => {
                 type="number"
                 size="sm"
                 :color="row.return ? 'red' : undefined"
-              @keydown.enter="moveFocus(index, 'qty', 'right')"
+                @keydown.enter="moveFocus(index, 'qty', 'right')"
+                :disabled="bill?.isMarkit"
               />
             
               <UInput
@@ -1734,7 +1918,8 @@ const handleClearClient = async () => {
                 type="number"
                 size="sm"
                 :color="row.return ? 'red' : undefined"
-              @keydown.enter="addNewRow(index)"
+                @keydown.enter="addNewRow(index)"
+                :disabled="bill?.isMarkit"
               />
             </div>
           </div>
@@ -1782,6 +1967,7 @@ const handleClearClient = async () => {
                     @keydown.down.prevent="moveFocus(index, 'barcode', 'down')"
                     @keydown.left.prevent="moveFocus(index, 'barcode', 'left')"
                     @keydown.right.prevent="moveFocus(index, 'barcode', 'right')"
+                    :disabled="bill?.isMarkit"
                   />
                 </td>
                 <td class="py-1 whitespace-nowrap"  ref="categoryInputs">
@@ -1801,6 +1987,7 @@ const handleClearClient = async () => {
                     @keydown.left.prevent="movecatgeory(index)"
                     @keydown.right.prevent="movecatgeory(index)"
                     @keydown.enter.prevent="movecatgeory(index)"
+                    :disabled="bill?.isMarkit"
                   >
                     <template #label>
                       <span v-if="row.category.length" class="truncate">
@@ -1824,6 +2011,7 @@ const handleClearClient = async () => {
                     @keydown.down.prevent="moveFocus(index, 'name', 'down')"
                     @keydown.left.prevent="moveFocus(index, 'name', 'left')"
                     @keydown.right.prevent="moveFocus(index, 'name', 'right')"
+                    :disabled="bill?.isMarkit"
                   />
                 </td>
                 <td class="py-1 whitespace-nowrap">
@@ -1838,6 +2026,7 @@ const handleClearClient = async () => {
                     @keydown.down.prevent="moveFocus(index, 'rate', 'down')"
                     @keydown.left.prevent="moveFocus(index, 'rate', 'left')"
                     @keydown.right.prevent="moveFocus(index, 'rate', 'right')"
+                    :disabled="bill?.isMarkit"
                   />
                 </td>
                 <td class="py-1 whitespace-nowrap">
@@ -1852,7 +2041,7 @@ const handleClearClient = async () => {
                     @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
                     @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
                     @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
-                  
+                    :disabled="bill?.isMarkit"
                   />
                 </td>
                 <td class="py-1 whitespace-nowrap">
@@ -1867,6 +2056,7 @@ const handleClearClient = async () => {
                   @keydown.down.prevent="moveFocus(index, 'discount', 'down')"
                   @keydown.left.prevent="moveFocus(index, 'discount', 'left')"
                   @keydown.right.prevent="moveFocus(index, 'discount', 'right')"
+                  :disabled="bill?.isMarkit"
                 />
               </td>
 
@@ -1883,6 +2073,7 @@ const handleClearClient = async () => {
                     @keydown.down.prevent="moveFocus(index, 'user', 'down')"
                     @keydown.left.prevent="moveFocus(index, 'user', 'left')"
                     @keydown.right.prevent="moveFocus(index, 'user', 'right')"
+                    :disabled="bill?.isMarkit"
                   />
                 </td>
                 <td class="py-1 whitespace-nowrap">
@@ -1898,6 +2089,7 @@ const handleClearClient = async () => {
                     @keydown.down.prevent="moveFocus(index, 'tax', 'down')"
                     @keydown.left.prevent="moveFocus(index, 'tax', 'left')"
                     @keydown.right.prevent="moveFocus(index, 'tax', 'right')"
+                    :disabled="bill?.isMarkit"
                   />
                 </td>
                 <td class="py-1 ps-2 whitespace-nowrap"   :class="{ 'text-red-600': row.return }">
@@ -1935,6 +2127,7 @@ const handleClearClient = async () => {
             v-model="discount"
             @keydown.enter.prevent="handleEnterMainDiscount()"
             placeholder="Enter discount"
+            :disabled="bill?.isMarkit"
           />
         </div>
 
@@ -1960,11 +2153,11 @@ const handleClearClient = async () => {
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Sales Return AMT</label>
-              <UInput v-model="returnAmt" />
+              <UInput v-model="returnAmt" :disabled="bill?.isMarkit" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Total Redeemed AMT</label>
-              <UInput v-model="redeemedAmt" />
+              <UInput v-model="redeemedAmt" :disabled="bill?.isMarkit" />
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>
@@ -1975,6 +2168,7 @@ const handleClearClient = async () => {
                   :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
                   @keydown.enter.prevent="handleEnterPayment(index)"
                   class="flex-1"
+                  :disabled="bill?.isMarkit"
                 />
                 <UButton
                   icon="i-heroicons-scissors"
@@ -1984,6 +2178,7 @@ const handleClearClient = async () => {
                   variant="solid"
                   class="w-auto"
                   @click="handleSplit"
+                  :disabled="bill?.isMarkit"
                 />
               </div>
             </div>
@@ -1991,24 +2186,32 @@ const handleClearClient = async () => {
 
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
-              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
+              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit"/>
             </div>    
           </div>
 
+        
           <div>
-            <div class="mb-4 mt-5">
-              <UButton color="primary" block>Add Voucher</UButton>
+            <div class="mb-4">
+              <label class="block text-gray-700 font-medium">Apply Coupon</label>
+              <USelectMenu 
+                v-model="selectedCouponId" 
+                :options="eligibleCoupons" 
+                placeholder="Select a coupon"
+                :disabled="bill?.isMarkit"
+              />
+
             </div>
             <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Total Scanned</label>
-              <UInput v-model="voucherNo" />
+              <label class="block text-gray-700 font-medium">Eligible Coupons</label>
+              <UInput :value="eligibleCoupons.length" :disabled="bill?.isMarkit" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Total Value</label>
-              <UInput v-model="voucherNo" />
+              <UInput v-model="couponValue" :disabled="bill?.isMarkit" />
             </div>
             <div class="mt-9">
-              <UButton color="primary" block @click="isOpen=true" :disabled="isSavingAcc">Add Account</UButton>
+              <UButton color="primary" block @click="isOpen=true" :loading="isSavingAcc" :disabled="bill?.isMarkit">Add Account</UButton>
             </div>
           </div>
           
@@ -2023,22 +2226,25 @@ const handleClearClient = async () => {
                   icon="i-heroicons-magnifying-glass-20-solid"
                   @keydown.enter.prevent="handleEnterPhone"
                   class="flex-1"
+                  :disabled="clientFound || bill?.isMarkit"
                 />
-                <UButton icon="i-heroicons-x-mark" color="red" @click="handleClearClient" />
+                <!-- <UButton icon="i-heroicons-x-mark" color="red" @click="handleClearClient" :disabled="bill?.isMarkit" /> -->
               </div>
             </div>
 
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
-              <UInput v-model="clientName" />
+              <UInput v-model="clientName"
+              :disabled="clientFound || bill?.isMarkit" />
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Points</label>
-              <UInput v-model="points" />
+              <UInput v-model="points"
+              :disabled="clientFound || bill?.isMarkit" />
             </div>
             <div>
-               <UButton v-if="!isRedeemPoint" color="green" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming">Redeem Points</UButton>
-              <UButton v-else-if="isRedeemPoint" color="red" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming">Cancel Redeem</UButton>
+               <UButton v-if="!isRedeemPoint" color="green" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Redeem Points</UButton>
+              <UButton v-else-if="isRedeemPoint" color="red" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Cancel Redeem</UButton>
             </div>
           </div>
         </div>
@@ -2055,6 +2261,7 @@ const handleClearClient = async () => {
           v-model="discount"
           @keydown.enter.prevent="handleEnterMainDiscount()"
           placeholder="Enter discount"
+          :disabled="bill?.isMarkit"
           />
         </div>
 
@@ -2067,6 +2274,7 @@ const handleClearClient = async () => {
             :options="['Cash', 'UPI', 'Card', 'Split', 'Credit']"
             @keydown.enter.prevent="handleEnterPayment(index)"
             class="flex-1"
+            :disabled="bill?.isMarkit"
             />
             <UButton
             icon="i-heroicons-pencil-square"
@@ -2076,13 +2284,14 @@ const handleClearClient = async () => {
             variant="solid"
             class="w-auto"
             @click="handleSplit"
+            :disabled="bill?.isMarkit"
             />
           </div>    
         </div>    
 
         <div class="">
           <label class="block text-gray-700 font-medium">Sales Return AMT</label>
-          <UInput v-model="returnAmt" />
+          <UInput v-model="returnAmt" :disabled="bill?.isMarkit" />
         </div>
 
         <div class="flex flex-row gap-2 w-full">
@@ -2093,18 +2302,19 @@ const handleClearClient = async () => {
       :loading="isClientLoading"
       icon="i-heroicons-magnifying-glass-20-solid"
       @keydown.enter.prevent="handleEnterPhone"
+      :disabled="bill?.isMarkit"
     />
   </div>
   <div class="flex-1">
     <label class="block text-gray-700 font-medium">Name</label>
-    <UInput v-model="clientName" />
+    <UInput v-model="clientName" :disabled="bill?.isMarkit" />
   </div>
 </div>
 
         <div class="">
           <label class="block text-gray-700 font-medium">Account Name</label>
           <div class="w-full flex flex-row gap-2">
-            <UInputMenu class="flex-1" v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
+            <UInputMenu class="flex-1" v-model="selected" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit"/>
             <UButton
             icon="i-heroicons-plus"
             size="sm"
@@ -2112,7 +2322,7 @@ const handleClearClient = async () => {
             square
             variant="solid"
             class="w-auto"
-            :disabled="isSavingAcc"
+            :disabled="isSavingAcc || bill?.isMarkit"
             @click="isOpen=true"
             />
           </div>
@@ -2123,18 +2333,18 @@ const handleClearClient = async () => {
          
 
         <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden lg:flex">
-          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
-          <UButton color="red" class="flex-1" block @click="handleDeleteBill">Delete</UButton>
-          <UButton class="flex-1" block>Barcode Search</UButton>
-          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
-          <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
+          <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
+          <UButton color="red" class="flex-1" block @click="handleDeleteBill" :disabled="bill?.isMarkit">Delete</UButton>
+          <UButton class="flex-1" block :disabled="bill?.isMarkit">Barcode Search</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Sales Return</UButton>
+          <UButton class="flex-1"  @click="isClientAddModelOpen = true" block :disabled="bill?.isMarkit">Add Client</UButton>
         </div>
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
-          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit">Save</UButton>
-          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
+          <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Return</UButton>
         </div>
         </template>
       </UCard>
@@ -2146,20 +2356,20 @@ const handleClearClient = async () => {
 
           <!-- Name -->
           <h3 class="text-md font-semibold">Personal Details</h3>
-          <UInput v-model="account.name" label="Name" placeholder="Enter full name" required />
-          <UInput v-model="account.phone" label="Phone No" placeholder="Enter Phone Number" required />
+          <UInput v-model="account.name" label="Name" placeholder="Enter full name" required :disabled="bill?.isMarkit" />
+          <UInput v-model="account.phone" label="Phone No" placeholder="Enter Phone Number" required :disabled="bill?.isMarkit" />
 
           <!-- Address -->
           <h3 class="text-md font-semibold mt-4">Address Details</h3>
-          <UInput v-model="account.street" label="Street" placeholder="Enter street name" required />
-          <UInput v-model="account.locality" label="Locality" placeholder="Enter locality" required />
-          <UInput v-model="account.city" label="City" placeholder="Enter city name" required />
-          <UInput v-model="account.state" label="State" placeholder="Enter state name" required />
-          <UInput v-model="account.pincode" label="Pincode" placeholder="Enter pincode" required />
+          <UInput v-model="account.street" label="Street" placeholder="Enter street name" required :disabled="bill?.isMarkit" />
+          <UInput v-model="account.locality" label="Locality" placeholder="Enter locality" required :disabled="bill?.isMarkit" />
+          <UInput v-model="account.city" label="City" placeholder="Enter city name" required :disabled="bill?.isMarkit" />
+          <UInput v-model="account.state" label="State" placeholder="Enter state name" required :disabled="bill?.isMarkit" />
+          <UInput v-model="account.pincode" label="Pincode" placeholder="Enter pincode" required :disabled="bill?.isMarkit" />
 
 
           <!-- Submit Button -->
-          <UButton @click="submitForm" :disabled="isSavingAcc" block>Submit</UButton>
+          <UButton @click="submitForm" :disabled="isSavingAcc || bill?.isMarkit" block>Submit</UButton>
         </div>
       </UModal>
 
@@ -2169,12 +2379,14 @@ const handleClearClient = async () => {
 <BillingSalesReturn
   v-model="issalesReturnModelOpen"
   @totalreturnvalue="handleReturnData"
+  :disabled="bill?.isMarkit"
 />
 <BillingAddClient
   v-model:model="isClientAddModelOpen"
   v-model:phoneNo="phoneNo"
   :onVerify="handleEnterPhone"
   :clientAdded="handleClientAdded"
+  :disabled="bill?.isMarkit"
 />
 
 
@@ -2194,6 +2406,7 @@ const handleClearClient = async () => {
         :options="[method]"
         disabled
         class="w-1/2"
+        :disabled="bill?.isMarkit"
       />
       <UInput
         v-model.number="tempSplits[method].amount"
@@ -2201,6 +2414,7 @@ const handleClearClient = async () => {
         placeholder="Enter amount"
         class="w-1/2"
         @update:modelValue="() => handleAmountEntry(method)"
+        :disabled="bill?.isMarkit"
       />
     </div>
 
@@ -2218,7 +2432,7 @@ const handleClearClient = async () => {
     </div>
 
     <UButton
-      :disabled="totalSplitAmount !== grandTotal"
+      :disabled="totalSplitAmount !== grandTotal || bill?.isMarkit"
       color="green"
       block
       class="mt-4"
@@ -2251,8 +2465,9 @@ const handleClearClient = async () => {
                 color="green"
                 label="Yes"
                 @click="print"
+                :disabled="bill?.isMarkit"
             />
-            <UButton color="red" label="NO" @click="isPrint = false" />
+            <UButton color="red" label="NO" @click="isPrint = false" :disabled="bill?.isMarkit" />
         </template>
     </UDashboardModal>
 
@@ -2278,8 +2493,9 @@ const handleClearClient = async () => {
                 color="red"
                 label="Delete"
                 @click="() => {removeRow( deletingRowIdentity.event,deletingRowIdentity.index);isDeleteModalOpen = false; }"
+                :disabled="bill?.isMarkit"
             />
-            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
+            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" :disabled="bill?.isMarkit" />
         </template>
     </UDashboardModal>
 

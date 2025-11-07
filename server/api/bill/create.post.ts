@@ -10,17 +10,15 @@ export default defineEventHandler(async (event) => {
     billPoints,
     clientId,
     companyId,
+    couponId,
     userId,
     tokenEntries
   } = body;
 
- 
-
   try {
-
     await prisma.$transaction(async (tx) => {
       // 1. Create Bill with Entries
-      await tx.bill.create({
+      const bill = await tx.bill.create({
         data: payload
       });
 
@@ -86,27 +84,47 @@ export default defineEventHandler(async (event) => {
         });
       }
 
-    await tx.company.update({        
+      // 6. Mark coupon as used (if coupon applied)
+      if (couponId && clientId) {
+        await tx.couponUsage.create({
+          data: {
+            couponId: couponId,
+            clientId,
+            billId: bill.id
+          }
+        });
+
+        // Optionally increment coupon usage counter
+        await tx.coupon.update({
+          where: { id: couponId },
+          data: {
+            timesUsed: { increment: 1 }
+          }
+        });
+      }
+
+      // 7. Increment company bill counter
+      await tx.company.update({
         where: {
-            id: companyId,
+          id: companyId
         },
         data: {
-            billCounter: {
-            increment: 1,
-            },
-        },
-        });
-    },{
-  maxWait: 10000, // wait up to 10s to acquire a connection
-  timeout: 100000000000  // run the transaction for up to 15s
-});
+          billCounter: {
+            increment: 1
+          }
+        }
+      });
+    }, {
+      maxWait: 10000,   // wait up to 10s to acquire a connection
+      timeout: 15000    // run the transaction for up to 15s
+    });
 
     return { success: true };
-
   } catch (error) {
-   return sendError(event, createError({
+    console.log(error)
+    return sendError(event, createError({
       statusCode: 500,
       statusMessage: 'Failed to Create bill',
-    }))
+    }));
   }
 });

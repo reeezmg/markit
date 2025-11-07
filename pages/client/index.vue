@@ -9,13 +9,14 @@ import {
     useUpdateManyClient,
     useUpdatePipeline,
     useUpdateBill,
+    useCountClient
 } from '~/lib/hooks';
 
 
-const UpdateClient = useUpdateClient();
-const UpdatePipeline = useUpdatePipeline();
-const UpdateManyClient = useUpdateManyClient();
-const UpdateBill = useUpdateBill();
+const UpdateClient = useUpdateClient({ optimisticUpdate: true });
+const UpdatePipeline = useUpdatePipeline({ optimisticUpdate: true });
+const UpdateManyClient = useUpdateManyClient({ optimisticUpdate: true });
+const UpdateBill = useUpdateBill({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
@@ -294,11 +295,10 @@ const resetFilters = () => {
 };
 
 // Pagination
-const sort = ref({ column: 'id', direction: 'asc' as const });
+const sort = ref({ column: 'name', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref(10);
-const pageTotal = ref(0); // This value should be dynamic coming from the API
 const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
 const pageTo = computed(() =>
     Math.min(page.value * pageCount.value, pageTotal.value),
@@ -365,6 +365,10 @@ const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
     };
 });
 
+const countArgs = computed(() => ({
+  where: queryArgs.value.where,
+}));
+const { data: pageTotal } = useCountClient(countArgs);
 
 const handleEnterPhone = async() => {
   
@@ -384,10 +388,6 @@ const {
     refetch,
 } = useFindManyClient(queryArgs);
 
-watch(clients, () => {
-    pageTotal.value = clients.value ? clients.value.length : 0;
-    console.log(clients)
-});
 
 async function multiToggle(ids, status: boolean) {
     try {
@@ -488,27 +488,27 @@ const downloadClientsAsVCF = () => {
         >
             <!-- Filters -->
         <template #header>
-            <div class="flex flex-col sm:flex-row justify-between gap-3 w-full">
-            <!-- Left side: Search + Status -->
-            <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+           <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
+                <!-- Left side: Search + Status -->
+                <div class="flex flex-row gap-3 w-full sm:w-auto">
                 <UInput
                     v-model="search"
                     icon="i-heroicons-magnifying-glass-20-solid"
                     placeholder="Search..."
-                     class="w-full sm:w-60"
+                    class="w-full sm:w-auto"
                 />
                   <USelectMenu
                         v-model="selectedStatus"
                         :options="todoStatus"
                         multiple
                         placeholder="Status"
-                        class="w-full sm:w-60"
+                        class="w-full sm:w-40"
                     />
             </div>
-                <div class="w-full sm:w-auto flex justify-end">
+                <div class="flex flex-row gap-3 w-full sm:w-auto justify-end">
                   
                     <UButton
-                       class="w-full sm:w-40 me-3"
+                        class="w-full flex-1 sm:w-auto sm:flex-none"
                         icon="i-heroicons-plus"
                         size="sm"
                         color="primary"
@@ -517,7 +517,7 @@ const downloadClientsAsVCF = () => {
                         @click="isClientAddModelOpen = true" 
                     />
                     <UButton
-                        class="w-full sm:w-40"
+                        class="w-full flex-1 sm:w-auto sm:flex-none"
                         icon="i-heroicons-arrow-down-tray"
                         size="sm"
                         color="primary"

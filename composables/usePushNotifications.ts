@@ -1,6 +1,7 @@
 import { getToken, onMessage } from 'firebase/messaging'
 import { useMessaging } from './useMessaging'
 
+
 export async function usePushNotifications(userId: string) {
       const config = useRuntimeConfig();
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
@@ -39,7 +40,7 @@ export async function usePushNotifications(userId: string) {
   }
 
   try {
-    await $fetch(config.public.prismaUrl+ '/api/savefcmtoken', {
+    await $fetch('/api/savefcmtoken', {
       method: 'POST',
       body: {
         userId,

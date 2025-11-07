@@ -13,6 +13,7 @@ const useAuth = () => useNuxtApp().$auth;
 const isAdd = ref(false);
 const settledMap = ref(new Map());
 const variantInputs = ref(useAuth().session.value?.variantInputs)
+const deliveryType = ref<string>('')
 const isSaveDisable = computed(() => {
   // If any value is false → disable
   for (const val of settledMap.value.values()) {
@@ -25,6 +26,7 @@ const isSaveDisable = computed(() => {
 interface ImageData {
     file: File;
     uuid: string;
+    view?: string;
 }
 interface Item {
     name: string;
@@ -358,6 +360,7 @@ const selectedProduct: Ref<Product> = ref({
   }]
 });
 
+
 const clearInputs = ref(true)
 const createRef = ref<any>(null);
 const variantRef = ref<any>([]);
@@ -378,7 +381,7 @@ const brand = ref('');
 const description = ref('');
 const live = ref<boolean>();
 let files = reactive<ImageData[]>([]);
-const category = ref('');
+const category = ref({});
 const subcategory = ref('');
 
 const barcodes = ref<BarcodeItem[]>([]);
@@ -415,7 +418,7 @@ const variants = ref<{
 }]);
 
 const { data: categoryTax } = useFindUniqueCategory({
-  where: computed(() => ({ id: category.value })),
+  where: computed(() => ({ id: category.value.id })),
   select: {
     fixedTax: true,
     taxBelowThreshold: true,
@@ -423,7 +426,7 @@ const { data: categoryTax } = useFindUniqueCategory({
     thresholdAmount: true,
     taxType: true,
   }
-},{ enabled: computed(() => !!category.value) });
+},{ enabled: computed(() => !!category.value.id) });
 
 
 const createValue = (data: any) => {
@@ -433,6 +436,10 @@ const createValue = (data: any) => {
     category.value = data.category;
     subcategory.value = data.subcategory;
 };
+
+watch(category, (newProduct) => {
+  console.log('Selected product updated:', newProduct);
+}, { deep: true });
 
 const updateVariant = (index,data: any) => {
   variants.value[index] = { ...variants.value[index], ...data };
@@ -465,6 +472,7 @@ const handleDistributorValue = (data:any) => {
   distributorId.value = data.distributorId;
   paymentType.value = data.paymentType;
   billNo.value = data.billNo
+  deliveryType.value = data.deliveryType
 };
 
 const handleAdd = async (e: Event) => {
@@ -480,7 +488,7 @@ const handleAdd = async (e: Event) => {
     //   });
     //   return;
     // }
-    if (!category.value || category.value.trim() === '') {
+    if (!category.value || category.value.id.trim() === '') {
       toast.add({
         title: 'Please fill product category',
         color: 'red',
@@ -508,7 +516,7 @@ const handleAdd = async (e: Event) => {
       .filter((file) => file.file instanceof File)
       .map(async (file) => {
         const base64 = await prepareFileForApi(file.file);
-        return { base64, uuid: file.uuid };
+        return { base64, uuid: file.uuid, view: file.view };
       })
   )
 );
@@ -516,11 +524,11 @@ const handleAdd = async (e: Event) => {
   if (base64files.length > 0) {
     const awsres = await Promise.all(
       base64files.map((file) =>
-        awsService.uploadBase64File(file.base64, file.uuid)
+        awsService.uploadBase64File(file.base64, file.uuid, file.view, category.value.name, category.value.targetAudience, useAuth().session.value?.isAiImage)
       )
     );
 }
-
+  console.log(variants.value)
 
     const productRes = CreateProduct.mutate({
       data: {
@@ -538,7 +546,7 @@ const handleAdd = async (e: Event) => {
           connect: { id: poId.value },
         },
         ...(category.value && {
-          category: { connect: { id: category.value } }
+          category: { connect: { id: category.value.id } }
         }),
         ...(subcategory.value && {
           subcategory: { connect: { id: subcategory.value } }
@@ -576,9 +584,12 @@ const handleAdd = async (e: Event) => {
               pprice: variant.pprice || 0,
               dprice: variant.dprice || 0,
               discount: variant.discount || 0,
+              deliveryType: deliveryType.value || 'trynbuy',
               status: true,
               tax,
-              images: variant.images?.map((file) => file.uuid) || [],
+              images: (variant.images || [])
+                .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
+                .map((file) => file.uuid),
               company: {
                 connect: { id: useAuth().session.value?.companyId },
               },
@@ -588,6 +599,7 @@ const handleAdd = async (e: Event) => {
                 }
               })
             };
+
           })
         }
       },
@@ -630,7 +642,7 @@ const handleEdit = async (e: Event) => {
   isLoad.value = true
   try {
   
-    if (!category.value || category.value.trim() === '') {
+    if (!category.value || category.value.id.trim() === '') {
       toast.add({
         title: 'Please fill product category',
         color: 'red',
@@ -663,7 +675,7 @@ const handleEdit = async (e: Event) => {
     if (base64files.length > 0) {
       const awsres = await Promise.all(
         base64files.map((file) =>
-          awsService.uploadBase64File(file.base64, file.uuid)
+          awsService.uploadBase64File(file.base64, file.uuid, file.view, category.value.name, category.value.targetAudience, useAuth().session.value?.isAiImage)
         )
       );
     }
@@ -681,7 +693,7 @@ const updatedProduct =  UpdateProduct.mutate({
       connect: { id: useAuth().session.value?.companyId },
     },
     ...(category.value && {
-      category: { connect: { id: category.value } }
+      category: { connect: { id: category.value.id } }
     }),
     ...(subcategory.value && {
       subcategory: { connect: { id: subcategory.value } }
@@ -704,6 +716,7 @@ const updatedProduct =  UpdateProduct.mutate({
           sprice: v.sprice || 0,
           pprice: v.pprice || 0,
           dprice: v.dprice || 0,
+          deliveryType: deliveryType.value || 'trynbuy',
           discount: v.discount || 0,
           status: true,
           images: v.images?.map(file => file.uuid) || [],
@@ -744,6 +757,7 @@ const updatedProduct =  UpdateProduct.mutate({
           pprice: v.pprice || 0,
           dprice: v.dprice || 0,
           discount: v.discount || 0,
+          deliveryType: deliveryType.value || 'trynbuy',
           status: true,
           images: v.images?.map(file => file.uuid) || [],
           tax: calculateTax(v),
@@ -1163,6 +1177,10 @@ const handleNewProduct = () => {
                       ref="mediaRefs"
                       :editFile="selectedProduct && selectedProduct.variants[index]?.images"
                       :index="index" 
+                      :categoryName="category.name"
+                      :targetAudience="category.targetAudience"
+                      :productId="selectedProduct?.id"
+                      :updatedAt= "selectedProduct?.updatedAt"
                       @update="fileValue"
                     />
                   </UPageCard>
@@ -1322,6 +1340,8 @@ const handleNewProduct = () => {
                       ref="mediaRefs"
                       :editFile="selectedProduct && selectedProduct.variants[index]?.images"
                       :index="index" 
+                      :categoryName="category.name"
+                      :targetAudience = "category.targetAudience"
                       @update="fileValue"
                     />
                   </UPageCard>

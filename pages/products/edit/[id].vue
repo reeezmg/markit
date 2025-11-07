@@ -76,7 +76,7 @@ const name = ref('');
 const brand = ref('');
 const description = ref('');
 const live = ref<boolean>();
-const category = ref('');
+const category = ref({});
 const subcategory = ref('');
 
 const barcodes = ref<BarcodeItem[]>([]);
@@ -113,7 +113,7 @@ const variants = ref<{
 
 
 const { data:categoryTax } = useFindUniqueCategory({
-  where: computed(() => ({ id: category.value })),
+  where: computed(() => ({ id: category.value.id })),
   select: {
     fixedTax: true,
     taxBelowThreshold: true,
@@ -121,7 +121,7 @@ const { data:categoryTax } = useFindUniqueCategory({
     thresholdAmount: true,
     taxType: true,
   }
-},{ enabled: computed(() => !!category.value) });
+},{ enabled: computed(() => !!category.value.id) });
 
 
 const createValue = (data: any) => {
@@ -164,10 +164,11 @@ function calculateTax(variant) {
 
 
 
-const {data: selectedProduct, isLoading, refetch:productRefetch} = useFindUniqueProduct({
+const {data: selectedProductRaw, isLoading, refetch:productRefetch} = useFindUniqueProduct({
   where: { id: route.params.id },
   select: {
     id: true,
+    updatedAt:true,
     name: true,
     brand: true,
     description: true,
@@ -198,6 +199,11 @@ const {data: selectedProduct, isLoading, refetch:productRefetch} = useFindUnique
   }
 });
 
+const selectedProduct = ref();
+
+watch(selectedProductRaw, (newVal) => {
+  selectedProduct.value = newVal ? JSON.parse(JSON.stringify(newVal)) : null;
+}, { immediate: true });
 
 
 
@@ -205,7 +211,7 @@ const handleEdit = async (e: Event) => {
   e.preventDefault();
   isLoad.value = true
   try {
-    if (!category.value || category.value.trim() === '') {
+    if (!category.value || category.value.id.trim() === '') {
       toast.add({
         title: 'Please fill product category',
         color: 'red',
@@ -230,7 +236,7 @@ const handleEdit = async (e: Event) => {
       .filter((file) => file.file instanceof File)
       .map(async (file) => {
         const base64 = await prepareFileForApi(file.file);
-        return { base64, uuid: file.uuid };
+        return { base64, uuid: file.uuid, view: file.view };
       })
   )
 );
@@ -239,12 +245,13 @@ const handleEdit = async (e: Event) => {
     if (base64files.length > 0) {
       const awsres = await Promise.all(
         base64files.map((file) =>
-          awsService.uploadBase64File(file.base64, file.uuid)
+           awsService.uploadBase64File(file.base64, file.uuid, file.view, category.value.name, category.value.targetAudience, useAuth().session.value?.isAiImage)
         )
       );
     }
 
    const productId = selectedProduct.value.id;
+   console.log(selectedProduct.value)
 
 const updatedProduct =  await UpdateProduct.mutateAsync({
   where: { id: productId },
@@ -257,7 +264,7 @@ const updatedProduct =  await UpdateProduct.mutateAsync({
       connect: { id: useAuth().session.value?.companyId },
     },
     ...(category.value && {
-      category: { connect: { id: category.value } }
+      category: { connect: { id: category.value.id } }
     }),
     ...(subcategory.value && {
       subcategory: { connect: { id: subcategory.value } }
@@ -282,7 +289,9 @@ const updatedProduct =  await UpdateProduct.mutateAsync({
           dprice: v.dprice || 0,
           discount: v.discount || 0,
           status: true,
-          images: v.images?.map(file => file.uuid) || [],
+          images: (v.images || [])
+            .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
+            .map((file) => file.uuid),
           tax: calculateTax(v),
           company: {
             connect: { id: useAuth().session.value?.companyId },
@@ -321,7 +330,9 @@ const updatedProduct =  await UpdateProduct.mutateAsync({
           dprice: v.dprice || 0,
           discount: v.discount || 0,
           status: true,
-          images: v.images?.map(file => file.uuid) || [],
+          images: (v.images || [])
+            .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
+            .map((file) => file.uuid),
           tax: calculateTax(v),
           company: {
             connect: { id: useAuth().session.value?.companyId },
@@ -562,6 +573,7 @@ console.log(barcodes.value)
             </button>
           </div>
           <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
+          
           <AddProductVariants   
             ref="variantRef"
             :id="selectedProduct?.variants[index]?.id"
@@ -579,6 +591,10 @@ console.log(barcodes.value)
             ref="mediaRefs"
             :editFile="selectedProduct && selectedProduct.variants[index]?.images"
             :index="index" 
+            :categoryName="category.name"
+            :targetAudience = "category.targetAudience"
+            :productId = "selectedProduct?.id"
+            :updatedAt = "selectedProduct?.updatedAt"
             @update="fileValue"
           />
         </UPageCard>
@@ -663,6 +679,10 @@ console.log(barcodes.value)
                   :key="index"
                   :editFile="selectedProduct && selectedProduct.variants[index].images"
                   :index="index" 
+                  :categoryName="category.name"
+                  :targetAudience = "category.targetAudience"
+                  :productId = "selectedProduct?.id"
+                  :updatedAt = "selectedProduct?.updatedAt"
                   @update="fileValue"
                 />
               </UPageCard>

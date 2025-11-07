@@ -1,33 +1,52 @@
 <script setup lang="ts">
 import {
 useFindManyDistributorCompany,
-  useDeleteDistributorCompany
+  useDeleteDistributorCompany,
+  useDeletePurchaseOrder
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
 const toast = useToast();
 const emit = defineEmits(['modal-open','edit']);
-
-const DeleteDistributorCompany = useDeleteDistributorCompany()
+const router = useRouter();
+const DeleteDistributorCompany = useDeleteDistributorCompany({ optimisticUpdate: true })
+const DeletePurchaseOrder = useDeletePurchaseOrder({ optimisticUpdate: true })
 const useAuth = () => useNuxtApp().$auth;
 const isSaving = ref(false)
 
 const sort = ref({ column: 'distributor.name', direction: 'asc' as const });
+const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('10');
 const isOpenPay = ref(false)
 const isOpenCredit = ref(false)
 const distributorId = ref<string | null>(null)
 const companyId = ref<string | null>(null)
+const isPurchaseOrderDeleteModalOpen = ref(false)
+const deletingPurchaseOrderRowIdentity = ref({})
+const isDistributorDeleteModalOpen = ref(false)
+const deletingDistributorRowIdentity = ref({})
 
 
 
 const columns = [
   { key: 'distributor.name', label: 'Distributor', sortable: true },
-  { key: 'purchaseorders.length', label: 'Orders', sortable: true },
+  { key: 'purchaseOrders.length', label: 'Orders', sortable: true },
   { key: 'totalAmount', label: 'Total', sortable: true },
   { key: 'paidAmount', label: 'Paid', sortable: true },
   { key: 'totalDue', label: 'Due', sortable: true },
+  {
+        key: 'actions',
+        label: 'Actions',
+    },
+
+];
+
+const purchaseColumns = [
+  { key: 'createdAt', label: 'Date', sortable: true },
+  { key: 'products.length', label: 'Products', sortable: true },
+  { key: 'totalAmount', label: 'Total Value', sortable: true },
+  { key: 'paymentType', label: 'Payment Type', sortable: true },
   {
         key: 'actions',
         label: 'Actions',
@@ -50,24 +69,63 @@ const action = (row:any) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => deleteDistributor(row.distributor.id),
+             click: () => {
+                isDistributorDeleteModalOpen.value = true
+                deletingDistributorRowIdentity.value = {name:row.distributor.name,id:row.distributor.id}
+                }
         },
     ],
     
 ];
 
+const purchaseOrderAction = (row:any) => [
+
+    [
+        {
+            label: 'Edit',
+            icon: 'i-heroicons-pencil-square-20-solid',
+            click: () => router.push(`/products/add/${row.id}`),
+        },
+    
+        {
+            label: 'Delete',
+            icon: 'i-heroicons-trash-20-solid',
+            click: () => {
+                isPurchaseOrderDeleteModalOpen.value = true
+                deletingPurchaseOrderRowIdentity.value = {id:row.id}
+                }
+        },
+    ],
+    
+];
+
+const removePurchaseOrder = () => {
+  try {
+    DeletePurchaseOrder.mutate({ where: { id :deletingPurchaseOrderRowIdentity.value.id} });
+  } catch (err) {
+    console.log(err);
+  }finally{
+     isPurchaseOrderDeleteModalOpen.value = false;
+  }
+};
 
 
-const deleteDistributor = async(id:string) => {
-   const res = await DeleteDistributorCompany.mutateAsync({
+const removeDistributor = () => {
+  try {
+   const res = DeleteDistributorCompany.mutate({
           where:{
             distributorId_companyId: {
-              distributorId:id,
+              distributorId:deletingDistributorRowIdentity.value.id,
               companyId:useAuth().session.value?.companyId as string,
             },
           },
-        }
-)};
+        })
+    } catch (err) {
+    console.log(err);
+    }finally{
+    isDistributorDeleteModalOpen.value = false;
+    }
+};
 
 
 
@@ -119,6 +177,15 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
             remarks:true,
             paymentType:true
         }
+      },
+      purchaseOrders:{
+        select:{
+          id:true,
+          createdAt:true,
+          products:true,
+          paymentType:true,
+          totalAmount:true
+        }
       }
     },
     orderBy: 
@@ -130,6 +197,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
     take: parseInt(pageCount.value),
   };
 });
+
 
 
 const { data, isLoading, error } = useFindManyDistributorCompany(queryArgs);
@@ -170,7 +238,7 @@ const distributors = computed(() => {
 });
 
 
- 
+ console.log(distributors.value)
 const  pageTotal = computed(() => distributors.value?.length) ;
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
@@ -218,15 +286,15 @@ const selectedDistributor = computed(() => {
                 </div>
             </template>
 
-            <template #default="{ row }">
+    
                 <UTable
-                  
                     v-model:sort="sort"
                     :rows="distributors"
                     :columns="columns"
                     :loading="isLoading"
+                     v-model:expand="expand"
                     sort-mode="manual"
-                    
+                     class="w-full"
                 >
 
                     <template #actions-data="{ row }">
@@ -243,12 +311,29 @@ const selectedDistributor = computed(() => {
                     {{ row.totalAmount - row.paidAmount }}
                     </template>
 
-                  
+                  <template #expand="{row}">
+                    <div>
+                      <UTable
+                      :rows="row.purchaseOrders"
+                      :columns="purchaseColumns">
+                        <template #createdAt-data="{ row }">
+                      {{ new Date(row.createdAt).toLocaleString() }}
+                    </template>
 
+                    <template #actions-data="{ row }">
+                    <UDropdown :items="purchaseOrderAction(row)">
+                        <UButton
+                        color="gray"
+                        variant="ghost"
+                        icon="i-heroicons-ellipsis-horizontal-20-solid"
+                        />
+                    </UDropdown>
+                    </template>
 
+                    </UTable>
+                    </div>
+                  </template>
                 </UTable>
-                </template>
-
 
             <template #footer>
                 <div class="flex flex-wrap justify-between items-center">
@@ -286,6 +371,61 @@ const selectedDistributor = computed(() => {
 
     <div v-if="error" class="text-red-500">Failed to load data: {{ error.message }}</div>
   </div>
+
+  
+  <UDashboardModal
+        v-model="isDistributorDeleteModalOpen"
+        title="Delete Distributor"
+        :description="`Are you sure you want to delete Distributor ${deletingDistributorRowIdentity.name}?`
+        "
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  removeDistributor()"
+            />
+            <UButton color="white" label="Cancel" @click="isDistributorDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
+
+  <UDashboardModal
+        v-model="isPurchaseOrderDeleteModalOpen"
+        title="Delete Purchase Order"
+        :description="`Are you sure you want to delete this Purchase?
+        you will loose all products connected to this order.`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  removePurchaseOrder()"
+            />
+            <UButton color="white" label="Cancel" @click="isPurchaseOrderDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
   
 
 </template>

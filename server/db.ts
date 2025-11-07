@@ -1,0 +1,6 @@
+// ~/server/db.ts
+import { Pool } from 'pg';
+
+export const pool = new Pool({
+  connectionString: process.env.DATABASE_URL, // or user, password, host, db, port separately
+});
