@@ -3,18 +3,16 @@ import crypto from 'uncrypto';
 
 const runtimeAuth = useRuntimeConfig().auth;
 console.log('Auth Config:', runtimeAuth);
+const isProd = process.env.NODE_ENV === 'production'
+
 const sessionConfig: SessionConfig = {
   name: runtimeAuth.name,
   password: runtimeAuth.password,
   cookie: {
-    // secure: true,
-    // sameSite: 'none',  // must allow cross-site
-    // maxAge: 31536000
-
-    secure: false,         // allow HTTP
-  sameSite: 'lax',       // safest for same-site local dev
-  maxAge: 31536000
-  }
+    secure: isProd,             // HTTPS only in prod
+    sameSite: isProd ? 'none' : 'lax',
+    maxAge: 31536000,
+  },
 };
 export type AuthSession = {
     id: string;
