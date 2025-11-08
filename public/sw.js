@@ -1,8 +1,12 @@
+// ===============================
 // ✅ Firebase imports
+// ===============================
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js');
 importScripts('https://www.gstatic.com/firebasejs/10.12.2/firebase-messaging-compat.js');
 
+// ===============================
 // ✅ Firebase config
+// ===============================
 firebase.initializeApp({
   apiKey: "AIzaSyBIdT1rcRgxGuPbIE8o3iHellO306YXWvU",
   authDomain: "markit-e2b0e.firebaseapp.com",
@@ -14,23 +18,29 @@ firebase.initializeApp({
 
 const messaging = firebase.messaging();
 
+// ===============================
 // ✅ Handle background FCM messages
+// ===============================
 messaging.onBackgroundMessage(payload => {
-  self.registration.showNotification(payload.data.title, {
-    body: payload.data.body,
+  console.log('[SW] Background message:', payload);
+  self.registration.showNotification(payload.data.title || 'Markit', {
+    body: payload.data.body || '',
     icon: '/icons/icon-192.png',
+    badge: '/icons/icon-192.png',
     data: payload.data.url || '/'
   });
 });
 
+// ===============================
 // ✅ Handle notification clicks
+// ===============================
 self.addEventListener('notificationclick', event => {
   event.notification.close();
   const targetUrl = event.notification.data || '/';
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
       for (let client of windowClients) {
-        if (client.url === targetUrl && 'focus' in client) {
+        if (client.url.includes(targetUrl) && 'focus' in client) {
           return client.focus();
         }
       }
@@ -41,22 +51,27 @@ self.addEventListener('notificationclick', event => {
   );
 });
 
-
-// ✅ --- ADD OFFLINE CACHING LOGIC HERE ---
-
-const CACHE_NAME = 'markit-v1';
+// ===============================
+// ✅ Offline caching logic
+// ===============================
+const CACHE_VERSION = 'v3';
+const CACHE_NAME = `markit-${CACHE_VERSION}`;
 const OFFLINE_URL = '/nonetwork.html';
+
+// Files you want to precache on install
 const PRECACHE_URLS = [
-  '/',            // 👈 home page or change to your startup page
-  OFFLINE_URL,    // 👈 offline page
+  '/',
+  OFFLINE_URL,
   '/icons/icon-192.png',
   '/icons/icon-512.png',
   '/manifest.json'
 ];
 
-// ✅ Install event — cache important pages
+// ===============================
+// ✅ Install event — cache app shell
+// ===============================
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing and caching app shell...');
+  console.log('[SW] Installing and caching essential assets...');
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then((cache) => cache.addAll(PRECACHE_URLS))
@@ -64,9 +79,11 @@ self.addEventListener('install', (event) => {
   );
 });
 
+// ===============================
 // ✅ Activate event — cleanup old caches
+// ===============================
 self.addEventListener('activate', (event) => {
-  console.log('[SW] Activating...');
+  console.log('[SW] Activating new service worker...');
   event.waitUntil(
     caches.keys().then(keys =>
       Promise.all(
@@ -82,20 +99,42 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// ✅ Fetch event — respond with cache, fallback to offline
+// ===============================
+// ✅ Fetch event — serve from cache / offline fallback
+// ===============================
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   event.respondWith(
     fetch(event.request)
       .then((response) => {
-        // Optionally cache fresh responses
+        // Cache successful network responses
         const clone = response.clone();
         caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
         return response;
       })
-      .catch(() =>
-        caches.match(event.request).then((res) => res || caches.match(OFFLINE_URL))
-      )
+      .catch(async () => {
+        const cache = await caches.open(CACHE_NAME);
+
+        // ✅ Handle navigation requests (HTML pages)
+        if (event.request.mode === 'navigate' ||
+            event.request.headers.get('accept')?.includes('text/html')) {
+          const cachedPage = await cache.match(event.request);
+          return cachedPage || cache.match(OFFLINE_URL);
+        }
+
+        // ✅ For other files (JS, CSS, images, etc.)
+        const cachedAsset = await cache.match(event.request);
+        return cachedAsset || cache.match(OFFLINE_URL);
+      })
   );
+});
+
+// ===============================
+// ✅ Optional: log lifecycle changes
+// ===============================
+self.addEventListener('message', (event) => {
+  if (event.data && event.data.type === 'SKIP_WAITING') {
+    self.skipWaiting();
+  }
 });
