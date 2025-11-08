@@ -16,28 +16,28 @@ public class MainActivity extends BridgeActivity {
   public void onCreate(Bundle savedInstanceState) {
     super.onCreate(savedInstanceState);
 
-//    WebView webView = getBridge().getWebView();
-//    webView.setWebViewClient(new WebViewClient());
-//
-//    if (isNetworkAvailable()) {
-      // Load your login URL if network is available
-//      webView.loadUrl("http://172.20.10.4:3000/login");
-//    } else {
-      // Load offline page if network is not available
-//      webView.loadUrl("file:///android_asset/offline.html");
-//    }
-//  }
+    WebView webView = getBridge().getWebView();
+    webView.setWebViewClient(new WebViewClient());
 
-//  private boolean isNetworkAvailable() {
-//    ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
-//    if (cm == null) return false;
-//
-//    Network network = cm.getActiveNetwork();
-//    if (network == null) return false;
-//
-//    NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
-//    return capabilities != null &&
-//      (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-//        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR));
+    if (isNetworkAvailable()) {
+      // Load your login URL if network is available
+      webView.loadUrl("http://172.20.10.4:3000/login");
+    } else {
+      // Load offline page if network is not available
+      webView.loadUrl("file:///android_asset/offline.html");
+    }
+  }
+
+  private boolean isNetworkAvailable() {
+    ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
+    if (cm == null) return false;
+
+    Network network = cm.getActiveNetwork();
+    if (network == null) return false;
+
+    NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
+    return capabilities != null &&
+      (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR));
   }
 }
