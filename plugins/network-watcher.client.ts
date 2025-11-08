@@ -1,10 +1,13 @@
+import { useRouter } from 'vue-router'
+import { Capacitor } from '@capacitor/core'
+import { Network } from '@capacitor/network'
+
 export default defineNuxtPlugin((nuxtApp) => {
   if (!process.client) return
 
   const router = useRouter()
 
   const handleOffline = () => {
-    // store the current route before redirecting
     const currentPath = router.currentRoute.value.fullPath
     localStorage.setItem('prevRoute', currentPath)
     if (currentPath !== '/nonetwork') {
@@ -20,10 +23,23 @@ export default defineNuxtPlugin((nuxtApp) => {
     }
   }
 
-  // Listen for network changes
-  window.addEventListener('offline', handleOffline)
-  window.addEventListener('online', handleOnline)
-
-  // Optional: check initial state on app load
-  if (!navigator.onLine) handleOffline()
+  // ✅ If running inside Capacitor app
+  if (Capacitor.isNativePlatform()) {
+    console.log('📱 Using Capacitor Network plugin')
+    // Initial check
+    Network.getStatus().then(status => {
+      if (!status.connected) handleOffline()
+    })
+    // Subscribe to native network changes
+    Network.addListener('networkStatusChange', (status) => {
+      if (status.connected) handleOnline()
+      else handleOffline()
+    })
+  } else {
+    // ✅ Fallback for normal web environment
+    console.log('🌐 Using browser network events')
+    window.addEventListener('offline', handleOffline)
+    window.addEventListener('online', handleOnline)
+    if (!navigator.onLine) handleOffline()
+  }
 })

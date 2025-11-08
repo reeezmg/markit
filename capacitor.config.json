@@ -4,8 +4,9 @@
   "server": {
     "androidScheme": "https",
     "hostname": "markit.co.in",
-    "url": "https://markit.co.in:3000/login",
-    "allowNavigation": ["markit.co.in"]
+    "url": "https://markit.co.in/login",
+    "allowNavigation": ["markit.co.in"],
+    "cleartext": false
   },
   "plugins": {
     "SplashScreen": {

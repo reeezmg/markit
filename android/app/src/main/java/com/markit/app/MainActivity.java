@@ -5,6 +5,7 @@ import android.net.ConnectivityManager;
 import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.os.Bundle;
+import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
@@ -19,15 +20,19 @@ public class MainActivity extends BridgeActivity {
     WebView webView = getBridge().getWebView();
     webView.setWebViewClient(new WebViewClient());
 
+    WebSettings webSettings = webView.getSettings();
+    webSettings.setJavaScriptEnabled(true);
+    webSettings.setDomStorageEnabled(true);
+    webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+
     if (isNetworkAvailable()) {
-      // Load your login URL if network is available
       webView.loadUrl("https://markit.co.in/login");
     } else {
-      // Load offline page if network is not available
       webView.loadUrl("file:///android_asset/offline.html");
     }
   }
 
+  // ✅ Make sure this method is INSIDE the MainActivity class
   private boolean isNetworkAvailable() {
     ConnectivityManager cm = (ConnectivityManager) getSystemService(Context.CONNECTIVITY_SERVICE);
     if (cm == null) return false;
@@ -36,8 +41,9 @@ public class MainActivity extends BridgeActivity {
     if (network == null) return false;
 
     NetworkCapabilities capabilities = cm.getNetworkCapabilities(network);
-    return capabilities != null &&
-      (capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
-        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR));
+    return capabilities != null && (
+      capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR)
+    );
   }
 }
