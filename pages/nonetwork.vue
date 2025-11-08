@@ -1,5 +1,6 @@
 <template>
-  <div class="flex flex-col w-full items-center justify-center h-screen text-center p-6">
+  <div class="flex flex-col items-center justify-center h-screen text-center p-6">
+    <img src="/icons/logo.png" alt="Offline" class="w-32 h-32 mb-6 opacity-80" />
     <h1 class="text-2xl font-semibold mb-2">You’re Offline</h1>
     <p class="text-gray-500 mb-6">
       Please check your internet connection and try again.
@@ -14,14 +15,13 @@
 </template>
 
 <script setup>
-import { useRouter } from 'vue-router'
-const router = useRouter()
+import { useRouter, onMounted, onBeforeUnmount } from 'vue-router'
 
-definePageMeta({
-    layout: false,
-});
+const router = useRouter()
+let handleOnline
 
 const retry = () => {
+  if (typeof window === 'undefined' || typeof navigator === 'undefined') return
   if (navigator.onLine) {
     const prevUrl = localStorage.getItem('prevRoute') || '/'
     localStorage.removeItem('prevRoute')
@@ -31,6 +31,17 @@ const retry = () => {
   }
 }
 
-// 👇 automatically go back when network restores
-window.addEventListener('online', () => retry())
+// ✅ only attach listener after client mount
+onMounted(() => {
+  handleOnline = () => retry()
+  if (typeof window !== 'undefined') {
+    window.addEventListener('online', handleOnline)
+  }
+})
+
+onBeforeUnmount(() => {
+  if (typeof window !== 'undefined' && handleOnline) {
+    window.removeEventListener('online', handleOnline)
+  }
+})
 </script>
