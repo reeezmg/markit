@@ -45,7 +45,7 @@ self.addEventListener('notificationclick', event => {
 // ✅ --- ADD OFFLINE CACHING LOGIC HERE ---
 
 const CACHE_NAME = 'markit-v1';
-const OFFLINE_URL = '/offline.html';
+const OFFLINE_URL = '/nonetwork.html';
 const PRECACHE_URLS = [
   '/',            // 👈 home page or change to your startup page
   OFFLINE_URL,    // 👈 offline page
