@@ -1,78 +1,68 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Offline</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>You’re Offline</title>
   <style>
     body {
       display: flex;
       flex-direction: column;
-      justify-content: center;
       align-items: center;
+      justify-content: center;
       height: 100vh;
-      margin: 0;
-      font-family: Arial, sans-serif;
-      background-color: #f9f9f9;
-      color: #333;
       text-align: center;
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 1.5rem;
+      background-color: #fff;
+      margin: 0;
     }
-
     h1 {
-      margin-bottom: 10px;
+      font-size: 1.75rem;
+      font-weight: 600;
+      margin-bottom: 0.5rem;
     }
-
     p {
-      margin-bottom: 20px;
+      color: #6b7280;
+      margin-bottom: 1.5rem;
     }
-
     button {
-      padding: 10px 20px;
-      font-size: 16px;
+      background-color: rgb(249, 115, 22); /* main orange */
+      color: white;
+      padding: 0.75rem 1.5rem;
       border: none;
-      border-radius: 8px;
-      background: #007bff;
-      color: #fff;
+      border-radius: 0.75rem;
       cursor: pointer;
-      transition: background 0.2s ease-in-out;
+      font-size: 1rem;
+      transition: background-color 0.2s ease-in-out;
     }
-
     button:hover {
-      background: #0056b3;
-    }
-
-    .spinner {
-      display: none;
-      margin-top: 20px;
-      border: 4px solid #f3f3f3;
-      border-top: 4px solid #007bff;
-      border-radius: 50%;
-      width: 36px;
-      height: 36px;
-      animation: spin 1s linear infinite;
-    }
-
-    @keyframes spin {
-      0% { transform: rotate(0deg); }
-      100% { transform: rotate(360deg); }
+      background-color: rgb(234, 88, 12); /* darker orange hover */
     }
   </style>
 </head>
 <body>
-  <h1>You are offline</h1>
-  <p>Please reconnect to the internet.</p>
-  <button onclick="reloadPage()">Reload</button>
-  <div class="spinner" id="spinner"></div>
+<h1>You’re Offline</h1>
+<p>Please check your internet connection and try again.</p>
+<button id="retry">Retry</button>
 
-  <script>
-    function reloadPage() {
-      const spinner = document.getElementById('spinner');
-      spinner.style.display = 'block';
+<script>
+  const retryButton = document.getElementById('retry');
 
-      // small delay to show spinner before redirect
-      setTimeout(() => {
-        window.location.href = 'https://markit.co.in/login';
-      }, 1000);
+  function retry() {
+    if (navigator.onLine) {
+      const prevUrl = localStorage.getItem('prevRoute') || '/';
+      localStorage.removeItem('prevRoute');
+      window.location.replace(prevUrl);
+    } else {
+      alert('Still offline 😕');
     }
-  </script>
+  }
+
+  retryButton.addEventListener('click', retry);
+
+  // Automatically retry when connection is restored
+  window.addEventListener('online', retry);
+</script>
 </body>
 </html>
