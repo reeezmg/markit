@@ -18,7 +18,6 @@ try {
 
   const messaging = firebase.messaging();
 
-  // ✅ Handle background messages
   messaging.onBackgroundMessage((payload) => {
     console.log('[SW] Background message:', payload);
     self.registration.showNotification(payload.data.title || 'Markit', {
@@ -28,7 +27,6 @@ try {
       data: payload.data.url || '/'
     });
   });
-
 } catch (err) {
   console.warn('[SW] Firebase Messaging not initialized:', err);
 }
@@ -36,7 +34,7 @@ try {
 // ===================================================
 // ✅ Cache Configuration
 // ===================================================
-const CACHE_VERSION = 'v4';
+const CACHE_VERSION = 'v5';
 const CACHE_NAME = `markit-${CACHE_VERSION}`;
 const OFFLINE_URL = '/nonetwork.html';
 
@@ -52,17 +50,27 @@ const PRECACHE_URLS = [
 // ✅ Install Event — Cache essential files
 // ===================================================
 self.addEventListener('install', (event) => {
-  console.log('[SW] Installing...');
+  console.log('[SW] Installing and caching essential assets...');
   event.waitUntil(
     (async () => {
+      const cache = await caches.open(CACHE_NAME);
       try {
-        const cache = await caches.open(CACHE_NAME);
-        await cache.addAll(PRECACHE_URLS);
-        console.log('[SW] Cached essential assets');
+        // ✅ Force fetch and cache offline.html, even if not visited yet
+        await Promise.all(
+          PRECACHE_URLS.map(async (url) => {
+            const response = await fetch(url, { cache: 'reload' });
+            if (response.ok) {
+              await cache.put(url, response.clone());
+            } else {
+              console.warn(`[SW] Skipped caching ${url}, response not OK`);
+            }
+          })
+        );
+        console.log('[SW] Pre-caching completed');
       } catch (err) {
-        console.warn('[SW] Failed to cache during install:', err);
+        console.warn('[SW] Failed to pre-cache:', err);
       }
-      self.skipWaiting(); // Activate immediately after install
+      self.skipWaiting();
     })()
   );
 });
@@ -83,8 +91,8 @@ self.addEventListener('activate', (event) => {
           }
         })
       );
-      await self.clients.claim(); // Start controlling open pages
-      console.log('[SW] Ready and controlling clients');
+      await self.clients.claim();
+      console.log('[SW] Now controlling all clients');
     })()
   );
 });
@@ -95,30 +103,35 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
+  const request = event.request;
+
   event.respondWith(
     (async () => {
       const cache = await caches.open(CACHE_NAME);
-      const cachedResponse = await cache.match(event.request);
 
-      // Always try to fetch fresh copy in background
-      const fetchPromise = fetch(event.request)
-        .then((networkResponse) => {
-          if (networkResponse && networkResponse.status === 200) {
-            cache.put(event.request, networkResponse.clone());
-          }
-          return networkResponse;
-        })
-        .catch(async () => {
-          // Network failed → use cache or offline page
-          if (event.request.mode === 'navigate' ||
-              event.request.headers.get('accept')?.includes('text/html')) {
-            return cachedResponse || (await cache.match(OFFLINE_URL));
-          }
-          return cachedResponse || (await cache.match(OFFLINE_URL));
-        });
+      try {
+        // Try network first
+        const networkResponse = await fetch(request);
+        if (networkResponse && networkResponse.status === 200) {
+          cache.put(request, networkResponse.clone());
+        }
+        return networkResponse;
+      } catch (error) {
+        // On network failure, fallback to cache or offline page
+        const cachedResponse = await cache.match(request);
+        if (cachedResponse) return cachedResponse;
 
-      // Return cached response first (instant load)
-      return cachedResponse || fetchPromise;
+        if (
+          request.mode === 'navigate' ||
+          request.headers.get('accept')?.includes('text/html')
+        ) {
+          console.warn('[SW] Network failed, showing offline page');
+          return await cache.match(OFFLINE_URL);
+        }
+
+        // For non-HTML assets (e.g., images), fallback to offline icon
+        return await cache.match('/icons/icon-192.png');
+      }
     })()
   );
 });
