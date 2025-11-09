@@ -24,7 +24,8 @@ public class MainActivity extends BridgeActivity {
     webSettings.setJavaScriptEnabled(true);
     webSettings.setDomStorageEnabled(true);
     webSettings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
-
+    webSettings.setCacheMode(WebSettings.LOAD_DEFAULT);
+    webSettings.setDomStorageEnabled(true);
     if (isNetworkAvailable()) {
       webView.loadUrl("https://markit.co.in/login");
     } else {

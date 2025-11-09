@@ -6,7 +6,8 @@
     "hostname": "markit.co.in",
     "url": "https://markit.co.in/login",
     "allowNavigation": ["markit.co.in"],
-    "cleartext": false
+    "cleartext": false,
+    "errorPath": "/nonetwork.html"
   },
   "plugins": {
     "SplashScreen": {
