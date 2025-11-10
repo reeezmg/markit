@@ -1045,213 +1045,194 @@ const handleInvalidBarcode = (index) => {
   delete currentRequestIds.value[index];
 };
 
-
 const handleSave = async () => {
-  isSaving.value = true;
+  if (isSaving.value) return
+  isSaving.value = true
+
+  // Grab session once
+  const session = useAuth().session.value
+  const companyId = session?.companyId
+  const userId = session?.id
 
   try {
-    // 1. Filter valid entries
-    if (!navigator.onLine) {
-    throw createError({
-      statusCode: 0,
-      statusMessage: 'No internet connection',
-    })
-  }
-    const finalitems = items.value.filter(item =>
-      item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
-    );
-
-    if (items.value.length === 0) {
-      throw new Error(`No valid items to bill.`);
+    // 0) Online check (only in browser)
+    if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
+      throw new Error('No internet connection')
     }
 
-    if (items.value.length === 0) {
-      items.value = [{
-        id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '',
-        qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0
-      }];
-      discount.value = 0;
-      paymentMethod.value = 'Cash';
-      tokenEntries.value = [''];
-      throw new Error(`No valid Entry in bill.`);
+    // 1) Filter valid entries
+    const finalitems = (items.value || []).filter(
+      (item) => item?.name?.trim() || item?.barcode?.trim() || (item?.category?.length ?? 0) > 0
+    )
+
+    if (finalitems.length === 0) {
+      throw new Error('No valid items to bill.')
     }
 
-    finalitems.forEach((item, index) => {
-      if (!item.category?.[0]?.id) {
-        throw new Error(`No category in entry ${index + 1}`);
+    // 2) Per-entry validation
+    finalitems.forEach((item, idx) => {
+      if (!item?.category?.[0]?.id) {
+        throw new Error(`No category in entry ${idx + 1}`)
       }
-    });
+      // Optional: ensure numeric-ish fields are numeric
+      if (Number.isNaN(Number(item.qty ?? 1))) throw new Error(`Invalid qty in entry ${idx + 1}`)
+      if (Number.isNaN(Number(item.rate ?? 0))) throw new Error(`Invalid rate in entry ${idx + 1}`)
+    })
 
+    // 3) Get a new invoice number
+    const billInv = await $fetch('/api/bill/findBillCounter', {
+      method: 'POST',
+      body: { companyId, userId },
+    })
 
-    const billcounter = await $fetch('/api/bill/findBillCounter', {
-    method: 'POST',
-    body: {
-      companyId: useAuth().session.value?.companyId,
-      userId: useAuth().session.value?.id,
+    // 4) Coupons (only if customer present)
+    if (clientId.value) {
+      await generateCoupons(clientId.value, Number(grandTotal.value) || 0)
     }
-  });
-  if(clientId.value){
-    await generateCoupons(clientId.value, grandTotal.value);
-  }
-    const billInv = billcounter;
-    const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
-    const billPoints = pointsValue > 0 ? Number(grandTotal.value) / pointsValue : 0;
-    const returnedItems = finalitems.filter(item => item.return);
 
-    const entriesData = finalitems.map(item => {
-      const entry = {
+    // 5) Build derived flags + arrays
+    const pointsValue = Number(session?.pointsValue || 0)
+    const billPoints = pointsValue > 0 ? Number(grandTotal.value || 0) / pointsValue : 0
+    const returnedItems = finalitems.filter((i) => i.return)
+
+    const entriesData = finalitems.map((item) => {
+      const base = {
         name: item.name || '',
         qty: Number(item.qty || 1),
         rate: Number(item.rate || 0),
         discount: Number(item.discount || 0),
         tax: Number(item.tax || 0),
         value: Number(item.value || 0),
-        return: item.return || false,
-        ...(item.size && { size: item.size }),
-        ...(item.barcode && { barcode: item.barcode }),
-        ...(item.id && { item: { connect: { id: item.id } } }),
-        ...(item.variantId && { variant: { connect: { id: item.variantId } } }),
-        ...(item.category?.[0]?.id && {
-          category: { connect: { id: item.category[0].id } }
-        }),
-        ...(item.userId && {
-          userName: item.user,
-          companyUser: {
-            connect: {
-              companyId_userId: {
-                companyId: useAuth().session.value?.companyId,
-                userId: item.userId,
-              }
-            }
-          }
-        })
-      };
-      return entry;
-    });
+        return: Boolean(item.return),
+      }
 
-        const hasCreditPayment =
-          paymentMethod.value === 'Credit' ||
-          (paymentMethod.value === 'Split' &&
-          splitPayments.value?.some(p => p.method === 'Credit'));
-    
+      if (item.size) base.size = item.size
+      if (item.barcode) base.barcode = item.barcode
+      if (item.id) base.item = { connect: { id: item.id } }
+      if (item.variantId) base.variant = { connect: { id: item.variantId } }
+      if (item.category?.[0]?.id) base.category = { connect: { id: item.category[0].id } }
 
+      if (item.userId) {
+        base.userName = item.user
+        base.companyUser = {
+          connect: {
+            companyId_userId: {
+              companyId,
+              userId: item.userId,
+            },
+          },
+        }
+      }
+
+      return base
+    })
+
+    const hasCreditPayment =
+      paymentMethod.value === 'Credit' ||
+      (paymentMethod.value === 'Split' &&
+        Array.isArray(splitPayments.value) &&
+        splitPayments.value.some((p) => p?.method === 'Credit'))
+
+    // 6) Build payload for /api/bill/create
     const payload = {
       invoiceNumber: billInv,
       subtotal: Number(subtotal.value) || 0,
       discount: Number(discount.value) || 0,
       grandTotal: Number(grandTotal.value) || 0,
+      // Keep prisma field camelCase; DB column can be @map("return_amt")
       returnAmt: Number(returnAmt.value) || 0,
       paymentMethod: paymentMethod.value || 'Cash',
-      ...(redeemedPoints.value && { redeemedPoints: redeemedPoints.value || 0 }),
-      ...(!clientId.value ? { billPoints: 0 } : { billPoints }),
+      ...(redeemedPoints.value ? { redeemedPoints: Number(redeemedPoints.value) || 0 } : {}),
+      ...(clientId.value ? { billPoints: Number(billPoints) } : { billPoints: 0 }),
       createdAt: new Date(date.value).toISOString(),
       paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
       type: 'BILL',
       entries: { create: entriesData },
-      company: {
-        connect: {
-          id: useAuth().session.value?.companyId,
-        },
-      },
+      company: { connect: { id: companyId } },
       companyUser: {
         connect: {
-          companyId_userId: {
-            companyId: useAuth().session.value?.companyId,
-            userId: useAuth().session.value?.id,
-          }
-        }
+          companyId_userId: { companyId, userId },
+        },
       },
-      ...(clientId.value && {
-        client: { connect: { id: clientId.value } }
-      }),
-      ...(selected.value && {
-        account: { connect: { id: selected.value } }
-      }),
-      ...(paymentMethod.value === 'Split' && {
-        splitPayments: splitPayments.value
-      }),
-    };
+      ...(clientId.value && { client: { connect: { id: clientId.value } } }),
+      ...(selected.value && { account: { connect: { id: selected.value } } }),
+      ...(paymentMethod.value === 'Split' && { splitPayments: splitPayments.value }),
+    }
 
-     printData = {
+    // 7) Build print data (unchanged logic; uses finalitems)
+    printData = {
       invoiceNumber: billInv,
-      phone:useAuth().session.value?.companyPhone,
-      description:useAuth().session.value?.description,
-      thankYouNote:useAuth().session.value?.thankYouNote,
-      refundPolicy:useAuth().session.value?.refundPolicy,
-      returnPolicy:useAuth().session.value?.returnPolicy,
+      phone: session?.companyPhone,
+      description: session?.description,
+      thankYouNote: session?.thankYouNote,
+      refundPolicy: session?.refundPolicy,
+      returnPolicy: session?.returnPolicy,
       date: new Date(date.value).toISOString(),
-      entries: finalitems.map(entry => {
-        const discountVal = entry.discount < 0
-          ? entry.discount
-          : entry.discount > 0
-            ? `${entry.discount}%`
-            : 0;
+      entries: finalitems.map((entry) => {
+        const discountVal =
+          Number(entry.discount) < 0
+            ? Number(entry.discount)
+            : Number(entry.discount) > 0
+            ? `${Number(entry.discount)}%`
+            : 0
         return {
           description: entry.barcode ? entry.name : entry.category[0].name,
           hsn: entry.category[0].hsn,
-          qty: entry.qty || 1,
-          mrp: entry.rate || 0,
+          qty: Number(entry.qty || 1),
+          mrp: Number(entry.rate || 0),
           discount: discountVal,
-          tax: entry.tax || 0,
-          value: entry.qty * entry.rate || 0,
+          tax: Number(entry.tax || 0),
+          value: Number(entry.qty || 1) * Number(entry.rate || 0),
           size: entry.size || '',
           barcode: entry.barcode,
-          tvalue: entry.value || 0,
-        };
+          tvalue: Number(entry.value || 0),
+        }
       }),
-      subtotal: subtotal.value,
-      discount: Number(discount.value),
-      grandTotal: grandTotal.value,
+      subtotal: Number(subtotal.value) || 0,
+      discount: Number(discount.value) || 0,
+      grandTotal: Number(grandTotal.value) || 0,
       paymentMethod: paymentMethod.value,
-      companyName: useAuth().session.value?.companyName || '',
-      companyAddress: useAuth().session.value?.address || {},
-      gstin: useAuth().session.value?.gstin || '',
-      ...(paymentMethod.value === 'Split' && {
-        splitPayments: splitPayments.value
-      }),
-      accHolderName: useAuth().session.value?.accHolderName || '',
-      upiId: useAuth().session.value?.upiId || '',
+      companyName: session?.companyName || '',
+      companyAddress: session?.address || {},
+      gstin: session?.gstin || '',
+      ...(paymentMethod.value === 'Split' && { splitPayments: splitPayments.value }),
+      accHolderName: session?.accHolderName || '',
+      upiId: session?.upiId || '',
       clientName: clientName.value,
       clientPhone: phoneNo.value,
-      tqty: finalitems.reduce((sum, entry) => sum + entry.qty, 0),
-      tvalue: finalitems.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
-      ttvalue: finalitems.reduce((sum, entry) => sum + entry.value, 0),
-      tdiscount: finalitems.reduce((sum, entry) => {
-        if (entry.discount < 0) {
-          return sum + (Math.abs(entry.discount) * entry.qty);
-        } else {
-          return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
-        }
-      }, 0)
-    };
+      tqty: finalitems.reduce((sum, e) => sum + Number(e.qty || 1), 0),
+      tvalue: finalitems.reduce((sum, e) => sum + Number(e.qty || 1) * Number(e.rate || 0), 0),
+      ttvalue: finalitems.reduce((sum, e) => sum + Number(e.value || 0), 0),
+      tdiscount: finalitems.reduce((sum, e) => {
+        const qty = Number(e.qty || 1)
+        const rate = Number(e.rate || 0)
+        const d = Number(e.discount || 0)
+        if (d < 0) return sum + Math.abs(d) * qty
+        return sum + ((rate * d) / 100) * qty
+      }, 0),
+    }
+    printModel.value = true
 
-    // 🔔 Notify users (FCM + backend)
-    // await $fetch('/api/notifications/notify', {
-    //   method: 'POST',
-    //   body: {
-    //     userId: useAuth().session.value?.id,
-    //     type: 'BILL',
-    //     companyId: useAuth().session.value?.companyId,
-    //     invoiceNumber: billInv,
-    //     amount: grandTotal.value
-    //   }
-    // });
+    // 8) Fire FCM notification (non-blocking; swallow its error)
+    ;(async () => {
+      try {
+        await $fetch('/api/notifyfcm', {
+          method: 'POST',
+          body: {
+            companyId,
+            excludeDeviceId: localStorage.getItem('device_id'),
+            title: `New Bill Created in ${session?.companyName}`,
+            body: `Invoice #${billInv} for ₹${Number(grandTotal.value) || 0} has been created.`,
+            data: { url: '/erp/sales' },
+          },
+        })
+      } catch {}
+    })()
 
-     $fetch('/api/notifyfcm', {
-      method: 'POST',
-      body: {
-        companyId: useAuth().session.value?.companyId,
-        excludeDeviceId: localStorage.getItem('device_id'),
-        title: `New Bill Created in ${useAuth().session.value?.companyName}`,
-        body: `Invoice #${billInv} for ₹${grandTotal.value} has been created.`,
-        data: {
-          url: '/erp/sales'
-        }
-      }
-    });
 
-    // 🔁 Backend call to handle everything with Prisma transaction
-    $fetch('/api/bill/create', {
+
+    // 9) Create bill (await; single try/catch controls toast + state)
+    await $fetch('/api/bill/create', {
       method: 'POST',
       body: {
         payload,
@@ -1259,51 +1240,34 @@ const handleSave = async () => {
         returnedItems,
         billPoints,
         clientId: clientId.value,
-        companyId: useAuth().session.value?.companyId,
+        companyId,
         couponId: selectedCouponId.value?.value || null,
-        userId: useAuth().session.value?.id,
+        userId,
         tokenEntries: tokenEntries.value,
-      }
-    }).then(async() => {
-    toast.add({
-      title: 'Bill created successfully!',
-      color: 'green',
-    });
-
-      queryClient.invalidateQueries({
-        queryKey: ['zenstack', 'Bill', 'findMany'],
-        exact: false
-      });
-        queryClient.invalidateQueries({
-        queryKey: ['zenstack', 'Product', 'findMany'],
-        exact: false
-      });
-      await couponRefetch()
-    }).catch(error => {
-       toast.add({
-        title: 'Bill creation failed!',
-        color: 'red',
-      });
-   
+      },
     })
 
-    // 🧾 Trigger Print
+    toast.add({ title: 'Bill created successfully!', color: 'green' })
 
-   
+    // 10) Refresh caches
+    queryClient.invalidateQueries({ queryKey: ['zenstack', 'Bill', 'findMany'], exact: false })
+    queryClient.invalidateQueries({ queryKey: ['zenstack', 'Product', 'findMany'], exact: false })
+    await couponRefetch()
 
-      reset();
-      printModel.value = true;
+    // 11) Reset UI and open print modal
+    reset()
+
   } catch (error) {
-    console.error('Error creating bill', error);
+    console.error('Error creating bill', error)
     toast.add({
       title: 'Bill creation failed!',
-      description: error.message,
+      description: error?.message || 'Unknown error',
       color: 'red',
-    });
-  } finally{
-     isSaving.value = false
+    })
+  } finally {
+    isSaving.value = false
   }
-};
+}
 
 
 

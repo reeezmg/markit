@@ -1,130 +1,247 @@
-import { prisma } from '~/server/prisma';
+import { Pool } from 'pg'
+import crypto from 'crypto'
+
+const pool = new Pool({
+  connectionString: process.env.DATABASE_URL,
+  max: 10,
+  idleTimeoutMillis: 30000,
+  connectionTimeoutMillis: 10000
+})
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event);
-  const session = await useAuthSession(event);
+  const body = await readBody(event)
   const {
-    payload,
+    payload, // Prisma-style payload from frontend
     items,
     returnedItems,
     billPoints,
     clientId,
     companyId,
     couponId,
-    userId,
     tokenEntries
-  } = body;
+  } = body
+
+  const TRANSIENT_ERROR_CODES = [
+    '40001', '40P01', '53300', '57P01', '55006', '08006', '08003', 'P1001'
+  ]
+
+  async function logError(error: any, requestData: any) {
+    const client = await pool.connect()
+    try {
+      client.query(
+        `INSERT INTO save_error_requests (id, created_at, company_id, request_data, error_message)
+         VALUES ($1, now(), $2, $3, $4)`,
+        [
+          crypto.randomUUID(),
+          companyId,
+          JSON.stringify(requestData),
+          error.message || 'Unknown error'
+        ]
+      )
+    } catch (logErr) {
+      console.error('⚠️ Failed to log error:', logErr.message)
+    } finally {
+      client.release()
+    }
+  }
+
+  async function runTransaction(attempt = 1) {
+    const client = await pool.connect()
+    try {
+      await client.query('BEGIN')
+
+      // Generate Bill ID
+      const billId = crypto.randomUUID()
+
+      // 1️⃣ Insert Bill — Prisma-style fields flattened
+      const insertBillQuery = `
+        INSERT INTO bills (
+          id, invoice_number, subtotal, discount, grand_total, return_amt,
+          payment_method, redeemed_points, bill_points, created_at,
+          payment_status, type, split_payments, company_id, account_id,
+          client_id, user_id, updated_at
+        )
+        VALUES (
+          $1, $2, $3, $4, $5, $6,
+          $7, $8, $9, $10,
+          $11, $12, $13, $14, $15,
+          $16, $17, now()
+        )
+      `
+
+      await client.query(insertBillQuery, [
+        billId,
+        payload.invoiceNumber || null,
+        payload.subtotal || 0,
+        payload.discount || 0,
+        payload.grandTotal || 0,
+        payload.returnAmt || 0,
+        payload.paymentMethod || 'Cash',
+        payload.redeemedPoints || 0,
+        payload.billPoints || 0,
+        payload.createdAt ? new Date(payload.createdAt) : new Date(),
+        payload.paymentStatus || 'PAID',
+        payload.type || 'BILL',
+        payload.splitPayments ? JSON.stringify(payload.splitPayments) : null,
+        payload.company.connect?.id || companyId,
+        payload.account?.connect?.id || null,
+        payload.client?.connect?.id || null,
+        payload.companyUser?.connect?.companyId_userId?.userId || null
+      ])
+
+      // 2️⃣ Insert Entries (payload.entries.create)
+      if (payload.entries?.create?.length) {
+        const entryInserts = payload.entries.create.map((entry: any) => {
+          const entryId = crypto.randomUUID()
+          return client.query(
+            `
+              INSERT INTO entries (
+                id, name, qty, rate, discount, tax, value, size, barcode,
+                return, variant_id, item_id, category_id, company_id, user_id, bill_id
+              )
+              VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9,
+                $10, $11, $12, $13, $14, $15, $16
+              )
+            `,
+            [
+              entryId,
+              entry.name || '',
+              entry.qty || 1,
+              entry.rate || 0,
+              entry.discount || 0,
+              entry.tax || 0,
+              entry.value || 0,
+              entry.size || null,
+              entry.barcode || null,
+              entry.return || false,
+              entry.variant?.connect?.id || null,
+              entry.item?.connect?.id || null,
+              entry.category?.connect?.id || null,
+              companyId,
+              entry.companyUser?.connect?.companyId_userId?.userId || null,
+              billId
+            ]
+          )
+        })
+        await Promise.all(entryInserts)
+      }
+
+      // 3️⃣ Parallel updates (client points, stock, returns, etc.)
+      const updatePromises: Promise<any>[] = []
+
+      if (clientId) {
+        updatePromises.push(
+          client.query(
+            `UPDATE company_clients SET points = points + $1 WHERE company_id = $2 AND client_id = $3`,
+            [billPoints, companyId, clientId]
+          )
+        )
+      }
+
+      // stock updates
+      for (const item of items) {
+        if (!item.return) {
+          if (item.variantId)
+            updatePromises.push(
+              client.query(
+                `UPDATE variants SET sold = COALESCE(sold, 0) + $1 WHERE id = $2`,
+                [item.qty, item.variantId]
+              )
+            )
+          if (item.id)
+            updatePromises.push(
+              client.query(
+                `UPDATE items SET qty = COALESCE(qty, 0) - $1 WHERE id = $2`,
+                [item.qty, item.id]
+              )
+            )
+        }
+      }
+
+      // returned stock
+      for (const item of returnedItems) {
+        if (item.variantId)
+          updatePromises.push(
+            client.query(
+              `UPDATE variants SET sold = COALESCE(sold, 0) - $1 WHERE id = $2`,
+              [item.qty, item.variantId]
+            )
+          )
+        if (item.id)
+          updatePromises.push(
+            client.query(
+              `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE id = $2`,
+              [item.qty, item.id]
+            )
+          )
+      }
+
+      // delete token entries
+      if (tokenEntries.length > 0) {
+        updatePromises.push(
+          client.query(
+            `DELETE FROM token_entries WHERE token_no = ANY($1)`,
+            [tokenEntries.filter((t: string) => t.trim() !== '')]
+          )
+        )
+      }
+
+      // coupon usage + increment
+      if (couponId && clientId) {
+        const usageId = crypto.randomUUID()
+        updatePromises.push(
+          client.query(
+            `INSERT INTO coupon_usages (id, coupon_id, client_id, bill_id, used_at)
+             VALUES ($1, $2, $3, $4, now())`,
+            [usageId, couponId, clientId, billId]
+          )
+        )
+        updatePromises.push(
+          client.query(
+            `UPDATE coupons SET times_used = times_used + 1 WHERE id = $1`,
+            [couponId]
+          )
+        )
+      }
+
+      // increment bill counter
+      updatePromises.push(
+        client.query(
+          `UPDATE companies SET bill_counter = bill_counter + 1 WHERE id = $1`,
+          [companyId]
+        )
+      )
+
+      await Promise.all(updatePromises)
+
+      await client.query('COMMIT')
+      client.release()
+      return { success: true, billId }
+    } catch (error: any) {
+      await client.query('ROLLBACK')
+      client.release()
+
+      console.error(`❌ Transaction attempt ${attempt} failed:`, error.message)
+      logError(error, body)
+
+      if (TRANSIENT_ERROR_CODES.includes(error.code) && attempt < 3) {
+        const delay = 200 * Math.pow(2, attempt - 1)
+        console.log(`🔁 Retrying in ${delay}ms...`)
+        await new Promise((res) => setTimeout(res, delay))
+        return runTransaction(attempt + 1)
+      }
+
+      throw error
+    }
+  }
 
   try {
-    await prisma.$transaction(async (tx) => {
-      // 1. Create Bill with Entries
-      const bill = await tx.bill.create({
-        data: payload
-      });
-
-      // 2. Update client points (if clientId exists)
-      if (clientId) {
-        await tx.companyClient.update({
-          where: {
-            companyId_clientId: {
-              companyId,
-              clientId
-            }
-          },
-          data: {
-            points: { increment: billPoints }
-          }
-        });
-      }
-
-      // 3. Update stock & sold (for normal items)
-      for (const item of items) {
-        if ((item.barcode && !item.return) || (!item.barcode && item.variantId && !item.return)) {
-          if (item.variantId) {
-            await tx.variant.update({
-              where: { id: item.variantId },
-              data: { sold: { increment: item.qty } }
-            });
-          }
-
-          if (item.id) {
-            await tx.item.update({
-              where: { id: item.id },
-              data: { qty: { decrement: item.qty } }
-            });
-          }
-        }
-      }
-
-      // 4. Update returned items (if any)
-      for (const item of returnedItems) {
-        if (item.variantId) {
-          await tx.variant.update({
-            where: { id: item.variantId },
-            data: { sold: { decrement: item.qty } }
-          });
-        }
-
-        if (item.id) {
-          await tx.item.update({
-            where: { id: item.id },
-            data: { qty: { increment: item.qty } }
-          });
-        }
-      }
-
-      // 5. Delete token entries
-      if (tokenEntries.length > 0) {
-        await tx.tokenEntry.deleteMany({
-          where: {
-            tokenNo: {
-              in: tokenEntries.filter((t: string) => t.trim() !== '')
-            }
-          }
-        });
-      }
-
-      // 6. Mark coupon as used (if coupon applied)
-      if (couponId && clientId) {
-        await tx.couponUsage.create({
-          data: {
-            couponId: couponId,
-            clientId,
-            billId: bill.id
-          }
-        });
-
-        // Optionally increment coupon usage counter
-        await tx.coupon.update({
-          where: { id: couponId },
-          data: {
-            timesUsed: { increment: 1 }
-          }
-        });
-      }
-
-      // 7. Increment company bill counter
-      await tx.company.update({
-        where: {
-          id: companyId
-        },
-        data: {
-          billCounter: {
-            increment: 1
-          }
-        }
-      });
-    }, {
-      maxWait: 10000,   // wait up to 10s to acquire a connection
-      timeout: 15000    // run the transaction for up to 15s
-    });
-
-    return { success: true };
+    const result = await runTransaction()
+    return result
   } catch (error) {
-    console.log(error)
-    return sendError(event, createError({
-      statusCode: 500,
-      statusMessage: 'Failed to Create bill',
-    }));
+    console.error('🚨 Final failure after retries:', error.message)
+    logError(error, body)
+    throw createError({ statusCode: 500, statusMessage: 'Failed to create bill after retries' })
   }
-});
+})

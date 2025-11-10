@@ -168,6 +168,7 @@ model Company extends Base {
 
     productinput Productinput?
     variantinput Variantinput?
+    saveErrorRequests SaveErrorRequest[]
     
     @@allow('create', auth() != null && status)
     @@allow('update', users?[user == auth()])
@@ -724,7 +725,7 @@ model Bill extends Base {
     discount        Float?    
     tax             Float?    
     grandTotal      Float? @map("grand_total")  
-    returnAmt       Float? @map("return_Amt")  
+    returnAmt       Float? @map("return_amt")  
     deliveryFees    Float? @map("delivery_fees")  
     paymentMethod   String? @map("payment_method") 
     redeemedPoints  Int?     @map("redeemed_points")
@@ -1168,3 +1169,14 @@ model LikeCompanyClient {
   @@allow('read, create, update, delete', true)
   @@map("like_company_client")
 }
+
+model SaveErrorRequest extends Base {
+  createdAt DateTime @default(now()) @map("created_at")
+  requestData Json @map("request_data")
+  errorMessage String @map("error_message")
+  company   Company @relation(fields: [companyId], references: [id],onDelete:Cascade)
+  companyId String @map("company_id")
+  @@allow('read, create, update, delete', true)
+  @@map("save_error_requests")
+}
+
