@@ -586,7 +586,7 @@ console.log(barcodes.value)
             :editDiscount="selectedProduct?.variants[index]?.discount"
             :editItems="selectedProduct?.variants[index]?.items"
             @update="updateVariant(index,$event)" />
-          <AddProductMedia
+          <AddProductMedia 
            v-if="variantInputs?.images"
             ref="mediaRefs"
             :editFile="selectedProduct && selectedProduct.variants[index]?.images"
