@@ -55,7 +55,7 @@ export default defineEventHandler(async (event) => {
     .toBuffer()
 
     // 🔹 Prepare Gemini API
-    const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyC3S1UTOCHokAiLf3WXSQd8Dl2uTRKlzaU'
+    const GEMINI_API_KEY = process.env.GEMINI_API_KEY 
     if (!GEMINI_API_KEY) throw createError({ statusCode: 500, statusMessage: 'Missing Gemini API key' })
 
     const productType = body.categoryName || 'product'

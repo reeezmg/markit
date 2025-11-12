@@ -44,6 +44,93 @@ const deletingRowIdentity = ref({})
 const activeImages = ref<string[]>([])
 const activeImagesDate = ref<string[]>([])
 let images = reactive<ImageData[]>([]);
+
+// ==========================
+// 🟢 DISCOUNT MODAL LOGIC
+// ==========================
+const isDiscountModalOpen = ref(false)
+const isDiscountApplying = ref(false)
+const discountPercentage = ref<number | null>(null)
+const discountFilters = reactive({
+  categoryId: '',
+  startDate: '',
+  endDate: '',
+  brand: '',
+  minMargin: '',
+  maxSprice: '',
+  minDprice: '',
+  minRating: '',
+})
+
+const categoryOptions = computed(() =>
+  products.value
+    ? [
+        ...new Set(products.value.map((p) => p.category?.name).filter(Boolean)),
+      ].map((name) => ({ label: name, value: name }))
+    : []
+)
+
+watch(isDiscountModalOpen, (open) => {
+  if (!open) {
+    Object.assign(discountFilters, {
+      categoryId: '',
+      startDate: '',
+      endDate: '',
+      brand: '',
+      minMargin: '',
+      maxSprice: '',
+      minDprice: '',
+      minRating: '',
+    })
+    discountPercentage.value = null
+  }
+})
+
+const applyDiscount = async () => {
+  if (!discountPercentage.value || discountPercentage.value <= 0) {
+    return toast.add({
+      title: 'Invalid Discount',
+      description: 'Please enter a valid discount percentage.',
+      color: 'red',
+    })
+  }
+
+  try {
+    isDiscountApplying.value = true
+
+    const res = await $fetch('/api/discount/apply', {
+      method: 'POST',
+      body: JSON.parse(
+        JSON.stringify({
+          companyId: useAuth().session.value?.companyId,
+          discountPercentage: discountPercentage.value,
+          filters: discountFilters,
+        })
+      ),
+    })
+
+    toast.add({
+      title: 'Discount Applied',
+      description: `Applied ${discountPercentage.value}% discount to ${res.updatedCount} variants.`,
+      color: 'green',
+    })
+
+    isDiscountModalOpen.value = false
+    discountPercentage.value = null
+    await refetch()
+  } catch (err: any) {
+    console.error('Discount Error:', err)
+    toast.add({
+      title: 'Error Applying Discount',
+      description: err?.message || 'Unexpected error occurred.',
+      color: 'red',
+    })
+  } finally {
+    isDiscountApplying.value = false
+  }
+}
+
+
 // Columns
 const columns = [
     {
@@ -608,46 +695,57 @@ const fileValue = (data: any) => {
     images = data.files
 };
 
+const handleAddPhoto = async () => {  
+  try {
+    isPhotoSaving.value = true;
 
-const handleAddPhoto = async() => {  
-try{
-isPhotoSaving.value = true
-    const res = await Updatevariant.mutateAsync({
-        where: { id:items.value?.variant.id },
-        data: { images: images.map((image) => image.uuid) },
-    });
-    if(images.length > 0 && res){
-   const base64files = await Promise.all(
+    // Step 1: Prepare and upload files first
+    const base64files = await Promise.all(
       images
-        .filter((file) => file.file instanceof File) // Only process if file.file is a File
+        .filter((file) => file.file instanceof File)
         .map(async (file) => {
           const base64 = await prepareFileForApi(file.file);
           return { base64, uuid: file.uuid, view: file.view };
-        }
-    )
-  );
-
-  if (base64files.length > 0) {
-    const awsres = await Promise.all(
-      base64files.map((file) =>
-        awsService.uploadBase64File(file.base64, file.uuid,file.view, items.value.variant.product.category.name, items.value.variant.product.category.targetAudience, useAuth().session.value?.isAiImage)
-      )
+        })
     );
-}itemBarcode.value = ''
-    }
-}catch(err:any){
-    console.log(err)
-     toast.add({
-            title: 'Photo Attached !',
-            color: 'red',
-            description: err.message
-        });
-}finally{
-isPhotoSaving.value = false
-isAddPhotoModelOpen.value = false
-}
 
-}
+    if (base64files.length > 0) {
+      await Promise.all(
+        base64files.map((file) =>
+          awsService.uploadBase64File(
+            file.base64,
+            file.uuid,
+            file.view,
+            items.value.variant.product.category.name,
+            items.value.variant.product.category.targetAudience,
+            useAuth().session.value?.isAiImage
+          )
+        )
+      );
+    }
+
+    // Step 2: Update DB after successful upload
+    const res = await Updatevariant.mutateAsync({
+      where: { id: items.value?.variant.id },
+      data: { images: images.map((image) => image.uuid) },
+    });
+
+    console.log("DB updated with image UUIDs:", res);
+
+    itemBarcode.value = '';
+  } catch (err: any) {
+    console.error(err);
+    toast.add({
+      title: 'Photo Upload Failed!',
+      color: 'red',
+      description: err.message
+    });
+  } finally {
+    isPhotoSaving.value = false;
+    isAddPhotoModelOpen.value = false;
+  }
+};
+
 
 
 </script>
@@ -686,7 +784,7 @@ isAddPhotoModelOpen.value = false
     />
   </div>
 
-  <!-- Right side: Buttons -->
+    <!-- Right side: Buttons -->
   <div class="flex flex-row gap-3 w-full sm:w-auto justify-end">
     <UButton
       icon="i-heroicons-plus"
@@ -707,7 +805,18 @@ isAddPhotoModelOpen.value = false
       @click="isAddPhotoModelOpen = true"
     class="w-full flex-1 sm:w-auto sm:flex-none"
     />
+    <!-- 🟢 New Discount Button -->
+    <UButton
+      icon="i-heroicons-percent-badge"
+      size="sm"
+      color="orange"
+      variant="solid"
+      label="Discount"
+      @click="isDiscountModalOpen = true"
+      class="w-full flex-1 sm:w-auto sm:flex-none"
+    />
   </div>
+
 </div>
 
 
@@ -1162,5 +1271,82 @@ isAddPhotoModelOpen.value = false
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
         </template>
     </UDashboardModal>
+
+<!-- 🟢 DISCOUNT MODAL -->
+<UModal v-model="isDiscountModalOpen" size="xl" prevent-close>
+  <UCard>
+    <template #header>
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold">Apply Discount</h3>
+        <UButton
+          icon="i-heroicons-x-mark"
+          variant="ghost"
+          @click="isDiscountModalOpen = false"
+        />
+      </div>
+    </template>
+
+    <!-- Filters -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <UFormGroup label="Category">
+        <USelect
+          v-model="discountFilters.categoryId"
+          :options="categoryOptions"
+          placeholder="Select Category"
+        />
+      </UFormGroup>
+
+      <UFormGroup label="Start Date">
+        <UInput type="date" v-model="discountFilters.startDate" />
+      </UFormGroup>
+
+      <UFormGroup label="End Date">
+        <UInput type="date" v-model="discountFilters.endDate" />
+      </UFormGroup>
+
+      <UFormGroup label="Brand">
+        <UInput placeholder="Brand" v-model="discountFilters.brand" />
+      </UFormGroup>
+
+      <UFormGroup label="Min Margin">
+        <UInput type="number" v-model="discountFilters.minMargin" />
+      </UFormGroup>
+
+      <UFormGroup label="Max sprice">
+        <UInput type="number" v-model="discountFilters.maxSprice" />
+      </UFormGroup>
+
+      <UFormGroup label="Min dprice">
+        <UInput type="number" v-model="discountFilters.minDprice" />
+      </UFormGroup>
+
+      <UFormGroup label="Min Rating">
+        <UInput type="number" v-model="discountFilters.minRating" />
+      </UFormGroup>
+    </div>
+
+    <!-- Discount Input -->
+    <UFormGroup label="Discount Percentage (%)" class="mt-4">
+      <UInput
+        type="number"
+        min="1"
+        max="90"
+        v-model="discountPercentage"
+        placeholder="Enter discount (e.g., 10)"
+      />
+    </UFormGroup>
+
+    <div class="flex justify-end mt-6 gap-3">
+      <UButton color="white" label="Cancel" @click="isDiscountModalOpen = false" />
+      <UButton
+        color="orange"
+        :loading="isDiscountApplying"
+        label="Apply Discount"
+        @click="applyDiscount"
+      />
+    </div>
+  </UCard>
+</UModal>
+
 
 </template>
