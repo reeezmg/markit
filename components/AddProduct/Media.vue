@@ -194,7 +194,7 @@ defineExpose({ resetForm })
 
       <!-- ✨ AI Button (Only when isAiImage enabled & uuid exists) -->
       <UButton
-        v-if="file.uuid && useAuth().session.value?.isAiImage"
+        v-if="file.uuid && useAuth().session.value?.isAiImage && !file.file"
         :icon="file.isLoading ? 'i-heroicons-arrow-path' : 'i-heroicons-sparkles'"
         :loading="file.isLoading"
         color="primary"
