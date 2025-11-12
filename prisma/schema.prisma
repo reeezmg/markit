@@ -166,7 +166,7 @@ model Company {
   variants                  Variant[]
   purchaseOrders            PurchaseOrder[]
   items                     Item[]
-  trybuys                   Trynbuy[]
+  trybuys                   Trynbuy[]            @relation("try_n_buy_company")
   status                    Boolean              @default(true)
   type                      CompanyType
   pipeline                  Pipeline?
@@ -361,9 +361,11 @@ model Trynbuy {
   createdAt               DateTime                 @default(now()) @map("created_at")
   checkoutMethod          String                   @map("checkout_method")
   subtotal                Float                    @map("subtotal")
-  productDiscount         Float                    @map("product_discount")
-  totalDiscount           Float                    @map("total_discount")
-  shipping                Float                    @map("shipping")
+  productDiscount         Float?                   @map("product_discount")
+  totalDiscount           Float?                   @map("total_discount")
+  shipping                Float?                   @map("shipping")
+  waitingFee              Float?                   @map("waiting_fee")
+  waitingTime             Float?                   @map("waiting_time")
   deliveryType            String                   @map("delivery_type")
   deliveryTime            DateTime?                @map("delivery_time")
   orderStatus             String?                  @default("ORDER_RECEIVED") @map("order_status")
@@ -374,15 +376,14 @@ model Trynbuy {
   bill                    Bill?
   client                  Client?                  @relation(fields: [clientId], references: [id])
   clientId                String?                  @map("client_id")
-  company                 Company                  @relation(fields: [companyId], references: [id])
-  companyId               String                   @map("company_id")
+  companyLocations        Address[]                @relation("try_n_buy_company_locations")
   deliveryPartnerEarnings DeliveryPartnerEarnings?
+  company                 Company[]                @relation("try_n_buy_company")
   deliveryPartner         DeliveryPartner?         @relation(fields: [deliveryPartnerId], references: [id])
   deliveryPartnerId       String?                  @map("delivery_partner_id")
   packingStatus           String?                  @map("packing_status")
 
   @@index([clientId])
-  @@index([companyId])
   @@map("trynbuys")
 }
 
@@ -422,6 +423,7 @@ model TrynbuyCartItem {
   item      Item    @relation(fields: [itemId], references: [id])
   itemId    String  @map("item_id")
   quantity  Int
+  status    String?
 
   @@index([trynbuyId])
   @@index([variantId])
@@ -437,6 +439,7 @@ model TrynbuyReturnedItem {
   item      Item    @relation(fields: [itemId], references: [id])
   itemId    String  @map("item_id")
   quantity  Int
+  status    String?
 
   @@index([trynbuyId])
   @@index([variantId])
@@ -646,7 +649,7 @@ model Bill {
   billPoints     Int?          @map("bill_points")
   splitPayments  Json?         @map("split_payments")
   paymentStatus  PaymentStatus @default(PENDING) @map("payment_status")
-  transactionId  String?       @unique() @map("transaction_id")
+  transactionId  String?       @map("transaction_id")
   notes          String?
   type           OrderType?
   status         OrderStatus?
@@ -806,38 +809,39 @@ model Payment {
 }
 
 model Address {
-  id                String                                @id() @unique() @default(uuid())
-  createdAt         DateTime                              @default(now()) @map("created_at")
-  updatedAt         DateTime                              @updatedAt() @map("updated_at")
-  name              String?
-  street            String?
-  locality          String?
-  landmark          String?
-  city              String?
-  state             String?
-  pincode           String?
-  houseDetails      String?                               @map("house_details")
-  type              String?
-  formattedAddress  String?                               @map("formatted_address")
-  placeId           String?                               @map("place_id")
-  coord             Unsupported("geography(Point,4326)")?
-  lat               Float?                                @map("lat")
-  lng               Float?                                @map("lng")
-  active            Boolean                               @default(true)
-  user              User?                                 @relation(fields: [userId], references: [id])
-  userId            String?                               @unique() @map("user_id")
-  client            Client?                               @relation(fields: [clientId], references: [id])
-  clientId          String?                               @map("client_id")
-  distributor       Distributor?                          @relation(fields: [distributorId], references: [id])
-  distributorId     String?                               @unique() @map("distributor_id")
-  company           Company?                              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId         String?                               @unique() @map("company_id")
-  account           Account?                              @relation(fields: [accountId], references: [id])
-  accountId         String?                               @unique() @map("account_id")
-  deliveryPartner   DeliveryPartner?                      @relation(fields: [deliveryPartnerId], references: [id])
-  deliveryPartnerId String?                               @unique() @map("deliveryPartner_id")
-  bill              Bill[]
-  trynbuy           Trynbuy[]
+  id                      String                                @id() @unique() @default(uuid())
+  createdAt               DateTime                              @default(now()) @map("created_at")
+  updatedAt               DateTime                              @updatedAt() @map("updated_at")
+  name                    String?
+  street                  String?
+  locality                String?
+  landmark                String?
+  city                    String?
+  state                   String?
+  pincode                 String?
+  houseDetails            String?                               @map("house_details")
+  type                    String?
+  formattedAddress        String?                               @map("formatted_address")
+  placeId                 String?                               @map("place_id")
+  coord                   Unsupported("geography(Point,4326)")?
+  lat                     Float?                                @map("lat")
+  lng                     Float?                                @map("lng")
+  active                  Boolean                               @default(true)
+  user                    User?                                 @relation(fields: [userId], references: [id])
+  userId                  String?                               @unique() @map("user_id")
+  client                  Client?                               @relation(fields: [clientId], references: [id])
+  clientId                String?                               @map("client_id")
+  distributor             Distributor?                          @relation(fields: [distributorId], references: [id])
+  distributorId           String?                               @unique() @map("distributor_id")
+  company                 Company?                              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId               String?                               @unique() @map("company_id")
+  account                 Account?                              @relation(fields: [accountId], references: [id])
+  accountId               String?                               @unique() @map("account_id")
+  deliveryPartner         DeliveryPartner?                      @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId       String?                               @unique() @map("deliveryPartner_id")
+  bill                    Bill[]
+  trynbuy                 Trynbuy[]
+  trynbuyCompanyLocations Trynbuy[]                             @relation("try_n_buy_company_locations")
 
   @@map("addresses")
 }

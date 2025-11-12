@@ -1256,7 +1256,7 @@ const handleSave = async () => {
 
     // 11) Reset UI and open print modal
     reset()
-
+ isSaving.value = false
   } catch (error) {
     console.error('Error creating bill', error)
     toast.add({
@@ -1264,9 +1264,8 @@ const handleSave = async () => {
       description: error?.message || 'Unknown error',
       color: 'red',
     })
-  } finally {
-    isSaving.value = false
-  }
+     isSaving.value = false
+  } 
 }
 
 

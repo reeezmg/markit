@@ -149,7 +149,7 @@ model Company extends Base {
     variants         Variant[]
     purchaseOrders         PurchaseOrder[]
     items           Item[]
-    trybuys             Trynbuy[]
+    trybuys             Trynbuy[] @relation("try_n_buy_company")
     status      Boolean       @default(true)
     type        CompanyType
     pipeline    Pipeline?
@@ -371,15 +371,17 @@ model DeliveryPartner extends Base {
   @@map("delivery_partners")
 }
 
-model Trynbuy {
+model     Trynbuy {
   id              String       @id @default(uuid())
   orderNumber     Int          @default(autoincrement()) @map("order_number")
   createdAt       DateTime     @default(now()) @map("created_at")
   checkoutMethod  String       @map("checkout_method")
   subtotal        Float        @map("subtotal")
-  productDiscount Float        @map("product_discount")
-  totalDiscount   Float        @map("total_discount")
-  shipping        Float        @map("shipping")
+  productDiscount Float?        @map("product_discount")
+  totalDiscount   Float?        @map("total_discount")
+  shipping        Float?        @map("shipping")
+  waitingFee      Float?        @map("waiting_fee")
+  waitingTime     Float?        @map("waiting_time")
   deliveryType    String       @map("delivery_type")
   deliveryTime    DateTime?    @map("delivery_time")
   orderStatus     String?      @default("ORDER_RECEIVED") @map("order_status") 
@@ -390,9 +392,11 @@ model Trynbuy {
   bill            Bill?
   client          Client?      @relation(fields: [clientId], references: [id])
   clientId        String?      @map("client_id")
-  company         Company      @relation(fields: [companyId], references: [id])
-  companyId       String       @map("company_id")
+
+  companyLocations Address[]  @relation("try_n_buy_company_locations")
   deliveryPartnerEarnings DeliveryPartnerEarnings?
+
+  company        Company[]     @relation("try_n_buy_company")
 
   // 👇 Many Trynbuy → One DeliveryPartner
   deliveryPartner   DeliveryPartner? @relation(fields: [deliveryPartnerId], references: [id])
@@ -400,8 +404,9 @@ model Trynbuy {
 
   packingStatus   String?      @map("packing_status")
 
-  @@index([clientId])   
-  @@index([companyId])  
+  
+
+  @@index([clientId])    
   @@allow("create, read, update, delete", true)
   @@map("trynbuys")
 }
@@ -451,6 +456,7 @@ model TrynbuyCartItem {
   item      Item  @relation(fields: [itemId], references: [id])
   itemId    String   @map("item_id")
   quantity  Int  
+  status   String?
         
    @@index([trynbuyId])  
   @@index([variantId])
@@ -467,6 +473,7 @@ model TrynbuyReturnedItem {
   item      Item  @relation(fields: [itemId], references: [id])
   itemId    String   @map("item_id")
   quantity  Int 
+  status   String?
 
   @@index([trynbuyId])  
   @@index([variantId])  
@@ -732,7 +739,7 @@ model Bill extends Base {
     billPoints      Int?     @map("bill_points")
     splitPayments   Json?   @map("split_payments") 
     paymentStatus   PaymentStatus @default(PENDING) @map("payment_status")  
-    transactionId   String? @unique @map("transaction_id")  
+    transactionId   String? @map("transaction_id")  
     notes           String?
     type            OrderType?
     status          OrderStatus? 
@@ -935,7 +942,9 @@ model Address extends Base {
     deliveryPartnerId    String? @map('deliveryPartner_id') @unique
 
     bill     Bill[]
-    trynbuy          Trynbuy[]      
+    trynbuy          Trynbuy[]    
+
+    trynbuyCompanyLocations Trynbuy[] @relation("try_n_buy_company_locations")  
 
     @@allow('create, read, update, delete', true)
     @@map('addresses')

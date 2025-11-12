@@ -1,14 +1,14 @@
 
 <script setup>
 import { item } from '@unovis/ts/components/bullet-legend/style';
-import { useFindUniqueTrynbuy,useUpdateItem, useFindUniqueItem,useUpdateEntry,useUpdateTrynbuy } from '~/lib/hooks';
+import { useFindUniqueTrynbuy,useUpdateItem, useFindUniqueItem,useUpdateEntry,useUpdateTrynbuyCartItem } from '~/lib/hooks';
 
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const route = useRoute();
 const router = useRouter();
 const UpdateEntry = useUpdateEntry()
-const UpdateTrynbuy = useUpdateTrynbuy()
+const UpdateTrynbuyCartItem = useUpdateTrynbuyCartItem()
 const orderId = route.query.id;
 
 const paymentMethod = ref('Cash');
@@ -124,67 +124,97 @@ onMounted(() => {
 });
 
 // ✅ Replace trynbuy with Trynbuy
-const trynbuyArgs = computed(() => ({
-  where: { id: orderId },
-  select: {
-    id:true,
-    createdAt: true,
-    orderNumber: true,
-    subtotal: true,
-    productDiscount: true,
-    totalDiscount: true,
-    shipping: true,
-    deliveryType: true,
-    deliveryTime: true,
-    orderStatus: true,
-    location:{
-      select:{
-          name:true,
-          formattedAddress:true,
-          houseDetails:true
-      }
-    },
-    // notes: true,
-    client: {
-      select: {
-        id:true,
-        name: true,
-        phone: true,
-      },
-    },
-    cartItems: {
-      select: {
-        id: true,
-        quantity: true,
-        variant: {
-          select: {
-            id: true,
-            name: true,
-            images: true,
-            sprice: true,
-            tax: true,
-            discount: true,
-            product:{
-              select:{
-                name:true
-              }
-            }
-          },
-        },
-        item: {
-          select: {
-            id: true,
-            barcode: true,
-            size: true,
-          },
-        },
-      },
-    },
-  },
-}))
+const trynbuyArgs = computed(() => {
+  const companyId = useAuth().session.value?.companyId
 
+  return {
+    where: { id: orderId },
+    select: {
+      id: true,
+      createdAt: true,
+      orderNumber: true,
+      subtotal: true,
+      productDiscount: true,
+      totalDiscount: true,
+      shipping: true,
+      deliveryType: true,
+      deliveryTime: true,
+      orderStatus: true,
+
+      // ✅ Delivery location details
+      location: {
+        select: {
+          name: true,
+          formattedAddress: true,
+          houseDetails: true,
+        },
+      },
+
+      // ✅ Client details
+      client: {
+        select: {
+          id: true,
+          name: true,
+          phone: true,
+        },
+      },
+
+      // ✅ Cart items (filtered by current company)
+      cartItems: {
+        where: {
+          variant: {
+            product: {
+              companyId: {
+                equals: companyId, // ✅ safer & explicit Prisma filter
+              },
+            },
+          },
+        },
+        select: {
+          id: true,
+          quantity: true,
+
+          // ✅ Variant details
+          variant: {
+            select: {
+              id: true,
+              name: true,
+              images: true,
+              sprice: true,
+              dprice: true,
+              tax: true,
+              discount: true,
+              product: {
+                select: {
+                  name: true,
+                  company: {
+                    select: {
+                      id: true,
+                      name: true,
+                      logo: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+
+          // ✅ Item details
+          item: {
+            select: {
+              id: true,
+              barcode: true,
+              size: true,
+            },
+          },
+        },
+      },
+    },
+  }
+})
 
 const { data: trynbuy, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyArgs)
+
 
 // ✅ Map cartItems instead of entries
 watch(
@@ -313,34 +343,44 @@ const handlePack = async () => {
   const trynbuyId = trynbuy.value?.id || null;
 
   try {
-    // 1. Update Trynbuy status (PACKED)
-    await UpdateTrynbuy.mutateAsync({
-      where: { id: orderId },
-      data: {
-        orderStatus: 'PACKED'
-      }
-    });
+    if (!trynbuyId) throw new Error("Missing Trynbuy ID");
 
-    // 2. Call backend endpoint to fetch & emit data
-    if (trynbuyId) {
+    // 1️⃣ Collect all cart item IDs from the Trynbuy
+    const cartItemIds = trynbuy.value?.cartItems?.map(ci => ci.id) || [];
+
+    if (!cartItemIds.length) throw new Error("No cart items found for this Trynbuy");
+
+    // 2️⃣ Update all cart items in one mutation
+    await Promise.all(
+      cartItemIds.map(id =>
+        UpdateTrynbuyCartItem.mutateAsync({
+          where: { id },
+          data: { status: 'PACKED' },
+        })
+      )
+    );
+
+    // 3️⃣ Optionally notify backend to emit socket event
+    if (trynbuyId && clientId) {
       await $fetch(`/api/pack/${trynbuyId}/${clientId}`, {
-        baseURL: 'http://localhost:3005',   // or use runtimeConfig.apiBase
+        baseURL: 'http://localhost:3005', // ✅ Adjust for production
       });
     }
 
     toast.add({
-      title: 'Order packed & client notified',
+      title: 'All items marked as packed & client notified',
       color: 'green',
     });
 
   } catch (err) {
     console.error(err);
     toast.add({
-      title: 'Something went wrong',
+      title: 'Something went wrong while packing',
       color: 'red',
     });
   }
 };
+
 
 
 

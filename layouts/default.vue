@@ -4,6 +4,8 @@ import {
     useCountTrynbuy
 } from '~/lib/hooks';
 
+const checkoutStore = useCheckoutStore()
+
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
 const plan = ref(useAuth().session.value?.plan || 'free');
@@ -13,15 +15,21 @@ const { isHelpSlideoverOpen } = useDashboard();
 const auth = useAuth();
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
 
-const { data: orderCount, refetch } = useCountTrynbuy({where:{
-    companyId: useAuth().session.value?.companyId,
-    orderStatus: 'ORDER_RECEIVED'
-}});
+const { data: orderCount, refetch } = useCountTrynbuy({
+  where: {
+    company: {
+      some: { id: useAuth().session.value?.companyId }, 
+    },
+    orderStatus: 'ORDER_RECEIVED',
+  },
+})
+
 
 watch(orderCount,(val) => {
     console.log(val)
 })
-useCheckoutEvents(refetch)
+watch(() => checkoutStore.lastUpdate, () => refetch())
+useCheckoutEvents()
 
 
 const links = computed(() => {
