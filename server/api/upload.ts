@@ -54,7 +54,7 @@ export default defineEventHandler(async (event) => {
     .toFormat('jpeg') // ensure Gemini gets a solid background (JPEG doesn’t support alpha)
     .toBuffer()
 
-    // 🔹 Prepare Gemini API
+    // 🔹 Prepare Gemini API 
     const GEMINI_API_KEY = process.env.GEMINI_API_KEY 
     if (!GEMINI_API_KEY) throw createError({ statusCode: 500, statusMessage: 'Missing Gemini API key' })
 
