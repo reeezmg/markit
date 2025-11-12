@@ -70,7 +70,7 @@ const navLinks = [
     </UHeader>
 
    <ULandingHero
-      title="Launches October 26."
+      title="Launching soon."
       description="The way you shop locally is about to change."
       :ui="{ 
         wrapper: '',
