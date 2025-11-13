@@ -4,6 +4,8 @@ import {
   PutObjectCommand,
 } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import imageCompression from 'browser-image-compression'
+
 
 export default class CloudflareService {
   s3Client: S3Client;
@@ -57,24 +59,48 @@ export default class CloudflareService {
     }
   }
 
-  public async uploadBase64File(base64String: string, key: string, view?: string, categoryName?: string, targetAudience?: string, isAiImage?: boolean): Promise<void> {
-     try {
-    const result = await $fetch('/api/upload', {
+
+public async uploadBase64File(
+  base64String: string,
+  key: string,
+  view?: string,
+  categoryName?: string,
+  targetAudience?: string,
+  isAiImage?: boolean
+): Promise<void> {
+  try {
+    // Convert base64 → File
+    const res = await fetch(base64String)
+    const blob = await res.blob()
+    const file = new File([blob], 'upload.jpg', { type: blob.type })
+
+    // 🔹 Compress on client
+    const compressedFile = await imageCompression(file, {
+      maxWidthOrHeight: 1024, // resize
+      maxSizeMB: 2.5,           // target under 4 MB
+      useWebWorker: true,
+      initialQuality: 0.7,    // adjust as needed
+    })
+
+    // Convert compressed file → base64 again
+    const compressedBase64 = await imageCompression.getDataUrlFromFile(compressedFile)
+
+    // 🔹 Send smaller base64 payload to server
+    await $fetch('/api/upload', {
       method: 'POST',
       body: {
-        base64: base64String,
-        key: key, // R2 object key
+        base64: compressedBase64,
+        key,
         view,
         categoryName,
         targetAudience,
-        isAiImage
+        isAiImage,
       },
-    });
+    })
   } catch (err) {
-    console.error('Upload failed:', err);
+    console.error('Upload failed:', err)
   }
-};
-
+}
 public async aify(
     uuid: string,
     view?: string,
