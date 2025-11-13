@@ -74,16 +74,24 @@ public async uploadBase64File(
     const blob = await res.blob()
     const file = new File([blob], 'upload.jpg', { type: blob.type })
 
-    // 🔹 Compress on client
-    const compressedFile = await imageCompression(file, {
-      maxWidthOrHeight: 1024, // resize
-      maxSizeMB: 2.5,           // target under 4 MB
-      useWebWorker: true,
-      initialQuality: 0.7,    // adjust as needed
-    })
+  // 🔹 Compress on client
+const compressedFile = await imageCompression(file, {
+  maxWidthOrHeight: 1024, // resize
+  maxSizeMB: 2.5,         // target under 2.5 MB
+  useWebWorker: true,
+  initialQuality: 1,    // adjust as needed
+})
 
-    // Convert compressed file → base64 again
-    const compressedBase64 = await imageCompression.getDataUrlFromFile(compressedFile)
+// ✅ Log original and compressed sizes
+console.log(
+  `📸 Original size: ${(file.size / 1024 / 1024).toFixed(2)} MB`
+)
+console.log(
+  `🧩 Compressed size: ${(compressedFile.size / 1024 / 1024).toFixed(2)} MB`
+)
+
+// Convert compressed file → base64 again
+const compressedBase64 = await imageCompression.getDataUrlFromFile(compressedFile)
 
     // 🔹 Send smaller base64 payload to server
     await $fetch('/api/upload', {

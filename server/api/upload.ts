@@ -134,7 +134,7 @@ If the input image has transparent areas, ensure they are filled with #ffffff no
       usedAiImage = true
       const generatedBuffer = Buffer.from(generatedBase64, 'base64')
       const originalSizeMB = generatedBuffer.length / 1024 / 1024
-      let quality = originalSizeMB > 2 ? 70 : originalSizeMB <= 0.5 ? 100 : 85
+      let quality = originalSizeMB > 2 ? 70 : originalSizeMB <= 1 ? 100 : 90
 
       console.log(`🟢 Compressing AI image (quality ${quality})`)
       finalBuffer = await sharp(generatedBuffer)
