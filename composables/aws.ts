@@ -80,7 +80,7 @@ const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
 const compressedFile = await imageCompression(file, {
   maxWidthOrHeight: 1024,
   maxSizeMB: 1,
-  initialQuality: 0.8,
+  initialQuality: 1,
   useWebWorker: !isIOS,  // iOS = no worker, still compresses
 });
 
