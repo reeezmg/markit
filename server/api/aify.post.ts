@@ -23,7 +23,16 @@ export default defineEventHandler(async (event) => {
 
   // 🔹 Fetch image from URL
   console.log(`🟡 Fetching image from: ${body.url}`)
-  const res = await fetch(body.url)
+  const res = await fetch(body.url, {
+  headers: {
+    "User-Agent":
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+    "Accept": "image/avif,image/webp,image/apng,*/*",
+    "Referer": "https://markit.co.in",
+    "Accept-Language": "en-US,en;q=0.9"
+  }
+})
+
   if (!res.ok) throw createError({ statusCode: 400, statusMessage: `Failed to fetch image: ${res.statusText}` })
   const userBuffer = Buffer.from(await res.arrayBuffer())
 

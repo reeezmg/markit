@@ -94,7 +94,7 @@ console.log(
 const compressedBase64 = await imageCompression.getDataUrlFromFile(compressedFile)
 
     // 🔹 Send smaller base64 payload to server
-    await $fetch('/api/upload', {
+    const ress = await $fetch('/api/upload', {
       method: 'POST',
       body: {
         base64: compressedBase64,
@@ -105,6 +105,7 @@ const compressedBase64 = await imageCompression.getDataUrlFromFile(compressedFil
         isAiImage,
       },
     })
+          console.log('✅ AI upload success:', ress);
   } catch (err) {
     console.error('Upload failed:', err)
   }
