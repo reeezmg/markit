@@ -75,12 +75,15 @@ public async uploadBase64File(
     const file = new File([blob], 'upload.jpg', { type: blob.type })
 
   // 🔹 Compress on client
+const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+
 const compressedFile = await imageCompression(file, {
-  maxWidthOrHeight: 1024, // resize
-  maxSizeMB: 1,         // target under 1 MB
-  useWebWorker: true,
-  initialQuality: 0.8,    // adjust as needed
-})
+  maxWidthOrHeight: 1024,
+  maxSizeMB: 1,
+  initialQuality: 0.8,
+  useWebWorker: !isIOS,  // iOS = no worker, still compresses
+});
+
 
 // ✅ Log original and compressed sizes
 console.log(
