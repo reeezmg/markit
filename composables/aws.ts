@@ -77,9 +77,9 @@ public async uploadBase64File(
   // 🔹 Compress on client
 const compressedFile = await imageCompression(file, {
   maxWidthOrHeight: 1024, // resize
-  maxSizeMB: 2.5,         // target under 2.5 MB
+  maxSizeMB: 1,         // target under 1 MB
   useWebWorker: true,
-  initialQuality: 1,    // adjust as needed
+  initialQuality: 0.9,    // adjust as needed
 })
 
 // ✅ Log original and compressed sizes
