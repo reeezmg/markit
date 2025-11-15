@@ -725,7 +725,7 @@ const handleAddPhoto = async () => {
     }
 
     // Step 2: Update DB after successful upload
-    const res = await Updatevariant.mutateAsync({
+     Updatevariant.mutate({
       where: { id: items.value?.variant.id },
       data: { images: images.map((image) => image.uuid) },
     });
