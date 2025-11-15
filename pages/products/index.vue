@@ -710,7 +710,7 @@ const handleAddPhoto = async () => {
     );
 
     if (base64files.length > 0) {
-       Promise.all(
+      await Promise.all(
         base64files.map((file) =>
           awsService.uploadBase64File(
             file.base64,
