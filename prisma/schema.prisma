@@ -359,6 +359,7 @@ model Trynbuy {
   id                      String                   @id() @default(uuid())
   orderNumber             Int                      @default(autoincrement()) @map("order_number")
   createdAt               DateTime                 @default(now()) @map("created_at")
+  updatedAt               DateTime?                @updatedAt() @map("updated_at")
   checkoutMethod          String                   @map("checkout_method")
   subtotal                Float                    @map("subtotal")
   productDiscount         Float?                   @map("product_discount")
@@ -373,7 +374,7 @@ model Trynbuy {
   locationId              String?                  @map("location_id")
   cartItems               TrynbuyCartItem[]
   returnedItems           TrynbuyReturnedItem[]
-  bill                    Bill?
+  bill                    Bill[]
   client                  Client?                  @relation(fields: [clientId], references: [id])
   clientId                String?                  @map("client_id")
   companyLocations        Address[]                @relation("try_n_buy_company_locations")
@@ -423,7 +424,7 @@ model TrynbuyCartItem {
   item      Item    @relation(fields: [itemId], references: [id])
   itemId    String  @map("item_id")
   quantity  Int
-  status    String?
+  status    String? @default("ORDER_RECEIVED")
 
   @@index([trynbuyId])
   @@index([variantId])
@@ -673,7 +674,7 @@ model Bill {
   address        Address?      @relation(fields: [addressId], references: [id])
   addressId      String?       @map("address_id")
   trynbuy        Trynbuy?      @relation(fields: [trynbuyId], references: [id])
-  trynbuyId      String?       @unique() @map("trynbuy_id")
+  trynbuyId      String?       @map("trynbuy_id")
   isMarkit       Boolean       @default(false) @map("is_markit")
 
   @@index([companyId, createdAt, deleted])

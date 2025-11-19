@@ -156,6 +156,7 @@ If your rendering face then show the face completely.
           base64: resizedBase64,
           key,
           prompt,
+          view,
           isAiImage: isAiImage ?? true,
         }),
       });

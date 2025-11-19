@@ -28,8 +28,10 @@ const { data: orderCount, refetch } = useCountTrynbuy({
 watch(orderCount,(val) => {
     console.log(val)
 })
-watch(() => checkoutStore.lastUpdate, () => refetch())
-useCheckoutEvents()
+
+watch(() => checkoutStore.lastUpdate, async () => await refetch(), { immediate: true })
+
+
 
 
 const links = computed(() => {

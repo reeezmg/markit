@@ -11,6 +11,8 @@ const useAuth = () => useNuxtApp().$auth;
 // Use an absolute endpoint so server-side fetch works too
 const categoryStore = useCategoryStore()
 const userStore = useUserStore()
+useCheckoutEvents()
+useBillEvents()
 
 const PRINTER_SERVICES = {
   SERVICE: '000018f0-0000-1000-8000-00805f9b34fb',

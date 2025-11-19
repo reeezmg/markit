@@ -173,7 +173,7 @@ const trynbuyArgs = computed(() => {
         select: {
           id: true,
           quantity: true,
-
+          status: true,
           // ✅ Variant details
           variant: {
             select: {

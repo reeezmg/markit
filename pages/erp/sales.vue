@@ -11,7 +11,7 @@ import { useQueryClient } from '@tanstack/vue-query'
 import { getQueryKey } from '@zenstackhq/tanstack-query/runtime-v5'
 const paymentOptions = ['Cash', 'UPI', 'Card']
 const queryClient = useQueryClient()
-
+const billStore = useBillStore()
 const timeZone = 'Asia/Kolkata'
 const toast = useToast();
 const updateBill = useUpdateBill({ optimisticUpdate: true });
@@ -265,6 +265,14 @@ const {
     error,
     refetch,
 } = useFindManyBill(queryArgs);
+
+watch(
+  () => billStore.lastUpdate,
+  async () => {
+    const res = await refetch()
+  },
+  { immediate: true }
+)
 
 const deleteBillMutate = useUpdateBill({ optimisticUpdate: true})
 

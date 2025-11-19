@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
+import { startOfDay, endOfDay } from 'date-fns'
 import { useRouter } from '#app'
 import { computed, ref, watch } from 'vue'
 import {
@@ -35,7 +36,7 @@ const columns = [
   { key: 'createdAt', label: 'Date', sortable: true },
   { key: 'deliveryType', label: 'Delivery', sortable: true },
   { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
-  { key: 'orderStatus', label: 'Status', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Actions', sortable: false },
 ]
 
@@ -72,12 +73,8 @@ const pageTo = computed(() =>
   Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0)
 )
 
-// ✅ Date helpers
 function isRangeSelected(duration: Duration) {
-  return (
-    isSameDay(selectedDate.value.start, sub(new Date(), duration)) &&
-    isSameDay(selectedDate.value.end, new Date())
-  )
+  return isSameDay(selectedDate.value.start, sub(new Date(), duration)) && isSameDay(selectedDate.value.end, new Date())
 }
 
 function selectRange(duration: Duration) {
@@ -106,8 +103,12 @@ const queryArgs = computed<Prisma.TrynbuyFindManyArgs>(() => ({
         : []),
       ...(selectedDate.value
         ? [
-            { createdAt: { gte: selectedDate.value.start.toISOString() } },
-            { createdAt: { lte: selectedDate.value.end.toISOString() } },
+           {
+              createdAt: {
+              gte: startOfDay(selectedDate.value.start),
+              lte: endOfDay(selectedDate.value.end),
+            }
+           },
           ]
         : []),
     ],
@@ -144,10 +145,18 @@ const countArgs = computed(() => ({
 
 // ✅ Hooks
 const { data: trynbuys, isLoading, refetch } = useFindManyTrynbuy(queryArgs)
+
 const { data: pageTotal } = useCountTrynbuy(countArgs)
 const UpdateBill = useUpdateBill()
 
-watch(() => checkoutStore.lastUpdate, () => refetch())
+watch(
+  () => checkoutStore.lastUpdate,
+  async () => {
+    const res = await refetch()
+  },
+  { immediate: true }
+)
+
 
 // ✅ Handlers
 const resetFilters = () => {
@@ -295,38 +304,39 @@ const handleChange = (value: string, row: any) => {
           }}
         </template>
 
-        <template #orderStatus-data="{ row }">
-          <UBadge
-            size="sm"
-            :color="
-              row.orderStatus === 'BILLED'
-                ? 'green'
-                : row.orderStatus === 'ALL_RETURNED'
-                ? 'purple'
-                : row.orderStatus === 'CANCELLED'
-                ? 'red'
-                : row.orderStatus === 'DELIVERED'
-                ? 'orange'
-                : row.orderStatus === 'ORDER_RECEIVED'
-                ? 'yellow'
-                : 'gray'
-            "
-            variant="subtle"
-          >
-            {{
-              row.orderStatus
-                ? row.orderStatus
-                    .split('_')
-                    .map(
-                      (w) =>
-                        w.charAt(0).toUpperCase() +
-                        w.slice(1).toLowerCase()
-                    )
-                    .join(' ')
-                : '-'
-            }}
-          </UBadge>
-        </template>
+       <template #status-data="{ row }">
+        <UBadge
+          size="sm"
+          :color="
+            (row.cartItems?.[0]?.status === 'BILLED'
+              ? 'green'
+              : row.cartItems?.[0]?.status === 'ALL_RETURNED'
+              ? 'purple'
+              : row.cartItems?.[0]?.status === 'CANCELLED'
+              ? 'red'
+              : row.cartItems?.[0]?.status === 'DELIVERED'
+              ? 'orange'
+              : row.cartItems?.[0]?.status === 'ORDER_RECEIVED'
+              ? 'yellow'
+              : 'gray')
+          "
+          variant="subtle"
+        >
+          {{
+            row.cartItems?.[0]?.status
+              ? row.cartItems[0].status
+                  .split('_')
+                  .map(
+                    w =>
+                      w.charAt(0).toUpperCase() +
+                      w.slice(1).toLowerCase()
+                  )
+                  .join(' ')
+              : '-'
+          }}
+        </UBadge>
+      </template>
+
 
         <!-- Subtable -->
         <template #expand="{ row }">

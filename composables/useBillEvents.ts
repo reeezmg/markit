@@ -1,14 +1,14 @@
 let audio: HTMLAudioElement | null = null
 let unlocked = false
 
-export function useCheckoutEvents() {
-  const checkoutStore = useCheckoutStore()
+export function useBillEvents() {
+  const BillStore = useBillStore()
   const { $socket } = useNuxtApp()
 
-  const handleCheckoutSuccess = (data: any) => {
-    console.log("✅ Checkout success received:", data)
+  const handleBillSuccess = (data: any) => {
+    console.log("✅ Bill success received:", data)
 
-    checkoutStore.notifyUpdate()
+    BillStore.notifyUpdate()
 
     // If audio is not initialized, skip to avoid crash
     if (!audio) {
@@ -46,10 +46,10 @@ export function useCheckoutEvents() {
     window.addEventListener("click", unlock)
 
     // Listen to socket event
-    $socket.on("checkout:success", handleCheckoutSuccess)
+    $socket.on("bill:success", handleBillSuccess)
   })
 
   onBeforeUnmount(() => {
-    $socket.off("checkout:success", handleCheckoutSuccess)
+    $socket.off("bill:success", handleBillSuccess)
   })
 }
