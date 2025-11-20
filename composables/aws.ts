@@ -143,6 +143,7 @@ Preserve the color, texture, and design exactly as in the uploaded image.
 Ensure pose and composition suitable for a ${view || "front"}-facing product display.
 If any transparent areas exist, fill them with pure white (#ffffff)
 If your rendering face then show the face completely.
+focus on ${categoryName || "product"}
       `.trim();
 
       // ⭐ Send directly to Worker
