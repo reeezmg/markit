@@ -62,6 +62,7 @@ export type AuthSession = {
     minDeliveryCharges?: number;
     deliveryDiscountThreshold?: number;
     deliveryDiscountAmount?: number;
+    commissionRate?: number;
     productInputs?: {
         name: boolean;
         brand: boolean;

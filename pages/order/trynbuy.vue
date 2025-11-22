@@ -132,11 +132,17 @@ const queryArgs = computed<Prisma.TrynbuyFindManyArgs>(() => ({
         item: true,
       },
     },
+     bill:{
+            where:{
+              companyId: useAuth().session.value?.companyId,
+            }
+          }
   },
   orderBy: { [sort.value.column]: sort.value.direction },
   skip: (page.value - 1) * parseInt(pageCount.value),
   take: parseInt(pageCount.value),
 }))
+
 
 
 const countArgs = computed(() => ({
@@ -145,6 +151,10 @@ const countArgs = computed(() => ({
 
 // ✅ Hooks
 const { data: trynbuys, isLoading, refetch } = useFindManyTrynbuy(queryArgs)
+
+watch(trynbuys, (newData) => {
+ console.log('📦 Fetched TrynBuys:', newData)
+})
 
 const { data: pageTotal } = useCountTrynbuy(countArgs)
 const UpdateBill = useUpdateBill()
@@ -268,7 +278,7 @@ const handleChange = (value: string, row: any) => {
               {
                 label: 'Bill',
                 icon: 'i-heroicons-document-text',
-                click: () => router.push(`/erp/edit/${row.id}`),
+                click: () => router.push(`/erp/edit/${row.bill[0]?.id}`),
               },
             ],
           ]">

@@ -29,6 +29,7 @@ export default eventHandler(async (event) => {
         refundPolicy: user.companies[0].company.refundPolicy ?? undefined,
         returnPolicy: user.companies[0].company.returnPolicy ?? undefined,
         companyPhone: user.companies[0].company.phone ?? undefined,
+        commissionRate: user.companies[0].company.commissionRate ?? undefined,
         image: user.image || null,
         email: user.email,
         code: user.companies[0].code ?? undefined,

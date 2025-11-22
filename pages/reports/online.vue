@@ -54,6 +54,7 @@ onUnmounted(() => {
 
 const useAuth = () => useNuxtApp().$auth;
 const companyName = computed(() => useAuth().session.value?.companyName);
+const commissionRate = computed(() => useAuth().session.value?.commissionRate);
 const { printReport } = usePrint();
 let printData = {}
 
@@ -401,8 +402,8 @@ const printReportHandle = async() => {
           <!-- Payable Commission -->
           <KpiCard 
             class="w-full" 
-            title="Total Commission (12%)" 
-            :value="formatCurrency((dashboard?.totalSales || 0) * 0.12)"
+            :title="`Total Commission (${commissionRate || 0}%)`" 
+            :value="formatCurrency((dashboard?.totalSales || 0) * ((commissionRate || 0) / 100))"
           />
         </div>
 

@@ -169,6 +169,8 @@ model Company extends Base {
     productinput Productinput?
     variantinput Variantinput?
     saveErrorRequests SaveErrorRequest[]
+
+    commissionRate Float? @map("commission_rate")
     
     @@allow('create', auth() != null && status)
     @@allow('update', users?[user == auth()])
