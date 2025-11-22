@@ -176,84 +176,31 @@ focus on ${categoryName || "product"}
     }
   }
 
-// public async uploadBase64File(
-//   base64String: string,
-//   key: string,
-//   view?: string,
-//   categoryName?: string,
-//   targetAudience?: string,
-//   isAiImage?: boolean
-// ): Promise<void> {
-//   try {
-//     // Convert base64 → File
-//     const res = await fetch(base64String)
-//     const blob = await res.blob()
-//     const file = new File([blob], 'upload.jpg', { type: blob.type })
-
-//   // 🔹 Compress on client
-// const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-
-// const compressedFile = await imageCompression(file, {
-//   maxWidthOrHeight: 1024,
-//   maxSizeMB: 1,
-//   initialQuality: 1,
-//   useWebWorker: !isIOS,  // iOS = no worker, still compresses
-// });
-
-
-// // ✅ Log original and compressed sizes
-// console.log(
-//   `📸 Original size: ${(file.size / 1024 / 1024).toFixed(2)} MB`
-// )
-// console.log(
-//   `🧩 Compressed size: ${(compressedFile.size / 1024 / 1024).toFixed(2)} MB`
-// )
-
-// // Convert compressed file → base64 again
-// const compressedBase64 = await imageCompression.getDataUrlFromFile(compressedFile)
-
-//     // 🔹 Send smaller base64 payload to server
-//     const ress = await $fetch('/api/upload', {
-//       method: 'POST',
-//       body: {
-//         base64: compressedBase64,
-//         key,
-//         view,
-//         categoryName,
-//         targetAudience,
-//         isAiImage,
-//       },
-//     })
-//           console.log('✅ AI upload success:', ress);
-//   } catch (err) {
-//     console.error('Upload failed:', err)
-//   }
-// }
 public async aify(
-    uuid: string,
-    view?: string,
-    categoryName?: string,
-    targetAudience?: string,
-    isAiImage: boolean = true
-  ): Promise<any> {
-    try {
-        console.log(uuid,view,categoryName,targetAudience)
-      const result = await $fetch('/api/aify', {
-        method: 'POST',
-        body: {
-          url:`https://images.markit.co.in/${uuid}`,
-          key:uuid,
-          view,
-          categoryName,
-          targetAudience,
-        },
-      });
+  uuid: string,
+  view?: string,
+  categoryName?: string,
+  targetAudience?: string,
+  isAiImage: boolean = true
+): Promise<any> {
+  try {
+    const result = await $fetch('https://solitary-brook-330b.reezmohdmg16.workers.dev', {
+      method: 'POST',
+      body: {
+        url: `https://images.markit.co.in/${uuid}`,
+        key: uuid,
+        view,
+        categoryName,
+        targetAudience,
+        isAiImage
+      },
+    });
 
-      console.log('✅ AI upload success:', result);
-      return result;
-    } catch (err) {
-      console.error('❌ Upload failed:', err);
-      throw err;
-    }
+    console.log('✅ AI upload success:', result);
+    return result;
+  } catch (err) {
+    console.error('❌ Worker request failed:', err);
+    throw err;
   }
-}  
+}
+}
