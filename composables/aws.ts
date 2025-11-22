@@ -143,7 +143,8 @@ Preserve the color, texture, and design exactly as in the uploaded image.
 Ensure pose and composition suitable for a ${view || "front"}-facing product display.
 If any transparent areas exist, fill them with pure white (#ffffff)
 If your rendering face then show the face completely.
-focus on ${categoryName || "product"}
+Ensure the ${categoryName || "product"} occupies at least 70–80% of the frame, with a tight crop and clear visibility of all important details. The ${categoryName || "product"} should appear large and prominent, filling most of the image space.
+Ensure model is wearing ${categoryName || "product"}
       `.trim();
 
       // ⭐ Send directly to Worker
