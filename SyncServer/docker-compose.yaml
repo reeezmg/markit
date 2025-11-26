@@ -1,0 +1,13 @@
+version: "3.8"
+name: "electric_quickstart"
+
+services:
+  electric:
+    image: electricsql/electric
+    container_name: electric
+    restart: always
+    environment:
+       DATABASE_URL: postgresql://postgres:reez@host.docker.internal:5432/markit
+       ELECTRIC_INSECURE: true
+    ports:
+      - "5133:3000"

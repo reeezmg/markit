@@ -1,0 +1,22 @@
+User-agent: *
+Disallow: /client
+Disallow: /checkout
+Disallow: /dashboard
+Disallow: /distributor
+Disallow: /erp
+Disallow: /marketing
+Disallow: /offline
+Disallow: /order
+Disallow: /products
+Disallow: /reports
+Disallow: /saleshistory
+Disallow: /settings
+Disallow: /users
+Disallow: /cleanup
+
+Allow: /
+Allow: /store
+Allow: /storelanding
+Allow: /login
+Allow: /register
+Allow: /blogs

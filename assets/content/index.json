@@ -1,0 +1,54 @@
+{
+  "title": "Welcome to Markit",
+  "description": "The best B2B eCommerce platform for your business",
+  "seo": {
+    "title": "Markit – B2B Simplified",
+    "description": "Grow your business with Markit’s tailored eCommerce solutions."
+  },
+  "hero": {
+    "links": [
+      { "label": "Get Started", "to": "/signup" },
+      { "label": "Learn More", "to": "/about" }
+    ]
+  },
+  "sections": [
+    {
+      "title": "Streamlined Operations",
+      "description": "Automate procurement and sales workflows.",
+      "orientation": "horizontal",
+      "reverse": false,
+      "features": [
+        { "title": "Real-time Inventory", "description": "Keep track of stock levels with ease." },
+        { "title": "Custom Pricing", "description": "Set flexible pricing for different clients." }
+      ]
+    }
+  ],
+  "features": {
+    "title": "Powerful Features",
+    "description": "Everything you need to scale",
+    "items": [
+      { "title": "Multi-vendor Support", "description": "Onboard sellers and manage them efficiently." },
+      { "title": "Analytics Dashboard", "description": "Get insights into sales, traffic, and behavior." }
+    ]
+  },
+  "testimonials": {
+    "headline": "Our Customers Love Us",
+    "title": "Trusted by Thousands",
+    "description": "Here’s what our users are saying",
+    "items": [
+      {
+        "quote": "Markit has transformed how we do business.",
+        "user": { "name": "Priya Singh", "email": "priya@example.com", "avatar": "/avatar1.jpg" }
+      },
+      {
+        "quote": "A game-changer for wholesale distribution.",
+        "user": { "name": "Amit Verma", "email": "amit@example.com", "avatar": "/avatar2.jpg" }
+      }
+    ]
+  },
+  "cta": {
+    "title": "Ready to grow?",
+    "description": "Join Markit today and revolutionize your B2B operations.",
+    "links": [{ "label": "Start Free Trial", "to": "/signup" }]
+  }
+}
