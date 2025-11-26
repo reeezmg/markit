@@ -43,7 +43,6 @@ const { printBill } = usePrint();
 const router = useRouter();
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
-const isPrint = ref(false);
 const isSavingAcc = ref(false);
 const issalesReturnModelOpen = ref(false);
 const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
@@ -1133,7 +1132,7 @@ const handleEdit = async () => {
 
     // 9. Prepare for printing
     printData = preparedPrintData;
-    isPrint.value = true;
+    printModel.value = true;
 
 
   } catch (error) {
@@ -1203,14 +1202,14 @@ const submitForm = () => {
 
 const print = async() => {
   try{
-  isPrint.value = false
+  printModel.value = false
   await printBill(printData)
   toast.add({
         title: 'Printing Sucess!',
         color: 'Green',
       });
   }catch(err){
-     isPrint.value = true
+     printModel.value = true
       toast.add({
         title: 'Printing failed!',
         description: err.message,
@@ -2466,7 +2465,7 @@ watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
 
 
     <UDashboardModal
-        v-model="isPrint"
+        v-model="printModel"
         title="12 AZ Bill"
         description="Would You Like to print?"
         icon="i-heroicons-exclamation-circle"
