@@ -54,7 +54,7 @@ const couponValue = ref(0);
 const clientFound = ref(false);
 const couponFound = ref(false);
 const selectedCouponId = ref("");
-
+const printModel = ref(false);
 
 const returnAmt = computed(() => {
   return items.value.reduce((sum, item) => {
@@ -952,7 +952,7 @@ const fetchItemData = async (barcode, index) => {
 
 const handleEdit = async () => {
   isSaving.value = true;
-  
+  printModel.value = true
   try {
 
     if (!navigator.onLine) {
