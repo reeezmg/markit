@@ -159,7 +159,7 @@ defineExpose({ resetForm })
       type="file"
       accept="image/*"
       class="sr-only"
-       capture="camera"
+       capture="environment"
       @change="handleAddImageChange"
     />
 
