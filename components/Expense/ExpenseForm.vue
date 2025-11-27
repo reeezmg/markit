@@ -204,7 +204,7 @@ const saveForm = () => {
         </UFormGroup>
 
         <!-- user (Company User) -->
-        <UFormGroup label="user" required>
+        <UFormGroup label="user">
           <USelectMenu
             v-model="form.user"
             by="userId"

@@ -18,9 +18,9 @@ const useAuth = () => useNuxtApp().$auth;
 /* ---------------------------------------------------
    CREATE EXPENSE
 --------------------------------------------------- */
-const addExpense = async (expense: any) => {
+const addExpense =  (expense: any) => {
     try {
-        await createExpense.mutateAsync({
+        createExpense.mutate({
             data: {
                 ...(expense.date && {
                     expenseDate: new Date(expense.date).toISOString(),
@@ -57,17 +57,17 @@ const addExpense = async (expense: any) => {
         });
 
         // OPTIONAL NOTIFICATION
-        await $fetch('/api/notifications/notify', {
-            method: 'POST',
-            body: {
-                userId: useAuth().session.value?.id,
-                type: 'EXPENSE',
-                note: expense.note,
-                companyId: useAuth().session.value?.companyId,
-                amount: expense.amount,
-                category: expense.category?.name,
-            }
-        });
+        // await $fetch('/api/notifications/notify', {
+        //     method: 'POST',
+        //     body: {
+        //         userId: useAuth().session.value?.id,
+        //         type: 'EXPENSE',
+        //         note: expense.note,
+        //         companyId: useAuth().session.value?.companyId,
+        //         amount: expense.amount,
+        //         category: expense.category?.name,
+        //     }
+        // });
 
     // $fetch('/api/notifications/notify', {
     //   method: 'POST',
