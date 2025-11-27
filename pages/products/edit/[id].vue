@@ -452,44 +452,49 @@ console.log(barcodes.value)
   }
 }
 
-const printBarcodesVariant = async(variant:any) => {
-  barcodes.value = variant.items?.map(item => ({
-            barcode: item.barcode ?? '',
-            code: variant.code ?? '',
-            shopname:useAuth().session.value?.companyName,
-            productName: selectedProduct?.value?.name,
-            brand: selectedProduct?.value?.brand,
-            name: variant.name,
-            sprice: variant.sprice,
-             ...(variant.sprice !== variant.dprice && 
-                {  dprice: variant.dprice }
-              ),
-            size: item.size,
-        })) ?? [];
-       
+const printBarcodesVariant = async (variant: any) => {
+  const auth = useAuth();
 
-console.log(barcodes.value)
-  try{
- 
+  // Build barcodes with qty-based duplicates
+  barcodes.value = variant.items?.flatMap(item => {
+    const qty = Number(item.qty) || 1;   // default to 1 if missing
+
+    const base = {
+      barcode: item.barcode ?? "",
+      code: variant.code ?? "",
+      shopname: auth.session.value?.companyName,
+      productName: selectedProduct?.value?.name,
+      brand: selectedProduct?.value?.brand,
+      name: variant.name,
+      sprice: variant.sprice,
+      ...(variant.sprice !== variant.dprice && { dprice: variant.dprice }),
+      size: item.size,
+    };
+
+    // Duplicate barcode entries based on qty
+    return Array.from({ length: qty }, () => ({ ...base }));
+  }) ?? [];
+
+  console.log(barcodes.value);
+  console.log(variant);
+
+  try {
     const response = await printLabel(barcodes.value);
-    console.log(response)
-    toast.add({
-        title: 'Printing success!',
-        color: 'green',
-      });
-    
+    console.log(response);
 
-  }catch(err){
-    console.log(err)
     toast.add({
-        title: 'Printing failed!',
-        description: err.message,
-        color: 'red',
-      });
+      title: "Printing success!",
+      color: "green",
+    });
+  } catch (err: any) {
+    console.log(err);
+    toast.add({
+      title: "Printing failed!",
+      description: err.message,
+      color: "red",
+    });
   }
- 
-  
-}
+};
 
 
 
