@@ -32,6 +32,11 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   return "";
 }
 
+   const calculatedDiscount = data.discount < 0
+      ? Math.abs(data.discount)
+      : (data.subtotal * data.discount) / 100;
+
+
   // Now create final PDF
   const doc = new jsPDF({
     unit: "mm",
@@ -144,15 +149,16 @@ center(
   y += 5;
 
   // ---------------------- TOTALS ----------------------
-  const totalQty = data.entries.reduce((sum: number, item: any) => sum + (item.qty || 0), 0);
-  const totalMrp = data.entries.reduce((sum: number, item: any) => sum + (item.mrp || 0), 0);
-  const totalDiscount = data.entries.reduce((sum: number, item: any) => sum + (item.discount || 0), 0);
-  const totalValue = data.entries.reduce((sum: number, item: any) => sum + (item.value || 0), 0);
+const totalQty = data.entries.reduce((sum: number, item: any) => sum + (Number(item.qty) || 0), 0);
+const totalMrp = data.entries.reduce((sum: number, item: any) => sum + (Number(item.mrp) || 0), 0);
+const totalDiscount = data.entries.reduce((sum: number, item: any) => sum + (Number(item.discount) || 0), 0);
+const totalValue = data.entries.reduce((sum: number, item: any) => sum + (Number(item.value) || 0), 0);
 
-  doc.text(String(totalQty), 50, y);
-  doc.text(String(totalMrp.toFixed(2)), 65, y);
-  doc.text(String(totalDiscount.toFixed(2)), 85, y);
-  doc.text(String(totalValue.toFixed(2)), 102, y);
+// When printing, ensure we call toFixed on numbers
+doc.text(String(totalQty), 50, y);
+doc.text(Number(totalMrp).toFixed(2), 65, y);
+doc.text(Number(totalDiscount).toFixed(2), 85, y);
+doc.text(Number(totalValue).toFixed(2), 102, y);
 
   y += 4;
   line();
@@ -181,7 +187,7 @@ center(
   doc.setFontSize(12);
   doc.setFont("courier", "bold");
   doc.rect(5, y, pageWidth - 10, 10);
-  doc.text(`YOUR SAVING: ${data.tdiscount || 0}`, pageWidth / 2, y + 7, {
+  doc.text(`YOUR SAVING: ${calculatedDiscount + (data.tdiscount || 0)}`, pageWidth / 2, y + 7, {
     align: "center",
   });
 
