@@ -22,6 +22,16 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   const footerHeight = 90;
   const finalHeight = headerHeight + itemHeight + footerHeight;
 
+  function cleanJoin(a?: string, b?: string) {
+  const left = a?.trim() || "";
+  const right = b?.trim() || "";
+
+  if (left && right) return `${left}, ${right}`;
+  if (left) return left;
+  if (right) return right;
+  return "";
+}
+
   // Now create final PDF
   const doc = new jsPDF({
     unit: "mm",
@@ -54,17 +64,18 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   // ---------------------- HEADER ----------------------
   center(data.companyName, 14, true);
 center(
-  `${data.companyAddress?.name || ""}, ${data.companyAddress?.street || ""}`,
+  cleanJoin(data.companyAddress?.name, data.companyAddress?.street),
+  20
+)
+
+
+center(
+  cleanJoin(data.companyAddress?.locality, data.companyAddress?.city),
   20
 )
 
 center(
-  `${data.companyAddress?.locality || ""}, ${data.companyAddress?.city || ""}`,
-  20
-)
-
-center(
-  `${data.companyAddress?.state || ""} - ${data.companyAddress?.pincode || ""}`,
+  cleanJoin(data.companyAddress?.state, data.companyAddress?.pincode),
   20
 )
 
