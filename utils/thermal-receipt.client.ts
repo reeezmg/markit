@@ -199,9 +199,12 @@ doc.text(Number(totalValue).toFixed(2), 102, y);
   doc.setFontSize(12);
   doc.setFont("courier", "bold");
   doc.rect(5, y, pageWidth - 10, 10);
-  doc.text(`YOUR SAVING: ${calculatedDiscount + (data.tdiscount || 0)}`, pageWidth / 2, y + 7, {
-    align: "center",
-  });
+const saving = Number(calculatedDiscount + (data.tdiscount || 0)).toFixed(2);
+
+doc.text(`YOUR SAVING: ${saving}`, pageWidth / 2, y + 7, {
+  align: "center",
+});
+
 
   y += 20;
 
