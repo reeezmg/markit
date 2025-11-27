@@ -2466,7 +2466,7 @@ watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
 
     <UDashboardModal
         v-model="printModel"
-        title="12 AZ Bill"
+        title="Print Bill"
         description="Would You Like to print?"
         icon="i-heroicons-exclamation-circle"
         prevent-close
