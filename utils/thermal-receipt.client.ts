@@ -70,18 +70,18 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   center(data.companyName, 14, true);
 center(
   cleanJoin(data.companyAddress?.name, data.companyAddress?.street),
-  20
+  10
 )
 
 
 center(
   cleanJoin(data.companyAddress?.locality, data.companyAddress?.city),
-  20
+  10
 )
 
 center(
   cleanJoin(data.companyAddress?.state, data.companyAddress?.pincode),
-  20
+  10
 )
 
   if (data.gstin) center(`GSTIN: ${data.gstin}`);
@@ -111,11 +111,11 @@ center(
   doc.text("MRP", 65, y);
 
   doc.text("TAX", 85, y);
-    doc.text("DISC", 85, y);
+    doc.text("DISC", 102, y);
 
 
   y += 5;
-  doc.text("HSN", 102, y);
+  doc.text("HSN", 85, y);
     doc.text("T.VALUE", 102, y);
 
   y += 6;
@@ -136,7 +136,7 @@ center(
     doc.text(String(item.qty), 50, y);
     doc.text(String(item.mrp), 65, y);
     doc.text(`${item.tax}%`, 85, y);
-     doc.text(String(item.discount || 0), 85, y);
+     doc.text(String(item.discount || 0), 102, y);
  
 
     // Remaining description lines (if any)
@@ -148,7 +148,7 @@ center(
     // TAX + VALUE next line
     y += 5;
    
-     doc.text(String(item.hsn || ""), 102, y);
+     doc.text(String(item.hsn || ""), 85, y);
     doc.text(String(item.value || 0), 102, y);
   
 
@@ -208,11 +208,19 @@ doc.text(Number(totalValue).toFixed(2), 102, y);
   // ---------------------- FOOTER ----------------------
   doc.setFont("courier", "normal");
   doc.setFontSize(11);
-
-  center("Thank you for shopping!");
-  center("Returns accepted within 7 days");
-  center("with original receipt");
-  center(`Customer care: ${data.phone || ""}`);
+if (data.thankYouNote){
+  center(data.thankYouNote);
+}
+if (data.returnPolicy){
+  center(data.returnPolicy);
+}
+if(data.refundPolicy){
+    center(data.refundPolicy);
+  }
+  if (data.phone){
+    center(`Customer care: ${data.phone || ""}`);
+  }
+  
 
   doc.save(filename);
 }
