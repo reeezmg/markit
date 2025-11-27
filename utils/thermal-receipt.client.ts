@@ -94,6 +94,11 @@ center(
   txt(`Invoice: ${data.invoiceNumber}`);
   txt(`Date: ${new Date(data.date).toLocaleString()}`);
   txt(`Payment Method: ${data.paymentMethod}`);
+  if (data.clientName){
+      txt(`Client: ${data.clientName}`);
+      txt(`client Phone: ${data.clientPhone}`);
+  }
+
 
   line();
   y += 5;
