@@ -53,9 +53,21 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
 
   // ---------------------- HEADER ----------------------
   center(data.companyName, 14, true);
-  center(`${data.companyAddress.name}, ${data.companyAddress.street}` || "", 10);
-  center(`${data.companyAddress.locality}, ${data.companyAddress.city}` || "", 10);
-  center(`${data.companyAddress.state}- ${data.companyAddress.pincode}` || "", 10);
+center(
+  `${data.companyAddress?.name || ""}, ${data.companyAddress?.street || ""}`,
+  20
+)
+
+center(
+  `${data.companyAddress?.locality || ""}, ${data.companyAddress?.city || ""}`,
+  20
+)
+
+center(
+  `${data.companyAddress?.state || ""} - ${data.companyAddress?.pincode || ""}`,
+  20
+)
+
   if (data.gstin) center(`GSTIN: ${data.gstin}`);
 
   y += 2;
