@@ -95,8 +95,8 @@ center(
   txt(`Date: ${new Date(data.date).toLocaleString()}`);
   txt(`Payment Method: ${data.paymentMethod}`);
   if (data.clientName){
-      txt(`Client: ${data.clientName}`);
-      txt(`client Phone: ${data.clientPhone}`);
+      txt(`Client Name: ${data.clientName}`);
+      txt(`Client Phone: ${data.clientPhone}`);
   }
 
 
@@ -109,11 +109,15 @@ center(
   doc.text("DESCRIPTION", 15, y);
   doc.text("QTY", 50, y);
   doc.text("MRP", 65, y);
-  doc.text("DISC", 85, y);
-  doc.text("HSN", 102, y);
-  y += 5;
+
   doc.text("TAX", 85, y);
-  doc.text("T.VALUE", 102, y);
+    doc.text("DISC", 85, y);
+
+
+  y += 5;
+  doc.text("HSN", 102, y);
+    doc.text("T.VALUE", 102, y);
+
   y += 6;
   doc.setFont("courier", "normal");
 
@@ -131,8 +135,9 @@ center(
     // Right-side columns SAME LINE
     doc.text(String(item.qty), 50, y);
     doc.text(String(item.mrp), 65, y);
-    doc.text(String(item.discount || 0), 85, y);
-    doc.text(String(item.hsn || ""), 102, y);
+    doc.text(`${item.tax}%`, 85, y);
+     doc.text(String(item.discount || 0), 85, y);
+ 
 
     // Remaining description lines (if any)
     for (let j = 1; j < descLines.length; j++) {
@@ -142,8 +147,10 @@ center(
 
     // TAX + VALUE next line
     y += 5;
-    doc.text(`${item.tax}%`, 85, y);
+   
+     doc.text(String(item.hsn || ""), 102, y);
     doc.text(String(item.value || 0), 102, y);
+  
 
     // Extra spacing between items
     y += 6;
