@@ -3,21 +3,30 @@ import jsPDF from "jspdf";
 export async function generateThermalReceiptPDF(data: any, filename = "receipt.pdf") {
   if (typeof window === "undefined") return;
 
- const pageWidth = 127; // 5-inch paper
+  const pageWidth = 127; // 5-inch thermal width
 
-// baseline heights
-const headerHeight = 90;
-const itemHeight = data.entries.length * 10;
-const footerHeight = 90;
+  // Estimate dynamic height based on wrapped text
+  const estimateHeightPerEntry = (entry: any, doc: any) => {
+    const descLines = doc.splitTextToSize(entry.description || "", 30);
+    return 12 + descLines.length * 5; // approx per item row
+  };
 
-// total height
-const finalHeight = headerHeight + itemHeight + footerHeight;
+  // Temporary doc for calculating wrapped lines
+  const tempDoc = new jsPDF({ unit: "mm" });
+  const itemHeight = data.entries.reduce(
+    (sum: number, item: any) => sum + estimateHeightPerEntry(item, tempDoc),
+    0
+  );
 
-// now create pdf with correct height
-const doc = new jsPDF({
-  unit: "mm",
-  format: [pageWidth, finalHeight]
-});
+  const headerHeight = 90;
+  const footerHeight = 90;
+  const finalHeight = headerHeight + itemHeight + footerHeight;
+
+  // Now create final PDF
+  const doc = new jsPDF({
+    unit: "mm",
+    format: [pageWidth, finalHeight],
+  });
 
   doc.setFont("courier", "normal");
 
@@ -44,9 +53,9 @@ const doc = new jsPDF({
 
   // ---------------------- HEADER ----------------------
   center(data.companyName, 14, true);
-  center("underlined");
-  center("underlined");
-  center("underlined");
+  center(`${data.companyAddress.name}, ${data.companyAddress.street}` || "", 10);
+  center(`${data.companyAddress.locality}, ${data.companyAddress.city}` || "", 10);
+  center(`${data.companyAddress.state}- ${data.companyAddress.pincode}` || "", 10);
   if (data.gstin) center(`GSTIN: ${data.gstin}`);
 
   y += 2;
@@ -75,27 +84,43 @@ const doc = new jsPDF({
   y += 6;
   doc.setFont("courier", "normal");
 
-  // ---------------------- ITEM ROWS ----------------------
+  // ---------------------- ITEM ROWS WITH WRAPPED DESCRIPTION ----------------------
   data.entries.forEach((item: any, i: number) => {
-    doc.text(String(i + 1), 5, y);
-    doc.text(item.description || "", 15, y);
+    // Wrap description (fits 30mm width)
+    const descLines = doc.splitTextToSize(item.description || "", 30);
 
+    // SL number on first line
+    doc.text(String(i + 1), 5, y);
+
+    // First line of description
+    doc.text(descLines[0], 15, y);
+
+    // Right-side columns SAME LINE
     doc.text(String(item.qty), 50, y);
     doc.text(String(item.mrp), 65, y);
     doc.text(String(item.discount || 0), 85, y);
     doc.text(String(item.hsn || ""), 102, y);
 
-    y += 5;
+    // Remaining description lines (if any)
+    for (let j = 1; j < descLines.length; j++) {
+      y += 5;
+      doc.text(descLines[j], 15, y);
+    }
 
+    // TAX + VALUE next line
+    y += 5;
     doc.text(`${item.tax}%`, 85, y);
     doc.text(String(item.value || 0), 102, y);
 
-    y += 5;
+    // Extra spacing between items
+    y += 6;
   });
 
   y += 2;
   line();
   y += 5;
+
+  // ---------------------- TOTALS ----------------------
   const totalQty = data.entries.reduce((sum: number, item: any) => sum + (item.qty || 0), 0);
   const totalMrp = data.entries.reduce((sum: number, item: any) => sum + (item.mrp || 0), 0);
   const totalDiscount = data.entries.reduce((sum: number, item: any) => sum + (item.discount || 0), 0);
@@ -105,23 +130,37 @@ const doc = new jsPDF({
   doc.text(String(totalMrp.toFixed(2)), 65, y);
   doc.text(String(totalDiscount.toFixed(2)), 85, y);
   doc.text(String(totalValue.toFixed(2)), 102, y);
+
   y += 4;
-      line();
-        y += 5;
-  doc.text(`DISC/ROUND OFF(+/-): ${data.discount}`,pageWidth/2,y,{ align: "center" });
+  line();
+  y += 5;
+
+  doc.text(
+    `DISC/ROUND OFF(+/-): ${data.discount}`,
+    pageWidth / 2,
+    y,
+    { align: "center" }
+  );
   y += 7;
 
-  // ---------------------- GRAND TOTAL VERTICAL ----------------------
-
+  // ---------------------- GRAND TOTAL ----------------------
   doc.setFontSize(16);
   doc.setFont("courier", "bold");
-  doc.text(`GRAND TOTAL: ${data.grandTotal}`,pageWidth / 2, y + 7, { align: "center" });
+  doc.text(
+    `GRAND TOTAL: ${data.grandTotal}`,
+    pageWidth / 2,
+    y + 7,
+    { align: "center" }
+  );
   y += 15;
-  // ---------------------- SAVING BOX ----------------------
+
+  // ---------------------- SAVINGS ----------------------
   doc.setFontSize(12);
   doc.setFont("courier", "bold");
   doc.rect(5, y, pageWidth - 10, 10);
-  doc.text(`YOUR SAVING: ${data.tdiscount || 0}`, pageWidth / 2, y + 7, { align: "center" });
+  doc.text(`YOUR SAVING: ${data.tdiscount || 0}`, pageWidth / 2, y + 7, {
+    align: "center",
+  });
 
   y += 20;
 
@@ -133,7 +172,6 @@ const doc = new jsPDF({
   center("Returns accepted within 7 days");
   center("with original receipt");
   center(`Customer care: ${data.phone || ""}`);
-
 
   doc.save(filename);
 }
