@@ -123,6 +123,10 @@ watch(() => props.editsPrice, (newsPrice) => {
     sprice.value = newsPrice ?? 0;
 }, { immediate: true });
 
+watch(() => props.editpPrice, (newpPrice) => {
+    pprice.value = newpPrice ?? 0;
+}, { immediate: true });
+
 watch(() => props.editdPrice, (newdPrice) => {
   dprice.value = newdPrice ?? 0;
 
