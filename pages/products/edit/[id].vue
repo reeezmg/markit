@@ -507,8 +507,8 @@ const printBarcodesVariant = async (variant: any) => {
 </div>
     
     <UDashboardPanelContent v-else class="pb-24">
-      <div class="flex flex-row gap-4">
-        <div class="w-1/2">
+      <div class="flex sm:flex-row flex-col gap-4">
+        <div class="sm:w-1/2 w-full ">
   <UPageCard class="m-3">
     <div class="text-lg mb-4">Variant Links</div>
 
@@ -549,7 +549,7 @@ const printBarcodesVariant = async (variant: any) => {
 </div>
 
 
-        <div class=" w-1/2">
+        <div class=" sm:w-1/2 w-full">
         
       <UPageCard class="m-3" id="Create">
         <AddProductCreate 

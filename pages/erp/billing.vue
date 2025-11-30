@@ -57,6 +57,7 @@ const isRedeemPoint = ref(false);
 const selected = ref(null);
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
+const isProductSearchOpen = ref(false);
 
 const account = ref({
     name: '',
@@ -1935,8 +1936,28 @@ watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
   }
 }, { deep: true });
 
+const handleProductSelected = async (selectedItems) => {
+  if (!selectedItems || selectedItems.length === 0) return;
 
+  for (const item of selectedItems) {
+    const barcode = item.barcode;
+    if (!barcode) continue;
 
+    // last row index
+    const index = items.value.length - 1;
+
+    // set barcode into current row
+    items.value[index].barcode = barcode;
+
+    // fetch item details
+    await fetchItemData(barcode, index);
+
+    // create a new blank row after filling
+    addNewRow(index, true);
+
+    console.log("Added barcode:", barcode, "at index:", index);
+  }
+};
 
 
 
@@ -2584,7 +2605,7 @@ watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
           <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
           <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
-          <UButton class="flex-1" block>Barcode Search</UButton>
+          <UButton class="flex-1" block @click="isProductSearchOpen = true">Product Search</UButton>
           <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
           <UButton v-if="!token" class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
         </div>
@@ -2634,6 +2655,12 @@ watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
   v-model:phoneNo="phoneNo"
   :onVerify="handleEnterPhone"
   :clientAdded="handleClientAdded"
+/>
+
+<BillingProductSearch
+  v-model="isProductSearchOpen"
+  @done="handleProductSelected"
+  @close="isProductSearchOpen = false"
 />
 
 <!-- token modal -->
