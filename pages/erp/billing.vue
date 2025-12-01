@@ -1250,12 +1250,14 @@ const handleSave = async () => {
       },
     })
 
-    toast.add({ title: 'Bill created successfully!', color: 'green' })
-
-    // 10) Refresh caches
+        // 10) Refresh caches
     queryClient.invalidateQueries({ queryKey: ['zenstack', 'Bill', 'findMany'], exact: false })
     queryClient.invalidateQueries({ queryKey: ['zenstack', 'Product', 'findMany'], exact: false })
     await couponRefetch()
+ 
+
+    toast.add({ title: 'Bill created successfully!', color: 'green' })
+
 
     // 11) Reset UI and open print modal
     
