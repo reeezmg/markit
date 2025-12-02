@@ -57,32 +57,23 @@ const columns = [
 ];
 
 
-const productcolumns = [
-    {
+const subcategorycolumns = [
+     {
         key: 'name',
-        label: 'name',
+        label: 'Name',
+        sortable: true,
+    },
+   {
+        key: 'products',
+        label: 'Products',
         sortable: true,
     },
     {
-        key: 'variants',
-        label: 'Variants',
-        sortable: false,
-    },
-     {
         key: 'qty',
         label: 'Qty',
         sortable: true,
     },
-    {
-        key: 'status',
-        label: 'Status',
-        sortable: true,
-    },
-    {
-        key: 'actions',
-        label: 'Actions',
-        sortable: false,
-    },
+
 ];
 
 
@@ -249,6 +240,32 @@ const queryArgs = reactive({
                 }
             }
         },
+        subcategories:{
+            select:{
+            id:true,
+            name:true,
+            image:true,
+            products: {
+                select:{
+                    id:true,
+                    name:true,
+                    status:true,
+                    variants:{
+                        select:{
+                            images:true,
+                            sprice:true,
+                            items:{
+                                select: {
+                                    qty: true,
+                                },
+                            }
+                        }
+                    }
+                }
+            },
+
+        }
+        }
     },
 });
 
@@ -567,8 +584,8 @@ const removeProduct = () => {
                 <template #expand="{ row }">
                     <div class="ps-4">
                     <UTable 
-                        :rows="row.products" 
-                        :columns="productcolumns"
+                        :rows="row.subcategories" 
+                        :columns="subcategorycolumns"
                     >
 
                       
@@ -576,7 +593,7 @@ const removeProduct = () => {
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
                         <UAvatar
-                            :src="`https://images.markit.co.in/${row.variants[0]?.images[0]}`"
+                            :src="`https://images.markit.co.in/${row.image}`"
                             :alt="row.name"
                             size="lg"
                         />
@@ -584,38 +601,25 @@ const removeProduct = () => {
                     </div>
                 </template>
 
-                <template #variants-data="{ row }">
-                    {{
-                        row.variants?.reduce((variantTotal, variant) => {
-                            const itemTotal = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
-                            return variantTotal + itemTotal;
-                        }, 0)
-                        }}
+           <template #products-data="{ row }">
+                    {{ row.products.length }}
                 </template>
 
-                 <template #qty-data="{ row }">
+                <template #qty-data="{ row }">
                     {{
-                        row.variants?.reduce((total, variant) => {
-                        const itemQty = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
-                        return total + itemQty;
+                        row.products?.reduce((productTotal, product) => {
+                        const variantQty = product.variants?.reduce((variantTotal, variant) => {
+                            const itemQty = variant.items?.reduce((itemTotal, item) => {
+                            return itemTotal + (item.qty || 0);
+                            }, 0) || 0;
+                            return variantTotal + itemQty;
+                        }, 0) || 0;
+                        return productTotal + variantQty;
                         }, 0) || 0
                     }}
                     </template>
 
 
-
-                  <template #actions-data="{ row }">
-                    <UDropdown :items="productAction(row)">
-                        <UButton
-                            color="gray"
-                            variant="ghost"
-                            icon="i-heroicons-ellipsis-horizontal-20-solid"
-                        />
-                    </UDropdown>
-                </template>
-
-
-                
                     
                     </UTable>
                     </div>

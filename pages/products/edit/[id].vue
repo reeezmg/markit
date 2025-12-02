@@ -622,7 +622,7 @@ const printBarcodesVariant = async (variant: any) => {
           @click="handleEdit"
           :loading="isLoad"
         >
-          Edit Product
+          Save Edit
         </UButton>
       </div>
         </div>
@@ -640,7 +640,7 @@ const printBarcodesVariant = async (variant: any) => {
                   @click="handleEdit"
                   :loading="isLoad"
                 >
-                  Edit Product
+                  Save Edit
                 </button>
               </div>
               <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark-20-solid" class="-my-1" @click="isOpenAdd = false" />
@@ -712,7 +712,7 @@ const printBarcodesVariant = async (variant: any) => {
                 @click="handleEdit"
                 :loading="isLoad"
               >
-                Edit Product
+                Save Edit
               </button>
             </div>
           </div>

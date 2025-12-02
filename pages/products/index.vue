@@ -19,6 +19,7 @@ import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Pagination } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/pagination'
+import { useLocalStorageRef } from '~/composables/useLocalStorageRef'
 
 
 interface ImageData {
@@ -141,7 +142,7 @@ const columns = [
     {
         key: 'category',
         label: 'Category',
-        sortable: true,
+        sortable: false,
     },
     {
         key: 'variants',
@@ -330,11 +331,17 @@ const resetFilters = () => {
     selectedStatus.value = [];
 };
 
+
+
 // Pagination
-const sort = ref({ column: 'createdAt', direction: 'desc' as const });
-const expand = ref({ openedRows: [], row: null });
-const page = ref(1);
-const pageCount = ref('10');
+const sort = useLocalStorageRef('sort', { column: 'createdAt', direction: 'desc' as const }, 'product');
+
+const expand = useLocalStorageRef('expand', { openedRows: [], row: null }, 'product');
+
+const page = useLocalStorageRef('page', 1, 'product');
+
+const pageCount = useLocalStorageRef('pageCount', '10','product');
+
 const { data: pageTotal }  = useCountProduct({where: { companyId: useAuth().session.value?.companyId }})
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
