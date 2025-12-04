@@ -145,6 +145,11 @@ const columns = [
         sortable: false,
     },
     {
+        key: 'subcategory',
+        label: 'subcategory',
+        sortable: false,
+    },
+    {
         key: 'variants',
         label: 'Variants',
         sortable: false,
@@ -905,6 +910,9 @@ const handleAddPhoto = async () => {
 
                 <template #category-data="{ row }">
                     {{ row.category?.name }}
+                </template>
+                <template #subcategory-data="{ row }">
+                    {{ row.subcategory?.name }}
                 </template>
 
                 <template #variants-data="{ row }"> 
