@@ -410,6 +410,7 @@ const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
                 },
             },
             category: true,
+            subcategory: true,
         },
         orderBy: {
             [sort.value.column]: sort.value.direction,
@@ -441,6 +442,7 @@ const {
             product: {
                 select: {
                 category: true,
+                subcategory: true,
                 id: true,
                 updatedAt: true
                 },
