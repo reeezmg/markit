@@ -114,7 +114,6 @@ const handleSubmit = async (e: Event) => {
             name: sub.name,
             description: sub.description ?? '',
             image: sub.files?.uuid ?? null,
-            targetAudience: sub.targetAudience ?? null, // ✅ If subcategories use this too
             company: {
               connect: {
                 id: useAuth().session.value?.companyId,
