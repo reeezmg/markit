@@ -211,6 +211,14 @@ const handleEdit = async (e: Event) => {
   e.preventDefault();
   isLoad.value = true
   try {
+     if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.add({
+        title: 'No internet connection',
+        color: 'red',
+      });
+      throw new Error('No internet connection')
+    }
+
     if (!category.value || category.value.id.trim() === '') {
       toast.add({
         title: 'Please fill product category',
@@ -251,7 +259,7 @@ const handleEdit = async (e: Event) => {
     }
 
    const productId = selectedProduct.value.id;
-   console.log(selectedProduct.value)
+   console.log(variantInputs?.value.images )
 
 const updatedProduct =  await UpdateProduct.mutateAsync({
   where: { id: productId },
@@ -289,9 +297,11 @@ const updatedProduct =  await UpdateProduct.mutateAsync({
           dprice: v.dprice || 0,
           discount: v.discount || 0,
           status: true,
+          ...(variantInputs?.value.images && { 
           images: (v.images || [])
             .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
             .map((file) => file.uuid),
+          }),
           tax: calculateTax(v),
           company: {
             connect: { id: useAuth().session.value?.companyId },
@@ -330,9 +340,11 @@ const updatedProduct =  await UpdateProduct.mutateAsync({
           dprice: v.dprice || 0,
           discount: v.discount || 0,
           status: true,
+          ...(variantInputs?.value.images && { 
           images: (v.images || [])
             .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
             .map((file) => file.uuid),
+          }),
           tax: calculateTax(v),
           company: {
             connect: { id: useAuth().session.value?.companyId },
@@ -680,7 +692,6 @@ const printBarcodesVariant = async (variant: any) => {
                   :editSizes="selectedProduct?.variants[index].sizes"
                   @update="updateVariant(index,$event)" />
                 <AddProductMedia
-                  v-if="variantInputs?.images"
                   :key="index"
                   :editFile="selectedProduct && selectedProduct.variants[index].images"
                   :index="index" 

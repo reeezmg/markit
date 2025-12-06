@@ -45,6 +45,16 @@ const deletingRowIdentity = ref({})
 const activeImages = ref<string[]>([])
 const activeImagesDate = ref<string[]>([])
 let images = reactive<ImageData[]>([]);
+const isMobile = ref(false);
+
+onMounted(() => {
+  isMobile.value = window.innerWidth < 1024;
+  window.addEventListener('resize', () => {
+    isMobile.value = window.innerWidth < 1024;
+  });
+});
+
+
 
 // ==========================
 // 🟢 DISCOUNT MODAL LOGIC
@@ -54,6 +64,7 @@ const isDiscountApplying = ref(false)
 const discountPercentage = ref<number | null>(null)
 const discountFilters = reactive({
   categoryId: '',
+  subcategoryId: '',
   startDate: '',
   endDate: '',
   brand: '',
@@ -61,20 +72,41 @@ const discountFilters = reactive({
   maxSprice: '',
   minDprice: '',
   minRating: '',
+  status: '',
 })
 
 const categoryOptions = computed(() =>
   products.value
     ? [
-        ...new Set(products.value.map((p) => p.category?.name).filter(Boolean)),
-      ].map((name) => ({ label: name, value: name }))
+        ...new Map(
+          products.value
+            .filter((p) => p.category)
+            .map((p) => [p.category?.id, p.category])
+        ).values(),
+      ].map((c) => ({ label: c.name, value: c.id }))
+      .sort((a, b) => a.label.localeCompare(b.label))
     : []
 )
+
+const subcategoryOptions = computed(() =>
+  products.value
+    ? [
+        ...new Map(
+          products.value
+            .filter((p) => p.subcategory)
+            .map((p) => [p.subcategory?.id, p.subcategory])
+        ).values(),
+      ].map((s) => ({ label: s.name, value: s.id }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+    : []
+)
+
 
 watch(isDiscountModalOpen, (open) => {
   if (!open) {
     Object.assign(discountFilters, {
       categoryId: '',
+      subcategoryId: '',
       startDate: '',
       endDate: '',
       brand: '',
@@ -82,6 +114,7 @@ watch(isDiscountModalOpen, (open) => {
       maxSprice: '',
       minDprice: '',
       minRating: '',
+      status: null,
     })
     discountPercentage.value = null
   }
@@ -128,6 +161,44 @@ const applyDiscount = async () => {
     })
   } finally {
     isDiscountApplying.value = false
+  }
+}
+
+
+// ==========================
+// 🟢 Filter MODAL LOGIC
+// ==========================
+const isFilterModalOpen = ref(false)
+const isFilterApplying = ref(false)
+const filters = reactive({
+  categoryId: '',
+  subcategoryId: '',
+  startDate: '',
+  endDate: '',
+  brand: '',
+  minMargin: '',
+  maxSprice: '',
+  minDprice: '',
+  minRating: '',
+  status: null,
+})
+
+const applyFilter = async () => {
+  isFilterApplying.value = true
+  isFilterModalOpen.value = false
+  console.log("Applying filters:", filters)
+
+  try {
+    await refetch()
+  } catch (err: any) {
+    console.error('Filter error:', err)
+    toast.add({
+      title: "Error Applying Filter",
+      description: err.message || "Unexpected error occurred.",
+      color: "red",
+    })
+  } finally {
+    isFilterApplying.value = false
   }
 }
 
@@ -333,7 +404,8 @@ const selectedStatus = ref<any>([]);
 
 const resetFilters = () => {
     search.value = '';
-    selectedStatus.value = [];
+    Object.keys(filters).forEach(k => filters[k] = '')
+    refetch()
 };
 
 
@@ -356,69 +428,115 @@ const pageTo = computed(() =>
 
 // Data
 const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
-    const selectedStatusCondition =
-        selectedStatus.value.length > 0
-            ? {
-                  OR: selectedStatus.value.map((item) => {
-                      return { status: item.value };
-                  }),
-              }
-            : {};
 
-    return {
-        where: {
-            AND: [
-                { companyId: useAuth().session.value?.companyId },
-                {
-                    OR: [
-                        // ✅ Product name
-                        { name: { contains: search.value, mode: 'insensitive' } },
+  const filterConditions: any[] = [{ companyId: useAuth().session.value?.companyId }]
 
-                        // ✅ Variant code
-                        {
-                            variants: {
-                                some: {
-                                    code: { contains: search.value, mode: 'insensitive' },
-                                },
-                            },
-                        },
+  if (filters.categoryId)
+    filterConditions.push({ categoryId: filters.categoryId })
 
-                        // ✅ Item barcode (via variants → items)
-                        {
-                            variants: {
-                                some: {
-                                    items: {
-                                        some: {
-                                            barcode: {
-                                                contains: search.value,
-                                                mode: 'insensitive',
-                                            },
-                                        },
-                                    },
-                                },
-                            },
-                        },
-                    ],
-                },
-                selectedStatusCondition,
-            ],
+  if (filters.subcategoryId)
+    filterConditions.push({ subcategoryId: filters.subcategoryId })
+
+  if (filters.brand)
+    filterConditions.push({ brand: { contains: filters.brand, mode: 'insensitive' } })
+
+  if (filters.minMargin)
+    filterConditions.push({ margin: { gte: parseFloat(filters.minMargin) } })
+
+if (filters.status !== "" && filters.status !== null && filters.status !== undefined) {
+  const statusBoolean =
+    filters.status === "true" ? true :
+    filters.status === "false" ? false :
+    filters.status;
+
+  filterConditions.push({ status: statusBoolean });
+}
+
+  if (filters.maxSprice)
+    filterConditions.push({
+      variants: {
+        some: {
+          sprice: { lte: parseFloat(filters.maxSprice) },
         },
-        include: {
-            variants: {
-                include: {
-                    items: true,
-                },
+      },
+    })
+
+  if (filters.minDprice)
+    filterConditions.push({
+      variants: {
+        some: {
+          dprice: { gte: parseFloat(filters.minDprice) },
+        },
+      },
+    })
+
+  if (filters.minRating)
+    filterConditions.push({ rating: { gte: parseFloat(filters.minRating) } })
+
+  if (filters.startDate && filters.endDate)
+    filterConditions.push({
+      createdAt: {
+        gte: new Date(filters.startDate),
+        lte: new Date(filters.endDate),
+      },
+    })
+
+  return {
+    where: {
+      AND: [
+        ...filterConditions,
+        {
+          OR: [
+            { name: { contains: search.value, mode: 'insensitive' } },
+
+            {
+              variants: {
+                some: { code: { contains: search.value, mode: 'insensitive' } },
+              },
             },
-            category: true,
-            subcategory: true,
+
+            {
+              variants: {
+                some: {
+                  items: {
+                    some: {
+                      barcode: { contains: search.value, mode: 'insensitive' },
+                    },
+                  },
+                },
+              },
+            },
+
+            {
+              category: {
+                name: { contains: search.value, mode: 'insensitive' },
+              },
+            },
+
+            {
+              subcategory: {
+                name: { contains: search.value, mode: 'insensitive' },
+              },
+            },
+          ],
         },
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
-        },
-        skip: (page.value - 1) * parseInt(pageCount.value),
-        take: parseInt(pageCount.value),
-    };
-});
+      ],
+    },
+
+    include: {
+      variants: { include: { items: true }},
+      category: true,
+      subcategory: true,
+    },
+
+    orderBy: {
+      [sort.value.column]: sort.value.direction,
+    },
+
+    skip: (page.value - 1) * parseInt(pageCount.value),
+    take: parseInt(pageCount.value),
+  }
+})
 
 
 const {
@@ -779,9 +897,10 @@ const handleAddPhoto = async () => {
                 footer: { padding: 'p-4' },
             }"
         >
-         
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 py-3 w-full">
-  <!-- Left side: Search + Status -->
+            <div
+  class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 py-3 w-full"
+>
+  <!-- LEFT SIDE: Search -->
   <div class="flex flex-row gap-3 w-full sm:w-auto">
     <UInput
       v-model="search"
@@ -789,49 +908,66 @@ const handleAddPhoto = async () => {
       placeholder="Search..."
       class="w-full sm:w-auto"
     />
-    <USelectMenu
-      v-model="selectedStatus"
-      :options="todoStatus"
-      multiple
-      placeholder="Status"
-      class="w-full sm:w-40"
-    />
   </div>
 
-    <!-- Right side: Buttons -->
+  <!-- RIGHT SIDE -->
   <div class="flex flex-row gap-3 w-full sm:w-auto justify-end">
-    <UButton
-      icon="i-heroicons-plus"
-      size="sm"
-      color="primary"
-      variant="solid"
-      label="Add Product"
-      :loading="isAdd"
-      @click="handleAdd"
-       class="w-full flex-1 sm:w-auto sm:flex-none"
-    />
-    <UButton
-      icon="i-heroicons-camera"
-      size="sm"
-      color="primary"
-      variant="solid"
-      label="Add Photo"
-      @click="isAddPhotoModelOpen = true"
-    class="w-full flex-1 sm:w-auto sm:flex-none"
-    />
-    <!-- 🟢 New Discount Button -->
-    <UButton
-      icon="i-heroicons-percent-badge"
-      size="sm"
-      color="orange"
-      variant="solid"
-      label="Discount"
-      @click="isDiscountModalOpen = true"
-      class="w-full flex-1 sm:w-auto sm:flex-none"
-    />
-  </div>
 
+    <!-- 🔽 Mobile Dropdown -->
+    <UDropdown
+      v-if="isMobile"
+      class="w-full"
+      :items="[
+        [
+          { label: 'Filter', icon: 'i-heroicons-funnel', click: () => isFilterModalOpen = true },
+          { label: 'Add Product', icon: 'i-heroicons-plus', click: handleAdd },
+          { label: 'Add Photo', icon: 'i-heroicons-camera', click: () => isAddPhotoModelOpen = true },
+          { label: 'Discount', icon: 'i-heroicons-percent-badge', click: () => isDiscountModalOpen = true }
+        ]
+      ]"
+    >
+      <UButton icon="i-heroicons-bars-3" color="primary" size="sm" label="Actions" class="w-full" />
+    </UDropdown>
+
+    <!-- 🖥 Desktop Buttons -->
+    <template v-else>
+      <UButton
+        icon="i-heroicons-funnel"
+        size="sm"
+        color="orange"
+        variant="solid"
+        label="Filter"
+        @click="isFilterModalOpen = true"
+      />
+      <UButton
+        icon="i-heroicons-plus"
+        size="sm"
+        color="primary"
+        variant="solid"
+        label="Add Product"
+        :loading="isAdd"
+        @click="handleAdd"
+      />
+      <UButton
+        icon="i-heroicons-camera"
+        size="sm"
+        color="primary"
+        variant="solid"
+        label="Add Photo"
+        @click="isAddPhotoModelOpen = true"
+      />
+      <UButton
+        icon="i-heroicons-percent-badge"
+        size="sm"
+        color="orange"
+        variant="solid"
+        label="Discount"
+        @click="isDiscountModalOpen = true"
+      />
+    </template>
+  </div>
 </div>
+
 
 
 
@@ -1313,6 +1449,14 @@ const handleAddPhoto = async () => {
         />
       </UFormGroup>
 
+      <UFormGroup label="Sub Category">
+        <USelect
+          v-model="discountFilters.subcategoryId"
+          :options="subcategoryOptions"
+          placeholder="Select Category"
+        />
+      </UFormGroup>
+
       <UFormGroup label="Start Date">
         <UInput type="date" v-model="discountFilters.startDate" />
       </UFormGroup>
@@ -1340,6 +1484,19 @@ const handleAddPhoto = async () => {
       <UFormGroup label="Min Rating">
         <UInput type="number" v-model="discountFilters.minRating" />
       </UFormGroup>
+
+          <UFormGroup label="Status">
+        <USelect
+          v-model="discountFilters.status"
+          :options="[
+            { label: 'Active', value: true },
+            { label: 'Inactive', value: false },
+            { label: 'All', value: null }
+          ]"
+          placeholder="Select Status"
+        />
+
+      </UFormGroup>
     </div>
 
     <!-- Discount Input -->
@@ -1360,6 +1517,95 @@ const handleAddPhoto = async () => {
         :loading="isDiscountApplying"
         label="Apply Discount"
         @click="applyDiscount"
+      />
+    </div>
+  </UCard>
+</UModal>
+
+<UModal v-model="isFilterModalOpen" size="xl" prevent-close>
+  <UCard>
+    <template #header>
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold">Filter</h3>
+        <UButton
+          icon="i-heroicons-x-mark"
+          variant="ghost"
+          @click="isFilterModalOpen = false"
+        />
+      </div>
+    </template>
+
+    <!-- Filters -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <UFormGroup label="Category">
+        <USelect
+          v-model="filters.categoryId"
+          :options="categoryOptions"
+          placeholder="Select Category"
+        />
+      </UFormGroup>
+      
+      <UFormGroup label="Sub Category">
+        <USelect
+          v-model="filters.subcategoryId"
+          :options="subcategoryOptions"
+          placeholder="Select Sub Category"
+        />
+      </UFormGroup>
+
+      <UFormGroup label="Start Date">
+        <UInput type="date" v-model="filters.startDate" />
+      </UFormGroup>
+
+      <UFormGroup label="End Date">
+        <UInput type="date" v-model="filters.endDate" />
+      </UFormGroup>
+
+      <UFormGroup label="Brand">
+        <UInput placeholder="Brand" v-model="filters.brand" />
+      </UFormGroup>
+
+      <UFormGroup label="Min Margin">
+        <UInput type="number" v-model="filters.minMargin" />
+      </UFormGroup>
+
+      <UFormGroup label="Max sprice">
+        <UInput type="number" v-model="filters.maxSprice" />
+      </UFormGroup>
+
+      <UFormGroup label="Min dprice">
+        <UInput type="number" v-model="filters.minDprice" />
+      </UFormGroup>
+
+      <UFormGroup label="Min Rating">
+        <UInput type="number" v-model="filters.minRating" />
+      </UFormGroup>
+
+       <UFormGroup label="Status">
+          <USelect
+            v-model="filters.status"
+            :options="[
+              { label: 'Active', value: true },
+              { label: 'Inactive', value: false },
+              { label: 'All', value: null }
+            ]"
+            placeholder="Select Status"
+          />
+
+    </UFormGroup>
+
+
+      
+    </div>
+
+   
+    <div class="flex justify-end mt-6 gap-3">
+      <UButton color="white" label="Cancel" @click="isFilterModalOpen = false" />
+      <UButton
+        color="orange"
+        :loading="isFilterApplying"
+        label="Filter"
+        @click="applyFilter"
       />
     </div>
   </UCard>

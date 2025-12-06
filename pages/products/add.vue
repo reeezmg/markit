@@ -481,6 +481,15 @@ const handleAdd = async (e: Event) => {
   e.preventDefault();
   try {
 
+    if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
+         toast.add({
+           title: 'No internet connection',
+           color: 'red',
+         });
+         throw new Error('No internet connection')
+       }
+
+
     // if (!name.value || name.value.trim() === '') {
     //   toast.add({
     //     title: 'Please fill product name',
@@ -587,9 +596,9 @@ const handleAdd = async (e: Event) => {
               deliveryType: deliveryType.value || 'trynbuy',
               status: true,
               tax,
-              images: (variant.images || [])
+              ...(variantInputs?.value.images && { images: (variant.images || [])
                 .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
-                .map((file) => file.uuid),
+                .map((file) => file.uuid),}),
               company: {
                 connect: { id: useAuth().session.value?.companyId },
               },
@@ -606,17 +615,37 @@ const handleAdd = async (e: Event) => {
       select: { id: true }
     });
 
-    handleReset();
+
+//     const productRes = await $fetch('/api/products/create', {
+//   method: "POST",
+//   body: {
+//     payload: {
+//       name: name.value,
+//       brand: brand.value,
+//       description: description.value,
+//       status: live.value
+//     },
+//     companyId: useAuth().session.value?.companyId,
+//     poId: poId.value,
+//     category: category.value,
+//     subcategory: subcategory.value,
+//     variants: variants.value,
+//     categoryTax: categoryTax.value,
+//     deliveryType: deliveryType.value
+//   }
+// })
+
+  
 
     toast.add({
       title: 'Product Added!',
       id: 'modal-success',
     });
-    
+      handleReset();
+    isOpenAdd.value = false
   } catch (err: any) {
     console.log(err.info?.message ?? err);
   }finally{
-    isOpenAdd.value = false
     isLoad.value = false
   }
  
@@ -642,6 +671,13 @@ const handleEdit = async (e: Event) => {
   isLoad.value = true
   try {
   
+     if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
+          toast.add({
+            title: 'No internet connection',
+            color: 'red',
+          });
+          throw new Error('No internet connection')
+        }
     if (!category.value || category.value.id.trim() === '') {
       toast.add({
         title: 'Please fill product category',
@@ -759,7 +795,9 @@ const updatedProduct =  UpdateProduct.mutate({
           discount: v.discount || 0,
           deliveryType: deliveryType.value || 'trynbuy',
           status: true,
-          images: v.images?.map(file => file.uuid) || [],
+             ...(variantInputs?.value.images && { images: (variant.images || [])
+                .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
+                .map((file) => file.uuid),}),
           tax: calculateTax(v),
           company: {
             connect: { id: useAuth().session.value?.companyId },
@@ -855,7 +893,17 @@ const queryParams = computed(() => (
   {
   where: { id: poId.value },
   include: {
-    products: { include: { variants: { include: { items: true } } } },
+    products: { 
+      include: { 
+        subcategory: true,
+        category: true,
+        variants: { 
+          include: { 
+            items: true 
+          } 
+        } 
+      }
+     },
   },
 }
 ));
@@ -898,7 +946,8 @@ const handleSave = async () => {
     if (!items.value?.products) {
       throw new Error("No items found");
     }
-
+    console.log("Items to save:", items.value.products);
+ 
 
     // Generate printable barcode format
     barcodes.value = items.value?.products.flatMap(product => 
@@ -910,9 +959,9 @@ const handleSave = async () => {
                 barcode: item.barcode ?? '',
                 code: variant.code ?? '',
                 shopname: useAuth().session.value?.companyName,
-                productName: product.name,
-                brand: product.brand,
-                name: variant.name,
+                productName: product.name || product.category.name || '',
+                brand: product.brand || product.subcategory.name || '' ,
+                name: variant.name || '',
                 sprice: variant.sprice,
                 ...(variant.sprice !== variant.dprice && 
                 {  dprice: variant.dprice }
@@ -922,6 +971,8 @@ const handleSave = async () => {
         )
       )
     );
+
+       console.log("PO ID:", barcodes.value);
 
     isOpen.value = true;
     UpdatePurchaseOrder.mutate({
@@ -1306,9 +1357,7 @@ const handleNewProduct = () => {
                         @update="createValue" />
                 </UPageCard>
                  
-          
-
-                <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.key" class="mb-3">
+              <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.key" class="mb-3">
                     <UPageCard class="m-3" id="Variants">
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
@@ -1341,7 +1390,9 @@ const handleNewProduct = () => {
                       :editFile="selectedProduct && selectedProduct.variants[index]?.images"
                       :index="index" 
                       :categoryName="category.name"
-                      :targetAudience = "category.targetAudience"
+                      :targetAudience="category.targetAudience"
+                      :productId="selectedProduct?.id"
+                      :updatedAt= "selectedProduct?.updatedAt"
                       @update="fileValue"
                     />
                   </UPageCard>
