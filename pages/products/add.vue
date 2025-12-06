@@ -795,7 +795,7 @@ const updatedProduct =  UpdateProduct.mutate({
           discount: v.discount || 0,
           deliveryType: deliveryType.value || 'trynbuy',
           status: true,
-             ...(variantInputs?.value.images && { images: (variant.images || [])
+             ...(variantInputs?.value.images && { images: (v.images || [])
                 .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
                 .map((file) => file.uuid),}),
           tax: calculateTax(v),
