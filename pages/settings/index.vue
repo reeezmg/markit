@@ -25,6 +25,9 @@ const isNameChanged = ref(false);
 const isImageChanged = ref(false);
 const isEmailChanged = ref(false);
 const router = useRouter();
+const showCurrent = ref(false)
+const showNew = ref(false)
+const showConfirm = ref(false)
 
 
 const toast = useToast();
@@ -442,29 +445,63 @@ const onVerifyOtp = async () => {
                     class="grid grid-cols-2 gap-2"
                     :ui="{ container: '' }"
                 >
-                    <UInput
-                        id="password"
-                        v-model="state.password_current"
-                        type="password"
-                        placeholder="Current password"
-                        size="md"
-                    />
-                    <UInput
-                        id="password_new"
-                        v-model="state.password_new"
-                        type="password"
-                        placeholder="New password"
-                        size="md"
-                        class="mt-2"
-                    />
-                    <UInput
-                        id="confirm_password"
-                        v-model="state.confirm_password"
-                        type="password"
-                        placeholder="Confirm password"
-                        size="md"
-                        class="mt-2"
-                    />
+                   <UInput
+                    id="password"
+                    v-model="state.password_current"
+                    :type="showCurrent ? 'text' : 'password'"
+                    placeholder="Current password"
+                    size="md"
+                >
+                    <template #trailing>
+                        <div class="pointer-events-auto">
+                            <UIcon
+                                :name="showCurrent ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'"
+                                class="cursor-pointer text-gray-500"
+                                @click.stop="showCurrent = !showCurrent"
+                            />
+                        </div>
+                    </template>
+                </UInput>
+
+                <UInput
+                    id="password_new"
+                    v-model="state.password_new"
+                    :type="showNew ? 'text' : 'password'"
+                    placeholder="New password"
+                    size="md"
+                    class="mt-2"
+                >
+                    <template #trailing>
+                        <div class="pointer-events-auto">
+                            <UIcon
+                                :name="showNew ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'"
+                                class="cursor-pointer text-gray-500"
+                                @click.stop="showNew = !showNew"
+                            />
+                        </div>
+                    </template>
+                </UInput>
+
+                <UInput
+                    id="confirm_password"
+                    v-model="state.confirm_password"
+                    :type="showConfirm ? 'text' : 'password'"
+                    placeholder="Confirm password"
+                    size="md"
+                    class="mt-2"
+                >
+                    <template #trailing>
+                        <div class="pointer-events-auto">
+                            <UIcon
+                                :name="showConfirm ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'"
+                                class="cursor-pointer text-gray-500"
+                                @click.stop="showConfirm = !showConfirm"
+                            />
+                        </div>
+                    </template>
+                </UInput>
+
+
 
                     <UButton
                     label="Update Password"
