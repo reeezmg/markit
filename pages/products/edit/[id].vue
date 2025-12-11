@@ -261,7 +261,7 @@ const handleEdit = async (e: Event) => {
    const productId = selectedProduct.value.id;
    console.log(variantInputs?.value.images )
 
-const updatedProduct =  await UpdateProduct.mutateAsync({
+const updatedProduct =   UpdateProduct.mutateAsync({
   where: { id: productId },
   data: {
     name: name.value || '',

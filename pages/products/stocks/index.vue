@@ -134,7 +134,12 @@ const { data: stockData, pending, refresh } = await useLazyAsyncData(
       }
     }),
   { enabled: !!companyId.value } // Do NOT run at load
+  
 )
+
+watch(stockData, (newData) => {
+  console.log('Stock data updated:', newData)
+})
 
 // TRIGGER FIRST CALL ONCE COMPANYID LOADS
 watch(companyId, (val) => {

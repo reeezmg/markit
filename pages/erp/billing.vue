@@ -869,6 +869,11 @@ const itemargs = computed(() => ({
           select: {
             name: true,
             categoryId: true,
+            subcategory: {
+              select: {
+                name: true
+              }
+            },
             category: {
               select: {
                 taxType: true,
@@ -1028,7 +1033,7 @@ const processItemResponse = (itemData, index) => {
 
   items.value[index].id = itemData.id || '';
   items.value[index].size = itemData.size || '';
-  items.value[index].name = `${itemData.variant?.name}-${itemData.variant.product.name}` || '';
+  items.value[index].name = `${itemData.variant?.name}-${itemData.variant.product.name}-${itemData.variant.product.subcategory?.name}` || '';
   items.value[index].category = categories.value.filter(category => category.id === categoryId);
   items.value[index].rate = itemData.variant?.sprice || 0;
   items.value[index].discount = itemData.variant?.dprice - itemData.variant?.sprice || 0;

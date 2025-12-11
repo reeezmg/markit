@@ -19,15 +19,13 @@ watch(() => props.open, v => (isOpen.value = v))
 const auth = useAuth()
 const companyId = computed(() => auth.session.value?.companyId)
 
-// Dropdown values
+// Dropdowns
 const selectedCategory = ref<string | null>(null)
 const selectedSubcategory = ref<string | null>(null)
 const selectedProduct = ref<string | null>(null)
 
-// Selected item IDs
+// Selection
 const selectedItems = ref<string[]>([])
-
-// Expanded image row
 const expandedRow = ref<string | null>(null)
 
 const toggleExpand = (id: string) => {
@@ -45,23 +43,18 @@ const { data: categories } = useFindManyCategory(() => ({
 }))
 
 // Subcategory
-const {
-  data: subcategories,
-  refetch: refreshSubcategories
-} = useFindManySubcategory(() => ({
-  where: {
-    companyId: companyId.value,
-    status: true,
-    categoryId: selectedCategory.value || undefined
-  },
-  orderBy: { name: 'asc' }
-}))
+const { data: subcategories, refetch: refreshSubcategories } =
+  useFindManySubcategory(() => ({
+    where: {
+      companyId: companyId.value,
+      status: true,
+      categoryId: selectedCategory.value || undefined
+    },
+    orderBy: { name: 'asc' }
+  }))
 
 // Products
-const {
-  data: products,
-  refetch: refreshProducts
-} = useFindManyProduct(() => ({
+const { data: products, refetch: refreshProducts } = useFindManyProduct(() => ({
   where: {
     companyId: companyId.value,
     status: true,
@@ -71,15 +64,24 @@ const {
   orderBy: { name: 'asc' }
 }))
 
-// Variants (with items)
-const {
-  data: variants,
-  refetch: refreshVariants
-} = useFindManyVariant(() => ({
+// ------------------------------
+// FIXED VARIANT QUERY
+// loads variants on selecting SUBCATEGORY or PRODUCT
+// ------------------------------
+const { data: variants, refetch: refreshVariants } = useFindManyVariant(() => ({
   where: {
     companyId: companyId.value,
     status: true,
-    productId: selectedProduct.value || undefined
+
+    // If product is chosen → filter by product
+    productId: selectedProduct.value || undefined,
+
+    // If no product selected → filter variants by subcategory
+    product: selectedProduct.value
+      ? undefined
+      : selectedSubcategory.value
+      ? { subcategoryId: selectedSubcategory.value }
+      : undefined
   },
   include: {
     product: true,
@@ -95,14 +97,18 @@ watch(selectedCategory, () => {
   selectedSubcategory.value = null
   selectedProduct.value = null
   selectedItems.value = []
+
   refreshSubcategories()
   refreshProducts()
+  refreshVariants()
 })
 
 watch(selectedSubcategory, () => {
   selectedProduct.value = null
   selectedItems.value = []
+
   refreshProducts()
+  refreshVariants() // important: load variants on subcategory change
 })
 
 watch(selectedProduct, () => {
@@ -219,7 +225,7 @@ const done = () => {
             v-model="selectedProduct"
             searchable
             clearable
-            :disabled="!selectedCategory"
+            :disabled="!selectedSubcategory"
             placeholder="Select Product"
             value-attribute="value"
             option-attribute="label"
@@ -234,7 +240,7 @@ const done = () => {
 
       <!-- ITEMS TABLE -->
       <div
-        v-if="selectedProduct"
+        v-if="selectedSubcategory || selectedProduct"
         class="mt-4 w-full border rounded overflow-x-auto"
       >
         <table class="text-sm w-full min-w-max">
@@ -255,8 +261,6 @@ const done = () => {
 
           <tbody>
             <template v-for="row in allItems" :key="row.itemId">
-
-              <!-- MAIN ROW -->
               <tr class="border-t hover:bg-gray-50">
                 <td class="p-2">
                   <UCheckbox
@@ -265,7 +269,6 @@ const done = () => {
                   />
                 </td>
 
-                <!-- IMAGE CLICK -->
                 <td class="p-2">
                   <UAvatar
                     size="sm"
@@ -286,7 +289,6 @@ const done = () => {
                 <td class="p-2 whitespace-nowrap">{{ row.qty }}</td>
               </tr>
 
-              <!-- EXPANDED PREVIEW ROW -->
               <tr v-if="expandedRow === row.itemId">
                 <td colspan="9" class="bg-gray-50 p-4">
                   <div class="flex justify-center">
@@ -297,7 +299,6 @@ const done = () => {
                   </div>
                 </td>
               </tr>
-
             </template>
           </tbody>
 
