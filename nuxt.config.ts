@@ -35,7 +35,6 @@ export default defineNuxtConfig({
     inline: [
       '@zenstackhq/runtime',
       '@zenstackhq/server',
-      '.zenstack'
     ]
   },
 
