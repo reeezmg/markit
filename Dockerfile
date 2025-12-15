@@ -12,7 +12,7 @@ RUN apt-get update && apt-get install -y \
 
 # Install deps
 COPY package*.json ./
-RUN npm ci
+RUN npm install
 
 # Copy source
 COPY . .
