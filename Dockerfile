@@ -10,20 +10,22 @@ RUN apt-get update && apt-get install -y \
   ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
+# Install deps
 COPY package*.json ./
 RUN npm ci
 
+# Copy source
 COPY . .
 
-# 🔥 Generate ZenStack
+# Generate ZenStack (outputs to node_modules/.zenstack)
 RUN npx zenstack generate
 
-# 🔥 CRITICAL: make .zenstack resolvable at runtime
-RUN mkdir -p node_modules/.zenstack \
-  && cp -r .zenstack/* node_modules/.zenstack/
-
-# Build Nuxt
+# Build Nuxt (creates .output/server)
 RUN npm run build
+
+# 🔥 CRITICAL: copy ZenStack runtime INTO Nitro server bundle
+RUN mkdir -p .output/server/node_modules/.zenstack \
+  && cp -r node_modules/.zenstack/* .output/server/node_modules/.zenstack/
 
 ENV NODE_ENV=production
 ENV NITRO_PORT=8080
