@@ -63,6 +63,7 @@ export type AuthSession = {
     deliveryDiscountThreshold?: number;
     deliveryDiscountAmount?: number;
     commissionRate?: number;
+    printerLabelSize?: string;
     productInputs?: {
         name: boolean;
         brand: boolean;

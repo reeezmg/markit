@@ -177,6 +177,7 @@ model Company {
   bankName                  String?              @map("bank_name")
   gstin                     String?
   upiId                     String?              @map("upi_id")
+  printerLabelSize          String?              @map("printer_label_size")
   notifications             Notification[]
   address                   Address?
   distributor               DistributorCompany[]

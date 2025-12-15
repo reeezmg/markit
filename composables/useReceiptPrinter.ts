@@ -211,61 +211,113 @@ export function useReceiptPrinter() {
 
   const stringToBytes = (str: string) => new TextEncoder().encode(str + '\r\n');
 
-  const printMobileLabel = async (items: any[]): Promise<{ success: boolean; message: string }> => {
-    if (!selectedDevice.value) {
-      return { success: false, message: 'No printer selected' };
-    }
+  const printMobileLabel = async (
+      items: any[],
+      printerLabelSize: string
+    ): Promise<{ success: boolean; message: string }> => {
 
-    try {
-      await BleClient.connect(selectedDevice.value.deviceId);
-      
-    } catch {
-      return { success: false, message: 'Printer connection failed. Please power on the printer.' };
-    }
-
-    try {
-      let successCount = 0;
-
-      for (const item of items) {
-        const { shopname = '', barcode = '', code = '', productName = '', name = '', sprice, dprice, size = '', brand = '' } = item;
-
-        const tsplCommands = `
-        SIZE 50 mm,38 mm
-        GAP 1 mm,1 mm
-        DIRECTION 0
-        CLS
-
-        TEXT 30,18,"3",0,1,1,"${shopname}"
-        BAR 30,48,410,2
-
-        TEXT 30,58,"2",0,1,1,"${productName}"
-        TEXT 30,83,"2",0,1,1,"${name}${size ? ' - ' + size : ''}"
-        TEXT 30,110,"2",0,1,1,"MRP Rs.${parseFloat(sprice).toFixed(2)}"
-
-       ${dprice !== null && dprice !== undefined ? `BAR 30,116,230,4` : ''}
-       ${dprice !== null && dprice !== undefined ? `TEXT 30,136,"2",0,1,1,"Discount Rs.${parseFloat(dprice).toFixed(2)}"` : ''}
-
-        TEXT 30,168,"1",0,1,1,"${code}-${brand}"
-        BARCODE 30,185,"128",100,0,0,3,3,"${barcode}"
-        TEXT 30,292,"1",0,1,1,"${barcode}"
-
-        PRINT 1,1`;
-
-        try {
-          const commandData = stringToBytes(tsplCommands);
-          await sendDataInChunks(selectedDevice.value.deviceId, commandData);
-          await new Promise(resolve => setTimeout(resolve, 300));
-          successCount++;
-        } catch {}
+      if (!selectedDevice.value) {
+        return { success: false, message: 'No printer selected' };
       }
 
-      await BleClient.disconnect(selectedDevice.value.deviceId);
-      return { success: successCount > 0, message: `Printed ${successCount} of ${items.length} labels` };
-    } catch (err: any) {
-      return { success: false, message: 'Failed to print labels: ' + err.message };
-    }
-  };
+      try {
+        await BleClient.connect(selectedDevice.value.deviceId);
+      } catch {
+        return { success: false, message: 'Printer connection failed. Please power on the printer.' };
+      }
 
+      try {
+        let successCount = 0;
+
+        // normalize label size
+        const labelSize = printerLabelSize?.toLowerCase().replace(/\s/g, '');
+
+        for (const item of items) {
+          const {
+            shopname = '',
+            barcode = '',
+            code = '',
+            productName = '',
+            name = '',
+            sprice,
+            dprice,
+            size = '',
+            brand = ''
+          } = item;
+
+          let tsplCommands = '';
+
+          // ---------- 50 x 38 ----------
+          if (labelSize === '50x38mm') {
+            tsplCommands = `
+    SIZE 50 mm,38 mm
+    GAP 1 mm,1 mm
+    DIRECTION 0
+    CLS
+
+    TEXT 30,18,"3",0,1,1,"${shopname}"
+    BAR 30,48,410,2
+
+    TEXT 30,58,"2",0,1,1,"${productName}"
+    TEXT 30,83,"2",0,1,1,"${name}${size ? ' - ' + size : ''}"
+    TEXT 30,110,"2",0,1,1,"MRP Rs.${parseFloat(sprice).toFixed(2)}"
+
+    ${dprice != null ? `BAR 30,116,230,4` : ''}
+    ${dprice != null ? `TEXT 30,136,"2",0,1,1,"Discount Rs.${parseFloat(dprice).toFixed(2)}"` : ''}
+
+    TEXT 30,168,"1",0,1,1,"${code}-${brand}"
+    BARCODE 30,185,"128",100,0,0,3,3,"${barcode}"
+    TEXT 30,292,"1",0,1,1,"${barcode}"
+
+    PRINT 1,1
+    `;
+          }
+
+          // ---------- 50 x 25 ----------
+          else {
+            tsplCommands = `
+    SIZE 50 mm,25 mm
+    GAP 3 mm,0 mm
+    DIRECTION 0
+    CLS
+
+    TEXT 10,5,"2",0,1,1,"${shopname}"
+    BAR 0,25,380,2
+
+    TEXT 10,30,"1",0,1,1,"${productName}"
+    TEXT 10,50,"1",0,1,1,"${name}${size ? ' - ' + size : ''}"
+    TEXT 10,70,"1",0,1,1,"MRP Rs.${parseFloat(sprice).toFixed(2)}"
+
+    ${dprice != null ? `BAR 10,76,200,3` : ''}
+    ${dprice != null ? `TEXT 10,90,"1",0,1,1,"Discount Rs.${parseFloat(dprice).toFixed(2)}"` : ''}
+
+    TEXT 10,110,"1",0,1,1,"${code}-${brand}"
+    BARCODE 10,120,"128",60,0,0,2,2,"${barcode}"
+    TEXT 10,185,"1",0,1,1,"${barcode}"
+
+    PRINT 1,1
+    `;
+          }
+
+          try {
+            const commandData = stringToBytes(tsplCommands);
+            await sendDataInChunks(selectedDevice.value.deviceId, commandData);
+            await new Promise(r => setTimeout(r, 300));
+            successCount++;
+          } catch {}
+        }
+
+        await BleClient.disconnect(selectedDevice.value.deviceId);
+
+        return {
+          success: successCount > 0,
+          message: `Printed ${successCount} of ${items.length} labels`
+        };
+
+      } catch (err: any) {
+        return { success: false, message: 'Failed to print labels: ' + err.message };
+      }
+    };
 
 
   const printMobileReport = async (report: any): Promise<{ success: boolean; message: string }> => {

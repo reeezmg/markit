@@ -166,3 +166,12 @@ export const updatePointsValue = async (pointsValue: number) => {
     });
     await useAuth().updateSession();
 };
+
+export const updatePrinterLabelSize = async (printerLabelSize: string) => {
+    const config = useRuntimeConfig();
+    await $fetch('/api/auth/changePrinterLabelSize', {
+        method: 'PUT',
+        body: { printerLabelSize },
+    });
+    await useAuth().updateSession();
+}

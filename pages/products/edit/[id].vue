@@ -446,7 +446,7 @@ const printBarcodes = async() => {
 console.log(barcodes.value)
   try{
  
-    const response = await printLabel(barcodes.value);
+    const response = await printLabel(barcodes.value, useAuth().session.value?.printerLabelSize);
     console.log(response)
     toast.add({
         title: 'Printing success!',
@@ -491,7 +491,7 @@ const printBarcodesVariant = async (variant: any) => {
   console.log(variant);
 
   try {
-    const response = await printLabel(barcodes.value);
+    const response = await printLabel(barcodes.value, useAuth().session.value?.printerLabelSize);
     console.log(response);
 
     toast.add({

@@ -32,6 +32,7 @@ export default eventHandler(async (event) => {
         commissionRate: user.companies[0].company.commissionRate ?? undefined,
         image: user.image || null,
         email: user.email,
+        printerLabelSize: user.companies[0].company.printerLabelSize ?? undefined,
         code: user.companies[0].code ?? undefined,
         storeUniqueName: user.companies[0].company.storeUniqueName ?? undefined,
         isTaxIncluded: user.companies[0].company.isTaxIncluded,

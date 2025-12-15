@@ -20,6 +20,15 @@ import { Pagination } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/pagination'
 import { useLocalStorageRef } from '~/composables/useLocalStorageRef'
+const { $db, $sync } = useNuxtApp()
+
+onMounted(async () => {
+  // Example: Query products
+  const ret = $db.live.query('SELECT * FROM products;', [], (res) => {
+  console.log(res)
+})
+
+})
 
 
 interface ImageData {

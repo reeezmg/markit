@@ -22,6 +22,7 @@ const isRefundPolicyChanged = ref(false);
 const isReturnPolicyChanged = ref(false);
 const isImageChanged = ref(false);
 const isCategoryChanged = ref(false);
+const isPrinterLabelSizeChanged = ref(false);
 const isDeliveryConfigChanged = ref(false);
 const isPointChanged = ref(false);
 const isTimeChanged = ref(false);
@@ -41,6 +42,7 @@ const isUpdatingtiming = ref(false);
 const isUpdatingDescription = ref(false);
 const isUpdatingLogo = ref(false);
 const isUpdatingCategory = ref(false);
+const isUpdatingPrinterLabelSize = ref(false);
 const isUpdatingDeliveryConfig = ref(false);
 const isUpdatingDeliveryType = ref(false);
 
@@ -48,6 +50,9 @@ const isUpdatingDeliveryType = ref(false);
 const category = ['Men','Women','Girl','Boy']
 
 const selectedCategory = ref(useAuth().session.value?.category || [])
+
+const printerLabelSizes = ['50x25mm', '50x38 mm'];
+const selectedPrinterLabelSize = ref(useAuth().session.value?.printerLabelSize );
 
 
 
@@ -194,8 +199,13 @@ watch(() => storeRefundPolicy.value, (newRefundPolicy) => {
 watch(() => storeReturnPolicy.value, (newReturnPolicy) => {
   isReturnPolicyChanged.value = newReturnPolicy !== useAuth().session.value?.returnPolicy;
 }, { immediate: true });
+
 watch(() => selectedCategory.value, (newCategory) => {
   isCategoryChanged.value = newCategory !== useAuth().session.value?.category;
+}, { immediate: true });
+
+watch(() => selectedPrinterLabelSize.value, (newSize) => {
+  isPrinterLabelSizeChanged.value = newSize !== useAuth().session.value?.printerLabelSize;
 }, { immediate: true });
 
 watch(() => deliveryMode.value, (newConfig) => {
@@ -698,6 +708,33 @@ const onCategoryChange = () => {
   }
 };
 
+const onPrinterLabelSizeChange = () => {
+  isUpdatingPrinterLabelSize.value = true;
+  try {
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+   UpdateCompany.mutate({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        printerLabelSize: selectedPrinterLabelSize.value,
+      },
+    });
+    updatePrinterLabelSize(selectedPrinterLabelSize.value);
+    toast.add({ title: 'Printer label size updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating Printer label size',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingPrinterLabelSize.value = false;
+  }
+};
+
 
 const onLogoUpdate = async () => {
   isUpdatingLogo.value = true;
@@ -972,6 +1009,17 @@ const onDeliveryTypeChange = () => {
       >
        <USelectMenu v-model="selectedCategory" :options="category" multiple placeholder="Select Category" />
         <UButton class="my-2" type="submit" label="Save Categories" :loading="isUpdatingCategory" @click="onCategoryChange" :disabled="!isCategoryChanged"/>
+      </UFormGroup>
+      <UDivider class="mb-4" />
+      <UFormGroup
+        name="PrinterLabelSize"
+        label="Printer Label Size"
+        description="Your Store Printer Label Size"
+        class="grid grid-cols-2 gap-2 mb-4"
+        :ui="{ container: '' }"
+      >
+       <USelectMenu v-model="selectedPrinterLabelSize" :options="printerLabelSizes" multiple placeholder="Select Printer Label Size" />
+        <UButton class="my-2" type="submit" label="Save Printer Label Size" :loading="isUpdatingPrinterLabelSize" @click="onPrinterLabelSizeChange" :disabled="!isPrinterLabelSizeChanged"/>
       </UFormGroup>
       <UDivider class="mb-4" />
       <UFormGroup

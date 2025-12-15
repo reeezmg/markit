@@ -53,10 +53,10 @@ export const usePrint = () => {
     }
   };
 
-  const printLabel = async (labelData: any) => {
+  const printLabel = async (labelData: any, printerLabelSize: any) => {
     try {
       if (Capacitor.isNativePlatform()) {
-        const res = await printMobileLabel(labelData)
+        const res = await printMobileLabel(labelData, printerLabelSize)
        if(!res.success){
         throw res.message
        }

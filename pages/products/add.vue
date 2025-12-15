@@ -920,7 +920,7 @@ const {
 const printBarcodes = async() => {
   isPrint.value = true
   try{
-    const response = await printLabel(barcodes.value);
+    const response = await printLabel(barcodes.value,useAuth().session.value?.printerLabelSize);
     toast.add({
         title: 'Printing success!',
         color: 'green',
