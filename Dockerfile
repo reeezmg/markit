@@ -12,20 +12,17 @@ RUN apt-get update && apt-get install -y \
 
 # Install deps
 COPY package*.json ./
-RUN npm install
+RUN npm ci
 
 # Copy source
 COPY . .
 
 # Generate ZenStack (outputs to node_modules/.zenstack)
-RUN npx zenstack generate
+RUN npx zenstack generate --output ./zenstack
 
 # Build Nuxt (creates .output/server)
 RUN npm run build
 
-# 🔥 CRITICAL: copy ZenStack runtime INTO Nitro server bundle
-RUN mkdir -p .output/server/node_modules/.zenstack \
-  && cp -r node_modules/.zenstack/* .output/server/node_modules/.zenstack/
 
 ENV NODE_ENV=production
 ENV NITRO_PORT=8080
