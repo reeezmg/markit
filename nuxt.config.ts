@@ -26,37 +26,28 @@ export default defineNuxtConfig({
   /* ----------------------------------------
    * NITRO (Cloud Run compatible)
    * --------------------------------------*/
-  
   nitro: {
-  preset: 'node-server',
+    preset: 'node-server',
 
-  // 🔥 REQUIRED: keep ZenStack runtime files
-  externals: {
-    inline: [
-      '@zenstackhq/runtime',
-      '@zenstackhq/server',
-    ]
-  },
+    routeRules: {
+      '/nonetwork': { prerender: true },
 
-  routeRules: {
-    '/nonetwork': { prerender: true },
+      // CDN-friendly caching
+      '/_nuxt/**': {
+        headers: {
+          'cache-control': 'public, max-age=31536000, immutable'
+        }
+      },
 
-    '/_nuxt/**': {
-      headers: {
-        'cache-control': 'public, max-age=31536000, immutable'
+      '/': {
+        cache: { maxAge: 60 }
       }
     },
 
-    '/': {
-      cache: { maxAge: 60 }
+    esbuild: {
+      options: { target: 'es2022' }
     }
   },
-
-  esbuild: {
-    options: { target: 'es2022' }
-  }
-},
-
 
   /* ----------------------------------------
    * VITE
