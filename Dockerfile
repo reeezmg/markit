@@ -2,13 +2,20 @@ FROM node:20-slim
 
 WORKDIR /app
 
-# 🔴 TEMPORARY: hardcode license (REMOVE LATER)
+# TEMP hardcoded license (remove later)
 ENV NUXT_UI_PRO_LICENSE=1BEFD730-F461-4D63-B338-94FC804AE532
 
+# Install deps
 COPY package*.json ./
 RUN npm ci
 
+# Copy source
 COPY . .
+
+# 🔥 REQUIRED: generate ZenStack files
+RUN npx zenstack generate
+
+# Build Nuxt
 RUN npm run build
 
 ENV NODE_ENV=production
