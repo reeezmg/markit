@@ -13,6 +13,9 @@ export default defineNuxtConfig({
     }
   },
 
+  /* ----------------------------------------
+   * BUILD
+   * --------------------------------------*/
   build: {
     transpile: [
       'trpc-nuxt',
@@ -20,24 +23,48 @@ export default defineNuxtConfig({
     ]
   },
 
+  /* ----------------------------------------
+   * NITRO (Cloud Run compatible)
+   * --------------------------------------*/
   nitro: {
-    preset: 'vercel',
+    preset: 'node-server',
+
     routeRules: {
       '/nonetwork': { prerender: true },
+
+      // CDN-friendly caching
+      '/_nuxt/**': {
+        headers: {
+          'cache-control': 'public, max-age=31536000, immutable'
+        }
+      },
+
+      '/': {
+        cache: { maxAge: 60 }
+      }
     },
-    esbuild: { options: { target: 'es2022' } }
+
+    esbuild: {
+      options: { target: 'es2022' }
+    }
   },
 
+  /* ----------------------------------------
+   * VITE
+   * --------------------------------------*/
   vite: {
     optimizeDeps: {
-      exclude: ['@electric-sql/pglite','@point-of-sale/receipt-printer-encoder'],
+      exclude: [
+        '@electric-sql/pglite',
+        '@point-of-sale/receipt-printer-encoder'
+      ],
     },
 
     ssr: {
       noExternal: ['@electric-sql/pglite'],
     },
 
-    // ⭐ Eager load EVERYTHING → One bundle
+    // ⭐ One bundle strategy (kept as-is)
     build: {
       rollupOptions: {
         output: {
@@ -47,6 +74,9 @@ export default defineNuxtConfig({
     }
   },
 
+  /* ----------------------------------------
+   * MODULES
+   * --------------------------------------*/
   modules: [
     '@nuxt/ui',
     '@nuxt/fonts',
@@ -59,7 +89,7 @@ export default defineNuxtConfig({
     '@nuxtjs/robots',
     [
       'pinia-plugin-persistedstate/nuxt',
-      { autoImports:['piniaPluginPersistedstate'] }
+      { autoImports: ['piniaPluginPersistedstate'] }
     ],
     [
       '@pinia/nuxt',
@@ -69,12 +99,17 @@ export default defineNuxtConfig({
 
   plugins: [],
 
-  site: { 
+  /* ----------------------------------------
+   * SITE META
+   * --------------------------------------*/
+  site: {
     url: 'https://markit.co.in',
     name: 'Markit'
   },
 
-  imports: { dirs: ['stores'] },
+  imports: {
+    dirs: ['stores']
+  },
 
   ui: {
     safelistColors: ['primary', 'red', 'orange', 'green', 'tertiary'],
@@ -82,6 +117,9 @@ export default defineNuxtConfig({
 
   devtools: { enabled: true },
 
+  /* ----------------------------------------
+   * RUNTIME CONFIG
+   * --------------------------------------*/
   runtimeConfig: {
     sessionSecret: process.env.SESSION_SECRET,
     sourceId: process.env.SOURCE_ID,
