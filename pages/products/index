@@ -19,15 +19,7 @@ import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Pagination } from 'swiper/modules'
 import 'swiper/css'
 import 'swiper/css/pagination'
-const { $db, $sync } = useNuxtApp()
-
-onMounted(async () => {
-  // Example: Query products
-  const ret = $db.live.query('SELECT * FROM products;', [], (res) => {
-  console.log(res)
-})
-
-})
+import { useLocalStorageRef } from '~/composables/useLocalStorageRef'
 
 
 interface ImageData {
@@ -37,19 +29,180 @@ interface ImageData {
 
 const awsService = new AwsService();
 const toast = useToast();
-const UpdateProduct = useUpdateProduct();
-const DeleteProduct = useDeleteProduct();
-const UpdateManyProduct = useUpdateManyProduct();
-const Updatevariant = useUpdateVariant();
-const CreatePurchaseOrder = useCreatePurchaseOrder();
+const UpdateProduct = useUpdateProduct({ optimisticUpdate: true });
+const DeleteProduct = useDeleteProduct({ optimisticUpdate: true });
+const UpdateManyProduct = useUpdateManyProduct({ optimisticUpdate: true });
+const Updatevariant = useUpdateVariant({ optimisticUpdate: true });
+const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
 const isAddPhotoModelOpen = ref(false)
 const isBarcodeLoading = ref(false);
 const isModalOpen = ref(false)
+const isDeleteModalOpen = ref(false)
+const deletingRowIdentity = ref({})
 const activeImages = ref<string[]>([])
+const activeImagesDate = ref<string[]>([])
 let images = reactive<ImageData[]>([]);
+const isMobile = ref(false);
+
+onMounted(() => {
+  isMobile.value = window.innerWidth < 1024;
+  window.addEventListener('resize', () => {
+    isMobile.value = window.innerWidth < 1024;
+  });
+});
+
+
+
+// ==========================
+// 🟢 DISCOUNT MODAL LOGIC
+// ==========================
+const isDiscountModalOpen = ref(false)
+const isDiscountApplying = ref(false)
+const discountPercentage = ref<number | null>(null)
+const discountFilters = reactive({
+  categoryId: '',
+  subcategoryId: '',
+  startDate: '',
+  endDate: '',
+  brand: '',
+  minMargin: '',
+  maxSprice: '',
+  minDprice: '',
+  minRating: '',
+  status: '',
+})
+
+const categoryOptions = computed(() =>
+  products.value
+    ? [
+        ...new Map(
+          products.value
+            .filter((p) => p.category)
+            .map((p) => [p.category?.id, p.category])
+        ).values(),
+      ].map((c) => ({ label: c.name, value: c.id }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+    : []
+)
+
+const subcategoryOptions = computed(() =>
+  products.value
+    ? [
+        ...new Map(
+          products.value
+            .filter((p) => p.subcategory)
+            .map((p) => [p.subcategory?.id, p.subcategory])
+        ).values(),
+      ].map((s) => ({ label: s.name, value: s.id }))
+      .sort((a, b) => a.label.localeCompare(b.label))
+    : []
+)
+
+
+watch(isDiscountModalOpen, (open) => {
+  if (!open) {
+    Object.assign(discountFilters, {
+      categoryId: '',
+      subcategoryId: '',
+      startDate: '',
+      endDate: '',
+      brand: '',
+      minMargin: '',
+      maxSprice: '',
+      minDprice: '',
+      minRating: '',
+      status: null,
+    })
+    discountPercentage.value = null
+  }
+})
+
+const applyDiscount = async () => {
+  if (!discountPercentage.value || discountPercentage.value <= 0) {
+    return toast.add({
+      title: 'Invalid Discount',
+      description: 'Please enter a valid discount percentage.',
+      color: 'red',
+    })
+  }
+
+  try {
+    isDiscountApplying.value = true
+
+    const res = await $fetch('/api/discount/apply', {
+      method: 'POST',
+      body: JSON.parse(
+        JSON.stringify({
+          companyId: useAuth().session.value?.companyId,
+          discountPercentage: discountPercentage.value,
+          filters: discountFilters,
+        })
+      ),
+    })
+
+    toast.add({
+      title: 'Discount Applied',
+      description: `Applied ${discountPercentage.value}% discount to ${res.updatedCount} variants.`,
+      color: 'green',
+    })
+
+    isDiscountModalOpen.value = false
+    discountPercentage.value = null
+    await refetch()
+  } catch (err: any) {
+    console.error('Discount Error:', err)
+    toast.add({
+      title: 'Error Applying Discount',
+      description: err?.message || 'Unexpected error occurred.',
+      color: 'red',
+    })
+  } finally {
+    isDiscountApplying.value = false
+  }
+}
+
+
+// ==========================
+// 🟢 Filter MODAL LOGIC
+// ==========================
+const isFilterModalOpen = ref(false)
+const isFilterApplying = ref(false)
+const filters = reactive({
+  categoryId: '',
+  subcategoryId: '',
+  startDate: '',
+  endDate: '',
+  brand: '',
+  minMargin: '',
+  maxSprice: '',
+  minDprice: '',
+  minRating: '',
+  status: null,
+})
+
+const applyFilter = async () => {
+  isFilterApplying.value = true
+  isFilterModalOpen.value = false
+  console.log("Applying filters:", filters)
+
+  try {
+    await refetch()
+  } catch (err: any) {
+    console.error('Filter error:', err)
+    toast.add({
+      title: "Error Applying Filter",
+      description: err.message || "Unexpected error occurred.",
+      color: "red",
+    })
+  } finally {
+    isFilterApplying.value = false
+  }
+}
+
+
 // Columns
 const columns = [
     {
@@ -60,7 +213,12 @@ const columns = [
     {
         key: 'category',
         label: 'Category',
-        sortable: true,
+        sortable: false,
+    },
+    {
+        key: 'subcategory',
+        label: 'subcategory',
+        sortable: false,
     },
     {
         key: 'variants',
@@ -214,7 +372,10 @@ const action = (row) => [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => removeProduct(row.id),
+            click: () => {
+                isDeleteModalOpen.value = true
+                deletingRowIdentity.value = {name:row.name,id:row.id}
+                }
         },
     ],
 ];
@@ -243,128 +404,147 @@ const selectedStatus = ref<any>([]);
 
 const resetFilters = () => {
     search.value = '';
-    selectedStatus.value = [];
+    Object.keys(filters).forEach(k => filters[k] = '')
+    refetch()
 };
 
+
+
 // Pagination
-const sort = ref({ column: 'created_at', direction: 'desc' as const });
-const expand = ref({ openedRows: [], row: null });
-const page = ref(1);
-const pageCount = ref('10');
+const sort = useLocalStorageRef('sort', { column: 'createdAt', direction: 'desc' as const }, 'product');
+
+const expand = useLocalStorageRef('expand', { openedRows: [], row: null }, 'product');
+
+const page = useLocalStorageRef('page', 1, 'product');
+
+const pageCount = useLocalStorageRef('pageCount', '10','product');
+
 const { data: pageTotal }  = useCountProduct({where: { companyId: useAuth().session.value?.companyId }})
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value),
 );
 
-const products = ref<any[]>([])
-const isLoading = ref(false)
-const error = ref<any>(null)
 
-async function fetchProducts() {
-  try {
-    isLoading.value = true
+// Data
+const queryArgs = computed<Prisma.ProductFindManyArgs>(() => {
 
-    const offset = (page.value - 1) * parseInt(pageCount.value)
-    const limit = parseInt(pageCount.value)
+  const filterConditions: any[] = [{ companyId: useAuth().session.value?.companyId }]
 
-    const companyId = useAuth().session.value?.companyId
-    const searchVal = search.value
+  if (filters.categoryId)
+    filterConditions.push({ categoryId: filters.categoryId })
 
-    const conditions: string[] = []
-    const params: any[] = []
+  if (filters.subcategoryId)
+    filterConditions.push({ subcategoryId: filters.subcategoryId })
 
-    if (companyId) {
-      params.push(companyId)
-      conditions.push(`p.company_id = $${params.length}`)
-    }
+  if (filters.brand)
+    filterConditions.push({ brand: { contains: filters.brand, mode: 'insensitive' } })
 
-    if (searchVal) {
-      params.push(`%${searchVal}%`)
-      conditions.push(`(
-        p.name ILIKE $${params.length}
-        OR EXISTS (
-          SELECT 1 FROM variants_synced v
-          WHERE v.product_id = p.id AND v.code ILIKE $${params.length}
-        )
-        OR EXISTS (
-          SELECT 1 FROM variants_synced v
-          JOIN items_synced i ON i.variant_id = v.id
-          WHERE v.product_id = p.id AND i.barcode ILIKE $${params.length}
-        )
-      )`)
-    }
+  if (filters.minMargin)
+    filterConditions.push({ margin: { gte: parseFloat(filters.minMargin) } })
 
-    const whereSQL = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""
-        const sql = `
-        SELECT p.*, 
-                COALESCE(
-                    json_agg(
-                    json_build_object(
-                        'id', v.id,
-                        'name', v.name,
-                        'code', v.code,
-                        'images', v.images,
-                        'sprice', v.s_price,
-                        'dprice', v.d_price,
-                        'pprice', v.p_price,
-                        'discount', v.discount,
-                        'tax', v.tax,
-                        'status', v.status,
-                        'items', (
-                            SELECT json_agg(i.*) 
-                            FROM items_synced i 
-                            WHERE i.variant_id = v.id
-                        )
-                    )
-                    ) FILTER (WHERE v.id IS NOT NULL),
-                    '[]'
-                ) as variants,
-                to_json(c.*) as category
-        FROM products_synced p
-        LEFT JOIN variants_synced v ON v.product_id = p.id
-        LEFT JOIN categories_synced c ON c.id = p.category_id
-        ${whereSQL}
-        GROUP BY p.id, c.id
-        ORDER BY p.${sort.value.column} ${sort.value.direction}
-        OFFSET ${offset}
-        LIMIT ${limit};
-        `
+if (filters.status !== "" && filters.status !== null && filters.status !== undefined) {
+  const statusBoolean =
+    filters.status === "true" ? true :
+    filters.status === "false" ? false :
+    filters.status;
 
-
-     const ret = $db.live.query({
-  query: sql,
-  params,   // 👈 this is the array you built earlier
-  offset,
-  limit,
-  callback: (res) => {
-    products.value = res.rows
-    pageTotal.value = res.totalCount
-    isLoading.value = false
-  }
-})
-    console.log('Live query set up:', ret)
-  } catch (err) {
-    error.value = err
-    console.error("Error fetching products:", err)
-  } finally {
-    isLoading.value = false
-  }
+  filterConditions.push({ status: statusBoolean });
 }
 
+  if (filters.maxSprice)
+    filterConditions.push({
+      variants: {
+        some: {
+          sprice: { lte: parseFloat(filters.maxSprice) },
+        },
+      },
+    })
 
-// 🚀 Run on mount or when filters change
-watch([page, search, sort], fetchProducts, { immediate: true })
+  if (filters.minDprice)
+    filterConditions.push({
+      variants: {
+        some: {
+          dprice: { gte: parseFloat(filters.minDprice) },
+        },
+      },
+    })
 
-onMounted(fetchProducts)
+  if (filters.minRating)
+    filterConditions.push({ rating: { gte: parseFloat(filters.minRating) } })
+
+  if (filters.startDate && filters.endDate)
+    filterConditions.push({
+      createdAt: {
+        gte: new Date(filters.startDate),
+        lte: new Date(filters.endDate),
+      },
+    })
+
+  return {
+    where: {
+      AND: [
+        ...filterConditions,
+        {
+          OR: [
+            { name: { contains: search.value, mode: 'insensitive' } },
+
+            {
+              variants: {
+                some: { code: { contains: search.value, mode: 'insensitive' } },
+              },
+            },
+
+            {
+              variants: {
+                some: {
+                  items: {
+                    some: {
+                      barcode: { contains: search.value, mode: 'insensitive' },
+                    },
+                  },
+                },
+              },
+            },
+
+            {
+              category: {
+                name: { contains: search.value, mode: 'insensitive' },
+              },
+            },
+
+            {
+              subcategory: {
+                name: { contains: search.value, mode: 'insensitive' },
+              },
+            },
+          ],
+        },
+      ],
+    },
+
+    include: {
+      variants: { include: { items: true }},
+      category: true,
+      subcategory: true,
+    },
+
+    orderBy: {
+      [sort.value.column]: sort.value.direction,
+    },
+
+    skip: (page.value - 1) * parseInt(pageCount.value),
+    take: parseInt(pageCount.value),
+  }
+})
 
 
-watch(products,(newProducts) => {
-  console.log('Products updated:', newProducts)
-}, { immediate: true })
-
-
-
+const {
+    data: products,
+    isLoading,
+    error,
+    refetch,
+} = useFindManyProduct(queryArgs);
 
 const {
     data:items,
@@ -375,9 +555,30 @@ const {
         barcode: itemBarcode.value,
     })),
     include: {
-      variant: true,
-    },
-},{enabled:false})
+        variant: {
+            include: {
+            product: {
+                select: {
+                category: true,
+                subcategory: true,
+                id: true,
+                updatedAt: true
+                },
+            },
+            },
+        },
+},
+
+},{enabled:!!itemBarcode})
+
+watch(items, (newItems) => {
+    console.log('Item data updated:', newItems);
+});
+
+const handleRefetch = async() => {
+    console.log("refetching parent" )
+    await handleGetItemInfo();
+}
 
 
 const result = ref('')
@@ -522,16 +723,19 @@ onUnmounted(() => {
   stopCamera()
 })
 
-function openImageViewer(images: string[]) {
+function openImageViewer(images: string[], updatedAt: Date) {
   activeImages.value = images
+  activeImagesDate.value = updatedAt
   isModalOpen.value = true
 }
 
-const removeProduct = async(id:string) => {
+const removeProduct = async() => {
   try {
-    await DeleteProduct.mutateAsync({ where: { id } });
+    DeleteProduct.mutate({ where: { id :deletingRowIdentity.value.id} });
   } catch (err) {
     console.log(err);
+  }finally{
+     isDeleteModalOpen.value = false;
   }
 };
 
@@ -623,49 +827,57 @@ const fileValue = (data: any) => {
     images = data.files
 };
 
+const handleAddPhoto = async () => {  
+  try {
+    isPhotoSaving.value = true;
 
-const handleAddPhoto = async() => {  
-try{
-isPhotoSaving.value = true
-    const res = await Updatevariant.mutateAsync({
-        where: { id:items.value?.variant.id },
-        data: { images: images.map((image) => image.uuid) },
-    });
-    console.log(res)
-    if(images.length > 0 && res){
-        console.log(images)
-   const base64files = await Promise.all(
+    // Step 1: Prepare and upload files first
+    const base64files = await Promise.all(
       images
-        .filter((file) => file.file instanceof File) // Only process if file.file is a File
+        .filter((file) => file.file instanceof File)
         .map(async (file) => {
           const base64 = await prepareFileForApi(file.file);
-          return { base64, uuid: file.uuid };
-        }
-    )
-  );
-console.log(base64files)
-  if (base64files.length > 0) {
-    const awsres = await Promise.all(
-      base64files.map((file) =>
-        awsService.uploadBase64File(file.base64, file.uuid)
-      )
+          return { base64, uuid: file.uuid, view: file.view };
+        })
     );
-    console.log(awsres)
-}
-    }
-}catch(err:any){
-    console.log(err)
-     toast.add({
-            title: 'Photo Attached !',
-            color: 'red',
-            description: err.message
-        });
-}finally{
-isPhotoSaving.value = false
-isAddPhotoModelOpen.value = false
-}
 
-}
+    if (base64files.length > 0) {
+      await Promise.all(
+        base64files.map((file) =>
+          awsService.uploadBase64File(
+            file.base64,
+            file.uuid,
+            file.view,
+            items.value.variant.product.category.name,
+            items.value.variant.product.category.targetAudience,
+            useAuth().session.value?.isAiImage
+          )
+        )
+      );
+    }
+
+    // Step 2: Update DB after successful upload
+    const res = await Updatevariant.mutateAsync({
+      where: { id: items.value?.variant.id },
+      data: { images: images.map((image) => image.uuid) },
+    });
+
+    console.log("DB updated with image UUIDs:", res);
+
+    itemBarcode.value = '';
+  } catch (err: any) {
+    console.error(err);
+    toast.add({
+      title: 'Photo Upload Failed!',
+      color: 'red',
+      description: err.message
+    });
+  } finally {
+    isPhotoSaving.value = false;
+    isAddPhotoModelOpen.value = false;
+  }
+};
+
 
 
 </script>
@@ -685,9 +897,10 @@ isAddPhotoModelOpen.value = false
                 footer: { padding: 'p-4' },
             }"
         >
-         
-<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 py-3 w-full">
-  <!-- Left side: Search + Status -->
+            <div
+  class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 px-4 py-3 w-full"
+>
+  <!-- LEFT SIDE: Search -->
   <div class="flex flex-row gap-3 w-full sm:w-auto">
     <UInput
       v-model="search"
@@ -695,38 +908,66 @@ isAddPhotoModelOpen.value = false
       placeholder="Search..."
       class="w-full sm:w-auto"
     />
-    <USelectMenu
-      v-model="selectedStatus"
-      :options="todoStatus"
-      multiple
-      placeholder="Status"
-      class="w-full sm:w-40"
-    />
   </div>
 
-  <!-- Right side: Buttons -->
+  <!-- RIGHT SIDE -->
   <div class="flex flex-row gap-3 w-full sm:w-auto justify-end">
-    <UButton
-      icon="i-heroicons-plus"
-      size="sm"
-      color="primary"
-      variant="solid"
-      label="Add Product"
-      :loading="isAdd"
-      @click="handleAdd"
-       class="w-full flex-1 sm:w-auto sm:flex-none"
-    />
-    <UButton
-      icon="i-heroicons-camera"
-      size="sm"
-      color="primary"
-      variant="solid"
-      label="Add Photo"
-      @click="isAddPhotoModelOpen = true"
-    class="w-full flex-1 sm:w-auto sm:flex-none"
-    />
+
+    <!-- 🔽 Mobile Dropdown -->
+    <UDropdown
+      v-if="isMobile"
+      class="w-full"
+      :items="[
+        [
+          { label: 'Filter', icon: 'i-heroicons-funnel', click: () => isFilterModalOpen = true },
+          { label: 'Add Product', icon: 'i-heroicons-plus', click: handleAdd },
+          { label: 'Add Photo', icon: 'i-heroicons-camera', click: () => isAddPhotoModelOpen = true },
+          { label: 'Discount', icon: 'i-heroicons-percent-badge', click: () => isDiscountModalOpen = true }
+        ]
+      ]"
+    >
+      <UButton icon="i-heroicons-bars-3" color="primary" size="sm" label="Actions" class="w-full" />
+    </UDropdown>
+
+    <!-- 🖥 Desktop Buttons -->
+    <template v-else>
+      <UButton
+        icon="i-heroicons-funnel"
+        size="sm"
+        color="orange"
+        variant="solid"
+        label="Filter"
+        @click="isFilterModalOpen = true"
+      />
+      <UButton
+        icon="i-heroicons-plus"
+        size="sm"
+        color="primary"
+        variant="solid"
+        label="Add Product"
+        :loading="isAdd"
+        @click="handleAdd"
+      />
+      <UButton
+        icon="i-heroicons-camera"
+        size="sm"
+        color="primary"
+        variant="solid"
+        label="Add Photo"
+        @click="isAddPhotoModelOpen = true"
+      />
+      <UButton
+        icon="i-heroicons-percent-badge"
+        size="sm"
+        color="orange"
+        variant="solid"
+        label="Discount"
+        @click="isDiscountModalOpen = true"
+      />
+    </template>
   </div>
 </div>
+
 
 
 
@@ -808,6 +1049,9 @@ isAddPhotoModelOpen.value = false
                 <template #category-data="{ row }">
                     {{ row.category?.name }}
                 </template>
+                <template #subcategory-data="{ row }">
+                    {{ row.subcategory?.name }}
+                </template>
 
                 <template #variants-data="{ row }"> 
                     {{row.variants?.length}}
@@ -886,7 +1130,7 @@ isAddPhotoModelOpen.value = false
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
                         <UAvatar
-                            :src="`https://images.markit.co.in/${row.variants[0]?.images[0]}`"
+                            :src="`https://images.markit.co.in/${row.variants[0]?.images[0]}?t=${row.updatedAt}`"
                             :alt="row.name"
                             size="lg"
                         />
@@ -899,17 +1143,20 @@ isAddPhotoModelOpen.value = false
                         :rows="row.variants" 
                         :columns="variantcolumns"
                     >
-                    <template #name-data="{ row }">
-                    <div class="flex flex-row items-center">
-                        <UAvatar
-                            :src="`https://images.markit.co.in/${row.images[0]}`"
-                            :alt="row.name"
-                            size="lg"
-                            @click="openImageViewer(row.images)"
-                        />
-                        <div class="ms-3">{{ row.name }}</div>
-                    </div>
-                </template>
+                       <template #name-data="{ row: variant }">
+        <div class="flex flex-row items-center">
+          <UAvatar
+            :src="`https://images.markit.co.in/${variant.images[0]}?t=${row.updatedAt}`"
+            :alt="variant.name"
+            size="lg"
+            @click="openImageViewer(variant.images, row.updatedAt)"
+          />
+          <div class="ms-3">
+            {{ variant.name }}
+           
+          </div>
+        </div>
+      </template>
 
                <template #barcode-data="{ row }">
                     <UPopover mode="hover">
@@ -1104,6 +1351,7 @@ isAddPhotoModelOpen.value = false
       <p><strong>Name:</strong> {{ items.variant.name }}</p>
       <p><strong>Code:</strong> {{ items.variant.code }}</p>
       <p><strong>Selling Price:</strong> ₹{{ items.variant.sprice }}</p>
+      {{ items.variant.product.category.name }}
     </div>
     <div v-else class="mt-4 space-y-1">Not found</div>
 
@@ -1114,6 +1362,11 @@ isAddPhotoModelOpen.value = false
       :editFile="items?.variant?.images"
       :index="0"
       class="mt-4"
+       :categoryName="items.variant.product.category.name"
+       :targetAudience="items.variant.product.category.targetAudience"
+       :productId="items.variant.product.id"
+        :updatedAt="items.variant.product.updatedAt"
+        @refetch="handleRefetch"
       @update="fileValue"
     />
 
@@ -1138,12 +1391,225 @@ isAddPhotoModelOpen.value = false
       >
         <SwiperSlide v-for="(img, index) in activeImages" :key="index">
           <img
-            :src="`https://images.markit.co.in/${img}`"
+            :src="`https://images.markit.co.in/${img}?t=${activeImagesDate}`"
             class="max-h-[80vh] mx-auto object-contain"
           />
         </SwiperSlide>
       </Swiper>
     </div>
   </UModal>
+
+  <UDashboardModal
+        v-model="isDeleteModalOpen"
+        title="Delete Product"
+        :description="`Are you sure you want to delete Product ${deletingRowIdentity.name}?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                @click="() =>  removeProduct()"
+            />
+            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
+
+<!-- 🟢 DISCOUNT MODAL -->
+<UModal v-model="isDiscountModalOpen" size="xl" prevent-close>
+  <UCard>
+    <template #header>
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold">Apply Discount</h3>
+        <UButton
+          icon="i-heroicons-x-mark"
+          variant="ghost"
+          @click="isDiscountModalOpen = false"
+        />
+      </div>
+    </template>
+
+    <!-- Filters -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <UFormGroup label="Category">
+        <USelect
+          v-model="discountFilters.categoryId"
+          :options="categoryOptions"
+          placeholder="Select Category"
+        />
+      </UFormGroup>
+
+      <UFormGroup label="Sub Category">
+        <USelect
+          v-model="discountFilters.subcategoryId"
+          :options="subcategoryOptions"
+          placeholder="Select Category"
+        />
+      </UFormGroup>
+
+      <UFormGroup label="Start Date">
+        <UInput type="date" v-model="discountFilters.startDate" />
+      </UFormGroup>
+
+      <UFormGroup label="End Date">
+        <UInput type="date" v-model="discountFilters.endDate" />
+      </UFormGroup>
+
+      <UFormGroup label="Brand">
+        <UInput placeholder="Brand" v-model="discountFilters.brand" />
+      </UFormGroup>
+
+      <UFormGroup label="Min Margin">
+        <UInput type="number" v-model="discountFilters.minMargin" />
+      </UFormGroup>
+
+      <UFormGroup label="Max sprice">
+        <UInput type="number" v-model="discountFilters.maxSprice" />
+      </UFormGroup>
+
+      <UFormGroup label="Min dprice">
+        <UInput type="number" v-model="discountFilters.minDprice" />
+      </UFormGroup>
+
+      <UFormGroup label="Min Rating">
+        <UInput type="number" v-model="discountFilters.minRating" />
+      </UFormGroup>
+
+          <UFormGroup label="Status">
+        <USelect
+          v-model="discountFilters.status"
+          :options="[
+            { label: 'Active', value: true },
+            { label: 'Inactive', value: false },
+            { label: 'All', value: null }
+          ]"
+          placeholder="Select Status"
+        />
+
+      </UFormGroup>
+    </div>
+
+    <!-- Discount Input -->
+    <UFormGroup label="Discount Percentage (%)" class="mt-4">
+      <UInput
+        type="number"
+        min="1"
+        max="90"
+        v-model="discountPercentage"
+        placeholder="Enter discount (e.g., 10)"
+      />
+    </UFormGroup>
+
+    <div class="flex justify-end mt-6 gap-3">
+      <UButton color="white" label="Cancel" @click="isDiscountModalOpen = false" />
+      <UButton
+        color="orange"
+        :loading="isDiscountApplying"
+        label="Apply Discount"
+        @click="applyDiscount"
+      />
+    </div>
+  </UCard>
+</UModal>
+
+<UModal v-model="isFilterModalOpen" size="xl" prevent-close>
+  <UCard>
+    <template #header>
+      <div class="flex justify-between items-center">
+        <h3 class="text-lg font-semibold">Filter</h3>
+        <UButton
+          icon="i-heroicons-x-mark"
+          variant="ghost"
+          @click="isFilterModalOpen = false"
+        />
+      </div>
+    </template>
+
+    <!-- Filters -->
+    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+      <UFormGroup label="Category">
+        <USelect
+          v-model="filters.categoryId"
+          :options="categoryOptions"
+          placeholder="Select Category"
+        />
+      </UFormGroup>
+      
+      <UFormGroup label="Sub Category">
+        <USelect
+          v-model="filters.subcategoryId"
+          :options="subcategoryOptions"
+          placeholder="Select Sub Category"
+        />
+      </UFormGroup>
+
+      <UFormGroup label="Start Date">
+        <UInput type="date" v-model="filters.startDate" />
+      </UFormGroup>
+
+      <UFormGroup label="End Date">
+        <UInput type="date" v-model="filters.endDate" />
+      </UFormGroup>
+
+      <UFormGroup label="Brand">
+        <UInput placeholder="Brand" v-model="filters.brand" />
+      </UFormGroup>
+
+      <UFormGroup label="Min Margin">
+        <UInput type="number" v-model="filters.minMargin" />
+      </UFormGroup>
+
+      <UFormGroup label="Max sprice">
+        <UInput type="number" v-model="filters.maxSprice" />
+      </UFormGroup>
+
+      <UFormGroup label="Min dprice">
+        <UInput type="number" v-model="filters.minDprice" />
+      </UFormGroup>
+
+      <UFormGroup label="Min Rating">
+        <UInput type="number" v-model="filters.minRating" />
+      </UFormGroup>
+
+       <UFormGroup label="Status">
+          <USelect
+            v-model="filters.status"
+            :options="[
+              { label: 'Active', value: true },
+              { label: 'Inactive', value: false },
+              { label: 'All', value: null }
+            ]"
+            placeholder="Select Status"
+          />
+
+    </UFormGroup>
+
+
+      
+    </div>
+
+   
+    <div class="flex justify-end mt-6 gap-3">
+      <UButton color="white" label="Cancel" @click="isFilterModalOpen = false" />
+      <UButton
+        color="orange"
+        :loading="isFilterApplying"
+        label="Filter"
+        @click="applyFilter"
+      />
+    </div>
+  </UCard>
+</UModal>
+
 
 </template>
