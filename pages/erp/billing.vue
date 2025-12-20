@@ -1101,7 +1101,10 @@ const handleSave = async () => {
 
     // 5) Build derived flags + arrays
     const pointsValue = Number(session?.pointsValue || 0)
-    const billPoints = pointsValue > 0 ? Number(grandTotal.value || 0) / pointsValue : 0
+const billPoints =
+  pointsValue > 0
+    ? Math.round(Number(grandTotal.value || 0) / pointsValue)
+    : 0
     const returnedItems = finalitems.filter((i) => i.return)
 
     const entriesData = finalitems.map((item) => {

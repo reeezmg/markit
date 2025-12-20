@@ -982,7 +982,15 @@ const handleEdit = async () => {
 
 
     // 4. Calculate bill points
-    const billPoints = (pointsValue > 0 ? Number(grandTotal.value) / pointsValue : 0) - pastBillPoints.value;
+const billPoints =
+  Math.round(
+    (pointsValue > 0
+      ? Number(grandTotal.value || 0) / pointsValue
+      : 0
+    ) - Number(pastBillPoints.value || 0)
+  )
+  
+
 
     // 5. Prepare print data
     const preparedPrintData = {
