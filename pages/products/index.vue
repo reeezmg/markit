@@ -413,7 +413,7 @@ const resetFilters = () => {
 // Pagination
 const sort = useLocalStorageRef('sort', { column: 'createdAt', direction: 'desc' as const }, 'product');
 
-const expand = useLocalStorageRef('expand', { openedRows: [], row: null }, 'product');
+const expand = { openedRows: [], row: null };
 
 const page = useLocalStorageRef('page', 1, 'product');
 
