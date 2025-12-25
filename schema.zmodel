@@ -23,6 +23,8 @@ abstract model Base {
 enum UserRole {
     admin
     user
+    manager
+    biller
     accountant
 }
 

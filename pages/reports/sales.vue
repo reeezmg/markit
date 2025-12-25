@@ -330,129 +330,158 @@ const printReportHandle = async() => {
 }
 </script>
 
-
 <template>
   <UDashboardPanelContent>
-        <div v-if="loading" class="w-full flex justify-center items-center py-20">
-        <UIcon name="i-heroicons-arrow-path-20-solid" class="animate-spin w-5 h-5 text-gray-500 mr-2" />
-        <span>Loading data...</span>
+    <!-- Loading -->
+    <div v-if="loading" class="w-full flex justify-center items-center py-20">
+      <UIcon
+        name="i-heroicons-arrow-path-20-solid"
+        class="animate-spin w-5 h-5 text-gray-500 mr-2"
+      />
+      <span>Loading data...</span>
     </div>
+
+    <!-- Content -->
     <div v-else ref="scrollContainer" class="scroll-container">
-    <ClientOnly>
-      <div class="space-y-6 p-6"  >
-        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-          <h1 class="text-xl font-semibold">Sales Report</h1>
-          <div class="flex flex-wrap items-center gap-3">
-            <UPopover :popper="{ placement: 'bottom-start' }" class=" z-10 ">
-              <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
-              {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
-              </UButton>
+      <ClientOnly>
+        <div class="space-y-6 p-6">
 
-              <template #panel="{ close }">
-              <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
-                  <div class="hidden sm:flex flex-col py-4">
-                  <UButton
-                      v-for="(range, index) in ranges"
-                      :key="index"
-                      :label="range.label"
-                      color="gray"
-                      variant="ghost"
-                      class="rounded-none px-6 hidden sm:block"
-                      :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
-                      truncate
-                      @click="selectRange(range.duration)"
-                  />
+          <!-- Header -->
+          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          
+            <div class="flex flex-wrap items-center gap-3">
+              <!-- Date Picker -->
+              <UPopover :popper="{ placement: 'bottom-start' }" class="z-10 w-full sm:w-60">
+                <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
+                  {{ format(selectedDate.start, 'd MMM, yyy') }} -
+                  {{ format(selectedDate.end, 'd MMM, yyy') }}
+                </UButton>
+
+                <template #panel="{ close }">
+                  <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800 w-full sm:w-auto">
+                    <div class="hidden sm:flex flex-col py-4">
+                      <UButton
+                        v-for="(range, index) in ranges"
+                        :key="index"
+                        :label="range.label"
+                        color="gray"
+                        variant="ghost"
+                        class="rounded-none px-6 w-full sm:w-auto"
+                        :class="[
+                          isRangeSelected(range.duration)
+                            ? 'bg-gray-100 dark:bg-gray-800'
+                            : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                        ]"
+                        truncate
+                        @click="selectRange(range.duration)"
+                      />
+                    </div>
+
+                    <DatePicker v-model="selectedDate" @close="close" class="w-full sm:w-auto" />
                   </div>
+                </template>
+              </UPopover>
 
-                  <DatePicker v-model="selectedDate" @close="close" />
-              </div>
-              </template>
-          </UPopover>
-            <UDropdown :items="actions()">
+              <!-- Export -->
+              <UDropdown :items="actions()" class="w-full sm:w-auto">
                 <UButton
                   icon="i-heroicons-chevron-down"
                   label="Export / Print"
                   color="primary"
+                  class="w-full sm:w-auto"
                 />
-            </UDropdown>
+              </UDropdown>
 
+            </div>
           </div>
+
+          <!-- KPI Cards -->
+          <div v-if="dashboard" class="grid grid-cols-1 sm:grid-cols-5 gap-4">
+            <KpiCard title="Total Revenue" :value="formatCurrency(dashboard.totalSales)" />
+            <KpiCard title="Total Credit" :value="formatCurrency(dashboard.salesByPaymentMethod.Credit)" />
+            <KpiCard title="Total Expense" :value="formatCurrency(dashboard.totalExpenses)" />
+            <KpiCard title="Balance" :value="formatCurrency(dashboard.balances.totalBalance)" />
+            <KpiCard title="Profit" :value="formatCurrency(dashboard.profit) || '₹0.00'" />
+          </div>
+
+          <!-- 🔥 Summary Tables -->
+          <div
+            v-if="dashboard"
+            class="grid grid-cols-1 md:grid-cols-3 gap-4"
+          >
+            <!-- Revenue -->
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4">
+              <h3 class="font-semibold mb-3">Revenue Breakdown</h3>
+              <UTable
+                :rows="[
+                  { mode: 'Cash', amount: dashboard.salesByPaymentMethod.Cash },
+                  { mode: 'UPI', amount: dashboard.salesByPaymentMethod.UPI },
+                  { mode: 'Card', amount: dashboard.salesByPaymentMethod.Card }
+                ]"
+                :columns="[
+                  { key: 'mode', label: 'Mode' },
+                  { key: 'amount', label: 'Amount', formatter: formatCurrency }
+                ]"
+              />
+            </div>
+
+            <!-- Expense -->
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4">
+              <h3 class="font-semibold mb-3">Expense Breakdown</h3>
+              <UTable
+                :rows="[
+                  { mode: 'Cash', amount: dashboard.expensesByPaymentMethod.Cash },
+                  { mode: 'UPI', amount: dashboard.expensesByPaymentMethod.UPI },
+                  { mode: 'Card', amount: dashboard.expensesByPaymentMethod.Card },
+                  { mode: 'Bank Transfer', amount: dashboard.expensesByPaymentMethod.BankTransfer },
+                  { mode: 'Cheque', amount: dashboard.expensesByPaymentMethod.Cheque }
+                ]"
+                :columns="[
+                  { key: 'mode', label: 'Mode' },
+                  { key: 'amount', label: 'Amount', formatter: formatCurrency }
+                ]"
+              />
+            </div>
+
+            <!-- Balance -->
+            <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4">
+              <h3 class="font-semibold mb-3">Balance</h3>
+              <UTable
+                :rows="[
+                  { type: 'Cash Balance', amount: dashboard.balances.cashBalance },
+                  { type: 'Bank Balance', amount: dashboard.balances.bankBalance }
+                ]"
+                :columns="[
+                  { key: 'type', label: 'Type' },
+                  { key: 'amount', label: 'Amount', formatter: formatCurrency }
+                ]"
+              />
+            </div>
+          </div>
+
+          <!-- Category Table + Pie -->
+          <div class="flex flex-col lg:flex-row gap-4 h-[400px]">
+            <div class="flex-1 bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4 overflow-auto">
+              <UTable
+                :rows="dashboard?.categorySales"
+                :columns="[
+                  { key: 'name', label: 'Category' },
+                  { key: 'sales', label: 'Sales' }
+                ]"
+              />
+            </div>
+
+            <div class="flex-1">
+              <CategoryRevenuePie
+                v-if="dashboard?.revenueByCategory"
+                :revenueByCategory="dashboard.revenueByCategory"
+                title="Category"
+              />
+            </div>
+          </div>
+
         </div>
-
-        <div v-if="!loading && dashboard" class="grid grid-cols-1 sm:grid-cols-5 gap-4">
-
-            <UPopover mode="hover">
-              <KpiCard class="w-full"  title="Total Revenue" :value="formatCurrency(dashboard?.totalSales)"/> 
-              <template #panel>
-                <div class="p-4 flex flex-col">
-                  <div>Revenue in Cash: {{ formatCurrency(dashboard?.salesByPaymentMethod.Cash) }}</div>
-                  <div>Revenue in UPI: {{ formatCurrency(dashboard?.salesByPaymentMethod.UPI) }}</div>
-                  <div>Revenue in Card: {{ formatCurrency(dashboard?.salesByPaymentMethod.Card) }}</div>
-                </div>
-            </template>
-          </UPopover>
-
-           <KpiCard class="w-full"  title="Total Credit" :value="formatCurrency(dashboard?.salesByPaymentMethod.Credit)"/>
-
-            <UPopover mode="hover">
-              <KpiCard class="w-full" title="Total Expense" :value="formatCurrency(dashboard?.totalExpenses)"/>
-              <template #panel>
-                <div class="p-4 flex flex-col">
-                  <div>Expense in Cash: {{ formatCurrency(dashboard?.expensesByPaymentMethod.Cash) }}</div>
-                  <div>Expense in UPI: {{ formatCurrency(dashboard?.expensesByPaymentMethod.UPI) }}</div>
-                  <div>Expense in Card: {{ formatCurrency(dashboard?.expensesByPaymentMethod.Card) }}</div>
-                  <div>Expense in BankTransfer: {{ formatCurrency(dashboard?.expensesByPaymentMethod.BankTransfer) }}</div>
-                  <div>Expense in Cheque: {{ formatCurrency(dashboard?.expensesByPaymentMethod.Cheque) }}</div>
-                </div>
-              </template>
-            </UPopover>
-      
-
-            <UPopover mode="hover">
-              <KpiCard class="w-full" title="Balance" :value="formatCurrency(dashboard?.balances.totalBalance)"/>
-              <template #panel>
-                <div class="p-4 flex flex-col">
-                  <div>Balance in Cash: {{ formatCurrency(dashboard?.balances.cashBalance) }}</div>
-                  <div>Balance in UPI: {{ formatCurrency(dashboard?.balances.bankBalance) }}</div>
-                </div>
-              </template>
-            </UPopover>
-
-              <KpiCard title="Profit" :value="formatCurrency(dashboard?.profit) || 0.00"/>
-
-
-        </div>
-
-
-     <div class="flex flex-col lg:flex-row gap-4 h-[400px]">
-  <!-- Table -->
-  <div class="flex-1 bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4 overflow-auto">
-    <UTable
-      :rows="dashboard?.categorySales"
-      :columns="[
-        { key: 'name', label: 'Category' },
-        {
-          key: 'sales',
-          label: 'Sales',
-        }
-      ]"
-    />
-  </div>
-
-  <!-- Top Products -->
-  <div class="flex-1">
-    <CategoryRevenuePie v-if="!loading && dashboard?.revenueByCategory" :revenueByCategory="dashboard?.revenueByCategory" title="Category" />
-  </div>
-</div>
-
-<!-- 
- <TopProducts
-      v-if="!loading && dashboard?.topProducts"
-      :topProducts="dashboard.topProducts"
-    /> -->
-
-      </div>
-    </ClientOnly>
-  </div>
+      </ClientOnly>
+    </div>
   </UDashboardPanelContent>
 </template>
