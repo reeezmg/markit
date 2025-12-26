@@ -555,6 +555,7 @@ const reset = () => {
   couponValue.value = 0
   redeemedAmt.value = 0;
   returnAmt.value = 0;
+  redeemedPoints.value = 0;
 
   // Focus the barcode input
   const input = barcodeInputs.value[0]?.$el?.querySelector('input');

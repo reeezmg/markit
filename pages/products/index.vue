@@ -419,11 +419,7 @@ const page = useLocalStorageRef('page', 1, 'product');
 
 const pageCount = useLocalStorageRef('pageCount', '10','product');
 
-const { data: pageTotal }  = useCountProduct({where: { companyId: useAuth().session.value?.companyId }})
-const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
-const pageTo = computed(() =>
-    Math.min(page.value * parseInt(pageCount.value), pageTotal.value),
-);
+
 
 
 // Data
@@ -545,6 +541,25 @@ const {
     error,
     refetch,
 } = useFindManyProduct(queryArgs);
+
+
+const countArgs = computed(() => ({
+  where: queryArgs.value.where,
+}));
+
+
+const { data: pageTotal }  = useCountProduct(countArgs)
+const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
+const pageTo = computed(() =>
+    Math.min(page.value * parseInt(pageCount.value), pageTotal.value),
+);
+
+watch(products, (newProducts) => {
+   if(page.value > pageTotal.value) {
+       page.value = 1;
+   }
+});
+
 
 const {
     data:items,

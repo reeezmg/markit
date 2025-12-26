@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
 import { format, startOfDay, endOfDay, isSameDay, endOfMonth, sub } from 'date-fns'
-
+import CategoryRevenuePie from '@/components/dashboard/CategoryRevenuePie.vue'
 /* -----------------------------
   STATE
 ------------------------------ */
@@ -76,6 +76,14 @@ const entryColumns = [
   { key: 'marginPercent', label: 'Margin %' }
 ]
 
+const categoryColumns = [
+  { key: 'name', label: 'Category' },
+  { key: 'sales', label: 'Sales' },
+  { key: 'profit', label: 'Profit' },
+  { key: 'marginPercent', label: 'Margin %' }
+]
+
+
 
 function isRangeSelected(duration: Duration) {
   return isSameDay(selectedDate.value.start, sub(new Date(), duration)) && isSameDay(selectedDate.value.end, new Date())
@@ -98,12 +106,17 @@ const formatCurrency = (v: number) =>
 
 <template>
   <UDashboardPanelContent>
-    <div class="p-6 space-y-6">
+      <div v-if="loading" class="w-full flex justify-center items-center py-20">
+      <UIcon
+        name="i-heroicons-arrow-path-20-solid"
+        class="animate-spin w-5 h-5 text-gray-500 mr-2"
+      />
+      <span>Loading data...</span>
+    </div>
+    <div v-else class="p-6 space-y-6">
 
       <!-- HEADER -->
       <div class="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
-        <h2 class="text-lg font-semibold">Profit Report</h2>
-
         <!-- DATE PICKER -->
         <UPopover :popper="{ placement: 'bottom-start' }">
           <UButton
@@ -208,7 +221,7 @@ const formatCurrency = (v: number) =>
         :multiple-expand="false"
       >
         <template #billDate-data="{ row }">
-          {{ format(new Date(row.billDate), 'dd MMM yyyy mm:hh') }}
+          {{ format(new Date(row.billDate), 'dd MMM yyyy') }}
         </template>
 
         <template #billSales-data="{ row }">
@@ -257,6 +270,44 @@ const formatCurrency = (v: number) =>
         </template>
       </UTable>
     </UCard>
+    <!-- CATEGORY WISE PROFIT TABLE -->
+     <div class="flex flex-col lg:flex-row gap-4 h-[400px]">
+<UCard
+  class="w-full flex-1"
+  :ui="{
+    base: '',
+    divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+    header: { padding: 'px-4 py-4' },
+    body: { padding: '' }
+  }"
+>
+
+  <UTable
+    :rows="report.categoryProfit"
+    :columns="categoryColumns"
+  >
+    <template #sales-data="{ row }">
+      {{ formatCurrency(row.sales) }}
+    </template>
+
+    <template #profit-data="{ row }">
+      <span :class="row.profit >= 0 ? 'text-green-600' : 'text-red-600'">
+        {{ formatCurrency(row.profit) }}
+      </span>
+    </template>
+
+    <template #marginPercent-data="{ row }">
+      {{ row.marginPercent.toFixed(2) }}%
+    </template>
+  </UTable>
+</UCard>
+<UCard class="flex-1">
+    <CategoryRevenuePie
+      :revenueByCategory="report.categoryProfitChart"
+      title="Category"
+    />
+  </UCard>
+</div>  
     </div>
   </UDashboardPanelContent>
 </template>

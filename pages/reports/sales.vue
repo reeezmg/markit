@@ -382,7 +382,8 @@ const printReportHandle = async() => {
                 </template>
               </UPopover>
 
-              <!-- Export -->
+            </div>
+                        <!-- Export -->
               <UDropdown :items="actions()" class="w-full sm:w-auto">
                 <UButton
                   icon="i-heroicons-chevron-down"
@@ -391,17 +392,34 @@ const printReportHandle = async() => {
                   class="w-full sm:w-auto"
                 />
               </UDropdown>
-
-            </div>
           </div>
 
           <!-- KPI Cards -->
-          <div v-if="dashboard" class="grid grid-cols-1 sm:grid-cols-5 gap-4">
-            <KpiCard title="Total Revenue" :value="formatCurrency(dashboard.totalSales)" />
-            <KpiCard title="Total Credit" :value="formatCurrency(dashboard.salesByPaymentMethod.Credit)" />
-            <KpiCard title="Total Expense" :value="formatCurrency(dashboard.totalExpenses)" />
-            <KpiCard title="Balance" :value="formatCurrency(dashboard.balances.totalBalance)" />
-            <KpiCard title="Profit" :value="formatCurrency(dashboard.profit) || '₹0.00'" />
+          <div v-if="dashboard" class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+            <UCard>
+              <div class="text-sm text-gray-500">Total Revenue</div>
+                <div class="text-xl font-semibold">
+                  {{ formatCurrency(dashboard.totalSales) }}
+                </div>
+              </UCard>
+              <UCard>
+                 <div class="text-sm text-gray-500">Total Credit</div>
+                  <div class="text-xl font-semibold">
+                    {{ formatCurrency(dashboard.salesByPaymentMethod.Credit) }}
+                  </div>
+              </UCard>
+            <UCard>
+              <div class="text-sm text-gray-500">Total Expense</div>
+                <div class="text-xl font-semibold">
+                  {{ formatCurrency(dashboard.totalExpenses) }}
+                </div>
+              </UCard>
+            <UCard>
+              <div class="text-sm text-gray-500">Balance</div>
+                <div class="text-xl font-semibold">
+                  {{ formatCurrency(dashboard.balances.totalBalance) }}
+                </div>
+              </UCard>
           </div>
 
           <!-- 🔥 Summary Tables -->
@@ -410,7 +428,7 @@ const printReportHandle = async() => {
             class="grid grid-cols-1 md:grid-cols-3 gap-4"
           >
             <!-- Revenue -->
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4">
+            <UCard>
               <h3 class="font-semibold mb-3">Revenue Breakdown</h3>
               <UTable
                 :rows="[
@@ -423,10 +441,10 @@ const printReportHandle = async() => {
                   { key: 'amount', label: 'Amount', formatter: formatCurrency }
                 ]"
               />
-            </div>
+            </UCard>
 
             <!-- Expense -->
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4">
+            <UCard>
               <h3 class="font-semibold mb-3">Expense Breakdown</h3>
               <UTable
                 :rows="[
@@ -441,10 +459,10 @@ const printReportHandle = async() => {
                   { key: 'amount', label: 'Amount', formatter: formatCurrency }
                 ]"
               />
-            </div>
+            </UCard>
 
             <!-- Balance -->
-            <div class="bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4">
+            <UCard>
               <h3 class="font-semibold mb-3">Balance</h3>
               <UTable
                 :rows="[
@@ -456,12 +474,12 @@ const printReportHandle = async() => {
                   { key: 'amount', label: 'Amount', formatter: formatCurrency }
                 ]"
               />
-            </div>
+            </UCard>
           </div>
 
           <!-- Category Table + Pie -->
           <div class="flex flex-col lg:flex-row gap-4 h-[400px]">
-            <div class="flex-1 bg-white dark:bg-zinc-900 rounded-2xl shadow-md p-4 overflow-auto">
+            <UCard class="flex-1 rounded-2xl p-4 overflow-auto">
               <UTable
                 :rows="dashboard?.categorySales"
                 :columns="[
@@ -469,15 +487,15 @@ const printReportHandle = async() => {
                   { key: 'sales', label: 'Sales' }
                 ]"
               />
-            </div>
+            </UCard>
 
-            <div class="flex-1">
+            <UCard class="flex-1">
               <CategoryRevenuePie
                 v-if="dashboard?.revenueByCategory"
                 :revenueByCategory="dashboard.revenueByCategory"
                 title="Category"
               />
-            </div>
+            </UCard>
           </div>
 
         </div>

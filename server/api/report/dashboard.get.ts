@@ -18,7 +18,6 @@ export default defineEventHandler(async (event) => {
       salesResult,
       discountsResult,
       taxResult,
-      profitResult,
       activeItemsResult,
       itemsWithImagesResult,
       salesByMethodResult 
@@ -67,38 +66,6 @@ export default defineEventHandler(async (event) => {
          WHERE b.company_id = $1
            AND b.deleted = false
            AND b.payment_status = 'PAID'`,
-        [companyId]
-      ),
-
-      // profit calculation
-      client.query(
-        `
-        SELECT
-          (SELECT COALESCE(SUM(b.subtotal),0) - COALESCE(SUM(b.grand_total),0)
-           FROM bills b
-           WHERE b.company_id = $1
-             AND b.deleted = false
-             AND b.payment_status = 'PAID') AS total_discount,
-
-          COALESCE(SUM(
-            CASE 
-              WHEN e.qty > 0 AND b.payment_status = 'PAID' THEN
-                CASE 
-                  WHEN e.return = true 
-                  THEN -(ABS((e.rate - COALESCE(v.p_price, (e.rate * (1 - (COALESCE(c.margin,100)::numeric / 100.0)))))) * e.qty)
-                  ELSE ((e.rate - COALESCE(v.p_price, (e.rate * (1 - (COALESCE(c.margin,100)::numeric / 100.0)))))) * e.qty
-                END
-              ELSE 0
-            END
-          ),0) AS profit_before_discount
-        FROM entries e
-        INNER JOIN bills b ON e.bill_id = b.id
-        LEFT JOIN variants v ON e.variant_id = v.id
-        LEFT JOIN categories c ON e.category_id = c.id
-        WHERE b.company_id = $1
-          AND b.deleted = false
-          AND b.payment_status = 'PAID';
-        `,
         [companyId]
       ),
 
@@ -174,12 +141,7 @@ export default defineEventHandler(async (event) => {
     const totalDiscounts = Number(discountsResult.rows[0].total_discounts);
     const totalTax = Number(taxResult.rows[0].total_tax);
 
-    const profitRow = profitResult.rows[0];
-    const profitBeforeDiscount = Number(profitRow.profit_before_discount);
-    const profitDiscount = Number(profitRow.total_discount);
-    const totalProfit =
-      (profitBeforeDiscount - profitDiscount) - totalExpenses;
-
+    
     const totalActiveItems = Number(activeItemsResult.rows[0].total_active_items);
     const totalItemsWithImages = Number(itemsWithImagesResult.rows[0].total_items_with_images);
 
@@ -191,7 +153,6 @@ export default defineEventHandler(async (event) => {
       totalSales,
       totalDiscounts,
       totalTax,
-      totalProfit,
       sales:{
         total:salesByMethodResult.total_sales,
         cash:salesByMethodResult.cash_sales,

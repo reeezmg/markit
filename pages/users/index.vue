@@ -9,6 +9,7 @@ import {
     useUpdateCompanyUser,
     useCreateUser,
     useFindUniqueUser,
+    useCountCompanyUser,
 } from '~/lib/hooks';
 const userStore = useUserStore()
 const toast = useToast();
@@ -16,15 +17,14 @@ const isSaving = ref(false)
 const isDeleting = ref(false)
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentinty = ref({})
-const CreateUser = useCreateUser();
-const UpdateUser = useUpdateUser();
-const UpdateManyUser = useUpdateManyUser();
-const DeleteCompanyUser = useDeleteCompanyUser();
-const UpdateCompanyUser = useUpdateCompanyUser();
+const CreateUser = useCreateUser({ optimisticUpdate: true });
+const UpdateUser = useUpdateUser({ optimisticUpdate: true });
+const UpdateManyUser = useUpdateManyUser({ optimisticUpdate: true });
+const DeleteCompanyUser = useDeleteCompanyUser({ optimisticUpdate: true });
+const UpdateCompanyUser = useUpdateCompanyUser({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
 const isOpen = ref(false);
-const disableSave = ref(true)
 const useAuth = () => useNuxtApp().$auth;
 
 // Columns
@@ -112,7 +112,6 @@ const formData = reactive({
     email: '',
     name: '',
     role: { label: '', value: '' },
-    code:'',
     id:''
 });
 
@@ -123,7 +122,6 @@ const openEdit = (row) => {
     formData.name = row.name
     formData.role.label = row.role
     formData.role.value = row.role
-    formData.code = row.code
     formData.id = row.userId
     }
 
@@ -183,34 +181,48 @@ const { data: existingUser, refetch: refetchUser } = useFindUniqueUser(
   { enabled: false }
 );
 
-watch(() => formData.code, (newCode) => {
-    console.log(userStore.users)
-    console.log(newCode)
-  const match = userStore.users.find(u => u.code === newCode)
-console.log(match)
-  disableSave.value =
-    !!match && (formData.id === '' || formData.id !== match.id)
-})
-
 
 
 // Pagination
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const page = ref(1);
 const pageCount = ref(10);
-const pageTotal = ref(0); // This value should be dynamic coming from the API
-const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
-const pageTo = computed(() =>
-    Math.min(page.value * pageCount.value, pageTotal.value),
-);
+
 
 const deleteUser = async (id: string) => {
   isDeleting.value = true
-  const companyId = useAuth().session.value?.companyId!;
-  const currentUserId = useAuth().session.value?.id;
+
+  const companyId = useAuth().session.value?.companyId!
+  const currentUserId = useAuth().session.value?.id
 
   try {
-    await UpdateCompanyUser.mutateAsync({
+    // ✅ Ensure users are loaded
+    if (!users.value || users.value.length === 0) {
+      throw new Error('User list not loaded')
+    }
+
+    // 🔍 Find user being deleted
+    const userToDelete = users.value.find(u => u.userId === id)
+    if (!userToDelete) return
+
+    // 🔐 Admin safety check
+    if (userToDelete.role === 'admin') {
+      const adminCount = users.value.filter(u => u.role === 'admin' && !u.deleted).length
+
+      if (adminCount <= 1) {
+        alert('At least one admin must remain in the company')
+            toast.add({
+            title: 'At least one admin must remain in the company!',
+            description: 'You cannot delete the last admin user.',
+            color: 'red',
+            id: 'modal-success',
+        });
+        return
+      }
+    }
+
+    // ✅ Proceed with soft delete
+     UpdateCompanyUser.mutate({
       where: {
         companyId_userId: {
           companyId,
@@ -219,21 +231,25 @@ const deleteUser = async (id: string) => {
       },
         data: {
             deleted: true,
-            code:'',
             status: false
         },
     });
 
+
+    // 🚪 Logout if deleting self
     if (id === currentUserId) {
-      await authLogout();
+      await authLogout()
     }
-    await userStore.fetchUsers(useAuth().session.value?.companyId!)
+
+    await userStore.fetchUsers(companyId)
   } catch (error) {
-    console.error('Failed to delete user:', error);
-  }finally{
+    console.error('Failed to delete user:', error)
+  } finally {
     isDeleting.value = false
+    isDeleteModalOpen.value = false
   }
-};
+}
+
 
 const queryArgs = computed(() => {
   const selectedStatusCondition =
@@ -250,6 +266,7 @@ const queryArgs = computed(() => {
       AND: [
         {
           companyId: useAuth().session.value?.companyId,
+          deleted: false
         },
         {
           name: {
@@ -276,11 +293,16 @@ const queryArgs = computed(() => {
 
 const { data: users, isLoading, error, refetch } = useFindManyCompanyUser(queryArgs);
 
+const countArgs = computed(() => ({
+  where: queryArgs.value.where,
+}));
 
-watch(users, () => {
-    pageTotal.value = users.value ? users.value.length : 0;
-    console.log(users.value)
-});
+const { data: pageTotal } = useCountCompanyUser(countArgs);
+
+const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
+const pageTo = computed(() =>
+    Math.min(page.value * pageCount.value, pageTotal.value),
+);
 
 async function multiToggle(ids, status: boolean) {
     try {
@@ -293,23 +315,31 @@ async function multiToggle(ids, status: boolean) {
     }
 }
 
-async function toggleStatus(id: string) {
-    if (users.value) {
-        const userToUpdate = users.value.find((item) => item.id === id);
-        if (!userToUpdate) return;
+function toggleStatus(userId: string) {
+  if (!users.value) return
 
-        const updatedStatus = !userToUpdate.status;
+  const user = users.value.find(u => u.userId === userId)
+  if (!user) return
 
-        try {
-            await UpdateUser.mutateAsync({
-                where: { id },
-                data: { status: updatedStatus },
-            });
-        } catch (error) {
-            console.error('Error updating user status:', error);
-        }
-    }
+  const companyId = useAuth().session.value?.companyId!
+
+  try {
+    UpdateCompanyUser.mutate({
+      where: {
+        companyId_userId: {
+          companyId,
+          userId,
+        },
+      },
+      data: {
+        status: !user.status, // ✅ direct toggle
+      },
+    })
+  } catch (error) {
+    console.error('Error updating user status:', error)
+  }
 }
+
 
 const handleSubmit = async (e: Event) => {
     isSaving.value = true
@@ -328,7 +358,6 @@ const handleSubmit = async (e: Event) => {
             },
             data: {
             name: formData.name,
-            code: formData.code,
             role: formData.role.value
             }
         }
@@ -352,7 +381,6 @@ const handleSubmit = async (e: Event) => {
                             connect: { id: useAuth().session.value?.companyId },
                             },
                         name: formData.name, 
-                        code: formData.code, 
                         role: formData.role.value, 
                     }],
                 },
@@ -366,12 +394,11 @@ const handleSubmit = async (e: Event) => {
                 password: await hash(formData.email),
                 companies: {
                     create: {
-                        name: formData.name, 
-                        code: formData.code, 
+                        name: formData.name,  
                         role: formData.role.value, 
                         company: {
                             connect: {
-                                id: useAuth().session.value?.companyId,
+                                id: useAuth().session.value?.companyId!,
                             },
                         },
                     },
@@ -389,7 +416,6 @@ const handleSubmit = async (e: Event) => {
         formData.email = ''
         formData.name = ''
         formData.role = { label: '', value: '' }
-        formData.code = ''
         formData.id = ''
         
         isOpen.value = false;
@@ -543,7 +569,7 @@ const handleSubmit = async (e: Event) => {
                 <template #status-data="{ row }">
                     <Switch
                         v-model="row.status"
-                        @click="toggleStatus(row.id)"
+                        @click="toggleStatus(row.userId)"
                         :class="[
                             row.status ? 'bg-orange-400' : 'bg-gray-200',
                             'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2',
@@ -680,21 +706,12 @@ const handleSubmit = async (e: Event) => {
                     />
                 </UFormGroup>
 
-                <UFormGroup name="selectMenu" label="code" class="mb-5" :error="(disableSave && formData.code) && 'Code is already taken'">
-                    <UInput
-                        v-model="formData.code"
-                        type="text"
-                        placeholder="Enter code"
-                    />
-                </UFormGroup>
-
                 <template #footer>
                     <UButton
                         type="submit"
                         block
                         class="mb-5"
                         @click="handleSubmit"
-                        :disabled = "disableSave"
                         :loading = "isSaving"
                     >
                         Continue

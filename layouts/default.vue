@@ -218,6 +218,8 @@ const links = computed(() => {
         to: '/reports',
         icon: 'i-heroicons-book-open',
         children: [
+        ...(auth.session.value?.type === 'admin' || auth.session.value?.type === 'manager'
+            ? [
             {
             label: 'Sales',
             to: `/reports/sales`,
@@ -226,8 +228,22 @@ const links = computed(() => {
                 shortcuts: ['R', 'S'],
             },
             },
+            ]
+            : []),
+            ...(auth.session.value?.type === 'admin'
+            ? [
             {
-            label: 'online',
+            label: 'Profit',
+            to: `/reports/profit`,
+            tooltip: {
+                text: 'Profit Report',
+                shortcuts: ['P', 'R'],
+            },
+            },
+            ]
+            : []),
+            {
+            label: 'Online',
             to: `/reports/online`,
             tooltip: {
                 text: 'Reports',

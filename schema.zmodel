@@ -114,6 +114,7 @@ model Company extends Base {
     images      String?
     pointsValue Int @default(0) @map("points_value")
     billCounter Int @default(1) @map("bill_counter")
+    userCodeCounter  Int   @default(1) @map("user_code_counter")
     isTaxIncluded Boolean @default(true) @map("is_tax_included")
     isUserTrackIncluded Boolean @default(true) @map("is_usertrack_included")
     isAiImage Boolean @default(true) @map("is_ai_image")
@@ -993,7 +994,7 @@ model CompanyUser {
     company   Company @relation(fields: [companyId], references: [id],onDelete: Cascade)
     userId    String @map('user_id')
     user      User @relation(fields: [userId], references: [id],onDelete: Cascade)
-    code      String?
+    code      Int?
     phone     String?   
     name      String?
     role      UserRole      @default(user) @map('role')
@@ -1003,7 +1004,6 @@ model CompanyUser {
     bills       Bill[]
     expense    Expense[]
     @@id([companyId, userId])
-    @@unique([companyId, code])
     @@allow('read,create, update, delete', auth() != null )
     @@map('company_users')
 }

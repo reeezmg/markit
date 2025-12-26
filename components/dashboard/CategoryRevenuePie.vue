@@ -1,12 +1,12 @@
 <template>
-  <div class="bg-white h-full dark:bg-zinc-900 rounded-2xl shadow-md p-4">
-    <h3 class="text-lg font-semibold mb-2">Revenue by Category</h3>
+  <div>
     <ClientOnly>
-      <VChart 
+      <VChart
         ref="chartRef"
-        :option="chartOptions" 
-        class="h-full w-full" 
-        manual-update
+        :option="chartOptions"
+        class="w-full"
+        style="height: 300px"
+        autoresize
       />
     </ClientOnly>
   </div>
@@ -25,18 +25,20 @@ const VChart = defineAsyncComponent(() => import('vue-echarts'))
 const props = defineProps<{
   revenueByCategory: { name: string; value: number }[]
 }>()
-
+console.log(props.revenueByCategory)
 const chartRef = ref()
 
-watch(() => props.revenueByCategory, (newData) => {
-  if (chartRef.value) {
-    chartRef.value.setOption({
-      series: [{
-        data: newData
-      }]
-    })
-  }
-}, { deep: true })
+watch(
+  () => props.revenueByCategory,
+  (newData) => {
+    if (chartRef.value) {
+      chartRef.value.setOption({
+        series: [{ data: newData }]
+      })
+    }
+  },
+  { deep: true }
+)
 
 const chartOptions = computed(() => ({
   tooltip: {
@@ -47,7 +49,7 @@ const chartOptions = computed(() => ({
     {
       name: 'Revenue by Category',
       type: 'pie',
-      radius: '70%',
+      radius: '80%',
       data: props.revenueByCategory,
       emphasis: {
         itemStyle: {

@@ -55,7 +55,7 @@ export default eventHandler(async (event) => {
         role: user.companies[0].role,
         pointsValue: user.companies[0].company.pointsValue || 0,
         currency: user.companies[0].company.currency || 'INR',
-        type:'USER',
+        type:user.companies[0].role,
         address: user.companies[0].company.address || {},
         openTime: user.companies[0].company.openTime || '',
         closeTime: user.companies[0].company.closeTime || '',

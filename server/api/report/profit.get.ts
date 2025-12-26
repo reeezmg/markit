@@ -9,38 +9,28 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
+  /* -----------------------------
+     DATE PARSING
+  ------------------------------ */
   const query = getQuery(event)
-const rawStart = query.startDate as string | undefined
-const rawEnd = query.endDate as string | undefined
+  const rawStart = query.startDate as string | undefined
+  const rawEnd = query.endDate as string | undefined
 
-    console.log('Profit Report - Start Date:', rawStart)
-console.log('Profit Report - End Date:', rawEnd)
+  if (rawStart && isNaN(Date.parse(rawStart))) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid startDate' })
+  }
+  if (rawEnd && isNaN(Date.parse(rawEnd))) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid endDate' })
+  }
 
-if (rawStart && isNaN(Date.parse(rawStart))) {
-  throw createError({
-    statusCode: 400,
-    statusMessage: 'Invalid startDate'
-  })
-}
+  const startDate = rawStart ? new Date(rawStart) : new Date(0)
+  const endDate = rawEnd ? new Date(rawEnd) : new Date()
 
-if (rawEnd && isNaN(Date.parse(rawEnd))) {
-  throw createError({
-    statusCode: 400,
-    statusMessage: 'Invalid endDate'
-  })
-}
-
-const startDate = rawStart ? new Date(rawStart) : new Date(0)
-const endDate = rawEnd ? new Date(rawEnd) : new Date()
-
-
-    console.log('Profit Report - Start Date:', startDate)
-console.log('Profit Report - End Date:', endDate)
   const client = await pool.connect()
 
   try {
     /* -------------------------------------------------
-       ENTRY DATA (RATE + VALUE + COGS SAFE)
+       ENTRY DATA (DISCOUNT + RETURN SAFE)
     -------------------------------------------------- */
     const { rows } = await client.query(
       `
@@ -54,13 +44,14 @@ console.log('Profit Report - End Date:', endDate)
           e.id              AS entry_id,
           e.name            AS entry_name,
           e.qty,
-          e.rate,                 -- ✅ FIX: include rate
+          e.rate,
           e.value,
+          c.name            AS category_name,
 
           COALESCE(
             v.p_price,
             e.rate * (1 - (COALESCE(c.margin, 100) / 100.0))
-          )                 AS cost_price,
+          ) AS cost_price,
 
           e.return          AS is_return
 
@@ -79,17 +70,13 @@ console.log('Profit Report - End Date:', endDate)
       SELECT
         *,
         CASE
-          WHEN is_return = true THEN
-            -ABS(cost_price * qty)
-          ELSE
-            (cost_price * qty)
+          WHEN is_return = true THEN -ABS(cost_price * qty)
+          ELSE (cost_price * qty)
         END AS entry_cogs,
 
         CASE
-          WHEN is_return = true THEN
-            -ABS(value - (cost_price * qty))
-          ELSE
-            (value - (cost_price * qty))
+          WHEN is_return = true THEN -ABS(value - (cost_price * qty))
+          ELSE (value - (cost_price * qty))
         END AS entry_profit
 
       FROM entry_calc
@@ -114,17 +101,19 @@ console.log('Profit Report - End Date:', endDate)
     const totalExpenses = Number(expenseRes.rows[0].total_expenses)
 
     /* -------------------------------------------------
-       TRANSFORM → BILL + ENTRY
+       TRANSFORM → BILL + CATEGORY
     -------------------------------------------------- */
     const billMap = new Map<string, any>()
+    const categoryMap = new Map<string, { sales: number; profit: number }>()
 
     for (const r of rows) {
+      /* ---------- BILL ---------- */
       if (!billMap.has(r.bill_id)) {
         billMap.set(r.bill_id, {
           billId: r.bill_id,
           billDate: r.bill_date,
           invoiceNumber: r.invoice_number,
-          billSales: Number(r.bill_sales), // ✅ FIX: always grand_total
+          billSales: Number(r.bill_sales),
           billCOGS: 0,
           billProfit: 0,
           marginPercent: 0,
@@ -134,8 +123,8 @@ console.log('Profit Report - End Date:', endDate)
 
       const bill = billMap.get(r.bill_id)
 
-      const entryCOGS = Number(r.entry_cogs)
       const entryValue = Number(r.value)
+      const entryCOGS = Number(r.entry_cogs)
       const entryProfit = Number(r.entry_profit)
 
       bill.billCOGS += entryCOGS
@@ -144,17 +133,27 @@ console.log('Profit Report - End Date:', endDate)
         slNo: bill.entries.length + 1,
         name: r.entry_name,
         qty: Number(r.qty),
-        rate: Number(r.rate),          // ✅ FIX: rate now present
+        rate: Number(r.rate),
         value: entryValue,
         cogs: entryCOGS,
         profit: entryProfit,
-        marginPercent:
-          entryValue > 0 ? (entryProfit / entryValue) * 100 : 0
+        marginPercent: entryValue > 0 ? (entryProfit / entryValue) * 100 : 0
       })
+
+      /* ---------- CATEGORY ---------- */
+      const category = r.category_name || 'Uncategorized'
+
+      if (!categoryMap.has(category)) {
+        categoryMap.set(category, { sales: 0, profit: 0 })
+      }
+
+      const cat = categoryMap.get(category)!
+      cat.sales += entryValue
+      cat.profit += entryProfit
     }
 
     /* -------------------------------------------------
-       FINAL BILL + SUMMARY
+       FINAL BILL TOTALS
     -------------------------------------------------- */
     let totalSales = 0
     let totalCOGS = 0
@@ -166,18 +165,39 @@ console.log('Profit Report - End Date:', endDate)
 
       totalSales += b.billSales
       totalCOGS += b.billCOGS
-
       return b
     })
 
     const totalProfit = totalSales - totalCOGS
 
     /* -------------------------------------------------
+       CATEGORY TABLE DATA
+    -------------------------------------------------- */
+    const categoryProfit = Array.from(categoryMap.entries()).map(
+      ([name, v]) => ({
+        name,
+        sales: v.sales,
+        profit: v.profit,
+        marginPercent: v.sales > 0 ? (v.profit / v.sales) * 100 : 0
+      })
+    )
+
+    /* -------------------------------------------------
+       CATEGORY PIE CHART DATA
+    -------------------------------------------------- */
+    const categoryProfitChart = Array.from(categoryMap.entries())
+      .map(([name, v]) => ({
+        name,
+        value: v.profit
+      }))
+      .filter(item => item.value !== 0)
+
+    /* -------------------------------------------------
        RESPONSE
     -------------------------------------------------- */
     return {
       summary: {
-        totalSales,                     // ✅ correct now
+        totalSales,
         totalCOGS,
         totalProfitBeforeExpense: totalProfit,
         totalExpenses,
@@ -185,7 +205,9 @@ console.log('Profit Report - End Date:', endDate)
         overallMarginPercent:
           totalSales > 0 ? (totalProfit / totalSales) * 100 : 0
       },
-      bills
+      bills,
+      categoryProfit,
+      categoryProfitChart
     }
   } finally {
     client.release()
