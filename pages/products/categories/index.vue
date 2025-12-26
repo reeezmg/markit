@@ -353,6 +353,35 @@ const removeProduct = () => {
         console.error('Error updating product status:', error);
     }
 }
+
+const downloadReport = async () => {
+    try {
+        const response = await $fetch<ArrayBuffer>('/api/category/stock-by-category.pdf', {
+            method: 'GET',
+            headers: {
+                Accept: 'application/pdf',
+            },
+            responseType: 'arrayBuffer',
+        });
+
+        const blob = new Blob([response], { type: 'application/pdf' });
+        const url = window.URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.setAttribute('download', 'stock-by-category.pdf');
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+    } catch (error) {
+        console.error('Error downloading PDF:', error);
+        toast.add({
+            title: 'Download failed!',
+            description: 'There was an error downloading the report.',
+            color: 'red',
+        });
+    }
+};
 </script>
 
 <template>
@@ -392,6 +421,15 @@ const removeProduct = () => {
 
   <!-- Right side: Add Button aligned to end -->
   <div class="w-full sm:w-auto flex justify-end">
+    <UButton
+      icon="i-heroicons-arrow-down-tray"
+      size="sm"
+      color="primary"
+      variant="solid"
+      label="Download"
+      class="me-2 w-full sm:w-40"
+      @click="downloadReport()"
+      />
     <UButton
       icon="i-heroicons-plus"
       size="sm"

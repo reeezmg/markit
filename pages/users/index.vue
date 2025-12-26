@@ -167,7 +167,11 @@ const selectedStatus = ref<any>([]);
 
 const options = [
     { label: 'Admin', value: 'admin' },
+    { label: 'Manager', value: 'manager' },
+    { label: 'Biller', value: 'biller' },
+    { label: 'Accountant', value: 'accountant' },
     { label: 'User', value: 'user' },
+
 ];
 
 const resetFilters = () => {
@@ -560,6 +564,14 @@ const handleSubmit = async (e: Event) => {
                             icon="i-heroicons-ellipsis-horizontal-20-solid"
                         />
                     </UDropdown>
+                </template>
+                <template #role-data="{ row }">
+                   <UBadge
+                        :color="row.role === 'admin' ? 'red' : row.role === 'manager' ? 'blue' : row.role === 'biller' ? 'green' : row.role === 'accountant' ? 'purple' : 'gray'"
+                        size="sm"
+                        variant="subtle"
+                        >{{  row.role.toUpperCase() }}
+                    </UBadge>
                 </template>
             
                 <template #email-data="{ row }">

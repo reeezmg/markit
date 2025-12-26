@@ -1,14 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
 import PullToRefresh from 'pulltorefreshjs'
-import KpiCard from '@/components/dashboard/KpiCard.vue'
-import TopProducts from '@/components/dashboard/TopProducts.vue'
-import RevenueEChart from '@/components/dashboard/RevenueEChart.vue'
 import CategoryRevenuePie from '@/components/dashboard/CategoryRevenuePie.vue'
-import { useCompanyDashboard } from '@/lib/api/useDashboardData'
-import { exportToCSV } from '~/utils/export-csv'
 import { startOfDay, endOfDay,sub, format, isSameDay, type Duration  } from 'date-fns'
-import type { DashboardComposable, BillWithRelations, KpiItem, PdfReportMeta } from '~/types/dashboard'
+
 
 
 const scrollContainer = ref<HTMLElement | null>(null)
@@ -60,14 +55,9 @@ let printData = {}
 
 const dashboard = ref({
 })
-const bills = ref({
-})
 const expenses = ref({
 })
 const fullReport = ref(false)
-const quickRange = ref('Today')
-const quickRanges = ['Today','This Month', 'Last Month']
-const csvLoading = ref(false)
 const pdfLoading = ref(false)
 const toast = useToast()
 
@@ -102,24 +92,6 @@ const fetchReportFromServer = async () => {
     console.error('Failed to fetch server report:', error);
   }finally {
     loading.value = false;
-  }
-};
-
-const fetchBillFromServer = async () => {
-  if (!selectedDate.value.start || !selectedDate.value.end) return;
-
-  try {
-    const res = await $fetch('/api/report/bills', {
-      method: 'GET',
-      params: {
-        startDate: startOfDay(selectedDate.value.start),
-        endDate: endOfDay(selectedDate.value.end),
-      },
-    });
-    console.log(res)
-    bills.value = res;
-  } catch (error) {
-    console.error('Failed to fetch server report:', error);
   }
 };
 const fetchexpenseFromServer = async () => {
@@ -158,16 +130,8 @@ const ranges = [
 const actions = () => [
   [
     {
-      label: 'Download CSV',
-      icon: 'i-heroicons-arrow-down-tray',
-      click: downloadCSV,
-      loading: csvLoading
-    },
-  ],
-  [
-    {
       label: 'Download PDF',
-      icon: 'i-heroicons-document',
+      icon: 'i-heroicons-arrow-down-tray',
       click: downloadPDF,
       loading: pdfLoading
     },
@@ -183,118 +147,57 @@ const actions = () => [
 ]
 
 
-const kpiArray = computed<KpiItem[]>(() => ([
-  { KPI: 'Total Revenue', Value: formatCurrency(bills.value.reduce((sum,bill) => sum + (bill.grandTotal ?? 0),0) ?? 0) },
-  { KPI: 'Total Bills', Value: bills.value?.length },
-  { KPI: 'Avg. Bill Value', Value: formatCurrency(bills.value.length > 0 ? 
-    dashboard?.totalSales / bills.value?.length : 0) }
-]))
-
-const billsCSV = computed(() => bills.value.map(bill => {
-  console.log(bill.invoiceNumber)
-
-  return {
-    Invoice: `="${bill.invoiceNumber}"`,
-    Date: bill.createdAt ? new Date(bill.createdAt).toLocaleDateString() : 'N/A',
-    Client: bill.client?.name ?? 'N/A',
-    Subtotal: bill.subtotal ?? 0,
-    GrandTotal: bill.grandTotal ?? 0,
-    PaymentMethod: bill.paymentMethod ?? 'N/A',
-  }
-}))
 
 // Helper functions
 const formatCurrency = (val: number) => `₹${val.toLocaleString(undefined, { minimumFractionDigits: 2 })}`
 
-const formatAddress = (address?: any) => {
-  if (!address) return 'N/A'
-  return [
-    address.name,
-    address.street,
-    address.locality,
-    address.city,
-    address.state,
-    address.pincode
-  ].filter(Boolean).join(', ')
-}
 
-// Download handlers
-const timestamp = new Date().toISOString().replace(/[:.]/g, '-')
-const csvfilename = `sales-report-${timestamp}.csv`
-const pdfFilename = `sales-report-${timestamp}.pdf`
-
-const downloadCSV = async() => { 
-  csvLoading.value = true
-  await fetchBillFromServer()
-  if (!bills.value?.length) {
-    toast.add({ title: 'No Data', description: 'No report data available to download', color: 'red' })
-    return
-  }
-
-  try {
-    exportToCSV(billsCSV.value, csvfilename)
-    toast.add({ title: 'CSV Downloaded', description: 'Your CSV file has been downloaded', color:'green' })
-  } catch (error) {
-    toast.add({ title: 'CSV Error', description: 'Failed to generate CSV', color: 'red' })
-  } finally {
-    csvLoading.value = false
-  }
-}
 
 const downloadPDF = async () => {
   pdfLoading.value = true
-  await fetchBillFromServer()
-  if (!bills.value || !bills.value?.length) {
-    toast.add({ title: 'No Data', description: 'No report data available to export', color: 'red' })
-    return
-  }
-  try {
-    const { generateSalesReportPDF } = await import('~/utils/generate-sales-report-pdf.client')
-    
-    const reportMeta: PdfReportMeta = {
-      companyName: useAuth().session.value?.companyName || '',
-      logoUrl: useAuth().session.value?.companyLogo || '/logo.png',
-      dateRange: fullReport.value 
-        ? 'Full Report' 
-        : quickRange.value 
-        ? quickRange.value 
-        : `${selectedDate.value.start || 'Start'} to ${selectedDate.value.end || 'End'}`,
-      reportTitle: 'Sales Report'
-    }
 
-    await generateSalesReportPDF(
-      kpiArray.value,
-      bills.value,
-      reportMeta,
-      pdfFilename
-    )
-    
-    toast.add({ title: 'PDF Downloaded', description: 'Your PDF report has been downloaded' })
+  try {
+    const res = await $fetch.raw('/api/report/generate-sales.pdf', {
+      method: 'GET',
+      params: {
+        startDate: startOfDay(selectedDate.value.start),
+        endDate: endOfDay(selectedDate.value.end),
+      },
+      headers: {
+        Accept: 'application/pdf'
+      }
+    })
+
+    const blob = new Blob([res._data], { type: 'application/pdf' })
+
+    // Try to extract filename from header
+    const contentDisposition = res.headers.get('content-disposition')
+    const filename =
+      contentDisposition?.match(/filename="(.+)"/)?.[1] ||
+      'sales-report.pdf'
+
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+
+    link.href = url
+    link.download = filename
+    document.body.appendChild(link)
+    link.click()
+
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
   } catch (error) {
-    console.error('PDF generation error:', error)
-    toast.add({ 
-      title: 'PDF Error', 
-      description: 'Failed to generate PDF', 
-      color: 'red' 
+    console.error('PDF Download Error:', error)
+    toast.add({
+      title: 'PDF Error',
+      description: 'Failed to download PDF',
+      color: 'red'
     })
   } finally {
     pdfLoading.value = false
   }
 }
 
-// Refresh function
-const refreshPage = async () => {
-  loading.value = true
-  try {
-    await fetchReportFromServer()
-    toast.add({ title: 'Data refreshed successfully' })
-  } catch (error) {
-    console.error('Refresh failed:', error)
-    toast.add({ title: 'Refresh Failed', description: 'Failed to reload data', color: 'red' })
-  } finally {
-    loading.value = false
-  }
-}
 
 // Initialize
 onMounted(() => {

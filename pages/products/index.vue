@@ -1050,6 +1050,10 @@ const handleAddPhoto = async () => {
                 :loading="isLoading"
                 sort-mode="manual"
                 class="w-full"
+                :ui="{
+                    td: { base: 'max-w-[0] truncate' },
+                    default: { checkbox: { color: 'gray' } },
+                }"
             >
                 <template #actions-data="{ row }">
                     <UDropdown :items="action(row)">
@@ -1277,7 +1281,7 @@ const handleAddPhoto = async () => {
             <template #footer>
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
-                        <span class="text-sm leading-5 hidden sm:flex">
+                        <span class="text-sm leading-5 hidden sm:block">
                             Showing
                             <span class="font-medium">{{ pageFrom }}</span>
                             to
