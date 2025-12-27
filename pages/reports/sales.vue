@@ -381,27 +381,28 @@ const printReportHandle = async() => {
           </div>
 
           <!-- Category Table + Pie -->
-          <div class="flex flex-col lg:flex-row gap-4 h-[400px]">
-            <<UCard class="flex-1 rounded-2xl overflow-y-scroll p-4">
-              <div class="overflow-x-auto ">
-                <UTable
-                  :rows="dashboard?.categorySales || []"
-                  :columns="[
-                    { key: 'name', label: 'Category' },
-                    { key: 'sales', label: 'Sales' }
-                  ]"
-                />
-              </div>
-            </UCard>
+          <div class="flex flex-col lg:flex-row gap-4 lg:h-[400px]">
+  <UCard class="flex-1 rounded-2xl p-4 lg:overflow-y-scroll">
+    <div class="overflow-x-auto">
+      <UTable
+        :rows="dashboard?.categorySales || []"
+        :columns="[
+          { key: 'name', label: 'Category' },
+          { key: 'sales', label: 'Sales' }
+        ]"
+      />
+    </div>
+  </UCard>
 
-            <UCard class="flex-1">
-              <CategoryRevenuePie
-                v-if="dashboard?.revenueByCategory"
-                :revenueByCategory="dashboard.revenueByCategory"
-                title="Category"
-              />
-            </UCard>
-          </div>
+  <UCard class="flex-1">
+    <CategoryRevenuePie
+      v-if="dashboard?.revenueByCategory"
+      :revenueByCategory="dashboard.revenueByCategory"
+      title="Category"
+    />
+  </UCard>
+</div>
+
 
         </div>
       </ClientOnly>
