@@ -382,8 +382,8 @@ const printReportHandle = async() => {
 
           <!-- Category Table + Pie -->
           <div class="flex flex-col lg:flex-row gap-4 h-[400px]">
-            <<UCard class="flex-1 rounded-2xl p-4">
-              <div class="overflow-x-auto">
+            <<UCard class="flex-1 rounded-2xl overflow-y-scroll p-4">
+              <div class="overflow-x-auto ">
                 <UTable
                   :rows="dashboard?.categorySales || []"
                   :columns="[
