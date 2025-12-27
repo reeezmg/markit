@@ -382,14 +382,16 @@ const printReportHandle = async() => {
 
           <!-- Category Table + Pie -->
           <div class="flex flex-col lg:flex-row gap-4 h-[400px]">
-            <UCard class="flex-1 rounded-2xl p-4 overflow-auto">
-              <UTable
-                :rows="dashboard?.categorySales"
-                :columns="[
-                  { key: 'name', label: 'Category' },
-                  { key: 'sales', label: 'Sales' }
-                ]"
-              />
+            <<UCard class="flex-1 rounded-2xl p-4">
+              <div class="overflow-x-auto">
+                <UTable
+                  :rows="dashboard?.categorySales || []"
+                  :columns="[
+                    { key: 'name', label: 'Category' },
+                    { key: 'sales', label: 'Sales' }
+                  ]"
+                />
+              </div>
             </UCard>
 
             <UCard class="flex-1">

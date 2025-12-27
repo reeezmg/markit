@@ -62,16 +62,18 @@ export default defineEventHandler(async (event) => {
     ------------------------------------ */
     const doc = new jsPDF({ unit: 'mm', format: 'a4' })
     const pageHeight = doc.internal.pageSize.height
+    const pageWidth = doc.internal.pageSize.width
     const margin = 15
     let y = margin
-
-    const addFooter = (page: number) => {
-      doc.setFontSize(9)
-      doc.setTextColor(120)
-      doc.text(`Page ${page}`, 105, pageHeight - 10, { align: 'center' })
-    }
-
     let pageNo = 1
+
+    const addFooter = () => {
+      doc.setFontSize(9)
+      doc.setTextColor(130)
+      doc.text(`Page ${pageNo}`, pageWidth / 2, pageHeight - 10, {
+        align: 'center'
+      })
+    }
 
     /* ------------------------------------
        3. HEADER
@@ -85,74 +87,93 @@ export default defineEventHandler(async (event) => {
     doc.text('Category-wise Stock Report', margin, y)
 
     y += 6
-    doc.setFontSize(10)
     doc.setFont('helvetica', 'normal')
-    doc.setTextColor(100)
+    doc.setFontSize(10)
+    doc.setTextColor(120)
     doc.text(`Generated on: ${new Date().toLocaleDateString()}`, margin, y)
 
-    y += 10
+    y += 12
     doc.setTextColor(0)
 
     /* ------------------------------------
        4. CONTENT
     ------------------------------------ */
     for (const category of res.rows) {
-      // Page break safety
-      if (y > pageHeight - 40) {
-        addFooter(pageNo++)
+      if (y > pageHeight - 50) {
+        addFooter()
+        pageNo++
         doc.addPage()
         y = margin
       }
 
-      // Category Header
-      doc.line(margin, y, 195 - margin, y)
+      /* ---------- CATEGORY HEADER ---------- */
+      doc.setDrawColor(0)
+      doc.setLineWidth(0.4)
+      doc.line(margin, y, pageWidth - margin, y)
       y += 7
+
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
-      doc.text(
-        `CATEGORY: ${category.name.toUpperCase()}`,
-        margin,
-        y
-      )
-      doc.text(
-        `TOTAL QTY: ${category.qty}`,
-        195 - margin,
-        y,
-        { align: 'right' }
-      )
+      doc.text(`CATEGORY: ${category.name.toUpperCase()}`, margin, y)
+      doc.text(`TOTAL QTY: ${category.qty}`, pageWidth - margin, y, {
+        align: 'right'
+      })
 
-      y += 4
-      doc.line(margin, y, 195 - margin, y)
-      y += 6
-
-      // Table Header
-      doc.setFontSize(10)
-      doc.text('Subcategory', margin, y)
-      doc.text('Qty', 195 - margin, y, { align: 'right' })
-
-      y += 3
-      doc.line(margin, y, 195 - margin, y)
       y += 5
+      doc.line(margin, y, pageWidth - margin, y)
+      y += 8
 
+      /* ---------- TABLE HEADER ---------- */
+      const tableStartY = y
+      const rowHeight = 7
+      const col1X = margin
+      const col2X = pageWidth - margin - 20
+
+      doc.setFillColor(240, 242, 245)
+      doc.rect(margin, y - 5, pageWidth - margin * 2, rowHeight, 'F')
+
+      doc.setFontSize(10)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Subcategory', col1X + 2, y)
+      doc.text('Qty', col2X + 18, y, { align: 'right' })
+
+      y += rowHeight
       doc.setFont('helvetica', 'normal')
 
-      // Rows
-      for (const sub of category.subcategories) {
-        if (y > pageHeight - 25) {
-          addFooter(pageNo++)
-          doc.addPage()
-          y = margin
-        }
+      /* ---------- TABLE ROWS ---------- */
+      if (!category.subcategories.length) {
+        doc.setTextColor(150)
+        doc.text('No data available', col1X + 2, y)
+        doc.setTextColor(0)
+        y += rowHeight
+      } else {
+        let alternate = false
 
-        doc.text(sub.name, margin, y)
-        doc.text(String(sub.qty), 195 - margin, y, { align: 'right' })
-        y += 5
+        for (const sub of category.subcategories) {
+          if (y > pageHeight - 30) {
+            addFooter()
+            pageNo++
+            doc.addPage()
+            y = margin
+          }
+
+          if (alternate) {
+            doc.setFillColor(250, 250, 250)
+            doc.rect(margin, y - 5, pageWidth - margin * 2, rowHeight, 'F')
+          }
+
+          doc.text(sub.name, col1X + 2, y)
+          doc.text(String(sub.qty), col2X + 18, y, { align: 'right' })
+
+          alternate = !alternate
+          y += rowHeight
+        }
       }
 
-      y += 6
+      y += 8
     }
 
-    addFooter(pageNo)
+    addFooter()
 
     /* ------------------------------------
        5. RETURN PDF
