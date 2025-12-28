@@ -199,7 +199,7 @@ const formatCurrency = (v: number) =>
 
       <!-- TABLE -->
         <UCard
-            class="w-full"
+            class="w-full h-[400px] overflow-y-scroll"
             :ui="{
                 base: '',
                 
@@ -271,9 +271,9 @@ const formatCurrency = (v: number) =>
       </UTable>
     </UCard>
     <!-- CATEGORY WISE PROFIT TABLE -->
-     <div class="flex flex-col lg:flex-row gap-4 h-[400px]">
+     <div class="flex flex-col lg:flex-row gap-4 lg:h-[400px]">
 <UCard
-  class="w-full flex-1"
+  class="w-full flex-1 lg:overflow-y-scroll"
   :ui="{
     base: '',
     divide: 'divide-y divide-gray-200 dark:divide-gray-700',

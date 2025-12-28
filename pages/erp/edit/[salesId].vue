@@ -1072,13 +1072,14 @@ const billPoints =
         paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
         splitPayments: paymentMethod.value === 'Split' ? splitPayments.value : null,
         accountId: selected.value,
-        clientId: clientId.value,
+        clientId: newClientId.value,
         date: new Date(date.value).toISOString(),
         companyId: useAuth().session.value?.companyId
       },
     }    // Increment to new client (if exists)
-    if (newClientId.value && (newClientId.value !== oldClientId.value))  {
-
+    console.log(oldClientId.value,newClientId.value,'old and new client ids');
+    if (clientId.value)  {
+      if(oldClientId.value && newClientId.value !== ''){
       await UpdateCompanyClientForRedeem.mutateAsync({
         where: {
           companyId_clientId: {
@@ -1091,9 +1092,9 @@ const billPoints =
         },
       });
       console.log('Points decremented from old client:', res);
-    
+    }
 
-
+    if(newClientId.value){
       const res = await UpdateCompanyClientForRedeem.mutateAsync({
         where: {
           companyId_clientId: {
@@ -1111,6 +1112,7 @@ const billPoints =
       newClientId.value = '';
 
       console.log('Points incremented to new client:', res);
+    }
     }
 
 
