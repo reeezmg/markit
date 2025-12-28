@@ -2258,7 +2258,7 @@ watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
                   class="flex-1"
                   :disabled="clientFound || bill?.isMarkit"
                 />
-                <!-- <UButton icon="i-heroicons-x-mark" color="red" @click="handleClearClient" :disabled="bill?.isMarkit" /> -->
+                <UButton icon="i-heroicons-x-mark" color="red" @click="handleClearClient" :disabled="bill?.isMarkit" />
               </div>
             </div>
 
