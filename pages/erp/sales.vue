@@ -51,7 +51,7 @@ const getColumns = (isMobile) => {
     return [
       { key: 'invoiceNumber', label: 'Inv#', sortable: true },
       { key: 'createdAt', label: 'Date', sortable: true },
-      { key: 'entries', label: 'Entries', sortable: true },
+      { key: 'customer', label: 'Customer', sortable: true },
       { key: 'subtotal', label: 'Sub Total', sortable: true },
       { key: 'grandTotal', label: 'Grand Total', sortable: true },
       { key: 'paymentStatus', label: 'Payment', sortable: true },
@@ -65,7 +65,7 @@ const getColumns = (isMobile) => {
     { key: 'subtotal', label: 'Sub Total', sortable: true },
     { key: 'grandTotal', label: 'Grand Total', sortable: true },
     { key: 'createdAt', label: 'Date', sortable: true },
-    { key: 'entries', label: 'Entries', sortable: true },
+    { key: 'customer', label: 'Customer', sortable: true },
     { key: 'paymentStatus', label: 'Payment', sortable: true },
     { key: 'notes', label: 'Notes', sortable: true },
     { key: 'actions', label: 'Actions', sortable: false },
@@ -199,7 +199,7 @@ const columnsTable = computed(() =>
 const selectedRows = ref([]);
 const notes = ref<any>({})
 
-const search = ref<number | null>(null);
+const search = ref('');
 const selectedStatus = ref<any>([]);
 const searchStatus = ref(undefined);
 
@@ -217,46 +217,103 @@ const page = ref(1);
 const pageCount = ref('5');
 
 const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
-return {
-    where: {
-        companyId: useAuth().session.value?.companyId,
-        deleted: false,
-        ...(search.value && {
-            invoiceNumber: {
-                contains: search.value,
-                mode: 'insensitive'
-                }
-            }
-        ),
-        ...(selectedStatus.value.length && {
-            OR: selectedStatus.value.map(item => ({ paymentStatus: item.value }))
-        }),
-        ...((selectedDate.value && !search.value) && {
-  createdAt: {
-    gte: startOfDay(selectedDate.value.start),
-    lte: endOfDay(selectedDate.value.end),
+  const searchTerm = search.value?.trim()
+
+  // ---------- helpers ----------
+  const isDigitsOnly = !!searchTerm && /^\d+$/.test(searchTerm)
+  const isInvoiceSearch =
+    isDigitsOnly &&
+    searchTerm.length > 0 &&
+    searchTerm.length <= 9 // INT4 safe
+
+  const isPhoneSearch =
+    !!searchTerm &&
+    /^[+\d]+$/.test(searchTerm) &&
+    searchTerm.length >= 1
+
+  // ---------- dynamic OR ----------
+  const searchOR: Prisma.BillWhereInput[] = []
+
+  if (isInvoiceSearch) {
+    searchOR.push({
+      invoiceNumber: {
+        equals: Number(searchTerm),
+      },
+    })
   }
-})
+
+  if (searchTerm) {
+    searchOR.push(
+      {
+        client: {
+          name: {
+            contains: searchTerm,
+            mode: 'insensitive',
+          },
+        },
+      }
+    )
+  }
+
+  if (isPhoneSearch) {
+    searchOR.push({
+      client: {
+        phone: {
+          contains: searchTerm,
+        },
+      },
+    })
+  }
+
+  return {
+    where: {
+      companyId: useAuth().session.value?.companyId,
+      deleted: false,
+
+      ...(searchOR.length && {
+        OR: searchOR,
+      }),
+
+      ...(selectedStatus.value.length && {
+        OR: selectedStatus.value.map(item => ({
+          paymentStatus: item.value,
+        })),
+      }),
+
+      ...((selectedDate.value && !searchTerm) && {
+        createdAt: {
+          gte: startOfDay(selectedDate.value.start),
+          lte: endOfDay(selectedDate.value.end),
+        },
+      }),
     },
-    include:{
-        entries:{
-            include:{
-                category:{
-                    select:{
-                        name:true
-                    }
-                }
-            }
-        }
+
+    include: {
+      client: {
+        select: {
+          name: true,
+          phone: true,
+        },
+      },
+      entries: {
+        include: {
+          category: {
+            select: {
+              name: true,
+            },
+          },
+        },
+      },
     },
+
     orderBy: {
-        [sort.value.column]: sort.value.direction,
+      [sort.value.column]: sort.value.direction,
     },
+
     skip: (page.value - 1) * parseInt(pageCount.value),
     take: parseInt(pageCount.value),
-};
-});
-
+  }
+})
 
 
 const {
@@ -527,8 +584,13 @@ const handlePaid = () => {
                     </UDropdown>
                 </template>
 
-                <template #entries-data="{ row }">
-                    {{ row.entries?.length }}
+                <template #customer-data="{ row }">
+                   <div class="flex flex-col">
+                    {{ row.client?.phone || '-' }}<br/>
+                    <div class="text-xs text-gray-500">
+                        {{ row.client?.name }}
+                    </div>
+                   </div>
                 </template>
 
                 <template #grandTotal-data="{ row }">

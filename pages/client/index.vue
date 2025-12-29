@@ -41,13 +41,13 @@ const columns = [
         sortable: true,
     },
     {
-        key: 'status',
-        label: 'Status',
+        key: 'points',
+        label: 'Points',
         sortable: true,
     },
     {
-        key: 'pipeline',
-        label: 'Pipeline',
+        key: 'status',
+        label: 'Status',
         sortable: true,
     },
     {
@@ -306,68 +306,97 @@ const pageTo = computed(() =>
 
 // Data
 const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
-    const selectedStatusCondition =
-        selectedStatus.value.length > 0
-            ? {
-                  OR: selectedStatus.value.map((item) => {
-                      return { status: item.value };
-                  }),
-              }
-            : {};
+  const companyId = useAuth().session.value?.companyId
+  const searchTerm = search.value?.trim()
 
-    return {
+  const selectedStatusCondition =
+    selectedStatus.value.length > 0
+      ? {
+          OR: selectedStatus.value.map(item => ({
+            status: item.value,
+          })),
+        }
+      : {}
+
+  return {
+    where: {
+      AND: [
+        // client must belong to current company
+        {
+          companies: {
+            some: {
+              companyId,
+            },
+          },
+        },
+
+        // search
+        ...(searchTerm
+          ? [{
+              OR: [
+                {
+                  name: {
+                    contains: searchTerm,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  email: {
+                    contains: searchTerm,
+                    mode: 'insensitive',
+                  },
+                },
+                {
+                  phone: {
+                    contains: searchTerm,
+                  },
+                },
+              ],
+            }]
+          : []),
+
+        selectedStatusCondition,
+      ],
+    },
+
+    orderBy: {
+      [sort.value.column]: sort.value.direction,
+    },
+
+    skip: (page.value - 1) * pageCount.value,
+    take: pageCount.value,
+
+    include: {
+      // 🔥 THIS is where points come from
+      companies: {
         where: {
-            AND: [
-                {
-                    companies: {
-                        some: {
-                            companyId: useAuth().session.value?.companyId,
-                        },
-                    },
-                },
-                {
-                    OR: [
-                        {
-                            name: {
-                                contains: search.value,
-                                mode: 'insensitive',
-                            },
-                        },
-                        {
-                            email: {
-                                contains: search.value,
-                                mode: 'insensitive',
-                            },
-                        },
-                        {
-                            phone: {
-                                contains: search.value
-                            },
-                        },
-                    ],
-                },
-                selectedStatusCondition,
-            ],
+          companyId,
         },
+        select: {
+          points: true,
+        },
+      },
 
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
+      bills: {
+        include: {
+          entries: true,
         },
-        skip: (page.value - 1) * pageCount.value,
-        take: pageCount.value,
-        include:{
-            bills:{
-               include:{
-                 entries:true
-               }
-            }
-        },
-    };
-});
+      },
+    },
+  }
+})
 
 const countArgs = computed(() => ({
   where: queryArgs.value.where,
 }));
+
+const {
+    data: clients,
+    isLoading,
+    error,
+    refetch,
+} = useFindManyClient(queryArgs);
+
 const { data: pageTotal } = useCountClient(countArgs);
 
 const handleEnterPhone = async() => {
@@ -377,16 +406,6 @@ const handleEnterPhone = async() => {
 const handleClientAdded = (id,name) => {
  
 };
-
-
-
-
-const {
-    data: clients,
-    isLoading,
-    error,
-    refetch,
-} = useFindManyClient(queryArgs);
 
 
 async function multiToggle(ids, status: boolean) {
@@ -608,10 +627,8 @@ const downloadClientsAsVCF = () => {
                     </UDropdown>
                 </template>
 
-                <template #pipeline-data="{ row }">
-                    <UDropdown :items="pipelineStatus(row)">
-                        <UButton color="white" :label="row.pipelineStatus" trailing-icon="i-heroicons-chevron-down-20-solid"  />
-                    </UDropdown>
+                <template #points-data="{ row }">
+                   {{ row.companies[0]?.points || 0 }}
                 </template>
 
                 <template #status-data="{ row }">
