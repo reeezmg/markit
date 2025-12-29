@@ -611,11 +611,11 @@ model Category {
   entries           Entry[]
   shortCut          String?         @map("short_cut")
   hsn               String?
-  taxType           TaxType         @default(FIXED)
-  fixedTax          Float?          
-  thresholdAmount   Float?        
-  taxBelowThreshold Float?        
-  taxAboveThreshold Float?          
+  taxType           TaxType         @default(FIXED) @map("tax_type")
+  fixedTax          Float?          @map("fixed_tax")
+  thresholdAmount   Float?          @map("threshold_amount")
+  taxBelowThreshold Float?          @map("tax_below_threshold")
+  taxAboveThreshold Float?          @map("tax_above_threshold")
   margin            Float?  
   targetAudience    String?        @map("target_audience")     
   writeId           String?            @default(uuid()) @map('write_id')
@@ -1004,6 +1004,7 @@ model CompanyUser {
     bills       Bill[]
     expense    Expense[]
     @@id([companyId, userId])
+
     @@allow('read,create, update, delete', auth() != null )
     @@map('company_users')
 }
