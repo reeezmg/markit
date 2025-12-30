@@ -696,7 +696,7 @@ model Entry {
     tax Float?
     value Float?
     size String?
-    userName String?
+    userName String? @map("user_name")
     companyId String? @map("company_id")
     userId String? @map("user_id")
     companyUser CompanyUser? @relation(fields: [companyId, userId], references: [companyId, userId])
@@ -819,7 +819,7 @@ model Payment {
 model Address {
     id String @id() @unique() @default(uuid())
     createdAt DateTime @default(now()) @map("created_at")
-    updatedAt DateTime @updatedAt() @map("updated_at")
+    updatedAt DateTime @updatedAt() @default(now()) @map("updated_at")
     name String?
     street String?
     locality String?

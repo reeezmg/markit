@@ -796,7 +796,7 @@ model Entry extends Base {
     tax         Float? 
     value       Float?
     size        String?
-    userName    String?
+    userName    String? @map("user_name")
     companyId       String? @map("company_id")
     userId          String? @map("user_id")
     companyUser     CompanyUser? @relation(fields: [companyId, userId], references: [companyId, userId])
@@ -922,7 +922,7 @@ model Payment extends Base {
 
 model Address extends Base {
     createdAt DateTime @default(now()) @map("created_at")
-    updatedAt DateTime @updatedAt @map("updated_at")
+    updatedAt DateTime @updatedAt @default(now()) @map("updated_at")
     name       String?
     street    String?
     locality  String?
