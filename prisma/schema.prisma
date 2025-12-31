@@ -497,9 +497,9 @@ model CouponUsage {
 model CouponClient {
     id String @id() @default(uuid())
     coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
-    couponId String
+    couponId String @map("coupon_id")
     client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
-    clientId String
+    clientId String @map("client_id")
     createdAt DateTime @default(now())
 
     @@map("coupon_clients")
