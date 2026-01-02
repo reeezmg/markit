@@ -652,6 +652,7 @@ model Bill {
     deliveryFees Float? @map("delivery_fees")
     paymentMethod String? @map("payment_method")
     redeemedPoints Int? @map("redeemed_points")
+    couponValue Int? @map("coupon_value")
     billPoints Int? @map("bill_points")
     splitPayments Json? @map("split_payments")
     paymentStatus PaymentStatus @default(PENDING) @map("payment_status")
