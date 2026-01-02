@@ -2364,7 +2364,7 @@ const handleProductSelected = async (selectedItems) => {
         enterkeyhint="enter"
         size="sm"  
          :color="row.return ? 'red' : undefined"
-        @keydown.enter="addNewRow(index); updateUserDetails(index,row.user)"
+        @keydown.enter="addNewRow(index); updateUserDetails(index,Number(row.user))"
         @keydown.up.prevent="moveFocus(index, 'user', 'up')"
         @keydown.down.prevent="moveFocus(index, 'user', 'down')"
         @keydown.left.prevent="moveFocus(index, 'user', 'left')"
