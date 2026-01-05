@@ -1,7 +1,5 @@
 <script setup>
 import { BillingAddClient } from '#components';
-import { useCreateBill,useFindUniqueClient,useFindManyCoupon,useCreateTokenEntry,useFindFirstItem,useFindManyTokenEntry, useFindManyCategory, useUpdateVariant,useUpdateItem, useCreateAccount,useFindManyAccount, useDeleteTokenEntry, useUpdateCompanyClient } from '~/lib/hooks';
-import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'
 import {
@@ -9,23 +7,18 @@ import {
   CapacitorBarcodeScannerTypeHint
 } from '@capacitor/barcode-scanner'
 import { Capacitor } from '@capacitor/core';
+const config = useRuntimeConfig();
+const serverUrl = config.public.serverUrl
 // import { generateThermalReceiptPDF } from '~/utils/thermal-receipt.client';
-   
+const isClientLoading = ref(false);
+const isCouponLoading = ref(false)
+const allCoupons = ref([])
 
 
 const queryClient = useQueryClient();
 const { generatableCoupons, loading:generatableCouponsLoading, error:generatableCouponsError, generateCoupons } = useGenerateCoupons()
 const currentRequestIds = ref({});
-const lastResponse  = ref({});
 const { printBill } = usePrint();
-const CreateBill = useCreateBill({ optimisticUpdate: true });
-const CreateTokenEntry = useCreateTokenEntry({ optimisticUpdate: true });
-const CreateAccount = useCreateAccount({ optimisticUpdate: true });
-const UpdateVariant = useUpdateVariant({ optimisticUpdate: true });
-const UpdateItem = useUpdateItem({ optimisticUpdate: true });
-const DeleteTokenEntry = useDeleteTokenEntry({ optimisticUpdate: true });
-const UpdateCompanyClient = useUpdateCompanyClient({ optimisticUpdate: true });
-const UpdateCompanyClientForRedeem = useUpdateCompanyClient();
 const redeeming = ref(false);
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
@@ -50,8 +43,6 @@ const points = ref(0);
 const clientName = ref('');
 const clientId = ref('');
 const couponValue = ref(0);
-const token = ref("")
-const tokenEntries = ref([])
 const splitPayments = ref([])
 const isRedeemPoint = ref(false);
 const selected = ref(null);
@@ -80,9 +71,6 @@ const taxInputs = ref([]);
 const discountref = ref();
 const paymentref = ref();
 const saveref = ref();
-const savetokenref = ref();
-const addTokenRef = ref();
-const tokenInputs = ref(['']);
 const categoryStore = useCategoryStore()
 const userStore = useUserStore()
 
@@ -95,7 +83,6 @@ const isMobile = ref(false);
 const showSplitModal = ref(false)
 const isOpen = ref(false);
 const isSavingAcc = ref(false)
-const isTokenOpen = ref(false);
 const issalesReturnModelOpen = ref(false);
 const isClientAddModelOpen = ref(false);
 
@@ -133,8 +120,6 @@ const grandTotal = computed(() => {
 
   return afterDiscount - redeemedAmt.value;
 });
-
-
 
 
 const dateOnly = computed({
@@ -355,8 +340,6 @@ onMounted(() => {
       clientName: '',
       clientId: '',
       couponValue: 0,
-      token: '',
-      tokenEntries: [],
       splitPayments: [],
       isRedeemPoint: false,
       redeemedPoints: 0,
@@ -392,8 +375,6 @@ const currentBill = computed(() => ({
   clientName: clientName.value,
   clientId: clientId.value,
   couponValue: couponValue.value,
-  token: token.value,
-  tokenEntries: tokenEntries.value,
   splitPayments: splitPayments.value,
   isRedeemPoint: isRedeemPoint.value,
   redeemedPoints: redeemedPoints.value,
@@ -435,8 +416,6 @@ function createNewBill() {
   clientName.value = '';
   clientId.value = '';
   couponValue.value = '';
-  token.value = '';
-  tokenEntries.value = [];
   splitPayments.value = [];
   isRedeemPoint.value = false;
   redeemedPoints.value = 0;
@@ -486,8 +465,6 @@ function loadBill(billNumber) {
   clientName.value = bill.clientName ?? '';
   clientId.value = bill.clientId ?? '';
   couponValue.value = bill.couponValue ?? 0;
-  token.value = bill.token ?? '';
-  tokenEntries.value = bill.tokenEntries ?? [];
   splitPayments.value = bill.splitPayments ?? [];
   isRedeemPoint.value = bill.isRedeemPoint ?? false;
   redeemedPoints.value = bill.redeemedPoints ?? 0;
@@ -543,7 +520,6 @@ const reset = () => {
   ];
   discount.value = 0;
   paymentMethod.value = 'Cash';
-  tokenEntries.value = [''];
   clientName.value = '';
   clientId.value = '';
   phoneNo.value = '';
@@ -822,102 +798,69 @@ const args = computed(() => ({
   },
 }));
 
+const fetchClientByPhone = async (phone) => {
+  isClientLoading.value = true
 
+  try {
+    if (!phone) return null
 
- const {
-  data: client,
-  isLoading:isClientLoading,
-  error,
-  refetch:refetchClient,
-} = useFindUniqueClient(
-  args,
-  { enabled: false }
-);
-
-
-const {
-    data: categories,
-} = useFindManyCategory(
-  {
-    where:{companyId:useAuth().session.value?.companyId},
-    select:{
-      id:true,
-      name:true,
-      hsn:true,
-    }
-}
-);
-
-
-const itemargs = computed(() => ({
-  where:  {
-        barcode: scannedBarcode.value,
-        companyId: useAuth().session.value?.companyId
+    const data = await $fetch('/api/bill/findUniqueClient', {
+      query: {
+        phone: `+91${phone}`,
       },
-  select: {
-    id: true,
-    size: true,
-    qty: true,
-    variant: {
-      select: {
-        id: true,
-        sprice: true,
-        dprice:true,
-        name: true,
-        tax: true,
-        discount: true,
-        product: {
-          select: {
-            name: true,
-            categoryId: true,
-            subcategory: {
-              select: {
-                name: true
-              }
-            },
-            category: {
-              select: {
-                taxType: true,
-                fixedTax: true,
-                thresholdAmount: true,
-                taxBelowThreshold: true,
-                taxAboveThreshold: true
-              }
-            }
-          }
-        }
-      }
-    }
+    })
+
+    return data ?? null
+  } catch (error) {
+    console.error('Error fetching client by phone:', error)
+    throw error
+  } finally {
+    isClientLoading.value = false
   }
-}));
+}
 
 
+const categories = ref([])
 
 
-const entryargs = computed(() => ({
-    where: {
-        tokenNo: { in: tokenEntries.value }  // Fetch all entries matching tokenNos
+const getCategories = async () => {
+  try {
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) {
+      console.warn('companyId not ready yet')
+      return
     }
-}));
 
-const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs);
-const { data: entrydata ,refetch:entryRefetch} = useFindManyTokenEntry(entryargs,{enable:false});
+    const data = await $fetch('/api/bill/findManyCategory', {
+      method: 'GET',
+      query: {
+        companyId,
+      },
+    })
+
+    categories.value = data ?? []
+    console.log('Categories fetched:', categories.value)
+  } catch (error) {
+    console.error('Error fetching categories:', error)
+  }
+}
+
+
+onMounted(async() => {
+  await getCategories()
+})
+
+
+
 
 const handleEnterBarcode = (barcode,index) => {
  const pattern = /^\d+[A-Z]\d{6}$/;
 
   if(!barcode){
-    if(token.value){
-      const component = savetokenref.value;
-      const button = component.$el;
-      button.focus();
-    }
-    else{
     const component = discountref.value;
     const input = component.$el.querySelector("input");
     input.focus();
     input.select();
-    }
   }else{
     if(!pattern.test(barcode)){
       const categorystore = categoryStore.getCategoryByShortCut(barcode)
@@ -945,33 +888,6 @@ const handleEnterPayment = () => {
 };
 
 
-const handleTokenInputEnter = async(index) => {
-  if(!tokenEntries.value[index]){
-    const component = addTokenRef.value;
-    const button = component.$el;
-    button.focus();
-    
-  }else{
-    addEntry()
-    await nextTick();
-    const component = tokenInputs.value[index + 1];
-    const input = component.$el.querySelector("input");
-    input.focus();
-    input.select();
-  }
-  
-}
-
-const handleTokenDelete = (index, event) => {
-  if(!tokenEntries.value[index] && tokenEntries.value.length > 1){
-    event.preventDefault()
-    tokenEntries.value.splice(index,1)
-    const component = tokenInputs.value[index-1];
-    const input = component.$el.querySelector("input");
-    input.focus();
-
-  }
-}
 
 const selectAllText = (index) => {
   const component = barcodeInputs.value[index];
@@ -982,78 +898,90 @@ const selectAllText = (index) => {
     }
   }
 };
+const fetchItemFromServer = async (barcode) => {
+  try {
+    if (!barcode) return null
 
-watch(itemdata, (newData) => {
-  if (!newData) return;
-  
-  lastResponse.value = {
-    data: newData,
-    requestId: scannedBarcode.value 
-  };
-  
-  processItemResponse(newData);
-});
+    const data = await $fetch('/api/bill/findFirstItem', {
+      query: { barcode },
+    })
+
+    return data ?? null
+  } catch (error) {
+    console.error('Error fetching item from server:', error)
+    throw error
+  }
+}
+
 
 const fetchItemData = async (barcode, index) => {
-  if (!barcode) return;
- loadingStates.value[index] = true;
-  // Store the current barcode and index
-  currentRequestIds.value[index] = barcode;
-  scannedBarcode.value = barcode;
-  
+  if (!barcode || !items.value[index]) return
+
+  loadingStates.value[index] = true
+  currentRequestIds.value[index] = barcode
+
   try {
-    await itemRefetch();
-    // Check if this is still the active request for this index
-    if (currentRequestIds.value[index] !== barcode) {
-      return; // Newer request has been made
-    }
-    
-    // Process the response if we got one
-    if (lastResponse.value?.requestId === barcode && itemdata.value) {
-      processItemResponse(itemdata.value, index);
-    } else if (!itemdata.value) {
-      handleInvalidBarcode(index);
+    const data = await fetchItemFromServer(barcode)
+    console.log('Fetched item data:', data)
+
+    // ❗ Ignore stale responses
+    if (currentRequestIds.value[index] !== barcode) return
+
+    if (data) {
+      processItemResponse(data, index)
+    } else {
+      handleInvalidBarcode(index)
     }
   } catch (error) {
-    console.error('Error fetching item:', error);
-    if (currentRequestIds.value[index] === barcode) {
-      handleInvalidBarcode(index);
-    }
-  } finally{
-     loadingStates.value[index] = false;
-  }
-};
+    console.error('Error fetching item:', error)
 
+    if (currentRequestIds.value[index] === barcode) {
+      handleInvalidBarcode(index)
+    }
+  } finally {
+    loadingStates.value[index] = false
+    delete currentRequestIds.value[index]
+  }
+}
 
 const processItemResponse = (itemData, index) => {
-  if (!items.value[index]) {
-    return;
-  }
+  if (!items.value[index]) return
 
-  const categoryId = itemData.variant.product.categoryId;
+  const categoryId = itemData.variant.product.categoryId
 
-  items.value[index].id = itemData.id || '';
-  items.value[index].size = itemData.size || '';
-  items.value[index].name = `${itemData.variant.product.subcategory?.name} ${itemData.variant?.name} ${itemData.variant.product.name} ` || '';
-  items.value[index].category = categories.value.filter(category => category.id === categoryId);
-  items.value[index].rate = itemData.variant?.sprice || 0;
-  items.value[index].discount = itemData.variant?.dprice - itemData.variant?.sprice || 0;
-  items.value[index].tax = itemData.variant?.tax || 0;
-  items.value[index].totalQty = itemData?.qty || 0;
-  items.value[index].sizes = itemData.variant?.sizes || null;
-  items.value[index].variantId = itemData.variant?.id || '';
+  items.value[index].id = itemData.id ?? ''
+  items.value[index].size = itemData.size ?? ''
 
-  delete currentRequestIds.value[index];
-};
+  items.value[index].name =
+    `${itemData.variant.product.subcategory?.name ?? ''} ` +
+    `${itemData.variant?.name ?? ''} ` +
+    `${itemData.variant.product.name ?? ''}`
+
+  items.value[index].category =
+    categories.value.filter(c => c.id === categoryId)
+
+  items.value[index].rate = itemData.variant?.sprice ?? 0
+  items.value[index].discount =
+    (itemData.variant?.dprice ?? 0) -
+    (itemData.variant?.sprice ?? 0)
+
+  items.value[index].tax = itemData.variant?.tax ?? 0
+  items.value[index].totalQty = itemData.qty ?? 0
+  items.value[index].sizes = itemData.variant?.sizes ?? null
+  items.value[index].variantId = itemData.variant?.id ?? ''
+}
 
 const handleInvalidBarcode = (index) => {
-  items.value[index].barcode = '';
+  if (!items.value[index]) return
+
+  items.value[index].barcode = ''
+
   toast.add({
     title: 'Barcode is invalid or item is empty!',
     color: 'red',
-  });
-  delete currentRequestIds.value[index];
-};
+  })
+}
+
 
 const handleSave = async () => {
   if (isSaving.value) return
@@ -1154,6 +1082,7 @@ const billPoints =
       grandTotal: Number(grandTotal.value) || 0,
       // Keep prisma field camelCase; DB column can be @map("return_amt")
       returnAmt: Number(returnAmt.value) || 0,
+      couponValue:Number(couponValue.value) || 0,
       paymentMethod: paymentMethod.value || 'Cash',
       ...(redeemedPoints.value ? { redeemedPoints: Number(redeemedPoints.value) || 0 } : {}),
       ...(clientId.value ? { billPoints: Number(billPoints) } : { billPoints: 0 }),
@@ -1254,15 +1183,13 @@ const billPoints =
         clientId: clientId.value,
         companyId,
         couponId: selectedCouponId.value?.value || null,
-        userId,
-        tokenEntries: tokenEntries.value,
+        userId
       },
     })
 
         // 10) Refresh caches
-    queryClient.invalidateQueries({ queryKey: ['zenstack', 'Bill', 'findMany'], exact: false })
-    queryClient.invalidateQueries({ queryKey: ['zenstack', 'Product', 'findMany'], exact: false })
-    await couponRefetch()
+    // queryClient.invalidateQueries({ queryKey: ['zenstack', 'Bill', 'findMany'], exact: false })
+    // queryClient.invalidateQueries({ queryKey: ['zenstack', 'Product', 'findMany'], exact: false })
  
 
     toast.add({ title: 'Bill created successfully!', color: 'green' })
@@ -1323,134 +1250,81 @@ const download = async() => {
 }
 
 
-const {
-    data: accounts
-} = useFindManyAccount({
-      where: { companyId: useAuth().session.value?.companyId},
-});
+const accounts = ref([])
 
 
-const submitForm = () => {
-  isSavingAcc.value = true
+const getAccounts = async () => {
   try {
-    
-    if (!account.value.name) {
-        throw new Error(`Plase Fill name`);
-      }
-    const res = CreateAccount.mutateAsync({
-      data: {
-                id: uuidv4(),
-                name: account.value.name,
-                phone: account.value.phone,
-                address: {
-                    create: {
-                        street: account.value.street,
-                        locality: account.value.locality,
-                        city: account.value.city,
-                        state: account.value.state,
-                        pincode: account.value.pincode,
-                    },
-                },
-                company:{
-                  connect:{
-                        id:useAuth().session.value?.companyId
-                      }
-                  }
-              }
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) {
+      console.warn('companyId not ready yet, skipping fetch')
+      return
+    }
+
+    const data = await $fetch('/api/bill/findManyAccount', {
+      method: 'GET',
+      query: { companyId },
     })
+
+    accounts.value = data ?? []
+    console.log('Accounts fetched:', accounts.value)
+  } catch (err) {
+    console.error('Error fetching accounts:', err)
+  } 
+}
+
+onMounted(async () => {
+  await getAccounts()
+})
+
+const submitForm = async () => {
+  isSavingAcc.value = true
+
+  try {
+    if (!account.value.name) {
+      throw new Error('Please fill name')
+    }
+
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) {
+      throw new Error('Company not found')
+    }
+
+    await $fetch('/api/bill/createAccount', {
+      method: 'POST',
+      body: {
+        name: account.value.name,
+        phone: account.value.phone,
+        companyId,
+        address: {
+          street: account.value.street,
+          locality: account.value.locality,
+          city: account.value.city,
+          state: account.value.state,
+          pincode: account.value.pincode,
+        },
+      },
+    })
+
     toast.add({
-            title: 'Account added !',
-            id: 'modal-success',
-        });
+      title: 'Account added!',
+      id: 'modal-success',
+    })
+    await getAccounts()
     isOpen.value = false
-  }catch(error){
-     toast.add({
-        title: 'Account creation failed!',
-        description: error.message,
-        color: 'red',
-      });
-  }finally{
+  } catch (error) {
+    toast.add({
+      title: 'Account creation failed!',
+      description: error.message || 'Something went wrong',
+      color: 'red',
+    })
+  } finally {
     isSavingAcc.value = false
   }
-};
-
-
-
-const handleTokenSave = async () => {
-  items.value = items.value.filter(item => item.id || item.barcode);
-  try {
-    // Create the bill first
-    const billResponse = await Promise.all(
-    items.value.map(item => 
-        CreateTokenEntry.mutateAsync({
-            data: {
-                tokenNo: token.value,
-                createdAt: new Date().toISOString(),
-                company: {
-                    connect: {
-                        id: useAuth().session.value?.companyId,
-                    },
-                },
-                itemId: item.id || '',
-                variantId: item.variantId || '',
-                barcode: item.barcode || '',
-                categoryId: item.category[0]?.id || '', 
-                size: item.size || '',
-                name: item.name || '',
-                qty: item.qty,
-                rate: item.rate,
-                discount: item.discount,
-                tax: item.tax,
-                value: item.value,
-                sizes: item.sizes, 
-                totalQty: item.totalQty,
-            }
-        })
-    )
-);
-
-    
-  } catch (error) {
-    console.error('Error creating bill', error);
-  }
-
-
-  try {
-   
-    for (const item of items.value) {
-          await UpdateItem.mutateAsync({
-            where: { id: item.id },
-            data: {
-              status: 'tokened',
-            },
-          });
-
-         
-        }
-    } catch (error) {
-    console.error('Error updating item and variant', error);
-  }
-    
-
-    // Optionally, you can reset the form or perform other actions after successful creation
-    items.value = [
-    { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0,userCode:null,userId:null,user:null }
-    ];
-    token.value = '';
-    discount.value = 0;
-    paymentMethod.value = 'Cash';
-
-};
-
-const addEntry = () => {
-  tokenEntries.value.push('')  // Add a new empty entry
 }
 
-const removeEntry = (index) => {
-  if (tokenEntries.value.length > 1) {
-    tokenEntries.value.splice(index, 1)
-  }
-}
+
+
 
 const submitEntryForm = async () => {
     await entryRefetch();
@@ -1499,9 +1373,6 @@ const newBill = () => {
   // ];
   // discount.value = 0;
   // paymentMethod.value = 'Cash';
-
-  // token.value = '';
-  // tokenEntries.value = [''];
   // grandTotal.value = 0;
   // returnAmt.value = 0;
   // phoneNo.value = '';
@@ -1655,15 +1526,23 @@ const handleReturnData = ({ returnedItems }) => {
 };
 
 
-const handleEnterPhone = async() => {
-  const { data } = await refetchClient()
-  clientName.value = data?.name
-  clientId.value = data?.id
-  points.value = data?.companies[0]?.points
-  if(!data){
-    isClientAddModelOpen.value = true;
+const handleEnterPhone = async () => {
+  try {
+    const data = await fetchClientByPhone(phoneNo.value)
+
+    if (!data) {
+      isClientAddModelOpen.value = true
+      return
+    }
+
+    clientName.value = data.name
+    clientId.value = data.id
+    points.value = data.companies?.[0]?.points ?? 0
+  } catch (err) {
+    console.error('Failed to fetch client:', err)
   }
 }
+
 
 const handleClientAdded = (id,name) => {
   clientName.value = name
@@ -1671,6 +1550,8 @@ const handleClientAdded = (id,name) => {
   points.value = 0
   isClientAddModelOpen.value = false;
 };
+
+
 
 
 
@@ -1762,64 +1643,60 @@ const handleDiscountEnter = (index) => {
 };
 
 const handleRedeemPoints = async () => {
-  isRedeemPoint.value = !isRedeemPoint.value;
-  redeeming.value = true;
+  isRedeemPoint.value = !isRedeemPoint.value
+  redeeming.value = true
 
-  if (isRedeemPoint.value) {
-    if (clientId.value) {
-      try {
-        // Determine the redeemable points (not more than grand total)
-        const redeemablePoints = Math.min(points.value, grandTotal.value);
+  try {
+    if (!clientId.value) return
 
-        const res = await UpdateCompanyClientForRedeem.mutateAsync({
-          where: {
-            companyId_clientId: {
-              companyId: useAuth().session.value?.companyId,
-              clientId: clientId.value
-            }
-          },
-          data: {
-            points: { decrement: redeemablePoints }
-          }
-        });
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) throw new Error('Company not found')
 
-        redeemedPoints.value = redeemablePoints;
-        redeemedAmt.value = redeemedAmt.value + redeemablePoints;
-        points.value = res.points;
+    if (isRedeemPoint.value) {
+      // 🔻 Redeem points
+      const redeemablePoints = Math.min(points.value, grandTotal.value)
 
-      } catch (error) {
-        console.error('Error updating client points', error);
-      }
+      const res = await $fetch('/api/bill/redeemClientPoints', {
+        method: 'POST',
+        body: {
+          companyId,
+          clientId: clientId.value,
+          points: redeemablePoints,
+          mode: 'redeem',
+        },
+      })
+
+      redeemedPoints.value = redeemablePoints
+      redeemedAmt.value += redeemablePoints
+      points.value = res.points
+    } else {
+      // 🔺 Revert points
+      if (redeemedPoints.value === 0) return
+
+      const res = await $fetch('/api/bill/redeemClientPoints', {
+        method: 'POST',
+        body: {
+          companyId,
+          clientId: clientId.value,
+          points: redeemedPoints.value,
+          mode: 'revert',
+        },
+      })
+
+      points.value = res.points
+      redeemedPoints.value = 0
+      redeemedAmt.value = 0
     }
-  } else {
-    // Revert redeemed points
-    if (clientId.value) {
-      try {
-        const res = await UpdateCompanyClientForRedeem.mutateAsync({
-          where: {
-            companyId_clientId: {
-              companyId: useAuth().session.value?.companyId,
-              clientId: clientId.value
-            }
-          },
-          data: {
-            points: { increment: redeemedPoints.value }
-          }
-        });
-
-        points.value = res.points;
-        redeemedPoints.value = 0;
-        redeemedAmt.value = 0;
-
-      } catch (error) {
-        console.error('Error updating client points', error);
-      }
-    }
+  } catch (error) {
+    console.error('Error updating client points', error)
+  } finally {
+    redeeming.value = false
   }
+}
 
-  redeeming.value = false;
-};
+
 function isCouponEligible(coupon, orderValue, clientId) {
+  console.log(clientId)
   const now = new Date();
   const clientUsage = coupon.couponUsage.filter(u => u.clientId === clientId).length;
   const clientAppearances = coupon.clients.filter(c => c.clientId === clientId).length;
@@ -1851,25 +1728,29 @@ function isCouponEligible(coupon, orderValue, clientId) {
   return true;
 }
 
+const couponRefetch = async () => {
+  try {
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) {
+      console.warn('companyId not ready yet')
+      return []
+    }
 
-const couponQueryArgs = computed(() => {
-  const now = new Date();
-  return {
-    where: {
-      companyId: useAuth().session.value?.companyId,
-      isActive: true,
-      startDate: { lte: now },
-      endDate: { gte: now },
-    },
-    include: {
-      clients: { select: { clientId: true } },   // ✅ fix here
-      couponUsage: { select: { clientId: true } },
-    },
+    const data = await $fetch('/api/bill/findManyCoupon', {
+      method: 'GET',
+      query: {
+        companyId,
+      },
+    })
+
+    allCoupons.value = data ?? []
+    return allCoupons.value
+  } catch (error) {
+    console.error('Error fetching coupons:', error)
+    return []
   }
-});
+}
 
-
-const { data: allCoupons, refetch: couponRefetch } = useFindManyCoupon(couponQueryArgs);
 
 
 const eligibleCoupons = computed(() => {
@@ -1923,7 +1804,7 @@ function calculateDiscount(coupon, orderValue) {
   // Prevent discount > orderValue
   if (discount > orderValue) discount = orderValue;
 
-  return discount
+  return Math.round(discount)
 }
 
 watch(selectedCouponId, (newSelectedCouponId) => {
@@ -1938,14 +1819,21 @@ watch(selectedCouponId, (newSelectedCouponId) => {
 }
 });
 
-watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
-  if (newItems) {
-    // reset coupon state when items or client changes
-    selectedCouponId.value = null;
-    redeemedAmt.value = redeemedAmt.value - couponValue.value;
-    couponValue.value = 0;
+watch(
+  [items, clientId],
+  async ([newItems, newClientId], [oldItems, oldClientId]) => {
+    if (!newItems || !newClientId) return
+
+    // 🔄 refetch coupons (client-sensitive)
+    await couponRefetch()
+
+    // 🔁 reset coupon state
+    selectedCouponId.value = null
+    redeemedAmt.value -= couponValue.value
+    couponValue.value = 0
   }
-}, { deep: true });
+)
+
 
 const handleProductSelected = async (selectedItems) => {
   if (!selectedItems || selectedItems.length === 0) return;
@@ -2020,9 +1908,8 @@ const handleProductSelected = async (selectedItems) => {
     </div>
      <div class="w-full flex flex-wrap gap-4 lg:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
-          <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
-          <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
     
         <div  class="lg:hidden flex flex-row items-center justify-between lg:col-span-2 gap-2 py-2 px-2">
@@ -2044,30 +1931,13 @@ const handleProductSelected = async (selectedItems) => {
         </div>
      
          <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
-            <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="flex-1" />
+            <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" />
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
        <div class="lg:grid grid-cols-1 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
-  <!-- Date Input: visible only if token is empty -->
-  <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
-
-  <!-- Token Input -->
-  <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="lg:col-span-2" />
-
-  <!-- Token Entries Button -->
-  <UButton
-    color="primary"
-    label="Token Entries"
-   :class="[
-    Capacitor.isNativePlatform()
-      ? 'lg:col-start-6 lg:col-span-2'
-      : 'lg:col-start-8 lg:col-span-2'
-  ]"
-    block
-    @click="isTokenOpen = true"
-  />
-
+          <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
+  
   <!-- Draft Selector + Reset -->
 <div
   :class="[
@@ -2407,7 +2277,7 @@ const handleProductSelected = async (selectedItems) => {
   
       </div>
         <!-- Other form elements -->
-         <div v-if="!token && !isMobile" class="lg:grid hidden grid-cols-1  lg:grid-cols-4 gap-4 text-sm px-3 py-3">
+         <div v-if="!isMobile" class="lg:grid hidden grid-cols-1  lg:grid-cols-4 gap-4 text-sm px-3 py-3">
 
           <div class="">
 
@@ -2599,13 +2469,6 @@ const handleProductSelected = async (selectedItems) => {
           </div>
         </div>
 
-          <div>
-            <label class="block text-gray-700 font-medium">Token</label>
-            <div class=" flex flex-row items-center justify-between gap-2">
-              <UInput v-model="token" label="Token" type="text" placeholder="Token No" class="w-full" />
-              <UButton color="primary" label="Token Entries " hidden @click="isTokenOpen=true" class=""/>
-            </div>
-          </div>
 
         </div>
 
@@ -2613,19 +2476,17 @@ const handleProductSelected = async (selectedItems) => {
 
         <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden lg:flex">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
-          <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
           <UButton class="flex-1" block @click="isProductSearchOpen = true">Product Search</UButton>
-          <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
-          <UButton v-if="!token" class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
+          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
+          <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
         </div>
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  v-if="!token" :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
-          <UButton  v-if="token" ref="savetokenref" color="green" class="flex-1" block @click="handleTokenSave">Save</UButton>
-          <UButton v-if="!token" class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton  class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
         </template>
       </UCard>
@@ -2673,30 +2534,6 @@ const handleProductSelected = async (selectedItems) => {
   @done="handleProductSelected"
   @close="isProductSearchOpen = false"
 />
-
-<!-- token modal -->
-    <UModal v-model="isTokenOpen">
-        <div class="p-4 space-y-4">
-          <div v-for="(entry, index) in tokenEntries" :key="index">
-            <div class="flex flex-row items-center">
-              <UInput ref="tokenInputs" v-model="tokenEntries[index]" size="sm" type="text" @keydown.enter="handleTokenInputEnter(index)"   @keydown.delete="(event) => handleTokenDelete(index, event)" />
-              <UButton 
-                icon="i-heroicons-trash" 
-                color="red" 
-                class="ms-2" 
-                @click="removeEntry(index)"
-                :disabled="tokenEntries.length === 1"
-              />
-            </div>
-          </div>
-
-          <div class="mt-4">
-            <UButton  color="green" @click="addEntry" >Add</UButton>
-          </div>
-
-          <UButton ref="addTokenRef"  @click="submitEntryForm" block class="mt-4">Submit</UButton>
-        </div>
-    </UModal>
 
 <!-- split payment method modal -->
    <UModal v-model="showSplitModal">

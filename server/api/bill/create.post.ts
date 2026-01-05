@@ -18,9 +18,8 @@ export default defineEventHandler(async (event) => {
     clientId,
     companyId,
     couponId,
-    tokenEntries
   } = body
-
+  console.log(body)
   const TRANSIENT_ERROR_CODES = [
     '40001', '40P01', '53300', '57P01', '55006', '08006', '08003', 'P1001'
   ]
@@ -59,13 +58,13 @@ export default defineEventHandler(async (event) => {
           id, invoice_number, subtotal, discount, grand_total, return_amt,
           payment_method, redeemed_points, bill_points, created_at,
           payment_status, type, split_payments, company_id, account_id,
-          client_id, user_id, updated_at
+          client_id, user_id, updated_at, coupon_value
         )
         VALUES (
           $1, $2, $3, $4, $5, $6,
           $7, $8, $9, $10,
           $11, $12, $13, $14, $15,
-          $16, $17, now()
+          $16, $17, now(), $18
         )
       `
 
@@ -86,7 +85,8 @@ export default defineEventHandler(async (event) => {
         payload.company.connect?.id || companyId,
         payload.account?.connect?.id || null,
         payload.client?.connect?.id || null,
-        payload.companyUser?.connect?.companyId_userId?.userId || null
+        payload.companyUser?.connect?.companyId_userId?.userId || null,
+        payload.couponValue
       ])
 
       // 2️⃣ Insert Entries (payload.entries.create)
@@ -175,16 +175,6 @@ export default defineEventHandler(async (event) => {
               [item.qty, item.id]
             )
           )
-      }
-
-      // delete token entries
-      if (tokenEntries.length > 0) {
-        updatePromises.push(
-          client.query(
-            `DELETE FROM token_entries WHERE token_no = ANY($1)`,
-            [tokenEntries.filter((t: string) => t.trim() !== '')]
-          )
-        )
       }
 
       // coupon usage + increment

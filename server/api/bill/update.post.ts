@@ -173,6 +173,7 @@ export default defineEventHandler(async (event) => {
           discount: billData.discount,
           grandTotal: billData.grandTotal,
           redeemedPoints: billData.redeemedPoints,
+          couponValue: billData.couponValue,
           paymentMethod: billData.paymentMethod,
           paymentStatus: billData.paymentStatus,
           ...(billData.splitPayments && {

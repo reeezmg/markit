@@ -1,22 +1,5 @@
 
 <script setup>
-import {
-  useUpdateBill,
-  useFindUniqueBill,
-  useFindFirstItem,
-  useFindManyCategory,
-  useUpdateVariant,
-  useUpdateItem,
-  useCreateAccount,
-  useFindManyAccount,
-  useFindUniqueClient,
-  useUpdateEntry,
-  useCreateEntry,
-  useDeleteManyEntry,
-  useFindManyEntry,
-  useUpdateCompanyClient,
-  useFindManyCoupon
-} from '~/lib/hooks'; 
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'
@@ -26,16 +9,7 @@ import {
 } from '@capacitor/barcode-scanner'
 import { Capacitor } from '@capacitor/core';
 const queryClient = useQueryClient();
-
-const UpdateBill = useUpdateBill({ optimisticUpdate: true });
-const CreateAccount = useCreateAccount({ optimisticUpdate: true });
-const UpdateVariant = useUpdateVariant({ optimisticUpdate: true });
-const UpdateItem = useUpdateItem({ optimisticUpdate: true });
-const UpdateEntry = useUpdateEntry({ optimisticUpdate: true });
-const CreateEntry = useCreateEntry({ optimisticUpdate: true });
-const DeleteManyEntry = useDeleteManyEntry({ optimisticUpdate: true });
-const UpdateCompanyClient = useUpdateCompanyClient({ optimisticUpdate: true });
-const UpdateCompanyClientForRedeem = useUpdateCompanyClient({ invalidateQueries: false });
+const currentRequestIds = ref({});
 const useAuth = () => useNuxtApp().$auth;
 const route = useRoute();
 const toast = useToast();
@@ -52,6 +26,7 @@ const accountLoaded = ref(false);
 const couponValue = ref(0);
 const clientFound = ref(false);
 const couponFound = ref(false);
+const couponLoaded = ref(false);
 const selectedCouponId = ref("");
 const printModel = ref(false);
 
@@ -566,94 +541,6 @@ const removeRow = (event,index) => {
   
 };
 
-onMounted(async () => {
-  const {data:newData} = await billRefetch()
-   if (!newData || !newData.entries) return;
-    if (newData?.splitPayments && newData.splitPayments.length > 0) {
-      tempSplits.value = Object.fromEntries(
-        paymentOptions.map((method) => {
-          const match = newData.splitPayments.find((p) => p.method === method);
-          return [method, { method, amount: match?.amount ?? null }];
-        })
-      );
-      splitPayments.value = [...newData.splitPayments];
-    }
-
-    if(newData.client?.id){
-      clientFound.value = true
-    }
-    if (newData.couponUsage[0]?.couponId) {
-      couponFound.value = true;
-      selectedCouponId.value = {
-        label:`${newData.couponUsage[0].coupon.code} (${newData.couponUsage[0].coupon.type})`,
-        value:newData.couponUsage[0].couponId
-      }
-    }
-    discount.value = newData.discount;
-    selected.value = newData.accountId;
-    clientId.value = newData.client?.id;
-    oldClientId.value = newData.client?.id;
-    clientName.value = newData.client?.name;
-    phoneNo.value = newData.client?.phone?.replace(/^\+91/, '') || '';
-    pastBillPoints.value = pointsValue > 0 ? Number(newData.grandTotal) / pointsValue : 0;
-    points.value = newData.client?.companies[0]?.points;
-    paymentMethod.value = newData.paymentMethod;
-    date.value = new Date(newData.createdAt).toISOString();
-    redeemedAmt.value = newData.redeemedPoints;
-    redeemedPoints.value = newData.redeemedPoints;
-    isRedeemPoint.value = !!newData.redeemedPoints;
-    console.log(newData.redeemedPoints)
-    items.value = newData.entries.map((entry, index) => ({
-      entryId: entry.id || '',
-      id: entry.item?.id || '',
-      variantId: entry.variant?.id || '',
-      sn: index + 1,
-      name: entry.name || '',
-      barcode: entry.barcode || '',
-      category: categories.value.filter((category) => category.id === entry.categoryId),
-      size: entry.item?.size || '',
-      sizes: entry.sizes || null,
-      qty: entry.qty || 1,
-      rate: entry.rate || 0,
-      discount: entry.discount || 0,
-      tax: entry.tax || 0,
-      value: entry.value || 0,
-      return: entry.return || false,
-      user:entry.userName || null,
-      userId:entry.userId || null
-    }));
-
-    items.value.push({
-      id: '',
-      variantId: '',
-      sn: items.value.length + 1,
-      barcode: '',
-      category: [],
-      size: '',
-      name: '',
-      qty: 1,
-      rate: 0,
-      discount: 0,
-      tax: 0,
-      value: 0,
-      sizes: {},
-      totalQty: 0,
-      return: false
-    });
-
-    // Wait for DOM update
-    await nextTick();
-
-    const component = barcodeInputs.value[items.value.length - 1];
-    const input = component?.$el?.querySelector?.("input");
-    input?.focus(); // Safe access
-  // Initialize column widths (optional)
-  const ths = resizableTable.value.querySelectorAll('th');
-  ths.forEach((th) => {
-    th.style.width = `${th.offsetWidth}px`;
-  });
-});
-
 
 const args = computed(() => ({
   where: {
@@ -678,191 +565,199 @@ const args = computed(() => ({
 
 
 
- const {
-  data: client,
-  isLoading:isClientLoading,
-  error,
-  refetch:refetchClient,
-} = useFindUniqueClient(
-  args,
-  { enabled: false } // disabled by default
-);
+ const fetchClientByPhone = async (phone) => {
+  isClientLoading.value = true
 
-const {
-    data: categories,
-} = useFindManyCategory(
-  {
-    where:{companyId:useAuth().session.value?.companyId},
-    select:{
-      id:true,
-      name:true
-    }
+  try {
+    if (!phone) return null
+
+    const data = await $fetch('/api/bill/findUniqueClient', {
+      query: {
+        phone: `+91${phone}`,
+      },
+    })
+
+    return data ?? null
+  } catch (error) {
+    console.error('Error fetching client by phone:', error)
+    throw error
+  } finally {
+    isClientLoading.value = false
+  }
 }
-);
 
 
+const categories = ref([])
 
-const itemargs = computed(() => ({
-  where: { 
-    barcode: scannedBarcode.value,
-    companyId:useAuth().session.value?.companyId || ''
 
-   },
-  select: {
-    id: true,
-    size: true,
-    qty: true,
-    variant: {
-      select: {
-        id: true,
-        sprice: true,
-        dprice:true,
-        name: true,
-        tax: true,
-        discount: true,
-        product: {
-          select: {
-            name: true,
-            categoryId: true,
-            category: {
-              select: {
-                taxType: true,
-                fixedTax: true,
-                thresholdAmount: true,
-                taxBelowThreshold: true,
-                taxAboveThreshold: true
-              }
-            }
-          }
-        }
-      }
+const getCategories = async () => {
+  try {
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) {
+      console.warn('companyId not ready yet')
+      return
     }
+
+    const data = await $fetch('/api/bill/findManyCategory', {
+      method: 'GET',
+      query: {
+        companyId,
+      },
+    })
+
+    categories.value = data ?? []
+    console.log('Categories fetched:', categories.value)
+  } catch (error) {
+    console.error('Error fetching categories:', error)
   }
-}));
-
-const findManyEntryargs = computed(() => ({
-  
-  where: {
-    billId: route.params.salesId,
-    id: {
-      notIn: items.value
-        .filter(item => item.entryId)
-        .map(item => item.entryId),
-    },
-  },
-  select: {
-    id: true,
-    itemId: true,
-    qty: true,
-    size:true,
-    variantId: true,
-    return:true,
-  },
-
-}));
+}
 
 
-
-
-const billArgs = computed(() => ({
-  where: { id: route.params.salesId },
-  select: {
-    id: true,
-    createdAt:true,
-    invoiceNumber: true,
-    subtotal: true,
-    discount: true,
-    tax: true,
-    grandTotal: true,
-    redeemedPoints: true,
-    billPoints: true,
-    deliveryFees: true,
-    paymentMethod: true,
-    paymentStatus: true,
-    splitPayments:true,
-    notes:true,
-    returnDeadline: true,
-    accountId:true,
-    type: true,
-    status: true,
-    isMarkit:true,
-    address: {
-        select:{
-            street:true,
-            locality:true,
-            city:true,
-            state:true,
-            pincode:true
-        }
-    },
-    client: {
-        select:{
-            name:true,
-            phone:true,
-            id:true,
-            companies: {
-              where: {
-                companyId: useAuth().session.value?.companyId
-              },
-                select: {
-                    points: true
-                }
-            }
-        }
-    },
-    entries: {  
-      select: {
-        id:true,
-        barcode:true,
-        name: true,
-        qty: true,
-        rate: true,
-        discount: true,
-        tax: true,
-        value: true,
-        size: true,
-        outOfStock: true,
-        categoryId:true,
-        return:true,
-        userName:true,
-        companyUser:true,
-        userId:true,
-        item:{
-          select:{
-            id:true,
-            size:true,
-          }
-        },
-        variant: {  
-          select: {
-            id:true,
-            images: true,
-          }
-        }
-      }
-    },
-    couponUsage:{
-      select:{
-        couponId:true,
-        coupon:{
-          select:{
-            code:true,
-            type:true
-          }
-        }
-      }
-    }
-  }
-}));
-
-
-const { data: bill ,refetch:billRefetch} = useFindUniqueBill(billArgs,{enabled:false});
-const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs,{enabled:false});
-const {data: entrietosDelete,refetch:entriesToDeleteRefetch} =  useFindManyEntry(findManyEntryargs,{enabled:false});
-
-watch(bill ,(newBill) => {
-  console.log(newBill)
+onMounted(async() => {
+  await getCategories()
 })
+
+
+
+const bill = ref(null)
+
+const fetchBill = async () => {
+  bill.value = await $fetch('/api/billEdit/findUniqueBill', {
+    method: 'GET',
+    query: {
+      billId: route.params.salesId,
+      companyId: useAuth().session.value?.companyId
+    }
+  })
+}
+
+
+
+onMounted(async () => {
+await fetchBill()
+});
+const dataLoading = ref(false)
+watch(bill, async (newBill) => {
+  if (!newBill || !newBill.entries) return
+  dataLoading.value = true
+  /* ---------------- SPLIT PAYMENTS ---------------- */
+  if (newBill.splitPayments?.length > 0) {
+    tempSplits.value = Object.fromEntries(
+      paymentOptions.map((method) => {
+        const match = newBill.splitPayments.find(p => p.method === method)
+        return [method, { method, amount: match?.amount ?? null }]
+      })
+    )
+    splitPayments.value = [...newBill.splitPayments]
+  }
+
+  /* ---------------- CLIENT ---------------- */
+  if (newBill.client?.id) {
+    clientFound.value = true
+  }
+
+  /* ---------------- COUPON ---------------- */
+  if (newBill.couponUsage?.[0]?.couponId) {
+    couponFound.value = true
+    selectedCouponId.value = {
+      label: `${newBill.couponUsage[0].coupon.code} (${newBill.couponUsage[0].coupon.type})`,
+      value: newBill.couponUsage[0].couponId
+    }
+  }
+
+  /* ---------------- BASIC FIELDS ---------------- */
+  discount.value = newBill.discount
+  selected.value = newBill.accountId
+  clientId.value = newBill.client?.id
+  oldClientId.value = newBill.client?.id
+  clientName.value = newBill.client?.name
+  phoneNo.value = newBill.client?.phone?.replace(/^\+91/, '') || ''
+  paymentMethod.value = newBill.paymentMethod
+  date.value = new Date(newBill.createdAt).toISOString()
+
+  /* ---------------- POINTS ---------------- */
+  pastBillPoints.value =
+    pointsValue > 0 ? Number(newBill.grandTotal) / pointsValue : 0
+
+  points.value = newBill.client?.companies?.[0]?.points ?? 0
+
+  redeemedAmt.value +=
+  Number(newBill.redeemedPoints || 0) +
+  Number(newBill.couponValue || 0)
+  redeemedPoints.value = newBill.redeemedPoints
+  isRedeemPoint.value = !!newBill.redeemedPoints
+  couponValue.value = newBill.couponValue
+
+  /* ---------------- ITEMS ---------------- */
+  items.value = newBill.entries.map((entry, index) => ({
+    entryId: entry.id || '',
+    id: entry.item?.id || '',
+    variantId: entry.variant?.id || '',
+    sn: index + 1,
+    name: entry.name || '',
+    barcode: entry.barcode || '',
+    category: categories.value.filter(c => c.id === entry.categoryId),
+    size: entry.item?.size || '',
+    sizes: entry.sizes || null,
+    qty: entry.qty || 1,
+    rate: entry.rate || 0,
+    discount: entry.discount || 0,
+    tax: entry.tax || 0,
+    value: entry.value || 0,
+    return: entry.return || false,
+    user: entry.userName || null,
+    userId: entry.userId || null
+  }))
+
+  /* ---------------- EMPTY ROW ---------------- */
+  items.value.push({
+    id: '',
+    variantId: '',
+    sn: items.value.length + 1,
+    barcode: '',
+    category: [],
+    size: '',
+    name: '',
+    qty: 1,
+    rate: 0,
+    discount: 0,
+    tax: 0,
+    value: 0,
+    sizes: {},
+    totalQty: 0,
+    return: false
+  })
+
+  await nextTick()
+
+  const component = barcodeInputs.value?.[items.value.length - 1]
+  const input = component?.$el?.querySelector?.('input')
+  input?.focus()
+
+  /* ---------------- TABLE WIDTH FIX ---------------- */
+  const ths = resizableTable.value?.querySelectorAll?.('th') || []
+  ths.forEach(th => {
+    th.style.width = `${th.offsetWidth}px`
+  })
+  dataLoading.value = false
+})
+
+
+const fetchEntriesToDelete = async () => {
+  const excludeEntryIds = items.value
+    .filter(item => item.entryId)
+    .map(item => item.entryId)
+
+  return await $fetch('/api/billEdit/findEntriesToDelete', {
+    method: 'POST',
+    body: {
+      billId: route.params.salesId,
+      companyId: useAuth().session.value?.companyId,
+      excludeEntryIds
+    }
+  })
+}
+
 
 
 const handleEnterBarcode = (barcode,index) => {
@@ -904,49 +799,107 @@ const handleEnterPayment = () => {
 
 
 const handleDeleteBill = async () => {
-    const res = await UpdateBill.mutateAsync({
-        where:{
-            id: route.params.salesId
-        },
-        data:{
-            deleted:true
-        }
+  await $fetch('/api/billEdit/deleteBill', {
+    method: 'POST',
+    body: {
+      billId: route.params.salesId,
+      companyId: useAuth().session.value?.companyId
+    }
+  })
+
+  router.push('/erp/sales')
+
+  toast.add({
+    title: 'Bill Deleted!',
+    color: 'red'
+  })
+}
+
+
+
+const fetchItemFromServer = async (barcode) => {
+  try {
+    if (!barcode) return null
+
+    const data = await $fetch('/api/bill/findFirstItem', {
+      query: { barcode },
     })
-router.push('/erp/sales')
-    toast.add({
-        title: 'Bill Deleted !',
-       color: 'red',
-    });
 
-};
-
+    return data ?? null
+  } catch (error) {
+    console.error('Error fetching item from server:', error)
+    throw error
+  }
+}
 
 
 const fetchItemData = async (barcode, index) => {
-  if (!barcode) return;
- loadingStates.value[index] = true;
-  scannedBarcode.value = barcode;
+  if (!barcode || !items.value[index]) return
 
-  await itemRefetch();
+  loadingStates.value[index] = true
+  currentRequestIds.value[index] = barcode
 
-  if (itemdata.value) {
-    console.log(itemdata.value)
-    const categoryId = itemdata.value.variant.product.categoryId;
-  items.value[index].id = itemdata.value.id || '';
-  items.value[index].size = itemdata.value.size || '';
-  items.value[index].name = `${itemdata.value.variant?.name}-${itemdata.value.variant?.product.name}` || '';
-  items.value[index].category = categories.value.filter(category => category.id === categoryId);
-  items.value[index].rate = itemdata.value.variant?.sprice || 0;
-  items.value[index].discount = itemdata.value.variant?.dprice - itemdata.value.variant?.sprice || 0;
-  items.value[index].tax = itemdata.value.variant?.tax || 0;
-  items.value[index].totalQty = itemdata.value?.qty || 0;
-  items.value[index].sizes = itemdata.value.variant?.sizes || null;
-  items.value[index].variantId = itemdata.value.variant?.id || '';
-    loadingStates.value[index] = false;
-  } else {
-    loadingStates.value[index] = false;
+  try {
+    const data = await fetchItemFromServer(barcode)
+    console.log('Fetched item data:', data)
+
+    // ❗ Ignore stale responses
+    if (currentRequestIds.value[index] !== barcode) return
+
+    if (data) {
+      processItemResponse(data, index)
+    } else {
+      handleInvalidBarcode(index)
+    }
+  } catch (error) {
+    console.error('Error fetching item:', error)
+
+    if (currentRequestIds.value[index] === barcode) {
+      handleInvalidBarcode(index)
+    }
+  } finally {
+    loadingStates.value[index] = false
+    delete currentRequestIds.value[index]
   }
-};
+}
+
+const processItemResponse = (itemData, index) => {
+  if (!items.value[index]) return
+
+  const categoryId = itemData.variant.product.categoryId
+
+  items.value[index].id = itemData.id ?? ''
+  items.value[index].size = itemData.size ?? ''
+
+  items.value[index].name =
+    `${itemData.variant.product.subcategory?.name ?? ''} ` +
+    `${itemData.variant?.name ?? ''} ` +
+    `${itemData.variant.product.name ?? ''}`
+
+  items.value[index].category =
+    categories.value.filter(c => c.id === categoryId)
+
+  items.value[index].rate = itemData.variant?.sprice ?? 0
+  items.value[index].discount =
+    (itemData.variant?.dprice ?? 0) -
+    (itemData.variant?.sprice ?? 0)
+
+  items.value[index].tax = itemData.variant?.tax ?? 0
+  items.value[index].totalQty = itemData.qty ?? 0
+  items.value[index].sizes = itemData.variant?.sizes ?? null
+  items.value[index].variantId = itemData.variant?.id ?? ''
+}
+
+const handleInvalidBarcode = (index) => {
+  if (!items.value[index]) return
+
+  items.value[index].barcode = ''
+
+  toast.add({
+    title: 'Barcode is invalid or item is empty!',
+    color: 'red',
+  })
+}
 
 
 const handleEdit = async () => {
@@ -978,8 +931,7 @@ const handleEdit = async () => {
     });
 
 
-    const {data:entriesDelete} = await entriesToDeleteRefetch()
-
+    const entriesDelete = await fetchEntriesToDelete()
 
     // 4. Calculate bill points
 const billPoints =
@@ -1068,6 +1020,7 @@ const billPoints =
         discount: discount.value || 0,
         grandTotal: grandTotal.value || 0,
         redeemedPoints: redeemedPoints.value || 0,
+        couponValue:Number(couponValue.value) || 0,
         paymentMethod: paymentMethod.value,
         paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
         splitPayments: paymentMethod.value === 'Split' ? splitPayments.value : null,
@@ -1080,32 +1033,30 @@ const billPoints =
     console.log(oldClientId.value,newClientId.value,'old and new client ids');
     if (clientId.value)  {
       if(oldClientId.value && newClientId.value !== ''){
-      await UpdateCompanyClientForRedeem.mutateAsync({
-        where: {
-          companyId_clientId: {
-            companyId: useAuth().session.value?.companyId,
-            clientId: oldClientId.value,
-          },
-        },
-        data: {
-          points: { decrement: pastBillPoints.value },
-        },
+        const res = await $fetch('/api/bill/redeemClientPoints', {
+        method: 'POST',
+        body: {
+          companyId: useAuth().session.value?.companyId,
+          clientId: oldClientId.value,
+          points: pastBillPoints.value,
+          mode: 'redeem'
+        }
       });
       console.log('Points decremented from old client:', res);
     }
 
     if(newClientId.value){
-      const res = await UpdateCompanyClientForRedeem.mutateAsync({
-        where: {
-          companyId_clientId: {
-            companyId: useAuth().session.value?.companyId,
-            clientId: newClientId.value,
-          },
-        },
-        data: {
-          points: { increment: pastBillPoints.value },
-        },
+
+       const res = await $fetch('/api/bill/redeemClientPoints', {
+        method: 'POST',
+        body: {
+          companyId: useAuth().session.value?.companyId,
+          clientId: newClientId.value,
+          points: pastBillPoints.value,
+          mode: 'revert'
+        }
       });
+      
       points.value = res.points;
       
       oldClientId.value = newClientId.value
@@ -1122,10 +1073,10 @@ const billPoints =
       method: 'POST',
       body: requestData
     }).then(() => {
-       queryClient.invalidateQueries({
-        queryKey: ['zenstack', 'Bill', 'findMany'],
-        exact: false
-      });
+      //  queryClient.invalidateQueries({
+      //   queryKey: ['zenstack', 'Bill', 'findMany'],
+      //   exact: false
+      // });
        // 8. Show success notification
     toast.add({
       title: 'Bill edited successfully!',
@@ -1159,56 +1110,78 @@ const billPoints =
 
 
 
-const {
-    data: accounts
-} = useFindManyAccount({
-      where: { companyId: useAuth().session.value?.companyId},
-});
+const accounts = ref([])
 
 
-const submitForm = () => {
-  isSavingAcc.value = true
+const getAccounts = async () => {
   try {
-    
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) {
+      console.warn('companyId not ready yet, skipping fetch')
+      return
+    }
+
+    const data = await $fetch('/api/bill/findManyAccount', {
+      method: 'GET',
+      query: { companyId },
+    })
+
+    accounts.value = data ?? []
+    console.log('Accounts fetched:', accounts.value)
+  } catch (err) {
+    console.error('Error fetching accounts:', err)
+  } 
+}
+
+onMounted(async () => {
+  await getAccounts()
+})
+
+const submitForm = async () => {
+  isSavingAcc.value = true
+
+  try {
     if (!account.value.name) {
-        throw new Error(`Plase Fill name`);
-      }
-    const res = CreateAccount.mutateAsync({
-      data: {
-        id: uuidv4(),
+      throw new Error('Please fill name')
+    }
+
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) {
+      throw new Error('Company not found')
+    }
+
+    await $fetch('/api/bill/createAccount', {
+      method: 'POST',
+      body: {
         name: account.value.name,
         phone: account.value.phone,
+        companyId,
         address: {
-            create: {
-                street: account.value.street,
-                locality: account.value.locality,
-                city: account.value.city,
-                state: account.value.state,
-                pincode: account.value.pincode,
-            },
+          street: account.value.street,
+          locality: account.value.locality,
+          city: account.value.city,
+          state: account.value.state,
+          pincode: account.value.pincode,
         },
-        company:{
-          connect:{
-                id:useAuth().session.value?.companyId
-              }
-          }
-      }
+      },
     })
+
     toast.add({
-            title: 'Account added !',
-            id: 'modal-success',
-        });
+      title: 'Account added!',
+      id: 'modal-success',
+    })
+    await getAccounts()
     isOpen.value = false
-  }catch(error){
-     toast.add({
-        title: 'Account creation failed!',
-        description: error.message,
-        color: 'red',
-      });
-  }finally{
+  } catch (error) {
+    toast.add({
+      title: 'Account creation failed!',
+      description: error.message || 'Something went wrong',
+      color: 'red',
+    })
+  } finally {
     isSavingAcc.value = false
   }
-};
+}
 
 const print = async() => {
   try{
@@ -1327,8 +1300,13 @@ function submitSplitPayment() {
 
 
 const handleEnterPhone = async() => {
-  console.log('hanlde')
-  const { data } = await refetchClient()
+   const data = await fetchClientByPhone(phoneNo.value)
+
+    if (!data) {
+      isClientAddModelOpen.value = true
+      return
+    }
+    
   clientName.value = data?.name
   clientId.value = data?.id
   newClientId.value = data?.id
@@ -1536,20 +1514,19 @@ const handleRedeemPoints = async () => {
         // Determine the redeemable points (not more than grand total)
         const redeemablePoints = Math.min(points.value, grandTotal.value);
 
-        const res = await UpdateCompanyClientForRedeem.mutateAsync({
-          where: {
-            companyId_clientId: {
-              companyId: useAuth().session.value?.companyId,
-              clientId: clientId.value
-            }
-          },
-          data: {
-            points: { decrement: redeemablePoints }
-          }
-        });
+        const res = await $fetch('/api/bill/redeemClientPoints', {
+        method: 'POST',
+        body: {
+          companyId: useAuth().session.value?.companyId,
+          clientId: clientId.value,
+          points: redeemablePoints,
+          mode: 'redeem',
+        },
+      })
+
 
         redeemedPoints.value = redeemablePoints;
-        redeemedAmt.value = redeemablePoints;
+        redeemedAmt.value = redeemablePoints + couponValue.value;
         points.value = res.points- pastBillPoints.value;
         console.log(res);
 
@@ -1561,21 +1538,20 @@ const handleRedeemPoints = async () => {
     // Revert redeemed points
     if (clientId.value) {
       try {
-        const res = await UpdateCompanyClientForRedeem.mutateAsync({
-          where: {
-            companyId_clientId: {
-              companyId: useAuth().session.value?.companyId,
-              clientId: clientId.value
-            }
-          },
-          data: {
-            points: { increment: redeemedPoints.value }
-          }
-        });
+
+        const res = await $fetch('/api/bill/redeemClientPoints', {
+        method: 'POST',
+        body: {
+          companyId: useAuth().session.value?.companyId,
+          clientId: clientId.value,
+          points: redeemedPoints.value,
+          mode: 'revert',
+        },
+      })
 
         points.value = res.points- pastBillPoints.value;
         redeemedPoints.value = 0;
-        redeemedAmt.value = 0;
+        redeemedAmt.value = couponValue.value;
         console.log(res);
 
       } catch (error) {
@@ -1589,22 +1565,33 @@ const handleRedeemPoints = async () => {
 
 
 const handleClearClient = async () => {
-  await UpdateCompanyClientForRedeem.mutateAsync({
-      where: {
-        companyId_clientId: {
+   await $fetch('/api/bill/redeemClientPoints', {
+        method: 'POST',
+        body: {
           companyId: useAuth().session.value?.companyId,
           clientId: oldClientId.value,
+          points: pastBillPoints.value,
+          mode: 'redeem',
         },
-      },
-      data: {
-        points: { decrement: pastBillPoints.value },
-      },
-    });
+      })
+      if(redeemedAmt.value){
+      await $fetch('/api/bill/redeemClientPoints', {
+            method: 'POST',
+            body: {
+              companyId: useAuth().session.value?.companyId,
+              clientId: oldClientId.value,
+              points: redeemedAmt.value - couponValue.value,
+              mode: 'revert',
+            },
+          })
+    }
   clientId.value = '';
   clientName.value = '';
   points.value = '';
   phoneNo.value = '';
   oldClientId.value = '';
+  redeemedAmt.value = 0;
+  clientFound.value = false;
 }
 
 function isCouponEligible(coupon, orderValue, clientId) {
@@ -1656,8 +1643,33 @@ const couponQueryArgs = computed(() => {
   }
 });
 
+const allCoupons = ref([])
 
-const { data: allCoupons, refetch: couponRefetch } = useFindManyCoupon(couponQueryArgs);
+
+const couponRefetch = async () => {
+  try {
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) {
+      console.warn('companyId not ready yet')
+      return []
+    }
+
+    const data = await $fetch('/api/bill/findManyCoupon', {
+      method: 'GET',
+      query: {
+        companyId,
+      },
+    })
+
+    allCoupons.value = data ?? []
+    return allCoupons.value
+  } catch (error) {
+    console.error('Error fetching coupons:', error)
+    return []
+  }
+}
+
+
 
 
 const eligibleCoupons = computed(() => {
@@ -1707,37 +1719,38 @@ function calculateDiscount(coupon, orderValue) {
   // Prevent discount > orderValue
   if (discount > orderValue) discount = orderValue;
 
-  return discount
+ return Math.round(discount)
 }
 
-watch(selectedCouponId, (newSelectedCouponId) => {
-  if(newSelectedCouponId){
-  console.log(newSelectedCouponId)
-  redeemedAmt.value = redeemedAmt.value - couponValue.value;
-  const chosen = allCoupons.value?.find(c => c.id === newSelectedCouponId?.value);
-  if (chosen) {
-    console.log(chosen)
-      const result = calculateDiscount(chosen, grandTotal.value);
-      couponValue.value = result;
-      redeemedAmt.value = redeemedAmt.value + result;
+
+
+
+watch(
+  [items, clientId],
+  async ([newItems, newClientId], [oldItems, oldClientId]) => {
+    if (!newItems || !newClientId) return
+   
+    // 🔄 refetch coupons (client-sensitive)
+   
+    
+    // 🔁 reset coupon state
+    if(couponLoaded.value){
+       await couponRefetch()
+    selectedCouponId.value = null
+    redeemedAmt.value -= couponValue.value
+    couponValue.value = 0
+    
     }
-}
-});
-
-watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
-  if (newItems && !couponFound.value) {
-    // reset coupon state when items or client changes
-    selectedCouponId.value = null;
-    redeemedAmt.value = redeemedAmt.value - couponValue.value;
-    couponValue.value = 0;
+     couponLoaded.value = true
   }
-}, { deep: true });
+)
 
-watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
-  if (newItems && couponFound.value) {
+watch(selectedCouponId,(newselectedCouponId) => {
+   if(couponLoaded.value){
+  if (items.value && couponFound.value) {
     redeemedAmt.value = redeemedAmt.value - couponValue.value;
-    console.log(selectedCouponId?.value)
-  const chosen = allCoupons.value?.find(c => c.id === selectedCouponId?.value.value);
+    console.log(newselectedCouponId)
+  const chosen = allCoupons.value?.find(c => c.id === newselectedCouponId?.value);
   if (chosen) {
     console.log(chosen)
       const result = calculateDiscount(chosen, grandTotal.value);
@@ -1746,6 +1759,7 @@ watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
       redeemedAmt.value = redeemedAmt.value + result;
     }
   }
+   }
 }, { deep: true });
 
 
@@ -1755,8 +1769,16 @@ watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
 </script>
 
 <template>
+
   <UDashboardPanelContent class="p-1">
-      <UCard 
+    <div v-if="dataLoading" class="w-full flex justify-center items-center py-20">
+          <UIcon
+            name="i-heroicons-arrow-path-20-solid"
+            class="animate-spin w-5 h-5 text-gray-500 mr-2"
+          />
+          <span>Loading data...</span>
+        </div>
+      <UCard v-else
     :ui="{
       base: 'h-full flex flex-col',
       rounded: '',
@@ -2187,7 +2209,10 @@ watch([items, clientId], ([newItems, newClientId], [oldItems, oldClientId]) => {
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Total Redeemed AMT</label>
-              <UInput v-model="redeemedAmt" :disabled="bill?.isMarkit" />
+              <UInput
+                v-model="redeemedAmt"
+                disabled
+              />
             </div>
              <div class="mb-4">
               <label class="block text-gray-700 font-medium">Payment Method</label>

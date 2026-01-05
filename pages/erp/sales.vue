@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import {
-    useUpdateBill,
-    useFindManyBill,
-    useCountBill
-} from '~/lib/hooks';
+
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
@@ -14,7 +10,6 @@ const queryClient = useQueryClient()
 const billStore = useBillStore()
 const timeZone = 'Asia/Kolkata'
 const toast = useToast();
-const updateBill = useUpdateBill({ optimisticUpdate: true });
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
 const isMobile = ref(false);
@@ -24,13 +19,7 @@ const deletingRowIdentity = ref({})
 const paymentMethod = ref('Cash');
 const activeBillInfo = ref({});
 
-onMounted(() => {
-  isMobile.value = window.innerWidth < 640;
-  window.addEventListener('resize', () => {
-    isMobile.value = window.innerWidth < 640;
-  });
-  refetch()
-});
+
 
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
@@ -215,130 +204,84 @@ const sort = ref({ column: 'invoiceNumber', direction: 'desc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref('5');
+const sales = ref([])
+const pageTotal = ref(0)
 
-const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
-  const searchTerm = search.value?.trim()
+const debouncedSearch = ref(search.value)
+let searchTimeout: ReturnType<typeof setTimeout> | null = null
+const isLoading = ref(false)
 
-  // ---------- helpers ----------
-  const isDigitsOnly = !!searchTerm && /^\d+$/.test(searchTerm)
-  const isInvoiceSearch =
-    isDigitsOnly &&
-    searchTerm.length > 0 &&
-    searchTerm.length <= 9 // INT4 safe
-
-  const isPhoneSearch =
-    !!searchTerm &&
-    /^[+\d]+$/.test(searchTerm) &&
-    searchTerm.length >= 1
-
-  // ---------- dynamic OR ----------
-  const searchOR: Prisma.BillWhereInput[] = []
-
-  if (isInvoiceSearch) {
-    searchOR.push({
-      invoiceNumber: {
-        equals: Number(searchTerm),
+const fetchSales = async () => {
+  isLoading.value = true
+  try {
+    const res = await $fetch('/api/billSale/findManyBills', {
+      method: 'POST',
+      body: {
+        companyId: useAuth().session.value?.companyId,
+        search: debouncedSearch.value?.trim(),
+        selectedStatus: selectedStatus.value,
+        startDate: selectedDate.value?.start,
+        endDate: selectedDate.value?.end,
+        page: page.value,
+        pageCount: Number(pageCount.value),
+        sortColumn: sort.value.column,
+        sortDirection: sort.value.direction,
       },
     })
+
+    sales.value = res.rows
+    pageTotal.value = res.total   // ✅ REAL TOTAL
+  } catch (err) {
+    sales.value = []
+    pageTotal.value = 0
+  } finally{
+    isLoading.value = false
   }
+}
 
-  if (searchTerm) {
-    searchOR.push(
-      {
-        client: {
-          name: {
-            contains: searchTerm,
-            mode: 'insensitive',
-          },
-        },
-      }
-    )
-  }
 
-  if (isPhoneSearch) {
-    searchOR.push({
-      client: {
-        phone: {
-          contains: searchTerm,
-        },
-      },
-    })
-  }
+// 🔎 Debounced search
+watch(search, (val) => {
+  if (searchTimeout) clearTimeout(searchTimeout)
 
-  return {
-    where: {
-      companyId: useAuth().session.value?.companyId,
-      deleted: false,
+  searchTimeout = setTimeout(() => {
+    debouncedSearch.value = val
+    page.value = 1
+    fetchSales()
+  }, 400)
+})
 
-      ...(searchOR.length && {
-        OR: searchOR,
-      }),
+// 🔁 Immediate refetch for others
+watch(
+  [
+    page,
+    pageCount,
+    selectedStatus,
+    () => selectedDate.value?.start,
+    () => selectedDate.value?.end,
+    () => sort.value.column,
+    () => sort.value.direction,
+  ],
+  fetchSales
+)
 
-      ...(selectedStatus.value.length && {
-        OR: selectedStatus.value.map(item => ({
-          paymentStatus: item.value,
-        })),
-      }),
-
-      ...((selectedDate.value && !searchTerm) && {
-        createdAt: {
-          gte: startOfDay(selectedDate.value.start),
-          lte: endOfDay(selectedDate.value.end),
-        },
-      }),
-    },
-
-    include: {
-      client: {
-        select: {
-          name: true,
-          phone: true,
-        },
-      },
-      entries: {
-        include: {
-          category: {
-            select: {
-              name: true,
-            },
-          },
-        },
-      },
-    },
-
-    orderBy: {
-      [sort.value.column]: sort.value.direction,
-    },
-
-    skip: (page.value - 1) * parseInt(pageCount.value),
-    take: parseInt(pageCount.value),
-  }
+onMounted(() => {
+  isMobile.value = window.innerWidth < 640
+  window.addEventListener('resize', () => {
+    isMobile.value = window.innerWidth < 640
+  })
+  fetchSales()
 })
 
 
-const {
-    data: sales,
-    isLoading,
-    error,
-    refetch,
-} = useFindManyBill(queryArgs);
 
 watch(
   () => billStore.lastUpdate,
   async () => {
-    const res = await refetch()
+    const res = await fetchSales()
   },
   { immediate: true }
 )
-
-const deleteBillMutate = useUpdateBill({ optimisticUpdate: true})
-
-const countArgs = computed(() => ({
-  where: queryArgs.value.where,
-}));
-
-const { data: pageTotal } = useCountBill(countArgs);
-
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -352,80 +295,95 @@ function selectRange(duration: Duration) {
   selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
 }
 
-watch(queryArgs, (newsales) => {
-    console.log( newsales);
-});
-
 const deleteBill = async () => {
   try {
-     deleteBillMutate.mutate({
-      where: {
-        id: deletingRowIdentity.value.id
+    const res = await $fetch('/api/billSale/deleteBill', {
+      method: 'POST',
+      body: {
+        billId: deletingRowIdentity.value.id,
+        companyId: useAuth().session.value?.companyId,
       },
-      data: {
-        deleted: true
-      }
-    });
-    
-    toast.add({
-      title: `Bill No ${deletingRowIdentity.value.name} deleted successfully!`,
-      color: 'green',
-    });
-  } catch (error) {
-    toast.add({
-      title: 'Error while deleting the bill entries',
-      description: error.message,
-      color: 'red',
-    });
-  } finally {
-    isDeleteModalOpen.value = false;
-  }
-};
-
-
-const handleUpdate = (id:string) => {
-    const res = updateBill.mutate({
-        where:{
-            id
-        },
-        data:{
-            notes:notes.value[id]
-        }
     })
 
+    toast.add({
+      title: `Bill No ${res.invoiceNumber} deleted successfully!`,
+      color: 'green',
+    })
 
-};
+    // 🔁 Refresh list after delete
+    await fetchSales()
+  } catch (error: any) {
+    toast.add({
+      title: 'Error while deleting the bill',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  } finally {
+    isDeleteModalOpen.value = false
+  }
+}
+
+const handleUpdate = async (id: string) => {
+  try {
+    await $fetch('/api/billSale/updateBillNotes', {
+      method: 'POST',
+      body: {
+        billId: id,
+        companyId: useAuth().session.value?.companyId,
+        notes: notes.value[id],
+      },
+    })
+    await fetchSales()
+    toast.add({
+      title: 'Notes updated successfully',
+      color: 'green',
+    })
+  } catch (error: any) {
+    toast.add({
+      title: 'Failed to update notes',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  }
+}
+
 
 const handleChange = (value:string, row:any) => {
     notes.value[row.id] = value;
 };
 
-const onPaymentStatusChange =  (id:string, status:string, billNo) => {
-    try{
-    const res = updateBill.mutate({
-        where:{
-            id
-        },
-        data:{
-            paymentStatus:status,
-            ...(status === 'PAID' && {
-                createdAt: new Date().toISOString()
-            }),
-            paymentMethod: status === 'PAID' ? paymentMethod.value : 'Credit'
-
-        }
+const onPaymentStatusChange = async (
+  id,
+  status,
+  billNo
+) => {
+  try {
+    await $fetch('/api/billSale/updatePaymentStatus', {
+      method: 'POST',
+      body: {
+        billId: id,
+        companyId: useAuth().session.value?.companyId,
+        status,
+        paymentMethod: paymentMethod.value,
+      },
     })
-     toast.add({
-          title: `Bill ${billNo} payment status changed to ${status}`,
-          color: 'green',
-        });
-    }catch(err){
-         toast.add({
-          title: 'Error while changing the bill status',
-          color: 'red',
-        });
-    }
+
+    toast.add({
+      title: `Bill ${billNo} payment status changed to ${status}`,
+      color: 'green',
+    })
+
+    // 🔁 Refresh list
+    await fetchSales()
+  } catch (err: any) {
+    toast.add({
+      title: 'Error while changing the bill status',
+      description: err?.message || 'Something went wrong',
+      color: 'red',
+    })
+  }
 }
+
 
 const handleEnterPayment = (id:string, status:string, billNo:string) => {
     if(status === 'PENDING'){

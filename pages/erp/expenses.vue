@@ -200,15 +200,45 @@ const saveExpense = async (form: any) => {
         closeForm();
     }
 };
+const pageTotal = ref(0)
+const totalAmount = ref(0)
+
+const onValues = ({ pageTotal: newPageTotal, totalAmount: newTotalAmount }) => {
+  pageTotal.value = newPageTotal
+  totalAmount.value = newTotalAmount
+  console.log(newTotalAmount)
+}
+
+const formatCurrency = (v: number) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR'
+  }).format(v ?? 0)
+
 </script>
 
 <template>
   <UDashboardPanelContent class="pb-24">
+    <div  class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
+        <UCard>
+          <div class="text-sm text-gray-500">Total Entry</div>
+          <div class="text-xl font-semibold">
+            {{ pageTotal }}
+          </div>
+        </UCard>
+        <UCard>
+          <div class="text-sm text-gray-500">Total Expense</div>
+          <div class="text-xl font-semibold">
+            {{ formatCurrency(totalAmount) }}
+          </div>
+        </UCard>
+        </div>
     <div>
       <ExpenseList
         @edit="openForm"
         @delete="deleteExpenseRow"
         @open="openForm"
+        @values="onValues"
       />
 
       <UModal v-model="showForm">

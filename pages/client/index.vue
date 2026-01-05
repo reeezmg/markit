@@ -298,10 +298,10 @@ const resetFilters = () => {
 const sort = ref({ column: 'name', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
-const pageCount = ref(10);
-const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
+const pageCount = ref('10');
+const pageFrom = computed(() => (page.value - 1) * Number(pageCount.value) + 1);
 const pageTo = computed(() =>
-    Math.min(page.value * pageCount.value, pageTotal.value),
+    Math.min(page.value * Number(pageCount.value), pageTotal.value),
 );
 
 // Data
@@ -363,8 +363,8 @@ const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
       [sort.value.column]: sort.value.direction,
     },
 
-    skip: (page.value - 1) * pageCount.value,
-    take: pageCount.value,
+    skip: (page.value - 1) * Number(pageCount.value),
+    take: Number(pageCount.value),
 
     include: {
       // 🔥 THIS is where points come from

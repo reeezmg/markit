@@ -10,7 +10,7 @@ import { sub, format, isSameDay, type Duration } from 'date-fns'
 // import { saveAs } from 'file-saver';
 import { startOfDay, endOfDay } from 'date-fns'
 
-const emit = defineEmits(['edit','delete','open']);
+const emit = defineEmits(['edit','delete','open','values']);
 const useAuth = () => useNuxtApp().$auth;
 const UpdateManyExpense = useUpdateManyExpense({ optimisticUpdate: true });
 const selectedRows = ref([]);
@@ -173,6 +173,25 @@ const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
 
 const { data: sales, isLoading, error, refetch } = useFindManyExpense(queryArgs);
 const  pageTotal = computed(() => sales.value?.length) ;
+const totalAmount = computed(() => {
+  if (!sales.value) return 0;
+
+  return sales.value.reduce((sum, item) => {
+    return sum + Number(item.totalAmount || 0);
+  }, 0);
+});
+
+watch(
+  [pageTotal, totalAmount],
+  ([newPageTotal, newTotalAmount]) => {
+    console.log(sales.value)
+    emit('values', {
+      pageTotal: newPageTotal,
+      totalAmount: newTotalAmount,
+    });
+  },
+  { immediate: true }
+);
 
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
