@@ -141,7 +141,7 @@ const businessWorth = computed(() =>
       </div>
 
       <!-- PROFIT & LOSS -->
-      <div class="grid grid-cols-1 sm:grid-cols-4 gap-4">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <UCard>
           <div class="text-sm text-gray-500">Sales</div>
           <div class="text-xl font-semibold">
@@ -163,13 +163,6 @@ const businessWorth = computed(() =>
             :class="pnl.netProfit >= 0 ? 'text-green-600' : 'text-red-600'"
           >
             {{ formatCurrency(pnl.netProfit) }}
-          </div>
-        </UCard>
-
-        <UCard>
-          <div class="text-sm text-gray-500">Business Worth</div>
-          <div class="text-xl font-semibold">
-            {{ formatCurrency(businessWorth) }}
           </div>
         </UCard>
       </div>
