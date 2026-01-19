@@ -27,6 +27,7 @@ export default defineEventHandler(async (event) => {
       for (const item of itemsWithoutId) {
         await tx.entry.create({
           data: {
+            companyId: billData.companyId, 
             barcode: item.barcode || undefined,
             qty: item.qty || 1,
             rate: item.rate || 0,
@@ -64,6 +65,7 @@ export default defineEventHandler(async (event) => {
         await tx.entry.update({
           where: { id: item.entryId },
           data: {
+            companyId: billData.companyId, 
             barcode: item.barcode || undefined,
             qty: item.qty || 1,
             rate: item.rate || 0,
@@ -99,21 +101,19 @@ export default defineEventHandler(async (event) => {
       for (const item of itemsWithoutId) {
         if (!item.id) continue
         if (item.return) {
-          if (item.variantId) {
-            await tx.variant.update({
-              where: { id: item.variantId },
-              data: { sold: { decrement: item.qty } }
+            await tx.item.update({
+              where: { id: item.id },
+              data: { soldQty: { decrement: item.qty } }
             })
-          }
           await tx.item.update({
             where: { id: item.id },
             data: { qty: { increment: item.qty } }
           })
         } else {
-          if (item.variantId) {
-            await tx.variant.update({
-              where: { id: item.variantId },
-              data: { sold: { increment: item.qty } }
+          if (item.itemId) {
+            await tx.item.update({
+              where: { id: item.id },
+              data: { soldQty: { increment: item.qty } }
             })
           }
           await tx.item.update({
@@ -128,10 +128,10 @@ export default defineEventHandler(async (event) => {
       const notReturnedItems = entriesToDelete.filter(item => !item.return)
 
       for (const item of returnedItems) {
-        if (item.variantId) {
-          await tx.variant.update({
-            where: { id: item.variantId },
-            data: { sold: { increment: item.qty } }
+        if (item.itemId) {
+          await tx.item.update({
+            where: { id: item.itemId },
+            data: { soldQty: { increment: item.qty } }
           })
         }
         if (item.itemId) {
@@ -143,10 +143,10 @@ export default defineEventHandler(async (event) => {
       }
 
       for (const item of notReturnedItems) {
-        if (item.variantId) {
-          await tx.variant.update({
-            where: { id: item.variantId },
-            data: { sold: { decrement: item.qty } }
+        if (item.itemId) {
+          await tx.item.update({
+            where: { id: item.itemId },
+            data: { soldQty: { decrement: item.qty } }
           })
         }
         if (item.itemId) {

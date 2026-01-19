@@ -20,7 +20,9 @@ const paymentMethod = ref('Cash');
 const activeBillInfo = ref({});
 
 
-
+const { printBill } = usePrint();
+const printData = ref(null);
+const isPrintOpen = ref(false)
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
   { label: 'Last 14 days', duration: { days: 14 } },
@@ -141,6 +143,20 @@ const action = (row: any) => {
   }
 
   return [
+    [
+      {
+        label: 'Print',
+        icon: 'i-heroicons-printer',
+        click: () => print(row.id),
+      },
+    ],
+    [
+      {
+        label: 'Details',
+        icon: 'i-heroicons-document-magnifying-glass',
+        click: () => openBill(row.id),
+      },
+    ],
     [
       {
         label: 'Edit',
@@ -385,6 +401,7 @@ const onPaymentStatusChange = async (
 }
 
 
+
 const handleEnterPayment = (id:string, status:string, billNo:string) => {
     if(status === 'PENDING'){
         onPaymentStatusChange(id, status, billNo)
@@ -397,6 +414,175 @@ const handlePaid = () => {
     onPaymentStatusChange(activeBillInfo.value.id, 'PAID', activeBillInfo.value.billNo)
      isOpen.value = false
 };
+
+
+const print = async (id) => {
+  const sale = sales.value.find(s => s.id === id)
+  if (!sale) {
+    console.error('Sale not found for id:', id)
+    return
+  }
+
+  const session = useAuth().session.value
+
+  const buildPrintDataFromSale = (sale, session) => ({
+    invoiceNumber: sale.invoiceNumber,
+    phone: session?.companyPhone,
+    description: session?.description,
+    thankYouNote: session?.thankYouNote,
+    refundPolicy: session?.refundPolicy,
+    returnPolicy: session?.returnPolicy,
+    date: new Date(sale.createdAt).toISOString(),
+
+    entries: sale.entries.map(entry => {
+      const discountVal =
+        Number(entry.discount) < 0
+          ? Number(entry.discount)
+          : Number(entry.discount) > 0
+          ? `${Number(entry.discount)}%`
+          : 0
+
+      return {
+        description: entry.barcode ? entry.name : entry.category,
+        hsn: entry.hsn || '',
+        qty: Number(entry.qty || 1),
+        mrp: Number(entry.rate || 0),
+        discount: discountVal,
+        tax: Number(entry.tax || 0),
+        value: Number(entry.qty || 1) * Number(entry.rate || 0),
+        size: entry.size || '',
+        barcode: entry.barcode,
+        tvalue: Number(entry.value || 0),
+      }
+    }),
+
+    subtotal: Number(sale.subtotal || 0),
+    discount: Number(sale.discount || 0),
+    grandTotal: Number(sale.grandTotal || 0),
+    paymentMethod: sale.paymentMethod,
+
+    companyName: session?.companyName || '',
+    companyAddress: session?.address || {},
+    gstin: session?.gstin || '',
+
+    ...(sale.paymentMethod === 'Split' && {
+      splitPayments: sale.splitPayments || [],
+    }),
+
+    accHolderName: session?.accHolderName || '',
+    upiId: session?.upiId || '',
+
+    clientName: sale.client?.name || '',
+    clientPhone: sale.client?.phone || '',
+
+    tqty: sale.entries.reduce((sum, e) => sum + Number(e.qty || 1), 0),
+    tvalue: sale.entries.reduce(
+      (sum, e) => sum + Number(e.qty || 1) * Number(e.rate || 0),
+      0
+    ),
+    ttvalue: sale.entries.reduce(
+      (sum, e) => sum + Number(e.value || 0),
+      0
+    ),
+    tdiscount: sale.entries.reduce((sum, e) => {
+      const qty = Number(e.qty || 1)
+      const rate = Number(e.rate || 0)
+      const d = Number(e.discount || 0)
+      if (d < 0) return sum + Math.abs(d) * qty
+      return sum + ((rate * d) / 100) * qty
+    }, 0),
+  })
+
+  printData.value = buildPrintDataFromSale(sale, session)
+
+  await printBill(printData.value)
+}
+
+
+const openBill = async (id) => {
+  const sale = sales.value.find(s => s.id === id)
+
+
+  if (!sale) {
+    console.error('Sale not found for id:', id)
+    return
+  }
+
+  const session = useAuth().session.value
+
+  const buildPrintDataFromSale = (sale, session) => ({
+    invoiceNumber: sale.invoiceNumber,
+    phone: session?.companyPhone,
+    description: session?.description,
+    thankYouNote: session?.thankYouNote,
+    refundPolicy: session?.refundPolicy,
+    returnPolicy: session?.returnPolicy,
+    date: new Date(sale.createdAt).toISOString(),
+
+    entries: sale.entries.map(entry => {
+      const discountVal =
+        Number(entry.discount) < 0
+          ? Number(entry.discount)
+          : Number(entry.discount) > 0
+          ? `${Number(entry.discount)}%`
+          : 0
+
+      return {
+        description: entry.barcode ? entry.name : entry.category,
+        hsn: entry.hsn || '',
+        qty: Number(entry.qty || 1),
+        mrp: Number(entry.rate || 0),
+        discount: discountVal,
+        tax: Number(entry.tax || 0),
+        value: Number(entry.qty || 1) * Number(entry.rate || 0),
+        size: entry.size || '',
+        barcode: entry.barcode,
+        tvalue: Number(entry.value || 0),
+      }
+    }),
+
+    subtotal: Number(sale.subtotal || 0),
+    discount: Number(sale.discount || 0),
+    grandTotal: Number(sale.grandTotal || 0),
+    paymentMethod: sale.paymentMethod,
+
+    companyName: session?.companyName || '',
+    companyAddress: session?.address || {},
+    gstin: session?.gstin || '',
+
+    ...(sale.paymentMethod === 'Split' && {
+      splitPayments: sale.splitPayments || [],
+    }),
+
+    accHolderName: session?.accHolderName || '',
+    upiId: session?.upiId || '',
+
+    clientName: sale.client?.name || '',
+    clientPhone: sale.client?.phone || '',
+
+    tqty: sale.entries.reduce((sum, e) => sum + Number(e.qty || 1), 0),
+    tvalue: sale.entries.reduce(
+      (sum, e) => sum + Number(e.qty || 1) * Number(e.rate || 0),
+      0
+    ),
+    ttvalue: sale.entries.reduce(
+      (sum, e) => sum + Number(e.value || 0),
+      0
+    ),
+    tdiscount: sale.entries.reduce((sum, e) => {
+      const qty = Number(e.qty || 1)
+      const rate = Number(e.rate || 0)
+      const d = Number(e.discount || 0)
+      if (d < 0) return sum + Math.abs(d) * qty
+      return sum + ((rate * d) / 100) * qty
+    }, 0),
+  })
+  
+  printData.value = buildPrintDataFromSale(sale, session)
+  isPrintOpen.value = true
+
+}
+
 
 </script>
 
@@ -726,6 +912,24 @@ const handlePaid = () => {
     <template #footer>
       <div class="flex gap-2 w-full">
         <UButton @click="handlePaid" >Submit</UButton>
+      </div>
+    </template>
+    </UCard>
+  </UModal>
+
+  <UModal v-model="isPrintOpen">
+    <UCard :ui="{ ring: '', divide: 'divide-y divide-gray-100 dark:divide-gray-800' }">
+    <template #header>
+      
+    </template>
+
+    <!-- default slot = body -->
+   <ThermalReceipt :data="printData" />
+
+    <template #footer>
+      <div class="flex gap-2 w-full">
+        <UButton @click="printBill(printData)" >Print</UButton>
+        <UButton color="red" @click="isPrintOpen = false" >Close</UButton>
       </div>
     </template>
     </UCard>

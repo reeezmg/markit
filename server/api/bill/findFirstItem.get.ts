@@ -42,6 +42,7 @@ export default defineEventHandler(async (event) => {
         v.name                   AS variant_name,
         v.s_price                AS sprice,
         v.d_price                AS dprice,
+        v.p_price                AS pprice,
         v.tax,
         v.discount,
 
@@ -92,7 +93,7 @@ export default defineEventHandler(async (event) => {
         dprice: Number(r.dprice),
         tax: Number(r.tax),
         discount: Number(r.discount),
-
+        pprice: Number(r.pprice),
         product: {
           name: r.product_name,
           categoryId: r.category_id,

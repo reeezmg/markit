@@ -53,7 +53,12 @@ interface Product {
   variants: Variant[];
 }
 
+const isPrintModalOpen = ref(false)
+const selectedVariant = ref<any>(null)
 
+// qty entered by user
+// key = item.id, value = number of labels
+const printQtyMap = ref<Record<string, number>>({})
 
 const route = useRoute();
 const UpdateProduct = useUpdateProduct();
@@ -368,7 +373,7 @@ const updatedProduct =   UpdateProduct.mutateAsync({
   },
   select: { id: true }
 });
-
+    await productRefetch();
     toast.add({
       title: 'Product Edited!',
       id: 'modal-success',
@@ -465,6 +470,7 @@ console.log(barcodes.value)
 }
 
 const printBarcodesVariant = async (variant: any) => {
+  console.log(variant)
   const auth = useAuth();
 
   // Build barcodes with qty-based duplicates
@@ -508,7 +514,70 @@ const printBarcodesVariant = async (variant: any) => {
   }
 };
 
+const openPrintModal = (variant: any) => {
+  selectedVariant.value = variant
+  printQtyMap.value = {}
 
+  variant.items?.forEach((item: any) => {
+    // default qty = item.qty or 1
+    printQtyMap.value[item.id] = Number(item.qty) || 1
+  })
+
+  isPrintModalOpen.value = true
+}
+
+const confirmPrint = async () => {
+  const auth = useAuth()
+
+  barcodes.value =
+    selectedVariant.value.items.flatMap((item: any) => {
+      const qty = Number(printQtyMap.value[item.id]) || 0
+      if (qty <= 0) return []
+
+      const base = {
+        barcode: item.barcode ?? "",
+        code: selectedVariant.value.code ?? "",
+        shopname: auth.session.value?.companyName,
+        productName:
+          selectedProduct.value.name ||
+          selectedProduct.value.category.name ||
+          "",
+        brand:
+          selectedProduct.value.brand ||
+          selectedProduct.value.subcategory.name ||
+          "",
+        name: selectedVariant.value.name,
+        sprice: selectedVariant.value.sprice,
+        ...(selectedVariant.value.sprice !==
+          selectedVariant.value.dprice && {
+          dprice: selectedVariant.value.dprice,
+        }),
+        size: item.size,
+      }
+
+      return Array.from({ length: qty }, () => ({ ...base }))
+    })
+
+  isPrintModalOpen.value = false
+
+  try {
+    await printLabel(
+      barcodes.value,
+      auth.session.value?.printerLabelSize
+    )
+
+    toast.add({
+      title: "Printing success!",
+      color: "green",
+    })
+  } catch (err: any) {
+    toast.add({
+      title: "Printing failed!",
+      description: err.message,
+      color: "red",
+    })
+  }
+}
 
 
 </script>
@@ -549,7 +618,8 @@ const printBarcodesVariant = async (variant: any) => {
           </div>
           <UButton
             label="Print"
-            @click.stop.prevent="printBarcodesVariant(variant)"
+            :loading="isLoad"
+            @click.stop.prevent="openPrintModal(variant)"
           />
         </div>
         </ULink>
@@ -730,4 +800,71 @@ const printBarcodesVariant = async (variant: any) => {
         </UCard>
       </UModal>
     </UDashboardPanelContent>
+
+    <UModal v-model="isPrintModalOpen">
+  <UCard>
+    <template #header>
+      <h3 class="text-lg font-semibold">Print Labels</h3>
+    </template>
+
+    <!-- CASE A: Single item & size is null -->
+    <div
+      v-if="
+        selectedVariant?.items?.length === 1 &&
+        selectedVariant.items[0].size === null
+      "
+      class="space-y-2"
+    >
+      <label class="text-sm font-medium">
+        Number of labels to print
+      </label>
+
+      <UInput
+        type="number"
+        min="1"
+        v-model.number="printQtyMap[selectedVariant.items[0].id]"
+      />
+    </div>
+
+    <!-- CASE B: Multiple sizes -->
+    <div v-else class="space-y-3">
+      <div
+        v-for="item in selectedVariant?.items"
+        :key="item.id"
+        class="flex items-center justify-between gap-3"
+      >
+        <span class="text-sm font-medium">
+          Size: {{ item.size }}
+        </span>
+
+        <UInput
+          type="number"
+          min="0"
+          class="w-24"
+          v-model.number="printQtyMap[item.id]"
+        />
+      </div>
+    </div>
+
+    <template #footer>
+      <div class="flex justify-end gap-2">
+        <UButton
+          color="gray"
+          variant="soft"
+          @click="isPrintModalOpen = false"
+        >
+          Cancel
+        </UButton>
+
+        <UButton
+          color="primary"
+          @click="confirmPrint"
+        >
+          Print
+        </UButton>
+      </div>
+    </template>
+  </UCard>
+</UModal>
+
   </template>

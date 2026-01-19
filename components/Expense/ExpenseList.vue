@@ -50,6 +50,11 @@ const columns = [
         sortable: true,
     },
     {
+        key: 'paymentMode',
+        label: 'Payment Mode',
+        sortable: true,
+    },
+    {
         key: 'totalAmount',
         label: 'Amount',
         sortable: true,
@@ -404,6 +409,18 @@ const multiUpdate = async(status:string,ids:any) => {
                     variant="subtle"
                 >
                     {{ row.status }}
+                </UBadge>
+            </template>
+
+            <template #paymentMode-data="{row}">
+                <UBadge 
+                    size="sm" 
+                    :color="row.paymentMode === 'CASH' ? 'green' 
+                        : row.paymentMode === 'BANK' ? 'blue' 
+                        : 'red'" 
+                    variant="subtle"
+                >
+                    {{ row.paymentMode }}
                 </UBadge>
             </template>
 

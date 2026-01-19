@@ -18,11 +18,13 @@ export default eventHandler(async (event) => {
             statusCode: 401,
         });
     }
+    const purchaseExpenseCategoryId = await getPurchaseExpenseCategoryId(user.companies[0].companyId);
 
     await session.update({
         id: user.id,
         cleanup: user.cleanup || false,
         name: user.companies[0].name || null,
+        purchaseExpenseCategoryId,
         logo: user.companies[0].company.logo ?? undefined,
         description: user.companies[0].company.description ?? undefined,
         thankYouNote: user.companies[0].company.thankYouNote ?? undefined,
@@ -47,7 +49,7 @@ export default eventHandler(async (event) => {
         minDeliveryCharges: user.companies[0].company.minDeliveryCharges || 0,
         deliveryDiscountThreshold: user.companies[0].company.deliveryDiscountThreshold || 0,
         deliveryDiscountAmount: user.companies[0].company.deliveryDiscountAmount || 0,
-        isUserTrackIncluded: user.companies[0].company.isUserTrackIncluded,
+        isCostIncluded: user.companies[0].company.isCostIncluded,
         companyId: user.companies[0].companyId,
         companyType: user.companies[0].company.type,
         companyName: user.companies[0].company.name,

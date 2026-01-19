@@ -51,7 +51,7 @@ export default defineEventHandler(async (event) => {
         ) sp ON b.payment_method = 'Split'
         WHERE b.company_id = $1
           AND b.deleted = false
-          AND b.payment_status = 'PAID'
+          AND b.payment_status IN ('PAID', 'PENDING')
           AND b.is_markit = false  -- Only non-markit bills
           AND b.created_at BETWEEN $2 AND $3;
         `,
@@ -65,7 +65,7 @@ export default defineEventHandler(async (event) => {
           COALESCE(SUM(e.total_amount), 0) AS total_expenses,
           COALESCE(SUM(CASE WHEN e.payment_mode = 'CASH' THEN e.total_amount ELSE 0 END), 0) AS cash_expenses,
           COALESCE(SUM(CASE WHEN e.payment_mode = 'CARD' THEN e.total_amount ELSE 0 END), 0) AS card_expenses,
-          COALESCE(SUM(CASE WHEN e.payment_mode = 'BANK_TRANSFER' THEN e.total_amount ELSE 0 END), 0) AS bank_transfer_expenses,
+          COALESCE(SUM(CASE WHEN e.payment_mode = 'BANK' THEN e.total_amount ELSE 0 END), 0) AS bank_expenses,
           COALESCE(SUM(CASE WHEN e.payment_mode = 'UPI' THEN e.total_amount ELSE 0 END), 0) AS upi_expenses,
           COALESCE(SUM(CASE WHEN e.payment_mode = 'CHEQUE' THEN e.total_amount ELSE 0 END), 0) AS cheque_expenses
         FROM expenses e
@@ -132,6 +132,7 @@ export default defineEventHandler(async (event) => {
     ]);
 
     const sales = salesRes.rows[0];
+    console.log(sales)
     const expenses = expensesRes.rows[0];
     const profitRow = profitRes.rows[0];
     const categoryRows = categoryRes.rows;
@@ -140,13 +141,14 @@ export default defineEventHandler(async (event) => {
     const cashSales = Number(sales.cash_sales);
     const upiSales = Number(sales.upi_sales);
     const cardSales = Number(sales.card_sales);
+    const creditSales = Number(sales.credit_sales);
 
     // Expenses
     const totalExpenses = Number(expenses.total_expenses);
     const cashExpenses = Number(expenses.cash_expenses);
     const upiExpenses = Number(expenses.upi_expenses);
     const cardExpenses = Number(expenses.card_expenses);
-    const bankTransferExpenses = Number(expenses.bank_transfer_expenses);
+    const bankTransferExpenses = Number(expenses.bank_expenses);
     const chequeExpenses = Number(expenses.cheque_expenses);
 
     // Balances
@@ -176,7 +178,7 @@ export default defineEventHandler(async (event) => {
         Cash: cashSales,
         UPI: upiSales,
         Card: cardSales,
-        Credit: Number(sales.credit_sales),
+        Credit: creditSales,
       },
       totalExpenses: Number(expenses.total_expenses),
       expensesByPaymentMethod: {

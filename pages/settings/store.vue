@@ -30,6 +30,7 @@ const isAccountStateChanged = ref(false);
 const isAddressStateChanged = ref(false);
 const isInputsChanged = ref(false);
 const isDeliveryTypeChanged =ref(false)
+const isOpeningBalanceChanged = ref(false);
 
 const selectedFile = ref<ImageData | null>(null);
 
@@ -45,6 +46,7 @@ const isUpdatingCategory = ref(false);
 const isUpdatingPrinterLabelSize = ref(false);
 const isUpdatingDeliveryConfig = ref(false);
 const isUpdatingDeliveryType = ref(false);
+const isUpdatingOpeningBalance = ref(false);
 
 
 const category = ['Men','Women','Girl','Boy']
@@ -64,6 +66,12 @@ interface AccountState {
   upiId?: string;
   gstin?: string;
 }
+
+interface openBalanceState {
+  cash?: number;
+  bank?: number;
+}
+
 
 const storePhone = ref(useAuth().session.value?.companyPhone || '');
 const isPhoneChanged = ref(false);
@@ -109,6 +117,12 @@ const addstate = reactive<AddressState>({
   formattedAddress:'ted',
   name:'',
 });
+
+const openingBalance = reactive<openBalanceState>({
+ cash: 0.00,
+ bank: 0.00
+});
+
 const timing = reactive<{open:string | undefined,close:string | undefined}>({
  open: useAuth().session.value?.openTime,
  close: useAuth().session.value?.closeTime
@@ -136,6 +150,7 @@ const storeReturnPolicy = ref(useAuth().session.value?.returnPolicy || '');
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
 const isAiImage = ref(useAuth().session.value?.isAiImage);
 const isUserTrackInclude = ref(useAuth().session.value?.isUserTrackIncluded);
+const isCostInclude = ref(useAuth().session.value?.isCostIncluded);
 const pointsValue = ref(useAuth().session.value?.pointsValue || 0);
 
 const productInputs = reactive([
@@ -257,6 +272,12 @@ watch(accstate, (newState) => {
     newState.gstin !== (useAuth().session.value?.gstin || '');
 }, { deep: true, immediate: true });
 
+watch(openingBalance, (newBalance) => {
+  isOpeningBalanceChanged.value = 
+    newBalance.cash !== (useAuth().session.value?.cash ) ||
+    newBalance.bank !== (useAuth().session.value?.bank );
+}, { deep: true, immediate: true });
+
 watch(addstate, (newState) => {
   isAddressStateChanged.value = 
     newState.street !== (useAuth().session.value?.address?.street || '') ||
@@ -269,6 +290,8 @@ watch(addstate, (newState) => {
     newState.formattedAddress !== (useAuth().session.value?.address?.formattedAddress || '') ||
     newState.name !== (useAuth().session.value?.address?.name || '');
 }, { deep: true, immediate: true });
+
+
 
 watch(productInputs, (newInputs) => {
   isInputsChanged.value = newInputs.some(input => input.value !== useAuth().session.value?.productInputs?.[input.key]);
@@ -308,6 +331,8 @@ const { data: info, isLoading, error, refetch } = useFindUniqueCompany({
     bankName: true,
     gstin: true,
     upiId:true,
+    bank:true,
+    cash:true,
     address: {
       select: {
         id: true,
@@ -333,6 +358,8 @@ watch(info, (newInfo) => {
     accstate.bankName = newInfo.bankName || '';
     accstate.upiId = newInfo.upiId || '';
     accstate.gstin = newInfo.gstin || ''; 
+    openingBalance.cash = newInfo.cash || 0.00;
+    openingBalance.bank = newInfo.bank || 0.00;
     
     if (newInfo.address) {
       addstate.street = newInfo.address.street || '';
@@ -592,6 +619,30 @@ const onUserTrackIncludeChange = () => {
     toast.add({ title: 'UserTrack include updated',description: error.statusMessage, icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating UserTrack setting', color: 'red', icon: 'i-heroicons-x-circle' });
+  }
+};
+
+
+const onCostIncludeChange = () => {
+  try {
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+    UpdateCompany.mutate({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        isCostIncluded: isCostInclude.value,
+      },
+    });
+    updateIsCostIncluded(isCostInclude.value);
+    toast.add({ title: 'Cost include updated',description: error.statusMessage, icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    toast.add({ title: 'Error updating Cost setting', color: 'red', icon: 'i-heroicons-x-circle' });
   }
 };
 
@@ -877,6 +928,34 @@ const onDeliveryTypeChange = () => {
   }
 };
 
+const onOpeningBalanceChange = () => {
+  isUpdatingOpeningBalance.value = true;
+  try {
+      if (!navigator.onLine) {
+    throw createError({
+      statusCode: 0,
+      statusMessage: 'No internet connection',
+    })
+  }
+   UpdateCompany.mutate({
+      where: {
+        id: useAuth().session.value?.companyId,
+      },
+      data: {
+        bank:openingBalance.bank,
+        cash:openingBalance.cash,
+      },
+    });
+    updateOpeningBalance(openingBalance);
+    toast.add({ title: 'Opening Balance updated', icon: 'i-heroicons-check-circle' });
+  } catch (error) {
+    console.error(error);
+    toast.add({ title: 'Error updating Opening Balance',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally {
+    isUpdatingOpeningBalance.value = false;
+  }
+};
+
 </script>
 
 <template>
@@ -1010,6 +1089,7 @@ const onDeliveryTypeChange = () => {
        <USelectMenu v-model="selectedCategory" :options="category" multiple placeholder="Select Category" />
         <UButton class="my-2" type="submit" label="Save Categories" :loading="isUpdatingCategory" @click="onCategoryChange" :disabled="!isCategoryChanged"/>
       </UFormGroup>
+
       <UDivider class="mb-4" />
       <UFormGroup
         name="PrinterLabelSize"
@@ -1021,6 +1101,7 @@ const onDeliveryTypeChange = () => {
        <USelectMenu v-model="selectedPrinterLabelSize" :options="printerLabelSizes" multiple placeholder="Select Printer Label Size" />
         <UButton class="my-2" type="submit" label="Save Printer Label Size" :loading="isUpdatingPrinterLabelSize" @click="onPrinterLabelSizeChange" :disabled="!isPrinterLabelSizeChanged"/>
       </UFormGroup>
+
       <UDivider class="mb-4" />
       <UFormGroup
         name="deliveryType"
@@ -1275,6 +1356,19 @@ const onDeliveryTypeChange = () => {
     >
       <UCheckbox v-model="isUserTrackInclude" @change="onUserTrackIncludeChange" />
     </UFormGroup>
+    <UDivider class="mb-4" />
+
+    <UFormGroup
+      name="CostBill"
+      label="Cost in Bill"
+      description="Check if you want to include cost in bills."
+      required
+      class="grid grid-cols-2 gap-2 mb-4"
+      :ui="{ container: '' }"    
+    >
+      <UCheckbox v-model="isCostInclude" @change="onCostIncludeChange" />
+    </UFormGroup>
+
   <UDivider class="mb-4" />
     <UFormGroup
       name="pointsValue"
@@ -1401,6 +1495,47 @@ const onDeliveryTypeChange = () => {
 
     <UDivider class="mb-4" />
 
+    
+    <UFormGroup
+      name="OpeningBalance"
+      label="Opening Balance"
+      description="Your store opening balance details."
+      required
+      class="grid grid-cols-2 gap-2"
+    >
+      <UInput
+        v-model="openingBalance.cash"
+        type="number"
+        size="md"
+        class="mb-4"
+        placeholder="Enter cash amount"
+      />
+
+      <UInput
+        v-model="openingBalance.bank"
+        type="number"
+        size="md"
+        placeholder="Enter bank amount"
+      />
+
+    
+    </UFormGroup>
+
+      <div class="my-4 grid grid-cols-2 gap-2">
+        <div></div>
+        <div>
+            <UButton
+              label="Update Opening Balance"
+              size="md"
+              :loading="isUpdatingOpeningBalance"
+              :disabled="!isOpeningBalanceChanged"
+              @click="onOpeningBalanceChange"
+            />
+        </div>
+    </div>
+
+  <UDivider class="mb-4" />
+
     <UFormGroup
   name="map"
   label="Pick Store Location"
@@ -1466,7 +1601,7 @@ const onDeliveryTypeChange = () => {
 
 
     <UDivider class="mb-4" />
-   
+
 
     <!-- Product Inputs Section -->
 <div class="mb-6">

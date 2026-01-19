@@ -133,7 +133,7 @@ const dateOnly = computed({
 })
 
 const items = ref([
-  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: null, discount: null, tax: null, value: 0,sizes:{}, totalQty:0 ,return:false, userCode:null, userId:null, user:null},
+  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: null, discount: null, tax: null, value: 0,cost: 0,sizes:{}, totalQty:0 ,return:false, userCode:null, userId:null, user:null},
 ]);
 
 const selectedDraft = ref(null);
@@ -348,7 +348,7 @@ onMounted(() => {
       items: [{
         id: '', variantId: '', name: '', sn: 1, barcode: '', category: [], size: '',
         item: '', qty: 1, rate: null, discount: null, tax: null, value: 0,
-        sizes: {}, totalQty: 0, return: false, userCode: null, userId: null, user: null
+        sizes: {}, totalQty: 0, return: false, userCode: null, userId: null, user: null,cost: 0
       }]
     };
     localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify([defaultBill]));
@@ -424,7 +424,7 @@ function createNewBill() {
   items.value = [{
     id: '', variantId: '', name: '', sn: 1, barcode: '', category: [], size: '',
     item: '', qty: 1, rate: null, discount: null, tax: null, value: 0,
-    sizes: {}, totalQty: 0, return: false, userCode: null, userId: null, user: null
+    sizes: {}, totalQty: 0, return: false, userCode: null, userId: null, user: null,cost:0
   }];
 
   const newBill = currentBill.value;
@@ -515,7 +515,8 @@ const reset = () => {
       value: 0,
       sizes: {},
       totalQty: 0,
-      return:false
+      return:false,
+      cost: 0
     },
   ];
   discount.value = 0;
@@ -567,6 +568,7 @@ const columns = computed(() => [
   { key: 'discount', label: 'DISC %' },
   ...(isUserTrackIncluded.value ? [{ key: 'user', label: 'User' }] : []),
   { key: 'tax', label: 'TAX%' },
+  { key: 'cost', label: 'COST' },
   { key: 'value', label: 'VALUE' },
 ]);
 
@@ -726,7 +728,8 @@ const addNewRow = async (index,moveTonNextRow = true) => {
     return:false,
     userCode:null,
     user:null,
-    userId:null
+    userId:null,
+    cost: 0
   });
   }
 
@@ -951,7 +954,7 @@ const processItemResponse = (itemData, index) => {
 
   items.value[index].id = itemData.id ?? ''
   items.value[index].size = itemData.size ?? ''
-
+  items.value[index].cost = itemData.variant?.pprice ?? 0
   items.value[index].name =
     `${itemData.variant.product.subcategory?.name ?? ''} ` +
     `${itemData.variant?.name ?? ''} ` +
@@ -1044,6 +1047,7 @@ const billPoints =
         discount: Number(item.discount || 0),
         tax: Number(item.tax || 0),
         value: Number(item.value || 0),
+        cost: Number(item.cost || 0),
         return: Boolean(item.return),
       }
 
@@ -1357,7 +1361,7 @@ const submitEntryForm = async () => {
         items.value.push({
             id: '', variantId: '', sn: items.value.length + 1, barcode: '',
             category: {}, size: '', item: '', qty: 1, rate: 0,
-            discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0
+            discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0, cost: 0
         });
 
     } else {
@@ -2008,6 +2012,7 @@ const handleProductSelected = async (selectedItems) => {
     <div class="flex justify-between text-gray-800 dark:text-gray-200 font-medium">
       <span  :class="{ 'text-red-600': row.return }">SN: {{ row.sn }}</span>
       <span  :class="{ 'text-red-600': row.return }">{{ row.name }}</span>
+      <span v-if="((useAuth().session.value?.role === 'admin' || useAuth().session.value?.role === 'manager') && useAuth().session.value?.isCostIncluded === true)" :class="{ 'text-red-600': row.return }">₹{{ row.cost }}</span>
       <span  :class="{ 'text-red-600': row.return }">₹{{ row.value }}</span>
     </div>
 
@@ -2255,6 +2260,9 @@ const handleProductSelected = async (selectedItems) => {
         @keydown.left.prevent="moveFocus(index, 'tax', 'left')"
         @keydown.right.prevent="moveFocus(index, 'tax', 'right')"
       />
+    </td>
+    <td v-if="((useAuth().session.value?.role === 'admin' || useAuth().session.value?.role === 'manager') && useAuth().session.value?.isCostIncluded === true)" class="py-1 ps-2 whitespace-nowrap"  :class="{ 'text-red-600': row.return }">
+      {{ row.cost }}
     </td>
     <td class="py-1 ps-2 whitespace-nowrap"  :class="{ 'text-red-600': row.return }">
       {{ row.value }}

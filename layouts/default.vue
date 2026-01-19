@@ -242,6 +242,18 @@ const links = computed(() => {
             },
             ]
             : []),
+            ...(auth.session.value?.type === 'admin'
+            ? [
+            {
+            label: 'Accounts',
+            to: `/reports/accounts`,
+            tooltip: {
+                text: 'Accounts Report',
+                shortcuts: ['A', 'R'],
+            },
+            },
+            ]
+            : []),
             {
             label: 'Online',
             to: `/reports/online`,
@@ -314,15 +326,15 @@ const links = computed(() => {
                         shortcuts: ['D', 'D'],
                     },
                 },
-                // {
-                //     label: 'Order',
-                //     to: `/distributor/Order`,
-                //     exact: true,
-                //     tooltip: {
-                //         text: 'Order',
-                //         shortcuts: ['D', 'O'],
-                //     },
-                // },
+                {
+                    label: 'Purchase Order',
+                    to: `/distributor/purchaseOrder`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Purchase Order',
+                        shortcuts: ['D', 'O'],
+                    },
+                },
                 {
                     label: 'Credit',
                     to: `/distributor/credit`,
@@ -365,6 +377,34 @@ const links = computed(() => {
                         },
                       ]
                     : []),
+            ],
+           
+        },
+
+        {
+            id: 'accounts',
+            label: 'Accounts',
+            to: `/accounts`,
+            icon: 'i-heroicons-squares-2x2',
+            children: [
+                {
+                    label: 'Transactions',
+                    to: `/accounts/transaction`,
+                    exact: true,
+                    tooltip: {
+                        text: 'transactions',
+                        shortcuts: ['A', 'T'],
+                    },
+                },
+
+                   {
+                    label: 'investments',
+                    to: `/accounts/investment`,
+                    tooltip: {
+                    text: 'investments',
+                    shortcuts: ['A', 'I'],
+                    },
+                },
             ],
            
         },

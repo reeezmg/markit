@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
 import { v4 as uuidv4 } from 'uuid';
-import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany} from '~/lib/hooks';
+import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant,useUpdateDistributorCredit, useDeleteDistributorCredit, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
 import { useQueryClient } from '@tanstack/vue-query';
@@ -73,6 +73,8 @@ interface Product {
 
 const route = useRoute();
 const poId = computed(() => String(route.query.poId || ''));
+const isEdit = computed(() => String(route.query.isEdit || ''));
+const oldPaymentType = ref<string>('');
 
 
 const CreateProduct = useCreateProduct({
@@ -332,6 +334,9 @@ const UpdateProduct = useUpdateProduct({
 
 const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
 const CreateDistributorCredit = useCreateDistributorCredit({ optimisticUpdate: true });
+const UpdateDistributorCredit = useUpdateDistributorCredit({ optimisticUpdate: true });
+const DeleteDistributorCredit = useDeleteDistributorCredit({ optimisticUpdate: true });
+
 const UpdateDistributorCompany = useUpdateDistributorCompany({ optimisticUpdate: true });
 const UpdatePurchaseOrder = useUpdatePurchaseOrder({ optimisticUpdate: true });
 const awsService = new AwsService();
@@ -579,6 +584,7 @@ const handleAdd = async (e: Event) => {
                 id: uuidv4(),
                   size: size.size || null,
                   qty: size.qty || 0,
+                  initialQty: size.qty || 0,
                   company: {
                     connect: { id: useAuth().session.value?.companyId },
                   },
@@ -773,11 +779,13 @@ const updatedProduct =  UpdateProduct.mutate({
               update: {
                 size: item.size || null,
                 qty: item.qty || 0,
+                initialQty: item.qty || 0,
               },
               create: {
                 id:item.id,
                 size: item.size || null,
                 qty: item.qty || 0,
+                initialQty: item.qty || 0,
                 company: {
                   connect: { id: useAuth().session.value?.companyId },
                 },
@@ -810,6 +818,7 @@ const updatedProduct =  UpdateProduct.mutate({
               id: item.id,
               size: item.size || null,
               qty: item.qty || 0,
+              initialQty: item.qty || 0,
               company: {
                 connect: { id: useAuth().session.value?.companyId },
               }
@@ -915,7 +924,11 @@ const {
   refetch:itemRefetch,
 } = useFindUniquePurchaseOrder(queryParams)
 
-
+watch(items, (newItems) => {
+  if (newItems && newItems.paymentType) {
+    oldPaymentType.value = newItems.paymentType;
+  }
+}, { immediate: true });
 
 const printBarcodes = async() => {
   isPrint.value = true
@@ -940,6 +953,7 @@ const printBarcodes = async() => {
 
 
 const handleSave = async () => {
+  console.log(items.value)
   isSave.value = true
 
   try {
@@ -959,8 +973,8 @@ const handleSave = async () => {
                 barcode: item.barcode ?? '',
                 code: variant.code ?? '',
                 shopname: useAuth().session.value?.companyName,
-                productName: product.name || product.category.name || '',
-                brand: product.brand || product.subcategory.name || '' ,
+                productName: product.name || product.category?.name || '',
+                brand: product.brand || product.subcategory?.name || '' ,
                 name: variant.name || '',
                 sprice: variant.sprice,
                 ...(variant.sprice !== variant.dprice && 
@@ -981,7 +995,8 @@ const handleSave = async () => {
         ...(paymentType.value && {
           paymentType: paymentType.value as PType
         }),
-          totalAmount:totalAmount.value,
+        billNo: billNo.value || '',
+        totalAmount:totalAmount.value,
       }
     });
 
@@ -1003,22 +1018,50 @@ const handleSave = async () => {
       }
     });
     }
-  if(paymentType.value == 'CREDIT'){
-     CreateDistributorCredit.mutate({
-        data: {
-          amount: totalAmount.value,
-          billNo: billNo.value,
-          distributorCompany: {
-            connect: {
-              distributorId_companyId: {
-                distributorId: distributorId.value,
-                 companyId: useAuth().session.value?.companyId!,
-              }
-            }
+    const companyId = useAuth().session.value?.companyId!;
+const distributorCompanyKey = {
+  distributorId: distributorId.value,
+  companyId
+};
+
+if (paymentType.value === 'CREDIT') {
+  if (isEdit.value && oldPaymentType.value === 'CREDIT') {
+    // ✏️ UPDATE existing credit
+    await UpdateDistributorCredit.mutateAsync({
+      where: {
+        purchaseOrderId: poId.value
+      },
+      data: {
+        amount: totalAmount.value,
+        billNo: billNo.value
+      }
+    });
+  } else {
+    // ➕ CREATE new credit
+    await CreateDistributorCredit.mutateAsync({
+      data: {
+        amount: totalAmount.value,
+        billNo: billNo.value,
+        distributorCompany: {
+          connect: {
+            distributorId_companyId: distributorCompanyKey
           }
         }
-      });
-  } 
+      }
+    });
+  }
+} else {
+  // ❌ PAYMENT TYPE IS NOT CREDIT
+  if (isEdit.value && oldPaymentType.value === 'CREDIT') {
+    // 🗑 DELETE existing credit
+    await DeleteDistributorCredit.mutateAsync({
+      where: {
+        purchaseOrderId: poId.value
+      }
+    });
+  }
+}
+
 
   }catch (error) {
     console.error("Failed to save purchase order", error);
@@ -1108,7 +1151,7 @@ const handleNewProduct = () => {
 <template>
     <UDashboardPanelContent>
        
-          <AddProductTopBar @update="handleDistributorValue" :totalAmount="totalAmount"/>   
+          <AddProductTopBar @update="handleDistributorValue" :totalAmount="totalAmount" :distributorId="items?.distributorId" :paymentType="items?.paymentType" :billNo="items?.billNo" />   
 
           <UDivider class="py-4"/>
 

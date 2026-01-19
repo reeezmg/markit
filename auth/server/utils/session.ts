@@ -18,6 +18,7 @@ export type AuthSession = {
     id: string;
     cleanup: boolean;
     category: string[];
+    purchaseExpenseCategoryId: string;
     name: string | null;
     description?: string;
     thankYouNote?: string;
@@ -31,6 +32,7 @@ export type AuthSession = {
     companyName: string;
     storeUniqueName?: string;
     isTaxIncluded: boolean;
+    isCostIncluded: boolean;
     isAiImage: boolean;
     isUserTrackIncluded: boolean;
     isLite:Boolean;
@@ -64,6 +66,8 @@ export type AuthSession = {
     deliveryDiscountAmount?: number;
     commissionRate?: number;
     printerLabelSize?: string;
+    cash?: number;
+    bank?: number;
     productInputs?: {
         name: boolean;
         brand: boolean;

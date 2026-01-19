@@ -23,6 +23,7 @@ const useAuth = () => useNuxtApp().$auth;
 /* ---------------------------------------------------
    FORM INITIALIZATION
 --------------------------------------------------- */
+
 const expenseData = computed(() => ({
   date: props.expense?.createdAt
     ? new Date(props.expense.createdAt).toLocaleDateString('en-CA')
@@ -32,8 +33,22 @@ const expenseData = computed(() => ({
   user: props.expense?.user || null,
 
   amount: props.expense?.totalAmount || '',
-  status: props.expense?.status || 'Paid',
-  paymentMode: props.expense?.paymentMode || 'CASH',
+  status: props.expense?.status
+  ? {
+      label:
+        props.expense.status.charAt(0).toUpperCase() +
+        props.expense.status.slice(1).toLowerCase(),
+      value: props.expense.status,
+    }
+  : { label: 'Paid', value: 'PAID' },
+  paymentMode: props.expense?.paymentMode ?
+  {
+      label:
+        props.expense.paymentMode.charAt(0).toUpperCase() +
+        props.expense.paymentMode.slice(1).toLowerCase(),
+      value: props.expense.paymentMode,
+  }:
+  { label: 'Cash', value: 'CASH' },
   note: props.expense?.note || '',
 }));
 
@@ -156,7 +171,10 @@ const saveForm = () => {
     emit('save', {
         ...form.value,
         userId: form.value.user?.userId || null,
-        categoryId: form.value.category?.id
+        categoryId: form.value.category?.id,
+        paymentMode: form.value.paymentMode.value ,
+        status: form.value.status.value ,
+
     });
 };
 </script>
@@ -194,6 +212,7 @@ const saveForm = () => {
               <div class="flex items-center justify-between w-full">
                 <span>{{ option.name }}</span>
                 <UIcon
+                  v-if="option.name !== 'Purchase'"
                   name="i-heroicons-x-circle"
                   class="w-4 h-4 text-red-500 cursor-pointer"
                   @mousedown.prevent.stop="removeCategory(option)"
@@ -238,9 +257,10 @@ const saveForm = () => {
             v-model="form.paymentMode"
             :options="[
               { label: 'Cash', value: 'CASH' },
+              { label: 'Bank', value: 'BANK' },
+              { label: 'UPI', value: 'UPI' },
               { label: 'Card', value: 'CARD' },
-              { label: 'Bank Transfer', value: 'BANK_TRANSFER' },
-              { label: 'UPI', value: 'UPI' }
+              { label: 'Cheque', value: 'CHEQUE' },
             ]"
           />
         </UFormGroup>

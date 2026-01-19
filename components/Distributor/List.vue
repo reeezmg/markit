@@ -7,7 +7,8 @@ import {
   useUpdateDistributorCredit,
   useDeleteDistributorCredit,
   useDeleteDistributorPayment,
-  useDeleteDistributorCompany
+  useDeleteDistributorCompany,
+  useCreateExpense
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
@@ -16,7 +17,7 @@ const emit = defineEmits(['modal-open','edit']);
 const CreateDistributorPayment = useCreateDistributorPayment();
 const UpdateDistributorPayment = useUpdateDistributorPayment();
 const DeleteDistributorPayment = useDeleteDistributorPayment();
-
+const createExpense = useCreateExpense({ optimisticUpdate: true });
 const CreateDistributorCredit = useCreateDistributorCredit();
 const UpdateDistributorCredit = useUpdateDistributorCredit();
 const DeleteDistributorCredit = useDeleteDistributorCredit();
@@ -293,34 +294,62 @@ const handlePay = async () => {
       return;
     }
 
+    const expenseData = {
+      totalAmount: form.value.amount,
+      note: form.value.remarks,
+      paymentMode: form.value.paymentType,
+      status: 'Paid',
+      companyId: companyId.value,
+      userId: useAuth().session.value?.userId,
+      expensecategoryId:
+        useAuth().session.value?.purchaseExpenseCategoryId,
+    };
+
     if (form.value.id) {
+      /* ---------------- UPDATE ---------------- */
+
       await UpdateDistributorPayment.mutateAsync({
         where: { id: form.value.id },
         data: {
           amount: form.value.amount,
           remarks: form.value.remarks,
           paymentType: form.value.paymentType,
+
+          expense: {
+            update: {
+              totalAmount: form.value.amount,
+              note: form.value.remarks,
+              paymentMode: form.value.paymentType,
+            },
+          },
         },
-        select: { id: true }
+        select: { id: true },
       });
 
       showToast('Payment edited successfully', 'green');
     } else {
+      /* ---------------- CREATE ---------------- */
+
       await CreateDistributorPayment.mutateAsync({
         data: {
           amount: form.value.amount,
           remarks: form.value.remarks,
           paymentType: form.value.paymentType,
+
           distributorCompany: {
             connect: {
               distributorId_companyId: {
                 distributorId: distributorId.value,
                 companyId: companyId.value,
-              }
-            }
-          }
+              },
+            },
+          },
+
+          expense: {
+            create: expenseData,
+          },
         },
-        select: { id: true }
+        select: { id: true },
       });
 
       showToast('Payment added successfully', 'green');
@@ -328,12 +357,14 @@ const handlePay = async () => {
 
     isOpenPay.value = false;
     resetForm();
-  } catch (err) {
+  } catch (err: any) {
     showToast('Error', 'red', err.message);
   } finally {
     isSaving.value = false;
   }
 };
+
+
 
 const handleAddCredit = async () => {
   isSaving.value = true;
@@ -549,9 +580,10 @@ const handleOpenCreditForm = (row) => {
                 v-model="form.paymentType"
                 :options="[
                     { label: 'Cash', value: 'CASH' },
+                    { label: 'Bank', value: 'BANK' },
                     { label: 'UPI', value: 'UPI' },
+                    { label: 'Card', value: 'CARD' },
                     { label: 'Cheque', value: 'CHEQUE' },
-                    { label: 'Bank Transfer', value: 'BANK_TRANSFER' }
                 ]"
                 option-attribute="label"
                 value-attribute="value"
@@ -562,22 +594,6 @@ const handleOpenCreditForm = (row) => {
          <UFormGroup label="Remarks" name="remarks">
           <UInput v-model="form.remarks" placeholder="Optional remarks" />
         </UFormGroup>
-
-        <div class="flex flex-col items-center" v-if="form.paymentType === 'UPI'">
-        <p v-if="upiLink" class="mb-2 text-sm font-medium">Scan to Pay via UPI</p>
-        <QrcodeVue v-if="upiLink" :value="upiLink" :size="160"  @click="window.open(upiLink, '_blank')" />
-            <div v-if="upiLink">
-                {{ upiLink }}
-            </div>
-            <div v-if="!upiLink">UPI ID is not stored for this distributor</div>
-        </div>
-
-        <div class="flex flex-col items-center" v-if="form.paymentType === 'BANK_TRANSFER' && selectedDistributor">
-        <p><strong>Account Holder Name:</strong> {{ selectedDistributor.distributor.accHolderName }}</p>
-        <p><strong>Bank Name:</strong> {{ selectedDistributor.distributor.bankName }}</p>
-        <p><strong>Account Number:</strong> {{ selectedDistributor.distributor.accountNo }}</p>
-        <p><strong>IFSC Code:</strong> {{ selectedDistributor.distributor.ifsc }}</p>
-        </div>
 
 
         <!-- Submit -->

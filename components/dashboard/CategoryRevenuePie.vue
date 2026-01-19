@@ -23,8 +23,10 @@ onMounted(() => {
 const VChart = defineAsyncComponent(() => import('vue-echarts'))
 
 const props = defineProps<{
+  title?: string
   revenueByCategory: { name: string; value: number }[]
 }>()
+
 console.log(props.revenueByCategory)
 const chartRef = ref()
 
@@ -41,15 +43,29 @@ watch(
 )
 
 const chartOptions = computed(() => ({
+  title: props.title
+    ? {
+        text: props.title,
+        left: 'center',
+        top: '5%',
+        textStyle: {
+          fontSize: 14,
+          fontWeight: '600'
+        }
+      }
+    : undefined,
+
   tooltip: {
     trigger: 'item',
     formatter: '{b}: ₹{c} ({d}%)'
   },
+
   series: [
     {
-      name: 'Revenue by Category',
+      name: props.title || 'Revenue by Category',
       type: 'pie',
       radius: '80%',
+      top: '15%', // push chart down so title doesn’t overlap
       data: props.revenueByCategory,
       emphasis: {
         itemStyle: {
@@ -61,4 +77,5 @@ const chartOptions = computed(() => ({
     }
   ]
 }))
+
 </script>

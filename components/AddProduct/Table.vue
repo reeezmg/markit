@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watchEffect } from 'vue';
 import { useFindUniquePurchaseOrder, useDeleteProduct } from '~/lib/hooks';
-
+const isEdit = computed(() => String(route.query.isEdit || ''));
 const emit = defineEmits(['product-selected','clicked','total-amount']);
 const props = defineProps<{
   settledMap: Map<string, boolean>;
@@ -89,22 +89,43 @@ const removeProduct = (id:string) => {
   }
 };
 
-// 🟢 Edit product function
+const normalizeProductForEdit = (product: any) => {
+  if (!isEdit.value) return product;
+
+  return {
+    ...product,
+    variants: product.variants?.map((variant: any) => ({
+      ...variant,
+      items: variant.items?.map((item: any) => ({
+        ...item,
+        qty: item.initialQty ?? item.qty ?? 0
+      }))
+    }))
+  };
+};
+
 const editProduct = (id: string) => {
   const selected = PO.value?.products?.find(p => p.id === id);
+
   if (selected) {
-    emit('product-selected', selected);
-    console.log('Selected product:', selected);
+    const normalizedProduct = normalizeProductForEdit(selected);
+
+    emit('product-selected', normalizedProduct);
+    console.log('Selected product (edit mode):', normalizedProduct);
   }
 };
 
 const editProductsm = (id: string) => {
   const selected = PO.value?.products?.find(p => p.id === id);
+
   if (selected) {
+    const normalizedProduct = normalizeProductForEdit(selected);
+
     emit('clicked', true);
-    emit('product-selected', selected);
+    emit('product-selected', normalizedProduct);
   }
 };
+
 
 </script>
 
@@ -113,13 +134,22 @@ const editProductsm = (id: string) => {
   <div>
     <UTable class="w-full table-auto" :loading="isLoading" v-model:expand="expand" :rows="products" :columns="columns">
        <template #qty-data="{ row }">
-        {{
-          row.variants?.reduce((variantTotal, variant) => {
-            const itemTotal = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
-            return variantTotal + itemTotal;
-          }, 0)
-        }}
-    </template>
+  {{
+    row.variants?.reduce((variantTotal, variant) => {
+      const itemTotal =
+        variant.items?.reduce((sum, item) => {
+          const qty = isEdit
+            ? (item.initialQty || 0)
+            : (item.qty || 0)
+
+          return sum + qty
+        }, 0) || 0
+
+      return variantTotal + itemTotal
+    }, 0)
+  }}
+</template>
+
       <template #action-data="{ row }">
         <div class="hidden md:block">
           <UButton :loading="!isSettled(row.id)" v-if="!isSettled(row.id)"
@@ -180,10 +210,15 @@ const editProductsm = (id: string) => {
           <template #qty-data="{ row }">
             {{
               row.items?.reduce((variantTotal, item) => {
-                return variantTotal + (item.qty || 0);
+                const qty = isEdit
+                  ? (item.initialQty || 0)
+                  : (item.qty || 0)
+
+                return variantTotal + qty
               }, 0)
             }}
-        </template>
+          </template>
+
           </UTable>
         </div>
       </template>

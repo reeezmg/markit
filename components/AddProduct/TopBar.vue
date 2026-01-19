@@ -4,8 +4,14 @@ import type { Prisma } from '@prisma/client';
 
 const props = withDefaults(defineProps<{
   totalAmount:number
+  distributorId?:string
+  paymentType?:string
+  billNo?:string
 }>(), {
-  totalAmount: 0
+  totalAmount: 0,
+  distributorId: '',
+  paymentType: '',
+  billNo: '',
 })
 
 
@@ -30,11 +36,32 @@ const supplier = ref({
 });
 
 
-const paymentType = ref('')
+const paymentType = ref(props.paymentType || '')
 const billNo = ref('')
 const DELIVERY_TYPE_KEY = 'lastDeliveryType'
 const deliveryTypeOptions = ref<string[]>(useAuth().session.value?.deliveryType || [])
 const deliveryType = ref<string>()
+
+watch(
+  () => props.paymentType,
+  (val) => {
+    if (val) {
+      paymentType.value = val   // 'CASH' | 'CREDIT' | 'UPI'
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.billNo,
+  (val) => {
+    if (val) {
+      billNo.value = val
+    }
+  },
+  { immediate: true }
+)
+
 
 if (process.client) {
   deliveryType.value = localStorage.getItem(DELIVERY_TYPE_KEY) || deliveryTypeOptions.value[0]
@@ -103,7 +130,21 @@ const {
             },
         },
 });
-const selected = ref<Prisma.DistributorFieldRefs>({} as Prisma.DistributorFieldRefs);
+
+const selected = ref<any>(null)
+
+watch(
+[distributors, () => props.distributorId],
+([list, distributorId]) => {
+  if (!list || !distributorId) return
+
+  selected.value = list.find(
+    (d) => d.id === distributorId
+  ) || null
+},
+{ immediate: true }
+)
+
 
 const emitUpdatedValues = () => {
   emit('update', {
@@ -139,13 +180,15 @@ watch(
         searchable-placeholder="Search a distributor"
       >
         <template #label>
-          <span v-if="!selected.name">Select Distributor</span>
-          <span>{{ selected.name }}</span>
+          <span v-if="!selected">Select Distributor</span>
+          <span v-else>{{ selected.name }}</span>
         </template>
-        <template #option="{ option: name }">
-          <span>{{ name.name }}</span>
+
+        <template #option="{ option }">
+          <span>{{ option.name }}</span>
         </template>
       </USelectMenu>
+
 
       <UButton
         icon="i-heroicons-plus"
@@ -171,13 +214,16 @@ watch(
       :options="[
         { label: 'Credit', value: 'CREDIT' },
         { label: 'Cash', value: 'CASH' },
+        { label: 'Bank', value: 'BANK' },
         { label: 'UPI', value: 'UPI' },
+        { label: 'Card', value: 'CARD' },
+        { label: 'Cheque', value: 'CHEQUE' },
       ]"
       option-attribute="label"
       value-attribute="value"
       placeholder="Payment Type"
-      class="w-full sm:w-auto"
     />
+
   </div>
 
   <!-- Right section (Delivery Type + Total) -->

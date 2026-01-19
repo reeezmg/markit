@@ -157,21 +157,3 @@ export const updateProfileDetails = async (name: string | null, email: string | 
     console.log('Session updated');
 };
 
-export const updatePointsValue = async (pointsValue: number) => {
-    const config = useRuntimeConfig();
-    await $fetch('/api/auth/changePointsValue', {
-        method: 'PUT',
-        body: { pointsValue },
-
-    });
-    await useAuth().updateSession();
-};
-
-export const updatePrinterLabelSize = async (printerLabelSize: string) => {
-    const config = useRuntimeConfig();
-    await $fetch('/api/auth/changePrinterLabelSize', {
-        method: 'PUT',
-        body: { printerLabelSize },
-    });
-    await useAuth().updateSession();
-}

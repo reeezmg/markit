@@ -145,8 +145,8 @@ export default defineEventHandler(async (event) => {
           if (item.variantId)
             updatePromises.push(
               client.query(
-                `UPDATE variants SET sold = COALESCE(sold, 0) + $1 WHERE id = $2`,
-                [item.qty, item.variantId]
+                `UPDATE items SET sold_qty = COALESCE(sold_qty, 0) + $1 WHERE id = $2`,
+                [item.qty, item.id]
               )
             )
           if (item.id)
@@ -164,8 +164,8 @@ export default defineEventHandler(async (event) => {
         if (item.variantId)
           updatePromises.push(
             client.query(
-              `UPDATE variants SET sold = COALESCE(sold, 0) - $1 WHERE id = $2`,
-              [item.qty, item.variantId]
+              `UPDATE items SET sold_qty = COALESCE(sold_qty, 0) - $1 WHERE id = $2`,
+              [item.qty, item.id]
             )
           )
         if (item.id)

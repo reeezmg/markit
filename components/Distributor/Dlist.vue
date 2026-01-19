@@ -44,7 +44,7 @@ const columns = [
 
 const purchaseColumns = [
   { key: 'createdAt', label: 'Date', sortable: true },
-  { key: 'products.length', label: 'Products', sortable: true },
+  { key: 'qty', label: 'Qty', sortable: true },
   { key: 'totalAmount', label: 'Total Value', sortable: true },
   { key: 'paymentType', label: 'Payment Type', sortable: true },
   {
@@ -84,7 +84,7 @@ const purchaseOrderAction = (row:any) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`/products/add/${row.id}`),
+            click: () => router.push(`/products/add?poId=${row.id}`),
         },
     
         {
@@ -178,15 +178,30 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
             paymentType:true
         }
       },
-      purchaseOrders:{
-        select:{
-          id:true,
-          createdAt:true,
-          products:true,
-          paymentType:true,
-          totalAmount:true
+      purchaseOrders: {
+        select: {
+          id: true,
+          createdAt: true,
+          paymentType: true,
+          totalAmount: true,
+          products: {
+            select: {
+              id: true,
+              variants: {
+                select: {
+                  id: true,
+                  items: {
+                    select: {
+                      qty: true
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
-      }
+      },
+
     },
     orderBy: 
       sort.value.column === 'distributor.name'
@@ -202,23 +217,41 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
 
 const { data, isLoading, error } = useFindManyDistributorCompany(queryArgs);
 
+const getPurchaseOrderQty = (purchaseOrder) => {
+  return purchaseOrder.products.reduce((productSum, product) => {
+    return (
+      productSum +
+      product.variants.reduce((variantSum, variant) => {
+        return (
+          variantSum +
+          variant.items.reduce(
+            (itemSum, item) => itemSum + (item.qty ?? 0),
+            0
+          )
+        )
+      }, 0)
+    )
+  }, 0)
+}
+
+
 const distributors = computed(() => {
   return data.value?.map(distributor => {
+
     const credits = (distributor.distributorCredits || []).map(c => ({
       ...c,
       createdAt: new Date(c.createdAt),
       type: 'CREDIT',
-      paymentType:c.billNo,
+      paymentType: c.billNo,
       class: 'bg-red-500/50 dark:bg-red-400/50'
-
     }));
 
     const payments = (distributor.distributorPayments || []).map(p => ({
       ...p,
       createdAt: new Date(p.createdAt),
       type: 'PAYMENT',
-      paymentType:p.paymentType,
-       class: 'bg-green-500/50 dark:bg-green-400/50'
+      paymentType: p.paymentType,
+      class: 'bg-green-500/50 dark:bg-green-400/50'
     }));
 
     const transactions = [...credits, ...payments].sort(
@@ -228,14 +261,22 @@ const distributors = computed(() => {
     const totalAmount = credits.reduce((sum, c) => sum + (c.amount || 0), 0);
     const paidAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
+    // ✅ ADD QTY PER PURCHASE ORDER
+    const purchaseOrders = distributor.purchaseOrders?.map(po => ({
+      ...po,
+      totalQty: getPurchaseOrderQty(po)
+    }));
+
     return {
       ...distributor,
       totalAmount,
       paidAmount,
-      transactions
+      transactions,
+      purchaseOrders
     };
   });
 });
+
 
 
  console.log(distributors.value)
@@ -329,6 +370,11 @@ const selectedDistributor = computed(() => {
                         />
                     </UDropdown>
                     </template>
+                    <template #qty-data="{ row }">
+                      {{ row.totalQty }}
+                    </template>
+
+
 
                     </UTable>
                     </div>

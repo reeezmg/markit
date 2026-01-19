@@ -80,7 +80,7 @@ export default defineEventHandler(async (event) => {
     const bankBalance =
       (Number(sales.upi_sales) + Number(sales.card_sales)) -
       expenses
-        .filter(e => ['UPI', 'CARD', 'BANK_TRANSFER', 'CHEQUE'].includes(e.mode))
+        .filter(e => ['UPI', 'CARD', 'BANK', 'CHEQUE'].includes(e.mode))
         .reduce((s, e) => s + e.amount, 0)
 
     const totalBalance = cashBalance + bankBalance

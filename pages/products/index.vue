@@ -206,6 +206,11 @@ const applyFilter = async () => {
 // Columns
 const columns = [
     {
+        key: 'createdAt',
+        label: 'Date',
+        sortable: true,
+    },
+    {
         key: 'name',
         label: 'name',
         sortable: true,
@@ -223,6 +228,16 @@ const columns = [
     {
         key: 'variants',
         label: 'Variants',
+        sortable: false,
+    },
+    {
+        key: 'initialQty',
+        label: 'Initial Qty',
+        sortable: false,
+    },
+    {
+        key: 'soldQty',
+        label: 'Sold Qty',
         sortable: false,
     },
     {
@@ -1065,6 +1080,14 @@ const handleAddPhoto = async () => {
                     </UDropdown>
                 </template>
 
+               <template #createdAt-data="{ row }">
+                    {{ new Date(row.createdAt).toLocaleString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                    }) }}
+                    </template>
+
                 <template #category-data="{ row }">
                     {{ row.category?.name }}
                 </template>
@@ -1079,6 +1102,22 @@ const handleAddPhoto = async () => {
                    {{
                         row.variants?.reduce((variantTotal, variant) => {
                             const itemTotal = variant.items?.reduce((sum, item) => sum + (item.qty || 0), 0) || 0;
+                            return variantTotal + itemTotal;
+                        }, 0)
+                        }}
+                    </template>
+                <template #initialQty-data="{ row }">
+                   {{
+                        row.variants?.reduce((variantTotal, variant) => {
+                            const itemTotal = variant.items?.reduce((sum, item) => sum + (item.initialQty || 0), 0) || 0;
+                            return variantTotal + itemTotal;
+                        }, 0)
+                        }}
+                    </template>
+                <template #soldQty-data="{ row }">
+                   {{
+                        row.variants?.reduce((variantTotal, variant) => {
+                            const itemTotal = variant.items?.reduce((sum, item) => sum + (item.soldQty || 0), 0) || 0;
                             return variantTotal + itemTotal;
                         }, 0)
                         }}

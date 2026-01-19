@@ -86,3 +86,31 @@ export async function createPipeline(pipeline: Prisma.PipelineCreateInput) {
         data: pipeline,
     });
 }
+
+export async function createDefaultExpenseCategories(companyId: string) {
+  await prisma.expenseCategory.create({
+    data: {
+      name: 'Purchase',
+      companyId,
+      status: true,
+    },
+  });
+}
+
+export async function getPurchaseExpenseCategoryId(companyId: string) {
+  const category = await prisma.expenseCategory.findFirst({
+    where: {
+      name: 'Purchase',
+      companyId,
+    },
+    select: {
+      id: true,
+    },
+  });
+
+  if (!category) {
+    throw new Error('Purchase expense category not found for company');
+  }
+
+  return category.id;
+}

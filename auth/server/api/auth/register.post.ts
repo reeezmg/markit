@@ -1,8 +1,8 @@
-import { createAddress,createPipeline,updateUser } from '../../utils/db';
+import { createDefaultExpenseCategories,createPipeline,updateUser } from '../../utils/db';
 
 export default eventHandler(async (event) => {
     const { email, name, companyname, password, type, plan } = await readBody(event);
-console.log(plan)
+
     const existingUser = await findUserByEmail(email);
 
     const company = await createCompany({
@@ -26,7 +26,7 @@ console.log(plan)
                 connect: { id: company.id },
                 },
                 role: 'admin',
-                code: '1',
+                code: 1,
                 name,     
             },
             ],
@@ -34,6 +34,7 @@ console.log(plan)
          });
     }
     
+    await createDefaultExpenseCategories(company.id);
 
     
     await createPipeline({

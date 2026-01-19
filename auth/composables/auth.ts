@@ -183,6 +183,15 @@ export const updateIsUserTrackIncluded = async (isUserTrackIncluded: boolean) =>
     await useAuth().updateSession();
 };
 
+export const updateIsCostIncluded = async (isCostIncluded: boolean) => {
+    await $fetch('/api/auth/changeIncludeCost', {
+        method: 'PUT',
+        body: { isCostIncluded },
+
+    });
+    await useAuth().updateSession();
+};
+
 export const updateSession = async (productinputData: any, variantinputData: any) => {
     await $fetch('/api/auth/changeInputs', {
         method: 'PUT',
@@ -269,3 +278,26 @@ export const updateIsAiImage = async (isAiImage: boolean) => {
     });
     await useAuth().updateSession();
 };
+
+
+export const updatePrinterLabelSize = async (printerLabelSize: string) => {
+    const config = useRuntimeConfig();
+    await $fetch('/api/auth/changePrinterLabelSize', {
+        method: 'PUT',
+        body: { printerLabelSize },
+    });
+    await useAuth().updateSession();
+}
+
+
+
+export const updateOpeningBalance = async (openingBalance: any) => {
+    const config = useRuntimeConfig();
+    await $fetch('/api/auth/changeOpeningBalance', {
+        method: 'PUT',
+        body: { openingBalance },
+    });
+    await useAuth().updateSession();
+};
+
+
