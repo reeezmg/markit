@@ -40,7 +40,7 @@ watch(
       if (!variant.items || !Array.isArray(variant.items)) return sum
 
       const variantTotal = variant.items.reduce((itemSum, item) => {
-        const qty = item.qty || 0
+        const qty = isEdit.value ? (item.initialQty || 0) : (item.qty || 0)
         const pprice = variant.pprice || 0
         return itemSum + qty * pprice
       }, 0)

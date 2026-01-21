@@ -498,6 +498,7 @@ const printBarcodesVariant = async (variant: any) => {
 
   try {
     const response = await printLabel(barcodes.value, useAuth().session.value?.printerLabelSize);
+
     console.log(response);
 
     toast.add({
@@ -528,7 +529,7 @@ const openPrintModal = (variant: any) => {
 
 const confirmPrint = async () => {
   const auth = useAuth()
-
+    console.log(auth.session.value?.printerLabelSize)
   barcodes.value =
     selectedVariant.value.items.flatMap((item: any) => {
       const qty = Number(printQtyMap.value[item.id]) || 0
@@ -565,6 +566,7 @@ const confirmPrint = async () => {
       barcodes.value,
       auth.session.value?.printerLabelSize
     )
+
 
     toast.add({
       title: "Printing success!",

@@ -68,7 +68,7 @@ const queryArgs = computed(() => ({
           select: {
             items: {
               select: {
-                qty: true,
+                initialQty: true,
               },
             },
           },
@@ -92,6 +92,10 @@ const {
   error,
   refetch,
 } = useFindManyPurchaseOrder(queryArgs)
+
+watch(purchaseOrders, (newData) => {
+  console.log('Fetched Purchase Orders:', newData)
+})
 
 const countArgs = computed(() => ({
   where: queryArgs.value.where,
@@ -118,7 +122,7 @@ const getPurchaseOrderQty = (po) => {
         (variantSum, variant) =>
           variantSum +
           variant.items.reduce(
-            (itemSum, item) => itemSum + (item.qty ?? 0),
+            (itemSum, item) => itemSum + (item.initialQty ?? 0),
             0
           ),
         0

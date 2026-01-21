@@ -248,7 +248,7 @@ export function useReceiptPrinter() {
           let tsplCommands = '';
 
           // ---------- 50 x 38 ----------
-          if (labelSize === '50x38mm') {
+          if (labelSize === '50x38 mm') {
             tsplCommands = `
     SIZE 50 mm,38 mm
     GAP 1 mm,1 mm

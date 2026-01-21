@@ -1098,7 +1098,7 @@ const onOpeningBalanceChange = () => {
         class="grid grid-cols-2 gap-2 mb-4"
         :ui="{ container: '' }"
       >
-       <USelectMenu v-model="selectedPrinterLabelSize" :options="printerLabelSizes" multiple placeholder="Select Printer Label Size" />
+       <USelectMenu v-model="selectedPrinterLabelSize" :options="printerLabelSizes" placeholder="Select Printer Label Size" />
         <UButton class="my-2" type="submit" label="Save Printer Label Size" :loading="isUpdatingPrinterLabelSize" @click="onPrinterLabelSizeChange" :disabled="!isPrinterLabelSizeChanged"/>
       </UFormGroup>
 
