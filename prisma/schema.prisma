@@ -191,6 +191,7 @@ model Company {
     openTime String @default("9:30") @map("open_time")
     closeTime String @default("9:30") @map("close_time")
     users CompanyUser[]
+    entries Entry[]
     category String[]
     clients CompanyClient[]
     products Product[]
@@ -750,6 +751,7 @@ model Entry {
     size String?
     userName String? @map("user_name")
     companyId String? @map("company_id")
+    company Company? @relation(fields: [companyId], references: [id])
     userId String? @map("user_id")
     companyUser CompanyUser? @relation(fields: [companyId, userId], references: [companyId, userId])
     variant Variant? @relation(fields: [variantId], references: [id])

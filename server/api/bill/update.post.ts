@@ -4,68 +4,33 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const session = await useAuthSession(event)
 
-  const {
-    items,
-    entriesToDelete,
-    billPoints,
-    billData
-  } = body
+  const { items, entriesToDelete, billPoints, billData } = body
 
   try {
     await prisma.$transaction(async (tx) => {
-      // 1. Validate bill existence
+      /* --------------------------------
+         1. Validate bill
+      -------------------------------- */
       const bill = await tx.bill.findUnique({
         where: { id: billData.id }
       })
       if (!bill) throw new Error('Bill not found')
 
-      // 2. Separate entries
+      /* --------------------------------
+         2. Separate entries
+      -------------------------------- */
       const itemsWithId = items.filter(i => i.entryId)
       const itemsWithoutId = items.filter(i => !i.entryId)
 
-      // 3. Create new entries
+      /* --------------------------------
+         3. Create new entries
+      -------------------------------- */
       for (const item of itemsWithoutId) {
         await tx.entry.create({
           data: {
-            companyId: billData.companyId, 
-            barcode: item.barcode || undefined,
-            qty: item.qty || 1,
-            rate: item.rate || 0,
-            name: item.name || '',
-            return: item.return || false,
-            discount: item.discount || 0,
-            value: item.value || 0,
-            ...(item.variantId?.trim() && {
-              variant: { connect: { id: item.variantId.trim() } }
-            }),
-            ...(item.category?.[0]?.id?.trim() && {
-              category: { connect: { id: item.category[0].id.trim() } }
-            }),
-            ...(item.id?.trim() && {
-              item: { connect: { id: item.id.trim() } }
-            }),
-            ...(item.userId?.trim() && {
-              companyUser: {
-                connect: {
-                  companyId_userId: {
-                    companyId: billData.companyId,
-                    userId: item.userId.trim()
-                  }
-                }
-              },
-              userName: item.user || ''
-            }),
-            bill: { connect: { id: billData.id } }
-          }
-        })
-      }
-
-      // 4. Update existing entries
-      for (const item of itemsWithId) {
-        await tx.entry.update({
-          where: { id: item.entryId },
-          data: {
-            companyId: billData.companyId, 
+            company: {
+              connect: { id: billData.companyId }
+            },
             barcode: item.barcode || undefined,
             qty: item.qty || 1,
             rate: item.rate || 0,
@@ -73,15 +38,68 @@ export default defineEventHandler(async (event) => {
             discount: item.discount || 0,
             tax: item.tax || 0,
             value: item.value || 0,
+            return: item.return || false,
+
             ...(item.variantId?.trim() && {
               variant: { connect: { id: item.variantId.trim() } }
             }),
+
             ...(item.category?.[0]?.id?.trim() && {
               category: { connect: { id: item.category[0].id.trim() } }
             }),
+
             ...(item.id?.trim() && {
               item: { connect: { id: item.id.trim() } }
             }),
+
+            ...(item.userId?.trim() && {
+              companyUser: {
+                connect: {
+                  companyId_userId: {
+                    companyId: billData.companyId,
+                    userId: item.userId.trim()
+                  }
+                }
+              },
+              userName: item.user || ''
+            }),
+
+            bill: { connect: { id: billData.id } }
+          }
+        })
+      }
+
+      /* --------------------------------
+         4. Update existing entries
+      -------------------------------- */
+      for (const item of itemsWithId) {
+        await tx.entry.update({
+          where: { id: item.entryId },
+          data: {
+             company: {
+              connect: { id: billData.companyId }
+            },
+            barcode: item.barcode || undefined,
+            qty: item.qty || 1,
+            rate: item.rate || 0,
+            name: item.name || '',
+            discount: item.discount || 0,
+            tax: item.tax || 0,
+            value: item.value || 0,
+            return: item.return || false,
+
+            ...(item.variantId?.trim() && {
+              variant: { connect: { id: item.variantId.trim() } }
+            }),
+
+            ...(item.category?.[0]?.id?.trim() && {
+              category: { connect: { id: item.category[0].id.trim() } }
+            }),
+
+            ...(item.id?.trim() && {
+              item: { connect: { id: item.id.trim() } }
+            }),
+
             ...(item.userId?.trim() && {
               companyUser: {
                 connect: {
@@ -97,76 +115,70 @@ export default defineEventHandler(async (event) => {
         })
       }
 
-      // 5. Adjust stock for new items
+      /* --------------------------------
+         5. Stock adjust – new entries
+      -------------------------------- */
       for (const item of itemsWithoutId) {
         if (!item.id) continue
+
         if (item.return) {
-            await tx.item.update({
-              where: { id: item.id },
-              data: { soldQty: { decrement: item.qty } }
-            })
           await tx.item.update({
             where: { id: item.id },
-            data: { qty: { increment: item.qty } }
+            data: {
+              soldQty: { decrement: item.qty },
+              qty: { increment: item.qty }
+            }
           })
         } else {
-          if (item.itemId) {
-            await tx.item.update({
-              where: { id: item.id },
-              data: { soldQty: { increment: item.qty } }
-            })
-          }
           await tx.item.update({
             where: { id: item.id },
-            data: { qty: { decrement: item.qty } }
+            data: {
+              soldQty: { increment: item.qty },
+              qty: { decrement: item.qty }
+            }
           })
         }
       }
 
-      // 6. Adjust stock for deleted items
-      const returnedItems = entriesToDelete.filter(item => item.return)
-      const notReturnedItems = entriesToDelete.filter(item => !item.return)
+      /* --------------------------------
+         6. Stock adjust – deleted entries
+      -------------------------------- */
+      for (const item of entriesToDelete) {
+        if (!item.itemId) continue
 
-      for (const item of returnedItems) {
-        if (item.itemId) {
+        if (item.return) {
           await tx.item.update({
             where: { id: item.itemId },
-            data: { soldQty: { increment: item.qty } }
+            data: {
+              soldQty: { increment: item.qty },
+              qty: { decrement: item.qty }
+            }
           })
-        }
-        if (item.itemId) {
+        } else {
           await tx.item.update({
             where: { id: item.itemId },
-            data: { qty: { decrement: item.qty } }
+            data: {
+              soldQty: { decrement: item.qty },
+              qty: { increment: item.qty }
+            }
           })
         }
       }
 
-      for (const item of notReturnedItems) {
-        if (item.itemId) {
-          await tx.item.update({
-            where: { id: item.itemId },
-            data: { soldQty: { decrement: item.qty } }
-          })
-        }
-        if (item.itemId) {
-          await tx.item.update({
-            where: { id: item.itemId },
-            data: { qty: { increment: item.qty } }
-          })
-        }
-      }
-
-      // 7. Delete entries
-      const entryToDeleteIds = entriesToDelete.filter(e => e.id).map(e => e.id)
-      if (entryToDeleteIds.length > 0) {
+      /* --------------------------------
+         7. Delete removed entries
+      -------------------------------- */
+      const entryIds = entriesToDelete.map(e => e.id).filter(Boolean)
+      if (entryIds.length) {
         await tx.entry.deleteMany({
-          where: { id: { in: entryToDeleteIds } }
+          where: { id: { in: entryIds } }
         })
       }
 
-      // 8. Update the bill
-      const res = await tx.bill.update({
+      /* --------------------------------
+         8. Update bill
+      -------------------------------- */
+      await tx.bill.update({
         where: { id: billData.id },
         data: {
           subtotal: billData.subtotal,
@@ -176,32 +188,29 @@ export default defineEventHandler(async (event) => {
           couponValue: billData.couponValue,
           paymentMethod: billData.paymentMethod,
           paymentStatus: billData.paymentStatus,
-          ...(billData.splitPayments && {
-            splitPayments: billData.splitPayments
-          }),
-            ...(billData.clientId
-              ? { client: { connect: { id: billData.clientId } } }
-              : billData.clientId === '' 
-                ? { client: { disconnect: true } }
-                : {}
-            ),
+          ...(billData.splitPayments && { splitPayments: billData.splitPayments }),
 
-            // ✅ Handle account relation
-            ...(billData.accountId
-              ? { account: { connect: { id: billData.accountId } } }
-              : billData.accountId === '' 
-                ? { account: { disconnect: true } }
-                : {}
-            ),
+          ...(billData.clientId
+            ? { client: { connect: { id: billData.clientId } } }
+            : billData.clientId === ''
+              ? { client: { disconnect: true } }
+              : {}),
+
+          ...(billData.accountId
+            ? { account: { connect: { id: billData.accountId } } }
+            : billData.accountId === ''
+              ? { account: { disconnect: true } }
+              : {}),
+
           createdAt: billData.date,
           company: { connect: { id: billData.companyId } }
         }
       })
 
-      console.log('Bill updated:', res)
-
-      // 9. Update client points
-      if (billData.clientId) {
+      /* --------------------------------
+         9. Client points
+      -------------------------------- */
+      if (billData.clientId && billPoints) {
         await tx.companyClient.update({
           where: {
             companyId_clientId: {
@@ -214,9 +223,9 @@ export default defineEventHandler(async (event) => {
           }
         })
       }
-    },{
-      maxWait: 10000, // wait up to 10s to acquire a connection
-      timeout: 150000000  // run the transaction for up to 15s
+    }, {
+      maxWait: 10_000,
+      timeout: 15_000
     })
 
     return { success: true }
@@ -225,18 +234,14 @@ export default defineEventHandler(async (event) => {
     await session.update({
       billCounter: session.data.billCounter - 1
     })
+
     return sendError(event, createError({
       statusCode: 500,
       statusMessage: 'Failed to update bill',
-      data: { 
+      data: {
         message: error.message,
-        data:{
-           items,
-            entriesToDelete,
-            billPoints,
-            billData
-        }
-       }
+        data: { items, entriesToDelete, billPoints, billData }
+      }
     }))
   }
 })
