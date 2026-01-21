@@ -265,9 +265,9 @@ export function useReceiptPrinter() {
     ${dprice != null ? `BAR 30,116,230,4` : ''}
     ${dprice != null ? `TEXT 30,136,"2",0,1,1,"Discount Rs.${parseFloat(dprice).toFixed(2)}"` : ''}
 
-    TEXT 30,168,"1",0,1,1,"${code}-${brand}"
-    BARCODE 30,185,"128",100,0,0,3,3,"${barcode}"
-    TEXT 30,292,"1",0,1,1,"${barcode}"
+    TEXT 10,168,"1",0,1,1,"${code}-${brand}"
+    BARCODE 10,185,"128",80,0,0,3,3,"${barcode}"
+    TEXT 10,270,"1",0,1,1,"${barcode}"
 
     PRINT 1,1
     `;
