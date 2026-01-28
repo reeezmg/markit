@@ -305,7 +305,7 @@ export default defineEventHandler(async (event) => {
       const r = await client.query(
         `
         SELECT
-          created_at AS date,
+          expense_date  AS date,
           'TRANSACTION' AS source,
           id::text AS ref,
           direction || ' via bank' AS description,
@@ -320,7 +320,7 @@ export default defineEventHandler(async (event) => {
             OR
             ($4::text IS NOT NULL AND account_id = $4)
           )
-          AND created_at BETWEEN $2 AND $3
+          AND expense_date BETWEEN $2 AND $3
         `,
         [companyId, from, to, bankId ?? null]
       )
