@@ -23,6 +23,9 @@ const addTransaction = async (tx: any) => {
   try {
     await createTx.mutateAsync({
       data: {
+        // ✅ DATE
+        createdAt: new Date(tx.date).toISOString(),
+
         partyType: tx.partyType,
         direction: tx.direction,
         status: tx.status || 'PENDING',
@@ -56,20 +59,23 @@ const addTransaction = async (tx: any) => {
 }
 
 /* ---------------------------------------------------
-   UPDATE
+   EDIT
 --------------------------------------------------- */
 const editTransaction = async (id: string, data: any) => {
   try {
     await updateTx.mutateAsync({
       where: { id },
       data: {
+        // ✅ DATE
+        createdAt: new Date(data.date).toISOString(),
+
         partyType: data.partyType,
         direction: data.direction,
         status: data.status,
         amount: Number(data.amount),
         paymentMode: data.paymentMode,
 
-        // ✅ BANK ACCOUNT (can be null)
+        // ✅ BANK ACCOUNT (nullable)
         accountId: data.accountId ?? null,
 
         ...(data.note && { note: data.note }),
