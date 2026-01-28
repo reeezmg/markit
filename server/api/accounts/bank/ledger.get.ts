@@ -20,6 +20,10 @@ export default defineEventHandler(async (event) => {
     ? new Date(query.to as string)
     : new Date()
 
+  /** ✅ OPENING BALANCE START DATE */
+  const OPENING_DATE = new Date('2025-12-01')
+  const includeOpening = from >= OPENING_DATE
+
   const isPrimary = !bankId
   const client = await pool.connect()
 
@@ -81,142 +85,148 @@ export default defineEventHandler(async (event) => {
     }
 
     /* =================================================
-       FAST OPENING BALANCE (SUMS ONLY)
+       FAST OPENING BALANCE (ONLY IF APPLICABLE)
     ================================================== */
-    let salesBefore = 0
-    let expensesBefore = 0
-    let moneyNetBefore = 0
-    let transferNetBefore = 0
+    let openingBalance = 0
 
-    // A. SALES (PRIMARY ONLY)
-    if (isPrimary) {
-      const r = await client.query(
-        `
-        WITH split AS (
-          SELECT (elem->>'amount')::numeric AS amount
-          FROM bills b
-          JOIN LATERAL jsonb_array_elements(
-            CASE
-              WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-              THEN b.split_payments::jsonb
-              ELSE '[]'::jsonb
-            END
-          ) elem ON true
-          WHERE b.company_id = $1
-            AND b.payment_method = 'Split'
-            AND (elem->>'method') IN ('UPI','Card')
-            AND b.deleted = false
-            AND b.payment_status IN ('PAID','PENDING')
-            AND b.is_markit = false
-            AND b.created_at < $2
-        )
-        SELECT
-          COALESCE(SUM(
-            CASE WHEN payment_method IN ('UPI','Card') THEN grand_total ELSE 0 END
-          ), 0)
-          + COALESCE((SELECT SUM(amount) FROM split), 0) AS total
-        FROM bills
-        WHERE company_id = $1
-          AND deleted = false
-          AND payment_status IN ('PAID','PENDING')
-          AND is_markit = false
-          AND created_at < $2
-        `,
-        [companyId, from]
-      )
+    if (includeOpening) {
+      let salesBefore = 0
+      let expensesBefore = 0
+      let moneyNetBefore = 0
+      let transferNetBefore = 0
 
-      salesBefore = Number(r.rows[0].total || 0)
-    }
-
-    // B. EXPENSES (PRIMARY ONLY)
-    if (isPrimary) {
-      const r = await client.query(
-        `
-        SELECT COALESCE(SUM(total_amount), 0) AS total
-        FROM expenses
-        WHERE company_id = $1
-          AND payment_mode = 'BANK'
-          AND created_at < $2
-        `,
-        [companyId, from]
-      )
-
-      expensesBefore = Number(r.rows[0].total || 0)
-    }
-
-    // C. MONEY TRANSACTIONS (BANK-SPECIFIC)
-    {
-      const r = await client.query(
-        `
-        SELECT COALESCE(SUM(
-          CASE WHEN direction = 'RECEIVED' THEN amount ELSE -amount END
-        ), 0) AS net
-        FROM money_transactions
-        WHERE company_id = $1
-          AND payment_mode = 'BANK'
-          AND status = 'PAID'
-          AND (
-            ($2::text IS NULL AND account_id IS NULL)
-            OR
-            ($2::text IS NOT NULL AND account_id = $2)
+      // SALES (PRIMARY ONLY)
+      if (isPrimary) {
+        const r = await client.query(
+          `
+          WITH split AS (
+            SELECT (elem->>'amount')::numeric AS amount
+            FROM bills b
+            JOIN LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
+                THEN b.split_payments::jsonb
+                ELSE '[]'::jsonb
+              END
+            ) elem ON true
+            WHERE b.company_id = $1
+              AND b.payment_method = 'Split'
+              AND (elem->>'method') IN ('UPI','Card')
+              AND b.deleted = false
+              AND b.payment_status IN ('PAID','PENDING')
+              AND b.is_markit = false
+              AND b.created_at < $2
           )
-          AND created_at < $3
-        `,
-        [companyId, bankId ?? null, from]
-      )
+          SELECT
+            COALESCE(SUM(
+              CASE WHEN payment_method IN ('UPI','Card') THEN grand_total ELSE 0 END
+            ), 0)
+            + COALESCE((SELECT SUM(amount) FROM split), 0) AS total
+          FROM bills
+          WHERE company_id = $1
+            AND deleted = false
+            AND payment_status IN ('PAID','PENDING')
+            AND is_markit = false
+            AND created_at < $2
+          `,
+          [companyId, from]
+        )
 
-      moneyNetBefore = Number(r.rows[0].net || 0)
-    }
+        salesBefore = Number(r.rows[0].total || 0)
+      }
 
-    // D. ACCOUNT TRANSFERS (BANK-SPECIFIC)
-    {
-      const r = await client.query(
-        `
-        SELECT
-          COALESCE(SUM(
-            CASE
-              WHEN to_type = 'BANK'
-               AND ($2::text IS NULL OR to_account_id = $2)
-              THEN amount ELSE 0 END
-          ), 0)
-          -
-          COALESCE(SUM(
-            CASE
-              WHEN from_type = 'BANK'
-               AND ($2::text IS NULL OR from_account_id = $2)
-              THEN amount ELSE 0 END
+      // EXPENSES (PRIMARY ONLY)
+      if (isPrimary) {
+        const r = await client.query(
+          `
+          SELECT COALESCE(SUM(total_amount), 0) AS total
+          FROM expenses
+          WHERE company_id = $1
+            AND payment_mode = 'BANK'
+            AND created_at < $2
+          `,
+          [companyId, from]
+        )
+
+        expensesBefore = Number(r.rows[0].total || 0)
+      }
+
+      // MONEY TRANSACTIONS
+      {
+        const r = await client.query(
+          `
+          SELECT COALESCE(SUM(
+            CASE WHEN direction = 'RECEIVED' THEN amount ELSE -amount END
           ), 0) AS net
-        FROM account_transfers
-        WHERE company_id = $1
-          AND created_at < $3
-        `,
-        [companyId, bankId ?? null, from]
-      )
+          FROM money_transactions
+          WHERE company_id = $1
+            AND payment_mode = 'BANK'
+            AND status = 'PAID'
+            AND (
+              ($2::text IS NULL AND account_id IS NULL)
+              OR
+              ($2::text IS NOT NULL AND account_id = $2)
+            )
+            AND created_at < $3
+          `,
+          [companyId, bankId ?? null, from]
+        )
 
-      transferNetBefore = Number(r.rows[0].net || 0)
+        moneyNetBefore = Number(r.rows[0].net || 0)
+      }
+
+      // ACCOUNT TRANSFERS
+      {
+        const r = await client.query(
+          `
+          SELECT
+            COALESCE(SUM(
+              CASE
+                WHEN to_type = 'BANK'
+                 AND ($2::text IS NULL OR to_account_id = $2)
+                THEN amount ELSE 0 END
+            ), 0)
+            -
+            COALESCE(SUM(
+              CASE
+                WHEN from_type = 'BANK'
+                 AND ($2::text IS NULL OR from_account_id = $2)
+                THEN amount ELSE 0 END
+            ), 0) AS net
+          FROM account_transfers
+          WHERE company_id = $1
+            AND created_at < $3
+          `,
+          [companyId, bankId ?? null, from]
+        )
+
+        transferNetBefore = Number(r.rows[0].net || 0)
+      }
+
+      openingBalance =
+        baseOpening +
+        salesBefore -
+        expensesBefore +
+        moneyNetBefore +
+        transferNetBefore
     }
 
-    const openingBalance =
-      baseOpening +
-      salesBefore -
-      expensesBefore +
-      moneyNetBefore +
-      transferNetBefore
-
     /* =================================================
-       OPENING ROW
+       OPENING ROW (ONLY WHEN VALID)
     ================================================== */
-    rows.push({
-      date: from,
-      source: 'OPENING',
-      ref: '-',
-      description: 'Opening Balance',
-      debit: 0,
-      credit: openingBalance,
-    })
+    if (includeOpening) {
+      rows.push({
+        date: OPENING_DATE,
+        source: 'OPENING',
+        ref: '-',
+        description: 'Opening Balance',
+        debit: 0,
+        credit: openingBalance,
+      })
+    }
 
     /* =================================================
-       LEDGER ROWS BETWEEN FROM → TO
+       LEDGER ROWS (FROM → TO)
     ================================================== */
 
     // SALES
@@ -283,7 +293,7 @@ export default defineEventHandler(async (event) => {
       const r = await client.query(
         `
         SELECT
-          expense_date  AS date,
+          expense_date AS date,
           'EXPENSE' AS source,
           id::text AS ref,
           'Expense paid from bank' AS description,
