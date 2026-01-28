@@ -31,11 +31,7 @@ export default defineEventHandler(async (event) => {
     let bank = bankOpening
 
     /* =================================================
-       SALES (REAL PAYMENT LOGIC)
-       Cash  → cash
-       UPI   → bank
-       Card  → bank
-       Credit → ignored
+       SALES
     ================================================== */
     const salesRes = await client.query(
       `
@@ -101,6 +97,7 @@ export default defineEventHandler(async (event) => {
         ) AS bank_expense
       FROM expenses
       WHERE company_id = $1
+        AND UPPER(status) = 'PAID'
       `,
       [companyId]
     )
@@ -113,7 +110,7 @@ export default defineEventHandler(async (event) => {
     bank -= bankExpenses
 
     /* =================================================
-       MONEY TRANSACTIONS
+       MONEY TRANSACTIONS (PRIMARY BANK ONLY)
     ================================================== */
     let cashReceived = 0
     let cashGiven = 0
@@ -126,6 +123,10 @@ export default defineEventHandler(async (event) => {
       FROM money_transactions
       WHERE company_id = $1
         AND status = 'PAID'
+        AND (
+          payment_mode = 'CASH'
+          OR (payment_mode = 'BANK' AND account_id IS NULL)
+        )
       GROUP BY direction, payment_mode
       `,
       [companyId]
@@ -144,7 +145,7 @@ export default defineEventHandler(async (event) => {
     bank += bankReceived - bankGiven
 
     /* =================================================
-       INVESTMENT BALANCE (SEPARATE ACCOUNT)
+       INVESTMENTS
     ================================================== */
     const invRes = await client.query(
       `
@@ -164,7 +165,7 @@ export default defineEventHandler(async (event) => {
     }
 
     /* =================================================
-       ACCOUNT TRANSFERS
+       ACCOUNT TRANSFERS (PRIMARY BANK ONLY)
     ================================================== */
     let cashTransfersIn = 0
     let cashTransfersOut = 0
@@ -174,10 +175,15 @@ export default defineEventHandler(async (event) => {
 
     const transferRes = await client.query(
       `
-      SELECT from_type, to_type, SUM(amount) AS total
+      SELECT
+        from_type,
+        from_account_id,
+        to_type,
+        to_account_id,
+        SUM(amount) AS total
       FROM account_transfers
       WHERE company_id = $1
-      GROUP BY from_type, to_type
+      GROUP BY from_type, from_account_id, to_type, to_account_id
       `,
       [companyId]
     )
@@ -185,13 +191,25 @@ export default defineEventHandler(async (event) => {
     for (const r of transferRes.rows) {
       const amt = Number(r.total)
 
-      if (r.from_type === 'CASH') cashTransfersOut += amt
-      if (r.from_type === 'BANK') bankTransfersOut += amt
+      if (r.from_type === 'CASH') {
+        cashTransfersOut += amt
+      }
 
-      if (r.to_type === 'CASH') cashTransfersIn += amt
-      if (r.to_type === 'BANK') bankTransfersIn += amt
+      if (r.to_type === 'CASH') {
+        cashTransfersIn += amt
+      }
 
-      if (r.from_type === 'INVESTMENT') investmentTransfersOut += amt
+      if (r.from_type === 'BANK' && r.from_account_id === null) {
+        bankTransfersOut += amt
+      }
+
+      if (r.to_type === 'BANK' && r.to_account_id === null) {
+        bankTransfersIn += amt
+      }
+
+      if (r.from_type === 'INVESTMENT') {
+        investmentTransfersOut += amt
+      }
     }
 
     cash += cashTransfersIn - cashTransfersOut
@@ -203,7 +221,7 @@ export default defineEventHandler(async (event) => {
     ================================================== */
     const netProfit = totalSales - totalExpenses
 
-    /* =================================================
+     /* =================================================
        CHART DATA
     ================================================== */
     const cashFlowChart = [
@@ -236,7 +254,7 @@ export default defineEventHandler(async (event) => {
       balances: {
         cash,
         bank,
-        investment: investmentBalance
+        investment: investmentBalance,
       },
 
       breakdown: {
@@ -248,7 +266,7 @@ export default defineEventHandler(async (event) => {
           moneyGiven: cashGiven,
           transfersIn: cashTransfersIn,
           transfersOut: cashTransfersOut,
-          closingBalance: cash
+          closingBalance: cash,
         },
         bank: {
           openingBalance: bankOpening,
@@ -258,21 +276,20 @@ export default defineEventHandler(async (event) => {
           moneyGiven: bankGiven,
           transfersIn: bankTransfersIn,
           transfersOut: bankTransfersOut,
-          closingBalance: bank
-        }
+          closingBalance: bank,
+        },
       },
 
       pnl: {
         sales: totalSales,
         expenses: totalExpenses,
-        netProfit
+        netProfit,
       },
-
       charts: {
-        cashFlow: cashFlowChart.filter(i => i.value !== 0),
-        bankFlow: bankFlowChart.filter(i => i.value !== 0),
-        pnlPie: pnlPieChart
-      }
+              cashFlow: cashFlowChart.filter(i => i.value !== 0),
+              bankFlow: bankFlowChart.filter(i => i.value !== 0),
+              pnlPie: pnlPieChart
+            }
     }
   } finally {
     client.release()

@@ -147,10 +147,7 @@ watch(
    SAVE
 --------------------------------------------------- */
 const saveForm = () => {
-  if (form.value.fromType === form.value.toType) {
-    toast.add({ title: 'From and To cannot be same', color: 'red' })
-    return
-  }
+
 
   if (!form.value.amount || Number(form.value.amount) <= 0) {
     toast.add({ title: 'Invalid amount', color: 'red' })

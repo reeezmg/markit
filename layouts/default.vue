@@ -396,6 +396,15 @@ const links = computed(() => {
                         shortcuts: ['A', 'B'],
                     },
                 },
+                {
+                    label: 'Cash',
+                    to: `/accounts/cash`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Cash',
+                        shortcuts: ['A', 'C'],
+                    },
+                },
                                 {
                     label: 'Investments',
                     to: `/accounts/investment`,

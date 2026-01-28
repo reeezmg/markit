@@ -47,8 +47,15 @@ function selectRange(duration: Duration) {
 /* ---------------------------------------------------
    FETCH LEDGER (AUTO REACTIVE)
 --------------------------------------------------- */
+
+const ledgerUrl = computed(() =>
+  bankId.value
+    ? '/api/accounts/secondaryledger'
+    : '/api/accounts/primaryledger'
+)
+
 const { data, pending, error, refresh } = await useFetch(
-  '/api/accounts/bank/ledger',
+  ledgerUrl,
   {
     query: computed(() => ({
       ...(bankId.value && { bankId: bankId.value }),
@@ -56,9 +63,10 @@ const { data, pending, error, refresh } = await useFetch(
       to: selectedDate.value.end.toISOString(),
     })),
     immediate: true,
-    watch: false, // 🔥 IMPORTANT: disable auto watch
+    watch: false,
   }
 )
+
 
 
 
