@@ -2,18 +2,16 @@
 import { ref, computed } from 'vue'
 import { format } from 'date-fns'
 
-import InvestmentForm from '~/components/Investment/Form.vue'
-import {
-  useCreateInvestment,
-  useUpdateInvestment,
-  useDeleteInvestment,
-  useFindManyInvestment,
-} from '~/lib/hooks'
+import AccountTransferForm from '~/components/AccountTransfer/Form.vue'
 
-/* ---------------------------------------------------
-   EMITS
---------------------------------------------------- */
-const emit = defineEmits(['open'])
+import {
+  useCreateAccountTransfer,
+  useUpdateAccountTransfer,
+  useDeleteAccountTransfer,
+  useFindManyAccountTransfer,
+  useFindManyBankAccount,
+  useFindUniqueCompany,
+} from '~/lib/hooks'
 
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
@@ -21,128 +19,158 @@ const useAuth = () => useNuxtApp().$auth
 /* ---------------------------------------------------
    HOOKS
 --------------------------------------------------- */
-const createInvestment = useCreateInvestment({ optimisticUpdate: true })
-const updateInvestment = useUpdateInvestment({ optimisticUpdate: true })
-const deleteInvestment = useDeleteInvestment({ optimisticUpdate: true })
+const createTransfer = useCreateAccountTransfer({ optimisticUpdate: true })
+const updateTransfer = useUpdateAccountTransfer({ optimisticUpdate: true })
+const deleteTransfer = useDeleteAccountTransfer({ optimisticUpdate: true })
 
 /* ---------------------------------------------------
    MODAL STATE
 --------------------------------------------------- */
-const showInvestmentForm = ref(false)
-const selectedInvestment = ref<any | null>(null)
+const showTransferForm = ref(false)
+const selectedTransfer = ref<any | null>(null)
 const isDeleteModalOpen = ref(false)
 const deletingRow = ref<any>(null)
 
 /* ---------------------------------------------------
    OPEN / CLOSE
 --------------------------------------------------- */
-const openInvestmentForm = (row = null) => {
-  selectedInvestment.value = row
-  showInvestmentForm.value = true
+const openTransferForm = (row = null) => {
+  selectedTransfer.value = row
+  showTransferForm.value = true
 }
 
-const closeInvestmentForm = () => {
-  showInvestmentForm.value = false
-  selectedInvestment.value = null
+const closeTransferForm = () => {
+  showTransferForm.value = false
+  selectedTransfer.value = null
 }
 
 /* ---------------------------------------------------
-   SAVE
+   SAVE (CREATE / UPDATE)
 --------------------------------------------------- */
-const saveInvestment = async (form: any) => {
-  if (selectedInvestment.value) {
-    await updateInvestment.mutateAsync({
-      where: { id: selectedInvestment.value.id },
-      data: {
-        ...(form.date && { createdAt: new Date(form.date).toISOString() }),
-        direction: form.direction,
-        amount: Number(form.amount),
-        paymentMode: form.paymentMode,
-        status: form.status,
-        note: form.note,
-        user: {
-          connect: {
-            companyId_userId: {
-              companyId: useAuth().session.value!.companyId,
-              userId: form.userId,
-            },
+const saveTransfer = async (transfer: any) => {
+  try {
+    if (selectedTransfer.value) {
+      await updateTransfer.mutateAsync({
+        where: { id: selectedTransfer.value.id },
+        data: {
+          ...(transfer.date && {
+            createdAt: new Date(transfer.date).toISOString(),
+          }),
+          fromType: transfer.fromType,
+          toType: transfer.toType,
+          amount: transfer.amount,
+          note: transfer.note ?? null,
+          fromAccountId: transfer.fromAccountId ?? null,
+          toAccountId: transfer.toAccountId ?? null,
+        },
+      })
+      toast.add({ title: 'Transfer updated', color: 'green' })
+    } else {
+      await createTransfer.mutateAsync({
+        data: {
+          ...(transfer.date && {
+            createdAt: new Date(transfer.date).toISOString(),
+          }),
+          fromType: transfer.fromType,
+          toType: transfer.toType,
+          amount: transfer.amount,
+          note: transfer.note ?? null,
+          ...(transfer.fromAccountId && {
+            fromAccountId: transfer.fromAccountId,
+          }),
+          ...(transfer.toAccountId && {
+            toAccountId: transfer.toAccountId,
+          }),
+          company: {
+            connect: { id: useAuth().session.value!.companyId },
           },
         },
-      },
-    })
-    toast.add({ title: 'Investment updated', color: 'green' })
-  } else {
-    createInvestment.mutate({
-      data: {
-        ...(form.date && { createdAt: new Date(form.date).toISOString() }),
-        direction: form.direction,
-        amount: Number(form.amount),
-        paymentMode: form.paymentMode,
-        status: 'COMPLETED',
-        note: form.note,
-        company: {
-          connect: { id: useAuth().session.value!.companyId },
-        },
-        user: {
-          connect: {
-            companyId_userId: {
-              companyId: useAuth().session.value!.companyId,
-              userId: form.userId,
-            },
-          },
-        },
-      },
-    })
-    toast.add({ title: 'Investment added', color: 'green' })
-  }
+      })
+      toast.add({ title: 'Transfer created', color: 'green' })
+    }
 
-  closeInvestmentForm()
+    closeTransferForm()
+  } catch (err: any) {
+    toast.add({
+      title: 'Transfer failed',
+      description: err.message,
+      color: 'red',
+    })
+  }
 }
 
 /* ---------------------------------------------------
    DELETE
 --------------------------------------------------- */
 const confirmDelete = async () => {
-  await deleteInvestment.mutateAsync({
+  await deleteTransfer.mutateAsync({
     where: { id: deletingRow.value.id },
   })
-  toast.add({ title: 'Investment deleted', color: 'green' })
+  toast.add({ title: 'Transfer deleted', color: 'green' })
   isDeleteModalOpen.value = false
 }
 
 /* ---------------------------------------------------
-   TABLE STATE
+   PAGINATION
 --------------------------------------------------- */
 const page = ref(1)
 const pageCount = ref('10')
 
 /* ---------------------------------------------------
-   FETCH
+   FETCH DATA
 --------------------------------------------------- */
 const queryArgs = computed(() => ({
-  where: {
-    companyId: useAuth().session.value?.companyId,
-  },
-  include: { user: true },
+  where: { companyId: useAuth().session.value?.companyId },
   orderBy: { createdAt: 'desc' },
   skip: (page.value - 1) * parseInt(pageCount.value),
   take: parseInt(pageCount.value),
 }))
 
-const { data: investments, isLoading } = useFindManyInvestment(queryArgs)
+const { data: transfers, isLoading } =
+  useFindManyAccountTransfer(queryArgs)
+
+/* ---------------------------------------------------
+   BANKS / COMPANY
+--------------------------------------------------- */
+const { data: banks } = useFindManyBankAccount(() => ({
+  where: { companyId: useAuth().session.value?.companyId },
+}))
+
+const { data: company } = useFindUniqueCompany(() => ({
+  where: { id: useAuth().session.value?.companyId },
+}))
+
+/* ---------------------------------------------------
+   HELPERS
+--------------------------------------------------- */
+const bankMap = computed(() => {
+  const map = new Map<string, string>()
+  banks.value?.forEach(b => {
+    map.set(b.id, b.bankName || 'Bank')
+  })
+  return map
+})
+
+const getAccountLabel = (type: string, accountId?: string | null) => {
+  if (type !== 'BANK') return type
+  if (accountId && bankMap.value.has(accountId)) {
+    return `BANK (${bankMap.value.get(accountId)})`
+  }
+  return 'BANK (Primary)'
+}
 
 /* ---------------------------------------------------
    ROWS
 --------------------------------------------------- */
 const rows = computed(() =>
-  investments.value?.map(i => ({
-    id: i.id,
-    date: i.createdAt,
-    type: i.direction === 'IN' ? 'Invested' : 'Withdrawn',
-    user: i.user?.name ?? '-',
-    amount: i.amount,
-    note: i.note,
-    raw: i,
+  transfers.value?.map(t => ({
+    id: t.id,
+    date: t.createdAt,
+    from: getAccountLabel(t.fromType, t.fromAccountId),
+    to: getAccountLabel(t.toType, t.toAccountId),
+    amount: t.amount,
+    note: t.note,
+    raw: t,
   })) ?? []
 )
 
@@ -153,10 +181,6 @@ const pageTotal = computed(() => rows.value.length)
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1)
 const pageTo = computed(() =>
   Math.min(page.value * parseInt(pageCount.value), pageTotal.value)
-)
-
-const totalAmount = computed(() =>
-  rows.value.reduce((sum, r) => sum + Number(r.amount || 0), 0)
 )
 
 const formatCurrency = (v: number) =>
@@ -173,7 +197,7 @@ const actionItems = (row: any) => [
     {
       label: 'Edit',
       icon: 'i-heroicons-pencil-square-20-solid',
-      click: () => openInvestmentForm(row.raw),
+      click: () => openTransferForm(row.raw),
     },
   ],
   [
@@ -192,23 +216,7 @@ const actionItems = (row: any) => [
 <template>
   <UDashboardPanelContent class="pb-24">
 
-    <!-- SUMMARY -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-      <UCard>
-        <div class="text-sm text-gray-500">Total Entries</div>
-        <div class="text-xl font-semibold">{{ pageTotal }}</div>
-      </UCard>
-
-      <UCard>
-        <div class="text-sm text-gray-500">Total Capital Amount</div>
-        <div class="text-xl font-semibold">
-          {{ formatCurrency(totalAmount) }}
-        </div>
-      </UCard>
-    </div>
-
-    <!-- TABLE CARD -->
-     <UCard
+       <UCard
             class="w-full"
             :ui="{
                 base: '',
@@ -225,9 +233,15 @@ const actionItems = (row: any) => [
       <!-- HEADER -->
       <template #header>
         <div class="flex justify-between items-center">
-          <h3 class="font-semibold"></h3>
-          <UButton color="primary" @click="openInvestmentForm()">
-            Add Investment
+          <div>
+            <h2 class="font-semibold">Account Transfers</h2>
+            <p class="text-sm text-gray-500">
+              Cash ↔ Bank ↔ Investment
+            </p>
+          </div>
+
+          <UButton color="primary" @click="openTransferForm()">
+            New Transfer
           </UButton>
         </div>
       </template>
@@ -251,15 +265,15 @@ const actionItems = (row: any) => [
         :loading="isLoading"
         :columns="[
           { key: 'date', label: 'Date' },
-          { key: 'type', label: 'Type' },
-          { key: 'user', label: 'User' },
+          { key: 'from', label: 'From' },
+          { key: 'to', label: 'To' },
           { key: 'amount', label: 'Amount' },
           { key: 'note', label: 'Note' },
           { key: 'actions', label: 'Actions' },
         ]"
       >
         <template #date-data="{ row }">
-          {{ format(row.date, 'd MMM yyyy') }}
+          {{ format(row.date, 'dd MMM yyyy') }}
         </template>
 
         <template #amount-data="{ row }">
@@ -278,7 +292,8 @@ const actionItems = (row: any) => [
       </UTable>
 
       <!-- FOOTER -->
-      <template #footer>
+   
+    <template #footer>
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
                         <span class="text-sm leading-5 hidden sm:block">
@@ -314,8 +329,8 @@ const actionItems = (row: any) => [
     <!-- DELETE MODAL -->
     <UDashboardModal
       v-model="isDeleteModalOpen"
-      title="Delete Investment"
-      description="Are you sure you want to delete this investment?"
+      title="Delete Transfer"
+      description="Are you sure you want to delete this transfer?"
       icon="i-heroicons-exclamation-circle"
       prevent-close
       :close-button="null"
@@ -327,11 +342,11 @@ const actionItems = (row: any) => [
     </UDashboardModal>
 
     <!-- FORM MODAL -->
-    <UModal v-model="showInvestmentForm">
-      <InvestmentForm
-        :investment="selectedInvestment"
-        @save="saveInvestment"
-        @cancel="closeInvestmentForm"
+    <UModal v-model="showTransferForm">
+      <AccountTransferForm
+        :transfer="selectedTransfer"
+        @save="saveTransfer"
+        @cancel="closeTransferForm"
       />
     </UModal>
   </UDashboardPanelContent>

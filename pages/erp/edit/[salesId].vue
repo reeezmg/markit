@@ -613,9 +613,6 @@ const getCategories = async () => {
 }
 
 
-onMounted(async() => {
-  await getCategories()
-})
 
 
 
@@ -634,7 +631,8 @@ const fetchBill = async () => {
 
 
 onMounted(async () => {
-await fetchBill()
+    await getCategories()
+    await fetchBill()
 });
 const dataLoading = ref(false)
 watch(bill, async (newBill) => {

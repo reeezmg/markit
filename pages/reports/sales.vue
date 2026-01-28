@@ -388,6 +388,7 @@ const printReportHandle = async() => {
         :rows="dashboard?.categorySales || []"
         :columns="[
           { key: 'name', label: 'Category' },
+          { key: 'qty', label: 'Quantity' },
           { key: 'sales', label: 'Sales' }
         ]"
       />

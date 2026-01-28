@@ -1,19 +1,16 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { format } from 'date-fns'
 
-import InvestmentForm from '~/components/Investment/Form.vue'
+import BankForm from '~/components/Bank/Form.vue'
+
 import {
-  useCreateInvestment,
-  useUpdateInvestment,
-  useDeleteInvestment,
-  useFindManyInvestment,
+  useCreateBankAccount,
+  useUpdateBankAccount,
+  useDeleteBankAccount,
+  useFindManyBankAccount,
+  useFindUniqueCompany,
+  useUpdateCompany,
 } from '~/lib/hooks'
-
-/* ---------------------------------------------------
-   EMITS
---------------------------------------------------- */
-const emit = defineEmits(['open'])
 
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
@@ -21,133 +18,180 @@ const useAuth = () => useNuxtApp().$auth
 /* ---------------------------------------------------
    HOOKS
 --------------------------------------------------- */
-const createInvestment = useCreateInvestment({ optimisticUpdate: true })
-const updateInvestment = useUpdateInvestment({ optimisticUpdate: true })
-const deleteInvestment = useDeleteInvestment({ optimisticUpdate: true })
+const createBank = useCreateBankAccount({ optimisticUpdate: true })
+const updateBank = useUpdateBankAccount({ optimisticUpdate: true })
+const deleteBank = useDeleteBankAccount({ optimisticUpdate: true })
+const updateCompany = useUpdateCompany({ optimisticUpdate: true })
 
 /* ---------------------------------------------------
    MODAL STATE
 --------------------------------------------------- */
-const showInvestmentForm = ref(false)
-const selectedInvestment = ref<any | null>(null)
+const showBankForm = ref(false)
+const selectedBank = ref<any | null>(null)
 const isDeleteModalOpen = ref(false)
 const deletingRow = ref<any>(null)
 
 /* ---------------------------------------------------
    OPEN / CLOSE
 --------------------------------------------------- */
-const openInvestmentForm = (row = null) => {
-  selectedInvestment.value = row
-  showInvestmentForm.value = true
+const openBankForm = (row = null) => {
+  selectedBank.value = row
+  showBankForm.value = true
 }
 
-const closeInvestmentForm = () => {
-  showInvestmentForm.value = false
-  selectedInvestment.value = null
+const closeBankForm = () => {
+  showBankForm.value = false
+  selectedBank.value = null
 }
 
 /* ---------------------------------------------------
-   SAVE
+   CREATE / UPDATE
 --------------------------------------------------- */
-const saveInvestment = async (form: any) => {
-  if (selectedInvestment.value) {
-    await updateInvestment.mutateAsync({
-      where: { id: selectedInvestment.value.id },
-      data: {
-        ...(form.date && { createdAt: new Date(form.date).toISOString() }),
-        direction: form.direction,
-        amount: Number(form.amount),
-        paymentMode: form.paymentMode,
-        status: form.status,
-        note: form.note,
-        user: {
-          connect: {
-            companyId_userId: {
-              companyId: useAuth().session.value!.companyId,
-              userId: form.userId,
-            },
-          },
-        },
+const addBank = (bank: any) => {
+  createBank.mutate({
+    data: {
+      accHolderName: bank.accHolderName,
+      bankName: bank.bankName,
+      accountNo: bank.accountNo,
+      ifsc: bank.ifsc,
+      gstin: bank.gstin,
+      upiId: bank.upiId,
+      openingBalance: Number(bank.openingBalance),
+      company: {
+        connect: { id: useAuth().session.value!.companyId },
       },
-    })
-    toast.add({ title: 'Investment updated', color: 'green' })
+    },
+  })
+
+  toast.add({ title: 'Bank account added', color: 'green' })
+}
+
+const editSecondaryBank = async (id: string, bank: any) => {
+  await updateBank.mutateAsync({
+    where: { id },
+    data: {
+      accHolderName: bank.accHolderName,
+      bankName: bank.bankName,
+      accountNo: bank.accountNo,
+      ifsc: bank.ifsc,
+      gstin: bank.gstin,
+      upiId: bank.upiId,
+      openingBalance: Number(bank.openingBalance),
+    },
+  })
+
+  toast.add({ title: 'Bank account updated', color: 'green' })
+}
+
+const editPrimaryBank = async (bank: any) => {
+  await updateCompany.mutateAsync({
+    where: { id: useAuth().session.value!.companyId },
+    data: {
+      accHolderName: bank.accHolderName,
+      bankName: bank.bankName,
+      accountNo: bank.accountNo,
+      ifsc: bank.ifsc,
+      gstin: bank.gstin,
+      upiId: bank.upiId,
+    },
+  })
+
+  toast.add({ title: 'Primary bank updated', color: 'green' })
+}
+
+const saveBank = async (form: any) => {
+  if (selectedBank.value?.isPrimary) {
+    await editPrimaryBank(form)
+  } else if (selectedBank.value) {
+    await editSecondaryBank(selectedBank.value.id, form)
   } else {
-    createInvestment.mutate({
-      data: {
-        ...(form.date && { createdAt: new Date(form.date).toISOString() }),
-        direction: form.direction,
-        amount: Number(form.amount),
-        paymentMode: form.paymentMode,
-        status: 'COMPLETED',
-        note: form.note,
-        company: {
-          connect: { id: useAuth().session.value!.companyId },
-        },
-        user: {
-          connect: {
-            companyId_userId: {
-              companyId: useAuth().session.value!.companyId,
-              userId: form.userId,
-            },
-          },
-        },
-      },
-    })
-    toast.add({ title: 'Investment added', color: 'green' })
+    addBank(form)
   }
 
-  closeInvestmentForm()
+  closeBankForm()
 }
 
 /* ---------------------------------------------------
    DELETE
 --------------------------------------------------- */
 const confirmDelete = async () => {
-  await deleteInvestment.mutateAsync({
+  await deleteBank.mutateAsync({
     where: { id: deletingRow.value.id },
   })
-  toast.add({ title: 'Investment deleted', color: 'green' })
+  toast.add({ title: 'Bank account deleted', color: 'green' })
   isDeleteModalOpen.value = false
 }
 
 /* ---------------------------------------------------
-   TABLE STATE
+   PAGINATION
 --------------------------------------------------- */
 const page = ref(1)
 const pageCount = ref('10')
 
 /* ---------------------------------------------------
-   FETCH
+   FETCH DATA
 --------------------------------------------------- */
-const queryArgs = computed(() => ({
-  where: {
-    companyId: useAuth().session.value?.companyId,
-  },
-  include: { user: true },
-  orderBy: { createdAt: 'desc' },
+const companyQuery = computed(() => ({
+  where: { id: useAuth().session.value?.companyId },
+}))
+
+const bankQuery = computed(() => ({
+  where: { companyId: useAuth().session.value?.companyId },
   skip: (page.value - 1) * parseInt(pageCount.value),
   take: parseInt(pageCount.value),
 }))
 
-const { data: investments, isLoading } = useFindManyInvestment(queryArgs)
+const { data: company } = useFindUniqueCompany(companyQuery)
+const { data: banks, isLoading } = useFindManyBankAccount(bankQuery)
+
+/* ---------------------------------------------------
+   PRIMARY BANK
+--------------------------------------------------- */
+const primaryBankRow = computed(() => {
+  if (!company.value?.bankName) return null
+
+  return {
+    id: 'PRIMARY_BANK',
+    isPrimary: true,
+    bankName: company.value.bankName,
+    accHolderName: company.value.accHolderName,
+    accountNo: company.value.accountNo,
+    ifsc: company.value.ifsc,
+    upiId: company.value.upiId,
+    raw: {
+      accHolderName: company.value.accHolderName,
+      bankName: company.value.bankName,
+      accountNo: company.value.accountNo,
+      ifsc: company.value.ifsc,
+      gstin: company.value.gstin,
+      upiId: company.value.upiId,
+    },
+  }
+})
 
 /* ---------------------------------------------------
    ROWS
 --------------------------------------------------- */
-const rows = computed(() =>
-  investments.value?.map(i => ({
-    id: i.id,
-    date: i.createdAt,
-    type: i.direction === 'IN' ? 'Invested' : 'Withdrawn',
-    user: i.user?.name ?? '-',
-    amount: i.amount,
-    note: i.note,
-    raw: i,
-  })) ?? []
-)
+const rows = computed(() => {
+  const primary = primaryBankRow.value ? [primaryBankRow.value] : []
+
+  const others =
+    banks.value?.map(b => ({
+      id: b.id,
+      bankName: b.bankName,
+      accHolderName: b.accHolderName,
+      accountNo: b.accountNo,
+      ifsc: b.ifsc,
+      upiId: b.upiId,
+      isPrimary: false,
+      raw: b,
+    })) ?? []
+
+  return [...primary, ...others]
+})
 
 /* ---------------------------------------------------
-   TOTALS
+   PAGINATION META
 --------------------------------------------------- */
 const pageTotal = computed(() => rows.value.length)
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1)
@@ -155,31 +199,32 @@ const pageTo = computed(() =>
   Math.min(page.value * parseInt(pageCount.value), pageTotal.value)
 )
 
-const totalAmount = computed(() =>
-  rows.value.reduce((sum, r) => sum + Number(r.amount || 0), 0)
-)
-
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-  }).format(v ?? 0)
-
 /* ---------------------------------------------------
-   ACTION DROPDOWN
+   ACTIONS
 --------------------------------------------------- */
+const goToDetails = (row: any) => {
+  if (row.isPrimary) navigateTo('/accounts/bank/primary')
+  else navigateTo(`/accounts/bank/${row.id}`)
+}
+
 const actionItems = (row: any) => [
   [
     {
+      label: 'Details',
+      icon: 'i-heroicons-document-text-20-solid',
+      click: () => goToDetails(row),
+    },
+    {
       label: 'Edit',
       icon: 'i-heroicons-pencil-square-20-solid',
-      click: () => openInvestmentForm(row.raw),
+      click: () => openBankForm(row),
     },
   ],
   [
     {
       label: 'Delete',
       icon: 'i-heroicons-trash-20-solid',
+      disabled: row.isPrimary,
       click: () => {
         deletingRow.value = row
         isDeleteModalOpen.value = true
@@ -191,24 +236,7 @@ const actionItems = (row: any) => [
 
 <template>
   <UDashboardPanelContent class="pb-24">
-
-    <!-- SUMMARY -->
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-      <UCard>
-        <div class="text-sm text-gray-500">Total Entries</div>
-        <div class="text-xl font-semibold">{{ pageTotal }}</div>
-      </UCard>
-
-      <UCard>
-        <div class="text-sm text-gray-500">Total Capital Amount</div>
-        <div class="text-xl font-semibold">
-          {{ formatCurrency(totalAmount) }}
-        </div>
-      </UCard>
-    </div>
-
-    <!-- TABLE CARD -->
-     <UCard
+   <UCard
             class="w-full"
             :ui="{
                 base: '',
@@ -225,9 +253,10 @@ const actionItems = (row: any) => [
       <!-- HEADER -->
       <template #header>
         <div class="flex justify-between items-center">
-          <h3 class="font-semibold"></h3>
-          <UButton color="primary" @click="openInvestmentForm()">
-            Add Investment
+          <h2 class="font-semibold">Bank Accounts</h2>
+
+          <UButton color="primary" @click="openBankForm()">
+            Add Bank Account
           </UButton>
         </div>
       </template>
@@ -250,20 +279,21 @@ const actionItems = (row: any) => [
         :rows="rows"
         :loading="isLoading"
         :columns="[
-          { key: 'date', label: 'Date' },
-          { key: 'type', label: 'Type' },
-          { key: 'user', label: 'User' },
-          { key: 'amount', label: 'Amount' },
-          { key: 'note', label: 'Note' },
+          { key: 'bankName', label: 'Bank' },
+          { key: 'accHolderName', label: 'Account Holder' },
+          { key: 'accountNo', label: 'Account No' },
+          { key: 'ifsc', label: 'IFSC' },
+          { key: 'upiId', label: 'UPI ID' },
           { key: 'actions', label: 'Actions' },
         ]"
       >
-        <template #date-data="{ row }">
-          {{ format(row.date, 'd MMM yyyy') }}
-        </template>
-
-        <template #amount-data="{ row }">
-          {{ formatCurrency(row.amount) }}
+        <template #bankName-data="{ row }">
+          <div class="flex items-center gap-2">
+            <span>{{ row.bankName }}</span>
+            <UBadge v-if="row.isPrimary" size="xs" color="primary">
+              Primary
+            </UBadge>
+          </div>
         </template>
 
         <template #actions-data="{ row }">
@@ -278,7 +308,8 @@ const actionItems = (row: any) => [
       </UTable>
 
       <!-- FOOTER -->
-      <template #footer>
+      
+    <template #footer>
                 <div class="flex flex-wrap justify-between items-center">
                     <div>
                         <span class="text-sm leading-5 hidden sm:block">
@@ -314,8 +345,8 @@ const actionItems = (row: any) => [
     <!-- DELETE MODAL -->
     <UDashboardModal
       v-model="isDeleteModalOpen"
-      title="Delete Investment"
-      description="Are you sure you want to delete this investment?"
+      title="Delete Bank Account"
+      description="Are you sure you want to delete this bank account?"
       icon="i-heroicons-exclamation-circle"
       prevent-close
       :close-button="null"
@@ -327,12 +358,13 @@ const actionItems = (row: any) => [
     </UDashboardModal>
 
     <!-- FORM MODAL -->
-    <UModal v-model="showInvestmentForm">
-      <InvestmentForm
-        :investment="selectedInvestment"
-        @save="saveInvestment"
-        @cancel="closeInvestmentForm"
+    <UModal v-model="showBankForm">
+      <BankForm
+        :bank="selectedBank?.raw"
+        @save="saveBank"
+        @cancel="closeBankForm"
       />
     </UModal>
+
   </UDashboardPanelContent>
 </template>

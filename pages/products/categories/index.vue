@@ -420,26 +420,38 @@ const downloadReport = async () => {
   </div>
 
   <!-- Right side: Add Button aligned to end -->
-  <div class="w-full sm:w-auto flex justify-end">
-    <UButton
-      icon="i-heroicons-arrow-down-tray"
-      size="sm"
-      color="primary"
-      variant="solid"
-      label="Download"
-      class="me-2 w-full sm:w-40"
-      @click="downloadReport()"
-      />
-    <UButton
-      icon="i-heroicons-plus"
-      size="sm"
-      color="primary"
-      variant="solid"
-      label="Add Category"
-      class="w-full sm:w-40"
-      @click="() => router.push('categories/add')"
-    />
-  </div>
+<div
+  class="
+    w-full
+    flex
+    flex-col
+    gap-2
+    sm:flex-row
+    sm:justify-end
+    sm:items-center
+  "
+>
+  <UButton
+    icon="i-heroicons-arrow-down-tray"
+    size="sm"
+    color="primary"
+    variant="solid"
+    label="Download"
+    class="w-full sm:w-40"
+    @click="downloadReport()"
+  />
+
+  <UButton
+    icon="i-heroicons-plus"
+    size="sm"
+    color="primary"
+    variant="solid"
+    label="Add Category"
+    class="w-full sm:w-40"
+    @click="() => router.push('categories/add')"
+  />
+</div>
+
 </div>
 
            

@@ -1,24 +1,29 @@
-// ~/server/api/report-non-markit.get.ts
-import { defineEventHandler, getQuery } from 'h3';
-import { pool } from '~/server/db';
+import { defineEventHandler, getQuery } from 'h3'
+import { pool } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event);
-  const companyId = session.data.companyId;
+  const session = await useAuthSession(event)
+  const companyId = session.data.companyId
 
   if (!companyId) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
+    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   }
 
-  const query = getQuery(event);
+  const query = getQuery(event)
 
-  const startDate = query.startDate ? new Date(JSON.parse(query.startDate)) : new Date(0);
-  const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : new Date();
+  const startDate = query.startDate
+    ? new Date(JSON.parse(query.startDate as string))
+    : new Date(0)
 
-  const client = await pool.connect();
+  const endDate = query.endDate
+    ? new Date(JSON.parse(query.endDate as string))
+    : new Date()
+
+  const client = await pool.connect()
+
   try {
     const [salesRes, expensesRes, profitRes, categoryRes] = await Promise.all([
-      // Sales query - only non-markit bills
+      // ================= SALES =================
       client.query(
         `
         SELECT
@@ -38,27 +43,27 @@ export default defineEventHandler(async (event) => {
             + COALESCE(SUM(CASE WHEN sp.method = 'Credit' THEN sp.amount ELSE 0 END), 0) AS credit_sales
         FROM bills b
         LEFT JOIN LATERAL (
-            SELECT 
-              (elem->>'method') AS method,
-              (elem->>'amount')::numeric AS amount
-            FROM jsonb_array_elements(
-              CASE 
-                WHEN jsonb_typeof(b.split_payments::jsonb) = 'array' 
-                THEN b.split_payments::jsonb 
-                ELSE '[]'::jsonb 
-              END
-            ) elem
+          SELECT 
+            (elem->>'method') AS method,
+            (elem->>'amount')::numeric AS amount
+          FROM jsonb_array_elements(
+            CASE 
+              WHEN jsonb_typeof(b.split_payments::jsonb) = 'array' 
+              THEN b.split_payments::jsonb 
+              ELSE '[]'::jsonb 
+            END
+          ) elem
         ) sp ON b.payment_method = 'Split'
         WHERE b.company_id = $1
           AND b.deleted = false
           AND b.payment_status IN ('PAID', 'PENDING')
-          AND b.is_markit = false  -- Only non-markit bills
+          AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3;
         `,
         [companyId, startDate, endDate]
       ),
 
-      // Expenses query - unchanged (expenses typically aren't markit-related)
+      // ================= EXPENSES =================
       client.query(
         `
         SELECT
@@ -70,12 +75,12 @@ export default defineEventHandler(async (event) => {
           COALESCE(SUM(CASE WHEN e.payment_mode = 'CHEQUE' THEN e.total_amount ELSE 0 END), 0) AS cheque_expenses
         FROM expenses e
         WHERE e.company_id = $1
-          AND e.expense_date BETWEEN $2 AND $3
+          AND e.expense_date BETWEEN $2 AND $3;
         `,
         [companyId, startDate, endDate]
       ),
 
-      // Profit query - only non-markit bills
+      // ================= PROFIT =================
       client.query(
         `
         SELECT
@@ -83,7 +88,7 @@ export default defineEventHandler(async (event) => {
            FROM bills b
            WHERE b.company_id = $1
              AND b.deleted = false
-             AND b.is_markit = false  -- Only non-markit bills
+             AND b.is_markit = false
              AND b.created_at BETWEEN $2 AND $3
              AND b.payment_status = 'PAID') AS total_discount,
 
@@ -104,73 +109,77 @@ export default defineEventHandler(async (event) => {
         LEFT JOIN categories c ON e.category_id = c.id
         WHERE b.company_id = $1
           AND b.deleted = false
-          AND b.is_markit = false  -- Only non-markit bills
+          AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3;
         `,
         [companyId, startDate, endDate]
       ),
 
-      // ✅ Revenue by Category - only non-markit bills
+      // ================= CATEGORY SALES (WITH QTY) =================
       client.query(
         `
         SELECT 
           COALESCE(c.name, 'Uncategorized') AS name,
-          ROUND(SUM(e.value)::numeric, 2) AS total
+          ROUND(SUM(e.value)::numeric, 2) AS total,
+          COALESCE(SUM(e.qty), 0) AS qty
         FROM entries e
         INNER JOIN bills b ON e.bill_id = b.id
         LEFT JOIN categories c ON e.category_id = c.id
         WHERE b.company_id = $1
           AND b.deleted = false
           AND b.payment_status = 'PAID'
-          AND b.is_markit = false  -- Only non-markit bills
+          AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3
         GROUP BY c.name
         ORDER BY total DESC;
         `,
         [companyId, startDate, endDate]
       )
-    ]);
+    ])
 
-    const sales = salesRes.rows[0];
-    console.log(sales)
-    const expenses = expensesRes.rows[0];
-    const profitRow = profitRes.rows[0];
-    const categoryRows = categoryRes.rows;
+    const sales = salesRes.rows[0]
+    const expenses = expensesRes.rows[0]
+    const profitRow = profitRes.rows[0]
+    const categoryRows = categoryRes.rows
 
-    // Sales by payment
-    const cashSales = Number(sales.cash_sales);
-    const upiSales = Number(sales.upi_sales);
-    const cardSales = Number(sales.card_sales);
-    const creditSales = Number(sales.credit_sales);
+    // ================= SALES =================
+    const cashSales = Number(sales.cash_sales)
+    const upiSales = Number(sales.upi_sales)
+    const cardSales = Number(sales.card_sales)
+    const creditSales = Number(sales.credit_sales)
 
-    // Expenses
-    const totalExpenses = Number(expenses.total_expenses);
-    const cashExpenses = Number(expenses.cash_expenses);
-    const upiExpenses = Number(expenses.upi_expenses);
-    const cardExpenses = Number(expenses.card_expenses);
-    const bankTransferExpenses = Number(expenses.bank_expenses);
-    const chequeExpenses = Number(expenses.cheque_expenses);
+    // ================= EXPENSES =================
+    const cashExpenses = Number(expenses.cash_expenses)
+    const upiExpenses = Number(expenses.upi_expenses)
+    const cardExpenses = Number(expenses.card_expenses)
+    const bankExpenses = Number(expenses.bank_expenses)
+    const chequeExpenses = Number(expenses.cheque_expenses)
+    const totalExpenses = Number(expenses.total_expenses)
 
-    // Balances
-    const cashBalance = cashSales - cashExpenses;
-    const bankBalance = (upiSales + cardSales) - (upiExpenses + cardExpenses + bankTransferExpenses + chequeExpenses);
-    const totalBalance = cashBalance + bankBalance;
+    // ================= BALANCES =================
+    const cashBalance = cashSales - cashExpenses
+    const bankBalance =
+      (upiSales + cardSales) -
+      (upiExpenses + cardExpenses + bankExpenses + chequeExpenses)
 
-    // Profit
-    const totalDiscount = Number(profitRow.total_discount);
-    const profitBeforeDiscount = Number(profitRow.profit_before_discount);
-    const totalProfit = (profitBeforeDiscount - totalDiscount) - totalExpenses;
+    const totalBalance = cashBalance + bankBalance
 
-    // ✅ Revenue & Sales by Category
+    // ================= PROFIT =================
+    const totalDiscount = Number(profitRow.total_discount)
+    const profitBeforeDiscount = Number(profitRow.profit_before_discount)
+    const totalProfit = profitBeforeDiscount - totalDiscount - totalExpenses
+
+    // ================= CATEGORY =================
     const revenueByCategory = categoryRows.map(r => ({
       name: r.name,
       value: Number(r.total)
-    }));
+    }))
 
     const categorySales = categoryRows.map(r => ({
       name: r.name,
-      sales: Number(r.total)
-    }));
+      sales: Number(r.total),
+      qty: Number(r.qty)
+    }))
 
     return {
       totalSales: Number(sales.total_sales),
@@ -178,15 +187,15 @@ export default defineEventHandler(async (event) => {
         Cash: cashSales,
         UPI: upiSales,
         Card: cardSales,
-        Credit: creditSales,
+        Credit: creditSales
       },
-      totalExpenses: Number(expenses.total_expenses),
+      totalExpenses,
       expensesByPaymentMethod: {
         Cash: cashExpenses,
         Card: cardExpenses,
-        BankTransfer: bankTransferExpenses,
+        BankTransfer: bankExpenses,
         UPI: upiExpenses,
-        Cheque: chequeExpenses,
+        Cheque: chequeExpenses
       },
       balances: {
         totalBalance,
@@ -196,8 +205,8 @@ export default defineEventHandler(async (event) => {
       profit: totalProfit,
       revenueByCategory,
       categorySales
-    };
+    }
   } finally {
-    client.release();
+    client.release()
   }
-});
+})

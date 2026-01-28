@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   useFindManyMoneyTransaction,
-  useCountMoneyTransaction,
   useUpdateManyMoneyTransaction,
 } from '~/lib/hooks'
 import type { Prisma } from '@prisma/client'
@@ -13,13 +12,16 @@ const useAuth = () => useNuxtApp().$auth
 
 const UpdateMany = useUpdateManyMoneyTransaction({ optimisticUpdate: true })
 
+/* ---------------------------------------------------
+   STATE
+--------------------------------------------------- */
 const selectedRows = ref<any[]>([])
 const selectedStatus = ref<string[]>([])
 const selectedPartyType = ref<string[]>([])
 const selectedDirection = ref<string[]>([])
 
 const isDeleteModalOpen = ref(false)
-const deletingRowIdentity = ref<any>({})
+const deletingRowIdentity = ref<any>(null)
 
 const selectedDate = ref({
   start: startOfDay(new Date()),
@@ -31,7 +33,7 @@ const page = ref(1)
 const pageCount = ref('10')
 
 /* ---------------------------------------------------
-   TABLE COLUMNS
+   COLUMNS
 --------------------------------------------------- */
 const columns = [
   { key: 'createdAt', label: 'Date', sortable: true },
@@ -60,17 +62,26 @@ const action = (row: any) => [
       label: 'Delete',
       icon: 'i-heroicons-trash-20-solid',
       click: () => {
-        isDeleteModalOpen.value = true
         deletingRowIdentity.value = row
+        isDeleteModalOpen.value = true
       },
     },
   ],
 ]
 
+/* ---------------------------------------------------
+   BULK ACTIONS
+--------------------------------------------------- */
 const active = (rows: any[]) => [
   [
-    { label: 'Mark Paid', click: () => multiUpdate('PAID', rows.map(r => r.id)) },
-    { label: 'Mark Pending', click: () => multiUpdate('PENDING', rows.map(r => r.id)) },
+    {
+      label: 'Mark Paid',
+      click: () => multiUpdate('PAID', rows.map(r => r.id)),
+    },
+    {
+      label: 'Mark Pending',
+      click: () => multiUpdate('PENDING', rows.map(r => r.id)),
+    },
   ],
 ]
 
@@ -137,16 +148,30 @@ const { data, isLoading } = useFindManyMoneyTransaction(queryArgs)
 --------------------------------------------------- */
 const pageTotal = computed(() => data.value?.length || 0)
 
-const totalAmount = computed(() =>
-  data.value?.reduce((sum, row) => sum + Number(row.amount || 0), 0) || 0
+const totalAmount = computed(
+  () => data.value?.reduce((s, r) => s + Number(r.amount || 0), 0) || 0
 )
 
-watch([pageTotal, totalAmount], () => {
-  emit('values', {
-    pageTotal: pageTotal.value,
-    totalAmount: totalAmount.value,
-  })
-}, { immediate: true })
+watch(
+  [pageTotal, totalAmount],
+  () => {
+    emit('values', {
+      pageTotal: pageTotal.value,
+      totalAmount: totalAmount.value,
+    })
+  },
+  { immediate: true }
+)
+
+/* ---------------------------------------------------
+   PAGINATION META
+--------------------------------------------------- */
+const pageFrom = computed(
+  () => (page.value - 1) * Number(pageCount.value) + 1
+)
+const pageTo = computed(() =>
+  Math.min(page.value * Number(pageCount.value), pageTotal.value)
+)
 
 /* ---------------------------------------------------
    BULK UPDATE
@@ -171,10 +196,25 @@ const resetFilters = () => {
   }
 }
 </script>
+
 <template>
-  <UCard class="w-full">
+     <UCard
+            class="w-full"
+            :ui="{
+                base: '',
+
+                divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+                header: { padding: 'px-4 py-5' },
+                body: {
+                    padding: '',
+                    base: 'divide-y divide-gray-200 dark:divide-gray-700',
+                },
+                footer: { padding: 'p-4' },
+            }"
+        >
+    <!-- HEADER -->
     <template #header>
-      <div class="flex flex-col sm:flex-row gap-3 justify-between">
+      <div class="flex flex-col sm:flex-row justify-between gap-3">
 
         <div class="flex flex-wrap gap-3">
           <USelectMenu
@@ -208,7 +248,24 @@ const resetFilters = () => {
             </UButton>
 
             <template #panel="{ close }">
-              <DatePicker v-model="selectedDate" @close="close" />
+              <div class="flex sm:divide-x divide-gray-200">
+                <div class="hidden sm:flex flex-col py-4">
+                  <UButton
+                    v-for="(range, i) in ranges"
+                    :key="i"
+                    :label="range.label"
+                    variant="ghost"
+                    color="gray"
+                    class="rounded-none px-6"
+                    :class="isRangeSelected(range.duration)
+                      ? 'bg-gray-100'
+                      : ''"
+                    @click="selectRange(range.duration)"
+                  />
+                </div>
+
+                <DatePicker v-model="selectedDate" @close="close" />
+              </div>
             </template>
           </UPopover>
         </div>
@@ -219,6 +276,34 @@ const resetFilters = () => {
       </div>
     </template>
 
+    <!-- TOP BAR -->
+    <div class="flex justify-between items-center px-4 py-3">
+      <div class="flex items-center gap-2">
+        <span class="text-sm hidden sm:block">Rows per page:</span>
+        <USelect
+          v-model="pageCount"
+          :options="[5,10,20,30,40].map(v => ({ label: v, value: v }))"
+          size="xs"
+          class="w-20"
+        />
+      </div>
+
+      <UDropdown
+        v-if="selectedRows.length > 1"
+        :items="active(selectedRows)"
+      >
+        <UButton
+          icon="i-heroicons-chevron-down"
+          trailing
+          color="gray"
+          size="xs"
+        >
+          Mark as
+        </UButton>
+      </UDropdown>
+    </div>
+
+    <!-- TABLE -->
     <UTable
       v-model="selectedRows"
       v-model:sort="sort"
@@ -250,22 +335,64 @@ const resetFilters = () => {
       </template>
 
       <template #paymentMode-data="{ row }">
-        <UBadge variant="subtle">{{ row.paymentMode }}</UBadge>
+        <UBadge variant="subtle">
+          {{ row.paymentMode }}
+        </UBadge>
       </template>
 
       <template #actions-data="{ row }">
         <UDropdown :items="action(row)">
-          <UButton icon="i-heroicons-ellipsis-horizontal-20-solid" variant="ghost" />
+          <UButton
+            icon="i-heroicons-ellipsis-horizontal-20-solid"
+            variant="ghost"
+            color="gray"
+          />
         </UDropdown>
       </template>
     </UTable>
+
+    <!-- FOOTER -->
+    
+    <template #footer>
+                <div class="flex flex-wrap justify-between items-center">
+                    <div>
+                        <span class="text-sm leading-5 hidden sm:block">
+                            Showing
+                            <span class="font-medium">{{ pageFrom }}</span>
+                            to
+                            <span class="font-medium">{{ pageTo }}</span>
+                            of
+                            <span class="font-medium">{{ pageTotal }}</span>
+                            results
+                        </span>
+                    </div>
+
+                    <UPagination
+                        v-model="page"
+                        :page-count="parseInt(pageCount)"
+                        :total="pageTotal"
+                        :ui="{
+                            wrapper: 'flex items-center gap-1',
+                            rounded:
+                                '!rounded-full min-w-[32px] justify-center',
+                            default: {
+                                activeButton: {
+                                    variant: 'outline',
+                                },
+                            },
+                        }"
+                    />
+                </div>
+            </template>
   </UCard>
 
+  <!-- DELETE MODAL -->
   <UDashboardModal
     v-model="isDeleteModalOpen"
     title="Delete Entry"
     description="Are you sure you want to delete this transaction?"
     icon="i-heroicons-exclamation-circle"
+    prevent-close
   >
     <template #footer>
       <UButton
@@ -273,7 +400,11 @@ const resetFilters = () => {
         label="Delete"
         @click="emit('delete', deletingRowIdentity.id)"
       />
-      <UButton label="Cancel" @click="isDeleteModalOpen = false" />
+      <UButton
+        label="Cancel"
+        color="gray"
+        @click="isDeleteModalOpen = false"
+      />
     </template>
   </UDashboardModal>
 </template>

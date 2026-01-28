@@ -1,73 +1,82 @@
-import { prisma } from '~/server/prisma';
+import { pool } from '~/server/db'
+import { readBody, defineEventHandler, createError, sendError } from 'h3'
 
 export default defineEventHandler(async (event) => {
-  const body = await readBody(event);
-  const session = await useAuthSession(event);
+  const body = await readBody(event)
+  const session = await useAuthSession(event)
+
   const {
-    items,
-    returnedItems,
+    items = [],
+    returnedItems = [],
     companyId,
-  } = body;
+  } = body
 
-
+  const client = await pool.connect()
 
   try {
-    await prisma.$transaction(async (tx) => {
-      
-      // 1. Update stock & sold (for normal items)
-      for (const item of items) {
-        if ((item.barcode && !item.return) || (!item.barcode && item.variantId && !item.return)) {
-          if (item.variantId) {
-            await tx.variant.update({
-              where: { id: item.variantId },
-              data: { sold: { increment: item.qty } }
-            });
-          }
+    await client.query('BEGIN')
 
-          if (item.id) {
-            await tx.item.update({
-              where: { id: item.id },
-              data: { qty: { decrement: item.qty } }
-            });
-          }
-        }
-      }
+    /* -------------------------------------------------
+       1. SOLD ITEMS → decrement qty, increment soldQty
+    -------------------------------------------------- */
+    for (const item of items) {
+      if (!item?.id || !item?.qty || item.return) continue
 
-      // 2. Update returned items (if any)
-      for (const item of returnedItems) {
-        if (item.variantId) {
-          await tx.variant.update({
-            where: { id: item.variantId },
-            data: { sold: { decrement: item.qty } }
-          });
-        }
+      await client.query(
+        `
+        UPDATE items
+        SET 
+          qty = qty - $1,
+          sold_qty = sold_qty + $1,
+          updated_at = NOW()
+        WHERE id = $2
+          AND company_id = $3
+        `,
+        [item.qty, item.id, companyId]
+      )
+    }
 
-        if (item.id) {
-          await tx.item.update({
-            where: { id: item.id },
-            data: { qty: { increment: item.qty } }
-          });
-        }
-      }
-    },{
-  maxWait: 1000000, // wait up to 10s to acquire a connection
-  timeout: 150000000  // run the transaction for up to 15s
-});
+    /* -------------------------------------------------
+       2. RETURNED ITEMS → increment qty, decrement soldQty
+    -------------------------------------------------- */
+    for (const item of returnedItems) {
+      if (!item?.id || !item?.qty) continue
 
-    return { success: true };
+      await client.query(
+        `
+        UPDATE items
+        SET 
+          qty = qty + $1,
+          sold_qty = GREATEST(sold_qty - $1, 0),
+          updated_at = NOW()
+        WHERE id = $2
+          AND company_id = $3
+        `,
+        [item.qty, item.id, companyId]
+      )
+    }
 
-  } catch (error) {
-   return sendError(event, createError({
-      statusCode: 500,
-      statusMessage: 'Failed to Create bill',
-      data: { 
-        message: error.message,
-        data:{
-              items,
-              returnedItems,
-              companyId,
-        }
-       }
-    }))
+    await client.query('COMMIT')
+
+    return { success: true }
+
+  } catch (error: any) {
+    await client.query('ROLLBACK')
+
+    return sendError(
+      event,
+      createError({
+        statusCode: 500,
+        statusMessage: 'Failed to update stock',
+        data: {
+          message: error.message,
+          items,
+          returnedItems,
+          companyId,
+        },
+      })
+    )
+  } finally {
+    client.release()
   }
-});
+})

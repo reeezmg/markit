@@ -388,6 +388,31 @@ const links = computed(() => {
             icon: 'i-heroicons-squares-2x2',
             children: [
                 {
+                    label: 'Banks',
+                    to: `/accounts/bank`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Banks',
+                        shortcuts: ['A', 'B'],
+                    },
+                },
+                                {
+                    label: 'Investments',
+                    to: `/accounts/investment`,
+                    tooltip: {
+                    text: 'investments',
+                    shortcuts: ['A', 'I'],
+                    },
+                },
+                {
+                    label: 'Transfers',
+                    to: `/accounts/transfer`,
+                    tooltip: {
+                    text: 'transfers',
+                    shortcuts: ['A', 'T'],
+                    },
+                },
+                {
                     label: 'Transactions',
                     to: `/accounts/transaction`,
                     exact: true,
@@ -395,16 +420,7 @@ const links = computed(() => {
                         text: 'transactions',
                         shortcuts: ['A', 'T'],
                     },
-                },
-
-                   {
-                    label: 'investments',
-                    to: `/accounts/investment`,
-                    tooltip: {
-                    text: 'investments',
-                    shortcuts: ['A', 'I'],
-                    },
-                },
+                }
             ],
            
         },

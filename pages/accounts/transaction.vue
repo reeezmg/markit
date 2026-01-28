@@ -19,15 +19,19 @@ const useAuth = () => useNuxtApp().$auth
 /* ---------------------------------------------------
    CREATE
 --------------------------------------------------- */
-const addTransaction = (tx: any) => {
+const addTransaction = async (tx: any) => {
   try {
-    createTx.mutate({
+    await createTx.mutateAsync({
       data: {
         partyType: tx.partyType,
         direction: tx.direction,
         status: tx.status || 'PENDING',
         amount: Number(tx.amount) || 0,
         paymentMode: tx.paymentMode,
+
+        // ✅ BANK ACCOUNT (optional)
+        ...(tx.accountId && { accountId: tx.accountId }),
+
         ...(tx.note && { note: tx.note }),
 
         company: {
@@ -64,6 +68,10 @@ const editTransaction = async (id: string, data: any) => {
         status: data.status,
         amount: Number(data.amount),
         paymentMode: data.paymentMode,
+
+        // ✅ BANK ACCOUNT (can be null)
+        accountId: data.accountId ?? null,
+
         ...(data.note && { note: data.note }),
       },
     })
@@ -149,8 +157,10 @@ const formatCurrency = (v: number) =>
     currency: 'INR',
   }).format(v ?? 0)
 </script>
+
 <template>
   <UDashboardPanelContent class="pb-24">
+    <!-- SUMMARY -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
       <UCard>
         <div class="text-sm text-gray-500">Total Entries</div>
@@ -165,6 +175,7 @@ const formatCurrency = (v: number) =>
       </UCard>
     </div>
 
+    <!-- LIST -->
     <List
       @edit="openForm"
       @delete="deleteTransaction"
@@ -172,6 +183,7 @@ const formatCurrency = (v: number) =>
       @values="onValues"
     />
 
+    <!-- FORM MODAL -->
     <UModal v-model="showForm">
       <Form
         :transaction="selectedTx"

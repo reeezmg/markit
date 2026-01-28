@@ -558,36 +558,23 @@ const {
 }
 );
 
+const itemdata = ref(null)
 
-const itemargs = computed(() => ({
-  where:  {
-        barcode: scannedBarcode.value,
-        companyId: useAuth().session.value?.companyId
-      },
-  select: {
-    id: true,
-    size: true,
-    qty: true,
-    variant: {
-      select: {
-        id: true,
-        sprice: true,
-        name: true,
-        product: {
-          select: {
-            name: true,
-            categoryId: true,
-          }
-        }
-      }
-    }
+const itemRefetch = async () => {
+  if (!scannedBarcode.value) {
+    itemdata.value = null
+    return
   }
-}));
 
+  const res = await $fetch('/api/bill/by-barcode', {
+    query: {
+      barcode: scannedBarcode.value,
+    },
+  })
 
+  itemdata.value = res
+}
 
-
-const { data: itemdata ,refetch:itemRefetch} = useFindFirstItem(itemargs);
 
 const handleEnterBarcode = (barcode,index) => {
   if(!barcode){
