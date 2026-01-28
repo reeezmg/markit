@@ -306,7 +306,7 @@ export default defineEventHandler(async (event) => {
         `
         SELECT
           created_at AS date,
-          'MONEY' AS source,
+          'TRANSACTION' AS source,
           id::text AS ref,
           direction || ' via bank' AS description,
           CASE WHEN direction = 'GIVEN' THEN amount ELSE 0 END AS debit,
