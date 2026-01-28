@@ -126,7 +126,7 @@ const businessWorth = computed(() =>
         </UCard>
 
         <UCard>
-          <div class="text-sm text-gray-500">Bank Balance</div>
+          <div class="text-sm text-gray-500">Bank Balance (primary)</div>
           <div class="text-2xl font-semibold">
             {{ formatCurrency(balances.bank) }}
           </div>
