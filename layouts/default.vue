@@ -36,16 +36,16 @@ watch(() => checkoutStore.lastUpdate, async () => await refetch(), { immediate: 
 
 const links = computed(() => {
     const simplifiedLinks = [
-    {
-      id: 'dashboard',
-      label: 'Dashboard',
-      icon: 'i-heroicons-home',
-      to: `/dashboard`,
-      tooltip: {
-        text: 'Dashboard',
-        shortcuts: ['D', 'D'],
-      },
-    },
+    // {
+    //   id: 'dashboard',
+    //   label: 'Dashboard',
+    //   icon: 'i-heroicons-home',
+    //   to: `/dashboard`,
+    //   tooltip: {
+    //     text: 'Dashboard',
+    //     shortcuts: ['D', 'D'],
+    //   },
+    // },
     {
     id: 'offline',
     label: 'Offline',
@@ -161,16 +161,16 @@ const links = computed(() => {
   ];
 
     const baseLinks = [
-        {  
-            id: 'dashboard',
-            label: 'Dashboard',    
-            icon: 'i-heroicons-home',
-            to: `/dashboard`,
-            tooltip: {
-                text: 'Dashboard',
-                shortcuts: ['D', 'D'],
-            },
-        },
+        // {  
+        //     id: 'dashboard',
+        //     label: 'Dashboard',    
+        //     icon: 'i-heroicons-home',
+        //     to: `/dashboard`,
+        //     tooltip: {
+        //         text: 'Dashboard',
+        //         shortcuts: ['D', 'D'],
+        //     },
+        // },
         {   
             id: 'erp',     
             label: 'ERP',

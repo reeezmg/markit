@@ -88,16 +88,18 @@ export default defineEventHandler(async (event) => {
     /* -------------------------------------------------
        EXPENSES
     -------------------------------------------------- */
-    const expenseRes = await client.query(
-      `
-      SELECT COALESCE(SUM(total_amount), 0) AS total_expenses
-      FROM expenses
-      WHERE company_id = $1
-        AND expense_date BETWEEN $2 AND $3;
-      `,
-      [companyId, startDate, endDate]
-    )
-
+  const expenseRes = await client.query(
+  `
+  SELECT COALESCE(SUM(e.total_amount), 0) AS total_expenses
+  FROM expenses e
+  JOIN expense_categories ec
+    ON ec.id = e.expense_category_id
+  WHERE e.company_id = $1
+    AND ec.name <> 'Purchase'
+    AND e.expense_date BETWEEN $2 AND $3
+  `,
+  [companyId, startDate, endDate]
+)
     const totalExpenses = Number(expenseRes.rows[0].total_expenses)
 
     /* -------------------------------------------------

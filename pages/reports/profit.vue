@@ -132,7 +132,7 @@ const formatCurrency = (v: number) =>
             <div class="flex divide-x divide-gray-200 dark:divide-gray-800">
               <div class="w-48 p-2 space-y-1">
                 <UButton
-                    v-for="(range, index) in ranges"
+                    v-for="(range, index) in quickRanges"
                     :key="index"
                     :label="range.label"
                     color="gray"
