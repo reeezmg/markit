@@ -27,6 +27,7 @@ const DeletePurchaseOrder = useDeletePurchaseOrder({
 // TABLE COLUMNS
 // -------------------------------------
 const columns = [
+  { key: 'purchaseOrderNo', label: 'PO No.', sortable: true },
   { key: 'createdAt', label: 'Date', sortable: true },
   { key: 'paymentType', label: 'Payment', sortable: true },
   { key: 'totalAmount', label: 'Total Amount', sortable: true },
@@ -62,6 +63,7 @@ const queryArgs = computed(() => ({
     createdAt: true,
     paymentType: true,
     totalAmount: true,
+    purchaseOrderNo: true,
     products: {
       select: {
         variants: {

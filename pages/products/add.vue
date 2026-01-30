@@ -394,6 +394,10 @@ const barcodes = ref<BarcodeItem[]>([]);
 const distributorId = ref('');
 const paymentType = ref('');
 const totalAmount = ref(0);
+const subTotalAmount = ref(0);
+const discount = ref(0);
+const tax = ref(0);
+const adjustment = ref(0);
 const billNo = ref('');
 
 const variants = ref<{ 
@@ -478,6 +482,11 @@ const handleDistributorValue = (data:any) => {
   paymentType.value = data.paymentType;
   billNo.value = data.billNo
   deliveryType.value = data.deliveryType
+  totalAmount.value = data.total
+  discount.value = data.discount
+  tax.value = data.taxPercent
+  adjustment.value = data.adjustment
+
 };
 
 const handleAdd = async (e: Event) => {
@@ -997,6 +1006,10 @@ const handleSave = async () => {
         }),
         billNo: billNo.value || '',
         totalAmount:totalAmount.value,
+        subTotalAmount: subTotalAmount.value,
+        discount: discount.value,
+        tax: tax.value,
+        adjustment: adjustment.value
       }
     });
 
@@ -1123,7 +1136,13 @@ const handleReset = () => {
 
 const handleSkip = () => {
      isAdd.value =true
-   router.push(`/products`)
+     if(isEdit.value){
+      router.push(`/distributor/purchaseOrder`)
+     }else{
+      router.push(`/products`)
+     }
+   
+
     isAdd.value =false
     isOpen.value = false
 }
@@ -1151,7 +1170,7 @@ const handleNewProduct = () => {
 <template>
     <UDashboardPanelContent>
        
-          <AddProductTopBar @update="handleDistributorValue" :totalAmount="totalAmount" :distributorId="items?.distributorId" :paymentType="items?.paymentType" :billNo="items?.billNo" />   
+          <AddProductTopBar @update="handleDistributorValue" :totalAmount="subTotalAmount" :distributorId="items?.distributorId" :paymentType="items?.paymentType" :billNo="items?.billNo" :discount="items?.discount" :tax="items?.tax" :adjustment="items?.adjustment" />   
 
           <UDivider class="py-4"/>
 
@@ -1178,7 +1197,7 @@ const handleNewProduct = () => {
                 </div>
 
               <UPageCard class="m-3">
-                <AddProductTable @product-selected="handleProductSelected" @clicked="isOpenAdd = true" @total-amount = "(data) => totalAmount = data" :settledMap="settledMap"/>
+                <AddProductTable @product-selected="handleProductSelected" @clicked="isOpenAdd = true" @total-amount = "(data) => subTotalAmount = data" :settledMap="settledMap"/>
               </UPageCard>
 
               <div class="m-3">

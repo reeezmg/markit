@@ -1,290 +1,389 @@
 <script setup lang="ts">
-import { useCreateDistributor,useFindManyDistributor } from '~/lib/hooks';
-import type { Prisma } from '@prisma/client';
+import { useCreateDistributor, useFindManyDistributor } from '~/lib/hooks'
 
+/* ------------------------------------
+   PROPS
+------------------------------------ */
 const props = withDefaults(defineProps<{
-  totalAmount:number
-  distributorId?:string
-  paymentType?:string
-  billNo?:string
+  totalAmount: number
+  distributorId?: string
+  paymentType?: string
+  billNo?: string
+  discount?: number
+  tax?: number
+  adjustment?: number
+  
 }>(), {
   totalAmount: 0,
   distributorId: '',
   paymentType: '',
   billNo: '',
+  discount: 0,
+  tax: 0,
+  adjustment: 0
 })
 
+/* ------------------------------------
+   GLOBAL
+------------------------------------ */
+const toast = useToast()
+const useAuth = () => useNuxtApp().$auth
 
-const isOpen = ref(false);
-const toast = useToast();
-const useAuth = () => useNuxtApp().$auth;
+const isPurchaseInfoOpen = ref(false)
+const isDistributorOpen = ref(false)
+
+/* ------------------------------------
+   DISTRIBUTOR
+------------------------------------ */
 const CreateDistributor = useCreateDistributor()
 const supplier = ref({
-    name: '',
-    street: '',
-    locality: '',
-    city: '',
-    state: '',
-    pincode: '',
-    gstin: '',
-    bankName: '',
-    accountNo: '',
-    upiId:'',
-    ifsc: '',
+  name: '',
+  street: '',
+  locality: '',
+  city: '',
+  state: '',
+  pincode: '',
+  gstin: '',
+  bankName: '',
+  accountNo: '',
+  upiId: '',
+  ifsc: '',
+  accHolderName: '',
+})
 
-    accHolderName:''
-});
+/* ------------------------------------
+   PURCHASE INFO
+------------------------------------ */
+const selected = ref<any>(null)
+const paymentType = ref<string>('')
+const billNo = ref<string>('')
 
+watch(
+  () => [props.paymentType, props.billNo],
+  ([p, b]) => {
+    if (typeof p === 'string') paymentType.value = p
+    if (typeof b === 'string') billNo.value = b
+  },
+  { immediate: true }
+)
 
-const paymentType = ref(props.paymentType || '')
-const billNo = ref('')
+/* ------------------------------------
+   DELIVERY TYPE
+------------------------------------ */
 const DELIVERY_TYPE_KEY = 'lastDeliveryType'
 const deliveryTypeOptions = ref<string[]>(useAuth().session.value?.deliveryType || [])
 const deliveryType = ref<string>()
 
-watch(
-  () => props.paymentType,
-  (val) => {
-    if (val) {
-      paymentType.value = val   // 'CASH' | 'CREDIT' | 'UPI'
-    }
-  },
-  { immediate: true }
-)
-
-watch(
-  () => props.billNo,
-  (val) => {
-    if (val) {
-      billNo.value = val
-    }
-  },
-  { immediate: true }
-)
-
-
 if (process.client) {
-  deliveryType.value = localStorage.getItem(DELIVERY_TYPE_KEY) || deliveryTypeOptions.value[0]
+  deliveryType.value =
+    localStorage.getItem(DELIVERY_TYPE_KEY) || deliveryTypeOptions.value[0]
 }
-// Watch for changes in deliveryType and update localStorage
-watch(deliveryType, (newValue) => {
-  if (typeof window !== 'undefined' && newValue) {
-    localStorage.setItem(DELIVERY_TYPE_KEY, newValue)
+
+watch(deliveryType, (val) => {
+  if (val) localStorage.setItem(DELIVERY_TYPE_KEY, val)
+})
+ console.log('Prop discount changed:', props.discount);
+
+/* ------------------------------------
+   PRICING INPUTS
+------------------------------------ */
+const discount = ref<number>(0)     // +% or -flat
+const taxPercent = ref<number>(0)   // %
+const adjustment = ref<number>(0)   // + / -
+
+/* ------------------------------------
+   SYNC PROPS → LOCAL STATE (FIX)
+------------------------------------ */
+watch(
+  () => [props.discount, props.tax, props.adjustment],
+  ([d, t, a]) => {
+    if (typeof d === 'number') discount.value = d
+    if (typeof t === 'number') taxPercent.value = t
+    if (typeof a === 'number') adjustment.value = a
+  },
+  { immediate: true }
+)
+
+/* ------------------------------------
+   ORDER-SAFE CALCULATION (FIXED)
+------------------------------------ */
+
+// BASE (never changes)
+const subtotal = computed(() => Number(props.totalAmount) || 0)
+
+// DISCOUNT (always from subtotal)
+const discountAmount = computed(() => {
+  const base = subtotal.value
+  const d = Number(discount.value) || 0
+
+  if (d > 0) {
+    return (base * d) / 100
   }
+
+  // flat discount (cap at subtotal)
+  return Math.min(Math.abs(d), base)
 })
 
-const emit = defineEmits(['update']);
+// AFTER DISCOUNT (LOCKED)
+const discountedAmount = computed(() => {
+  return subtotal.value - discountAmount.value
+})
 
-const submitForm = async () => {
-  try {
-    const res = await CreateDistributor.mutateAsync({
-      data: {
-                name: supplier.value.name,
-                accHolderName: supplier.value.accHolderName,
-                ifsc: supplier.value.ifsc,
-                accountNo: supplier.value.accountNo,
-                bankName: supplier.value.bankName,
-                gstin: supplier.value.gstin,
-                upiId: supplier.value.upiId,
-                address: {
-                    create: {
-                        street: supplier.value.street,
-                        locality: supplier.value.locality,
-                        city: supplier.value.city,
-                        state: supplier.value.state,
-                        pincode: supplier.value.pincode,
-                    },
-                },
-                companies:{
-                  create:{
-                    company:{
-                      connect:{
-                        id:useAuth().session.value?.companyId
-                      }
-                    }
-                  }
-                }
-              }
+// TAX (always from discountedAmount, never from adjustment)
+const taxAmount = computed(() => {
+  const t = Number(taxPercent.value) || 0
+  return (discountedAmount.value * t) / 100
+})
+
+// TOTAL BEFORE ADJUSTMENT (LOCKED)
+const totalBeforeAdjustment = computed(() => {
+  return discountedAmount.value + taxAmount.value
+})
+
+// FINAL TOTAL (adjustment applied last)
+const finalTotal = computed(() => {
+  const adj = Number(adjustment.value) || 0
+  return totalBeforeAdjustment.value + adj
+})
+
+/* ------------------------------------
+   EMIT UPDATES
+------------------------------------ */
+const emit = defineEmits(['update'])
+
+watch(
+  [
+    selected,
+    paymentType,
+    billNo,
+    deliveryType,
+    discount,
+    taxPercent,
+    adjustment,
+  ],
+  () => {
+    emit('update', {
+      distributorId: selected.value?.id || null,
+      paymentType: paymentType.value,
+      billNo: billNo.value,
+      deliveryType: deliveryType.value,
+      discount: discount.value,
+      taxPercent: taxPercent.value,
+      adjustment: adjustment.value,
+      subtotal: subtotal.value,
+      discountAmount: discountAmount.value,
+      taxAmount: taxAmount.value,
+      total: finalTotal.value,
     })
-    toast.add({
-            title: 'Distributor added !',
-            id: 'modal-success',
-        });
-    isOpen.value = false
-  }catch(error){
-    console.log(error)
-  }
-};
-
-const {
-    data: distributors,
-    isLoading,
-    error,
-    refetch,
-} = useFindManyDistributor({
-      where: {
-            companies: {
-                some: {
-                    companyId: useAuth().session.value?.companyId,
-                },
-            },
-        },
-});
-
-const selected = ref<any>(null)
-
-watch(
-[distributors, () => props.distributorId],
-([list, distributorId]) => {
-  if (!list || !distributorId) return
-
-  selected.value = list.find(
-    (d) => d.id === distributorId
-  ) || null
-},
-{ immediate: true }
-)
-
-
-const emitUpdatedValues = () => {
-  emit('update', {
-    distributorId: selected.value?.id || null,
-    paymentType: paymentType.value,
-    billNo: billNo.value,
-    deliveryType: deliveryType.value
-  });
-};
-
-// Watch for changes and emit updates
-watch(
-  [selected, paymentType, billNo, deliveryType],
-  ([newSelected, newPaymentType, newBillNo, newDeliveryType]) => {
-    emitUpdatedValues();
   },
   { deep: true }
-);
+)
 
+/* ------------------------------------
+   FETCH DISTRIBUTORS
+------------------------------------ */
+const { data: distributors } = useFindManyDistributor({
+  where: {
+    companies: {
+      some: { companyId: useAuth().session.value?.companyId },
+    },
+  },
+})
+
+watch(
+  [distributors, () => props.distributorId],
+  ([list, id]) => {
+    if (!list || !id) return
+    selected.value = list.find(d => d.id === id) || null
+  },
+  { immediate: true }
+)
+
+/* ------------------------------------
+   CREATE DISTRIBUTOR
+------------------------------------ */
+const submitDistributor = async () => {
+  await CreateDistributor.mutateAsync({
+    data: {
+      name: supplier.value.name,
+      accHolderName: supplier.value.accHolderName,
+      ifsc: supplier.value.ifsc,
+      accountNo: supplier.value.accountNo,
+      bankName: supplier.value.bankName,
+      gstin: supplier.value.gstin,
+      upiId: supplier.value.upiId,
+      address: {
+        create: {
+          street: supplier.value.street,
+          locality: supplier.value.locality,
+          city: supplier.value.city,
+          state: supplier.value.state,
+          pincode: supplier.value.pincode,
+        },
+      },
+      companies: {
+        create: {
+          company: {
+            connect: { id: useAuth().session.value?.companyId },
+          },
+        },
+      },
+    },
+  })
+
+  toast.add({ title: 'Distributor added!' })
+  isDistributorOpen.value = false
+}
 </script>
 
+
 <template>
-  <div class="flex flex-col sm:flex-row sm:justify-between gap-3 w-full">
-  <!-- Left section (Distributor, Add button, Bill No, Payment) -->
-  <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full sm:w-auto">
-    <!-- Distributor + Add button -->
-    <div class="flex items-center gap-2 w-full sm:w-auto">
-      <USelectMenu
-        class="flex-1 min-w-44"
-        v-model="selected"
-        :options="distributors"
-        searchable
-        searchable-placeholder="Search a distributor"
-      >
-        <template #label>
-          <span v-if="!selected">Select Distributor</span>
-          <span v-else>{{ selected.name }}</span>
-        </template>
-
-        <template #option="{ option }">
-          <span>{{ option.name }}</span>
-        </template>
-      </USelectMenu>
-
-
+  <!-- HEADER -->
+  <div class="flex flex-col sm:flex-row justify-between gap-4">
+    <div class="flex items-center gap-3">
       <UButton
-        icon="i-heroicons-plus"
+        label="Purchase Info"
+        icon="i-heroicons-document-text"
         size="sm"
         color="primary"
-        square
-        variant="solid"
-        @click="isOpen = true"
+        @click="isPurchaseInfoOpen = true"
       />
+      <span class="font-semibold"> Total: ₹{{ finalTotal.toFixed(2) }}</span>
     </div>
 
-    <!-- Bill No -->
-    <UInput
-      v-model="billNo"
-      type="text"
-      placeholder="Bill No"
-      class="w-full sm:w-auto"
-    />
-
-    <!-- Payment Type -->
-    <USelect
-      v-model="paymentType"
-      :options="[
-        { label: 'Credit', value: 'CREDIT' },
-        { label: 'Cash', value: 'CASH' },
-        { label: 'Bank', value: 'BANK' },
-        { label: 'UPI', value: 'UPI' },
-        { label: 'Card', value: 'CARD' },
-        { label: 'Cheque', value: 'CHEQUE' },
-      ]"
-      option-attribute="label"
-      value-attribute="value"
-      placeholder="Payment Type"
-    />
-
-  </div>
-
-  <!-- Right section (Delivery Type + Total) -->
-  <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-4 w-full sm:w-auto justify-end">
-    <!-- Delivery Type -->
-    <div class="flex items-center gap-2 w-full sm:w-auto">
-      <span class="whitespace-nowrap">Delivery Type:</span>
+    <div class="flex items-center gap-2">
+      <span class="whitespace-nowrap">Delivery Type</span>
       <USelectMenu
         v-model="deliveryType"
         :options="deliveryTypeOptions"
         placeholder="Select Delivery Type"
-        class="flex-1 sm:w-auto"
       />
     </div>
-
-    <!-- Total -->
-    <div class="flex items-center justify-end sm:justify-start w-full sm:w-auto">
-      <span class="font-semibold whitespace-nowrap">
-        Total: ₹{{ totalAmount.toFixed(2) }}
-      </span>
-    </div>
   </div>
-</div>
 
+  <!-- PURCHASE INFO MODAL -->
+  <UModal v-model="isPurchaseInfoOpen">
+    <div class="p-4 space-y-4">
+      <h2 class="text-lg font-semibold">Purchase Information</h2>
 
-
-  <template>
-    <div>
-      <UModal v-model="isOpen">
-        <div class="p-4 space-y-4">
-          <h2 class="text-lg font-semibold">Enter Distributor Details</h2>
-
-          <!-- Name -->
-          <h3 class="text-md font-semibold">Personal Details</h3>
-          <UInput v-model="supplier.name" label="Supplier Name" placeholder="Enter full name" required />
-
-          <!-- Address -->
-          <h3 class="text-md font-semibold mt-4">Address Details</h3>
-          <UInput v-model="supplier.street" label="Street" placeholder="Enter street name"  />
-          <UInput v-model="supplier.locality" label="Locality" placeholder="Enter locality"  />
-          <UInput v-model="supplier.city" label="City" placeholder="Enter city name"  />
-          <UInput v-model="supplier.state" label="State" placeholder="Enter state name"  />
-          <UInput v-model="supplier.pincode" label="Pincode" placeholder="Enter pincode"  />
-
-          <!-- GSTIN -->
-          <h3 class="text-md font-semibold mt-4">Tax Information</h3>
-          <UInput v-model="supplier.gstin" label="GSTIN" placeholder="Enter 15-digit GST Number"  />
-
-          <!-- Bank Account Details -->
-          <h3 class="text-md font-semibold mt-4">Bank Account Details</h3>
-          <UInput v-model="supplier.accHolderName" label="Account Holder Name" placeholder="Enter bank name"  />
-          <UInput v-model="supplier.bankName" label="Bank Name" placeholder="Enter bank name"  />
-          <UInput v-model="supplier.accountNo" label="Account Number" placeholder="Enter account number"  />
-          <UInput v-model="supplier.ifsc" label="IFSC Code" placeholder="Enter IFSC Code"  />
-          <UInput v-model="supplier.upiId" label="UPI ID" placeholder="Enter UPI ID"  />
-
-          <!-- Submit Button -->
-          <UButton @click="submitForm" block>Submit</UButton>
+      <UFormGroup label="Distributor">
+        <div class="flex gap-2">
+          <USelectMenu
+            class="flex-1"
+            v-model="selected"
+            :options="distributors"
+            searchable
+          >
+            <template #label>
+              <span v-if="!selected">Select Distributor</span>
+              <span v-else>{{ selected.name }}</span>
+            </template>
+             <template #option="{ option }">
+          <span>{{ option.name }}</span>
+        </template>
+          </USelectMenu>
+          <UButton icon="i-heroicons-plus" @click="isDistributorOpen = true" />
         </div>
-      </UModal>
-    </div>
-  </template>
+      </UFormGroup>
 
+      <UFormGroup label="Bill Number">
+        <UInput v-model="billNo" placeholder="Enter bill number" />
+      </UFormGroup>
+
+      <UFormGroup label="Payment Type">
+        <USelect
+          v-model="paymentType"
+          :options="[
+            { label: 'Credit', value: 'CREDIT' },
+            { label: 'Cash', value: 'CASH' },
+            { label: 'Bank', value: 'BANK' },
+            { label: 'UPI', value: 'UPI' },
+            { label: 'Card', value: 'CARD' },
+            { label: 'Cheque', value: 'CHEQUE' },
+          ]"
+          option-attribute="label"
+          value-attribute="value"
+        />
+      </UFormGroup>
+
+      <UDivider />
+
+      <div class="flex justify-between font-medium">
+        <span>Subtotal</span>
+        <span>₹{{ subtotal.toFixed(2) }}</span>
+      </div>
+
+      <UFormGroup label="Discount (+% or -flat)">
+        <UInput type="number" v-model.number="discount" placeholder="10 or -100" />
+      </UFormGroup>
+
+      <UFormGroup label="Tax (%)">
+        <UInput type="number" v-model.number="taxPercent" placeholder="5" />
+      </UFormGroup>
+
+      <UFormGroup label="Adjustment (+ / -)">
+        <UInput type="number" v-model.number="adjustment" placeholder="50 or -50" />
+      </UFormGroup>
+
+      <UDivider />
+
+      <div class="flex justify-between text-lg font-semibold">
+        <span>Total</span>
+        <span>₹{{ finalTotal.toFixed(2) }}</span>
+      </div>
+
+      <UButton block @click="isPurchaseInfoOpen = false">
+        Done
+      </UButton>
+    </div>
+  </UModal>
+
+  <!-- DISTRIBUTOR MODAL -->
+  <UModal v-model="isDistributorOpen">
+    <div class="p-4 space-y-3">
+      <h2 class="text-lg font-semibold">Add Distributor</h2>
+
+      <UFormGroup label="Name">
+        <UInput v-model="supplier.name" />
+      </UFormGroup>
+
+      <UFormGroup label="Street">
+        <UInput v-model="supplier.street" />
+      </UFormGroup>
+
+      <UFormGroup label="City">
+        <UInput v-model="supplier.city" />
+      </UFormGroup>
+
+      <UFormGroup label="State">
+        <UInput v-model="supplier.state" />
+      </UFormGroup>
+
+      <UFormGroup label="Pincode">
+        <UInput v-model="supplier.pincode" />
+      </UFormGroup>
+
+      <UFormGroup label="GSTIN">
+        <UInput v-model="supplier.gstin" />
+      </UFormGroup>
+
+      <UFormGroup label="Bank Name">
+        <UInput v-model="supplier.bankName" />
+      </UFormGroup>
+
+      <UFormGroup label="Account Number">
+        <UInput v-model="supplier.accountNo" />
+      </UFormGroup>
+
+      <UFormGroup label="IFSC Code">
+        <UInput v-model="supplier.ifsc" />
+      </UFormGroup>
+
+      <UFormGroup label="UPI ID">
+        <UInput v-model="supplier.upiId" />
+      </UFormGroup>
+
+      <UButton block @click="submitDistributor">Submit</UButton>
+    </div>
+  </UModal>
 </template>
