@@ -254,7 +254,7 @@ model PurchaseOrder {
     id              String        @id @default(uuid())
     createdAt       DateTime      @default(now()) @map("created_at")
     updatedAt       DateTime      @updatedAt @map("updated_at")
-    purchaseOrderNo  Int?           @map("purchase_order_no")
+    purchaseOrderNo  Int?         @map("purchase_order_no")
 
     products        Product[]
 
@@ -266,7 +266,8 @@ model PurchaseOrder {
     billNo          String?        @map("bill_no")
     distributorId   String?       @map("distributor_id")
     distributorCompany     DistributorCompany?  @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
-    distributorCredit DistributorCredit?
+    distributorCredit DistributorCredit[]
+    distributorPayment DistributorPayment[]
 
     discount       Float?         @default(0)
     adjustment     Float?         @default(0)
@@ -285,7 +286,8 @@ model DistributorPayment {
   paymentType            paymentType?       @map("payment_type") // CASH, CREDIT, etc.
   distributorId          String              @map("distributor_id")
   companyId              String              @map("company_id")
-
+  purchaseOrderId        String?              @map("purchase_order_id")
+  purchaseOrder          PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   distributorCompany     DistributorCompany  @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
   expense                Expense?           @relation(fields: [expenseId], references: [id], onDelete: Cascade)
   expenseId              String?             @unique @map("expense_id")
@@ -300,7 +302,7 @@ model DistributorCredit {
   remarks                String?
   billNo                 String?
   distributorId          String              @map("distributor_id")
-  purchaseOrderId        String?              @unique @map("purchase_order_id")
+  purchaseOrderId        String?             @map("purchase_order_id")
   purchaseOrder          PurchaseOrder?      @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   companyId              String              @map("company_id")
   distributorCompany     DistributorCompany  @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)

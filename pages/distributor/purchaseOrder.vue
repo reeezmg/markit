@@ -45,17 +45,18 @@ const columnsTable = computed(() =>
 // -------------------------------------
 const search = ref('')
 const sort = ref({ column: 'createdAt', direction: 'desc' as const })
+const expand = ref({ openedRows: [], row: null });
 const page = ref(1)
 const pageCount = ref(10)
 
 // -------------------------------------
-// QUERY (IMPORTANT PART)
+// QUERY (WITH DISTRIBUTOR PAYMENT)
 // -------------------------------------
 const queryArgs = computed(() => ({
   where: {
     companyId: useAuth().session.value?.companyId,
     products: {
-      some: {}, // ✅ at least one product
+      some: {},
     },
   },
   select: {
@@ -64,6 +65,20 @@ const queryArgs = computed(() => ({
     paymentType: true,
     totalAmount: true,
     purchaseOrderNo: true,
+
+    distributorPayment: {
+      select: {
+        id: true,
+        amount: true,
+        paymentType: true,
+        createdAt: true,
+        remarks: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    },
+
     products: {
       select: {
         variants: {
@@ -95,10 +110,6 @@ const {
   refetch,
 } = useFindManyPurchaseOrder(queryArgs)
 
-watch(purchaseOrders, (newData) => {
-  console.log('Fetched Purchase Orders:', newData)
-})
-
 const countArgs = computed(() => ({
   where: queryArgs.value.where,
 }))
@@ -114,7 +125,7 @@ const pageTo = computed(() =>
 )
 
 // -------------------------------------
-// QTY CALCULATION (Item.qty)
+// QTY CALCULATION
 // -------------------------------------
 const getPurchaseOrderQty = (po) => {
   return po.products.reduce(
@@ -134,7 +145,7 @@ const getPurchaseOrderQty = (po) => {
 }
 
 // -------------------------------------
-// FINAL ROWS FOR TABLE
+// FINAL ROWS
 // -------------------------------------
 const rows = computed(() =>
   purchaseOrders.value?.map(po => ({
@@ -144,7 +155,7 @@ const rows = computed(() =>
 )
 
 // -------------------------------------
-// ACTIONS (EDIT / DELETE)
+// ACTIONS
 // -------------------------------------
 const openEdit = (row) => {
   router.push(`/products/add?poId=${row.id}&isEdit=true`)
@@ -202,8 +213,6 @@ const action = (row) => [
   ],
 ]
 </script>
-
-
 <template>
   <UDashboardPanelContent class="pb-24">
     <UCard
@@ -244,14 +253,19 @@ const action = (row) => [
       <!-- Table -->
       <UTable
         v-model:sort="sort"
+        v-model:expand="expand"
         :rows="rows"
         :columns="columnsTable"
         :loading="isLoading"
         sort-asc-icon="i-heroicons-arrow-up"
         sort-desc-icon="i-heroicons-arrow-down"
         sort-mode="manual"
+        :multiple-expand="false"
         class="w-full"
       >
+    
+
+
         <!-- Date -->
         <template #createdAt-data="{ row }">
           {{ new Date(row.createdAt).toLocaleDateString() }}
@@ -265,7 +279,7 @@ const action = (row) => [
         <!-- Payment -->
         <template #paymentType-data="{ row }">
           <UBadge color="blue" variant="subtle">
-            {{ row.paymentType }}
+            {{ row.paymentType || '-' }}
           </UBadge>
         </template>
 
@@ -278,6 +292,58 @@ const action = (row) => [
               icon="i-heroicons-ellipsis-horizontal-20-solid"
             />
           </UDropdown>
+        </template>
+
+        <!-- Expanded Content -->
+        <template #expand="{ row }">
+          <div class="p-4 bg-gray-50 dark:bg-gray-900 rounded-md">
+            <h3 class="text-sm font-semibold mb-3">
+              Distributor Payments
+            </h3>
+
+            <div v-if="row.distributorPayment?.length">
+              <table class="w-full text-sm border border-gray-200 dark:border-gray-700">
+                <thead class="bg-gray-100 dark:bg-gray-800">
+                  <tr>
+                    <th class="px-3 py-2 text-left">Date</th>
+                    <th class="px-3 py-2 text-left">Type</th>
+                    <th class="px-3 py-2 text-right">Amount</th>
+                    <th class="px-3 py-2 text-left">Remarks</th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  <tr
+                    v-for="payment in row.distributorPayment"
+                    :key="payment.id"
+                    class="border-t border-gray-200 dark:border-gray-700"
+                  >
+                    <td class="px-3 py-2">
+                      {{ new Date(payment.createdAt).toLocaleDateString() }}
+                    </td>
+
+                    <td class="px-3 py-2">
+                      <UBadge size="xs" color="green" variant="subtle">
+                        {{ payment.paymentType }}
+                      </UBadge>
+                    </td>
+
+                    <td class="px-3 py-2 text-right font-medium">
+                      ₹{{ payment.amount.toFixed(2) }}
+                    </td>
+
+                    <td class="px-3 py-2">
+                      {{ payment.remarks || '-' }}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            <div v-else class="text-sm text-gray-500">
+              No distributor payments found.
+            </div>
+          </div>
         </template>
       </UTable>
 

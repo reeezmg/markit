@@ -1,4 +1,4 @@
-import { defineEventHandler, getQuery } from 'h3'
+import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -27,8 +27,22 @@ export default defineEventHandler(async (event) => {
       client.query(
         `
         SELECT
-          COALESCE(SUM(CASE WHEN b.payment_method != 'Split' THEN b.grand_total ELSE 0 END), 0)
-            + COALESCE(SUM(sp.amount), 0) AS total_sales,
+          -- ❌ CREDIT EXCLUDED FROM TOTAL SALES
+          COALESCE(SUM(
+            CASE 
+              WHEN b.payment_method NOT IN ('Split', 'Credit') 
+              THEN b.grand_total 
+              ELSE 0 
+            END
+          ), 0)
+          +
+          COALESCE(SUM(
+            CASE 
+              WHEN b.payment_method = 'Split' AND sp.method != 'Credit' 
+              THEN sp.amount 
+              ELSE 0 
+            END
+          ), 0) AS total_sales,
 
           COALESCE(SUM(CASE WHEN b.payment_method = 'Cash' THEN b.grand_total ELSE 0 END), 0)
             + COALESCE(SUM(CASE WHEN sp.method = 'Cash' THEN sp.amount ELSE 0 END), 0) AS cash_sales,
@@ -39,6 +53,7 @@ export default defineEventHandler(async (event) => {
           COALESCE(SUM(CASE WHEN b.payment_method = 'Card' THEN b.grand_total ELSE 0 END), 0)
             + COALESCE(SUM(CASE WHEN sp.method = 'Card' THEN sp.amount ELSE 0 END), 0) AS card_sales,
 
+          -- ✅ CREDIT KEPT SEPARATE
           COALESCE(SUM(CASE WHEN b.payment_method = 'Credit' THEN b.grand_total ELSE 0 END), 0)
             + COALESCE(SUM(CASE WHEN sp.method = 'Credit' THEN sp.amount ELSE 0 END), 0) AS credit_sales
         FROM bills b
@@ -115,7 +130,7 @@ export default defineEventHandler(async (event) => {
         [companyId, startDate, endDate]
       ),
 
-      // ================= CATEGORY SALES (WITH QTY) =================
+      // ================= CATEGORY SALES =================
       client.query(
         `
         SELECT 
@@ -140,15 +155,12 @@ export default defineEventHandler(async (event) => {
     const sales = salesRes.rows[0]
     const expenses = expensesRes.rows[0]
     const profitRow = profitRes.rows[0]
-    const categoryRows = categoryRes.rows
 
-    // ================= SALES =================
     const cashSales = Number(sales.cash_sales)
     const upiSales = Number(sales.upi_sales)
     const cardSales = Number(sales.card_sales)
     const creditSales = Number(sales.credit_sales)
 
-    // ================= EXPENSES =================
     const cashExpenses = Number(expenses.cash_expenses)
     const upiExpenses = Number(expenses.upi_expenses)
     const cardExpenses = Number(expenses.card_expenses)
@@ -156,7 +168,6 @@ export default defineEventHandler(async (event) => {
     const chequeExpenses = Number(expenses.cheque_expenses)
     const totalExpenses = Number(expenses.total_expenses)
 
-    // ================= BALANCES =================
     const cashBalance = cashSales - cashExpenses
     const bankBalance =
       (upiSales + cardSales) -
@@ -164,25 +175,12 @@ export default defineEventHandler(async (event) => {
 
     const totalBalance = cashBalance + bankBalance
 
-    // ================= PROFIT =================
     const totalDiscount = Number(profitRow.total_discount)
     const profitBeforeDiscount = Number(profitRow.profit_before_discount)
     const totalProfit = profitBeforeDiscount - totalDiscount - totalExpenses
 
-    // ================= CATEGORY =================
-    const revenueByCategory = categoryRows.map(r => ({
-      name: r.name,
-      value: Number(r.total)
-    }))
-
-    const categorySales = categoryRows.map(r => ({
-      name: r.name,
-      sales: Number(r.total),
-      qty: Number(r.qty)
-    }))
-
     return {
-      totalSales: Number(sales.total_sales),
+      totalSales: Number(sales.total_sales), // ✅ NO CREDIT INCLUDED
       salesByPaymentMethod: {
         Cash: cashSales,
         UPI: upiSales,
@@ -190,21 +188,12 @@ export default defineEventHandler(async (event) => {
         Credit: creditSales
       },
       totalExpenses,
-      expensesByPaymentMethod: {
-        Cash: cashExpenses,
-        Card: cardExpenses,
-        BankTransfer: bankExpenses,
-        UPI: upiExpenses,
-        Cheque: chequeExpenses
-      },
       balances: {
         totalBalance,
         cashBalance,
         bankBalance
       },
-      profit: totalProfit,
-      revenueByCategory,
-      categorySales
+      profit: totalProfit
     }
   } finally {
     client.release()

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
 import { v4 as uuidv4 } from 'uuid';
-import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant,useUpdateDistributorCredit, useDeleteDistributorCredit, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany} from '~/lib/hooks';
+import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant,useUpdateDistributorCredit, useDeleteDistributorCredit, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany,useCreateDistributorPayment, useUpdateDistributorPayment , useDeleteDistributorPayment} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
 import { useQueryClient } from '@tanstack/vue-query';
@@ -336,6 +336,10 @@ const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
 const CreateDistributorCredit = useCreateDistributorCredit({ optimisticUpdate: true });
 const UpdateDistributorCredit = useUpdateDistributorCredit({ optimisticUpdate: true });
 const DeleteDistributorCredit = useDeleteDistributorCredit({ optimisticUpdate: true });
+
+const CreateDistributorPayment = useCreateDistributorPayment({ optimisticUpdate: true });
+const UpdateDistributorPayment = useUpdateDistributorPayment({ optimisticUpdate: true });
+const DeleteDistributorPayment = useDeleteDistributorPayment({ optimisticUpdate: true });
 
 const UpdateDistributorCompany = useUpdateDistributorCompany({ optimisticUpdate: true });
 const UpdatePurchaseOrder = useUpdatePurchaseOrder({ optimisticUpdate: true });
@@ -960,44 +964,47 @@ const printBarcodes = async() => {
   }
 }
 
-
 const handleSave = async () => {
-  console.log(items.value)
   isSave.value = true
 
   try {
+    /* ---------------------------------
+       1️⃣ VALIDATION
+    ---------------------------------- */
     if (!items.value?.products) {
-      throw new Error("No items found");
+      throw new Error('No items found')
     }
-    console.log("Items to save:", items.value.products);
- 
 
-    // Generate printable barcode format
-    barcodes.value = items.value?.products.flatMap(product => 
-      product.variants.flatMap(variant => 
-        variant.items.flatMap(item => 
+    /* ---------------------------------
+       2️⃣ BARCODE GENERATION
+    ---------------------------------- */
+    barcodes.value = items.value.products.flatMap(product =>
+      product.variants.flatMap(variant =>
+        variant.items.flatMap(item =>
           item.qty === 0
-            ? [] // Skip if qty is 0
+            ? []
             : Array.from({ length: item.qty ?? 1 }, () => ({
                 barcode: item.barcode ?? '',
                 code: variant.code ?? '',
                 shopname: useAuth().session.value?.companyName,
                 productName: product.name || product.category?.name || '',
-                brand: product.brand || product.subcategory?.name || '' ,
+                brand: product.brand || product.subcategory?.name || '',
                 name: variant.name || '',
                 sprice: variant.sprice,
-                ...(variant.sprice !== variant.dprice && 
-                {  dprice: variant.dprice }
-              ),
-                size: item.size,
-            }))
+                ...(variant.sprice !== variant.dprice && {
+                  dprice: variant.dprice
+                }),
+                size: item.size
+              }))
         )
       )
-    );
+    )
 
-       console.log("PO ID:", barcodes.value);
+    isOpen.value = true
 
-    isOpen.value = true;
+    /* ---------------------------------
+       3️⃣ UPDATE PURCHASE ORDER
+    ---------------------------------- */
     UpdatePurchaseOrder.mutate({
       where: { id: poId.value }, 
       data: {
@@ -1014,76 +1021,150 @@ const handleSave = async () => {
     });
 
 
-    if(distributorId.value){
-      UpdateDistributorCompany.mutate({
-      where: {
-        distributorId_companyId: {
-          distributorId: distributorId.value,
-          companyId: useAuth().session.value?.companyId!,
-        }
-      },
-      data: {
-      
-        purchaseOrders:{
-          connect:{id:poId.value}
+    /* ---------------------------------
+       4️⃣ LINK DISTRIBUTOR COMPANY
+    ---------------------------------- */
+    if (distributorId.value) {
+      await UpdateDistributorCompany.mutateAsync({
+        where: {
+          distributorId_companyId: {
+            distributorId: distributorId.value,
+            companyId: useAuth().session.value?.companyId!
+          }
         },
-      
-      }
-    });
-    }
-    const companyId = useAuth().session.value?.companyId!;
-const distributorCompanyKey = {
-  distributorId: distributorId.value,
-  companyId
-};
-
-if (paymentType.value === 'CREDIT') {
-  if (isEdit.value && oldPaymentType.value === 'CREDIT') {
-    // ✏️ UPDATE existing credit
-    await UpdateDistributorCredit.mutateAsync({
-      where: {
-        purchaseOrderId: poId.value
-      },
-      data: {
-        amount: totalAmount.value,
-        billNo: billNo.value
-      }
-    });
-  } else {
-    // ➕ CREATE new credit
-    await CreateDistributorCredit.mutateAsync({
-      data: {
-        amount: totalAmount.value,
-        billNo: billNo.value,
-        distributorCompany: {
-          connect: {
-            distributorId_companyId: distributorCompanyKey
+        data: {
+          purchaseOrders: {
+            connect: { id: poId.value }
           }
         }
+      })
+    }
+
+    /* ---------------------------------
+       5️⃣ PAYMENT / CREDIT LOGIC
+    ---------------------------------- */
+    const companyId = useAuth().session.value?.companyId!
+    const distributorCompanyKey = {
+      distributorId: distributorId.value,
+      companyId
+    }
+
+    const newType = paymentType.value
+    const oldType = oldPaymentType.value
+
+    const hasNew = !!newType
+    const hasOld = !!oldType
+
+    const isNewCredit = newType === 'CREDIT'
+    const wasOldCredit = oldType === 'CREDIT'
+
+    /* ---------------------------------
+       🚫 CASE 0: NO OLD & NO NEW → DO NOTHING
+    ---------------------------------- */
+    if (!hasNew && !hasOld) {
+      return
+    }
+
+    /* ---------------------------------
+       🧹 CASE 1: OLD EXISTS, NEW EMPTY → DELETE OLD
+    ---------------------------------- */
+    if (!hasNew && hasOld) {
+      if (wasOldCredit) {
+        await DeleteDistributorCredit.mutateAsync({
+          where: { purchaseOrderId: poId.value }
+        })
+      } else {
+        await DeleteDistributorPayment.mutateAsync({
+          where: { purchaseOrderId: poId.value }
+        })
       }
-    });
-  }
-} else {
-  // ❌ PAYMENT TYPE IS NOT CREDIT
-  if (isEdit.value && oldPaymentType.value === 'CREDIT') {
-    // 🗑 DELETE existing credit
-    await DeleteDistributorCredit.mutateAsync({
-      where: {
-        purchaseOrderId: poId.value
-      }
-    });
+      return
+    }
+
+    /* ---------------------------------
+       🔁 CASE 2: CREDIT → CREDIT
+    ---------------------------------- */
+    if (isNewCredit && wasOldCredit) {
+      await UpdateDistributorCredit.mutateAsync({
+        where: { purchaseOrderId: poId.value },
+        data: {
+          amount: totalAmount.value,
+          billNo: billNo.value
+        }
+      })
+      return
+    }
+
+    /* ---------------------------------
+       🔄 CASE 3: CREDIT → NON-CREDIT
+    ---------------------------------- */
+    if (!isNewCredit && wasOldCredit) {
+      await DeleteDistributorCredit.mutateAsync({
+        where: { purchaseOrderId: poId.value }
+      })
+
+      await CreateDistributorPayment.mutateAsync({
+        data: {
+          amount: totalAmount.value,
+          paymentType: newType as PType,
+          purchaseOrder: {
+            connect: { id: poId.value }
+          },
+          distributorCompany: {
+            connect: {
+              distributorId_companyId: distributorCompanyKey
+            }
+          }
+        }
+      })
+      return
+    }
+
+    /* ---------------------------------
+       🔁 CASE 4: NON-CREDIT → NON-CREDIT
+    ---------------------------------- */
+    if (!isNewCredit && !wasOldCredit) {
+      await UpdateDistributorPayment.mutateAsync({
+        where: { purchaseOrderId: poId.value },
+        data: {
+          amount: totalAmount.value,
+          paymentType: newType as PType
+        }
+      })
+      return
+    }
+
+    /* ---------------------------------
+       🔄 CASE 5: NON-CREDIT → CREDIT
+    ---------------------------------- */
+    if (isNewCredit && !wasOldCredit) {
+      await DeleteDistributorPayment.mutateAsync({
+        where: { purchaseOrderId: poId.value }
+      })
+
+      await CreateDistributorCredit.mutateAsync({
+        data: {
+          amount: totalAmount.value,
+          billNo: billNo.value,
+          purchaseOrder: {
+            connect: { id: poId.value }
+          },
+          distributorCompany: {
+            connect: {
+              distributorId_companyId: distributorCompanyKey
+            }
+          }
+        }
+      })
+    }
+
+  } catch (error) {
+    console.error('Failed to save purchase order', error)
+  } finally {
+    isSave.value = false
   }
 }
 
-
-  }catch (error) {
-    console.error("Failed to save purchase order", error);
-    // Consider adding user feedback here
-  }
-  finally{
-    isSave.value = false
-  }
-};
 
 
 const handleReset = () => {

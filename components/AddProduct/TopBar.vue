@@ -160,6 +160,7 @@ watch(
     discount,
     taxPercent,
     adjustment,
+    finalTotal
   ],
   () => {
     emit('update', {
