@@ -187,7 +187,9 @@ model Company {
     deliveryDiscountThreshold Float? @map("delivery_discount_threshold")
     deliveryDiscountAmount Float? @map("delivery_discount_amount")
     cash Float? @default(0)
+    openingCashDate DateTime? @map("opening_cash_date")
     bank Float? @default(0)
+    openingBankDate DateTime? @map("opening_bank_date")
     plan String @default("free") @map("plan")
     openTime String @default("9:30") @map("open_time")
     closeTime String @default("9:30") @map("close_time")
@@ -320,7 +322,7 @@ model DistributorPayment {
     purchaseOrderId String? @map("purchase_order_id")
     purchaseOrder PurchaseOrder? @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
     distributorCompany DistributorCompany @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
-    expense Expense? @relation(fields: [expenseId], references: [id], onDelete: Cascade)
+    expense Expense? @relation(fields: [expenseId], references: [id])
     expenseId String? @unique() @map("expense_id")
 
     @@map("distributor_payments")

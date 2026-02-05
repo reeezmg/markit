@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
 import { v4 as uuidv4 } from 'uuid';
-import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant,useUpdateDistributorCredit, useDeleteDistributorCredit, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany,useCreateDistributorPayment, useUpdateDistributorPayment , useDeleteDistributorPayment} from '~/lib/hooks';
+import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant,useUpdateManyDistributorCredit, useDeleteManyDistributorCredit, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany,useCreateDistributorPayment, useUpdateManyDistributorPayment , useDeleteManyDistributorPayment} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
 import { useQueryClient } from '@tanstack/vue-query';
@@ -14,6 +14,7 @@ const isAdd = ref(false);
 const settledMap = ref(new Map());
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 const deliveryType = ref<string>('')
+const billDate = ref<string>('');
 const isSaveDisable = computed(() => {
   // If any value is false → disable
   for (const val of settledMap.value.values()) {
@@ -334,12 +335,12 @@ const UpdateProduct = useUpdateProduct({
 
 const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
 const CreateDistributorCredit = useCreateDistributorCredit({ optimisticUpdate: true });
-const UpdateDistributorCredit = useUpdateDistributorCredit({ optimisticUpdate: true });
-const DeleteDistributorCredit = useDeleteDistributorCredit({ optimisticUpdate: true });
+const UpdateManyDistributorCredit = useUpdateManyDistributorCredit({ optimisticUpdate: true });
+const DeleteManyDistributorCredit = useDeleteManyDistributorCredit({ optimisticUpdate: true });
 
 const CreateDistributorPayment = useCreateDistributorPayment({ optimisticUpdate: true });
-const UpdateDistributorPayment = useUpdateDistributorPayment({ optimisticUpdate: true });
-const DeleteDistributorPayment = useDeleteDistributorPayment({ optimisticUpdate: true });
+const UpdateManyDistributorPayment = useUpdateManyDistributorPayment({ optimisticUpdate: true });
+const DeleteManyDistributorPayment = useDeleteManyDistributorPayment({ optimisticUpdate: true });
 
 const UpdateDistributorCompany = useUpdateDistributorCompany({ optimisticUpdate: true });
 const UpdatePurchaseOrder = useUpdatePurchaseOrder({ optimisticUpdate: true });
@@ -482,14 +483,17 @@ const handleProductSelected = (product:any) => {
 };
 
 const handleDistributorValue = (data:any) => {
+  console.log('Distributor data received:', data);
   distributorId.value = data.distributorId;
   paymentType.value = data.paymentType;
+  oldPaymentType.value = data.oldPaymentType;
   billNo.value = data.billNo
   deliveryType.value = data.deliveryType
   totalAmount.value = data.total
   discount.value = data.discount
   tax.value = data.taxPercent
   adjustment.value = data.adjustment
+  billDate.value = data.billDate
 
 };
 
@@ -937,11 +941,14 @@ const {
   refetch:itemRefetch,
 } = useFindUniquePurchaseOrder(queryParams)
 
-watch(items, (newItems) => {
-  if (newItems && newItems.paymentType) {
-    oldPaymentType.value = newItems.paymentType;
-  }
-}, { immediate: true });
+
+const addProductTopBarRef = ref(null)
+
+
+const resetTopBar = () => {
+  console.log('🧹 Resetting AddProductTopBar from parent')
+  addProductTopBarRef.value?.reset()
+}
 
 const printBarcodes = async() => {
   isPrint.value = true
@@ -968,6 +975,15 @@ const handleSave = async () => {
   isSave.value = true
 
   try {
+    console.log('🚀 handleSave started')
+
+    /* ---------------------------------
+       0️⃣ NORMALIZE BILL DATE
+    ---------------------------------- */
+    const createdAtDate = billDate.value
+      ? new Date(billDate.value)
+      : new Date()
+
     /* ---------------------------------
        1️⃣ VALIDATION
     ---------------------------------- */
@@ -1003,33 +1019,168 @@ const handleSave = async () => {
     isOpen.value = true
 
     /* ---------------------------------
-       3️⃣ UPDATE PURCHASE ORDER
+       3️⃣ PAYMENT / CREDIT LOGIC
     ---------------------------------- */
-    UpdatePurchaseOrder.mutate({
-      where: { id: poId.value }, 
+    const companyId = useAuth().session.value?.companyId!
+    const distributorCompanyKey = {
+      distributorId: distributorId.value,
+      companyId
+    }
+
+    const newType = paymentType.value || null
+    const oldType = oldPaymentType.value || null
+
+    const isNewCredit = newType === 'CREDIT'
+    const wasOldCredit = oldType === 'CREDIT'
+    const hasNew = newType !== null
+    const hasOld = oldType !== null
+
+    console.table({ newType, oldType })
+
+    /* ---------------------------------
+       PAYMENT STATE MACHINE (NO RETURNS)
+    ---------------------------------- */
+
+    if (!hasNew && !hasOld) {
+      console.log('🚫 CASE 0: no old, no new')
+    }
+
+    else if (hasNew && !hasOld) {
+      console.log('🆕 CASE 1: old empty → new exists')
+
+      if (isNewCredit) {
+        console.log('➕ Create CREDIT')
+        await CreateDistributorCredit.mutateAsync({
+          data: {
+            billNo: billNo.value,
+            amount: totalAmount.value,
+            createdAt: createdAtDate,
+            purchaseOrder: { connect: { id: poId.value } },
+            distributorCompany: {
+              connect: { distributorId_companyId: distributorCompanyKey }
+            }
+          }
+        })
+      } else {
+        console.log('➕ Create PAYMENT')
+        await CreateDistributorPayment.mutateAsync({
+          data: {
+            amount: totalAmount.value,
+            paymentType: newType as PType,
+            createdAt: createdAtDate,
+            purchaseOrder: { connect: { id: poId.value } },
+            distributorCompany: {
+              connect: { distributorId_companyId: distributorCompanyKey }
+            }
+          }
+        })
+      }
+    }
+
+    else if (!hasNew && hasOld) {
+      console.log('🧹 CASE 2: old exists → new empty')
+
+      if (wasOldCredit) {
+        await DeleteManyDistributorCredit.mutateAsync({
+          where: { purchaseOrderId: poId.value }
+        })
+      } else {
+        await DeleteManyDistributorPayment.mutateAsync({
+          where: { purchaseOrderId: poId.value }
+        })
+      }
+    }
+
+    else if (isNewCredit && wasOldCredit) {
+      console.log('🔁 CASE 3: credit → credit')
+      await UpdateManyDistributorCredit.mutateAsync({
+        where: { purchaseOrderId: poId.value },
+        data: {
+          amount: totalAmount.value,
+          billNo: billNo.value,
+          createdAt: createdAtDate
+        }
+      })
+    }
+
+    else if (!isNewCredit && wasOldCredit) {
+      console.log('🔄 CASE 4: credit → non-credit')
+      await DeleteManyDistributorCredit.mutateAsync({
+        where: { purchaseOrderId: poId.value }
+      })
+
+      await CreateDistributorPayment.mutateAsync({
+        data: {
+          amount: totalAmount.value,
+          paymentType: newType as PType,
+          createdAt: createdAtDate,
+          purchaseOrder: { connect: { id: poId.value } },
+          distributorCompany: {
+            connect: { distributorId_companyId: distributorCompanyKey }
+          }
+        }
+      })
+    }
+
+    else if (!isNewCredit && !wasOldCredit) {
+      console.log('🔁 CASE 5: non-credit → non-credit')
+      await UpdateManyDistributorPayment.mutateAsync({
+        where: { purchaseOrderId: poId.value },
+        data: {
+          amount: totalAmount.value,
+          paymentType: newType as PType,
+          createdAt: createdAtDate
+        }
+      })
+    }
+
+    else if (isNewCredit && !wasOldCredit) {
+      console.log('🔄 CASE 6: non-credit → credit')
+      await DeleteManyDistributorPayment.mutateAsync({
+        where: { purchaseOrderId: poId.value }
+      })
+
+      await CreateDistributorCredit.mutateAsync({
+        data: {
+          amount: totalAmount.value,
+          billNo: billNo.value,
+          createdAt: createdAtDate,
+          purchaseOrder: { connect: { id: poId.value } },
+          distributorCompany: {
+            connect: { distributorId_companyId: distributorCompanyKey }
+          }
+        }
+      })
+    }
+
+    /* ---------------------------------
+       4️⃣ UPDATE PURCHASE ORDER (ALWAYS)
+    ---------------------------------- */
+    console.log('🧾 Updating purchase order')
+    await UpdatePurchaseOrder.mutateAsync({
+      where: { id: poId.value },
       data: {
-        ...(paymentType.value && {
-          paymentType: paymentType.value as PType
-        }),
+        paymentType: paymentType.value as PType,
         billNo: billNo.value || '',
-        totalAmount:totalAmount.value,
+        createdAt: createdAtDate,
+        totalAmount: totalAmount.value,
         subTotalAmount: subTotalAmount.value,
         discount: discount.value,
         tax: tax.value,
         adjustment: adjustment.value
       }
-    });
-
+    })
 
     /* ---------------------------------
-       4️⃣ LINK DISTRIBUTOR COMPANY
+       5️⃣ LINK DISTRIBUTOR COMPANY (ALWAYS)
     ---------------------------------- */
     if (distributorId.value) {
+      console.log('🔗 Linking distributor company')
       await UpdateDistributorCompany.mutateAsync({
         where: {
           distributorId_companyId: {
             distributorId: distributorId.value,
-            companyId: useAuth().session.value?.companyId!
+            companyId
           }
         },
         data: {
@@ -1040,131 +1191,15 @@ const handleSave = async () => {
       })
     }
 
-    /* ---------------------------------
-       5️⃣ PAYMENT / CREDIT LOGIC
-    ---------------------------------- */
-    const companyId = useAuth().session.value?.companyId!
-    const distributorCompanyKey = {
-      distributorId: distributorId.value,
-      companyId
-    }
-
-    const newType = paymentType.value
-    const oldType = oldPaymentType.value
-
-    const hasNew = !!newType
-    const hasOld = !!oldType
-
-    const isNewCredit = newType === 'CREDIT'
-    const wasOldCredit = oldType === 'CREDIT'
-
-    /* ---------------------------------
-       🚫 CASE 0: NO OLD & NO NEW → DO NOTHING
-    ---------------------------------- */
-    if (!hasNew && !hasOld) {
-      return
-    }
-
-    /* ---------------------------------
-       🧹 CASE 1: OLD EXISTS, NEW EMPTY → DELETE OLD
-    ---------------------------------- */
-    if (!hasNew && hasOld) {
-      if (wasOldCredit) {
-        await DeleteDistributorCredit.mutateAsync({
-          where: { purchaseOrderId: poId.value }
-        })
-      } else {
-        await DeleteDistributorPayment.mutateAsync({
-          where: { purchaseOrderId: poId.value }
-        })
-      }
-      return
-    }
-
-    /* ---------------------------------
-       🔁 CASE 2: CREDIT → CREDIT
-    ---------------------------------- */
-    if (isNewCredit && wasOldCredit) {
-      await UpdateDistributorCredit.mutateAsync({
-        where: { purchaseOrderId: poId.value },
-        data: {
-          amount: totalAmount.value,
-          billNo: billNo.value
-        }
-      })
-      return
-    }
-
-    /* ---------------------------------
-       🔄 CASE 3: CREDIT → NON-CREDIT
-    ---------------------------------- */
-    if (!isNewCredit && wasOldCredit) {
-      await DeleteDistributorCredit.mutateAsync({
-        where: { purchaseOrderId: poId.value }
-      })
-
-      await CreateDistributorPayment.mutateAsync({
-        data: {
-          amount: totalAmount.value,
-          paymentType: newType as PType,
-          purchaseOrder: {
-            connect: { id: poId.value }
-          },
-          distributorCompany: {
-            connect: {
-              distributorId_companyId: distributorCompanyKey
-            }
-          }
-        }
-      })
-      return
-    }
-
-    /* ---------------------------------
-       🔁 CASE 4: NON-CREDIT → NON-CREDIT
-    ---------------------------------- */
-    if (!isNewCredit && !wasOldCredit) {
-      await UpdateDistributorPayment.mutateAsync({
-        where: { purchaseOrderId: poId.value },
-        data: {
-          amount: totalAmount.value,
-          paymentType: newType as PType
-        }
-      })
-      return
-    }
-
-    /* ---------------------------------
-       🔄 CASE 5: NON-CREDIT → CREDIT
-    ---------------------------------- */
-    if (isNewCredit && !wasOldCredit) {
-      await DeleteDistributorPayment.mutateAsync({
-        where: { purchaseOrderId: poId.value }
-      })
-
-      await CreateDistributorCredit.mutateAsync({
-        data: {
-          amount: totalAmount.value,
-          billNo: billNo.value,
-          purchaseOrder: {
-            connect: { id: poId.value }
-          },
-          distributorCompany: {
-            connect: {
-              distributorId_companyId: distributorCompanyKey
-            }
-          }
-        }
-      })
-    }
-
   } catch (error) {
-    console.error('Failed to save purchase order', error)
+    console.error('❌ Failed to save purchase order', error)
   } finally {
     isSave.value = false
+    paymentType.value = ''
+    oldPaymentType.value = ''
+    console.log('✅ handleSave finished')
   }
 }
-
 
 
 const handleReset = () => {
@@ -1223,7 +1258,7 @@ const handleSkip = () => {
       router.push(`/products`)
      }
    
-
+         resetTopBar()
     isAdd.value =false
     isOpen.value = false
 }
@@ -1246,12 +1281,14 @@ const handleNewProduct = () => {
 
 
 
+
+
 </script>
 
 <template>
     <UDashboardPanelContent>
        
-          <AddProductTopBar @update="handleDistributorValue" :totalAmount="subTotalAmount" :distributorId="items?.distributorId" :paymentType="items?.paymentType" :billNo="items?.billNo" :discount="items?.discount" :tax="items?.tax" :adjustment="items?.adjustment" />   
+          <AddProductTopBar  ref="addProductTopBarRef" @update="handleDistributorValue" :totalAmount="subTotalAmount" :distributorId="items?.distributorId" :paymentType="items?.paymentType" :billNo="items?.billNo" :discount="items?.discount" :tax="items?.tax" :adjustment="items?.adjustment" :billDate="items?.createdAt" />   
 
           <UDivider class="py-4"/>
 

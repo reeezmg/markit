@@ -3,6 +3,7 @@ import {
   useFindManyPurchaseOrder,
   useCountPurchaseOrder,
   useDeletePurchaseOrder,
+  useCreateDistributorPayment,
 } from '~/lib/hooks'
 
 const toast = useToast()
@@ -16,12 +17,60 @@ const isDeleting = ref(false)
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentinty = ref<any>(null)
 
+const isOpenPay = ref(false)
+const isSaving = ref(false)
+
+const selectedRow = ref<any>(null)
+
 // -------------------------------------
-// ACTION HOOKS
+// FORM STATE
+// -------------------------------------
+const form = ref({
+  amount: null as number | null,
+  paymentType: 'CASH',
+  remarks: '',
+  date: new Date().toISOString().split('T')[0], // yyyy-mm-dd
+})
+
+// -------------------------------------
+// COMPUTED
+// -------------------------------------
+const companyId = computed(
+  () => useAuth().session.value?.companyId
+)
+
+const distributorId = computed(
+  () => selectedRow.value?.distributorId
+)
+
+// -------------------------------------
+// HELPERS
+// -------------------------------------
+const resetForm = () => {
+  form.value = {
+    amount: null,
+    paymentType: 'CASH',
+    remarks: '',
+    date: new Date().toISOString().split('T')[0],
+  }
+}
+
+const showToast = (
+  title: string,
+  color: 'green' | 'red' | 'yellow' = 'green',
+  description = ''
+) => {
+  toast.add({ title, color, description })
+}
+
+// -------------------------------------
+// MUTATIONS
 // -------------------------------------
 const DeletePurchaseOrder = useDeletePurchaseOrder({
   optimisticUpdate: true,
 })
+
+const CreateDistributorPayment = useCreateDistributorPayment()
 
 // -------------------------------------
 // TABLE COLUMNS
@@ -31,33 +80,27 @@ const columns = [
   { key: 'createdAt', label: 'Date', sortable: true },
   { key: 'paymentType', label: 'Payment', sortable: true },
   { key: 'totalAmount', label: 'Total Amount', sortable: true },
-  { key: 'qty', label: 'Qty', sortable: false },
-  { key: 'actions', label: 'Actions', sortable: false },
+  { key: 'qty', label: 'Qty' },
+  { key: 'due', label: 'Due' },
+  { key: 'actions', label: 'Actions' },
 ]
-
-const selectedColumns = ref(columns)
-const columnsTable = computed(() =>
-  columns.filter(col => selectedColumns.value.includes(col))
-)
 
 // -------------------------------------
 // FILTERS & PAGINATION
 // -------------------------------------
 const search = ref('')
-const sort = ref({ column: 'createdAt', direction: 'desc' as const })
-const expand = ref({ openedRows: [], row: null });
+const sort = ref({ column: 'purchaseOrderNo', direction: 'desc' as const })
+const expand = ref({ openedRows: [], row: null })
 const page = ref(1)
 const pageCount = ref(10)
 
 // -------------------------------------
-// QUERY (WITH DISTRIBUTOR PAYMENT)
+// QUERY
 // -------------------------------------
 const queryArgs = computed(() => ({
   where: {
-    companyId: useAuth().session.value?.companyId,
-    products: {
-      some: {},
-    },
+    companyId: companyId.value,
+    products: { some: {} },
   },
   select: {
     id: true,
@@ -65,6 +108,12 @@ const queryArgs = computed(() => ({
     paymentType: true,
     totalAmount: true,
     purchaseOrderNo: true,
+
+    distributorCompany: {
+      select: {
+        distributorId: true,
+      },
+    },
 
     distributorPayment: {
       select: {
@@ -74,9 +123,7 @@ const queryArgs = computed(() => ({
         createdAt: true,
         remarks: true,
       },
-      orderBy: {
-        createdAt: 'desc',
-      },
+      orderBy: { createdAt: 'desc' },
     },
 
     products: {
@@ -84,9 +131,7 @@ const queryArgs = computed(() => ({
         variants: {
           select: {
             items: {
-              select: {
-                initialQty: true,
-              },
+              select: { initialQty: true },
             },
           },
         },
@@ -96,52 +141,52 @@ const queryArgs = computed(() => ({
   orderBy: {
     [sort.value.column]: sort.value.direction,
   },
-  skip: (page.value - 1) * Number(pageCount.value),
-  take: Number(pageCount.value),
+  skip: (page.value - 1) * pageCount.value,
+  take: pageCount.value,
 }))
 
 // -------------------------------------
-// FETCH DATA
+// FETCH
 // -------------------------------------
 const {
   data: purchaseOrders,
   isLoading,
-  error,
   refetch,
 } = useFindManyPurchaseOrder(queryArgs)
 
-const countArgs = computed(() => ({
+const { data: pageTotal } = useCountPurchaseOrder({
   where: queryArgs.value.where,
-}))
-
-const { data: pageTotal } = useCountPurchaseOrder(countArgs)
+})
 
 // -------------------------------------
-// PAGINATION INFO
+// CALCULATIONS
 // -------------------------------------
-const pageFrom = computed(() => (page.value - 1) * Number(pageCount.value) + 1)
-const pageTo = computed(() =>
-  Math.min(page.value * Number(pageCount.value), pageTotal.value)
-)
-
-// -------------------------------------
-// QTY CALCULATION
-// -------------------------------------
-const getPurchaseOrderQty = (po) => {
-  return po.products.reduce(
-    (productSum, product) =>
-      productSum +
-      product.variants.reduce(
-        (variantSum, variant) =>
-          variantSum +
-          variant.items.reduce(
-            (itemSum, item) => itemSum + (item.initialQty ?? 0),
+const getPurchaseOrderQty = (po: any) =>
+  po.products.reduce(
+    (sum: number, p: any) =>
+      sum +
+      p.variants.reduce(
+        (vSum: number, v: any) =>
+          vSum +
+          v.items.reduce(
+            (iSum: number, i: any) => iSum + (i.initialQty ?? 0),
             0
           ),
         0
       ),
     0
   )
+
+const getDueAmount = (po: any) => {
+  if (po.paymentType !== 'CREDIT') return null
+
+  const paid =
+    po.distributorPayment?.reduce(
+      (sum: number, p: any) => sum + (p.amount ?? 0),
+      0
+    ) ?? 0
+
+  return po.totalAmount - paid
 }
 
 // -------------------------------------
@@ -151,68 +196,150 @@ const rows = computed(() =>
   purchaseOrders.value?.map(po => ({
     ...po,
     qty: getPurchaseOrderQty(po),
+    due: getDueAmount(po),
+    distributorId: po.distributorCompany?.distributorId,
   })) ?? []
 )
 
+watch(rows, val => {
+ console.log('Purchase Orders Rows:', val)
+})
+
 // -------------------------------------
-// ACTIONS
+// ACTION HANDLERS
 // -------------------------------------
-const openEdit = (row) => {
+const openEdit = (row: any) => {
   router.push(`/products/add?poId=${row.id}&isEdit=true`)
 }
 
-const confirmDelete = (row) => {
+const confirmDelete = (row: any) => {
   deletingRowIdentinty.value = row
   isDeleteModalOpen.value = true
 }
 
-const deletePurchaseOrder = async () => {
-  if (!deletingRowIdentinty.value) return
+const openPayModal = (row: any) => {
+  selectedRow.value = row
+  resetForm()
+  isOpenPay.value = true
+}
 
-  isDeleting.value = true
+// -------------------------------------
+// PAY HANDLER (FINAL + SAFE)
+// -------------------------------------
+const handlePay = async () => {
+  isSaving.value = true
+
   try {
-    await DeletePurchaseOrder.mutateAsync({
-      where: { id: deletingRowIdentinty.value.id },
+    if (!form.value.amount || form.value.amount <= 0) {
+      showToast('Please enter valid Amount', 'red')
+      return
+    }
+
+    if (!selectedRow.value?.id) {
+      showToast('Purchase Order not found', 'red')
+      return
+    }
+
+    if (!distributorId.value) {
+      showToast('Distributor not linked to this purchase order', 'red')
+      return
+    }
+
+    // 🔒 Freeze reactive values
+    const distributorIdValue = distributorId.value
+    const createdAtDate = form.value.date
+      ? new Date(form.value.date)
+      : new Date()
+
+    const expenseData = {
+      totalAmount: form.value.amount,
+      note: form.value.remarks || null,
+      paymentMode: form.value.paymentType,
+      status: 'Paid',
+      companyId: companyId.value,
+      userId: useAuth().session.value?.userId,
+      expensecategoryId:
+        useAuth().session.value?.purchaseExpenseCategoryId,
+      createdAt: createdAtDate,
+    }
+
+    await CreateDistributorPayment.mutateAsync({
+      data: {
+        amount: form.value.amount,
+        paymentType: form.value.paymentType,
+        createdAt: createdAtDate,
+
+        ...(form.value.remarks
+          ? { remarks: form.value.remarks }
+          : {}),
+
+        purchaseOrder: {
+          connect: { id: selectedRow.value.id },
+        },
+
+        distributorCompany: {
+          connect: {
+            distributorId_companyId: {
+              distributorId: distributorIdValue,
+              companyId: companyId.value,
+            },
+          },
+        },
+
+        expense: {
+          create: expenseData,
+        },
+      },
+      select: { id: true },
     })
 
-    toast.add({
-      title: 'Purchase Order deleted',
-      color: 'green',
-    })
-
+    showToast('Payment added successfully', 'green')
+    isOpenPay.value = false
+    resetForm()
     refetch()
-  } catch (err) {
-    toast.add({
-      title: 'Failed to delete Purchase Order',
-      color: 'red',
-    })
+  } catch (err: any) {
+    showToast('Error', 'red', err.message)
   } finally {
-    isDeleting.value = false
-    isDeleteModalOpen.value = false
-    deletingRowIdentinty.value = null
+    isSaving.value = false
   }
 }
 
 // -------------------------------------
 // DROPDOWN ITEMS
 // -------------------------------------
-const action = (row) => [
-  [
-    {
-      label: 'Edit',
-      icon: 'i-heroicons-pencil-square-20-solid',
-      click: () => openEdit(row),
-    },
-  ],
-  [
+const action = (row: any) => {
+  const items: any[] = [
+    [
+      {
+        label: 'Edit',
+        icon: 'i-heroicons-pencil-square-20-solid',
+        click: () => openEdit(row),
+      },
+    ],
+  ]
+
+  if (row.paymentType === 'CREDIT') {
+    items.push([
+      {
+        label: 'Pay',
+        icon: 'i-heroicons-banknotes-20-solid',
+        click: () => openPayModal(row),
+      },
+    ])
+  }
+
+  items.push([
     {
       label: 'Delete',
       icon: 'i-heroicons-trash-20-solid',
       click: () => confirmDelete(row),
     },
-  ],
-]
+  ])
+
+  return items
+}
 </script>
+
 <template>
   <UDashboardPanelContent class="pb-24">
     <UCard
@@ -225,7 +352,7 @@ const action = (row) => [
         footer: { padding: 'p-4' },
       }"
     >
-      <!-- Header -->
+      <!-- HEADER -->
       <template #header>
         <div class="flex flex-col sm:flex-row justify-between gap-3 w-full">
           <UInput
@@ -237,7 +364,7 @@ const action = (row) => [
         </div>
       </template>
 
-      <!-- Table Controls -->
+      <!-- TABLE CONTROLS -->
       <div class="flex justify-between items-center w-full px-4 py-3">
         <div class="flex items-center gap-1.5">
           <span class="text-sm hidden sm:block">Rows per page:</span>
@@ -250,12 +377,12 @@ const action = (row) => [
         </div>
       </div>
 
-      <!-- Table -->
+      <!-- TABLE -->
       <UTable
         v-model:sort="sort"
         v-model:expand="expand"
         :rows="rows"
-        :columns="columnsTable"
+        :columns="columns"
         :loading="isLoading"
         sort-asc-icon="i-heroicons-arrow-up"
         sort-desc-icon="i-heroicons-arrow-down"
@@ -263,27 +390,41 @@ const action = (row) => [
         :multiple-expand="false"
         class="w-full"
       >
-    
-
-
-        <!-- Date -->
+        <!-- DATE -->
         <template #createdAt-data="{ row }">
-          {{ new Date(row.createdAt).toLocaleDateString() }}
+          {{
+            new Date(row.createdAt).toLocaleDateString('en-GB', {
+              day: '2-digit',
+              month: '2-digit',
+              year: '2-digit'
+            })
+          }}
         </template>
 
-        <!-- Qty -->
+        <!-- QTY -->
         <template #qty-data="{ row }">
           {{ row.qty }}
         </template>
 
-        <!-- Payment -->
+        <!-- PAYMENT TYPE -->
         <template #paymentType-data="{ row }">
           <UBadge color="blue" variant="subtle">
             {{ row.paymentType || '-' }}
           </UBadge>
         </template>
 
-        <!-- Actions -->
+        <!-- DUE -->
+        <template #due-data="{ row }">
+          <span
+            v-if="row.due !== null"
+            class="font-semibold text-red-600"
+          >
+            ₹{{ row.due.toFixed(2) }}
+          </span>
+          <span v-else>-</span>
+        </template>
+
+        <!-- ACTIONS -->
         <template #actions-data="{ row }">
           <UDropdown :items="action(row)">
             <UButton
@@ -294,7 +435,7 @@ const action = (row) => [
           </UDropdown>
         </template>
 
-        <!-- Expanded Content -->
+        <!-- EXPANDED ROW -->
         <template #expand="{ row }">
           <div class="p-4 bg-gray-50 dark:bg-gray-900 rounded-md">
             <h3 class="text-sm font-semibold mb-3">
@@ -319,7 +460,13 @@ const action = (row) => [
                     class="border-t border-gray-200 dark:border-gray-700"
                   >
                     <td class="px-3 py-2">
-                      {{ new Date(payment.createdAt).toLocaleDateString() }}
+                      {{
+                        new Date(payment.createdAt).toLocaleDateString('en-GB', {
+                          day: '2-digit',
+                          month: '2-digit',
+                          year: '2-digit'
+                        })
+                      }}
                     </td>
 
                     <td class="px-3 py-2">
@@ -347,14 +494,16 @@ const action = (row) => [
         </template>
       </UTable>
 
-      <!-- Footer -->
+      <!-- FOOTER -->
       <template #footer>
         <div class="flex flex-wrap justify-between items-center">
           <span class="text-sm hidden sm:block">
             Showing
-            <span class="font-medium">{{ pageFrom }}</span>
+            <span class="font-medium">{{ (page - 1) * pageCount + 1 }}</span>
             to
-            <span class="font-medium">{{ pageTo }}</span>
+            <span class="font-medium">
+              {{ Math.min(page * pageCount, pageTotal) }}
+            </span>
             of
             <span class="font-medium">{{ pageTotal }}</span>
             results
@@ -373,32 +522,66 @@ const action = (row) => [
       </template>
     </UCard>
 
-    <!-- Delete Modal -->
-    <UDashboardModal
-      v-model="isDeleteModalOpen"
-      title="Delete Purchase Order"
-      description="Are you sure you want to delete this purchase order?"
-      icon="i-heroicons-exclamation-circle"
-      prevent-close
-      :close-button="null"
-      :ui="{
-        icon: { base: 'text-red-500 dark:text-red-400' },
-        footer: { base: 'ml-16' },
-      }"
-    >
-      <template #footer>
-        <UButton
-          color="red"
-          label="Delete"
-          :loading="isDeleting"
-          @click="deletePurchaseOrder"
-        />
-        <UButton
-          color="white"
-          label="Cancel"
-          @click="isDeleteModalOpen = false"
-        />
-      </template>
-    </UDashboardModal>
+    <!-- PAY MODAL -->
+    <UModal v-model="isOpenPay">
+      <UCard>
+        <div class="p-4 space-y-4">
+          
+          <!-- PAYMENT DATE -->
+          <UFormGroup label="Payment Date">
+            <UInput
+              type="date"
+              v-model="form.date"
+            />
+          </UFormGroup>
+          
+          <!-- AMOUNT -->
+          <UFormGroup label="Amount" required>
+            <UInput
+              v-model.number="form.amount"
+              type="number"
+              placeholder="Enter amount"
+            />
+          </UFormGroup>
+
+          <!-- PAYMENT TYPE -->
+          <UFormGroup label="Payment Type">
+            <USelect
+              v-model="form.paymentType"
+              :options="[
+                { label: 'Cash', value: 'CASH' },
+                { label: 'Bank', value: 'BANK' },
+                { label: 'UPI', value: 'UPI' },
+                { label: 'Card', value: 'CARD' },
+                { label: 'Cheque', value: 'CHEQUE' },
+              ]"
+              option-attribute="label"
+              value-attribute="value"
+              placeholder="Payment Type"
+            />
+          </UFormGroup>
+
+          <!-- REMARKS -->
+          <UFormGroup label="Remarks">
+            <UInput
+              v-model="form.remarks"
+              placeholder="Optional remarks"
+            />
+          </UFormGroup>
+
+          <!-- SUBMIT -->
+          <div class="pt-4">
+            <UButton
+              color="primary"
+              block
+              :loading="isSaving"
+              @click="handlePay"
+            >
+              Submit
+            </UButton>
+          </div>
+        </div>
+      </UCard>
+    </UModal>
   </UDashboardPanelContent>
 </template>

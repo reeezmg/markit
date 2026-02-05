@@ -8,7 +8,6 @@ import {
   useDeleteDistributorCredit,
   useDeleteDistributorPayment,
   useDeleteDistributorCompany,
-  useCreateExpense
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
@@ -17,7 +16,6 @@ const emit = defineEmits(['modal-open','edit']);
 const CreateDistributorPayment = useCreateDistributorPayment();
 const UpdateDistributorPayment = useUpdateDistributorPayment();
 const DeleteDistributorPayment = useDeleteDistributorPayment();
-const createExpense = useCreateExpense({ optimisticUpdate: true });
 const CreateDistributorCredit = useCreateDistributorCredit();
 const UpdateDistributorCredit = useUpdateDistributorCredit();
 const DeleteDistributorCredit = useDeleteDistributorCredit();
@@ -25,7 +23,7 @@ const DeleteDistributorCredit = useDeleteDistributorCredit();
 const DeleteDistributorCompany = useDeleteDistributorCompany()
 const useAuth = () => useNuxtApp().$auth;
 const isSaving = ref(false)
-
+const router = useRouter();
 const sort = ref({ column: 'distributor.name', direction: 'asc' as const });
 const page = ref(1);
 const pageCount = ref('10');
@@ -40,7 +38,9 @@ const form = ref({
   remarks: '',
   paymentType:'',
   billNo:'',
-  type:''
+  type:'',
+  date: new Date().toISOString().split('T')[0], // yyyy-mm-dd
+
 })
 
 const columns = [
@@ -100,19 +100,19 @@ const action = (row:any) => [
     
 ];
 
-const creditaction = (row:any) => [
+const subaction = (row:any) => [
 
     [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => payFormEdit(row),
+            click: () => formEdit(row),
         },
     
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => payDelete(row),
+            click: () => formDelete(row),
         },
     ],
     
@@ -130,10 +130,15 @@ const deleteDistributor = async(id:string) => {
         }
 )};
 
-const payFormEdit = async(row:any) => {
-  form.value = row
+const formEdit = async(row:any) => {
+  form.value = {...row, date: new Date(row.createdAt).toISOString().split('T')[0]} as any;
   if(form.value.type === 'CREDIT'){
-     isOpenCredit.value = true
+    if(form.value.purchaseOrderId){
+      router.push(`/products/add?poId=${form.value.purchaseOrderId}&isEdit=true`)
+    }else{
+        isOpenCredit.value = true
+    }
+
     
   }else{
     isOpenPay.value = true
@@ -141,7 +146,7 @@ const payFormEdit = async(row:any) => {
  
 }
 
-const payDelete = async(row:any) => {
+const formDelete = async(row:any) => {
   if(row.type === 'CREDIT'){
   const res = await DeleteDistributorCredit.mutateAsync({
           where:{
@@ -193,6 +198,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
         amount:true,
         remarks:true,
         billNo:true,
+        purchaseOrderId:true
       }
     },
 
@@ -202,7 +208,8 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
             id:true,
             amount:true,
             remarks:true,
-            paymentType:true
+            paymentType:true,
+            purchaseOrderId:true
         }
       }
     },
@@ -273,7 +280,8 @@ const resetForm = () => {
     amount: 0,
     remarks: '',
     paymentType: '',
-    billNo: ''
+    billNo: '',
+    date: new Date().toISOString().split('T')[0],
   };
 };
 
@@ -294,17 +302,11 @@ const handlePay = async () => {
       return;
     }
 
-    const expenseData = {
-      totalAmount: form.value.amount,
-      note: form.value.remarks,
-      paymentMode: form.value.paymentType,
-      status: 'Paid',
-      companyId: companyId.value,
-      userId: useAuth().session.value?.userId,
-      expensecategoryId:
-        useAuth().session.value?.purchaseExpenseCategoryId,
-    };
+       const createdAtDate = form.value.date
+      ? new Date(form.value.date)
+      : new Date()
 
+  
     if (form.value.id) {
       /* ---------------- UPDATE ---------------- */
 
@@ -314,14 +316,7 @@ const handlePay = async () => {
           amount: form.value.amount,
           remarks: form.value.remarks,
           paymentType: form.value.paymentType,
-
-          expense: {
-            update: {
-              totalAmount: form.value.amount,
-              note: form.value.remarks,
-              paymentMode: form.value.paymentType,
-            },
-          },
+            createdAt: form.value.date ? new Date(form.value.date) : new Date()
         },
         select: { id: true },
       });
@@ -335,7 +330,7 @@ const handlePay = async () => {
           amount: form.value.amount,
           remarks: form.value.remarks,
           paymentType: form.value.paymentType,
-
+            createdAt: form.value.date ? new Date(form.value.date) : new Date(),
           distributorCompany: {
             connect: {
               distributorId_companyId: {
@@ -343,11 +338,7 @@ const handlePay = async () => {
                 companyId: companyId.value,
               },
             },
-          },
-
-          expense: {
-            create: expenseData,
-          },
+          }
         },
         select: { id: true },
       });
@@ -379,6 +370,7 @@ const handleAddCredit = async () => {
       await UpdateDistributorCredit.mutateAsync({
         where: { id: form.value.id },
         data: {
+          createdAt: form.value.date ? new Date(form.value.date) : new Date(),
           amount: form.value.amount,
           remarks: form.value.remarks,
           billNo: form.value.billNo,
@@ -390,6 +382,7 @@ const handleAddCredit = async () => {
     } else {
       await CreateDistributorCredit.mutateAsync({
         data: {
+          createdAt: form.value.date ? new Date(form.value.date) : new Date(),
           amount: form.value.amount,
           remarks: form.value.remarks,
           billNo: form.value.billNo,
@@ -512,7 +505,7 @@ const handleOpenCreditForm = (row) => {
                         </template>
 
                         <template #actions-data="{ row }">
-                    <UDropdown :items="creditaction(row)">
+                    <UDropdown :items="subaction(row)">
                         <UButton
                         color="gray"
                         variant="ghost"
@@ -567,14 +560,21 @@ const handleOpenCreditForm = (row) => {
   <UModal v-model="isOpenPay">
   <UCard>
     <div class="p-4 space-y-4">
+      
+          <!-- PAYMENT DATE -->
+          <UFormGroup label="Payment Date">
+            <UInput
+              type="date"
+              v-model="form.date"
+            />
+          </UFormGroup>
+
         <!-- Amount -->
         <UFormGroup label="Amount" name="amount" required>
           <UInput v-model.number="form.amount" type="number" placeholder="Enter amount" />
         </UFormGroup>
 
         <!-- Remarks -->
-       
-
         <UFormGroup label="Payment Type" name="paymentType">
             <USelect
                 v-model="form.paymentType"
@@ -608,6 +608,13 @@ const handleOpenCreditForm = (row) => {
   <UModal v-model="isOpenCredit">
   <UCard>
     <div class="p-4 space-y-4">
+
+          <UFormGroup label="Payment Date">
+            <UInput
+              type="date"
+              v-model="form.date"
+            />
+          </UFormGroup>
 
       <UFormGroup label="BillNo" name="Billno">
           <UInput v-model="form.billNo" placeholder="BillNo" />

@@ -1,23 +1,217 @@
+<template>
+  <!-- HEADER -->
+  <div class="flex flex-col sm:flex-row justify-between gap-4">
+    <div class="flex items-center gap-3">
+      <UButton
+        label="Purchase Info"
+        icon="i-heroicons-document-text"
+        size="sm"
+        color="primary"
+        @click="isPurchaseInfoOpen = true"
+      />
+      <span class="font-semibold">
+        Total: ₹{{ finalTotal.toFixed(2) }}
+      </span>
+    </div>
+
+    <div class="flex items-center gap-2">
+      <span class="whitespace-nowrap">Delivery Type</span>
+      <USelectMenu
+        v-model="deliveryType"
+        :options="deliveryTypeOptions"
+        placeholder="Select Delivery Type"
+      />
+    </div>
+  </div>
+
+  <!-- PURCHASE INFO MODAL -->
+  <UModal v-model="isPurchaseInfoOpen">
+    <div class="p-4 space-y-4">
+      <h2 class="text-lg font-semibold">Purchase Information</h2>
+           <!-- 🆕 BILL DATE -->
+      <UFormGroup label="Bill Date">
+        <UInput
+          type="date"
+          v-model="billDate"
+        />
+      </UFormGroup>
+      <!-- DISTRIBUTOR -->
+      <UFormGroup label="Distributor">
+        <div class="flex gap-2">
+          <USelectMenu
+            class="flex-1"
+            v-model="selected"
+            :options="distributors"
+            searchable
+          >
+            <template #label>
+              <span v-if="!selected">Select Distributor</span>
+              <span v-else>{{ selected.name }}</span>
+            </template>
+            <template #option="{ option }">
+              <span>{{ option.name }}</span>
+            </template>
+          </USelectMenu>
+
+          <UButton
+            icon="i-heroicons-plus"
+            @click="isDistributorOpen = true"
+          />
+        </div>
+      </UFormGroup>
+
+      <!-- BILL NUMBER -->
+      <UFormGroup label="Bill Number">
+        <UInput
+          v-model="billNo"
+          placeholder="Enter bill number"
+        />
+      </UFormGroup>
+
+ 
+
+      <!-- PAYMENT TYPE -->
+      <UFormGroup label="Payment Type">
+        <USelect
+          v-model="paymentType"
+          :options="[
+            { label: 'Credit', value: 'CREDIT' },
+            { label: 'Cash', value: 'CASH' },
+            { label: 'Bank', value: 'BANK' },
+            { label: 'UPI', value: 'UPI' },
+            { label: 'Card', value: 'CARD' },
+            { label: 'Cheque', value: 'CHEQUE' },
+          ]"
+          option-attribute="label"
+          value-attribute="value"
+        />
+      </UFormGroup>
+
+      <UDivider />
+
+      <!-- SUBTOTAL -->
+      <div class="flex justify-between font-medium">
+        <span>Subtotal</span>
+        <span>₹{{ subtotal.toFixed(2) }}</span>
+      </div>
+
+      <!-- DISCOUNT -->
+      <UFormGroup label="Discount (+% or -flat)">
+        <UInput
+          type="number"
+          v-model.number="discount"
+          placeholder="10 or -100"
+        />
+      </UFormGroup>
+
+      <!-- TAX -->
+      <UFormGroup label="Tax (%)">
+        <UInput
+          type="number"
+          v-model.number="taxPercent"
+          placeholder="5"
+        />
+      </UFormGroup>
+
+      <!-- ADJUSTMENT -->
+      <UFormGroup label="Adjustment (+ / -)">
+        <UInput
+          type="number"
+          v-model.number="adjustment"
+          placeholder="50 or -50"
+        />
+      </UFormGroup>
+
+      <UDivider />
+
+      <!-- FINAL TOTAL -->
+      <div class="flex justify-between text-lg font-semibold">
+        <span>Total</span>
+        <span>₹{{ finalTotal.toFixed(2) }}</span>
+      </div>
+
+      <UButton
+        block
+        @click="isPurchaseInfoOpen = false"
+      >
+        Done
+      </UButton>
+    </div>
+  </UModal>
+
+  <!-- DISTRIBUTOR MODAL -->
+  <UModal v-model="isDistributorOpen">
+    <div class="p-4 space-y-3">
+      <h2 class="text-lg font-semibold">Add Distributor</h2>
+
+      <UFormGroup label="Name">
+        <UInput v-model="supplier.name" />
+      </UFormGroup>
+
+      <UFormGroup label="Street">
+        <UInput v-model="supplier.street" />
+      </UFormGroup>
+
+      <UFormGroup label="City">
+        <UInput v-model="supplier.city" />
+      </UFormGroup>
+
+      <UFormGroup label="State">
+        <UInput v-model="supplier.state" />
+      </UFormGroup>
+
+      <UFormGroup label="Pincode">
+        <UInput v-model="supplier.pincode" />
+      </UFormGroup>
+
+      <UFormGroup label="GSTIN">
+        <UInput v-model="supplier.gstin" />
+      </UFormGroup>
+
+      <UFormGroup label="Bank Name">
+        <UInput v-model="supplier.bankName" />
+      </UFormGroup>
+
+      <UFormGroup label="Account Number">
+        <UInput v-model="supplier.accountNo" />
+      </UFormGroup>
+
+      <UFormGroup label="IFSC Code">
+        <UInput v-model="supplier.ifsc" />
+      </UFormGroup>
+
+      <UFormGroup label="UPI ID">
+        <UInput v-model="supplier.upiId" />
+      </UFormGroup>
+
+      <UButton block @click="submitDistributor">
+        Submit
+      </UButton>
+    </div>
+  </UModal>
+</template>
+
 <script setup lang="ts">
 import { useCreateDistributor, useFindManyDistributor } from '~/lib/hooks'
 
 /* ------------------------------------
-   PROPS
+   PROPS (DB STATE)
 ------------------------------------ */
 const props = withDefaults(defineProps<{
   totalAmount: number
   distributorId?: string
-  paymentType?: string
+  paymentType?: string   // OLD from DB
   billNo?: string
+  billDate?: string      // 🆕 NEW
   discount?: number
   tax?: number
   adjustment?: number
-  
 }>(), {
   totalAmount: 0,
   distributorId: '',
   paymentType: '',
   billNo: '',
+  billDate: '',
   discount: 0,
   tax: 0,
   adjustment: 0
@@ -36,6 +230,7 @@ const isDistributorOpen = ref(false)
    DISTRIBUTOR
 ------------------------------------ */
 const CreateDistributor = useCreateDistributor()
+
 const supplier = ref({
   name: '',
   street: '',
@@ -52,17 +247,57 @@ const supplier = ref({
 })
 
 /* ------------------------------------
-   PURCHASE INFO
+   PURCHASE INFO STATE
 ------------------------------------ */
 const selected = ref<any>(null)
+
+// 🆕 NEW (editable)
 const paymentType = ref<string>('')
+
+// 🧊 OLD (frozen DB state)
+const oldPaymentType = ref<string | null>(null)
+
 const billNo = ref<string>('')
 
+// 🆕 BILL DATE (yyyy-mm-dd)
+const billDate = ref<string>('')
+
+/* ------------------------------------
+   INIT OLD vs NEW (CRITICAL FIX)
+------------------------------------ */
+
+
 watch(
-  () => [props.paymentType, props.billNo],
-  ([p, b]) => {
-    if (typeof p === 'string') paymentType.value = p
-    if (typeof b === 'string') billNo.value = b
+  () => props.paymentType,
+  (val) => {
+    if (oldPaymentType.value === null) {
+      oldPaymentType.value =
+        typeof val === 'string' && val !== '' ? val : null
+    }
+
+    if (paymentType.value === '' && typeof val === 'string') {
+      paymentType.value = val
+    }
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.billNo,
+  (val) => {
+    if (typeof val === 'string') billNo.value = val
+  },
+  { immediate: true }
+)
+
+watch(
+  () => props.billDate,
+  (val) => {
+     console.log('Initializing billDate from props.createdAt:', val)
+    if (!val || billDate.value) return
+   
+    // ISO → YYYY-MM-DD
+    billDate.value = new Date(val).toISOString().split('T')[0]
   },
   { immediate: true }
 )
@@ -71,7 +306,9 @@ watch(
    DELIVERY TYPE
 ------------------------------------ */
 const DELIVERY_TYPE_KEY = 'lastDeliveryType'
-const deliveryTypeOptions = ref<string[]>(useAuth().session.value?.deliveryType || [])
+const deliveryTypeOptions = ref<string[]>(
+  useAuth().session.value?.deliveryType || []
+)
 const deliveryType = ref<string>()
 
 if (process.client) {
@@ -82,17 +319,16 @@ if (process.client) {
 watch(deliveryType, (val) => {
   if (val) localStorage.setItem(DELIVERY_TYPE_KEY, val)
 })
- console.log('Prop discount changed:', props.discount);
 
 /* ------------------------------------
    PRICING INPUTS
 ------------------------------------ */
-const discount = ref<number>(0)     // +% or -flat
-const taxPercent = ref<number>(0)   // %
-const adjustment = ref<number>(0)   // + / -
+const discount = ref<number>(0)
+const taxPercent = ref<number>(0)
+const adjustment = ref<number>(0)
 
 /* ------------------------------------
-   SYNC PROPS → LOCAL STATE (FIX)
+   SYNC PROPS → LOCAL
 ------------------------------------ */
 watch(
   () => [props.discount, props.tax, props.adjustment],
@@ -105,49 +341,35 @@ watch(
 )
 
 /* ------------------------------------
-   ORDER-SAFE CALCULATION (FIXED)
+   CALCULATIONS
 ------------------------------------ */
-
-// BASE (never changes)
 const subtotal = computed(() => Number(props.totalAmount) || 0)
 
-// DISCOUNT (always from subtotal)
 const discountAmount = computed(() => {
   const base = subtotal.value
   const d = Number(discount.value) || 0
-
-  if (d > 0) {
-    return (base * d) / 100
-  }
-
-  // flat discount (cap at subtotal)
-  return Math.min(Math.abs(d), base)
+  return d > 0 ? (base * d) / 100 : Math.min(Math.abs(d), base)
 })
 
-// AFTER DISCOUNT (LOCKED)
 const discountedAmount = computed(() => {
   return subtotal.value - discountAmount.value
 })
 
-// TAX (always from discountedAmount, never from adjustment)
 const taxAmount = computed(() => {
   const t = Number(taxPercent.value) || 0
   return (discountedAmount.value * t) / 100
 })
 
-// TOTAL BEFORE ADJUSTMENT (LOCKED)
 const totalBeforeAdjustment = computed(() => {
   return discountedAmount.value + taxAmount.value
 })
 
-// FINAL TOTAL (adjustment applied last)
 const finalTotal = computed(() => {
-  const adj = Number(adjustment.value) || 0
-  return totalBeforeAdjustment.value + adj
+  return totalBeforeAdjustment.value + (Number(adjustment.value) || 0)
 })
 
 /* ------------------------------------
-   EMIT UPDATES
+   EMIT (OLD + NEW)
 ------------------------------------ */
 const emit = defineEmits(['update'])
 
@@ -156,6 +378,7 @@ watch(
     selected,
     paymentType,
     billNo,
+    billDate,
     deliveryType,
     discount,
     taxPercent,
@@ -165,12 +388,20 @@ watch(
   () => {
     emit('update', {
       distributorId: selected.value?.id || null,
+
+      // payment state
+      oldPaymentType: oldPaymentType.value,
       paymentType: paymentType.value,
+
       billNo: billNo.value,
+      billDate: billDate.value, // 🆕 EMITTED
+
       deliveryType: deliveryType.value,
+
       discount: discount.value,
       taxPercent: taxPercent.value,
       adjustment: adjustment.value,
+
       subtotal: subtotal.value,
       discountAmount: discountAmount.value,
       taxAmount: taxAmount.value,
@@ -235,156 +466,27 @@ const submitDistributor = async () => {
   toast.add({ title: 'Distributor added!' })
   isDistributorOpen.value = false
 }
+
+/* ------------------------------------
+   RESET (SAFE)
+------------------------------------ */
+const reset = () => {
+  selected.value = null
+  paymentType.value = ''
+  billNo.value = ''
+  billDate.value = ''
+  discount.value = 0
+  taxPercent.value = 0
+  adjustment.value = 0
+  deliveryType.value = deliveryTypeOptions.value[0] || ''
+
+  // ⚠️ DO NOT reset oldPaymentType
+}
+
+/* ------------------------------------
+   EXPOSE
+------------------------------------ */
+defineExpose({
+  reset
+})
 </script>
-
-
-<template>
-  <!-- HEADER -->
-  <div class="flex flex-col sm:flex-row justify-between gap-4">
-    <div class="flex items-center gap-3">
-      <UButton
-        label="Purchase Info"
-        icon="i-heroicons-document-text"
-        size="sm"
-        color="primary"
-        @click="isPurchaseInfoOpen = true"
-      />
-      <span class="font-semibold"> Total: ₹{{ finalTotal.toFixed(2) }}</span>
-    </div>
-
-    <div class="flex items-center gap-2">
-      <span class="whitespace-nowrap">Delivery Type</span>
-      <USelectMenu
-        v-model="deliveryType"
-        :options="deliveryTypeOptions"
-        placeholder="Select Delivery Type"
-      />
-    </div>
-  </div>
-
-  <!-- PURCHASE INFO MODAL -->
-  <UModal v-model="isPurchaseInfoOpen">
-    <div class="p-4 space-y-4">
-      <h2 class="text-lg font-semibold">Purchase Information</h2>
-
-      <UFormGroup label="Distributor">
-        <div class="flex gap-2">
-          <USelectMenu
-            class="flex-1"
-            v-model="selected"
-            :options="distributors"
-            searchable
-          >
-            <template #label>
-              <span v-if="!selected">Select Distributor</span>
-              <span v-else>{{ selected.name }}</span>
-            </template>
-             <template #option="{ option }">
-          <span>{{ option.name }}</span>
-        </template>
-          </USelectMenu>
-          <UButton icon="i-heroicons-plus" @click="isDistributorOpen = true" />
-        </div>
-      </UFormGroup>
-
-      <UFormGroup label="Bill Number">
-        <UInput v-model="billNo" placeholder="Enter bill number" />
-      </UFormGroup>
-
-      <UFormGroup label="Payment Type">
-        <USelect
-          v-model="paymentType"
-          :options="[
-            { label: 'Credit', value: 'CREDIT' },
-            { label: 'Cash', value: 'CASH' },
-            { label: 'Bank', value: 'BANK' },
-            { label: 'UPI', value: 'UPI' },
-            { label: 'Card', value: 'CARD' },
-            { label: 'Cheque', value: 'CHEQUE' },
-          ]"
-          option-attribute="label"
-          value-attribute="value"
-        />
-      </UFormGroup>
-
-      <UDivider />
-
-      <div class="flex justify-between font-medium">
-        <span>Subtotal</span>
-        <span>₹{{ subtotal.toFixed(2) }}</span>
-      </div>
-
-      <UFormGroup label="Discount (+% or -flat)">
-        <UInput type="number" v-model.number="discount" placeholder="10 or -100" />
-      </UFormGroup>
-
-      <UFormGroup label="Tax (%)">
-        <UInput type="number" v-model.number="taxPercent" placeholder="5" />
-      </UFormGroup>
-
-      <UFormGroup label="Adjustment (+ / -)">
-        <UInput type="number" v-model.number="adjustment" placeholder="50 or -50" />
-      </UFormGroup>
-
-      <UDivider />
-
-      <div class="flex justify-between text-lg font-semibold">
-        <span>Total</span>
-        <span>₹{{ finalTotal.toFixed(2) }}</span>
-      </div>
-
-      <UButton block @click="isPurchaseInfoOpen = false">
-        Done
-      </UButton>
-    </div>
-  </UModal>
-
-  <!-- DISTRIBUTOR MODAL -->
-  <UModal v-model="isDistributorOpen">
-    <div class="p-4 space-y-3">
-      <h2 class="text-lg font-semibold">Add Distributor</h2>
-
-      <UFormGroup label="Name">
-        <UInput v-model="supplier.name" />
-      </UFormGroup>
-
-      <UFormGroup label="Street">
-        <UInput v-model="supplier.street" />
-      </UFormGroup>
-
-      <UFormGroup label="City">
-        <UInput v-model="supplier.city" />
-      </UFormGroup>
-
-      <UFormGroup label="State">
-        <UInput v-model="supplier.state" />
-      </UFormGroup>
-
-      <UFormGroup label="Pincode">
-        <UInput v-model="supplier.pincode" />
-      </UFormGroup>
-
-      <UFormGroup label="GSTIN">
-        <UInput v-model="supplier.gstin" />
-      </UFormGroup>
-
-      <UFormGroup label="Bank Name">
-        <UInput v-model="supplier.bankName" />
-      </UFormGroup>
-
-      <UFormGroup label="Account Number">
-        <UInput v-model="supplier.accountNo" />
-      </UFormGroup>
-
-      <UFormGroup label="IFSC Code">
-        <UInput v-model="supplier.ifsc" />
-      </UFormGroup>
-
-      <UFormGroup label="UPI ID">
-        <UInput v-model="supplier.upiId" />
-      </UFormGroup>
-
-      <UButton block @click="submitDistributor">Submit</UButton>
-    </div>
-  </UModal>
-</template>
