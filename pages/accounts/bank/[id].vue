@@ -17,8 +17,8 @@ const bankId = computed(() =>
    DATE RANGE (AUTO FETCH)
 --------------------------------------------------- */
 const selectedDate = ref({
-  start: startOfDay(new Date()),
-  end: endOfDay(new Date()),
+  start: startOfDay(new Date()).toISOString(),
+  end: endOfDay(new Date()).toISOString(),
 })
 
 const ranges = [
@@ -59,13 +59,64 @@ const { data, pending, error, refresh } = await useFetch(
   {
     query: computed(() => ({
       ...(bankId.value && { bankId: bankId.value }),
-      from: selectedDate.value.start.toISOString(),
-      to: selectedDate.value.end.toISOString(),
+      from: startOfDay(selectedDate.value.start).toISOString(),
+      to: endOfDay(selectedDate.value.end).toISOString(),
     })),
     immediate: true,
     watch: false,
   }
 )
+
+const downloadLedgerPDF = async () => {
+
+  const res = await $fetch.raw(
+    '/api/accounts/bank-ledger.pdf',
+    {
+      method: 'GET',
+      params: {
+        from: startOfDay(selectedDate.value.start).toISOString(),
+        to: endOfDay(selectedDate.value.end).toISOString()
+      }
+    }
+  )
+
+  const blob = new Blob([res._data], {
+    type: 'application/pdf'
+  })
+
+  const url = URL.createObjectURL(blob)
+
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'bank-ledger.pdf'
+  a.click()
+
+  URL.revokeObjectURL(url)
+}
+
+
+
+/* =========================
+   DROPDOWN ACTIONS
+========================= */
+
+const actions = () => [
+  [
+    {
+      label: 'Download PDF',
+      icon: 'i-heroicons-arrow-down-tray',
+      click: downloadLedgerPDF
+    }
+  ],
+  // [
+  //   {
+  //     label: 'Download EXCEL',
+  //     icon: 'i-heroicons-arrow-down-tray',
+  //     click: downloadExcel,
+  //     loading: excelLoading.value
+  //   }
+  // ]
+]
 
 
 
@@ -147,6 +198,7 @@ const formatCurrency = (v: number) =>
     >
       <!-- HEADER (NO APPLY BUTTON) -->
       <template #header>
+         <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <UPopover :popper="{ placement: 'bottom-start' }">
           <UButton
             icon="i-heroicons-calendar-days-20-solid"
@@ -181,6 +233,15 @@ const formatCurrency = (v: number) =>
             </div>
           </template>
         </UPopover>
+
+           <UDropdown :items="actions()">
+            <UButton
+              label="Export"
+              icon="i-heroicons-chevron-down"
+              color="primary"
+            />
+          </UDropdown>
+          </div>
       </template>
 
       <!-- TABLE -->

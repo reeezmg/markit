@@ -90,7 +90,7 @@ const bankInfo = {
           AND b.payment_method = 'Split'
           AND (elem->>'method') IN ('UPI','Card')
           AND b.deleted = false
-          AND b.payment_status IN ('PAID','PENDING')
+          AND b.payment_status IN ('PAID')
           AND b.is_markit = false
           AND b.created_at < $2
       )
@@ -106,7 +106,7 @@ const bankInfo = {
       FROM bills
       WHERE company_id = $1
         AND deleted = false
-        AND payment_status IN ('PAID','PENDING')
+        AND payment_status IN ('PAID')
         AND is_markit = false
         AND created_at < $2
       `,
@@ -208,6 +208,16 @@ const openingBalance =
   moneyNetBefore +
   transferNetBefore
 
+  console.log({
+    baseOpening,
+    salesBefore,
+    expensesBefore,
+    distributorBefore,
+    moneyNetBefore,
+    transferNetBefore,
+    openingBalance
+  })
+
 
     /* =================================================
        OPENING ROW
@@ -243,7 +253,7 @@ const openingBalance =
         WHERE b.company_id = $1
           AND b.payment_method = 'Split'
           AND b.deleted = false
-          AND b.payment_status IN ('PAID','PENDING')
+          AND b.payment_status IN ('PAID')
           AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3
       )
@@ -260,7 +270,7 @@ const openingBalance =
       WHERE b.company_id = $1
         AND b.payment_method IN ('UPI','Card')
         AND b.deleted = false
-        AND b.payment_status IN ('PAID','PENDING')
+        AND b.payment_status IN ('PAID')
         AND b.is_markit = false
         AND b.created_at BETWEEN $2 AND $3
 

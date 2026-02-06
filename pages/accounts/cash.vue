@@ -80,6 +80,49 @@ const totalExpenses = computed(() =>
     .reduce((sum, r) => sum + Number(r.debit || 0), 0)
 )
 
+
+/* =========================
+   DROPDOWN ACTIONS
+========================= */
+
+const actions = () => [
+  [
+    {
+      label: 'Download PDF',
+      icon: 'i-heroicons-arrow-down-tray',
+      click: downloadCashLedgerPDF,
+    }
+  ]
+]
+
+const downloadCashLedgerPDF = async () => {
+
+  const res = await $fetch.raw(
+    '/api/accounts/cash-ledger.pdf',
+    {
+      method: 'GET',
+      params: {
+        from: startOfDay(selectedDate.value.start).toISOString(),
+        to: endOfDay(selectedDate.value.end).toISOString()
+      }
+    }
+  )
+
+  const blob = new Blob([res._data], {
+    type: 'application/pdf'
+  })
+
+  const url = URL.createObjectURL(blob)
+
+  const a = document.createElement('a')
+  a.href = url
+  a.download = 'cash-ledger.pdf'
+  a.click()
+
+  URL.revokeObjectURL(url)
+}
+
+
 const formatCurrency = (v: number) =>
   new Intl.NumberFormat('en-IN', {
     style: 'currency',
@@ -128,6 +171,7 @@ const formatCurrency = (v: number) =>
     >
       <!-- HEADER -->
       <template #header>
+        <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <UPopover :popper="{ placement: 'bottom-start' }">
           <UButton
             icon="i-heroicons-calendar-days-20-solid"
@@ -162,7 +206,16 @@ const formatCurrency = (v: number) =>
             </div>
           </template>
         </UPopover>
-      </template>
+         <!-- Export -->
+              <UDropdown :items="actions()">
+                <UButton
+                  label="Export"
+                  icon="i-heroicons-chevron-down"
+                  color="primary"
+                />
+              </UDropdown>
+      </div>
+        </template>
 
       <!-- TABLE -->
       <UTable

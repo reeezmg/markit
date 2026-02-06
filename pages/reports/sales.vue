@@ -91,8 +91,8 @@ const fetchReportFromServer = async () => {
     const res = await $fetch('/api/report/report', {
       method: 'GET',
       params: {
-        startDate: JSON.stringify(startOfDay(selectedDate.value.start)),
-        endDate: JSON.stringify(endOfDay(selectedDate.value.end))
+        startDate: startOfDay(selectedDate.value.start).toISOString(),
+        endDate: endOfDay(selectedDate.value.end).toISOString()
       }
     })
 
@@ -121,8 +121,8 @@ const fetchExpenseFromServer = async () => {
     const res = await $fetch('/api/report/expenses', {
       method: 'GET',
       params: {
-        startDate: JSON.stringify(startOfDay(selectedDate.value.start)),
-        endDate: JSON.stringify(endOfDay(selectedDate.value.end))
+        startDate: startOfDay(selectedDate.value.start).toISOString(),
+        endDate: endOfDay(selectedDate.value.end).toISOString()
       }
     })
 
@@ -172,8 +172,8 @@ const downloadPDF = async () => {
     const res = await $fetch.raw('/api/report/generate-sales.pdf', {
       method: 'GET',
       params: {
-        startDate: JSON.stringify(startOfDay(selectedDate.value.start)),
-        endDate: JSON.stringify(endOfDay(selectedDate.value.end))
+        startDate: startOfDay(selectedDate.value.start).toISOString(),
+        endDate: endOfDay(selectedDate.value.end).toISOString()
       },
       headers: { Accept: 'application/pdf' }
     })
@@ -209,12 +209,8 @@ const downloadExcel = async () => {
     const res = await $fetch.raw('/api/report/generate-sales.excel', {
       method: 'GET',
       params: {
-        startDate: JSON.stringify(
-          startOfDay(selectedDate.value.start)
-        ),
-        endDate: JSON.stringify(
-          endOfDay(selectedDate.value.end)
-        )
+        startDate: startOfDay(selectedDate.value.start).toISOString(),
+        endDate: endOfDay(selectedDate.value.end).toISOString()
       },
       headers: {
         Accept:
@@ -240,7 +236,7 @@ const downloadExcel = async () => {
 
     const filename =
       disposition?.match(/filename="(.+)"/)?.[1] ||
-      'financial-report.xlsx'
+      'summary.xlsx'
 
 
 
@@ -447,13 +443,13 @@ const revenueByCategory = computed(
             </UPopover>
 
             <!-- Export -->
-            <UDropdown :items="actions()">
-              <UButton
-                label="Export / Print"
-                icon="i-heroicons-chevron-down"
-                color="primary"
-              />
-            </UDropdown>
+              <UDropdown :items="actions()">
+                <UButton
+                  label="Export / Print"
+                  icon="i-heroicons-chevron-down"
+                  color="primary"
+                />
+              </UDropdown>
           </div>
 
           <!-- ================= KPI ================= -->
@@ -520,9 +516,9 @@ const revenueByCategory = computed(
 
             
             <UCard>
-              <div class="text-sm text-gray-500">Total Expense</div>
+              <div class="text-sm text-gray-500">Total Purchase</div>
               <div class="text-xl font-semibold mb-3">
-                {{ formatCurrency(dashboard.totalExpenses) }}
+                {{ formatCurrency(dashboard.totalPurchaseExpense) }}
               </div>
               
               <UTable

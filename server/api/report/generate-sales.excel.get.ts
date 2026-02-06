@@ -27,11 +27,11 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
 
   const startDate = query.startDate
-    ? new Date(JSON.parse(query.startDate as string))
+    ? new Date(query.startDate as string)
     : new Date(0)
 
   const endDate = query.endDate
-    ? new Date(JSON.parse(query.endDate as string))
+    ? new Date(query.endDate as string)
     : new Date()
 
 
@@ -681,7 +681,7 @@ export default defineEventHandler(async (event) => {
     setHeader(
       event,
       'Content-Disposition',
-      'attachment; filename="financial-report.xlsx"'
+      'attachment; filename="summary.xlsx"'
     )
 
     return Buffer.from(buffer)

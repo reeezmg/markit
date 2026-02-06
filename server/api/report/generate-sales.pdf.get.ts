@@ -711,7 +711,7 @@ const billsRes = await client.query(
     setHeader(
       event,
       'Content-Disposition',
-      `attachment; filename="financial-report.pdf"`
+      `attachment; filename="summary.pdf"`
     )
 
     return pdf

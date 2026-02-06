@@ -58,8 +58,8 @@ const fetchReport = async () => {
 
   report.value = await $fetch('/api/report/account', {
     params: {
-      from: selectedDate.value.start.toISOString(),
-      to: selectedDate.value.end.toISOString()
+      from: JSON.stringify(startOfDay(selectedDate.value.start)),
+      to: JSON.stringify(endOfDay(selectedDate.value.end))
     }
   })
 
