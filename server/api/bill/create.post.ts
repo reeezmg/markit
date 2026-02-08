@@ -97,11 +97,11 @@ export default defineEventHandler(async (event) => {
             `
               INSERT INTO entries (
                 id, name, qty, rate, discount, tax, value, size, barcode,
-                return, variant_id, item_id, category_id, company_id, user_id, bill_id
+                return, variant_id, item_id, category_id, company_id, user_id, bill_id, user_name
               )
               VALUES (
                 $1, $2, $3, $4, $5, $6, $7, $8, $9,
-                $10, $11, $12, $13, $14, $15, $16
+                $10, $11, $12, $13, $14, $15, $16, $17
               )
             `,
             [
@@ -120,7 +120,8 @@ export default defineEventHandler(async (event) => {
               entry.category?.connect?.id || null,
               companyId,
               entry.companyUser?.connect?.companyId_userId?.userId || null,
-              billId
+              billId,
+              entry.userName || null
             ]
           )
         })

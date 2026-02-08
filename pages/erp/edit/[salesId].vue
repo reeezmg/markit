@@ -1023,7 +1023,7 @@ const billPoints =
         paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
         splitPayments: paymentMethod.value === 'Split' ? splitPayments.value : null,
         accountId: selected.value,
-        clientId: newClientId.value,
+        clientId: newClientId.value ? newClientId.value : oldClientId.value,
         date: new Date(date.value).toISOString(),
         companyId: useAuth().session.value?.companyId
       },

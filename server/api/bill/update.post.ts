@@ -207,22 +207,7 @@ export default defineEventHandler(async (event) => {
         }
       })
 
-      /* --------------------------------
-         9. Client points
-      -------------------------------- */
-      if (billData.clientId && billPoints) {
-        await tx.companyClient.update({
-          where: {
-            companyId_clientId: {
-              companyId: billData.companyId,
-              clientId: billData.clientId
-            }
-          },
-          data: {
-            points: { increment: billPoints }
-          }
-        })
-      }
+     
     }, {
       maxWait: 10_000,
       timeout: 15_000
