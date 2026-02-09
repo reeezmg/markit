@@ -36,6 +36,59 @@ const applyQuickRange = (fn: Function, close: Function) => {
   close()
 }
 
+
+const actions = () => [
+  [
+    {
+      label: 'Download PDF',
+      icon: 'i-heroicons-arrow-down-tray',
+      click: downloadPDF
+    }
+  ]
+]
+
+
+/* =========================
+   EXPORT PDF
+========================= */
+
+const downloadPDF = async () => {
+
+  try {
+    const res = await $fetch.raw('/api/report/generate-profit.pdf', {
+      method: 'GET',
+      params: {
+        startDate: startOfDay(selectedDate.value.start).toISOString(),
+        endDate: endOfDay(selectedDate.value.end).toISOString()
+      },
+      headers: { Accept: 'application/pdf' }
+    })
+
+    const blob = new Blob([res._data], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+
+    const disposition = res.headers.get('content-disposition')
+    const filename =
+      disposition?.match(/filename="(.+)"/)?.[1] || 'profit-report.pdf'
+
+    const link = document.createElement('a')
+    link.href = url
+    link.download = filename
+    link.click()
+
+    URL.revokeObjectURL(url)
+  } catch (err) {
+    toast.add({
+      title: 'PDF Error',
+      description: 'Failed to download PDF',
+      color: 'red'
+    })
+  } finally {
+  
+  }
+}
+
+
 /* -----------------------------
   FETCH
 ------------------------------ */
@@ -116,7 +169,7 @@ const formatCurrency = (v: number) =>
     <div v-else class="p-6 space-y-6">
 
       <!-- HEADER -->
-      <div class="flex flex-col sm:flex-row gap-4 sm:items-center sm:justify-between">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <!-- DATE PICKER -->
         <UPopover :popper="{ placement: 'bottom-start' }">
           <UButton
@@ -158,6 +211,15 @@ const formatCurrency = (v: number) =>
             </div>
           </template>
         </UPopover>
+
+         <!-- Export -->
+                      <UDropdown :items="actions()">
+                        <UButton
+                          label="Export / Print"
+                          icon="i-heroicons-chevron-down"
+                          color="primary"
+                        />
+                      </UDropdown>
       </div>
 
       <!-- SUMMARY -->

@@ -2,16 +2,21 @@ import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
+
   const session = await useAuthSession(event)
   const companyId = session.data.companyId
 
   if (!companyId) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+    throw createError({
+      statusCode: 401,
+      statusMessage: 'Unauthorized'
+    })
   }
 
   /* -----------------------------
      DATE PARSING
   ------------------------------ */
+
   const query = getQuery(event)
   const rawStart = query.startDate as string | undefined
   const rawEnd = query.endDate as string | undefined
@@ -29,9 +34,11 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
+
     /* -------------------------------------------------
-       ENTRY DATA (DISCOUNT + RETURN SAFE)
+       ENTRY DATA (ONLY PAID → FOR COGS / PROFIT)
     -------------------------------------------------- */
+
     const { rows } = await client.query(
       `
       WITH entry_calc AS (
@@ -39,7 +46,17 @@ export default defineEventHandler(async (event) => {
           b.id              AS bill_id,
           b.created_at      AS bill_date,
           b.invoice_number,
-          b.grand_total     AS bill_sales,
+
+          /* REALIZED SALES PER BILL */
+          (
+            CASE 
+              WHEN b.payment_method NOT IN ('Split','Credit')
+                THEN b.grand_total
+              ELSE 0
+            END
+            +
+            COALESCE(sp.non_credit_amount,0)
+          ) AS bill_sales,
 
           e.id              AS entry_id,
           e.name            AS entry_name,
@@ -57,6 +74,26 @@ export default defineEventHandler(async (event) => {
 
         FROM entries e
         INNER JOIN bills b ON e.bill_id = b.id
+
+        /* SPLIT PAYMENT PARSE */
+        LEFT JOIN LATERAL (
+          SELECT
+            SUM(
+              CASE 
+                WHEN (elem->>'method') != 'Credit'
+                THEN (elem->>'amount')::numeric
+                ELSE 0
+              END
+            ) AS non_credit_amount
+          FROM jsonb_array_elements(
+            CASE
+              WHEN jsonb_typeof(b.split_payments::jsonb)='array'
+              THEN b.split_payments::jsonb
+              ELSE '[]'::jsonb
+            END
+          ) elem
+        ) sp ON b.payment_method='Split'
+
         LEFT JOIN variants v ON e.variant_id = v.id
         LEFT JOIN categories c ON e.category_id = c.id
 
@@ -69,6 +106,7 @@ export default defineEventHandler(async (event) => {
 
       SELECT
         *,
+
         CASE
           WHEN is_return = true THEN -ABS(cost_price * qty)
           ELSE (cost_price * qty)
@@ -85,31 +123,43 @@ export default defineEventHandler(async (event) => {
       [companyId, startDate, endDate]
     )
 
+
+
     /* -------------------------------------------------
        EXPENSES
     -------------------------------------------------- */
-  const expenseRes = await client.query(
-  `
-  SELECT COALESCE(SUM(e.total_amount), 0) AS total_expenses
-  FROM expenses e
-  JOIN expense_categories ec
-    ON ec.id = e.expense_category_id
-  WHERE e.company_id = $1
-    AND ec.name <> 'Purchase'
-    AND e.expense_date BETWEEN $2 AND $3
-  `,
-  [companyId, startDate, endDate]
-)
-    const totalExpenses = Number(expenseRes.rows[0].total_expenses)
+
+    const expenseRes = await client.query(
+      `
+      SELECT COALESCE(SUM(e.total_amount), 0) AS total_expenses
+      FROM expenses e
+      JOIN expense_categories ec
+        ON ec.id = e.expense_category_id
+      WHERE e.company_id = $1
+        AND ec.name <> 'Purchase'
+        AND e.expense_date BETWEEN $2 AND $3
+      `,
+      [companyId, startDate, endDate]
+    )
+
+    const totalExpenses = Number(
+      expenseRes.rows[0].total_expenses
+    )
+
+
 
     /* -------------------------------------------------
        TRANSFORM → BILL + CATEGORY
     -------------------------------------------------- */
+
     const billMap = new Map<string, any>()
-    const categoryMap = new Map<string, { sales: number; profit: number }>()
+    const categoryMap = new Map<
+      string,
+      { sales: number; profit: number }
+    >()
 
     for (const r of rows) {
-      /* ---------- BILL ---------- */
+
       if (!billMap.has(r.bill_id)) {
         billMap.set(r.bill_id, {
           billId: r.bill_id,
@@ -139,10 +189,12 @@ export default defineEventHandler(async (event) => {
         value: entryValue,
         cogs: entryCOGS,
         profit: entryProfit,
-        marginPercent: entryValue > 0 ? (entryProfit / entryValue) * 100 : 0
+        marginPercent:
+          entryValue > 0
+            ? (entryProfit / entryValue) * 100
+            : 0
       })
 
-      /* ---------- CATEGORY ---------- */
       const category = r.category_name || 'Uncategorized'
 
       if (!categoryMap.has(category)) {
@@ -154,49 +206,62 @@ export default defineEventHandler(async (event) => {
       cat.profit += entryProfit
     }
 
+
+
     /* -------------------------------------------------
-       FINAL BILL TOTALS
+       FINAL TOTALS
     -------------------------------------------------- */
+
     let totalSales = 0
     let totalCOGS = 0
 
-    const bills = Array.from(billMap.values()).map((b) => {
+    const bills = Array.from(billMap.values()).map(b => {
+
       b.billProfit = b.billSales - b.billCOGS
       b.marginPercent =
-        b.billSales > 0 ? (b.billProfit / b.billSales) * 100 : 0
+        b.billSales > 0
+          ? (b.billProfit / b.billSales) * 100
+          : 0
 
       totalSales += b.billSales
       totalCOGS += b.billCOGS
+
       return b
     })
 
     const totalProfit = totalSales - totalCOGS
 
-    /* -------------------------------------------------
-       CATEGORY TABLE DATA
-    -------------------------------------------------- */
-    const categoryProfit = Array.from(categoryMap.entries()).map(
-      ([name, v]) => ({
-        name,
-        sales: v.sales,
-        profit: v.profit,
-        marginPercent: v.sales > 0 ? (v.profit / v.sales) * 100 : 0
-      })
-    )
+
 
     /* -------------------------------------------------
-       CATEGORY PIE CHART DATA
+       CATEGORY DATA
     -------------------------------------------------- */
-    const categoryProfitChart = Array.from(categoryMap.entries())
+
+    const categoryProfit = Array.from(
+      categoryMap.entries()
+    ).map(([name, v]) => ({
+      name,
+      sales: v.sales,
+      profit: v.profit,
+      marginPercent:
+        v.sales > 0 ? (v.profit / v.sales) * 100 : 0
+    }))
+
+    const categoryProfitChart = Array.from(
+      categoryMap.entries()
+    )
       .map(([name, v]) => ({
         name,
         value: v.profit
       }))
       .filter(item => item.value !== 0)
 
+
+
     /* -------------------------------------------------
        RESPONSE
     -------------------------------------------------- */
+
     return {
       summary: {
         totalSales,
@@ -205,12 +270,15 @@ export default defineEventHandler(async (event) => {
         totalExpenses,
         netProfit: totalProfit - totalExpenses,
         overallMarginPercent:
-          totalSales > 0 ? (totalProfit / totalSales) * 100 : 0
+          totalSales > 0
+            ? (totalProfit / totalSales) * 100
+            : 0
       },
       bills,
       categoryProfit,
       categoryProfitChart
     }
+
   } finally {
     client.release()
   }
