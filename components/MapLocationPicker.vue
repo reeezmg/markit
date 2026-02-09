@@ -286,7 +286,7 @@ onMounted(() => {
   } else {
     const script = document.createElement('script')
     script.src =
-      'https://maps.googleapis.com/maps/api/js?key=AIzaSyBz5prFGdpWNR-beRlytk3vMjZKjy8KddY&libraries=places'
+      'https://maps.googleapis.com/maps/api/js?key=AIzaSyCfmQAcnCd3rUdLXxC9Hg9NiowG0ovHbfQ&libraries=places'
     script.async = true
     script.defer = true
     script.onload = initMap
