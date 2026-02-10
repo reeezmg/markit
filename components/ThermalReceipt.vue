@@ -59,7 +59,7 @@
       </div>
 
       <!-- ITEMS -->
-      <div v-for="(item, i) in data.entries" :key="i" class="mt-1">
+      <div v-for="(item, i) in data.entries" :key="i" class="mt-1 mb-4">
         <div class="grid grid-cols-[6mm_29mm_6mm_13mm_13mm_13mm]">
           <span>{{ i + 1 }}</span>
 
