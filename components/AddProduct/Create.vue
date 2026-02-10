@@ -1,250 +1,334 @@
 <script setup lang="ts">
-import * as z from 'zod';
-import { useForm } from 'vee-validate';
-import { toTypedSchema } from '@vee-validate/zod';
-import { useFindManyCategory,useFindManySubcategory } from '~/lib/hooks';
-const useAuth = () => useNuxtApp().$auth;
+import * as z from 'zod'
+import { useForm } from 'vee-validate'
+import { toTypedSchema } from '@vee-validate/zod'
+
+import {
+  useFindManyCategory,
+  useFindManySubcategory,
+  useFindManyBrand
+} from '~/lib/hooks'
+
+const useAuth = () => useNuxtApp().$auth
+
+/* -----------------------------
+PROPS
+------------------------------ */
 const props = defineProps<{
-    editName?: string | null;
-    editBrand?: string | null;
-    editDescription?: string | null;
-    editCategory?: any;
-    editSubcategory?: any;
-   
-}>();
+  editName?: string | null
+  editBrand?: any
+  editDescription?: string | null
+  editCategory?: any
+  editSubcategory?: any
+}>()
 
-const emit = defineEmits(['update']);
+const emit = defineEmits(['update'])
 
-
+/* -----------------------------
+VALIDATION
+------------------------------ */
 const schemas = z.object({
-    name: z.string().min(2),
-    brand: z.string().optional(),
-    category: z.string().optional(),
-    subcategory: z.string().optional(),
-    description: z.string().optional(),
-});
+  name: z.string().min(2),
+  brand: z.string().optional(),
+  category: z.string().optional(),
+  subcategory: z.string().optional(),
+  description: z.string().optional(),
+})
 
-const { errors, defineField,resetForm: resetValidation } = useForm({
-    validationSchema: toTypedSchema(schemas),
-});
-const [name, nameAttrs] = defineField('name');
-const [brand, brandAttrs] = defineField('brand');
-const [description, descriptionAttrs] = defineField('description');
-const selectedRow = ref<any>({});
-const subselectedRow = ref<any>({});
+const { errors, defineField, resetForm: resetValidation } = useForm({
+  validationSchema: toTypedSchema(schemas),
+})
 
-const productInputs = ref(useAuth().session.value?.productInputs)
+const [name, nameAttrs] = defineField('name')
+const [description, descriptionAttrs] = defineField('description')
 
-const {
-    data: categories,
-} = useFindManyCategory({where:{companyId:useAuth().session.value?.companyId}});
+/* -----------------------------
+STATE
+------------------------------ */
+const selectedRow = ref<any>({})
+const subselectedRow = ref<any>({})
+const brandSelectedRow = ref<any>({})
 
+const productInputs = ref(
+  useAuth().session.value?.productInputs
+)
+
+/* -----------------------------
+FETCH CATEGORIES
+------------------------------ */
+const { data: categories } = useFindManyCategory({
+  where: { companyId: useAuth().session.value?.companyId },
+})
+
+/* -----------------------------
+FETCH SUBCATEGORIES
+------------------------------ */
 const subArgs = computed(() => ({
-    where: {
-        companyId: useAuth().session.value?.companyId,
-        ...(selectedRow.value?.id && { categoryId: selectedRow.value.id })
-    }
-}));
+  where: {
+    companyId: useAuth().session.value?.companyId,
+    ...(selectedRow.value?.id && {
+      categoryId: selectedRow.value.id,
+    }),
+  },
+}))
 
-const { data: subcategories } = useFindManySubcategory(subArgs);
+const { data: subcategories } =
+  useFindManySubcategory(subArgs)
 
+/* -----------------------------
+FETCH BRANDS
+(Filtered by category like subcategory)
+------------------------------ */
+const brandArgs = computed(() => ({
+  where: {
+    companyId: useAuth().session.value?.companyId,
+    ...(selectedRow.value?.id && {
+      categoryId: selectedRow.value.id,
+    }),
+  },
+}))
+
+const { data: brands } =
+  useFindManyBrand(brandArgs)
+
+/* -----------------------------
+RESET FORM
+------------------------------ */
 const resetForm = () => {
-    name.value = '';
-    brand.value = '';
-    description.value = '';
-    selectedRow.value = {};
-    resetValidation()
-};
+  name.value = ''
+  description.value = ''
+  selectedRow.value = {}
+  subselectedRow.value = {}
+  brandSelectedRow.value = {}
+  resetValidation()
+}
 
-defineExpose({ resetForm });
+defineExpose({ resetForm })
 
-watch(subcategories, (newsubcategories) => {
-    subselectedRow.value = {};
-});
+/* -----------------------------
+WATCHERS
+------------------------------ */
 
-watch(() => props.editName, (newName) => {
-    name.value = newName ?? '';
-}, { immediate: true });
+/* Reset sub + brand when category changes */
+watch(subcategories, () => {
+  subselectedRow.value = {}
+})
 
-watch(() => props.editBrand, (newBrand) => {
-    brand.value = newBrand ?? '';
-}, { immediate: true });
+watch(brands, () => {
+  brandSelectedRow.value = {}
+})
 
-watch(() => props.editDescription, (newDescription) => {
-    description.value = newDescription ?? '';
-}, { immediate: true });
-
-watch([() => props.editCategory,categories], ([newCategory,newCategories]) => {
-    if (newCategory && newCategories?.length) {
-         selectedRow.value = newCategories.find(cat => cat.id === newCategory);
-        console.log(newCategory)
-    } else {
-        selectedRow.value = {};
-    }
-}, { immediate: true });
-
+/* Edit → Name */
 watch(
-    [() => props.editSubcategory, subcategories], 
-    ([newCategory, newSubcategories]) => {
-        if (newCategory && newSubcategories?.length) {
-            subselectedRow.value = newSubcategories.find(subcat => subcat.id === newCategory) || {};
-            console.log(subselectedRow.value);
-        } else {
-            subselectedRow.value = {};
-        }
-    },
-    { immediate: true }
-);
-
-
-
-watch(
-  [name, brand, description, selectedRow, subselectedRow],
-  ([newName, newBrand, newDescription, newCategoryRow, newSubcategoryRow]) => {
-    emit('update', {
-      name: newName,
-      brand: newBrand,
-      description: newDescription,
-      category: newCategoryRow,
-      subcategory: newSubcategoryRow?.id,
-    });
+  () => props.editName,
+  (val) => {
+    name.value = val ?? ''
   },
   { immediate: true }
-);
+)
 
+/* Edit → Description */
+watch(
+  () => props.editDescription,
+  (val) => {
+    description.value = val ?? ''
+  },
+  { immediate: true }
+)
 
+/* Edit → Category */
+watch(
+  [() => props.editCategory, categories],
+  ([newCategory, newCategories]) => {
+    if (newCategory && newCategories?.length) {
+      selectedRow.value =
+        newCategories.find(
+          (c) => c.id === newCategory
+        ) || {}
+    } else {
+      selectedRow.value = {}
+    }
+  },
+  { immediate: true }
+)
+
+/* Edit → Subcategory */
+watch(
+  [() => props.editSubcategory, subcategories],
+  ([newSub, newSubs]) => {
+    if (newSub && newSubs?.length) {
+      subselectedRow.value =
+        newSubs.find(
+          (s) => s.id === newSub
+        ) || {}
+    } else {
+      subselectedRow.value = {}
+    }
+  },
+  { immediate: true }
+)
+
+/* Edit → Brand */
+watch(
+  [() => props.editBrand, brands],
+  ([newBrand, newBrands]) => {
+    if (newBrand && newBrands?.length) {
+      brandSelectedRow.value =
+        newBrands.find(
+          (b) => b.id === newBrand
+        ) || {}
+    } else {
+      brandSelectedRow.value = {}
+    }
+  },
+  { immediate: true }
+)
+
+/* Emit updates */
+watch(
+  [
+    name,
+    description,
+    selectedRow,
+    subselectedRow,
+    brandSelectedRow,
+  ],
+  ([
+    newName,
+    newDesc,
+    newCat,
+    newSub,
+    newBrand,
+  ]) => {
+    emit('update', {
+      name: newName,
+      description: newDesc,
+      category: newCat,
+      subcategory: newSub?.id,
+      brand: newBrand?.id,
+    })
+  },
+  { immediate: true }
+)
 </script>
+
+<!-- ================= TEMPLATE ================= -->
 
 <template id="create">
   <div class="text-xl mb-4">Create</div>
   <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
 
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
-    <!-- Name -->
+  <div class="grid grid-cols-2 gap-4 mb-3">
+
+    <!-- NAME -->
     <UFormGroup label="Name" v-if="productInputs?.name">
       <UInput
-        id="name"
         v-model="name"
         v-bind="nameAttrs"
-        type="text"
         class="w-full"
       />
     </UFormGroup>
 
-    <!-- Brand -->
+    <!-- BRAND (SELECT MENU now) -->
     <UFormGroup label="Brand" v-if="productInputs?.brand">
-      <UInput
-        id="brand"
-        v-model="brand"
-        type="text"
-        name="brand"
-        class="w-full"
-      />
+      <USelectMenu
+        v-model="brandSelectedRow"
+        :options="brands"
+        option-key="id"
+        track-by="id"
+        searchable
+        option-attribute="name"
+        searchable-placeholder="Search a Brand..."
+      >
+        <template #label>
+          <span
+            v-if="Object.keys(brandSelectedRow).length"
+            class="truncate"
+          >
+            {{ brandSelectedRow.name }}
+          </span>
+          <span v-else>Select</span>
+        </template>
+
+        <template #leading>
+          <UIcon
+            v-if="!brandSelectedRow.image"
+            name="i-heroicons-user-circle"
+            class="w-5 h-5"
+          />
+          <UAvatar
+            v-else
+            :src="`https://images.markit.co.in/${brandSelectedRow.image}`"
+            size="2xs"
+          />
+        </template>
+
+        <template #option="{ option: brand }">
+          <UIcon
+            v-if="!brand.image"
+            name="i-heroicons-user-circle"
+            class="w-5 h-5"
+          />
+          <UAvatar
+            v-else
+            :src="`https://images.markit.co.in/${brand.image}`"
+            size="2xs"
+          />
+          <span class="truncate">
+            {{ brand.name }}
+          </span>
+        </template>
+      </USelectMenu>
     </UFormGroup>
 
-    <!-- Category -->
+    <!-- CATEGORY -->
     <UFormGroup label="Category" v-if="productInputs?.category">
-  <USelectMenu
-    v-model="selectedRow"
-    :options="categories"
-    option-key="id"
-    track-by="id"
-    searchable
-    option-attribute="name"
-    searchable-placeholder="Search a Category..."
-  >
-    <template #label>
-      <span v-if="Object.keys(selectedRow).length !== 0" class="truncate">
-        {{ selectedRow.name }}
-      </span>
-      <span v-else>Select</span>
-    </template>
+      <USelectMenu
+        v-model="selectedRow"
+        :options="categories"
+        option-key="id"
+        track-by="id"
+        searchable
+        option-attribute="name"
+      >
+        <template #label>
+          <span v-if="selectedRow?.name">
+            {{ selectedRow.name }}
+          </span>
+          <span v-else>Select</span>
+        </template>
+      </USelectMenu>
+    </UFormGroup>
 
-    <template #leading>
-      <UIcon
-        v-if="!selectedRow.image"
-        name="i-heroicons-user-circle"
-        class="w-5 h-5"
-      />
-      <UAvatar
-        v-else
-        :src="`https://images.markit.co.in/${selectedRow.image}`"
-        size="2xs"
-      />
-    </template>
-
-    <template #option="{ option: category }">
-      <UIcon
-        v-if="!category.image"
-        name="i-heroicons-user-circle"
-        class="w-5 h-5"
-      />
-      <UAvatar
-        v-else
-        :src="`https://images.markit.co.in/${category.image}`"
-        size="2xs"
-      />
-      <span class="truncate">{{ category.name }}</span>
-    </template>
-  </USelectMenu>
-</UFormGroup>
-
-
-    <!-- Sub-category -->
+    <!-- SUBCATEGORY -->
     <UFormGroup label="Sub-Category" v-if="productInputs?.subcategory">
-  <USelectMenu
-    v-model="subselectedRow"
-    :options="subcategories"
-    option-key="id"
-    track-by="id"
-    searchable
-    option-attribute="name"
-    searchable-placeholder="Search a Subcategory..."
-  >
-    <template #label>
-      <span v-if="Object.keys(subselectedRow).length !== 0" class="truncate">
-        {{ subselectedRow.name }}
-      </span>
-      <span v-else>Select</span>
-    </template>
+      <USelectMenu
+        v-model="subselectedRow"
+        :options="subcategories"
+        option-key="id"
+        track-by="id"
+        searchable
+        option-attribute="name"
+      >
+        <template #label>
+          <span v-if="subselectedRow?.name">
+            {{ subselectedRow.name }}
+          </span>
+          <span v-else>Select</span>
+        </template>
+      </USelectMenu>
+    </UFormGroup>
 
-    <template #leading>
-      <UIcon
-        v-if="!subselectedRow.image"
-        name="i-heroicons-user-circle"
-        class="w-5 h-5"
-      />
-      <UAvatar
-        v-else
-        :src="`https://images.markit.co.in/${subselectedRow.image}`"
-        size="2xs"
-      />
-    </template>
-
-    <template #option="{ option: subcategory }">
-      <UIcon
-        v-if="!subcategory.image"
-        name="i-heroicons-user-circle"
-        class="w-5 h-5"
-      />
-      <UAvatar
-        v-else
-        :src="`https://images.markit.co.in/${subcategory.image}`"
-        size="2xs"
-      />
-      <span class="truncate">{{ subcategory.name }}</span>
-    </template>
-  </USelectMenu>
-</UFormGroup>
-
-    <!-- Description: spans full row -->
-    <UFormGroup label="Description" class="md:col-span-2" v-if="productInputs?.description">
+    <!-- DESCRIPTION -->
+    <UFormGroup
+      label="Description"
+      class="md:col-span-2"
+      v-if="productInputs?.description"
+    >
       <UTextarea
-        id="description"
         v-model="description"
         v-bind="descriptionAttrs"
         :rows="4"
-        name="description"
         class="w-full"
       />
     </UFormGroup>

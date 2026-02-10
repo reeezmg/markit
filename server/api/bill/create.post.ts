@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
     clientId,
     companyId,
     couponId,
+    uuid
   } = body
   console.log(body)
   const TRANSIENT_ERROR_CODES = [
@@ -50,7 +51,7 @@ export default defineEventHandler(async (event) => {
       await client.query('BEGIN')
 
       // Generate Bill ID
-      const billId = crypto.randomUUID()
+      const billId = uuid
 
       // 1️⃣ Insert Bill — Prisma-style fields flattened
       const insertBillQuery = `

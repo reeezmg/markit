@@ -216,7 +216,7 @@ watch(
 defineExpose({ resetForm });
 </script>
 <template>
-  <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-3">
+  <div class="grid grid-cols-2 gap-4 mb-3">
     <!-- Variant Name -->
     <UFormGroup label="Variant Name" v-if="variantInputs?.name">
       <UInput v-model="name" v-bind="nameAttrs" type="text" placeholder="Color/Design" />

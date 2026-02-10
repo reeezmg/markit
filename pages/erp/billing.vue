@@ -6,6 +6,7 @@ import {
   CapacitorBarcodeScanner,
   CapacitorBarcodeScannerTypeHint
 } from '@capacitor/barcode-scanner'
+import { v4 as uuidv4 } from 'uuid';
 import { Capacitor } from '@capacitor/core';
 const config = useRuntimeConfig();
 const serverUrl = config.public.serverUrl
@@ -14,6 +15,7 @@ const isClientLoading = ref(false);
 const isCouponLoading = ref(false)
 const allCoupons = ref([])
 
+const uuid = ref('')
 
 const queryClient = useQueryClient();
 const { generatableCoupons, loading:generatableCouponsLoading, error:generatableCouponsError, generateCoupons } = useGenerateCoupons()
@@ -568,7 +570,7 @@ const columns = computed(() => [
   { key: 'discount', label: 'DISC %' },
   ...(isUserTrackIncluded.value ? [{ key: 'user', label: 'User' }] : []),
   { key: 'tax', label: 'TAX%' },
-  { key: 'cost', label: 'COST' },
+  ...((useAuth().session.value?.role === 'admin' || useAuth().session.value?.role === 'manager') && useAuth().session.value?.isCostIncluded === true ? [{ key: 'cost', label: 'COST' }] : []),
   { key: 'value', label: 'VALUE' },
 ]);
 
@@ -1000,6 +1002,7 @@ const handleSave = async () => {
     if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
       throw new Error('No internet connection')
     }
+     uuid.value = uuidv4()
 
     // 1) Filter valid entries
     const finalitems = (items.value || []).filter(
@@ -1180,6 +1183,7 @@ const billPoints =
     await $fetch('/api/bill/create', {
       method: 'POST',
       body: {
+        uuid: uuid.value,
         payload,
         items: finalitems,
         returnedItems,
@@ -1221,8 +1225,8 @@ const print = async() => {
   try{
   await printBill(printData)
   toast.add({
-        title: 'Printing Sucess!',
-        color: 'Green',
+        title: 'Printing Success!',
+        color: 'green',
       });
   }catch(err){
       printModel.value = true
@@ -1241,12 +1245,30 @@ const download = async() => {
     const ress = await generateThermalReceiptPDF(printData,"receipt.pdf")
   toast.add({
         title: 'Download Success!',
-        color: 'Green',
+        color: 'green',
       });
   }catch(err){
       printModel.value = true
       toast.add({
         title: 'Download failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
+
+const send = async() => {
+  printModel.value = false
+  try{
+
+  toast.add({
+        title: 'Receipt Sent Success!',
+        color: 'green',
+      });
+  }catch(err){
+      printModel.value = true
+      toast.add({
+        title: 'Receipt failed to Sent!',
         description: err.message,
         color: 'red',
       });
@@ -2616,6 +2638,12 @@ const handleProductSelected = async (selectedItems) => {
                 label="Print"
                 :disabled = "!printModel"
                 @click="print"
+            />
+            <UButton
+                color="primary"
+                label="Send"
+                :disabled = "!printModel"
+                @click="send"
             />
             <UButton
                 color="blue"

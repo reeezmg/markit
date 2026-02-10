@@ -60,7 +60,8 @@ interface Variant {
 interface Product {
   id: string ;
   name: string;
-  brand: string;
+  brandId: string;
+  brand: Record<string, any>;
   description: string;
   files: any[]; // Adjust type based on file structure (e.g., File[])
   category:  Record<string, any>;
@@ -103,7 +104,7 @@ const cacheKey = [
   const optimisticProduct = {
     id: newProduct.data.id,
     name: newProduct.data.name,
-    brand: newProduct.data.brand,
+    brandId: newProduct.data.brand?.connect?.id ?? null,
     description: newProduct.data.description,
     status: newProduct.data.status,
     companyId: newProduct.data.company?.connect?.id ?? null,
@@ -197,7 +198,7 @@ const UpdateProduct = useUpdateProduct({
     const updatedProduct = {
       ...product,
       name: input.name ?? product.name,
-      brand: input.brand ?? product.brand,
+      brandId: input.brand?.connect?.id ?? product.brandId,
       description: input.description ?? product.description,
       status: input.status ?? product.status,
       companyId: input.company?.connect?.id ?? product.companyId,
@@ -348,7 +349,8 @@ const awsService = new AwsService();
 const selectedProduct: Ref<Product> = ref({
   id: uuidv4(), 
   name: '',
-  brand: '',
+  brandId: '',
+  brand:{},
   description: '',
   files: [], 
   category: {}, 
@@ -565,7 +567,6 @@ const handleAdd = async (e: Event) => {
       data: {
         id: uuidv4(),
         name: name.value || '',
-        brand: brand.value || '',
         description: description.value || '',
         status: live.value ?? undefined,
         company: {
@@ -578,6 +579,9 @@ const handleAdd = async (e: Event) => {
         },
         ...(category.value && {
           category: { connect: { id: category.value.id } }
+        }),
+        ...(brand.value && {
+          brand: { connect: { id: brand.value } }
         }),
         ...(subcategory.value && {
           subcategory: { connect: { id: subcategory.value } }
@@ -745,7 +749,6 @@ const updatedProduct =  UpdateProduct.mutate({
   where: { id: productId },
   data: {
     name: name.value || '',
-    brand: brand.value || '',
     description: description.value || '',
     status: live.value ?? undefined,
     company: {
@@ -753,6 +756,9 @@ const updatedProduct =  UpdateProduct.mutate({
     },
     ...(category.value && {
       category: { connect: { id: category.value.id } }
+    }),
+    ...(brand.value && {
+      brand: { connect: { id: brand.value } }
     }),
     ...(subcategory.value && {
       subcategory: { connect: { id: subcategory.value } }
@@ -923,6 +929,7 @@ const queryParams = computed(() => (
       include: { 
         subcategory: true,
         category: true,
+        brand: true,
         variants: { 
           include: { 
             items: true 
@@ -1004,7 +1011,7 @@ const handleSave = async () => {
                 code: variant.code ?? '',
                 shopname: useAuth().session.value?.companyName,
                 productName: product.name || product.category?.name || '',
-                brand: product.brand || product.subcategory?.name || '',
+                brand: product.brand?.name || product.subcategory?.name || '',
                 name: variant.name || '',
                 sprice: variant.sprice,
                 ...(variant.sprice !== variant.dprice && {
@@ -1226,7 +1233,8 @@ const handleReset = () => {
   selectedProduct.value = {
     id:'',
     name: '',
-    brand:'',
+    brandId:'',
+    brand:{},
     description: '',
     files: [], // Reset reactive array
     category: {},
@@ -1294,7 +1302,7 @@ const handleNewProduct = () => {
 
         <div class="md:flex md:flex-row">
             <div class="md:w-1/2">
-              <div  class="m-3 hidden md:block">
+              <div  class="m-3">
                     <UButton
                         @click="handleSave"
                         color="green"
@@ -1302,15 +1310,6 @@ const handleNewProduct = () => {
                         :disabled="isSaveDisable"
                     >
                         Save Order
-                    </UButton>
-                </div>
-               
-    
-                <div class="m-3 md:hidden ">
-                    <UButton
-                        @click="handleNewProduct"
-                    >
-                        Add Product
                     </UButton>
                 </div>
 
@@ -1331,7 +1330,7 @@ const handleNewProduct = () => {
             </div>
             
 
-            <div class="hidden md:flex md:flex-col md:w-1/2">
+            <div class=" md:flex md:flex-col md:w-1/2">
               <div class="flex flex-row">
               <div>
               <div v-if="clearInputs" class="mx-3 mt-3">
@@ -1364,7 +1363,7 @@ const handleNewProduct = () => {
                     <AddProductCreate 
                         ref="createRef"
                         :editName="selectedProduct?.name"
-                        :editBrand="selectedProduct?.brand"
+                        :editBrand="selectedProduct?.brandId"
                         :editDescription="selectedProduct?.description"
                         :editCategory="selectedProduct?.categoryId"
                         :editSubcategory="selectedProduct?.subcategoryId"
@@ -1498,120 +1497,6 @@ const handleNewProduct = () => {
     </UModal>
 
 
-    
-    <UModal v-model="isOpenAdd">
-      <UCard >
-        <template #header>
-          <div class="flex items-center justify-between">
-             <div v-if="clearInputs" class="m-3">
-                    <UButton
-                        @click="handleAdd"
-                         :loading="isLoad"
-                    >
-                        Add Product
-                    </UButton>
-                </div>
-                <div v-else class="m-3">
-                    <UButton
-                        @click="handleEdit"
-                         :loading="isLoad"
-                    >
-                        Edit Product
-                    </UButton>
-                </div>
-            <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark-20-solid" class="-my-1" @click="isOpenAdd = false" />
-          </div>
-        </template>
-      <div>
-        
-
-             
-               <UPageCard class="m-3" id="Create">
-                    <AddProductCreate 
-                        ref="createRef"
-                        :editName="selectedProduct?.name"
-                        :editBrand="selectedProduct?.brand"
-                        :editDescription="selectedProduct?.description"
-                        :editCategory="selectedProduct?.categoryId"
-                        :editSubcategory="selectedProduct?.subcategoryId"
-                        @update="createValue" />
-                </UPageCard>
-                 
-              <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.key" class="mb-3">
-                    <UPageCard class="m-3" id="Variants">
-                    <div class="flex justify-between items-centerp-3 rounded-lg">
-                      <div class="text-xl mb-4">Variant {{index+1}}</div>
-                     
-                      <UButton
-                       v-if="variantInputs?.button"
-                        @click="removeVariant(index)"
-                        variant="outline"
-                        color="red"
-                      >Remove
-                      </UButton>
-                    </div>
-                    <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
-                    <AddProductVariants   
-                      ref="variantRef"
-                      :id="selectedProduct?.variants[index]?.id"
-                      :editName="selectedProduct?.variants[index]?.name " 
-                      :editCode="selectedProduct?.variants[index]?.code || variants[0]?.code"
-                      :editQty="selectedProduct?.variants[index]?.qty"
-                      :editsPrice="selectedProduct?.variants[index]?.sprice || variants[0]?.sprice"
-                      :editpPrice="selectedProduct?.variants[index]?.pprice || variants[0]?.pprice"
-                      :editdPrice="selectedProduct?.variants[index]?.dprice || variants[0]?.dprice"
-                      :editDiscount="selectedProduct?.variants[index]?.discount || variants[0]?.discount"
-                      :editItems="selectedProduct?.variants[index]?.items"
-          
-                      @update="updateVariant(index,$event)" />
-                      <AddProductMedia
-                      v-if="variantInputs?.images"
-                      ref="mediaRefs"
-                      :editFile="selectedProduct && selectedProduct.variants[index]?.images"
-                      :index="index" 
-                      :categoryName="category.name"
-                      :targetAudience="category.targetAudience"
-                      :productId="selectedProduct?.id"
-                      :updatedAt= "selectedProduct?.updatedAt"
-                      @update="fileValue"
-                    />
-                  </UPageCard>
-                  </div>
-
-                <UButton
-                    v-if="variantInputs?.button"
-                    @click="addVariant"
-                    color="green"
-                    block
-                  >
-                    + Add Variant
-                  </UButton>
-
-<!-- 
-                <UPageCard class="m-3" id="Live">
-                    <AddProductLive @update="liveValue" />
-                </UPageCard> -->
-
-                <div v-if="clearInputs" class="m-3">
-                    <UButton
-                        @click="handleAdd"
-                         :loading="isLoad"
-                    >
-                        Add Product
-                    </UButton>
-                </div>
-                <div v-else class="m-3">
-                    <UButton
-                        @click="handleEdit"
-                         :loading="isLoad"
-                    >
-                        Edit Product
-                    </UButton>
-                </div>
-            </div>   
-      </UCard>
-    </UModal>
-       
        
     </UDashboardPanelContent>
 
