@@ -81,10 +81,7 @@ FETCH BRANDS
 ------------------------------ */
 const brandArgs = computed(() => ({
   where: {
-    companyId: useAuth().session.value?.companyId,
-    ...(selectedRow.value?.id && {
-      categoryId: selectedRow.value.id,
-    }),
+    companyId: useAuth().session.value?.companyId
   },
 }))
 

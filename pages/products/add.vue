@@ -1167,14 +1167,15 @@ const handleSave = async () => {
     await UpdatePurchaseOrder.mutateAsync({
       where: { id: poId.value },
       data: {
-        paymentType: paymentType.value as PType,
-        billNo: billNo.value || '',
+        ...paymentType.value && { paymentType: paymentType.value as PType },
+         ...(billNo.value && { billNo: billNo.value }),
         createdAt: createdAtDate,
-        totalAmount: totalAmount.value,
+        totalAmount: totalAmount.value || subTotalAmount.value,
         subTotalAmount: subTotalAmount.value,
-        discount: discount.value,
-        tax: tax.value,
-        adjustment: adjustment.value
+        ...discount.value && { discount: discount.value },
+        ...tax.value && { tax: tax.value },
+        ...adjustment.value && { adjustment: adjustment.value },
+        
       }
     })
 

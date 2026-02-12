@@ -592,7 +592,6 @@ model Category {
     companyId String @map("company_id")
     products Product[]
     subcategories Subcategory[]
-    brands Brand[]
     entries Entry[]
     shortCut String? @map("short_cut")
     hsn String?
@@ -637,9 +636,7 @@ model Brand {
     company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
     companyId String @map("company_id")
     products Product[]
-    category Category? @relation(fields: [categoryId], references: [id])
     variant Variant[]
-    categoryId String? @map("category_id")
     writeId String? @default(uuid()) @map("write_id")
 
     @@map("brands")

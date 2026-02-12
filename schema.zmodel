@@ -150,6 +150,7 @@ model Company extends Base {
     products    Product[]
     categories  Category[]
     subcategories  Subcategory[]
+    brands      Brand[]
     bills       Bill[]
     carts       CartCompanyClient[]
     tokenbills  TokenEntry[]
@@ -673,12 +674,32 @@ model Subcategory {
     @@map('subcategories')
 }
 
+
+model Brand {
+    id          String             @id @default(uuid())
+    createdAt   DateTime           @default(now()) @map('created_at')
+    updatedAt   DateTime           @updatedAt @map('updated_at')
+    name        String             @length(1, 256)
+    description String?
+    status      Boolean            @default(true)
+    image       String?
+    company     Company            @relation(fields: [companyId], references: [id],onDelete:Cascade)
+    companyId   String             @map('company_id')
+    products    Product[] 
+    variant     Variant[]
+    writeId     String?            @default(uuid()) @map('write_id')
+
+    @@allow('read', true)
+    @@allow('create, update,delete',company.users?[user == auth()])
+
+    @@map('brands')
+}
+
 model Product {
     id          String            @id @default(uuid())
     createdAt   DateTime          @default(now()) @map("created_at")
     updatedAt   DateTime          @updatedAt @map("updated_at")
-    name        String            
-    brand       String?           
+    name        String                      
     status      Boolean           @default(true)
     rating      Float?
     description String?
@@ -688,6 +709,8 @@ model Product {
     categoryId   String?            @map('category_id')
     subcategory    Subcategory?           @relation(fields: [subcategoryId], references: [id])
     subcategoryId   String?            @map('subcategory_id')
+    brand        Brand?           @relation(fields: [brandId], references: [id])
+    brandId      String?            @map('brand_id')
     variants    Variant[]         
     purchaseorder     PurchaseOrder @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
     purchaseorderId   String            @map('purchaseorder_id')
@@ -718,6 +741,8 @@ model Variant {
     tax         Float       @default(0.0)
     product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
     productId   String @map("product_id")
+    brand        Brand?           @relation(fields: [brandId], references: [id])
+    brandId      String?            @map('brand_id')
     items       Item[]  
     entries     Entry[]
     company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)

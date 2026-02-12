@@ -65,6 +65,7 @@ const scannedBarcode = ref("");
 const barcodeInputs = ref([]);
 const categoryInputs = ref([]);
 const nameInputs = ref([]);
+const phoneInputs = ref([]);
 const qtyInputs = ref([]);
 const rateInputs = ref([]);
 const discountInputs = ref([]);
@@ -87,6 +88,36 @@ const isOpen = ref(false);
 const isSavingAcc = ref(false)
 const issalesReturnModelOpen = ref(false);
 const isClientAddModelOpen = ref(false);
+
+
+const handleKeydown = async (e) => {
+
+  if (e.key === 'Enter' && e.shiftKey) {
+
+    e.preventDefault()
+
+    await nextTick()
+
+    phoneInputs.value?.$el
+      ?.querySelector('input')
+      ?.focus()
+  }
+}
+
+
+
+/* =====================================================
+   MOUNT / UNMOUNT
+===================================================== */
+
+onMounted(() => {
+  window.addEventListener('keydown', handleKeydown)
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleKeydown)
+})
+
 
 const returnAmt = computed(() => {
   return items.value.reduce((sum, item) => {
@@ -570,7 +601,7 @@ const columns = computed(() => [
   { key: 'discount', label: 'DISC %' },
   ...(isUserTrackIncluded.value ? [{ key: 'user', label: 'User' }] : []),
   { key: 'tax', label: 'TAX%' },
-  ...((useAuth().session.value?.role === 'admin' || useAuth().session.value?.role === 'manager') && useAuth().session.value?.isCostIncluded === true ? [{ key: 'cost', label: 'COST' }] : []),
+  ...((useAuth().session.value?.role === 'admin') && useAuth().session.value?.isCostIncluded === true ? [{ key: 'cost', label: 'COST' }] : []),
   { key: 'value', label: 'VALUE' },
 ]);
 
@@ -1551,6 +1582,23 @@ const handleReturnData = ({ returnedItems }) => {
 
 };
 
+watch(isClientAddModelOpen, async (val) => {
+
+  if (val === false) {
+
+    await nextTick()
+
+    const input =
+      discountref.value?.$el
+        ?.querySelector('input')
+
+    input?.focus()
+    input?.select()
+  }
+
+})
+
+
 
 const handleEnterPhone = async () => {
   try {
@@ -1564,10 +1612,17 @@ const handleEnterPhone = async () => {
     clientName.value = data.name
     clientId.value = data.id
     points.value = data.companies?.[0]?.points ?? 0
+         const component = discountref.value;
+    const input = component.$el.querySelector("input");
+    input.focus();
+    input.select();
+
+
   } catch (err) {
     console.error('Failed to fetch client:', err)
   }
 }
+
 
 
 const handleClientAdded = (id,name) => {
@@ -1912,6 +1967,7 @@ const handleProductSelected = async (selectedItems) => {
       }
     }"
   >
+        {{useAuth().session.value?.isCostIncluded === true}}
     <template #header>
     <!-- 📷 Camera View -->
     <div class="relative px-2">
@@ -2034,7 +2090,7 @@ const handleProductSelected = async (selectedItems) => {
     <div class="flex justify-between text-gray-800 dark:text-gray-200 font-medium">
       <span  :class="{ 'text-red-600': row.return }">SN: {{ row.sn }}</span>
       <span  :class="{ 'text-red-600': row.return }">{{ row.name }}</span>
-      <span v-if="((useAuth().session.value?.role === 'admin' || useAuth().session.value?.role === 'manager') && useAuth().session.value?.isCostIncluded === true)" :class="{ 'text-red-600': row.return }">₹{{ row.cost }}</span>
+      <span v-if="((useAuth().session.value?.role === 'admin') && useAuth().session.value?.isCostIncluded === true)" :class="{ 'text-red-600': row.return }">₹{{ row.cost }}</span>
       <span  :class="{ 'text-red-600': row.return }">₹{{ row.value }}</span>
     </div>
 
@@ -2283,7 +2339,7 @@ const handleProductSelected = async (selectedItems) => {
         @keydown.right.prevent="moveFocus(index, 'tax', 'right')"
       />
     </td>
-    <td v-if="((useAuth().session.value?.role === 'admin' || useAuth().session.value?.role === 'manager') && useAuth().session.value?.isCostIncluded === true)" class="py-1 ps-2 whitespace-nowrap"  :class="{ 'text-red-600': row.return }">
+    <td v-if="((useAuth().session.value?.role === 'admin') && useAuth().session.value?.isCostIncluded === true)" class="py-1 ps-2 whitespace-nowrap"  :class="{ 'text-red-600': row.return }">
       {{ row.cost }}
     </td>
     <td class="py-1 ps-2 whitespace-nowrap"  :class="{ 'text-red-600': row.return }">
@@ -2406,7 +2462,7 @@ const handleProductSelected = async (selectedItems) => {
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
-              <UInput v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
+              <UInput ref="phoneInputs" v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
@@ -2555,7 +2611,7 @@ const handleProductSelected = async (selectedItems) => {
 <BillingAddClient
   v-model:model="isClientAddModelOpen"
   v-model:phoneNo="phoneNo"
-  :onVerify="handleEnterPhone"
+  :onVerify="handlePhoneSubmit"
   :clientAdded="handleClientAdded"
 />
 

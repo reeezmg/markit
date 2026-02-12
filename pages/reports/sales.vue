@@ -455,9 +455,9 @@ const revenueByCategory = computed(
           <!-- ================= KPI ================= -->
           <div
             v-if="dashboard"
-            class="grid grid-cols-1 sm:grid-cols-5 gap-4"
+            :class="dashboard.balances.opening.total ? 'grid grid-cols-1 md:grid-cols-5 gap-4' : 'grid grid-cols-1 md:grid-cols-4 gap-4'"
           >
-          <UCard>
+          <UCard v-if="dashboard.balances.opening.total" class="mb-4">
               <div class="text-sm text-gray-500">Opening Balance</div>
               <div class="text-xl font-semibold mb-3">
                 {{ formatCurrency(dashboard.balances.opening.total || 0) }}
@@ -636,11 +636,19 @@ const revenueByCategory = computed(
               />
             </UCard>
 
-            <!-- Pie -->
-            <UCard class="flex-1">
-              <CategoryRevenuePie
-                :revenueByCategory="revenueByCategory"
-                title="Revenue by Category"
+            <!-- Table -->
+            <UCard class="flex-1 p-4 overflow-y-auto">
+              <h3 class="font-semibold mb-3">
+                Brand Sales
+              </h3>
+
+              <UTable
+                :rows="brandSales"
+                :columns="[
+                  { key:'name', label:'Brand' },
+                  { key:'qty', label:'Qty' },
+                  { key:'sales', label:'Sales', formatter:formatCurrency }
+                ]"
               />
             </UCard>
 

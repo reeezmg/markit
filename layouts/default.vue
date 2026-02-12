@@ -98,6 +98,16 @@ const links = computed(() => {
       },
     },
     {
+      id: 'brands',
+      label: 'Brands',
+      to: `/products/brands`,
+      icon: 'i-heroicons-tag',
+      tooltip: {
+        text: 'Brands',
+        shortcuts: ['P', 'B'],
+      },
+    },
+    {
       id: 'stocks',
       label: 'Stocks',
       to: `/products/stocks`,
@@ -298,6 +308,14 @@ const links = computed(() => {
                     tooltip: {
                     text: 'products',
                     shortcuts: ['P', 'C'],
+                    },
+                },
+                   {
+                    label: 'Brands',
+                    to: `/products/brands`,
+                    tooltip: {
+                    text: 'products',
+                    shortcuts: ['P', 'B'],
                     },
                 },
                      {
