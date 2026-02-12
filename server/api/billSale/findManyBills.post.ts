@@ -51,7 +51,6 @@ export default defineEventHandler(async (event) => {
       const isNumeric = /^\d+$/.test(normalizedSearch)
 
       if (!isNumeric) {
-        // text → client name
         whereSQL += ` AND c.name ILIKE $${idx}`
         values.push(`%${normalizedSearch}%`)
         idx++
@@ -59,12 +58,10 @@ export default defineEventHandler(async (event) => {
         const len = normalizedSearch.length
 
         if (len < 3) {
-          // short number → phone
           whereSQL += ` AND c.phone ILIKE $${idx}`
           values.push(`%${normalizedSearch}%`)
           idx++
         } else {
-          // ≥3 digits → invoice OR phone
           whereSQL += `
             AND (
               b.invoice_number = $${idx}
@@ -77,24 +74,20 @@ export default defineEventHandler(async (event) => {
       }
     }
 
-    // 💳 Payment status (enum-safe)
+    /* 💳 Payment status */
     if (selectedStatus?.length) {
       whereSQL += ` AND b.payment_status::text = ANY($${idx}::text[])`
       values.push(selectedStatus.map((s: any) => s.value))
       idx++
     }
 
-    // 📅 Date filter (only when not searching)
+    /* 📅 DATE FILTER (FIXED) */
     if (!normalizedSearch && startDate && endDate) {
       whereSQL += `
-        AND b.created_at BETWEEN
-          date_trunc('day', $${idx}::timestamptz)
-          AND date_trunc('day', $${idx}::timestamptz)
-              + interval '1 day'
-              - interval '1 ms'
+        AND b.created_at BETWEEN $${idx} AND $${idx + 1}
       `
-      values.push(startDate)
-      idx++
+      values.push(startDate, endDate)
+      idx += 2
     }
 
     const orderByColumn =
@@ -103,7 +96,7 @@ export default defineEventHandler(async (event) => {
     const orderByDirection =
       sortDirection === 'asc' ? 'ASC' : 'DESC'
 
-    /* 🔥 MAIN QUERY WITH TOTAL COUNT */
+    /* 🔥 MAIN QUERY */
     const query = `
       SELECT
         b.id,

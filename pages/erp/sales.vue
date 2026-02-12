@@ -236,8 +236,8 @@ const fetchSales = async () => {
         companyId: useAuth().session.value?.companyId,
         search: debouncedSearch.value?.trim(),
         selectedStatus: selectedStatus.value,
-        startDate: selectedDate.value?.start,
-        endDate: selectedDate.value?.end,
+        startDate: startOfDay(selectedDate.value?.start).toISOString(),
+        endDate: endOfDay(selectedDate.value?.end).toISOString(),
         page: page.value,
         pageCount: Number(pageCount.value),
         sortColumn: sort.value.column,
@@ -254,6 +254,12 @@ const fetchSales = async () => {
     isLoading.value = false
   }
 }
+
+watch(sales, (newSales) => {
+   if(page.value > pageTotal.value) {
+       page.value = 1;
+   }
+});
 
 
 // 🔎 Debounced search
