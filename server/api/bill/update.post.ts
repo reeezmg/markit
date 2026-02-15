@@ -209,8 +209,8 @@ export default defineEventHandler(async (event) => {
 
      
     }, {
-      maxWait: 10_000,
-      timeout: 15_000
+      maxWait: 10_0000,
+      timeout: 15_0000
     })
 
     return { success: true }
