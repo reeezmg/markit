@@ -43,7 +43,8 @@ interface Variant {
 interface Product {
   id: string ;
   name: string;
-  brand: string;
+  brand: Record<string, any>;
+  brandId: string;
   description: string;
   files: any[]; // Adjust type based on file structure (e.g., File[])
   category:  Record<string, any>;
@@ -175,11 +176,12 @@ const {data: selectedProductRaw, isLoading, refetch:productRefetch} = useFindUni
     id: true,
     updatedAt:true,
     name: true,
-    brand: true,
     description: true,
     categoryId: true,
     subcategoryId: true,
     category: true,
+    brand: true,
+    brandId: true,
     subcategory: true,
     variants: {
       select: {
@@ -270,7 +272,9 @@ const updatedProduct =   UpdateProduct.mutateAsync({
   where: { id: productId },
   data: {
     name: name.value || '',
-    brand: brand.value || '',
+    brand: {
+      connect: { id: brand.value || undefined }
+    },
     description: description.value || '',
     status: live.value ?? undefined,
     company: {
@@ -482,7 +486,7 @@ const printBarcodesVariant = async (variant: any) => {
       code: variant.code ?? "",
       shopname: auth.session.value?.companyName,
       productName: selectedProduct.value.name || selectedProduct.value.category.name || '',
-      brand: selectedProduct.value.brand || selectedProduct.value.subcategory.name || '' ,
+      brand: selectedProduct.value.brand.name || selectedProduct.value.subcategory.name || '' ,
       name: variant.name,
       sprice: variant.sprice,
       ...(variant.sprice !== variant.dprice && { dprice: variant.dprice }),
@@ -639,7 +643,7 @@ const confirmPrint = async () => {
         <AddProductCreate 
           ref="createRef"
           :editName="selectedProduct?.name"
-          :editBrand="selectedProduct?.brand"
+          :editBrand="selectedProduct?.brandId"
           :editDescription="selectedProduct?.description"
           :editCategory="selectedProduct?.categoryId"
           :editSubcategory="selectedProduct?.subcategoryId"
@@ -735,7 +739,7 @@ const confirmPrint = async () => {
             <UPageCard class="m-3" id="Create">
               <AddProductCreate 
                 :editName="selectedProduct?.name"
-                :editBrand="selectedProduct?.brand"
+                :editBrand="selectedProduct?.brandId"
                 :editDescription="selectedProduct?.description"
                 :editCategory="selectedProduct?.categoryId"
                 :editSubcategory="selectedProduct?.subcategoryId"

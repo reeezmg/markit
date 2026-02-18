@@ -812,7 +812,7 @@ const onLogoUpdate = async () => {
     if (selectedFile.value) {
         const base64 = await prepareFileForApi(selectedFile.value.file);
         const base64file = { base64, uuid: selectedFile.value.uuid };
-        await awsService.uploadBase64File(base64file.base64, base64file.uuid);
+        await awsService.uploadBase64Object(base64file.base64, base64file.uuid);
     }
 
 updateLogo(selectedFile.value?.uuid);

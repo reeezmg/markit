@@ -34,6 +34,7 @@ export default class CloudflareService {
       },
     });
   }
+  
 
   public async generateS3SignedUrl(
     objectKey: string,
@@ -58,6 +59,37 @@ export default class CloudflareService {
       throw new Error('Generate R2 Signed URL Failed');
     }
   }
+
+
+  public async uploadBase64Object(base64String: string, key: string) {
+    try {
+      const prefixRegex = /^data:(.+);base64,/;
+      const match = base64String.match(prefixRegex);
+      if (!match) throw new Error('Invalid Base64 String');
+
+      const base64Data = Uint8Array.from(
+        atob(base64String.replace(prefixRegex, '')),
+        (c) => c.charCodeAt(0),
+      );
+
+      const uploadResult = await this.s3Client.send(
+        new PutObjectCommand({
+          Bucket: this.r2Bucket,
+          Key: key,
+          Body: base64Data,
+          ContentEncoding: 'base64',
+          ContentType: match[1],
+          ACL: 'public-read', // Optional, if you want public access
+        }),
+      );
+
+      return uploadResult;
+    } catch (error) {
+      console.error('Upload error', error);
+      throw new Error('Upload File Failed');
+    }
+  }
+ 
 
   // ------------------------------
   // Resize image to 1024x1024 using canvas (INSIDE CLASS)
