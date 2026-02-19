@@ -66,7 +66,7 @@ const features = [
           Your store
         </UButton>
         <UButton
-        to="/store.markit.co.in"
+        to="https://store.markit.co.in"
           class="bg-[#097D4C] text-white hover:bg-[#08643d] me-1"
         >
           Try N Buy
