@@ -1967,7 +1967,7 @@ const handleProductSelected = async (selectedItems) => {
       }
     }"
   >
-        {{useAuth().session.value?.isCostIncluded === true}}
+
     <template #header>
     <!-- 📷 Camera View -->
     <div class="relative px-2">
