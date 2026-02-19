@@ -66,17 +66,12 @@ const features = [
           Your store
         </UButton>
         <UButton
-          to="/launching"
+        to="/store.markit.co.in"
           class="bg-[#097D4C] text-white hover:bg-[#08643d] me-1"
         >
           Try N Buy
         </UButton>
-        <UButton
-          to="/store.markit.co.in"
-          class="bg-[#097D4C] text-white hover:bg-[#08643d]"
-        >
-          Register
-        </UButton>
+        
       </div>
 
       </template>
