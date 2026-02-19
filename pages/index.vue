@@ -16,8 +16,7 @@ definePageMeta({
 
 const navLinks = [
   { label: 'List Your Store', icon: 'i-heroicons-building-storefront', to: '/storelanding',size:'lg' },
-  { label: 'Login', icon: 'i-heroicons-arrow-right-on-rectangle', to: '/launching',size:'lg' },
-  { label: 'Register', icon: 'i-heroicons-user-plus', to: '/launching',size:'lg' },
+  { label: 'Start Shopping', icon: 'i-heroicons-arrow-right-on-rectangle', to: '/store.markit.co.in',size:'lg' },
 ]
 
 const features = [
@@ -64,16 +63,16 @@ const features = [
           to="/storelanding"
           class="bg-[#097D4C] text-white hover:bg-[#08643d] me-1"
         >
-          List Your store
+          Your store
         </UButton>
         <UButton
           to="/launching"
           class="bg-[#097D4C] text-white hover:bg-[#08643d] me-1"
         >
-          Login
+          Try N Buy
         </UButton>
         <UButton
-          to="/launching"
+          to="/store.markit.co.in"
           class="bg-[#097D4C] text-white hover:bg-[#08643d]"
         >
           Register
