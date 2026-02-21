@@ -22,6 +22,9 @@ const packref = ref();
 const items = ref([
   { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0, outOfStock:'' },
 ]);
+const config = useRuntimeConfig();
+const serverUrl = config.public.serverUrl
+
 
 const order = ref({
   id: 'ORD123456',
@@ -363,7 +366,7 @@ const handlePack = async () => {
     // 3️⃣ Optionally notify backend to emit socket event
     if (trynbuyId && clientId) {
       await $fetch(`/api/pack/${trynbuyId}/${clientId}`, {
-        baseURL: 'http://localhost:3005', // ✅ Adjust for production
+        baseURL: serverUrl, // ✅ Adjust for production
       });
     }
 

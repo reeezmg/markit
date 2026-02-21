@@ -8,8 +8,7 @@ import {
 } from '@capacitor/barcode-scanner'
 import { v4 as uuidv4 } from 'uuid';
 import { Capacitor } from '@capacitor/core';
-const config = useRuntimeConfig();
-const serverUrl = config.public.serverUrl
+
 // import { generateThermalReceiptPDF } from '~/utils/thermal-receipt.client';
 const isClientLoading = ref(false);
 const isCouponLoading = ref(false)

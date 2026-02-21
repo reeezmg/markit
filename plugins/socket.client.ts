@@ -1,7 +1,10 @@
 import { io } from "socket.io-client"
 
+
 export default defineNuxtPlugin((nuxtApp) => {
-  const socket = io("http://localhost:3005", {
+  const config = useRuntimeConfig();
+const serverUrl = config.public.serverUrl
+  const socket = io(serverUrl, {
     withCredentials: true,
   })
 
