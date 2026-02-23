@@ -152,7 +152,7 @@
         <UContainer class="py-10 text-center">
           <UDivider class="mb-6" />
           <p class="text-gray-600">
-            By continuing, you agree to our
+            By regestering, you agree to our
             <NuxtLink to="/terms" class="text-[#097D4C] font-semibold underline">
               Terms of Service & Privacy Policy
             </NuxtLink>

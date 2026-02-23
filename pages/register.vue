@@ -262,7 +262,7 @@ const onVerifyOtp = async () => {
 
         <div class="text-center text-sm mt-2">
           By signing up, you agree to our
-          <NuxtLink to="/" class="text-primary font-medium">Terms of Service</NuxtLink>
+          <NuxtLink to="/terms" class="text-primary font-medium">Terms of Service</NuxtLink>
         </div>
 
         <template v-if="!reject">
