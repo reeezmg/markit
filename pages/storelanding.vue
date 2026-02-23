@@ -4,7 +4,7 @@
       <UDashboardNavbar title="Markit">
         <template #right>
           <div class="flex items-center gap-4">
-            <UButton color="primary"  to="/login">Login</UButton>
+            <UButton color="primary" to="/login">Login</UButton>
             <UButton color="primary" to="/register">Register</UButton>
           </div>
         </template>
@@ -15,12 +15,16 @@
           <!-- Hero Section -->
           <UCard class="text-center space-y-6 shadow-xl">
             <template #header>
-              <h1 class="text-4xl md:text-5xl font-bold text-primary">Software for Fashion & Lifestyle Retailers</h1>
+              <h1 class="text-4xl md:text-5xl font-bold text-primary">
+                Software for Fashion & Lifestyle Retailers
+              </h1>
             </template>
             <p class="text-gray-600 text-lg max-w-2xl mx-auto">
-               Empower your business with a platform built for inventory, billing, CRM, and hybrid shopping models like Try-at-Home and Book Online, Try in Store.
+              Empower your business with a platform built for inventory, billing, CRM, and hybrid shopping models like Try-at-Home and Book Online, Try in Store.
             </p>
-            <UButton class="my-3" size="lg" color="primary" to="/register">Get Started for Free</UButton>
+            <UButton class="my-3" size="lg" color="primary" to="/register">
+              Get Started for Free
+            </UButton>
           </UCard>
 
           <!-- Features Section -->
@@ -85,8 +89,8 @@
               </p>
             </UCard>
           </div>
-
         </UContainer>
+
         <UContainer>
           <!-- Pricing Section -->
           <div class="text-center space-y-4">
@@ -126,39 +130,51 @@
                   </ul>
                 </template>
 
-               <template #footer>
-              <UButton
-                  :to="`/register?plan=${encodeURIComponent(plan.title.toLowerCase())}`"
-                  block
-                  color="primary"
-                  class="mt-4"
-                >
-                List Your Store
-              </UButton>
-              <p class="text-sm text-gray-500 mt-2 text-center">{{ plan.refundNote }}</p>
-            </template>
-
+                <template #footer>
+                  <UButton
+                    :to="`/register?plan=${encodeURIComponent(plan.title.toLowerCase())}`"
+                    block
+                    color="primary"
+                    class="mt-4"
+                  >
+                    List Your Store
+                  </UButton>
+                  <p class="text-sm text-gray-500 mt-2 text-center">
+                    {{ plan.refundNote }}
+                  </p>
+                </template>
               </UPricingCard>
             </UPricingGrid>
           </div>
-
         </UContainer>
+
+        <!-- TERMS LINK -->
+        <UContainer class="py-10 text-center">
+          <UDivider class="mb-6" />
+          <p class="text-gray-600">
+            By continuing, you agree to our
+            <NuxtLink to="/terms" class="text-[#097D4C] font-semibold underline">
+              Terms of Service & Privacy Policy
+            </NuxtLink>
+          </p>
+        </UContainer>
+
       </UDashboardPanelContent>
     </UDashboardPanel>
   </UDashboardPage>
 </template>
 
-  <script setup>
-    definePageMeta({
-        layout: false,
-    });
+<script setup>
+definePageMeta({
+  layout: false,
+})
 
-    const isYearly = ref(false)
+const isYearly = ref(false)
 
 const pricingPlans = computed(() => [
   {
     title: 'Free',
-    description:'List Your store for free',
+    description: 'List Your store for free',
     price: isYearly.value ? '₹0/year' : '₹0/month',
     features: [
       { label: '50 Products', available: true },
@@ -173,14 +189,13 @@ const pricingPlans = computed(() => [
       { label: 'Client Management', available: true },
       { label: 'Shop E-Commerce', available: true },
       { label: 'Cataloging assistance', available: false },
-
     ],
     highlight: false,
     refundNote: 'Refundable within 28 days.'
   },
   {
     title: 'Lite',
-    description:'List Your store Without ERP',
+    description: 'List Your store Without ERP',
     price: isYearly.value ? '₹10,000/year' : '₹1,000/month',
     features: [
       { label: 'unlimited Products', available: true },
@@ -201,7 +216,7 @@ const pricingPlans = computed(() => [
   },
   {
     title: 'Pro',
-    description:'List Your store With ERP',
+    description: 'List Your store With ERP',
     price: isYearly.value ? '₹20,000/year' : '₹2,000/month',
     features: [
       { label: 'unlimited Products', available: true },
@@ -221,9 +236,7 @@ const pricingPlans = computed(() => [
     refundNote: 'Refundable within 28 days.'
   }
 ])
+</script>
 
-  </script>
-  
-  <style scoped>
-  </style>
-  
+<style scoped>
+</style>

@@ -11,12 +11,18 @@ export default defineEventHandler(async (event) => {
     mode, // 'redeem' | 'revert'
   } = body || {}
 
-  if (!companyId || !clientId || !points || !mode) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'companyId, clientId, points and mode are required',
-    })
-  }
+if (
+  !companyId ||
+  !clientId ||
+  points === undefined ||
+  points === null ||
+  !mode
+) {
+  throw createError({
+    statusCode: 400,
+    statusMessage: 'companyId, clientId, points and mode are required',
+  })
+}
 
   const client = await pool.connect()
 
