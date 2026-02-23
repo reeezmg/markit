@@ -63,7 +63,7 @@ const features = [
           to="/storelanding"
           class="bg-[#097D4C] text-white hover:bg-[#08643d] me-1"
         >
-          Your store
+          Seller
         </UButton>
         <UButton
         to="https://store.markit.co.in"

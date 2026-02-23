@@ -153,7 +153,7 @@
           <UDivider class="mb-6" />
           <p class="text-gray-600">
             By regestering, you agree to our
-            <NuxtLink to="/terms" class="text-[#097D4C] font-semibold underline">
+            <NuxtLink to="/terms" class="text-primary font-semibold underline">
               Terms of Service & Privacy Policy
             </NuxtLink>
           </p>
