@@ -619,9 +619,9 @@ watch(selected, (newSelected) => {
   }
 })
 
-watch(redeemedAmt.value, (newValue) => {
+watch(redeemedAmt.value, (oldValue, newValue) => {
   if (newValue > 0) {
-    grandTotal.value = grandTotal.value - newValue;
+    grandTotal.value = grandTotal.value + oldValue - newValue;
   }
 });
 
@@ -1890,6 +1890,7 @@ function calculateDiscount(coupon, orderValue) {
 watch(selectedCouponId, (newSelectedCouponId) => {
   if(newSelectedCouponId){
   redeemedAmt.value = redeemedAmt.value - couponValue.value;
+  couponValue.value = 0;
   const chosen = allCoupons.value?.find(c => c.id === newSelectedCouponId?.value);
   if (chosen) {
       const result = calculateDiscount(chosen, grandTotal.value);
@@ -1903,15 +1904,18 @@ watch(
   [items, clientId],
   async ([newItems, newClientId], [oldItems, oldClientId]) => {
     if (!newItems || !newClientId) return
-
-    // 🔄 refetch coupons (client-sensitive)
+    if(selectedCouponId.value){
+  redeemedAmt.value = redeemedAmt.value - couponValue.value;
+  couponValue.value = 0;
+  const chosen = allCoupons.value?.find(c => c.id === selectedCouponId.value.value);
+  if (chosen) {
+      const result = calculateDiscount(chosen, grandTotal.value);
+      couponValue.value = result;
+      redeemedAmt.value = redeemedAmt.value + result;
+    }
+}
     await couponRefetch()
-
-    // 🔁 reset coupon state
-    selectedCouponId.value = null
-    redeemedAmt.value -= couponValue.value
-    couponValue.value = 0
-  }
+  },{deep: true,immediate: true}
 )
 
 

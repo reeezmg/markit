@@ -474,6 +474,16 @@ const links = computed(() => {
                 shortcuts: ['C', 'C'],
             },
         },
+        {
+            id: 'Coupons',
+            label: 'Coupons',
+            icon: 'i-heroicons-ticket',
+            to: `/coupon`,
+            tooltip: {
+                text: 'Coupons',
+                shortcuts: ['C', 'P'],
+            },
+        },
         
         {
             id: 'settings',

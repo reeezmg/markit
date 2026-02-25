@@ -272,8 +272,10 @@ const updatedProduct =   UpdateProduct.mutateAsync({
   where: { id: productId },
   data: {
     name: name.value || '',
+    ...brand.value && {
     brand: {
-      connect: { id: brand.value || undefined }
+      connect: { id: brand.value}
+    },
     },
     description: description.value || '',
     status: live.value ?? undefined,

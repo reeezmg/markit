@@ -547,8 +547,8 @@ model Coupon {
 
   couponUsage        CouponUsage[]  
 
-  company            Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId          String             @map("company_id")
+  company            Company?            @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String?             @map("company_id")
 
   createdAt          DateTime           @default(now()) @map("created_at")
   updatedAt          DateTime           @updatedAt      @map("updated_at")

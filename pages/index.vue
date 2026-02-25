@@ -15,7 +15,7 @@ definePageMeta({
 })
 
 const navLinks = [
-  { label: 'List Your Store', icon: 'i-heroicons-building-storefront', to: '/storelanding',size:'lg' },
+  { label: 'Seller', icon: 'i-heroicons-building-storefront', to: '/storelanding',size:'lg' },
   { label: 'Start Shopping', icon: 'i-heroicons-arrow-right-on-rectangle', to: '/store.markit.co.in',size:'lg' },
 ]
 
