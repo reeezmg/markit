@@ -50,6 +50,7 @@ export default eventHandler(async (event) => {
         deliveryDiscountThreshold: user.companies[0].company.deliveryDiscountThreshold || 0,
         deliveryDiscountAmount: user.companies[0].company.deliveryDiscountAmount || 0,
         isCostIncluded: user.companies[0].company.isCostIncluded,
+        isUserTrackIncluded: user.companies[0].company.isUserTrackIncluded,
         companyId: user.companies[0].companyId,
         companyType: user.companies[0].company.type,
         companyName: user.companies[0].company.name,
