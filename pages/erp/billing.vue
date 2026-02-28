@@ -1290,7 +1290,17 @@ const download = async() => {
 const send = async() => {
   printModel.value = false
   try{
-
+      await $fetch('/api/whatsapp/send-payment-template', {
+        method: 'POST',
+        body: {
+          phone: printData.clientPhone,
+          name: printData.clientName,
+          billName: printData.companyName,
+          amount: printData.grandTotal,
+          paymentDate: printData.date,
+          receiptId: printData.invoiceNumber,
+        },
+      })
   toast.add({
         title: 'Receipt Sent Success!',
         color: 'green',

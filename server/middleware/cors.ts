@@ -11,7 +11,7 @@ export default defineEventHandler((event) => {
 
   if (allowedOrigins.includes(origin)) {
     setResponseHeaders(event, {
-      "Access-Control-Allow-Origin": origin,
+      "Access-Control-Allow-Origin": "*",
       "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
       "Access-Control-Allow-Headers": "Content-Type, Authorization",
       "Access-Control-Allow-Credentials": "true", // ✅ important for cookies

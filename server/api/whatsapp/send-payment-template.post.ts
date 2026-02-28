@@ -4,19 +4,25 @@ export default defineEventHandler(async (event) => {
   const body = await readBody(event)
 
   const {
-    phone,        // Customer phone with country code
-    name,         // {{1}}
-    billName,     // {{2}}
-    amount,       // {{3}}
-    paymentDate,  // {{4}}
-    receiptId     // For button URL
+    phone,
+    name,
+    billName,
+    amount,
+    paymentDate,
+    receiptId
   } = body
 
+  // ❌ Validate phone
   if (!phone) {
     return { success: false, message: 'Phone is required' }
   }
 
-  const url = `https://markit.co.in/receipt/${receiptId}`
+  // ✅ Clean + normalize phone number
+  const cleaned = String(phone).replace(/\D/g, '') // remove non-digits
+
+  const formattedPhone = cleaned.startsWith('91')
+    ? cleaned
+    : `91${cleaned.slice(-10)}`
 
   try {
     const res: any = await $fetch(
@@ -29,19 +35,19 @@ export default defineEventHandler(async (event) => {
         },
         body: {
           messaging_product: 'whatsapp',
-          to: phone,
+          to: formattedPhone, // ✅ FIXED
           type: 'template',
           template: {
-            name: 'bill_payment_received', // Your template name
-            language: { code: 'en' },
+            name: 'invoice_1', // ✅ must match exactly
+            language: { code: 'en_US' }, // ✅ correct language
             components: [
               {
                 type: 'body',
                 parameters: [
-                  { type: 'text', text: name },
-                  { type: 'text', text: billName },
-                  { type: 'text', text: amount },
-                  { type: 'text', text: paymentDate }
+                  { type: 'text', text: String(name || '') },
+                  { type: 'text', text: String(billName || '') },
+                  { type: 'text', text: String(amount || '') },
+                  { type: 'text', text: String(paymentDate || '') }
                 ]
               },
               {
@@ -51,7 +57,7 @@ export default defineEventHandler(async (event) => {
                 parameters: [
                   {
                     type: 'text',
-                    text: receiptId
+                    text: String(receiptId || '')
                   }
                 ]
               }
@@ -63,10 +69,12 @@ export default defineEventHandler(async (event) => {
 
     return {
       success: true,
+      to: formattedPhone,
       data: res
     }
   } catch (error: any) {
-    console.error(error?.data || error)
+    console.error('WhatsApp Error:', JSON.stringify(error?.data, null, 2))
+
     return {
       success: false,
       error: error?.data || error.message
