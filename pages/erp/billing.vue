@@ -2710,7 +2710,7 @@ const handleProductSelected = async (selectedItems) => {
             />
             <!-- <UButton
                 color="primary"
-                label="Send"
+                label="Test"
                 :disabled = "!printModel"
                 @click="send"
             /> -->
