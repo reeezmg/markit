@@ -2708,12 +2708,12 @@ const handleProductSelected = async (selectedItems) => {
                 :disabled = "!printModel"
                 @click="print"
             />
-            <!-- <UButton
+        <UButton
                 color="primary"
                 label="Test"
                 :disabled = "!printModel"
                 @click="send"
-            /> -->
+            /> 
             <UButton
                 color="blue"
                 label="Download"
