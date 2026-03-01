@@ -1298,7 +1298,7 @@ const send = async() => {
           billName: printData.companyName,
           amount: printData.grandTotal,
           paymentDate: printData.date,
-          receiptId: printData.invoiceNumber,
+          receiptId: uuid.value,
         },
       })
   toast.add({

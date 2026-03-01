@@ -1,5 +1,17 @@
 import { defineEventHandler, readBody } from 'h3'
 
+// ✅ Safe date formatter (DD/MM/YYYY)
+const formatDate = (date: string) => {
+  if (!date) return ''
+
+  try {
+    const [year, month, day] = date.split('T')[0].split('-')
+    return `${day}/${month}/${year}`
+  } catch {
+    return date // fallback if format unexpected
+  }
+}
+
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
 
@@ -18,7 +30,7 @@ export default defineEventHandler(async (event) => {
   }
 
   // ✅ Clean + normalize phone number
-  const cleaned = String(phone).replace(/\D/g, '') // remove non-digits
+  const cleaned = String(phone).replace(/\D/g, '')
 
   const formattedPhone = cleaned.startsWith('91')
     ? cleaned
@@ -35,11 +47,11 @@ export default defineEventHandler(async (event) => {
         },
         body: {
           messaging_product: 'whatsapp',
-          to: formattedPhone, // ✅ FIXED
+          to: formattedPhone,
           type: 'template',
           template: {
-            name: 'invoice_1', // ✅ must match exactly
-            language: { code: 'en_US' }, // ✅ correct language
+            name: 'invoice_1',
+            language: { code: 'en_US' },
             components: [
               {
                 type: 'body',
@@ -47,7 +59,7 @@ export default defineEventHandler(async (event) => {
                   { type: 'text', text: String(name || '') },
                   { type: 'text', text: String(billName || '') },
                   { type: 'text', text: String(amount || '') },
-                  { type: 'text', text: String(paymentDate || '') }
+                  { type: 'text', text: formatDate(paymentDate) } // ✅ formatted
                 ]
               },
               {
