@@ -60,7 +60,7 @@ export default defineEventHandler(async (event) => {
                 to: from,
                 type: 'text',
                 text: {
-                  body: 'Hi'
+                  body: 'Please contact store for any queries regarding your Invoice. Thank you for shopping!'
                 }
               }
             }

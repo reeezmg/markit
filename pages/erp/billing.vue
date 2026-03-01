@@ -1018,6 +1018,106 @@ const handleInvalidBarcode = (index) => {
 }
 
 
+const selectedAction = ref(null)
+
+const STORAGE_KEY = 'markit_selected_action'
+
+// 👉 Load saved action
+onMounted(() => {
+  const saved = localStorage.getItem(STORAGE_KEY)
+  selectedAction.value = saved && saved !== 'null' ? saved : null
+})
+
+function selectAction(action) {
+  selectedAction.value = action
+
+  if (action) {
+    localStorage.setItem(STORAGE_KEY, action)
+  } else {
+    localStorage.removeItem(STORAGE_KEY)
+  }
+}
+
+const actionItems = [
+  [
+    { label: 'Print', click: () => selectAction('print') },
+    { label: 'Send', click: () => selectAction('send') },
+    { label: 'Download', click: () => selectAction('download') },
+    { label: 'None', click: () => selectAction(null) }
+  ]
+]
+
+
+
+const print = async() => {
+  printModel.value = false
+  try{
+  await printBill(printData)
+  toast.add({
+        title: 'Printing Success!',
+        color: 'green',
+      });
+  }catch(err){
+      printModel.value = true
+      toast.add({
+        title: 'Printing failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
+
+const download = async() => {
+  printModel.value = false
+  try{
+   const { generateThermalReceiptPDF } = await import('~/utils/thermal-receipt.client')
+    const ress = await generateThermalReceiptPDF(printData,"receipt.pdf")
+  toast.add({
+        title: 'Download Success!',
+        color: 'green',
+      });
+  }catch(err){
+      printModel.value = true
+      toast.add({
+        title: 'Download failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
+
+const send = async() => {
+  printModel.value = false
+  try{
+    if(!printData.clientPhone){
+      throw new Error('Client phone number is missing')
+    }
+      await $fetch('/api/whatsapp/send-payment-template', {
+        method: 'POST',
+        body: {
+          phone: printData.clientPhone,
+          name: printData.clientName,
+          billName: printData.companyName,
+          amount: printData.grandTotal,
+          paymentDate: printData.date,
+          receiptId: uuid.value,
+        },
+      })
+  toast.add({
+        title: 'Receipt Sent Success!',
+        color: 'green',
+      });
+  }catch(err){
+      printModel.value = true
+      toast.add({
+        title: 'Receipt failed to Sent!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
+
+
 const handleSave = async () => {
   if (isSaving.value) return
   isSaving.value = true
@@ -1190,7 +1290,7 @@ const billPoints =
         return sum + ((rate * d) / 100) * qty
       }, 0),
     }
-    printModel.value = true
+    
 
     // 8) Fire FCM notification (non-blocking; swallow its error)
     ;(async () => {
@@ -1234,7 +1334,10 @@ const billPoints =
 
 
     // 11) Reset UI and open print modal
-    
+     if (selectedAction.value === 'print') print()
+    else if (selectedAction.value === 'send') send()
+    else if (selectedAction.value === 'download') download()
+
     reset()
  isSaving.value = false
   } catch (error) {
@@ -1248,72 +1351,6 @@ const billPoints =
   } 
 }
 
-
-
-const print = async() => {
-  printModel.value = false
-  try{
-  await printBill(printData)
-  toast.add({
-        title: 'Printing Success!',
-        color: 'green',
-      });
-  }catch(err){
-      printModel.value = true
-      toast.add({
-        title: 'Printing failed!',
-        description: err.message,
-        color: 'red',
-      });
-  }
-}
-
-const download = async() => {
-  printModel.value = false
-  try{
-   const { generateThermalReceiptPDF } = await import('~/utils/thermal-receipt.client')
-    const ress = await generateThermalReceiptPDF(printData,"receipt.pdf")
-  toast.add({
-        title: 'Download Success!',
-        color: 'green',
-      });
-  }catch(err){
-      printModel.value = true
-      toast.add({
-        title: 'Download failed!',
-        description: err.message,
-        color: 'red',
-      });
-  }
-}
-
-const send = async() => {
-  printModel.value = false
-  try{
-      await $fetch('/api/whatsapp/send-payment-template', {
-        method: 'POST',
-        body: {
-          phone: printData.clientPhone,
-          name: printData.clientName,
-          billName: printData.companyName,
-          amount: printData.grandTotal,
-          paymentDate: printData.date,
-          receiptId: uuid.value,
-        },
-      })
-  toast.add({
-        title: 'Receipt Sent Success!',
-        color: 'green',
-      });
-  }catch(err){
-      printModel.value = true
-      toast.add({
-        title: 'Receipt failed to Sent!',
-        description: err.message,
-        color: 'red',
-      });
-  }
-}
 
 
 const accounts = ref([])
@@ -2571,16 +2608,56 @@ const handleProductSelected = async (selectedItems) => {
 
         </div>
 
-         
+       <div v-else class="w-full gap-4 px-3 py-3 hidden lg:flex items-center">
+  
+  <UButton color="blue" class="flex-1" block @click="newBill">
+    New
+  </UButton>
 
-        <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden lg:flex">
-          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
-          <UButton color="gray" class="flex-1" block disabled>Delete</UButton>
-          <UButton class="flex-1" block @click="isProductSearchOpen = true">Product Search</UButton>
-          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Sales Return</UButton>
-          <UButton class="flex-1"  @click="isClientAddModelOpen = true" block>Add Client</UButton>
-        </div>
+  <!-- ✅ Split Button Wrapper -->
+  <div class="flex-1 flex">
+    
+    <!-- Save -->
+    <UButton
+      :loading="isSaving"
+      ref="saveref"
+      color="green"
+      class="flex-1 rounded-r-none"
+      block
+      @keydown.enter.prevent="handleSave"
+      @click="handleSave"
+    >
+      Save{{ selectedAction ? ' & ' + selectedAction : '' }}
+    </UButton>
+
+    <!-- Dropdown -->
+    <UDropdown :items="actionItems">
+      <UButton
+        color="green"
+        class="rounded-l-none px-3"
+        icon="i-heroicons-chevron-up"
+      />
+    </UDropdown>
+
+  </div>
+
+  <UButton color="gray" class="flex-1" block disabled>
+    Delete
+  </UButton>
+
+  <UButton class="flex-1" block @click="isProductSearchOpen = true">
+    Product Search
+  </UButton>
+
+  <UButton class="flex-1" block @click="issalesReturnModelOpen = true">
+    Sales Return
+  </UButton>
+
+  <UButton class="flex-1" block @click="isClientAddModelOpen = true">
+    Add Client
+  </UButton>
+
+</div>
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
@@ -2687,8 +2764,8 @@ const handleProductSelected = async (selectedItems) => {
 
     <UDashboardModal
         v-model="printModel"
-        title="Print Bill"
-        description="Would You Like to print?"
+        title="Invoice Actions"
+        description="Choose an action to perform on the invoice."
         icon="i-heroicons-exclamation-circle"
         prevent-close
         :close-button="null"
@@ -2710,7 +2787,7 @@ const handleProductSelected = async (selectedItems) => {
             />
         <UButton
                 color="primary"
-                label="Test"
+                label="Send"
                 :disabled = "!printModel"
                 @click="send"
             /> 
