@@ -91,7 +91,7 @@
   
   <script setup>
  definePageMeta({
-    layout: false,
+    layout: 'marketing',
 });
   </script>
   
