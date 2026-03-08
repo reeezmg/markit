@@ -35,6 +35,9 @@ const tempSplits = ref(
 )
 
 const date = ref(new Date().toISOString());
+const parentUserCode = ref(null);
+const parentUserId = ref(null);
+const parentUserName = ref(null);
 const discount = ref(0);
 const redeemedAmt = ref(0);
 const redeemedPoints = ref(0);
@@ -363,6 +366,9 @@ onMounted(() => {
     const defaultBill = {
       billNo: '1',
       date: new Date().toISOString(),
+      parentUserCode: null,
+      parentUserId: null,
+      parentUserName: null,
       discount: 0,
       returnAmt: 0,
       redeemedAmt: 0,
@@ -398,6 +404,9 @@ onMounted(() => {
 const currentBill = computed(() => ({
   billNo: billNo.value,
   date: date.value,
+  parentUserCode: parentUserCode.value,
+  parentUserId: parentUserId.value,
+  parentUserName: parentUserName.value,
   discount: discount.value,
   returnAmt: returnAmt.value,
   redeemedAmt: redeemedAmt.value,
@@ -439,6 +448,9 @@ function createNewBill() {
 
   billNo.value = newBillNo;
   date.value = new Date().toISOString();
+  parentUserCode.value = null;
+  parentUserId.value = null;
+  parentUserName.value = null;
   discount.value = 0;
   returnAmt.value = 0;
   redeemedAmt.value = 0;
@@ -488,6 +500,9 @@ function loadBill(billNumber) {
 
   billNo.value = bill.billNo ?? '';
   date.value = new Date().toISOString();
+  parentUserCode.value = bill.parentUserCode ?? null;
+  parentUserId.value = bill.parentUserId ?? null;
+  parentUserName.value = bill.parentUserName ?? null;
   discount.value = bill.discount ?? 0;
   returnAmt.value = bill.returnAmt ?? 0;
   redeemedAmt.value = bill.redeemedAmt ?? 0;
@@ -548,6 +563,9 @@ const reset = () => {
       sizes: {},
       totalQty: 0,
       return:false,
+      userCode: null,
+      userId: null,
+      user: null,
       cost: 0
     },
   ];
@@ -560,6 +578,9 @@ const reset = () => {
   grandTotal.value = 0;
   selected.value = null;
   date.value = new Date().toISOString();
+  parentUserCode.value = null;
+  parentUserId.value = null;
+  parentUserName.value = null;
   isRedeemPoint.value = false;
   couponValue.value = 0
   redeemedAmt.value = 0;
@@ -758,9 +779,9 @@ const addNewRow = async (index,moveTonNextRow = true) => {
     sizes: {},
     totalQty: 0,
     return:false,
-    userCode:null,
-    user:null,
-    userId:null,
+    userCode: parentUserCode.value,
+    user: parentUserName.value,
+    userId: parentUserId.value,
     cost: 0
   });
   }
@@ -1460,7 +1481,8 @@ const submitEntryForm = async () => {
         items.value.push({
             id: '', variantId: '', sn: items.value.length + 1, barcode: '',
             category: {}, size: '', item: '', qty: 1, rate: 0,
-            discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0, cost: 0
+            discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0, cost: 0,
+            userCode: parentUserCode.value, userId: parentUserId.value, user: parentUserName.value
         });
 
     } else {
@@ -1758,6 +1780,43 @@ if(!user) return
     title: 'user code invalid!',
     color: 'red',
   });
+  }
+}
+
+async function updateParentUserDetails(user) {
+  if (!user) {
+    parentUserCode.value = null
+    parentUserName.value = null
+    parentUserId.value = null
+    items.value = items.value.map((item) => ({
+      ...item,
+      userCode: null,
+      user: null,
+      userId: null
+    }))
+    return
+  }
+
+  const userdetails = userStore.getuserByCode(Number(user))
+
+  if (userdetails) {
+    parentUserCode.value = Number(user)
+    parentUserName.value = userdetails.name || null
+    parentUserId.value = userdetails.id || null
+    items.value = items.value.map((item) => ({
+      ...item,
+      userCode: Number(user),
+      user: userdetails.name || null,
+      userId: userdetails.id || null
+    }))
+  } else {
+    parentUserCode.value = null
+    parentUserName.value = null
+    parentUserId.value = null
+    toast.add({
+      title: 'user code invalid!',
+      color: 'red',
+    });
   }
 }
 
@@ -2064,11 +2123,31 @@ const handleProductSelected = async (selectedItems) => {
      
          <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
             <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" />
+            <UInput
+              v-if="isUserTrackIncluded"
+              v-model="parentUserCode"
+              type="number"
+              label="User Code"
+              placeholder="Enter user code"
+              class="flex-1"
+              @keydown.enter.prevent="updateParentUserDetails(parentUserCode)"
+              @blur="updateParentUserDetails(parentUserCode)"
+            />
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
        <div class="lg:grid grid-cols-1 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
           <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
+          <UInput
+            v-if="!token && isUserTrackIncluded"
+            v-model="parentUserCode"
+            type="number"
+            label="User Code"
+            placeholder="Enter user code"
+            class="lg:col-span-2"
+            @keydown.enter.prevent="updateParentUserDetails(parentUserCode)"
+            @blur="updateParentUserDetails(parentUserCode)"
+          />
   
   <!-- Draft Selector + Reset -->
 <div

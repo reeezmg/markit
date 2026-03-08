@@ -17,6 +17,7 @@ const isDeleting = ref(false)
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentinty = ref<any>(null)
 
+const isAdd = ref(false)
 const isOpenPay = ref(false)
 const isSaving = ref(false)
 
@@ -305,6 +306,21 @@ const handlePay = async () => {
 }
 
 // -------------------------------------
+// ADD PURCHASE ORDER
+// -------------------------------------
+const handleAdd = async () => {
+  try {
+    isAdd.value = true
+    const res = await $fetch('/api/purchaseorder/create', { method: 'POST' })
+    router.push(`/products/add?poId=${res?.id}`)
+  } catch (error) {
+    console.error('Failed to create purchase order:', error)
+  } finally {
+    isAdd.value = false
+  }
+}
+
+// -------------------------------------
 // DROPDOWN ITEMS
 // -------------------------------------
 const action = (row: any) => {
@@ -360,6 +376,14 @@ const action = (row: any) => {
             icon="i-heroicons-magnifying-glass-20-solid"
             placeholder="Search Purchase Orders..."
             class="w-full sm:w-60"
+          />
+          <UButton
+            icon="i-heroicons-plus"
+            size="sm"
+            color="primary"
+            label="New PO"
+            :loading="isAdd"
+            @click="handleAdd"
           />
         </div>
       </template>

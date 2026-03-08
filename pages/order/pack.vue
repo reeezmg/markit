@@ -1,13 +1,12 @@
 
 <script setup>
 import { item } from '@unovis/ts/components/bullet-legend/style';
-import { useFindUniqueTrynbuy,useUpdateItem, useFindUniqueItem,useUpdateEntry,useUpdateTrynbuyCartItem } from '~/lib/hooks';
+import { useFindUniqueTrynbuy,useUpdateItem, useFindUniqueItem,useUpdateTrynbuyCartItem } from '~/lib/hooks';
 
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const route = useRoute();
 const router = useRouter();
-const UpdateEntry = useUpdateEntry()
 const UpdateTrynbuyCartItem = useUpdateTrynbuyCartItem()
 const orderId = route.query.id;
 
@@ -20,7 +19,7 @@ const packref = ref();
 
 
 const items = ref([
-  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0, outOfStock:'' },
+  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0, outOfStock:false, status: 'ORDER_RECEIVED' },
 ]);
 const config = useRuntimeConfig();
 const serverUrl = config.public.serverUrl
@@ -50,30 +49,6 @@ const columns = ref([
   { key: 'action', label: '' },
 
 ]);
-
-
-const action = (row) => [
-  [
-    {
-      label: 'Unpack',
-      icon: 'i-heroicons-arrow-up-on-square',
-      click: () => handleUnPack(row),
-    },
-    row.outOfStock
-      ? {
-          label: 'In stock',
-          icon: 'i-heroicons-check-badge',
-          click: () => handleInStock(row.id,row.value,row.outOfStock),
-        }
-      : {
-          label: 'Out of stock',
-          icon: 'i-heroicons-archive-box-x-mark',
-          click: () => handleOutOfStock(row),
-        },
-  ],
-];
-
-
 
 
 const resizableTable = ref(null); // Reference to the table element
@@ -251,7 +226,8 @@ watch(
         tax,
         value,
         image: variant.images?.[0] || null,
-        outOfStock: false, // no direct field in cartItem, so manual
+        status: cartItem.status || 'ORDER_RECEIVED',
+        outOfStock: cartItem.status === 'OUTOFSTOCK',
       }
     })
   },
@@ -260,24 +236,20 @@ watch(
 
 
 
-  const handleOutOfStock = async (row) => {
+const handleOutOfStock = async (row) => {
   if (row.outOfStock) return;
 
-  if (!row.barcode) {
-    await handleUnPack(row);
-  }
-
-  await UpdateEntry.mutateAsync({
+  await UpdateTrynbuyCartItem.mutateAsync({
     where: { id: row.id },
-    data: { outOfStock: true },
+    data: { status: 'OUTOFSTOCK' },
   });
 
   const index = items.value.findIndex((item) => item.id === row.id);
   if (index !== -1) {
     items.value[index] = {
       ...items.value[index],
-      value: -Math.abs(items.value[index].value),
       outOfStock: true,
+      status: 'OUTOFSTOCK',
     };
   }
 
@@ -287,20 +259,20 @@ watch(
   });
 };
 
-const handleInStock = async (id, value, outOfStock) => {
-  if (!outOfStock) return;
+const handleInStock = async (row) => {
+  if (!row.outOfStock) return;
 
-  await UpdateEntry.mutateAsync({
-    where: { id },
-    data: { outOfStock: false },
+  await UpdateTrynbuyCartItem.mutateAsync({
+    where: { id: row.id },
+    data: { status: 'ORDER_RECEIVED' },
   });
 
-  const index = items.value.findIndex((item) => item.id === id);
+  const index = items.value.findIndex((item) => item.id === row.id);
   if (index !== -1) {
     items.value[index] = {
       ...items.value[index],
-      value: Math.abs(value),
       outOfStock: false,
+      status: 'ORDER_RECEIVED',
     };
   }
 
@@ -313,60 +285,28 @@ const handleInStock = async (id, value, outOfStock) => {
 
 
 
-//Unpack single items
-const handleUnPack = async (row) => {
-  const res = await UpdateEntry.mutateAsync({
-    where: { id:row.id },
-    data: {
-      barcode:null,
-      item: {
-        disconnect: true,
-      },
-    },
-  });
-
-  if (res) {
-      toast.add({
-        title: 'Item unpacked successfully!',
-        color: 'green',
-      });
-    } else {
-      toast.add({
-        title: 'Failed to pack item.',
-        color: 'red',
-      });
-    }
-};
-
 //pack all items
 
 const handlePack = async () => {
-  const allOutOfStock = items.value.every(item => item.outOfStock);
   const clientId = trynbuy.value?.client?.id || null;
   const trynbuyId = trynbuy.value?.id || null;
 
   try {
     if (!trynbuyId) throw new Error("Missing Trynbuy ID");
+    if (!items.value.length) throw new Error("No cart items found for this Trynbuy");
 
-    // 1️⃣ Collect all cart item IDs from the Trynbuy
-    const cartItemIds = trynbuy.value?.cartItems?.map(ci => ci.id) || [];
-
-    if (!cartItemIds.length) throw new Error("No cart items found for this Trynbuy");
-
-    // 2️⃣ Update all cart items in one mutation
     await Promise.all(
-      cartItemIds.map(id =>
+      items.value.map(row =>
         UpdateTrynbuyCartItem.mutateAsync({
-          where: { id },
-          data: { status: 'PACKED' },
+          where: { id: row.id },
+          data: { status: row.outOfStock ? 'OUTOFSTOCK' : 'PACKED' },
         })
       )
     );
 
-    // 3️⃣ Optionally notify backend to emit socket event
     if (trynbuyId && clientId) {
       await $fetch(`/api/pack/${trynbuyId}/${clientId}`, {
-        baseURL: serverUrl, // ✅ Adjust for production
+        baseURL: serverUrl,
       });
     }
 
@@ -374,7 +314,6 @@ const handlePack = async () => {
       title: 'All items marked as packed & client notified',
       color: 'green',
     });
-
   } catch (err) {
     console.error(err);
     toast.add({
@@ -404,7 +343,7 @@ const handleSave = async () => {
 
   // ✅ Reset items only after all Prisma operations are complete
   items.value = [
-    { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0 }
+    { id: '', variantId: '', sn: 1, size: '', barcode: '', category: [], item: '', qty: 1, rate: 0, discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0, outOfStock: false, status: 'ORDER_RECEIVED' }
   ];
   discount.value = 0;
   paymentMethod.value = 'Cash';
@@ -542,39 +481,42 @@ const handleSave = async () => {
                 <img
                   v-if="row.image"
                   :src="`https://images.markit.co.in/${row.image}`"
-                  class="w-12 h-12 rounded-md object-cover border"
+                  :class="[
+                    'w-12 h-12 rounded-md object-cover border',
+                    row.outOfStock ? 'border-red-500' : 'border-gray-200'
+                  ]"
                 />
               </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.barcode" ref="barcodeInputs"  size="sm" />
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
+                  <UInput v-model="row.barcode" ref="barcodeInputs"  size="sm" :class="{ 'oos-input': row.outOfStock }" />
                 </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.name" size="sm"  @keydown.enter="addNewRow(index)" disabled/>
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
+                  <UInput v-model="row.name" size="sm" :class="{ 'oos-input': row.outOfStock }"  @keydown.enter="addNewRow(index)" disabled/>
                 </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.qty"  ref="qtyInputs" type="number" size="sm"  @keydown.enter="addNewRow(index)" disabled/>
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
+                  <UInput v-model="row.qty"  ref="qtyInputs" type="number" size="sm" :class="{ 'oos-input': row.outOfStock }"  @keydown.enter="addNewRow(index)" disabled/>
                 </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.rate" type="number" size="sm"  @keydown.enter="addNewRow(index)" disabled/>
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
+                  <UInput v-model="row.rate" type="number" size="sm" :class="{ 'oos-input': row.outOfStock }"  @keydown.enter="addNewRow(index)" disabled/>
                 </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.discount" type="number" size="sm"  @keydown.enter="addNewRow(index)"/>
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
+                  <UInput v-model="row.discount" type="number" size="sm" :class="{ 'oos-input': row.outOfStock }"  @keydown.enter="addNewRow(index)"/>
                 </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput v-model="row.tax" type="number" size="sm" @keydown.enter="addNewRow(index)" disabled />
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
+                  <UInput v-model="row.tax" type="number" size="sm" :class="{ 'oos-input': row.outOfStock }" @keydown.enter="addNewRow(index)" disabled />
                 </td>
                 <td class="py-1 ps-2 whitespace-nowrap" :class="{'text-red-500': row.outOfStock}">
                   {{ row.outOfStock ? -row.value: row.value }}
                 </td>
                 <td>
                   <div class="py-1">
-                    <UDropdown :items="action(row)">
                     <UButton
-                            color="primary"
-                            variant="ghost"
-                            icon="i-heroicons-ellipsis-horizontal-20-solid"
-                        />
-                    </UDropdown>
+                      :color="row.outOfStock ? 'green' : 'red'"
+                      variant="ghost"
+                      :icon="row.outOfStock ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'"
+                      :title="row.outOfStock ? 'Mark in stock' : 'Mark out of stock'"
+                      @click="row.outOfStock ? handleInStock(row) : handleOutOfStock(row)"
+                    />
                   </div>
                 </td>
               </tr>
@@ -622,4 +564,14 @@ const handleSave = async () => {
 .b-w{
   width:1px;
 }
+
+.oos-input :deep(input) {
+  border-color: #ef4444 !important;
+  color: #ef4444 !important;
+}
+
+.oos-input :deep(input::placeholder) {
+  color: #ef4444 !important;
+}
 </style>
+

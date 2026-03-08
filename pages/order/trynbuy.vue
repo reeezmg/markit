@@ -324,6 +324,8 @@ const handleChange = (value: string, row: any) => {
               ? 'purple'
               : row.cartItems?.[0]?.status === 'CANCELLED'
               ? 'red'
+              : row.cartItems?.[0]?.status === 'OUTOFSTOCK'
+              ? 'red'
               : row.cartItems?.[0]?.status === 'DELIVERED'
               ? 'orange'
               : row.cartItems?.[0]?.status === 'ORDER_RECEIVED'

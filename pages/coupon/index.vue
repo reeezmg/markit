@@ -2,6 +2,7 @@
 import { ref } from 'vue';
 import CouponForm from '~/components/Coupon/CouponForm.vue';
 import CouponList from '~/components/Coupon/CouponList.vue';
+import CouponDetail from '~/components/Coupon/CouponDetail.vue';
 import {
     useCreateCoupon,
     useUpdateCoupon,
@@ -14,8 +15,18 @@ const deleteCoupon = useDeleteCoupon({ optimisticUpdate: true });
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 
+// ─── Selected coupon detail panel ───
+const selectedCoupon = ref<any>(null)
+
+const selectCoupon = (row: any) => {
+    selectedCoupon.value = row
+}
+
+const closeDetail = () => {
+    selectedCoupon.value = null
+}
+
 const addCoupon = (coupon: any) => {
-    console.log(coupon)
     try {
         createCoupon.mutate({
             data: {
@@ -40,23 +51,7 @@ const addCoupon = (coupon: any) => {
                 },
             },
         });
-
-        // Send notification if needed
-        // $fetch('/api/notifications/notify', {
-        //     method: 'POST',
-        //     body: {
-        //         userId: useAuth().session.value?.id,
-        //         type: 'COUPON',
-        //         Note: `Coupon ${coupon.code} created`,
-        //         companyId: useAuth().session.value?.companyId,
-        //         code: coupon.code,
-        //         discount: coupon.discountValue,
-        //         type: coupon.type
-        //     }
-        // });
-
     } catch(error) {
-        console.log(error);
         toast.add({
             title: 'Error creating coupon',
             description: error.message,
@@ -112,6 +107,9 @@ const deleteCouponRow = (id: string) => {
             title: `Coupon deleted successfully!`,
             color: 'green',
         });
+        if (selectedCoupon.value?.id === id) {
+            selectedCoupon.value = null
+        }
     } catch(error) {
         toast.add({
             title: 'Error while deleting the coupon',
@@ -122,28 +120,26 @@ const deleteCouponRow = (id: string) => {
 };
 
 const showForm = ref(false);
-const selectedCoupon = ref<any | null>(null);
+const editingCoupon = ref<any | null>(null);
 
 const openForm = (coupon = null) => {
-    selectedCoupon.value = coupon;
+    editingCoupon.value = coupon;
     showForm.value = true;
-    console.log(coupon);
 };
 
 const closeForm = () => {
     showForm.value = false;
-    selectedCoupon.value = null;
+    editingCoupon.value = null;
 };
 
 const saveCoupon = (form: any) => {
     try {
-        if (selectedCoupon.value) {
-            editCoupon(selectedCoupon.value.id, form);
+        if (editingCoupon.value) {
+            editCoupon(editingCoupon.value.id, form);
         } else {
             addCoupon(form);
         }
     } catch(error) {
-        console.log(error);
         toast.add({
             title: 'Error saving coupon',
             description: error.message,
@@ -156,21 +152,47 @@ const saveCoupon = (form: any) => {
 </script>
 
 <template>
-    <UDashboardPanelContent class="pb-24">
-        <div>
-            <CouponList 
-                @edit="openForm" 
-                @delete="deleteCouponRow"  
-                @open="openForm"
-            />
-
-            <UModal v-model="showForm">
-                <CouponForm
-                    :coupon="selectedCoupon"
-                    @save="saveCoupon"
-                    @cancel="closeForm"
+    <UDashboardPanelContent class="pb-24 p-4">
+        <div class="flex border border-gray-200 dark:border-gray-700 rounded-md">
+            <!-- Left: Coupon List -->
+            <div
+                :class="[
+                    'flex flex-col border-r border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 ease-in-out',
+                    selectedCoupon ? 'w-[30%] min-w-[300px]' : 'w-full'
+                ]"
+            >
+                <CouponList
+                    :selected-coupon="selectedCoupon"
+                    @edit="openForm"
+                    @delete="deleteCouponRow"
+                    @open="openForm"
+                    @select="selectCoupon"
                 />
-            </UModal>
+            </div>
+
+            <!-- Right: Detail Panel -->
+            <Transition
+                enter-active-class="transition-all duration-300 ease-in-out"
+                enter-from-class="opacity-0 translate-x-4"
+                enter-to-class="opacity-100 translate-x-0"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0"
+                leave-to-class="opacity-0 translate-x-4"
+            >
+                <CouponDetail
+                    v-if="selectedCoupon"
+                    :coupon="selectedCoupon"
+                    @close="closeDetail"
+                />
+            </Transition>
         </div>
+
+        <UModal v-model="showForm">
+            <CouponForm
+                :coupon="editingCoupon"
+                @save="saveCoupon"
+                @cancel="closeForm"
+            />
+        </UModal>
     </UDashboardPanelContent>
 </template>

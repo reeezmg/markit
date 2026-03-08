@@ -15,6 +15,9 @@ export default defineEventHandler(async (event) => {
     companyId,
     search,
     selectedStatus,
+    selectedPaymentMethods,
+    minGrandTotal,
+    maxGrandTotal,
     startDate,
     endDate,
     page = 1,
@@ -78,6 +81,28 @@ export default defineEventHandler(async (event) => {
     if (selectedStatus?.length) {
       whereSQL += ` AND b.payment_status::text = ANY($${idx}::text[])`
       values.push(selectedStatus.map((s: any) => s.value))
+      idx++
+    }
+
+    if (selectedPaymentMethods?.length) {
+      whereSQL += ` AND b.payment_method::text = ANY($${idx}::text[])`
+      values.push(
+        selectedPaymentMethods.map((m: any) =>
+          typeof m === 'string' ? m : m.value
+        )
+      )
+      idx++
+    }
+
+    if (minGrandTotal !== undefined && minGrandTotal !== null && minGrandTotal !== '') {
+      whereSQL += ` AND b.grand_total >= $${idx}`
+      values.push(Number(minGrandTotal))
+      idx++
+    }
+
+    if (maxGrandTotal !== undefined && maxGrandTotal !== null && maxGrandTotal !== '') {
+      whereSQL += ` AND b.grand_total <= $${idx}`
+      values.push(Number(maxGrandTotal))
       idx++
     }
 

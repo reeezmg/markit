@@ -192,7 +192,7 @@ model Company extends Base {
     commissionRate Float? @map("commission_rate")
     
     @@allow('create', auth() != null && status)
-    @@allow('update', users?[user == auth()])
+    @@allow('update', users?[userId == auth().id])
     @@allow('read', true)
 
     @@map('companies')
@@ -331,7 +331,7 @@ model User extends Base {
     @@allow('create', true)
     @@allow('update', id == auth().id)
 
-    @@allow('read', companies?[company.users?[user == auth()]])
+    @@allow('read', companies?[company.users?[userId == auth().id]])
 
     @@map('users')
 }
@@ -648,7 +648,7 @@ model Category {
   targetAudience    String?        @map("target_audience")     
   writeId           String?            @default(uuid()) @map('write_id')
   @@allow("read", true)
-  @@allow("create, update, delete", company.users?[user == auth()])
+  @@allow("create, update, delete", company.users?[userId == auth().id])
   @@map("categories")
 }
 
@@ -669,7 +669,7 @@ model Subcategory {
     writeId     String?            @default(uuid()) @map('write_id')
 
     @@allow('read', true)
-    @@allow('create, update,delete',company.users?[user == auth()])
+    @@allow('create, update,delete',company.users?[userId == auth().id])
 
     @@map('subcategories')
 }
@@ -690,7 +690,7 @@ model Brand {
     writeId     String?            @default(uuid()) @map('write_id')
 
     @@allow('read', true)
-    @@allow('create, update,delete',company.users?[user == auth()])
+    @@allow('create, update,delete',company.users?[userId == auth().id])
 
     @@map('brands')
 }
@@ -721,7 +721,7 @@ model Product {
     @@index([companyId])
 
     @@allow('read', true)
-    @@allow('read, create, update, delete', company.users?[user == auth()])
+    @@allow('read, create, update, delete', company.users?[userId == auth().id])
 
     @@map('products')
 }
@@ -758,7 +758,7 @@ model Variant {
     @@index([companyId])
     @@allow('read', true)
     @@allow('update', true)
-    @@allow('read, create, update, delete', product.company.users?[user == auth()])
+    @@allow('read, create, update, delete', product.company.users?[userId == auth().id])
     
     @@map('variants')
 }

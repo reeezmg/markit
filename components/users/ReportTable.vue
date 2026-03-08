@@ -42,7 +42,12 @@ watch(
         label,
         sales: newUsers.salesData?.[index] ?? 0,
         count: newUsers.countData?.[index] ?? 0,
-        group: Array.isArray(newUsers.entryGroups?.[label]) ? newUsers.entryGroups[label] : []
+        group: Array.isArray(newUsers.entryGroups?.[label])
+          ? newUsers.entryGroups[label].map((entry: any) => ({
+              ...entry,
+              categoryName: entry?.category?.name || '-'
+            }))
+          : []
       }))
     } else {
       users.value = []
@@ -73,7 +78,7 @@ const columns = [
 
 const entryColumns = [
     {
-        key: 'category.name',
+        key: 'categoryName',
         label: 'Category',
         sortable: true,
     },
@@ -272,6 +277,18 @@ const expand = ref({ openedRows: [], row: null });
                         :rows="row.group" 
                         :columns="entryColumns"
                     >
+                      <template #categoryName-data="{ row: entry }">
+                        <span :class="{ 'text-red-600': entry.return }">{{ entry.categoryName }}</span>
+                      </template>
+                      <template #rate-data="{ row: entry }">
+                        <span :class="{ 'text-red-600': entry.return }">{{ entry.rate }}</span>
+                      </template>
+                      <template #qty-data="{ row: entry }">
+                        <span :class="{ 'text-red-600': entry.return }">{{ entry.qty }}</span>
+                      </template>
+                      <template #value-data="{ row: entry }">
+                        <span :class="{ 'text-red-600': entry.return }">{{ entry.value }}</span>
+                      </template>
                  </UTable>
                 </template>
             </UTable>

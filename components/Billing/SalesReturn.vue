@@ -354,38 +354,80 @@ const entryArgs = computed(() => ({
 
 const { data: entry ,refetch:entryRefetch} = useFindFirstEntry(entryArgs,{enabled:false});
 
-const fetchItemData = async (barcode, index) => {
-  if (!barcode || !invoiceNumber ) return;
-    loadingStates.value[index] = true;
-  scannedBarcode.value = barcode;
+const fetchItemFromEntryByInvoice = async (barcode) => {
+  scannedBarcode.value = barcode
+  const { data } = await entryRefetch()
+  return data ?? null
+}
 
-  const { data } = await entryRefetch();
-    console.log(data)
-  if (data) {
-    console.log(data)
-    returnedItems.value[index] = {
-      ...returnedItems.value[index],
-      id: data?.itemId || '',
-      size: data?.size || '',
-      sizes: data?.variant.sizes || '',
-      name: data?.name,
-      barcode: data.barcode || '',
-      category: categories.value.filter((c) => c.id === data?.categoryId),
-      discount:data?.discount || 0,
-      rate: data?.rate || 0,
-      totalQty: data?.qty || 0,
-      variantId: data?.variantId || '',
-    };
-    loadingStates.value[index] = false;
-  } else {
-     toast.add({
-          title: 'Barcode is invalid or item is empty!',
-          color: 'red',
-        });
-    loadingStates.value[index] = false;
-    returnedItems.value[index].barcode = ''
+const fetchItemFromCatalog = async (barcode) => {
+  if (!barcode) return null
+  const data = await $fetch('/api/bill/findFirstItem', {
+    query: { barcode },
+  })
+  return data ?? null
+}
+
+const fetchItemData = async (barcode, index) => {
+  if (!barcode || !returnedItems.value[index]) return
+
+  loadingStates.value[index] = true
+  const hasInvoice = !!String(invoiceNumber.value ?? '').trim()
+
+  try {
+    let data = null
+
+    if (hasInvoice) {
+      data = await fetchItemFromEntryByInvoice(barcode)
+      if (data) {
+        returnedItems.value[index] = {
+          ...returnedItems.value[index],
+          id: data?.itemId || '',
+          size: data?.size || '',
+          sizes: data?.variant?.sizes || '',
+          name: data?.name,
+          barcode: data?.barcode || '',
+          category: categories.value.filter((c) => c.id === data?.categoryId),
+          discount: data?.discount || 0,
+          rate: data?.rate || 0,
+          totalQty: data?.qty || 0,
+          variantId: data?.variantId || '',
+        }
+      }
+    } else {
+      data = await fetchItemFromCatalog(barcode)
+      if (data) {
+        const categoryId = data?.variant?.product?.categoryId
+        returnedItems.value[index] = {
+          ...returnedItems.value[index],
+          id: data?.id || '',
+          size: data?.size || '',
+          sizes: data?.variant?.sizes || '',
+          name:
+            `${data?.variant?.product?.subcategory?.name ?? ''} ` +
+            `${data?.variant?.name ?? ''} ` +
+            `${data?.variant?.product?.name ?? ''}`.trim(),
+          barcode: barcode,
+          category: categories.value.filter((c) => c.id === categoryId),
+          discount: (data?.variant?.dprice ?? 0) - (data?.variant?.sprice ?? 0),
+          rate: data?.variant?.sprice || 0,
+          totalQty: data?.qty || 0,
+          variantId: data?.variant?.id || '',
+        }
+      }
+    }
+
+    if (!data) {
+      toast.add({
+        title: 'Barcode is invalid or item is empty!',
+        color: 'red',
+      })
+      returnedItems.value[index].barcode = ''
+    }
+  } finally {
+    loadingStates.value[index] = false
   }
-};
+}
 
 
 
@@ -748,7 +790,7 @@ const sendReturnValue = () => {
           <div class="mb-3 flex items-center justify-between gap-4 text-sm">
           <UInput
             v-model="invoiceNumber"
-            label="Inv No"
+            label="Inv No (Optional)"
             type="text"
             placeholder="Invoice No"
             class="flex-1 max-w-xs"

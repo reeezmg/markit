@@ -250,6 +250,7 @@ const supplier = ref({
    PURCHASE INFO STATE
 ------------------------------------ */
 const selected = ref<any>(null)
+const isDistributorInitialized = ref(false)
 
 // 🆕 NEW (editable)
 const paymentType = ref<string>('')
@@ -258,9 +259,12 @@ const paymentType = ref<string>('')
 const oldPaymentType = ref<string | null>(null)
 
 const billNo = ref<string>('')
+const isBillNoInitialized = ref(false)
 
 // 🆕 BILL DATE (yyyy-mm-dd)
 const billDate = ref<string>('')
+
+const isDiscountInitialized = ref(false)
 
 /* ------------------------------------
    INIT OLD vs NEW (CRITICAL FIX)
@@ -285,7 +289,11 @@ watch(
 watch(
   () => props.billNo,
   (val) => {
-    if (typeof val === 'string') billNo.value = val
+    if (isBillNoInitialized.value) return
+    if (typeof val === 'string' && val !== '') {
+      billNo.value = val
+      isBillNoInitialized.value = true
+    }
   },
   { immediate: true }
 )
@@ -333,9 +341,13 @@ const adjustment = ref<number>(0)
 watch(
   () => [props.discount, props.tax, props.adjustment],
   ([d, t, a]) => {
+    if (isDiscountInitialized.value) return
+    const anyDefined = typeof d === 'number' || typeof t === 'number' || typeof a === 'number'
+    if (!anyDefined) return
     if (typeof d === 'number') discount.value = d
     if (typeof t === 'number') taxPercent.value = t
     if (typeof a === 'number') adjustment.value = a
+    isDiscountInitialized.value = true
   },
   { immediate: true }
 )
@@ -425,8 +437,13 @@ const { data: distributors } = useFindManyDistributor({
 watch(
   [distributors, () => props.distributorId],
   ([list, id]) => {
+    if (isDistributorInitialized.value) return
     if (!list || !id) return
-    selected.value = list.find(d => d.id === id) || null
+    const found = list.find(d => d.id === id) || null
+    if (found) {
+      selected.value = found
+      isDistributorInitialized.value = true
+    }
   },
   { immediate: true }
 )
@@ -479,6 +496,10 @@ const reset = () => {
   taxPercent.value = 0
   adjustment.value = 0
   deliveryType.value = deliveryTypeOptions.value[0] || ''
+
+  isDistributorInitialized.value = false
+  isBillNoInitialized.value = false
+  isDiscountInitialized.value = false
 
   // ⚠️ DO NOT reset oldPaymentType
 }

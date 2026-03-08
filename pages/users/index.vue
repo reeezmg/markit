@@ -1,16 +1,22 @@
 <script setup lang="ts">
-import { Switch } from '@headlessui/vue';
 import { hash } from '~/composables/hash';
+import { sub, format, isSameDay, type Duration } from 'date-fns'
+import { startOfDay, endOfDay } from 'date-fns'
 import {
     useFindManyCompanyUser,
     useUpdateUser,
-    useUpdateManyUser,
-    useDeleteCompanyUser,
     useUpdateCompanyUser,
     useCreateUser,
     useFindUniqueUser,
     useCountCompanyUser,
+    useFindManyEntry,
+    useCountEntry,
+    useFindManyExpense,
+    useCountExpense,
+    useFindManyExpenseCategory,
 } from '~/lib/hooks';
+import { useCompanyEntries } from '~/composables/companyReports'
+
 const userStore = useUserStore()
 const toast = useToast();
 const isSaving = ref(false)
@@ -19,94 +25,234 @@ const isDeleteModalOpen = ref(false)
 const deletingRowIdentinty = ref({})
 const CreateUser = useCreateUser({ optimisticUpdate: true });
 const UpdateUser = useUpdateUser({ optimisticUpdate: true });
-const UpdateManyUser = useUpdateManyUser({ optimisticUpdate: true });
-const DeleteCompanyUser = useDeleteCompanyUser({ optimisticUpdate: true });
 const UpdateCompanyUser = useUpdateCompanyUser({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
 const isOpen = ref(false);
 const useAuth = () => useNuxtApp().$auth;
 
-// Columns
+// ─── Selected user & detail panel ───
+const selectedUser = ref<any>(null)
+const activeTab = ref(0)
+
+const selectUser = (row: any) => {
+    selectedUser.value = row
+    // Reset detail tab state
+    activeTab.value = 0
+    salesPage.value = 1
+    expensePage.value = 1
+    salesSearch.value = ''
+    expenseSearch.value = ''
+    expenseSelectedStatus.value = []
+    expenseSelectedCategory.value = []
+    salesSelectedDate.value = {
+        start: new Date(new Date().setHours(0, 0, 0, 0)),
+        end: new Date(new Date().setHours(23, 59, 59, 999)),
+    }
+    expenseSelectedDate.value = {
+        start: new Date(new Date().setHours(0, 0, 0, 0)),
+        end: new Date(new Date().setHours(23, 59, 59, 999)),
+    }
+}
+
+const closeDetail = () => {
+    selectedUser.value = null
+}
+
+const tabs = [
+    { label: 'Sales', icon: 'i-heroicons-chart-bar' },
+    { label: 'Expenses', icon: 'i-heroicons-banknotes' },
+]
+
+// ─── Sales tab state ───
+const salesPage = ref(1)
+const salesPageCount = ref(10)
+const salesSearch = ref('')
+const salesSelectedDate = ref({
+    start: new Date(new Date().setHours(0, 0, 0, 0)),
+    end: new Date(new Date().setHours(23, 59, 59, 999)),
+})
+const salesLoading = ref(false)
+const salesEntries = ref<any[]>([])
+const salesTotalCount = ref(0)
+
+const salesColumns = [
+    { key: 'categoryName', label: 'Category', sortable: true },
+    { key: 'name', label: 'Product', sortable: true },
+    { key: 'rate', label: 'Rate', sortable: true },
+    { key: 'qty', label: 'Qty', sortable: true },
+    { key: 'value', label: 'Value', sortable: true },
+]
+
+const salesEntryArgs = computed(() => {
+    if (!selectedUser.value) return null
+    const companyId = useAuth().session.value?.companyId
+    return {
+        where: {
+            companyId,
+            companyUser: {
+                userId: selectedUser.value.userId,
+                companyId,
+            },
+            ...(salesSearch.value?.trim() && {
+                OR: [
+                    { name: { contains: salesSearch.value.trim(), mode: 'insensitive' } },
+                    { category: { name: { contains: salesSearch.value.trim(), mode: 'insensitive' } } },
+                ],
+            }),
+            bill: {
+                deleted: false,
+                createdAt: {
+                    gte: startOfDay(salesSelectedDate.value.start),
+                    lte: endOfDay(salesSelectedDate.value.end),
+                },
+            },
+        },
+        include: {
+            category: { select: { name: true } },
+            bill: { select: { discount: true, paymentMethod: true, paymentStatus: true } },
+        },
+        orderBy: { bill: { createdAt: 'desc' as const } },
+        skip: (salesPage.value - 1) * salesPageCount.value,
+        take: salesPageCount.value,
+    }
+})
+
+const salesCountArgs = computed(() => {
+    if (!salesEntryArgs.value) return null
+    return { where: salesEntryArgs.value.where }
+})
+
+const { data: rawSalesEntries, isLoading: salesIsLoading } = useFindManyEntry(
+    () => salesEntryArgs.value ?? { where: { id: '__none__' }, take: 0 },
+)
+const { data: salesTotal } = useCountEntry(
+    () => salesCountArgs.value ?? { where: { id: '__none__' } },
+)
+
+const formattedSalesEntries = computed(() => {
+    if (!rawSalesEntries.value) return []
+    return rawSalesEntries.value.map((entry: any) => ({
+        ...entry,
+        categoryName: entry.category?.name || '-',
+    }))
+})
+
+const salesPageFrom = computed(() => (salesPage.value - 1) * salesPageCount.value + 1)
+const salesPageTo = computed(() => Math.min(salesPage.value * salesPageCount.value, salesTotal.value || 0))
+
+// ─── Expense tab state ───
+const expensePage = ref(1)
+const expensePageCount = ref(10)
+const expenseSearch = ref('')
+const expenseSelectedStatus = ref<string[]>([])
+const expenseSelectedCategory = ref<string[]>([])
+const expenseSelectedDate = ref({
+    start: new Date(new Date().setHours(0, 0, 0, 0)),
+    end: new Date(new Date().setHours(23, 59, 59, 999)),
+})
+
+const expenseColumns = [
+    { key: 'expenseDate', label: 'Date', sortable: true },
+    { key: 'expensecategory.name', label: 'Category', sortable: true },
+    { key: 'note', label: 'Note', sortable: true },
+    { key: 'paymentMode', label: 'Payment', sortable: true },
+    { key: 'totalAmount', label: 'Amount', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+]
+
+const expenseCategoryArgs = computed(() => ({
+    where: { companyId: useAuth().session.value?.companyId },
+    select: { id: true, name: true },
+}))
+const { data: expenseCategories } = useFindManyExpenseCategory(expenseCategoryArgs)
+
+const expenseQueryArgs = computed(() => {
+    if (!selectedUser.value) return null
+    const companyId = useAuth().session.value?.companyId
+    return {
+        where: {
+            companyId,
+            userId: selectedUser.value.userId,
+            ...(expenseSearch.value?.trim() && {
+                OR: [
+                    { note: { contains: expenseSearch.value.trim(), mode: 'insensitive' } },
+                    { expensecategory: { name: { contains: expenseSearch.value.trim(), mode: 'insensitive' } } },
+                ],
+            }),
+            ...(expenseSelectedStatus.value.length && {
+                status: { in: expenseSelectedStatus.value },
+            }),
+            ...(expenseSelectedCategory.value.length && {
+                expensecategoryId: { in: expenseSelectedCategory.value },
+            }),
+            expenseDate: {
+                gte: startOfDay(expenseSelectedDate.value.start),
+                lte: endOfDay(expenseSelectedDate.value.end),
+            },
+        },
+        include: {
+            expensecategory: true,
+            user: true,
+        },
+        orderBy: { expenseDate: 'desc' as const },
+        skip: (expensePage.value - 1) * expensePageCount.value,
+        take: expensePageCount.value,
+    }
+})
+
+const expenseCountArgs = computed(() => {
+    if (!expenseQueryArgs.value) return null
+    return { where: expenseQueryArgs.value.where }
+})
+
+const { data: expenses, isLoading: expenseIsLoading } = useFindManyExpense(
+    () => expenseQueryArgs.value ?? { where: { id: '__none__' }, take: 0 },
+)
+const { data: expenseTotal } = useCountExpense(
+    () => expenseCountArgs.value ?? { where: { id: '__none__' } },
+)
+
+const expensePageFrom = computed(() => (expensePage.value - 1) * expensePageCount.value + 1)
+const expensePageTo = computed(() => Math.min(expensePage.value * expensePageCount.value, expenseTotal.value || 0))
+
+// Date range helpers (shared for sales & expense)
+const ranges = [
+    { label: 'Last 7 days', duration: { days: 7 } },
+    { label: 'Last 14 days', duration: { days: 14 } },
+    { label: 'Last 30 days', duration: { days: 30 } },
+    { label: 'Last 3 months', duration: { months: 3 } },
+    { label: 'Last 6 months', duration: { months: 6 } },
+    { label: 'Last year', duration: { years: 1 } },
+]
+
+function isRangeSelected(dateRef: any, duration: Duration) {
+    return isSameDay(dateRef.start, sub(new Date(), duration)) && isSameDay(dateRef.end, new Date())
+}
+
+function selectRange(dateRef: any, duration: Duration) {
+    dateRef.start = sub(new Date(), duration)
+    dateRef.end = new Date()
+}
+
+// Reset page on filter change
+watch([salesSearch, () => salesSelectedDate.value.start, () => salesSelectedDate.value.end], () => {
+    salesPage.value = 1
+})
+watch([expenseSearch, expenseSelectedStatus, expenseSelectedCategory, () => expenseSelectedDate.value.start, () => expenseSelectedDate.value.end], () => {
+    expensePage.value = 1
+}, { deep: true })
+
+// ─── Original users table logic ───
+
 const columns = [
-    {
-        key: 'name',
-        label: 'name',
-        sortable: true,
-    },
-    {
-        key: 'email',
-        label: 'email',
-        sortable: true,
-    },
-    {
-        key: 'code',
-        label: 'Code',
-        sortable: true,
-    },
-    {
-        key: 'role',
-        label: 'role',
-        sortable: true,
-    },
-    {
-        key: 'status',
-        label: 'Status',
-        sortable: true,
-    },
-    {
-        key: 'actions',
-        label: 'Actions',
-        sortable: false,
-    },
-];
-
-const selectedColumns = ref(columns);
-const columnsTable = computed(() =>
-    columns.filter((column) => selectedColumns.value.includes(column)),
-);
-
-// Selected Rows
-const selectedRows = ref([]);
-
-// Actions
-const active = (selectedRows) => [
-    [
-        {
-            key: 'active',
-            label: 'Active',
-            icon: 'i-heroicons-check',
-            click: () =>
-                multiToggle(
-                    selectedRows.map((item) => {
-                        return item.id;
-                    }),
-                    true,
-                ),
-        },
-    ],
-    [
-        {
-            key: 'inactive',
-            label: 'Inactive',
-            icon: 'i-heroicons-x-mark',
-            click: () =>
-                multiToggle(
-                    selectedRows.map((item) => {
-                        return item.id;
-                    }),
-                    false,
-                ),
-        },
-    ],
-    [
-        {
-            key: 'delete',
-            label: 'Delete',
-            icon: 'i-heroicons-trash',
-        },
-    ],
-];
+    { key: 'name', label: 'Name', sortable: true },
+    { key: 'email', label: 'Email', sortable: true },
+    { key: 'code', label: 'Code', sortable: true },
+    { key: 'role', label: 'Role', sortable: true },
+    { key: 'status', label: 'Status', sortable: true },
+    { key: 'actions', label: 'Actions', sortable: false },
+]
 
 const formData = reactive({
     email: '',
@@ -117,7 +263,7 @@ const formData = reactive({
 
 
 const openEdit = (row) => {
-    isOpen.value = true 
+    isOpen.value = true
     formData.email = row.user.email
     formData.name = row.name
     formData.role.label = row.role
@@ -188,7 +334,7 @@ const { data: existingUser, refetch: refetchUser } = useFindUniqueUser(
 
 
 // Pagination
-const sort = ref({ column: 'id', direction: 'asc' as const });
+const sort = ref({ column: 'name', direction: 'asc' as const });
 const page = ref(1);
 const pageCount = ref(10);
 
@@ -200,16 +346,13 @@ const deleteUser = async (id: string) => {
   const currentUserId = useAuth().session.value?.id
 
   try {
-    // ✅ Ensure users are loaded
     if (!users.value || users.value.length === 0) {
       throw new Error('User list not loaded')
     }
 
-    // 🔍 Find user being deleted
     const userToDelete = users.value.find(u => u.userId === id)
     if (!userToDelete) return
 
-    // 🔐 Admin safety check
     if (userToDelete.role === 'admin') {
       const adminCount = users.value.filter(u => u.role === 'admin' && !u.deleted).length
 
@@ -225,7 +368,6 @@ const deleteUser = async (id: string) => {
       }
     }
 
-    // ✅ Proceed with soft delete
      UpdateCompanyUser.mutate({
       where: {
         companyId_userId: {
@@ -240,9 +382,13 @@ const deleteUser = async (id: string) => {
     });
 
 
-    // 🚪 Logout if deleting self
     if (id === currentUserId) {
       await authLogout()
+    }
+
+    // Close detail if deleting selected user
+    if (selectedUser.value?.userId === id) {
+      selectedUser.value = null
     }
 
     await userStore.fetchUsers(companyId)
@@ -260,7 +406,7 @@ const queryArgs = computed(() => {
     selectedStatus.value.length > 0
       ? {
           OR: selectedStatus.value.map((item) => ({
-            status: item.value, // Correct: status is on CompanyUser
+            status: item.value,
           })),
         }
       : {};
@@ -285,17 +431,15 @@ const queryArgs = computed(() => {
       user: true,
       company: true,
     },
-    orderBy: {
-      user: {
-        [sort.value.column]: sort.value.direction,
-      },
-    },
+    orderBy: sort.value.column === 'email'
+      ? { user: { email: sort.value.direction } }
+      : { [sort.value.column]: sort.value.direction },
     skip: (page.value - 1) * pageCount.value,
     take: pageCount.value,
   };
 });
 
-const { data: users, isLoading, error, refetch } = useFindManyCompanyUser(queryArgs);
+const { data: users, isLoading } = useFindManyCompanyUser(queryArgs);
 
 const countArgs = computed(() => ({
   where: queryArgs.value.where,
@@ -307,17 +451,6 @@ const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
 const pageTo = computed(() =>
     Math.min(page.value * pageCount.value, pageTotal.value),
 );
-
-async function multiToggle(ids, status: boolean) {
-    try {
-        await UpdateManyUser.mutateAsync({
-            where: { id: { in: ids } },
-            data: { status: status },
-        });
-    } catch (error) {
-        console.error('Error updating user status:', error);
-    }
-}
 
 function toggleStatus(userId: string) {
   if (!users.value) return
@@ -336,7 +469,7 @@ function toggleStatus(userId: string) {
         },
       },
       data: {
-        status: !user.status, // ✅ direct toggle
+        status: !user.status,
       },
     })
   } catch (error) {
@@ -384,8 +517,8 @@ const handleSubmit = async (e: Event) => {
                         company: {
                             connect: { id: useAuth().session.value?.companyId },
                             },
-                        name: formData.name, 
-                        role: formData.role.value, 
+                        name: formData.name,
+                        role: formData.role.value,
                     }],
                 },
             },
@@ -398,8 +531,8 @@ const handleSubmit = async (e: Event) => {
                 password: await hash(formData.email),
                 companies: {
                     create: {
-                        name: formData.name,  
-                        role: formData.role.value, 
+                        name: formData.name,
+                        role: formData.role.value,
                         company: {
                             connect: {
                                 id: useAuth().session.value?.companyId!,
@@ -421,7 +554,7 @@ const handleSubmit = async (e: Event) => {
         formData.name = ''
         formData.role = { label: '', value: '' }
         formData.id = ''
-        
+
         isOpen.value = false;
 
         await userStore.fetchUsers(useAuth().session.value?.companyId!)
@@ -438,253 +571,504 @@ const handleSubmit = async (e: Event) => {
 </script>
 
 <template>
-    <UDashboardPanelContent class="pb-24">
-        <UCard
-            class="w-full"
-            :ui="{
-                base: '',
-                divide: 'divide-y divide-gray-200 dark:divide-gray-700',
-                header: { padding: 'px-4 py-5' },
-                body: {
-                    padding: '',
-                    base: 'divide-y divide-gray-200 dark:divide-gray-700',
-                },
-                footer: { padding: 'p-4' },
-            }"
-        >
-            <!-- Filters -->
-             <template #header>
-                <div class="flex flex-col sm:flex-row justify-between gap-3 w-full">
-                <!-- Left side: Search + Status -->
-                <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
-                <UInput
-                    v-model="search"
-                    icon="i-heroicons-magnifying-glass-20-solid"
-                    placeholder="Search..."
-                     class="w-full sm:w-60"
-                />
-                 <USelectMenu
-                        v-model="selectedStatus"
-                        :options="todoStatus"
-                        multiple
-                        placeholder="Status"
-                         class="w-full sm:w-60"
-                    />
-                </div>
-                  <div class="w-full sm:w-auto flex justify-end">
-                    <UButton
-                        class="w-full sm:w-40"
-                        icon="i-heroicons-plus"
-                        size="sm"
-                        color="primary"
-                        variant="solid"
-                        label="Add user"
-                        block
-                        @click="() => (isOpen = true)"
-                    />
-                </div>
-            </div>
-            </template>
-
-            <!-- Header and Action buttons -->
-            <div class="flex justify-between items-center w-full px-4 py-3">
-                <div class="flex items-center gap-1.5">
-                    <span class="text-sm leading-5 hidden sm:block">Rows per page:</span>
-                    <USelect
-                        v-model="pageCount"
-                        :options="[3, 5, 10, 20, 30, 40]"
-                        class="me-2 w-20"
-                        size="xs"
-                    />
-                </div>
-
-                <div class="flex gap-1.5 items-center z-10">
-                    <UDropdown
-                        v-if="selectedRows.length > 1"
-                        :items="active(selectedRows)"
-                        :ui="{ width: 'w-36' }"
-                    >
-                        <UButton
-                            icon="i-heroicons-chevron-down"
-                            trailing
-                            color="gray"
-                            size="xs"
-                        >
-                            Mark as
-                        </UButton>
-                    </UDropdown>
-
-                    <USelectMenu
-                        v-model="selectedColumns"
-                        :options="columns"
-                        multiple
-                    >
-                        <UButton
-                            icon="i-heroicons-view-columns"
-                            color="gray"
-                            size="xs"
-                        >
-                            Columns
-                        </UButton>
-                    </USelectMenu>
-
-                    <UButton
-                        icon="i-heroicons-funnel"
-                        color="gray"
-                        size="xs"
-                        :disabled="search === '' && selectedStatus.length === 0"
-                        @click="resetFilters"
-                    >
-                        Reset
-                    </UButton>
-                </div>
-            </div>
-
-            <!-- Table -->
-            <UTable
-                v-model="selectedRows"
-                v-model:sort="sort"
-                :rows="users"
-                :columns="columnsTable"
-                :loading="isLoading"
-                sort-asc-icon="i-heroicons-arrow-up"
-                sort-desc-icon="i-heroicons-arrow-down"
-                sort-mode="manual"
-                class="w-full"
-                :ui="{
-                    td: { base: 'max-w-[0] truncate' },
-                    default: { checkbox: { color: 'gray' } },
-                }"
+    <UDashboardPanelContent class="  p-4">
+        <div class="flex  border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
+            <!-- ─── Left: User List ─── -->
+            <div
+                :class="[
+                    'flex flex-col border-r border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 ease-in-out',
+                    selectedUser ? 'w-[30%] min-w-[240px]' : 'w-full'
+                ]"
             >
-                <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
+                <UCard
+                    class="w-full"
+                    :ui="{
+                        base: '',
+                        divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+                        header: { padding: 'px-4 py-5' },
+                        body: {
+                            padding: '',
+                            base: 'divide-y divide-gray-200 dark:divide-gray-700',
+                        }, 
+                        footer: { padding: 'p-4' },
+                    }"
+                >
+                    <!-- Filters -->
+                    <template #header>
+                        <div class="flex flex-wrap items-center justify-between gap-3 w-full">
+                            <div class="flex " :class="[selectedUser ? 'w-full justify-between items-center ' : 'gap-2']">
+                                <UInput
+                                    v-model="search"
+                                    icon="i-heroicons-magnifying-glass-20-solid"
+                                    placeholder="Search..."
+                                    
+                                    size="sm"
+                                />
+                                <USelectMenu
+                                    v-model="selectedStatus"
+                                    :options="todoStatus"
+                                    multiple
+                                    placeholder="Status"
+                                    
+                                    size="sm"
+                                />
+                            </div>
+                            <div>
+                                <UButton
+                                    v-if="!selectedUser"
+                                    icon="i-heroicons-plus"
+                                    size="sm"
+                                    color="primary"
+                                    variant="solid"
+                                    label="Add user"
+                                    @click="() => (isOpen = true)"
+                                />
+                            </div>
+                        </div>
+                    </template>
+
+                    <div class="flex justify-between items-center w-full px-4 py-2">
+                        <div class="flex items-center gap-1.5">
+                            <span class="text-sm leading-5 hidden sm:block">Rows per page:</span>
+                            <USelect
+                                v-model="pageCount"
+                                :options="[3, 5, 10, 20, 30, 40]"
+                                class="me-2 w-20"
+                                size="xs"
+                            />
+                        </div>
                         <UButton
+                            icon="i-heroicons-funnel"
                             color="gray"
-                            variant="ghost"
-                            icon="i-heroicons-ellipsis-horizontal-20-solid"
-                        />
-                    </UDropdown>
-                </template>
-                <template #role-data="{ row }">
-                   <UBadge
-                        :color="row.role === 'admin' ? 'red' : row.role === 'manager' ? 'blue' : row.role === 'biller' ? 'green' : row.role === 'accountant' ? 'purple' : 'gray'"
-                        size="sm"
-                        variant="subtle"
-                        >{{  row.role.toUpperCase() }}
-                    </UBadge>
-                </template>
-            
-                <template #email-data="{ row }">
-                      <div>{{ row.user.email }}</div>
-                </template>
-
-                <template #status-data="{ row }">
-                    <Switch
-                        v-model="row.status"
-                        @click="toggleStatus(row.userId)"
-                        :class="[
-                            row.status ? 'bg-orange-400' : 'bg-gray-200',
-                            'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2',
-                        ]"
-                    >
-                        <span class="sr-only">Use setting</span>
-                        <span
-                            :class="[
-                                row.status ? 'translate-x-5' : 'translate-x-0',
-                                'pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
-                            ]"
+                            size="xs"
+                            :disabled="search === '' && selectedStatus.length === 0"
+                            @click="resetFilters"
                         >
-                            <span
-                                :class="[
-                                    row.status
-                                        ? 'opacity-0 duration-100 ease-out'
-                                        : 'opacity-100 duration-200 ease-in',
-                                    'absolute inset-0 flex h-full w-full items-center justify-center transition-opacity',
-                                ]"
-                                aria-hidden="true"
-                            >
-                                <svg
-                                    class="h-3 w-3 text-gray-400"
-                                    fill="none"
-                                    viewBox="0 0 12 12"
-                                >
-                                    <path
-                                        d="M4 8l2-2m0 0l2-2M6 6L4 4m2 2l2 2"
-                                        stroke="currentColor"
-                                        stroke-width="2"
-                                        stroke-linecap="round"
-                                        stroke-linejoin="round"
-                                    />
-                                </svg>
-                            </span>
-                            <span
-                                :class="[
-                                    row.status
-                                        ? 'opacity-100 duration-200 ease-in'
-                                        : 'opacity-0 duration-100 ease-out',
-                                    'absolute inset-0 flex h-full w-full items-center justify-center transition-opacity',
-                                ]"
-                                aria-hidden="true"
-                            >
-                                <svg
-                                    class="h-3 w-3 text-orange-400"
-                                    fill="currentColor"
-                                    viewBox="0 0 12 12"
-                                >
-                                    <path
-                                        d="M3.707 5.293a1 1 0 00-1.414 1.414l1.414-1.414zM5 8l-.707.707a1 1 0 001.414 0L5 8zm4.707-3.293a1 1 0 00-1.414-1.414l1.414 1.414zm-7.414 2l2 2 1.414-1.414-2-2-1.414 1.414zm3.414 2l4-4-1.414-1.414-4 4 1.414 1.414z"
-                                    />
-                                </svg>
-                            </span>
-                        </span>
-                    </Switch>
-                </template>
-
-                <template #name-data="{ row }">
-                    <div class="flex flex-row items-center">
-                        <!-- <UAvatar
-                            :src="`https://images.markit.co.in/${row.images[0]}`"
-                            :alt="row.name"
-                            size="lg"
-                        /> -->
-                        <div class="ms-3">{{ row.name }}</div>
-                    </div>
-                </template>
-            </UTable>
-
-            <!-- Number of rows & Pagination -->
-            <template #footer>
-                <div class="flex flex-wrap justify-between items-center">
-                    <div>
-                        <span class="text-sm leading-5 hidden sm:block">
-                            Showing
-                            <span class="font-medium">{{ pageFrom }}</span>
-                            to
-                            <span class="font-medium">{{ pageTo }}</span>
-                            of
-                            <span class="font-medium">{{ pageTotal }}</span>
-                            results
-                        </span>
+                            Reset
+                        </UButton>
                     </div>
 
-                    <UPagination
-                        v-model="page"
-                        :page-count="pageCount"
-                        :total="pageTotal"
-                        :ui="{
-                            wrapper: 'flex items-center gap-1',
-                            rounded:
-                                '!rounded-full min-w-[32px] justify-center',
-                            default: {
-                                activeButton: {
-                                    variant: 'outline',
-                                },
+                    <div v-if="!selectedUser">
+                        <UTable
+                            v-model:sort="sort"
+                            :rows="users"
+                            :columns="columns"
+                            :loading="isLoading"
+                            sort-asc-icon="i-heroicons-arrow-up"
+                            sort-desc-icon="i-heroicons-arrow-down"
+                            sort-mode="manual"
+                            class="w-full"
+                            :ui="{
+                                td: { base: 'max-w-[0] truncate' },
+                                tr: { base: 'cursor-pointer' },
+                            }"
+                            @select="selectUser"
+                        >
+                            <template #name-data="{ row }">
+                                <div class="font-medium">{{ row.name }}</div>
+                            </template>
+                            <template #email-data="{ row }">
+                                <div>{{ row.user?.email || '-' }}</div>
+                            </template>
+                            <template #role-data="{ row }">
+                                <UBadge
+                                    :color="row.role === 'admin' ? 'red' : row.role === 'manager' ? 'blue' : row.role === 'biller' ? 'green' : row.role === 'accountant' ? 'purple' : 'gray'"
+                                    size="sm"
+                                    variant="subtle"
+                                >
+                                    {{ row.role?.toUpperCase() }}
+                                </UBadge>
+                            </template>
+                            <template #status-data="{ row }">
+                                <UToggle
+                                    :model-value="row.status"
+                                    size="xs"
+                                    @click.stop="toggleStatus(row.userId)"
+                                />
+                            </template>
+                           <template #actions-data="{ row }">
+                            <div @click.stop>
+                                <UDropdown :items="action(row)">
+                                <UButton
+                                    color="gray"
+                                    variant="ghost"
+                                    icon="i-heroicons-ellipsis-horizontal-20-solid"
+                                />
+                                </UDropdown>
+                            </div>
+                            </template>
+                        </UTable>
+                    </div>
+
+                    <div v-else>
+                        <div v-if="isLoading" class="p-4 text-sm text-gray-500">Loading users...</div>
+                        <div v-else-if="!users?.length" class="p-4 text-sm text-gray-500">No users found.</div>
+                        <div v-else class="divide-y divide-gray-200 dark:divide-gray-700">
+                            <button
+                                v-for="row in users"
+                                :key="row.id"
+                                type="button"
+                                class="w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/40"
+                                :class="selectedUser?.userId === row.userId ? 'bg-primary-50 dark:bg-primary-900/20' : ''"
+                                @click="selectUser(row)"
+                            >
+                                <div class="flex items-start gap-3">
+                                    <UAvatar :alt="row.name" size="sm" />
+                                    <div class="min-w-0 flex-1">
+                                        
+                                        <p class="mt-1 truncate text-xs text-gray-500">
+                                            {{ row.role?.toUpperCase() }} - {{ row.code || '-' }}
+                                        </p>
+                                    </div>
+                                    <div class="flex items-start justify-between gap-2">
+                                        <p
+                                            class="truncate text-sm"
+                                            :class="selectedUser?.userId === row.userId
+                                            ? 'font-semibold text-primary-700 dark:text-primary-300'
+                                            : 'font-medium text-gray-900 dark:text-gray-100'"
+                                        >
+                                            {{ row.name }}
+                                        </p>
+
+                                        <div class="flex items-center gap-1">
+                                            <div @click.stop>
+                                            <UDropdown :items="action(row)">
+                                                <UButton
+                                                color="gray"
+                                                variant="ghost"
+                                                icon="i-heroicons-ellipsis-horizontal-20-solid"
+                                                />
+                                            </UDropdown>
+                                            </div>
+                                        </div>
+                                        </div>
+                                </div>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Pagination -->
+                    <template #footer>
+                        <div class="flex flex-wrap justify-between items-center">
+                            <div>
+                                <span class="text-xs leading-5">
+                                    {{ pageFrom }}-{{ pageTo }} of {{ pageTotal }}
+                                </span>
+                            </div>
+
+                            <UPagination
+                                v-model="page"
+                                :page-count="pageCount"
+                                :total="pageTotal"
+                                size="xs"
+                                :ui="{
+                                    wrapper: 'flex items-center gap-1',
+                                    rounded: '!rounded-full min-w-[28px] justify-center',
+                                    default: {
+                                        activeButton: {
+                                            variant: 'outline',
+                                        },
+                                    },
+                                }"
+                            />
+                        </div>
+                    </template>
+                </UCard>
+            </div>
+
+            <!-- ─── Right: Detail Panel ─── -->
+            <Transition
+                enter-active-class="transition-all duration-300 ease-in-out"
+                enter-from-class="opacity-0 translate-x-4"
+                enter-to-class="opacity-100 translate-x-0"
+                leave-active-class="transition-all duration-200 ease-in"
+                leave-from-class="opacity-100 translate-x-0"
+                leave-to-class="opacity-0 translate-x-4"
+            >
+                <div v-if="selectedUser" class="flex-1 flex flex-col overflow-hidden">
+                    <!-- Detail Header -->
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
+                        <div class="flex items-center gap-3">
+                            <UAvatar :alt="selectedUser.name" size="sm" />
+                            <div>
+                                <div class="font-semibold text-sm">{{ selectedUser.name }}</div>
+                                <div class="text-xs text-gray-500">{{ selectedUser.user?.email }} &middot;
+                                    <UBadge
+                                        :color="selectedUser.role === 'admin' ? 'red' : selectedUser.role === 'manager' ? 'blue' : selectedUser.role === 'biller' ? 'green' : selectedUser.role === 'accountant' ? 'purple' : 'gray'"
+                                        size="xs"
+                                        variant="subtle"
+                                    >{{ selectedUser.role?.toUpperCase() }}</UBadge>
+                                </div>
+                            </div>
+                        </div>
+                        <UButton
+                            icon="i-heroicons-x-mark"
+                            color="red"
+                            variant="soft"
+                            size="sm"
+                            @click="closeDetail"
+                        />
+                    </div>
+                    <!-- Tabs -->
+                    <UTabs
+                        v-model="activeTab"
+                        :items="tabs"
+                        class="flex-1 flex flex-col overflow-hidden"
+                        color="primary"
+                        :ui="{ list: 
+                            { 
+                                tab: { active: 'text-primary-600 dark:text-primary-400' },
+                                background: 'bg-gray-50 dark:bg-gray-800/50 '
                             },
-                        }"
-                    />
+                          
+                             }"
+                    >
+                        <template #item="{ item, index }">
+                            <div class="flex-1 flex flex-col overflow-auto p-4">
+                                <template v-if="index === 0">
+                                    <UCard
+                                        class="w-full"
+                                        :ui="{
+                                            base: '',
+                                            ring: 'ring-1 ring-primary-200 dark:ring-primary-800',
+                                            divide: 'divide-y divide-primary-100 dark:divide-primary-900/40',
+                                            header: { padding: 'px-4 py-3' },
+                                            body: { padding: '' },
+                                            footer: { padding: 'px-4 py-3' },
+                                        }"
+                                    >
+                                        <template #header>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <UPopover :popper="{ placement: 'bottom-start' }">
+                                                    <UButton icon="i-heroicons-calendar-days-20-solid" size="sm" color="primary" >
+                                                        {{ format(salesSelectedDate.start, 'd MMM, yyy') }} - {{ format(salesSelectedDate.end, 'd MMM, yyy') }}
+                                                    </UButton>
+                                                    <template #panel="{ close }">
+                                                        <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                                                            <div class="hidden sm:flex flex-col py-4">
+                                                                <UButton
+                                                                    v-for="(range, i) in ranges"
+                                                                    :key="i"
+                                                                    :label="range.label"
+                                                                    color="primary"
+                                                                    
+                                                                    class="rounded-none px-6"
+                                                                    :class="[isRangeSelected(salesSelectedDate, range.duration) ? 'bg-primary-50 dark:bg-primary-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                                                                    truncate
+                                                                    @click="selectRange(salesSelectedDate, range.duration)"
+                                                                />
+                                                            </div>
+                                                            <DatePicker v-model="salesSelectedDate" @close="close" />
+                                                        </div>
+                                                    </template>
+                                                </UPopover>
+                                                <UInput
+                                                    v-model="salesSearch"
+                                                    icon="i-heroicons-magnifying-glass-20-solid"
+                                                    placeholder="Search product / category"
+                                                    class="w-60"
+                                                    size="sm"
+                                                    
+                                                    
+                                                />
+                                            </div>
+                                        </template>
+
+                                        <UTable
+                                            :rows="formattedSalesEntries"
+                                            :columns="salesColumns"
+                                            :loading="salesIsLoading"
+                                            class="w-full"
+                                            :ui="{ td: { base: 'max-w-[0] truncate' } }"
+                                        >
+                                            <template #categoryName-data="{ row }">
+                                                <span :class="{ 'text-red-600': row.return }">{{ row.categoryName }}</span>
+                                            </template>
+                                            <template #name-data="{ row }">
+                                                <span :class="{ 'text-red-600': row.return }">{{ row.name || '-' }}</span>
+                                            </template>
+                                            <template #rate-data="{ row }">
+                                                <span :class="{ 'text-red-600': row.return }">{{ row.rate }}</span>
+                                            </template>
+                                            <template #qty-data="{ row }">
+                                                <span :class="{ 'text-red-600': row.return }">{{ row.qty }}</span>
+                                            </template>
+                                            <template #value-data="{ row }">
+                                                <span :class="{ 'text-red-600': row.return }">{{ row.value }}</span>
+                                            </template>
+                                        </UTable>
+
+                                        <template #footer>
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs text-gray-500">
+                                                    {{ salesPageFrom }}-{{ salesPageTo }} of {{ salesTotal || 0 }}
+                                                </span>
+                                                <div class="flex items-center gap-2">
+                                                    <USelect
+                                                        v-model="salesPageCount"
+                                                        :options="[5, 10, 20, 50]"
+                                                        size="xs"
+                                                        class="w-16"
+                                                        
+                                                    />
+                                                    <UPagination
+                                                        v-model="salesPage"
+                                                        :page-count="salesPageCount"
+                                                        :total="salesTotal || 0"
+                                                        size="xs"
+                                                        :ui="{
+                                                            wrapper: 'flex items-center gap-1',
+                                                            rounded: '!rounded-full min-w-[28px] justify-center',
+                                                            default: { activeButton: { color: 'primary', variant: 'outline' } },
+                                                        }"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </UCard>
+                                </template>
+
+                                <template v-if="index === 1">
+                                    <UCard
+                                        class="w-full"
+                                        :ui="{
+                                            base: '',
+                                            ring: 'ring-1 ring-primary-200 dark:ring-primary-800',
+                                            divide: 'divide-y divide-primary-100 dark:divide-primary-900/40',
+                                            header: { padding: 'px-4 py-3' },
+                                            body: { padding: '' },
+                                            footer: { padding: 'px-4 py-3' },
+                                        }"
+                                    >
+                                        <template #header>
+                                            <div class="flex flex-wrap items-center gap-2">
+                                                <UPopover :popper="{ placement: 'bottom-start' }">
+                                                    <UButton icon="i-heroicons-calendar-days-20-solid" size="sm" color="primary">
+                                                        {{ format(expenseSelectedDate.start, 'd MMM, yyy') }} - {{ format(expenseSelectedDate.end, 'd MMM, yyy') }}
+                                                    </UButton>
+                                                    <template #panel="{ close }">
+                                                        <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                                                            <div class="hidden sm:flex flex-col py-4">
+                                                                <UButton
+                                                                    v-for="(range, i) in ranges"
+                                                                    :key="i"
+                                                                    :label="range.label"
+                                                                    color="primary"
+                                                                    
+                                                                    class="rounded-none px-6"
+                                                                    :class="[isRangeSelected(expenseSelectedDate, range.duration) ? 'bg-primary-50 dark:bg-primary-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                                                                    truncate
+                                                                    @click="selectRange(expenseSelectedDate, range.duration)"
+                                                                />
+                                                            </div>
+                                                            <DatePicker v-model="expenseSelectedDate" @close="close" />
+                                                        </div>
+                                                    </template>
+                                                </UPopover>
+                                                <UInput
+                                                    v-model="expenseSearch"
+                                                    icon="i-heroicons-magnifying-glass-20-solid"
+                                                    placeholder="Search note / category"
+                                                    class="w-48"
+                                                    size="sm"
+                                                    
+                                                    
+                                                />
+                                                <USelectMenu
+                                                    v-model="expenseSelectedStatus"
+                                                    :options="['Paid', 'Pending', 'Approved', 'Rejected']"
+                                                    multiple
+                                                    placeholder="Status"
+                                                    size="sm"
+                                                   
+                                                    
+                                                    class="w-32"
+                                                />
+                                                <USelectMenu
+                                                    v-model="expenseSelectedCategory"
+                                                    :options="expenseCategories || []"
+                                                    option-attribute="name"
+                                                    value-attribute="id"
+                                                    multiple
+                                                    placeholder="Category"
+                                                    size="sm"
+                                                 
+                                                    
+                                                    class="w-36"
+                                                />
+                                            </div>
+                                        </template>
+
+                                        <UTable
+                                            :rows="expenses"
+                                            :columns="expenseColumns"
+                                            :loading="expenseIsLoading"
+                                            class="w-full"
+                                            :ui="{ td: { base: 'max-w-[0] truncate' } }"
+                                        >
+                                            <template #expenseDate-data="{ row }">
+                                                {{ format(row.expenseDate, 'd MMM, yyy') }}
+                                            </template>
+                                            <template #status-data="{ row }">
+                                                <UBadge
+                                                    size="sm"
+                                                    :color="row.status === 'Paid' ? 'green' : row.status === 'Pending' ? 'orange' : row.status === 'Approved' ? 'blue' : 'red'"
+                                                    variant="subtle"
+                                                >
+                                                    {{ row.status }}
+                                                </UBadge>
+                                            </template>
+                                            <template #paymentMode-data="{ row }">
+                                                <UBadge
+                                                    size="sm"
+                                                    :color="row.paymentMode === 'CASH' ? 'green' : row.paymentMode === 'BANK' ? 'blue' : 'gray'"
+                                                    variant="subtle"
+                                                >
+                                                    {{ row.paymentMode }}
+                                                </UBadge>
+                                            </template>
+                                            <template #totalAmount-data="{ row }">
+                                                {{ Number(row.totalAmount || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR' }) }}
+                                            </template>
+                                        </UTable>
+
+                                        <template #footer>
+                                            <div class="flex justify-between items-center">
+                                                <span class="text-xs text-gray-500">
+                                                    {{ expensePageFrom }}-{{ expensePageTo }} of {{ expenseTotal || 0 }}
+                                                </span>
+                                                <div class="flex items-center gap-2">
+                                                    <USelect
+                                                        v-model="expensePageCount"
+                                                        :options="[5, 10, 20, 50]"
+                                                        size="xs"
+                                                        class="w-16"
+                                                        color="primary"
+                                                    />
+                                                    <UPagination
+                                                        v-model="expensePage"
+                                                        :page-count="expensePageCount"
+                                                        :total="expenseTotal || 0"
+                                                        size="xs"
+                                                        :ui="{
+                                                            wrapper: 'flex items-center gap-1',
+                                                            rounded: '!rounded-full min-w-[28px] justify-center',
+                                                            default: { activeButton: { color: 'primary', variant: 'outline' } },
+                                                        }"
+                                                    />
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </UCard>
+                                </template>
+                            </div>
+                        </template>
+                    </UTabs>
                 </div>
-            </template>
-        </UCard>
+            </Transition>
+        </div>
+
+        <!-- ─── Modals (unchanged) ─── -->
         <UModal v-model="isOpen">
             <UCard
                 :ui="{
@@ -760,3 +1144,4 @@ const handleSubmit = async (e: Event) => {
     </UDashboardModal>
     </UDashboardPanelContent>
 </template>
+
