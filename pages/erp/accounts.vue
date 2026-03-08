@@ -522,9 +522,7 @@ const sendPendingWhatsappApi = async (row: any) => {
         name: row?.account?.name || 'Customer',
         billName: useAuth().session.value?.companyName || '',
         amount: Number(row?.grandTotal || 0).toFixed(2),
-        dueDate: row?.createdAt || new Date().toISOString(),
-        receiptUrl: getReceiptLink(row?.id || ''),
-        paymentUrl: getUpiPaymentLink(row),
+        receiptId: row?.id,
       },
     })
 

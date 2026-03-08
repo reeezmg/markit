@@ -16,9 +16,12 @@
     </UDashboardPanel>
   </UDashboardPage>
 </template>
-
 <script setup lang="ts">
-definePageMeta({ layout: false });
+definePageMeta({ layout: false })
+
+const colorMode = useColorMode()
+colorMode.preference = 'light'
+
 const route = useRoute()
 const printData = ref<any>(null)
 
@@ -30,6 +33,7 @@ watch(
     const res = await $fetch('/api/billSale/receipt', {
       params: { id },
     })
+
     console.log('PRINT DATA:', res)
     printData.value = res
   },

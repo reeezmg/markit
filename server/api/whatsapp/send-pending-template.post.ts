@@ -17,10 +17,8 @@ export default defineEventHandler(async (event) => {
     name,
     billName,
     amount,
-    dueDate,
-    receiptUrl,
-    paymentUrl
-  } = body || {}
+    receiptId,
+    } = body || {}
 
   if (!phone) {
     return { success: false, message: 'Phone is required' }
@@ -54,7 +52,6 @@ export default defineEventHandler(async (event) => {
                   { type: 'text', text: String(name || '') },
                   { type: 'text', text: String(billName || '') },
                   { type: 'text', text: String(amount || '') },
-                  { type: 'text', text: formatDate(String(dueDate || '')) }
                 ]
               },
               {
@@ -62,18 +59,13 @@ export default defineEventHandler(async (event) => {
                 sub_type: 'url',
                 index: '0',
                 parameters: [
-                  { type: 'text', text: String(receiptUrl || '') }
-                ]
-              },
-              {
-                type: 'button',
-                sub_type: 'url',
-                index: '1',
-                parameters: [
-                  { type: 'text', text: String(paymentUrl || '') }
+                  {
+                    type: 'text',
+                    text: String(receiptId || '')
+                  }
                 ]
               }
-            ]
+              ]
           }
         }
       }
