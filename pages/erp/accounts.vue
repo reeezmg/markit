@@ -18,6 +18,7 @@ const UpdateAccount = useUpdateAccount({ optimisticUpdate: true });
 const DeleteAccount = useDeleteAccount({ optimisticUpdate: true });
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
+const ACCOUNTS_TABLE_STATE_KEY = 'erp_accounts_table_state_v1'
 const isSavingAcc = ref(false);
 const isOpen = ref(false);
 const account = ref({
@@ -33,6 +34,9 @@ const isDeleteAccountModalOpen = ref(false)
 const deletingAccountRowIdentity = ref({});
 const isDeleteBillModalOpen = ref(false)
 const deletingBillRowIdentity = ref({});
+const isPaymentMethodModalOpen = ref(false)
+const paymentMethodForPaid = ref<'Cash' | 'UPI' | 'Card'>('Cash')
+const paymentMethodBillCtx = ref<{ id: string; billNo: string; row?: any } | null>(null)
 
 const selectedDate = ref({ 
     start: new Date() , 
@@ -110,6 +114,7 @@ const action = (row:any) => [
             icon: 'i-heroicons-pencil-square-20-solid',
             click: () => router.push(`./edit/${row.id}`),
         },
+       
     ],
     [
         {
@@ -121,6 +126,13 @@ const action = (row:any) => [
             }
         },
     ],
+    [
+         {
+            label: 'Send Reminder',
+            icon: 'i-simple-icons-whatsapp',
+            click: () => sendPendingWhatsappApi(row),
+        },
+    ]
 ];
 const actionAccount = (row:any) => [
     [
@@ -162,10 +174,11 @@ watch(columns, (newColumns) => {
 const columnsTable = computed(() =>
   columns.value.filter((column) => selectedColumns.value.includes(column))
 );
+const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
 
 const notes = ref<any>({})
 
-const search = ref<number | null>(null);
+const search = ref<string>('');
 const selectedStatus = ref<any>([]);
 const searchStatus = ref(undefined);
 
@@ -207,7 +220,10 @@ const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
       }),
       ...statusFilters,
     },
-    include: {
+    select: {
+      id: true,
+      name: true,
+      phone: true,
       address: true,
       bill: {
         where: {
@@ -224,7 +240,7 @@ const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
             },
           },
         },
-      },
+      }
     },
     orderBy: {
       [sort.value.column]: sort.value.direction,
@@ -254,6 +270,149 @@ const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
 );
+
+const getPendingAmount = (accountRow: any) => {
+  return (
+    accountRow.bill
+      ?.filter((b: any) => b.paymentStatus === 'PENDING')
+      .reduce((sum: number, b: any) => {
+        if (b.paymentMethod === 'Split' && b.splitPayments) {
+          const creditAmount = b.splitPayments
+            .filter((sp: any) => sp.method === 'Credit')
+            .reduce((cSum: number, sp: any) => cSum + (sp.amount ?? 0), 0)
+          return sum + creditAmount
+        }
+        return sum + (b.grandTotal ?? 0)
+      }, 0) ?? 0
+  )
+}
+
+const handleDownloadExcel = async () => {
+  try {
+    const rows = accounts.value || []
+    if (!rows.length) {
+      toast.add({
+        title: 'No data to export',
+        color: 'orange',
+      })
+      return
+    }
+
+    const [{ Workbook }, { saveAs }] = await Promise.all([
+      import('exceljs'),
+      import('file-saver'),
+    ])
+
+    const workbook = new Workbook()
+    const worksheet = workbook.addWorksheet('Accounts')
+
+    worksheet.columns = [
+      { header: 'Name', key: 'name', width: 24 },
+      { header: 'Phone', key: 'phone', width: 18 },
+      { header: 'Pending Amount', key: 'pending', width: 16 },
+      { header: 'Bills Count', key: 'bills', width: 12 },
+    ]
+
+    rows.forEach((row: any) => {
+      worksheet.addRow({
+        name: row.name || '',
+        phone: row.phone || '',
+        pending: Number(getPendingAmount(row).toFixed(2)),
+        bills: Array.isArray(row.bill) ? row.bill.length : 0,
+      })
+    })
+
+    worksheet.getRow(1).font = { bold: true }
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    saveAs(
+      new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      `accounts-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`
+    )
+  } catch (error: any) {
+    toast.add({
+      title: 'Failed to export accounts',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  }
+}
+
+watch(
+  [
+    search,
+    selectedStatus,
+    pageCount,
+    () => selectedDate.value?.start,
+    () => selectedDate.value?.end,
+  ],
+  () => {
+    if (page.value !== 1) page.value = 1
+  },
+  { deep: true }
+)
+
+watch(
+  [
+    search,
+    selectedStatus,
+    page,
+    pageCount,
+    () => selectedDate.value?.start,
+    () => selectedDate.value?.end,
+    () => sort.value.column,
+    () => sort.value.direction,
+    selectedColumnKeys,
+  ],
+  () => {
+    if (!process.client) return
+    localStorage.setItem(
+      ACCOUNTS_TABLE_STATE_KEY,
+      JSON.stringify({
+        search: search.value,
+        selectedStatus: selectedStatus.value,
+        selectedDate: selectedDate.value,
+        page: page.value,
+        pageCount: pageCount.value,
+        sort: sort.value,
+        selectedColumnKeys: selectedColumnKeys.value,
+      })
+    )
+  },
+  { deep: true }
+)
+
+onMounted(() => {
+  if (!process.client) return
+  const raw = localStorage.getItem(ACCOUNTS_TABLE_STATE_KEY)
+  if (!raw) return
+
+  try {
+    const saved = JSON.parse(raw)
+    search.value = saved.search ?? ''
+    selectedStatus.value = saved.selectedStatus ?? []
+    if (saved.selectedDate?.start && saved.selectedDate?.end) {
+      selectedDate.value = {
+        start: new Date(saved.selectedDate.start),
+        end: new Date(saved.selectedDate.end),
+      }
+    }
+    page.value = Number(saved.page || 1)
+    pageCount.value = String(saved.pageCount || '5')
+    if (saved.sort?.column && saved.sort?.direction) {
+      sort.value = saved.sort
+    }
+    if (Array.isArray(saved.selectedColumnKeys)) {
+      selectedColumns.value = columns.value.filter((c: any) =>
+        saved.selectedColumnKeys.includes(c.key)
+      )
+    }
+  } catch (e) {
+    console.warn('Failed to parse accounts table state', e)
+  }
+})
 
 
 
@@ -302,7 +461,7 @@ const handleChange = (value:string, row:any) => {
     notes.value[row.id] = value;
 };
 
-const onPaymentStatusChange = async (id:string, status:string, billNo) => {
+const onPaymentStatusChange = async (id:string, status:string, billNo, paymentMethod?: 'Cash' | 'UPI' | 'Card') => {
     try{
     const res = await UpdateBill.mutateAsync({
         where:{
@@ -310,6 +469,9 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
         },
         data:{
             paymentStatus:status,
+            ...(status === 'PAID' && paymentMethod && {
+                paymentMethod
+            }),
             ...(status === 'PAID' && {
                 createdAt: new Date().toISOString()
             })
@@ -325,6 +487,101 @@ const onPaymentStatusChange = async (id:string, status:string, billNo) => {
           color: 'red',
         });
     }
+}
+
+const getReceiptLink = (billId: string) => {
+  if (!process.client) return ''
+  return `${window.location.origin}/receipt/${billId}`
+}
+
+const getUpiPaymentLink = (row: any) => {
+  const upiId = useAuth().session.value?.upiId
+  if (!upiId) return ''
+  const amount = Number(row?.grandTotal || 0).toFixed(2)
+  const payeeName = encodeURIComponent(useAuth().session.value?.companyName || 'Store')
+  const note = encodeURIComponent(`Invoice ${row?.invoiceNumber || ''}`.trim())
+  return `upi://pay?pa=${encodeURIComponent(upiId)}&pn=${payeeName}&am=${amount}&cu=INR&tn=${note}`
+}
+
+const sendPendingWhatsappApi = async (row: any) => {
+  try {
+    const phone = row?.account?.phone || row?.phone
+    if (!phone) {
+      toast.add({
+        title: 'Phone number missing',
+        description: 'Add account phone to send pending request.',
+        color: 'orange',
+      })
+      return
+    }
+
+    await $fetch('/api/whatsapp/send-pending-template', {
+      method: 'POST',
+      body: {
+        phone,
+        name: row?.account?.name || 'Customer',
+        billName: useAuth().session.value?.companyName || '',
+        amount: Number(row?.grandTotal || 0).toFixed(2),
+        dueDate: row?.createdAt || new Date().toISOString(),
+        receiptUrl: getReceiptLink(row?.id || ''),
+        paymentUrl: getUpiPaymentLink(row),
+      },
+    })
+
+    toast.add({
+      title: 'Pending request sent on WhatsApp',
+      color: 'green',
+    })
+  } catch (error: any) {
+    toast.add({
+      title: 'Failed to send WhatsApp request',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  }
+}
+
+const handlePaymentStatusSelect = (row: any, status: string) => {
+  if (status === 'PAID') {
+    // Keep row stable until user confirms payment method.
+    row.paymentStatus = 'PENDING'
+    paymentMethodForPaid.value = ['Cash', 'UPI', 'Card'].includes(row.paymentMethod)
+      ? row.paymentMethod
+      : 'Cash'
+    paymentMethodBillCtx.value = {
+      id: row.id,
+      billNo: row.invoiceNumber,
+      row
+    }
+    isPaymentMethodModalOpen.value = true
+    return
+  }
+
+  onPaymentStatusChange(row.id, status, row.invoiceNumber)
+}
+
+const confirmPaidWithMethod = async () => {
+  if (!paymentMethodBillCtx.value) return
+
+  await onPaymentStatusChange(
+    paymentMethodBillCtx.value.id,
+    'PAID',
+    paymentMethodBillCtx.value.billNo,
+    paymentMethodForPaid.value
+  )
+
+  if (paymentMethodBillCtx.value.row) {
+    paymentMethodBillCtx.value.row.paymentStatus = 'PAID'
+    paymentMethodBillCtx.value.row.paymentMethod = paymentMethodForPaid.value
+  }
+
+  isPaymentMethodModalOpen.value = false
+  paymentMethodBillCtx.value = null
+}
+
+const cancelPaidWithMethod = () => {
+  isPaymentMethodModalOpen.value = false
+  paymentMethodBillCtx.value = null
 }
 
 const openEditModal = (row:any) => {
@@ -516,6 +773,15 @@ const deleteAccountRow = async () => {
                     </USelectMenu>
 
                     <UButton
+                        icon="i-heroicons-arrow-down-tray"
+                        color="gray"
+                        size="xs"
+                        @click="handleDownloadExcel"
+                    >
+                        Download
+                    </UButton>
+
+                    <UButton
                         icon="i-heroicons-funnel"
                         color="gray"
                         size="xs"
@@ -540,23 +806,11 @@ const deleteAccountRow = async () => {
             >
 
             <template #pending-data="{ row }">
-            {{
-                row.bill
-                ?.filter(b => b.paymentStatus === 'PENDING')
-                .reduce((sum, b) => {
-                    if (b.paymentMethod === 'Split' && b.splitPayments) {
-                    // Sum only the credit part
-                    const creditAmount = b.splitPayments
-                        .filter(sp => sp.method === 'Credit')
-                        .reduce((cSum, sp) => cSum + (sp.amount ?? 0), 0);
-                    return sum + creditAmount;
-                    } else {
-                    // Normal case → take full grandTotal
-                    return sum + (b.grandTotal ?? 0);
-                    }
-                }, 0)
-                .toFixed(2)
-            }}
+              {{ getPendingAmount(row).toFixed(2) }}
+            </template>
+
+            <template #phone-data="{ row }">
+              {{ row.phone || '-' }}
             </template>
 
 
@@ -570,13 +824,13 @@ const deleteAccountRow = async () => {
                 </UDropdown>
             </template>
 
-                <template #expand="{ row }">
+                <template #expand="{ row: accountRow }">
                     <UTable 
-                        :rows="row.bill" 
+                        :rows="accountRow.bill" 
                         :columns="billColumns"
                     >
                         <template #actions-data="{ row }">
-                            <UDropdown :items="action(row)">
+                            <UDropdown :items="action({ ...row, account: { name: accountRow.name, phone: accountRow.phone } })">
                                 <UButton
                                     color="gray"
                                     variant="ghost"
@@ -598,7 +852,7 @@ const deleteAccountRow = async () => {
                                         <div v-if="row.paymentMethod === 'Split'">
                                             <ul class="list-disc list-inside">
                                                 <li v-for="(payment, idx) in row.splitPayments" :key="idx">
-                                                    {{ payment.method }} – ₹{{ payment.amount }}
+                                                    {{ payment.method }} â€“ â‚¹{{ payment.amount }}
                                                 </li>
                                             </ul>
                                         </div>
@@ -618,7 +872,7 @@ const deleteAccountRow = async () => {
                             <USelect
                                 v-model="row.paymentStatus"
                                 :options="['PAID', 'PENDING']"
-                                @update:model-value="status => onPaymentStatusChange(row.id, status, row.invoiceNumber)"
+                                @update:model-value="status => handlePaymentStatusSelect(row, status)"
                                 size="xs"
                                 class="w-28"
                             />
@@ -739,6 +993,26 @@ const deleteAccountRow = async () => {
             />
             <UButton color="white" label="Cancel" @click="isDeleteAccountModalOpen = false" />
         </template>
+    </UDashboardModal>
+
+    <UDashboardModal
+      v-model="isPaymentMethodModalOpen"
+      title="Select Payment Method"
+      description="Choose payment method before marking bill as paid."
+      icon="i-heroicons-credit-card"
+      prevent-close
+      :close-button="null"
+    >
+      <div class="px-4 pb-2">
+        <USelect
+          v-model="paymentMethodForPaid"
+          :options="['Cash', 'UPI', 'Card']"
+        />
+      </div>
+      <template #footer>
+        <UButton color="green" label="Confirm" @click="confirmPaidWithMethod" />
+        <UButton color="white" label="Cancel" @click="cancelPaidWithMethod" />
+      </template>
     </UDashboardModal>
 
       <UDashboardModal

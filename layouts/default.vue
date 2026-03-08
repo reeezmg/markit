@@ -353,15 +353,15 @@ const links = computed(() => {
                         shortcuts: ['D', 'O'],
                     },
                 },
-                {
-                    label: 'Credit',
-                    to: `/distributor/credit`,
-                    exact: true,
-                    tooltip: {
-                        text: 'Credit',
-                        shortcuts: ['D', 'C'],
-                    },
-                },
+                // {
+                //     label: 'Credit',
+                //     to: `/distributor/credit`,
+                //     exact: true,
+                //     tooltip: {
+                //         text: 'Credit',
+                //         shortcuts: ['D', 'C'],
+                //     },
+                // },
                
             ],
            

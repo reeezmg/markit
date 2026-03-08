@@ -9,6 +9,7 @@ const paymentOptions = ['Cash', 'UPI', 'Card']
 const queryClient = useQueryClient()
 const billStore = useBillStore()
 const timeZone = 'Asia/Kolkata'
+const SALES_TABLE_STATE_KEY = 'erp_sales_table_state_v1'
 const toast = useToast();
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
@@ -196,6 +197,7 @@ const selectedColumns = ref([]);
 watch(columns, (newColumns) => {
   selectedColumns.value = [...newColumns];
 }, { immediate: true });
+const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
 
 const columnsTable = computed(() =>
   columns.value.filter((column) => selectedColumns.value.includes(column))
@@ -207,10 +209,21 @@ const notes = ref<any>({})
 const search = ref('');
 const selectedStatus = ref<any>([]);
 const searchStatus = ref(undefined);
+const selectedPaymentMethods = ref<any>([]);
+const minGrandTotal = ref<number | null>(null);
+const maxGrandTotal = ref<number | null>(null);
+const isFilterModalOpen = ref(false);
+const draftSelectedStatus = ref<any>([]);
+const draftSelectedPaymentMethods = ref<any>([]);
+const draftMinGrandTotal = ref<number | null>(null);
+const draftMaxGrandTotal = ref<number | null>(null);
 
 const resetFilters = () => {
     search.value = '';
     selectedStatus.value = [];
+    selectedPaymentMethods.value = [];
+    minGrandTotal.value = null;
+    maxGrandTotal.value = null;
 };
 
 
@@ -222,10 +235,15 @@ const page = ref(1);
 const pageCount = ref('5');
 const sales = ref([])
 const pageTotal = ref(0)
-
-const debouncedSearch = ref(search.value)
-let searchTimeout: ReturnType<typeof setTimeout> | null = null
 const isLoading = ref(false)
+
+const paymentMethodFilterOptions = [
+  { label: 'Cash', value: 'Cash' },
+  { label: 'UPI', value: 'UPI' },
+  { label: 'Card', value: 'Card' },
+  { label: 'Credit', value: 'Credit' },
+  { label: 'Split', value: 'Split' },
+]
 
 const fetchSales = async () => {
   isLoading.value = true
@@ -234,8 +252,11 @@ const fetchSales = async () => {
       method: 'POST',
       body: {
         companyId: useAuth().session.value?.companyId,
-        search: debouncedSearch.value?.trim(),
+        search: search.value?.trim(),
         selectedStatus: selectedStatus.value,
+        selectedPaymentMethods: selectedPaymentMethods.value,
+        minGrandTotal: minGrandTotal.value,
+        maxGrandTotal: maxGrandTotal.value,
         startDate: startOfDay(selectedDate.value?.start).toISOString(),
         endDate: endOfDay(selectedDate.value?.end).toISOString(),
         page: page.value,
@@ -262,23 +283,16 @@ watch(sales, (newSales) => {
 });
 
 
-// 🔎 Debounced search
-watch(search, (val) => {
-  if (searchTimeout) clearTimeout(searchTimeout)
-
-  searchTimeout = setTimeout(() => {
-    debouncedSearch.value = val
-    page.value = 1
-    fetchSales()
-  }, 400)
-})
-
 // 🔁 Immediate refetch for others
 watch(
   [
     page,
     pageCount,
+    search,
     selectedStatus,
+    selectedPaymentMethods,
+    minGrandTotal,
+    maxGrandTotal,
     () => selectedDate.value?.start,
     () => selectedDate.value?.end,
     () => sort.value.column,
@@ -287,7 +301,110 @@ watch(
   fetchSales
 )
 
+watch(
+  [
+    search,
+    selectedStatus,
+    selectedPaymentMethods,
+    minGrandTotal,
+    maxGrandTotal,
+    pageCount,
+    () => selectedDate.value?.start,
+    () => selectedDate.value?.end,
+  ],
+  () => {
+    if (page.value !== 1) page.value = 1
+  },
+  { deep: true }
+)
+
+watch(
+  [
+    search,
+    selectedStatus,
+    selectedPaymentMethods,
+    minGrandTotal,
+    maxGrandTotal,
+    page,
+    pageCount,
+    () => selectedDate.value?.start,
+    () => selectedDate.value?.end,
+    () => sort.value.column,
+    () => sort.value.direction,
+    selectedColumnKeys,
+  ],
+  () => {
+    if (!process.client) return
+    localStorage.setItem(
+      SALES_TABLE_STATE_KEY,
+      JSON.stringify({
+        search: search.value,
+        selectedStatus: selectedStatus.value,
+        selectedPaymentMethods: selectedPaymentMethods.value,
+        minGrandTotal: minGrandTotal.value,
+        maxGrandTotal: maxGrandTotal.value,
+        selectedDate: selectedDate.value,
+        page: page.value,
+        pageCount: pageCount.value,
+        sort: sort.value,
+        selectedColumnKeys: selectedColumnKeys.value,
+      })
+    )
+  },
+  { deep: true }
+)
+
+const openFilterModal = () => {
+  draftSelectedStatus.value = [...selectedStatus.value]
+  draftSelectedPaymentMethods.value = [...selectedPaymentMethods.value]
+  draftMinGrandTotal.value = minGrandTotal.value
+  draftMaxGrandTotal.value = maxGrandTotal.value
+  isFilterModalOpen.value = true
+}
+
+const applyFilters = async () => {
+  selectedStatus.value = [...draftSelectedStatus.value]
+  selectedPaymentMethods.value = [...draftSelectedPaymentMethods.value]
+  minGrandTotal.value = draftMinGrandTotal.value
+  maxGrandTotal.value = draftMaxGrandTotal.value
+  page.value = 1
+  isFilterModalOpen.value = false
+  await fetchSales()
+}
+
 onMounted(() => {
+  if (process.client) {
+    const raw = localStorage.getItem(SALES_TABLE_STATE_KEY)
+    if (raw) {
+      try {
+        const saved = JSON.parse(raw)
+        search.value = saved.search ?? ''
+        selectedStatus.value = saved.selectedStatus ?? []
+        selectedPaymentMethods.value = saved.selectedPaymentMethods ?? []
+        minGrandTotal.value = saved.minGrandTotal ?? null
+        maxGrandTotal.value = saved.maxGrandTotal ?? null
+        if (saved.selectedDate?.start && saved.selectedDate?.end) {
+          selectedDate.value = {
+            start: new Date(saved.selectedDate.start),
+            end: new Date(saved.selectedDate.end),
+          }
+        }
+        page.value = Number(saved.page || 1)
+        pageCount.value = String(saved.pageCount || '5')
+        if (saved.sort?.column && saved.sort?.direction) {
+          sort.value = saved.sort
+        }
+        if (Array.isArray(saved.selectedColumnKeys)) {
+          selectedColumns.value = columns.value.filter((c: any) =>
+            saved.selectedColumnKeys.includes(c.key)
+          )
+        }
+      } catch (e) {
+        console.warn('Failed to parse sales table state', e)
+      }
+    }
+  }
+
   isMobile.value = window.innerWidth < 640
   window.addEventListener('resize', () => {
     isMobile.value = window.innerWidth < 640
@@ -304,6 +421,115 @@ watch(
   },
   { immediate: true }
 )
+
+const fetchFilteredSalesForExport = async () => {
+  const allRows: any[] = []
+  let exportPage = 1
+  const exportPageCount = 500
+  let hasMore = true
+  let totalRows = 0
+
+  while (hasMore) {
+    const res = await $fetch('/api/billSale/findManyBills', {
+      method: 'POST',
+      body: {
+        companyId: useAuth().session.value?.companyId,
+        search: search.value?.trim(),
+        selectedStatus: selectedStatus.value,
+        selectedPaymentMethods: selectedPaymentMethods.value,
+        minGrandTotal: minGrandTotal.value,
+        maxGrandTotal: maxGrandTotal.value,
+        startDate: startOfDay(selectedDate.value?.start).toISOString(),
+        endDate: endOfDay(selectedDate.value?.end).toISOString(),
+        page: exportPage,
+        pageCount: exportPageCount,
+        sortColumn: sort.value.column,
+        sortDirection: sort.value.direction,
+      },
+    })
+
+    totalRows = Number(res?.total || 0)
+    allRows.push(...(res?.rows || []))
+    hasMore = allRows.length < totalRows && (res?.rows || []).length > 0
+    exportPage += 1
+  }
+
+  return allRows
+}
+
+const handleDownloadExcel = async () => {
+  try {
+    const rows = await fetchFilteredSalesForExport()
+    if (!rows.length) {
+      toast.add({
+        title: 'No data to export',
+        color: 'orange',
+      })
+      return
+    }
+
+    const [{ Workbook }, { saveAs }] = await Promise.all([
+      import('exceljs'),
+      import('file-saver'),
+    ])
+
+    const workbook = new Workbook()
+    const worksheet = workbook.addWorksheet('Sales')
+
+    worksheet.columns = [
+      { header: 'Invoice #', key: 'invoiceNumber', width: 14 },
+      { header: 'Date', key: 'createdAt', width: 22 },
+      { header: 'Customer Name', key: 'customerName', width: 24 },
+      { header: 'Customer Phone', key: 'customerPhone', width: 18 },
+      { header: 'Sub Total', key: 'subtotal', width: 14 },
+      { header: 'Grand Total', key: 'grandTotal', width: 14 },
+      { header: 'Payment Status', key: 'paymentStatus', width: 14 },
+      { header: 'Payment Method', key: 'paymentMethod', width: 16 },
+      { header: 'Notes', key: 'notes', width: 30 },
+    ]
+
+    rows.forEach((row: any) => {
+      worksheet.addRow({
+        invoiceNumber: row.invoiceNumber ?? '',
+        createdAt: row.createdAt
+          ? new Date(row.createdAt).toLocaleString()
+          : '',
+        customerName: row.client?.name ?? '',
+        customerPhone: row.client?.phone ?? '',
+        subtotal: Number(row.subtotal || 0),
+        grandTotal: Number(row.grandTotal || 0),
+        paymentStatus: row.paymentStatus ?? '',
+        paymentMethod: row.paymentMethod ?? '',
+        notes: row.notes ?? '',
+      })
+    })
+
+    const headerRow = worksheet.getRow(1)
+    headerRow.font = { bold: true }
+    headerRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE5E7EB' },
+      }
+    })
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    const filename = `sales-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`
+    saveAs(
+      new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      filename
+    )
+  } catch (error: any) {
+    toast.add({
+      title: 'Failed to export sales',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  }
+}
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -610,51 +836,41 @@ const openBill = async (id) => {
         >
             <!-- Filters -->
             <template #header>
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
-                <div class="flex sm:flex-row flex-col gap-3 w-full sm:w-auto">
-                <div class="flex flex-row gap-3 w-full sm:w-auto">    
-                <UInput
-                    v-model="search"
-                    icon="i-heroicons-magnifying-glass-20-solid"
-                    type="text"
-                    placeholder="Search Invoice"
-                    class="w-full sm:w-40"
-                />
-                 <USelectMenu
-                    v-model="selectedStatus"
-                    :options="todoStatus"
-                    multiple
-                    placeholder="Status"
-                    class="w-full sm:w-40"
-                />
-                </div>
-                    <UPopover :popper="{ placement: 'bottom-start' }" class=" z-10 ">
-                        <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
-                        {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
-                        </UButton>
+            <div class="flex justify-between items-center gap-3 w-full">
+                    <div class="flex items-center gap-3">
+                      <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+                          <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
+                          {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
+                          </UButton>
 
-                        <template #panel="{ close }">
-                        <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
-                            <div class="hidden sm:flex flex-col py-4">
-                            <UButton
-                                v-for="(range, index) in ranges"
-                                :key="index"
-                                :label="range.label"
-                                color="gray"
-                                variant="ghost"
-                                class="rounded-none px-6 hidden sm:block"
-                                :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
-                                truncate
-                                @click="selectRange(range.duration)"
-                            />
-                            </div>
+                          <template #panel="{ close }">
+                          <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                              <div class="hidden sm:flex flex-col py-4">
+                              <UButton
+                                  v-for="(range, index) in ranges"
+                                  :key="index"
+                                  :label="range.label"
+                                  color="gray"
+                                  variant="ghost"
+                                  class="rounded-none px-6 hidden sm:block"
+                                  :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                                  truncate
+                                  @click="selectRange(range.duration)"
+                              />
+                              </div>
 
-                            <DatePicker v-model="selectedDate" @close="close" />
-                        </div>
-                        </template>
-                    </UPopover>
-                </div>
-               
+                              <DatePicker v-model="selectedDate" @close="close" />
+                          </div>
+                          </template>
+                      </UPopover>
+                      <UInput
+                        v-model="search"
+                        icon="i-heroicons-magnifying-glass-20-solid"
+                        type="text"
+                        placeholder="Search Invoice"
+                        class="w-full sm:w-52"
+                      />
+                    </div>
             </div>
         </template>
             <!-- Header and Action buttons -->
@@ -700,10 +916,28 @@ const openBill = async (id) => {
                     </USelectMenu>
 
                     <UButton
+                        icon="i-heroicons-arrow-down-tray"
+                        color="gray"
+                        size="xs"
+                        @click="handleDownloadExcel"
+                    >
+                        Download
+                    </UButton>
+
+                    <UButton
                         icon="i-heroicons-funnel"
                         color="gray"
                         size="xs"
-                        :disabled="search === '' && selectedStatus.length === 0"
+                        @click="openFilterModal"
+                    >
+                        Filters
+                    </UButton>
+
+                    <UButton
+                        icon="i-heroicons-arrow-path"
+                        color="gray"
+                        size="xs"
+                        :disabled="search === '' && selectedStatus.length === 0 && selectedPaymentMethods.length === 0 && !minGrandTotal && !maxGrandTotal"
                         @click="resetFilters"
                     >
                         Reset
@@ -896,6 +1130,48 @@ const openBill = async (id) => {
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
         </template>
     </UDashboardModal>
+
+    <UModal v-model="isFilterModalOpen">
+      <UCard>
+        <template #header>
+          <div class="text-base font-semibold">Sales Filters</div>
+        </template>
+
+        <div class="space-y-3">
+          <USelectMenu
+            v-model="draftSelectedStatus"
+            :options="todoStatus"
+            multiple
+            placeholder="Status"
+          />
+          <USelectMenu
+            v-model="draftSelectedPaymentMethods"
+            :options="paymentMethodFilterOptions"
+            multiple
+            placeholder="Payment Method"
+          />
+          <div class="grid grid-cols-2 gap-3">
+            <UInput
+              v-model.number="draftMinGrandTotal"
+              type="number"
+              placeholder="Min Total"
+            />
+            <UInput
+              v-model.number="draftMaxGrandTotal"
+              type="number"
+              placeholder="Max Total"
+            />
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="w-full flex justify-end gap-2">
+            <UButton color="gray" variant="ghost" @click="isFilterModalOpen = false">Cancel</UButton>
+            <UButton color="primary" @click="applyFilters">Apply Filter</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
 
       
   <UModal v-model="isOpen">

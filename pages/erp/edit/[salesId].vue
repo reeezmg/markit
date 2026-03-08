@@ -22,6 +22,9 @@ const isSavingAcc = ref(false);
 const issalesReturnModelOpen = ref(false);
 const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
 const date = ref(new Date().toISOString());
+const parentUserCode = ref(null);
+const parentUserId = ref(null);
+const parentUserName = ref(null);
 const discount = ref(0);
 const accountLoaded = ref(false);
 const couponValue = ref(0);
@@ -479,9 +482,9 @@ const addNewRow = async (index,moveTonNextRow = true) => {
     sizes: {},
     totalQty: 0,
     return:false,
-    userCode:null,
-    user:null,
-    userId:null
+    userCode: parentUserCode.value,
+    user: parentUserName.value,
+    userId: parentUserId.value
   });
   }
 
@@ -1362,6 +1365,43 @@ async function updateUserDetails(index, user) {
   }
 }
 
+async function updateParentUserDetails(user) {
+  if (!user) {
+    parentUserCode.value = null
+    parentUserName.value = null
+    parentUserId.value = null
+    items.value = items.value.map((item) => ({
+      ...item,
+      userCode: null,
+      user: null,
+      userId: null
+    }))
+    return
+  }
+
+  const userdetails = userStore.getuserByCode(Number(user))
+
+  if (userdetails) {
+    parentUserCode.value = Number(user)
+    parentUserName.value = userdetails.name || null
+    parentUserId.value = userdetails.id || null
+    items.value = items.value.map((item) => ({
+      ...item,
+      userCode: Number(user),
+      user: userdetails.name || null,
+      userId: userdetails.id || null
+    }))
+  } else {
+    parentUserCode.value = null
+    parentUserName.value = null
+    parentUserId.value = null
+    toast.add({
+      title: 'user code invalid!',
+      color: 'red',
+    });
+  }
+}
+
 const moveFocus = (currentRowIndex, currentField, direction) => {
   const baseFieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
   const fieldOrder = isUserTrackIncluded ? [...baseFieldOrder.slice(0, 6), 'user', 'tax'] : baseFieldOrder;
@@ -1854,16 +1894,39 @@ const couponModel = computed({
      
          <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
             <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" :disabled="bill?.isMarkit" />
+            <UInput
+              v-if="isUserTrackIncluded"
+              v-model="parentUserCode"
+              type="number"
+              label="User Code"
+              placeholder="Enter user code"
+              class="flex-1"
+              @keydown.enter.prevent="updateParentUserDetails(parentUserCode)"
+              @blur="updateParentUserDetails(parentUserCode)"
+              :disabled="bill?.isMarkit"
+            />
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan" :disabled="bill?.isMarkit"/>
           </div>
         
         <div class="lg:flex lg:flex-row lg:justify-between text-sm py-2 px-2 hidden">
-          <UInput 
-            v-model="dateOnly" 
-            type="date" 
-            label="Date" 
-            :disabled="bill?.isMarkit"
-          />
+          <div class="lg:flex lg:flex-row gap-2">
+            <UInput 
+              v-model="dateOnly" 
+              type="date" 
+              label="Date" 
+              :disabled="bill?.isMarkit"
+            />
+            <UInput
+              v-if="isUserTrackIncluded"
+              v-model="parentUserCode"
+              type="number"
+              label="User Code"
+              placeholder="Enter user code"
+              @keydown.enter.prevent="updateParentUserDetails(parentUserCode)"
+              @blur="updateParentUserDetails(parentUserCode)"
+              :disabled="bill?.isMarkit"
+            />
+          </div>
           <div class="lg:flex lg:flex-row">
            <UButton
                 color="primary"

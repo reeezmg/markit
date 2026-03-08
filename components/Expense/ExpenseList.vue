@@ -3,7 +3,8 @@ import {
     useFindManyExpense,
     useCountExpense,
     useFindManyExpenseCategory,
-    useUpdateManyExpense
+    useUpdateManyExpense,
+    useFindManyCompanyUser
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
@@ -12,12 +13,24 @@ import { startOfDay, endOfDay } from 'date-fns'
 
 const emit = defineEmits(['edit','delete','open','values']);
 const useAuth = () => useNuxtApp().$auth;
+const toast = useToast()
+const EXPENSE_TABLE_STATE_KEY = 'erp_expense_table_state_v1'
 const UpdateManyExpense = useUpdateManyExpense({ optimisticUpdate: true });
 const selectedRows = ref([]);
 const selectedStatus = ref([]);
 const selectedCategory = ref([]);
+const selectedUsers = ref<string[]>([]);
+const minAmount = ref<number | null>(null);
+const maxAmount = ref<number | null>(null);
+const search = ref('');
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
+const isFilterModalOpen = ref(false)
+const draftSelectedStatus = ref([])
+const draftSelectedCategory = ref([])
+const draftSelectedUsers = ref<string[]>([])
+const draftMinAmount = ref<number | null>(null)
+const draftMaxAmount = ref<number | null>(null)
 const selectedDate = ref({ 
     start: new Date(new Date().setHours(0, 0, 0, 0)) , 
     end: new Date(new Date().setHours(23, 59, 59, 999)) 
@@ -141,15 +154,64 @@ const categoryQueryArgs = computed<Prisma.ExpenseCategoryFindManyArgs>(() => ({
 }));
 
 const { data: categories, isLoading:categoryIsLoading,} = useFindManyExpenseCategory(categoryQueryArgs);
+const userQueryArgs = computed(() => ({
+    where: {
+        companyId: useAuth().session.value?.companyId,
+        deleted: false,
+        status: true,
+    },
+    select: {
+        userId: true,
+        name: true,
+    },
+}))
+const { data: companyUsers } = useFindManyCompanyUser(userQueryArgs)
+const userFilterOptions = computed(() =>
+    (companyUsers.value || []).map((u: any) => ({
+        label: u.name || 'Unknown',
+        value: u.userId
+    }))
+)
 
 // Data
 const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
+    const hasMinAmount = minAmount.value !== null && Number.isFinite(Number(minAmount.value))
+    const hasMaxAmount = maxAmount.value !== null && Number.isFinite(Number(maxAmount.value))
+    const selectedUserIds = (selectedUsers.value || [])
+      .map((u: any) => (typeof u === 'string' ? u : u?.value))
+      .filter((id: any) => typeof id === 'string' && id.length > 0)
     return {
         where: {
             companyId: useAuth().session.value?.companyId,
-            
+            ...(search.value?.trim() && {
+                OR: [
+                    {
+                        note: {
+                            contains: search.value.trim(),
+                            mode: 'insensitive'
+                        }
+                    },
+                    {
+                        expensecategory: {
+                            name: {
+                                contains: search.value.trim(),
+                                mode: 'insensitive'
+                            }
+                        }
+                    },
+                    {
+                        user: {
+                            name: {
+                                contains: search.value.trim(),
+                                mode: 'insensitive'
+                            }
+                        }
+                    }
+                ]
+            }),
+
             ...(selectedStatus.value.length && {
-                OR: selectedStatus.value.map((item) => ({ status: item }))
+                status: { in: selectedStatus.value }
             }),
 
                 ...(selectedDate.value && {
@@ -161,6 +223,17 @@ const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
 
             ...(selectedCategory.value.length && {
                 expensecategoryId: { in: selectedCategory }
+            }),
+
+            ...(selectedUserIds.length && {
+                userId: { in: selectedUserIds }
+            }),
+
+            ...((hasMinAmount || hasMaxAmount) && {
+                totalAmount: {
+                    ...(hasMinAmount ? { gte: Number(minAmount.value) } : {}),
+                    ...(hasMaxAmount ? { lte: Number(maxAmount.value) } : {}),
+                }
             })
         },
 
@@ -206,6 +279,7 @@ const selectedColumns = ref(columns);
 const columnsTable = computed(() =>
     columns.filter((column) => selectedColumns.value.includes(column)),
 );
+const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
 
 
 
@@ -216,13 +290,126 @@ watchEffect(() => {
 });
 
 const resetFilters = () => {
+    search.value = '';
     selectedStatus.value = [];
    selectedDate.value = ({
         start: new Date(new Date().setHours(0, 0, 0, 0)) , 
         end: new Date(new Date().setHours(23, 59, 59, 999)) 
     })
    selectedCategory.value = [];
+   selectedUsers.value = [];
+   minAmount.value = null;
+   maxAmount.value = null;
 };
+
+const openFilterModal = () => {
+  draftSelectedStatus.value = [...selectedStatus.value]
+  draftSelectedCategory.value = [...selectedCategory.value]
+  draftSelectedUsers.value = [...selectedUsers.value]
+  draftMinAmount.value = minAmount.value
+  draftMaxAmount.value = maxAmount.value
+  isFilterModalOpen.value = true
+}
+
+const applyFilters = () => {
+  selectedStatus.value = [...draftSelectedStatus.value]
+  selectedCategory.value = [...draftSelectedCategory.value]
+  selectedUsers.value = [...draftSelectedUsers.value]
+  minAmount.value = draftMinAmount.value
+  maxAmount.value = draftMaxAmount.value
+  page.value = 1
+  isFilterModalOpen.value = false
+}
+
+watch(
+  [
+    search,
+    selectedStatus,
+    selectedCategory,
+    selectedUsers,
+    minAmount,
+    maxAmount,
+    pageCount,
+    () => selectedDate.value?.start,
+    () => selectedDate.value?.end,
+  ],
+  () => {
+    if (page.value !== 1) page.value = 1
+  },
+  { deep: true }
+)
+
+watch(
+  [
+    search,
+    selectedStatus,
+    selectedCategory,
+    selectedUsers,
+    minAmount,
+    maxAmount,
+    page,
+    pageCount,
+    () => selectedDate.value?.start,
+    () => selectedDate.value?.end,
+    () => sort.value.column,
+    () => sort.value.direction,
+    selectedColumnKeys,
+  ],
+  () => {
+    if (!process.client) return
+    localStorage.setItem(
+      EXPENSE_TABLE_STATE_KEY,
+      JSON.stringify({
+        search: search.value,
+        selectedStatus: selectedStatus.value,
+        selectedCategory: selectedCategory.value,
+        selectedUsers: selectedUsers.value,
+        minAmount: minAmount.value,
+        maxAmount: maxAmount.value,
+        selectedDate: selectedDate.value,
+        page: page.value,
+        pageCount: pageCount.value,
+        sort: sort.value,
+        selectedColumnKeys: selectedColumnKeys.value,
+      })
+    )
+  },
+  { deep: true }
+)
+
+onMounted(() => {
+  if (!process.client) return
+  const raw = localStorage.getItem(EXPENSE_TABLE_STATE_KEY)
+  if (!raw) return
+
+  try {
+    const saved = JSON.parse(raw)
+    search.value = saved.search ?? ''
+    selectedStatus.value = saved.selectedStatus ?? []
+    selectedCategory.value = saved.selectedCategory ?? []
+    selectedUsers.value = saved.selectedUsers ?? []
+    minAmount.value = saved.minAmount ?? null
+    maxAmount.value = saved.maxAmount ?? null
+    if (saved.selectedDate?.start && saved.selectedDate?.end) {
+      selectedDate.value = {
+        start: new Date(saved.selectedDate.start),
+        end: new Date(saved.selectedDate.end),
+      }
+    }
+    page.value = Number(saved.page || 1)
+    pageCount.value = String(saved.pageCount || '10')
+    if (saved.sort?.column && saved.sort?.direction) {
+      sort.value = saved.sort
+    }
+    if (Array.isArray(saved.selectedColumnKeys)) {
+      selectedColumns.value = columns.filter((c: any) =>
+        saved.selectedColumnKeys.includes(c.key)
+      )
+    }
+  } catch (e) {
+    console.warn('Failed to parse expense table state', e)
+  }
+})
 
 function isRangeSelected(duration: Duration) {
   return isSameDay(selectedDate.value.start, sub(new Date(), duration)) && isSameDay(selectedDate.value.end, new Date())
@@ -242,6 +429,65 @@ const multiUpdate = async(status:string,ids:any) => {
         }
 
     })
+}
+
+const handleDownloadExcel = async () => {
+  try {
+    const rows = sales.value || []
+    if (!rows.length) {
+      toast.add({
+        title: 'No data to export',
+        color: 'orange',
+      })
+      return
+    }
+
+    const [{ Workbook }, { saveAs }] = await Promise.all([
+      import('exceljs'),
+      import('file-saver'),
+    ])
+
+    const workbook = new Workbook()
+    const worksheet = workbook.addWorksheet('Expenses')
+
+    worksheet.columns = [
+      { header: 'Date', key: 'expenseDate', width: 16 },
+      { header: 'Category', key: 'category', width: 24 },
+      { header: 'User', key: 'user', width: 24 },
+      { header: 'Note', key: 'note', width: 32 },
+      { header: 'Payment Mode', key: 'paymentMode', width: 14 },
+      { header: 'Amount', key: 'amount', width: 12 },
+      { header: 'Status', key: 'status', width: 12 },
+    ]
+
+    rows.forEach((row: any) => {
+      worksheet.addRow({
+        expenseDate: row.expenseDate ? format(row.expenseDate, 'd MMM yyyy') : '',
+        category: row.expensecategory?.name || '',
+        user: row.user?.name || '',
+        note: row.note || '',
+        paymentMode: row.paymentMode || '',
+        amount: Number(row.totalAmount || 0),
+        status: row.status || '',
+      })
+    })
+
+    worksheet.getRow(1).font = { bold: true }
+
+    const buffer = await workbook.xlsx.writeBuffer()
+    saveAs(
+      new Blob([buffer], {
+        type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      }),
+      `expenses-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`
+    )
+  } catch (error: any) {
+    toast.add({
+      title: 'Failed to export expenses',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  }
 }
 
 // const download = async (filePath:string) => {
@@ -287,28 +533,9 @@ const multiUpdate = async(status:string,ids:any) => {
             }"
         >
             <template #header>
-                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
-                    <div class="flex sm:flex-row flex-col gap-3 w-full sm:w-auto">
-                       <div class="flex flex-row gap-3 w-full sm:w-auto">    
-                        <USelectMenu
-                            v-model="selectedStatus"
-                            :options="['Paid','Pending', 'Approved', 'Rejected']"
-                            multiple
-                            placeholder="Status"
-                             class="w-full sm:w-40"
-                        />
-
-                        <USelectMenu
-                            v-model="selectedCategory"
-                            :options="categories"
-                            option-attribute="name"
-                            value-attribute="id"
-                            multiple
-                            placeholder="Category"
-                            class="w-full sm:w-40"
-                        />
-                        </div>
-                        <UPopover :popper="{ placement: 'bottom-start' }" class=" z-10">
+                <div class="flex justify-between items-center gap-3 w-full">
+                    <div class="flex items-center gap-3">
+                        <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
                         <UButton icon="i-heroicons-calendar-days-20-solid" class=" w-full sm:w-60">
                         {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
                         </UButton>
@@ -332,11 +559,20 @@ const multiUpdate = async(status:string,ids:any) => {
                             <DatePicker v-model="selectedDate" @close="close"  />
                         </div>
                         </template>
-                    </UPopover>
+                        </UPopover>
+                        <UInput
+                          v-model="search"
+                          icon="i-heroicons-magnifying-glass-20-solid"
+                          type="text"
+                          placeholder="Search note / category / user"
+                          class="w-full sm:w-56"
+                        />
                     </div>
-                    <UButton color="primary" @click=" emit('open')" block class="w-full sm:w-40" >
-                        Add Expense
-                    </UButton>
+                    <div class="flex items-center gap-2">
+                      <UButton color="primary" @click=" emit('open')" block class="w-full sm:w-40" >
+                          Add Expense
+                      </UButton>
+                    </div>
                 </div>
             </template>
             
@@ -382,7 +618,25 @@ const multiUpdate = async(status:string,ids:any) => {
                     </USelectMenu>
 
                     <UButton
+                        icon="i-heroicons-arrow-down-tray"
+                        color="gray"
+                        size="xs"
+                        @click="handleDownloadExcel"
+                    >
+                        Download
+                    </UButton>
+
+                    <UButton
                         icon="i-heroicons-funnel"
+                        color="gray"
+                        size="xs"
+                        @click="openFilterModal"
+                    >
+                        Filters
+                    </UButton>
+
+                    <UButton
+                        icon="i-heroicons-arrow-path"
                         color="gray"
                         size="xs"
                         @click="resetFilters"
@@ -497,4 +751,52 @@ const multiUpdate = async(status:string,ids:any) => {
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
         </template>
     </UDashboardModal>
+
+    <UModal v-model="isFilterModalOpen">
+      <UCard>
+        <template #header>
+          <div class="text-base font-semibold">Expense Filters</div>
+        </template>
+        <div class="space-y-3">
+          <USelectMenu
+            v-model="draftSelectedStatus"
+            :options="['Paid','Pending', 'Approved', 'Rejected']"
+            multiple
+            placeholder="Status"
+          />
+          <USelectMenu
+            v-model="draftSelectedCategory"
+            :options="categories"
+            option-attribute="name"
+            value-attribute="id"
+            multiple
+            placeholder="Category"
+          />
+          <USelectMenu
+            v-model="draftSelectedUsers"
+            :options="userFilterOptions"
+            multiple
+            placeholder="User"
+          />
+          <div class="grid grid-cols-2 gap-3">
+            <UInput
+              v-model.number="draftMinAmount"
+              type="number"
+              placeholder="Amount >= "
+            />
+            <UInput
+              v-model.number="draftMaxAmount"
+              type="number"
+              placeholder="Amount <= "
+            />
+          </div>
+        </div>
+        <template #footer>
+          <div class="w-full flex justify-end gap-2">
+            <UButton color="gray" variant="ghost" @click="isFilterModalOpen = false">Cancel</UButton>
+            <UButton color="primary" @click="applyFilters">Apply Filter</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
 </template>
