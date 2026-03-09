@@ -6,20 +6,12 @@ export function useCheckoutEvents() {
   const { $socket } = useNuxtApp()
 
   const handleCheckoutSuccess = (data: any) => {
-    console.log("✅ Checkout success received:", data)
-
     checkoutStore.notifyUpdate()
 
-    // If audio is not initialized, skip to avoid crash
-    if (!audio) {
-      console.warn("Audio not initialized yet")
-      return
-    }
+    if (!audio) return
 
-    // Try playing
-    audio.play().catch((err) => {
-      console.warn("Audio playback failed:", err)
-    })
+    audio.currentTime = 0
+    audio.play().catch(() => {})
   }
 
   onMounted(() => {
@@ -34,12 +26,10 @@ export function useCheckoutEvents() {
       if (audio && !unlocked) {
         audio.play().then(() => {
           audio!.pause()
+          audio!.currentTime = 0
           unlocked = true
           window.removeEventListener("click", unlock)
-          console.log("🔓 Audio unlocked for playback")
-        }).catch(() => {
-          console.warn("Click did not unlock audio yet")
-        })
+        }).catch(() => {})
       }
     }
 

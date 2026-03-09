@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
           type: 'template',
           template: {
             name: 'pending_invoice_1',
-            language: { code: 'en_US' },
+            language: { code: 'en' },
             components: [
               {
                 type: 'body',

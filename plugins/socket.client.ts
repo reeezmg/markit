@@ -9,13 +9,16 @@ const serverUrl = config.public.serverUrl
   })
 
 const useAuth = () => useNuxtApp().$auth;
-const companyId = ref(useAuth().session.value?.companyId)
-  watch(companyId, (val) => {
-    if (val) {
-        console.log(val)
-      socket.emit("joinCompany", val)
-    }
-  }, { immediate: true })
+
+  watch(
+    () => useAuth().session.value?.companyId,
+    (val) => {
+      if (val) {
+        socket.emit("joinCompany", val)
+      }
+    },
+    { immediate: true }
+  )
 
   nuxtApp.provide("socket", socket)
 })
