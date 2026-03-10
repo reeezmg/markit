@@ -87,6 +87,7 @@ const voucherNo = ref('');
 const phoneNo = ref('');
 const clientName = ref('');
 const points = ref(0);
+const baseDisplayPoints = ref(0);
 const clientId = ref('');
 const oldClientId = ref('');
 const scannedBarcode = ref("");
@@ -136,31 +137,24 @@ const resetRedeemState = () => {
   redeemedPoints.value = 0
   redeemedAmt.value = Number(couponValue.value || 0)
   isRedeemPoint.value = false
+  points.value = Math.max(0, baseDisplayPoints.value)
 }
 
 const setDisplayedPointsFromServer = (serverPoints) => {
   const rawPoints = Number(serverPoints || 0)
   if (clientId.value && clientId.value === oldClientId.value) {
-    points.value = Math.max(0, rawPoints - pastBillPoints.value + Number(redeemedPoints.value || 0))
+    baseDisplayPoints.value = Math.max(0, rawPoints - pastBillPoints.value + Number(originalRedeemedPoints.value || 0))
   } else {
-    points.value = Math.max(0, rawPoints)
+    baseDisplayPoints.value = Math.max(0, rawPoints)
   }
+  points.value = Math.max(0, baseDisplayPoints.value - Number(redeemedPoints.value || 0))
 }
 
 const revertRedeemedPointsForCurrentClient = async () => {
   if (!clientId.value || redeemedPoints.value <= 0) return
-  const res = await $fetch('/api/bill/redeemClientPoints', {
-    method: 'POST',
-    body: {
-      companyId: useAuth().session.value?.companyId,
-      clientId: clientId.value,
-      points: redeemedPoints.value,
-      mode: 'revert',
-    },
-  })
+  // Edit flow: do not mutate server points before save.
+  // Just reset local redeemed state and keep baseline points intact.
   resetRedeemState()
-  originalRedeemedPoints.value = 0
-  setDisplayedPointsFromServer(res.points)
 }
 
 const items = ref([
@@ -943,7 +937,6 @@ const handleInvalidBarcode = (index) => {
 
 const handleEdit = async () => {
   isSaving.value = true;
-  printModel.value = true
   try {
 
     if (!navigator.onLine) {
@@ -1302,16 +1295,7 @@ const handleEnterPhone = async() => {
     }
 
   if (clientId.value && data?.id && data.id !== clientId.value) {
-    try {
-      await revertRedeemedPointsForCurrentClient()
-    } catch (error) {
-      toast.add({
-        title: 'Failed to revert redeemed points',
-        description: error.message,
-        color: 'red',
-      })
-      return
-    }
+    await revertRedeemedPointsForCurrentClient()
   }
 
   clientFound.value = true
@@ -1323,16 +1307,7 @@ const handleEnterPhone = async() => {
 const handleClientAdded = async (id,name,phone) => {
   console.log(id,name)
   if (clientId.value && id && id !== clientId.value) {
-    try {
-      await revertRedeemedPointsForCurrentClient()
-    } catch (error) {
-      toast.add({
-        title: 'Failed to revert redeemed points',
-        description: error.message,
-        color: 'red',
-      })
-      return
-    }
+    await revertRedeemedPointsForCurrentClient()
   }
   clientFound.value = true
   clientName.value = name
@@ -1622,39 +1597,16 @@ const handleRedeemPoints = async () => {
         })
         return
       }
-      const res = await $fetch('/api/bill/redeemClientPoints', {
-        method: 'POST',
-        body: {
-          companyId: useAuth().session.value?.companyId,
-          clientId: clientId.value,
-          points: redeemablePoints,
-          mode: 'redeem',
-        },
-      })
-
       redeemedPoints.value = redeemablePoints;
       redeemedAmt.value = redeemablePoints + couponValue.value;
       isRedeemPoint.value = true
-      setDisplayedPointsFromServer(res.points)
-      originalRedeemedPoints.value = redeemedPoints.value
+      points.value = Math.max(0, baseDisplayPoints.value - redeemedPoints.value)
     } else {
       if (redeemedPoints.value <= 0) {
         resetRedeemState()
         return
       }
-      const res = await $fetch('/api/bill/redeemClientPoints', {
-        method: 'POST',
-        body: {
-          companyId: useAuth().session.value?.companyId,
-          clientId: clientId.value,
-          points: redeemedPoints.value,
-          mode: 'revert',
-        },
-      })
-
       resetRedeemState()
-      setDisplayedPointsFromServer(res.points)
-      originalRedeemedPoints.value = 0
     }
   } catch (error) {
     console.error('Error updating client points', error);
@@ -1665,19 +1617,11 @@ const handleRedeemPoints = async () => {
 
 
 const handleClearClient = async () => {
-  try {
-    await revertRedeemedPointsForCurrentClient()
-  } catch (error) {
-    toast.add({
-      title: 'Failed to revert redeemed points',
-      description: error.message,
-      color: 'red',
-    })
-    return
-  }
+  await revertRedeemedPointsForCurrentClient()
   clientId.value = '';
   clientName.value = '';
   points.value = 0;
+  baseDisplayPoints.value = 0;
   phoneNo.value = '';
   redeemedAmt.value = 0;
   isRedeemPoint.value = false;
