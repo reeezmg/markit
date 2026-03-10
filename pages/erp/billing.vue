@@ -656,6 +656,9 @@ const handleSave = async () => {
     printData = buildPrintData({ billInv, session, finalitems, refs: draftRefs })
     fireFcmNotification(companyId, billInv, grandTotal.value, session)
 
+    if (selectedAction.value === 'print') print()
+    else if (selectedAction.value === 'send') send()
+    else if (selectedAction.value === 'download') download()
     await $fetch('/api/bill/create', {
       method: 'POST',
       body: { uuid: uuid.value, payload, items: finalitems, returnedItems, billPoints,
@@ -663,9 +666,6 @@ const handleSave = async () => {
     })
 
     toast.add({ title: 'Bill created successfully!', color: 'green' })
-    if (selectedAction.value === 'print') print()
-    else if (selectedAction.value === 'send') send()
-    else if (selectedAction.value === 'download') download()
     reset()
   } catch (error) {
     console.error('Error creating bill', error)

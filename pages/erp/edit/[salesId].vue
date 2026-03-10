@@ -130,6 +130,32 @@ const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
 
+const selectedAction = ref(null)
+const STORAGE_KEY = 'markit_selected_action'
+
+onMounted(() => {
+  const saved = localStorage.getItem(STORAGE_KEY)
+  selectedAction.value = saved && saved !== 'null' ? saved : null
+})
+
+function selectAction(action) {
+  selectedAction.value = action
+  if (action) {
+    localStorage.setItem(STORAGE_KEY, action)
+  } else {
+    localStorage.removeItem(STORAGE_KEY)
+  }
+}
+
+const actionItems = [
+  [
+    { label: 'Print', click: () => selectAction('print') },
+    { label: 'Send', click: () => selectAction('send') },
+    { label: 'Download', click: () => selectAction('download') },
+    { label: 'None', click: () => selectAction(null) }
+  ]
+]
+
 const computeBillPoints = (total) =>
   pointsValue > 0 ? Math.round(Number(total || 0) / pointsValue) : 0
 
@@ -1064,17 +1090,19 @@ const handleEdit = async () => {
       },
     }
 
-    // 7. Call server endpoint
+    // 7. Prepare for printing and trigger action first
+    printData = preparedPrintData;
+    if (selectedAction.value === 'print') print()
+    else if (selectedAction.value === 'send') send()
+    else if (selectedAction.value === 'download') download()
+
+    // 8. Call server endpoint
     await $fetch('/api/bill/update', {
       method: 'POST',
       body: requestData
     })
 
     await reconcileClientPointsOnSave(newBillPoints)
-
-    // 8. Prepare for printing
-    printData = preparedPrintData;
-    printModel.value = true;
 
     // 9. Show success notification
     toast.add({
@@ -1085,10 +1113,10 @@ const handleEdit = async () => {
     pastBillPoints.value = newBillPoints
     originalRedeemedPoints.value = Number(redeemedPoints.value || 0)
 
+    
 
   } catch (error) {
     console.error('Error updating bill', error);
-    printModel.value = false
     toast.add({
       title: 'Bill update failed!',
       description: error.message,
@@ -1206,6 +1234,37 @@ const download = async() => {
       printModel.value = true
       toast.add({
         title: 'Download failed!',
+        description: err.message,
+        color: 'red',
+      });
+  }
+}
+
+const send = async() => {
+  printModel.value = false
+  try{
+    if(!printData?.clientPhone){
+      throw new Error('Client phone number is missing')
+    }
+      await $fetch('/api/whatsapp/send-payment-template', {
+        method: 'POST',
+        body: {
+          phone: printData.clientPhone,
+          name: printData.clientName,
+          billName: printData.companyName,
+          amount: printData.grandTotal,
+          paymentDate: printData.date,
+          receiptId: bill.value?.invoiceNumber || uuidv4(),
+        },
+      })
+  toast.add({
+        title: 'Receipt Sent Success!',
+        color: 'green',
+      });
+  }catch(err){
+      printModel.value = true
+      toast.add({
+        title: 'Receipt failed to Sent!',
         description: err.message,
         color: 'red',
       });
@@ -2451,7 +2510,29 @@ const couponModel = computed({
 
         <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden lg:flex">
           <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
+
+          <div class="flex-1 flex">
+            <UButton
+              :loading="isSaving"
+              ref="saveref"
+              color="green"
+              class="flex-1 rounded-r-none"
+              block
+              @click="handleEdit"
+              :disabled="bill?.isMarkit"
+            >
+              Save{{ selectedAction ? ' & ' + selectedAction : '' }}
+            </UButton>
+            <UDropdown :items="actionItems">
+              <UButton
+                color="green"
+                class="rounded-l-none px-3"
+                icon="i-heroicons-chevron-up"
+                :disabled="bill?.isMarkit"
+              />
+            </UDropdown>
+          </div>
+
           <UButton color="red" class="flex-1" block @click="handleDeleteBill" :disabled="bill?.isMarkit">Delete</UButton>
           <UButton class="flex-1" block :disabled="bill?.isMarkit">Barcode Search</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Sales Return</UButton>
@@ -2584,6 +2665,12 @@ const couponModel = computed({
                         :disabled = "!printModel"
                         @click="print"
                     />
+                    <UButton
+                                   color="primary"
+                                   label="Send"
+                                   :disabled = "!printModel"
+                                   @click="send"
+                               /> 
                     <UButton
                         color="blue"
                         label="Download"
