@@ -134,6 +134,7 @@ export default defineEventHandler(async (event) => {
         b.payment_status   AS "paymentStatus",
         b.payment_method   AS "paymentMethod",
         b.notes,
+        b.split_payments   AS "splitPayments",
 
         json_build_object(
           'name', c.name,
@@ -179,7 +180,12 @@ export default defineEventHandler(async (event) => {
     const res = await client.query(query, values)
 
     return {
-      rows: res.rows.map(({ total_count, ...row }) => row),
+      rows: res.rows.map(({ total_count, splitPayments, ...row }) => ({
+        ...row,
+        splitPayments: typeof splitPayments === 'string'
+          ? (() => { try { return JSON.parse(splitPayments) } catch { return [] } })()
+          : (splitPayments ?? []),
+      })),
       total: res.rows[0]?.total_count ?? 0,
     }
   } finally {

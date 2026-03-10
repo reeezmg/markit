@@ -68,7 +68,7 @@ const { data: products, refetch: refreshProducts } = useFindManyProduct(() => ({
 // FIXED VARIANT QUERY
 // loads variants on selecting SUBCATEGORY or PRODUCT
 // ------------------------------
-const { data: variants, refetch: refreshVariants } = useFindManyVariant(() => ({
+const { data: variants, refetch: refreshVariants, isPending: variantsLoading } = useFindManyVariant(() => ({
   where: {
     companyId: companyId.value,
     status: true,
@@ -76,11 +76,13 @@ const { data: variants, refetch: refreshVariants } = useFindManyVariant(() => ({
     // If product is chosen → filter by product
     productId: selectedProduct.value || undefined,
 
-    // If no product selected → filter variants by subcategory
+    // If no product selected → filter variants by subcategory or category
     product: selectedProduct.value
       ? undefined
       : selectedSubcategory.value
       ? { subcategoryId: selectedSubcategory.value }
+      : selectedCategory.value
+      ? { categoryId: selectedCategory.value }
       : undefined
   },
   include: {
@@ -225,7 +227,7 @@ const done = () => {
             v-model="selectedProduct"
             searchable
             clearable
-            :disabled="!selectedSubcategory"
+            :disabled="!selectedCategory"
             placeholder="Select Product"
             value-attribute="value"
             option-attribute="label"
@@ -240,10 +242,14 @@ const done = () => {
 
       <!-- ITEMS TABLE -->
       <div
-        v-if="selectedSubcategory || selectedProduct"
+        v-if="selectedCategory || selectedSubcategory || selectedProduct"
         class="mt-4 w-full border rounded overflow-x-auto"
       >
-        <table class="text-sm w-full min-w-max">
+        <div v-if="variantsLoading" class="flex justify-center items-center py-8">
+          <UIcon name="i-heroicons-arrow-path" class="animate-spin text-2xl text-gray-400" />
+        </div>
+
+        <table v-else class="text-sm w-full min-w-max">
 
           <thead class="bg-gray-100 text-left">
             <tr>
@@ -289,7 +295,7 @@ const done = () => {
                 <td class="p-2 whitespace-nowrap">{{ row.qty }}</td>
               </tr>
 
-              <tr v-if="expandedRow === row.itemId">
+              <tr v-if="expandedRow === row.itemId && row.images?.length">
                 <td colspan="9" class="bg-gray-50 p-4">
                   <div class="flex justify-center">
                     <img

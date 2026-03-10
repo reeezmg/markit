@@ -1,21 +1,18 @@
-import { prisma } from '~/server/prisma';
+import { pool } from '~/server/db'
 
 export default eventHandler(async (event) => {
-    const session = await useAuthSession(event);
-    const body = await readBody(event);
-    const { companyId, userId } = body;
+  const session = await useAuthSession(event)
+  const body = await readBody(event)
+  const { companyId } = body
 
-      const res = await prisma.company.findUnique({        
-        where: {
-            id: companyId,
-        }
-        });
+  // Atomically increment and return — guarantees each caller gets a unique number
+  const res = await pool.query(
+    `UPDATE companies SET bill_counter = bill_counter + 1 WHERE id = $1 RETURNING bill_counter`,
+    [companyId]
+  )
+  const billCounter = res.rows[0]?.bill_counter
 
-        console.log('res', res?.billCounter);
+  await session.update({ billCounter })
 
-     await session.update({
-        billCounter: res?.billCounter,
-    });
-
-   return res?.billCounter;
-});
+  return billCounter
+})

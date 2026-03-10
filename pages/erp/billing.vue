@@ -1,68 +1,35 @@
 <script setup>
 import { BillingAddClient } from '#components';
-import { useQueryClient } from '@tanstack/vue-query';
-import Quagga from '@ericblade/quagga2'
-import {
-  CapacitorBarcodeScanner,
-  CapacitorBarcodeScannerTypeHint
-} from '@capacitor/barcode-scanner'
 import { v4 as uuidv4 } from 'uuid';
 import { Capacitor } from '@capacitor/core';
 
-// import { generateThermalReceiptPDF } from '~/utils/thermal-receipt.client';
-const isClientLoading = ref(false);
-const isCouponLoading = ref(false)
-const allCoupons = ref([])
-
 const uuid = ref('')
 
-const queryClient = useQueryClient();
-const { generatableCoupons, loading:generatableCouponsLoading, error:generatableCouponsError, generateCoupons } = useGenerateCoupons()
-const currentRequestIds = ref({});
+const { generateCoupons } = useGenerateCoupons()
 const { printBill } = usePrint();
-const redeeming = ref(false);
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
-const router = useRouter();
 const isTaxIncluded = ref(useAuth().session.value?.isTaxIncluded);
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
-const billNo = ref('1');
-const loadingStates = ref([]);
 const paymentOptionsInsplit = ['Cash', 'UPI', 'Card','Credit']
 const paymentOptions = ref(['Cash', 'UPI', 'Card','Credit'])
-const tempSplits = ref(
-  Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }]))
-)
 
-const date = ref(new Date().toISOString());
-const parentUserCode = ref(null);
-const parentUserId = ref(null);
-const parentUserName = ref(null);
-const discount = ref(0);
-const redeemedAmt = ref(0);
-const redeemedPoints = ref(0);
-const paymentMethod = ref('Cash');
-const phoneNo = ref('');
-const points = ref(0);
-const clientName = ref('');
-const clientId = ref('');
-const couponValue = ref(0);
-const splitPayments = ref([])
-const isRedeemPoint = ref(false);
-const selected = ref(null);
+// ─── Draft / bill state ────────────────────────────────────────────────────
+const {
+  billNo, date, parentUserCode, parentUserId, parentUserName,
+  discount, redeemedAmt, redeemedPoints, paymentMethod,
+  phoneNo, points, clientName, clientId, couponValue,
+  splitPayments, isRedeemPoint, selected, tempSplits, items,
+  draftBills, selectedDraft,
+  currentBill, returnAmt, subtotal, grandTotal, tQty, dateOnly,
+  createNewBill, loadDraftBills, loadBill, deleteBill, resetDraft,
+  LOCAL_BILLS_KEY,
+} = useBillingDraft()
+
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
 const isProductSearchOpen = ref(false);
 
-const account = ref({
-    name: '',
-    phone:'',
-    street: '',
-    locality: '',
-    city: '',
-    state: '',
-    pincode: '',
-});
 const scannedBarcode = ref("");
 const barcodeInputs = ref([]);
 const categoryInputs = ref([]);
@@ -86,8 +53,7 @@ const isMobile = ref(false);
 
 
 const showSplitModal = ref(false)
-const isOpen = ref(false);
-const isSavingAcc = ref(false)
+const isOpen = ref(false)
 const issalesReturnModelOpen = ref(false);
 const isClientAddModelOpen = ref(false);
 
@@ -121,513 +87,94 @@ onBeforeUnmount(() => {
 })
 
 
-const returnAmt = computed(() => {
-  return items.value.reduce((sum, item) => {
-    if (item.return) {
-      const itemTotal = (item.qty || 1) * (item.rate || 0);
-      return sum + itemTotal;
-    }
-    return sum;
-  }, 0);
-});
 
 
-const subtotal = computed(() => {
-  return items.value.reduce((sum, item) => {
-    const itemTotal = (item.qty || 1) * (item.rate || 0);
-    return item.return ? sum - itemTotal : sum + itemTotal;
-  }, 0);
-});
-
-const grandTotal = computed(() => {
-  const baseTotal = items.value.reduce((sum, item) => {
-    const itemValue = item.value || 0;
-    return item.return ? sum - itemValue : sum + itemValue;
-  }, 0);
-
-  let afterDiscount = 0;
-
-  if (discount.value < 0) {
-    afterDiscount = parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
-  } else {
-    afterDiscount = parseFloat((baseTotal - (baseTotal * discount.value) / 100).toFixed(2));
-  }
-
-  return afterDiscount - redeemedAmt.value;
-});
-
-
-const dateOnly = computed({
-  get: () => date.value.split('T')[0],
-  set: val => {
-    // Preserve original time, but update the date
-    const original = new Date(date.value)
-    const updated = new Date(val + 'T' + original.toISOString().split('T')[1])
-    date.value = updated.toISOString()
-  }
-})
-
-const items = ref([
-  { id:'', variantId:'',name:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: null, discount: null, tax: null, value: 0,cost: 0,sizes:{}, totalQty:0 ,return:false, userCode:null, userId:null, user:null},
-]);
-
-const selectedDraft = ref(null);
-const draftBills = ref([]);
-const LOCAL_BILLS_KEY = 'bills';
-
-
-const result = ref('')
-const showCamera = ref(false)
-const videoRef = ref(null)
-
-const requestCameraAccess = async () => {
-  try {
-    await navigator.mediaDevices.getUserMedia({
-      video: {
-        facingMode: { exact: 'environment' },
-      },
-    })
-  } catch (err) {
-    console.error('🚫 Error accessing camera:', err)
-    toast.add({
-      title: 'Camera Access Blocked',
-      description:
-        'Unable to access camera. Please allow permission from your browser settings.',
-      color: 'red',
-    })
-  }
-}
-
-const askCameraPermission = async () => {
-  if (!('permissions' in navigator)) return requestCameraAccess()
-
-  try {
-    const res = await navigator.permissions.query({ name: 'camera' })
-    if (res.state === 'granted') {
-    } else {
-      requestCameraAccess()
-    }
-  } catch (e) {
-    console.warn('❗Permissions API error:', e)
-    requestCameraAccess()
-  }
-}
-
-const startCamera = async () => {
-  await askCameraPermission()
-
-  result.value = ''
-  showCamera.value = true
-
-  try {
-    await nextTick()
-
-    Quagga.init(
-      {
-        inputStream: {
-          type: 'LiveStream',
-          target: videoRef.value,
-          constraints: {
-            facingMode: 'environment',
-          },
-        },
-        locator: {
-          patchSize: 'medium',
-          halfSample: true,
-        },
-        decoder: {
-          readers: ['code_128_reader', 'ean_reader', 'ean_8_reader'],
-        },
-        locate: true,
-      },
-      (err) => {
-        if (err) {
-          console.error('Quagga init error:', err)
-          toast.add({
-            title: 'Camera Error',
-            description: err.message,
-            color: 'red',
-          })
-          return
-        }
-        Quagga.start()
-      }
-    )
-
-    Quagga.onDetected((data) => {
-      const scanned = data?.codeResult?.code
-      if (!scanned) return
-
-      result.value = scanned
-      const lastIndex = items.value.length - 1
-      if (lastIndex >= 0) {
-        items.value[lastIndex].barcode = result.value
-        fetchItemData(result.value, lastIndex)
-         addNewRow(lastIndex,true)  
-      }
-
-      stopCamera()
-    })
-  } catch (err) {
-    console.error('Camera access error:', err)
-
-    if (err.name === 'NotAllowedError') {
-      toast.add({
-        title: 'Camera Permission Denied',
-        description: 'Please allow camera access in your browser settings.',
-        color: 'red',
-        icon: 'i-heroicons-exclamation-triangle',
-      })
-    } else if (err.name === 'NotFoundError') {
-      toast.add({
-        title: 'No Camera Found',
-        description: 'We could not detect a camera on this device.',
-        color: 'orange',
-        icon: 'i-heroicons-video-camera-slash',
-      })
-    } else {
-      toast.add({
-        title: 'Unexpected Error',
-        description:
-          err.message || 'Something went wrong while accessing the camera.',
-        color: 'gray',
-        icon: 'i-heroicons-bug-ant',
-      })
-    }
-
-    stopCamera()
-  }
-}
-
-const stopCamera = () => {
-  try {
-    Quagga.stop()
-    Quagga.offDetected()
-    result.value = ''
-  } catch (e) {
-    console.warn('⚠️ Error while stopping Quagga:', e)
-  }
-  showCamera.value = false
-}
-
-onUnmounted(() => {
-  stopCamera()
-})
-
-
-const scannerResult = ref('')
-
-const scanCode128 = async () => {
-  try {
-    const result =
-      await CapacitorBarcodeScanner.scanBarcode({
-        hint: CapacitorBarcodeScannerTypeHint.CODE_128, // ✅ Only Code 128
-        scanInstructions: 'Align barcode within the frame',
-      })
-
-    if (result.ScanResult) {
-        const pattern = /^\d+[A-Z]\d{6}$/ // required format
-
-        if (!pattern.test(result.ScanResult)) {
-         toast.add({
-              title: 'Scanned Barcode Is Invalid!',
-              color: 'red',
-            });
-          return
-        }
-      scannerResult.value = result.ScanResult
-
-      // Example: update last item
-      const lastIndex = items.value.length - 1
-      if (lastIndex >= 0) {
-        items.value[lastIndex].barcode = scannerResult.value
-        fetchItemData(scannerResult.value, lastIndex)
-        addNewRow(lastIndex, true)
-      }
-    }
-  } catch (err) {
-    console.error('🚫 Scan error:', err)
-  }
-}
-
-const handleScan = () => {
-  if (Capacitor.isNativePlatform()) {
-    scanCode128()
-  } else {
-    startCamera()
-  }
-}
-
-
-onMounted(() => {
-  const bills = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
-
-  if (bills.length === 0) {
-    const defaultBill = {
-      billNo: '1',
-      date: new Date().toISOString(),
-      parentUserCode: null,
-      parentUserId: null,
-      parentUserName: null,
-      discount: 0,
-      returnAmt: 0,
-      redeemedAmt: 0,
-      paymentMethod: 'Cash',
-      phoneNo: '',
-      points: 0,
-      clientName: '',
-      clientId: '',
-      couponValue: 0,
-      splitPayments: [],
-      isRedeemPoint: false,
-      redeemedPoints: 0,
-      selected: null,
-      tempSplits: Object.fromEntries(['Cash', 'UPI', 'Card','Credit'].map(method => [method, { method, amount: null }])),
-      items: [{
-        id: '', variantId: '', name: '', sn: 1, barcode: '', category: [], size: '',
-        item: '', qty: 1, rate: null, discount: null, tax: null, value: 0,
-        sizes: {}, totalQty: 0, return: false, userCode: null, userId: null, user: null,cost: 0
-      }]
-    };
-    localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify([defaultBill]));
-  }
-
-  const updated = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY));
-  if (updated.length > 0) {
-    loadDraftBills();
-    selectedDraft.value = updated[0];
-    loadBill(updated[0].billNo);
-  }
-});
-
-// ✅ Single computed object to track all changes
-const currentBill = computed(() => ({
-  billNo: billNo.value,
-  date: date.value,
-  parentUserCode: parentUserCode.value,
-  parentUserId: parentUserId.value,
-  parentUserName: parentUserName.value,
-  discount: discount.value,
-  returnAmt: returnAmt.value,
-  redeemedAmt: redeemedAmt.value,
-  paymentMethod: paymentMethod.value,
-  phoneNo: phoneNo.value,
-  points: points.value,
-  clientName: clientName.value,
-  clientId: clientId.value,
-  couponValue: couponValue.value,
-  splitPayments: splitPayments.value,
-  isRedeemPoint: isRedeemPoint.value,
-  redeemedPoints: redeemedPoints.value,
-  selected: selected.value,
-  tempSplits: tempSplits.value,
-  items: items.value
-}));
-
-// ✅ Watch the whole bill and sync it
-watch(currentBill, (newVal) => {
-  const allBills = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
-  const index = allBills.findIndex(b => b.billNo === newVal.billNo);
-
-  if (index !== -1) {
-    allBills[index] = newVal;
-    localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(allBills));
-  }
-
-  // ✅ Refresh `draftBills` and `selectedDraft` from localStorage
-  const updated = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
-  draftBills.value = updated;
-  selectedDraft.value = updated.find(b => b.billNo === newVal.billNo);
-}, { deep: true });
-
-
-// ✅ Create new bill
-function createNewBill() {
-  const existing = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
-  const newBillNo = (existing.length + 1).toString(); // ✅ sequential (index + 1)
-
-  billNo.value = newBillNo;
-  date.value = new Date().toISOString();
-  parentUserCode.value = null;
-  parentUserId.value = null;
-  parentUserName.value = null;
-  discount.value = 0;
-  returnAmt.value = 0;
-  redeemedAmt.value = 0;
-  paymentMethod.value = 'Cash';
-  phoneNo.value = '';
-  points.value = 0;
-  clientName.value = '';
-  clientId.value = '';
-  couponValue.value = '';
-  splitPayments.value = [];
-  isRedeemPoint.value = false;
-  redeemedPoints.value = 0;
-  selected.value = null;
-  tempSplits.value = Object.fromEntries(paymentOptionsInsplit.map(method => [method, { method, amount: null }]));
-  items.value = [{
-    id: '', variantId: '', name: '', sn: 1, barcode: '', category: [], size: '',
-    item: '', qty: 1, rate: null, discount: null, tax: null, value: 0,
-    sizes: {}, totalQty: 0, return: false, userCode: null, userId: null, user: null,cost:0
-  }];
-
-  const newBill = currentBill.value;
-  existing.push(newBill);
-
-  // ✅ Re-sequence all bills after push
-  existing.forEach((b, i) => { b.billNo = (i + 1).toString(); });
-
-  localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(existing));
-  loadDraftBills();
-  selectedDraft.value = newBill;
-}
-
-
-// ✅ Load all drafts into memory
-function loadDraftBills() {
-  try {
-    draftBills.value = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
-  } catch (e) {
-    console.error('Failed to parse draft bills:', e);
-    draftBills.value = [];
-  }
-}
-
-// ✅ Load a specific bill
-function loadBill(billNumber) {
-  const bill = draftBills.value.find(b => b.billNo === billNumber);
-  if (!bill) return;
-
-  billNo.value = bill.billNo ?? '';
-  date.value = new Date().toISOString();
-  parentUserCode.value = bill.parentUserCode ?? null;
-  parentUserId.value = bill.parentUserId ?? null;
-  parentUserName.value = bill.parentUserName ?? null;
-  discount.value = bill.discount ?? 0;
-  returnAmt.value = bill.returnAmt ?? 0;
-  redeemedAmt.value = bill.redeemedAmt ?? 0;
-  paymentMethod.value = bill.paymentMethod ?? 'Cash';
-  phoneNo.value = bill.phoneNo ?? '';
-  points.value = bill.points ?? 0;
-  clientName.value = bill.clientName ?? '';
-  clientId.value = bill.clientId ?? '';
-  couponValue.value = bill.couponValue ?? 0;
-  splitPayments.value = bill.splitPayments ?? [];
-  isRedeemPoint.value = bill.isRedeemPoint ?? false;
-  redeemedPoints.value = bill.redeemedPoints ?? 0;
-  selected.value = bill.selected ?? null;
-  tempSplits.value = bill.tempSplits ?? {};
-  items.value = bill.items ?? [];
-}
-
-// ✅ Delete bill
-function deleteBill(billNumber) {
-  const deleted = draftBills.value.filter(b => b.billNo !== billNumber);
-
-  // ✅ Re-sequence after deletion
-  deleted.forEach((b, i) => { b.billNo = (i + 1).toString(); });
-
-  localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(deleted));
-  loadDraftBills();
-
-  const updated = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY));
-  if (updated.length > 0) {
-    selectedDraft.value = updated[0];
-  }
-}
-
-
-// ✅ Watch for selection change
-watch(selectedDraft, (val) => {
-  if (val && val.billNo !== billNo.value) {
-    loadBill(val.billNo);
-  }
-});
-
-
-const reset = () => {
-  items.value = [
-    {
-      id: '',
-      variantId: '',
-      sn: 1,
-      size: '',
-      barcode: '',
-      category: [],
-      item: '',
-      qty: 1,
-      rate: 0,
-      discount: 0,
-      tax: 0,
-      value: 0,
-      sizes: {},
-      totalQty: 0,
-      return:false,
-      userCode: null,
-      userId: null,
-      user: null,
-      cost: 0
-    },
-  ];
-  discount.value = 0;
-  paymentMethod.value = 'Cash';
-  clientName.value = '';
-  clientId.value = '';
-  phoneNo.value = '';
-  points.value = 0;
-  grandTotal.value = 0;
-  selected.value = null;
-  date.value = new Date().toISOString();
-  parentUserCode.value = null;
-  parentUserId.value = null;
-  parentUserName.value = null;
-  isRedeemPoint.value = false;
-  couponValue.value = 0
-  redeemedAmt.value = 0;
-  returnAmt.value = 0;
-  redeemedPoints.value = 0;
-
-  // Focus the barcode input
-  const input = barcodeInputs.value[0]?.$el?.querySelector('input');
-  input?.focus();
-  couponRefetch()
-};
-
-
-
-
-watch(
+const categories = ref([])
+
+// ─── Items (row management, barcode fetching, tax/value watchers) ────────────
+const {
+  loadingStates,
+  currentRequestIds,
+  addNewRow,
+  removeRow: _removeRow,
+  fetchItemData,
+  handleProductSelected,
+  handleReturnData,
+} = useBillingItems(
   items,
-  (newItems) => {
-    newItems.forEach((item, index) => {
-      if (item.category.length > 1) {
-        // Keep only the latest selected category
-        const lastCategory = item.category[item.category.length - 1];
-        items.value[index].category = [lastCategory];
-      }
-    });
-  },
-  { deep: true }
-);
+  categories,
+  categoryStore,
+  isTaxIncluded,
+  { code: parentUserCode, id: parentUserId, name: parentUserName },
+  (index) => barcodeInputs.value[index]?.$el?.querySelector('input')?.focus()
+)
+
+// Thin wrapper so template call sites stay as removeRow($event, index)
+const removeRow = (event, index) =>
+  _removeRow(event, index, (i) => barcodeInputs.value[i]?.$el?.querySelector('input')?.focus())
+
+// Camera / barcode scanning (web Quagga2 + native Capacitor)
+const { showCamera, videoRef, handleScan, stopCamera } = useBillingCamera((barcode) => {
+  const lastIndex = items.value.length - 1
+  if (lastIndex >= 0) {
+    items.value[lastIndex].barcode = barcode
+    fetchItemData(barcode, lastIndex)
+    addNewRow(lastIndex, true)
+  }
+})
 
 
-const columns = computed(() => [
-  { key: 'sn', label: 'S.N' },
-  { key: 'barcode', label: 'BAR CODE' },
-  { key: 'category', label: 'CATEGORY' },
-  { key: 'name', label: 'NAME' },
-  { key: 'rate', label: 'RATE' },
-  { key: 'qty', label: 'QTY' },
-  { key: 'discount', label: 'DISC %' },
-  ...(isUserTrackIncluded.value ? [{ key: 'user', label: 'User' }] : []),
-  { key: 'tax', label: 'TAX%' },
-  ...((useAuth().session.value?.role === 'admin') && useAuth().session.value?.isCostIncluded === true ? [{ key: 'cost', label: 'COST' }] : []),
-  { key: 'value', label: 'VALUE' },
-]);
+// ─── Client lookup + points redemption ──────────────────────────────────────
+const { isClientLoading, redeeming, handleEnterPhone, handleClientAdded, handleRedeemPoints } =
+  useBillingClient(
+    phoneNo, clientId, clientName, points,
+    redeemedAmt, redeemedPoints, isRedeemPoint, grandTotal,
+    isClientAddModelOpen,
+    () => {
+      const input = discountref.value?.$el?.querySelector('input')
+      input?.focus()
+      input?.select()
+    }
+  )
+
+// ─── Coupons (fetch, eligibility, discount calc, watchers) ──────────────────
+const { allCoupons, selectedCouponId, eligibleCoupons, couponRefetch } = useBillingCoupons(
+  clientId, items, grandTotal, redeemedAmt, couponValue
+)
+
+// ─── Reset (calls useBillingDraft.resetDraft + clears coupon + focuses barcode) ───
+const reset = () => {
+  resetDraft()
+  selectedCouponId.value = null
+  barcodeInputs.value[0]?.$el?.querySelector('input')?.focus()
+  couponRefetch()
+}
+
+
 
 
 
 const resizableTable = ref(null); // Reference to the table element
+
+// Table column definitions — drives the <thead> via v-for
+const columns = computed(() => {
+  const cols = [
+    { key: 'sn', label: 'SN' },
+    { key: 'barcode', label: 'Barcode' },
+    { key: 'category', label: 'Category' },
+    { key: 'name', label: 'Name' },
+    { key: 'rate', label: 'Rate' },
+    { key: 'qty', label: 'Qty' },
+    { key: 'discount', label: 'Discount' },
+  ]
+  if (isUserTrackIncluded.value) cols.push({ key: 'user', label: 'User' })
+  cols.push({ key: 'tax', label: 'Tax' })
+  if (useAuth().session.value?.role === 'admin' && useAuth().session.value?.isCostIncluded === true) {
+    cols.push({ key: 'cost', label: 'Cost' })
+  }
+  cols.push({ key: 'value', label: 'Value' })
+  return cols
+})
 
 let isResizing = false;
 let startX = 0;
@@ -640,11 +187,6 @@ watch(selected, (newSelected) => {
   }
 })
 
-watch(redeemedAmt.value, (oldValue, newValue) => {
-  if (newValue > 0) {
-    grandTotal.value = grandTotal.value + oldValue - newValue;
-  }
-});
 
 watch(paymentMethod, (newMethod) => {
   if (newMethod !== 'Split') {
@@ -662,66 +204,6 @@ watch(paymentMethod, (newMethod) => {
 
 
 
-watch(items, async () => {
-  for (let index = 0; index < items.value.length; index++) {
-    const item = items.value[index];
-    
-    // ---------- Step 1: Calculate discounted rate ----------
-    let discountedRate = item.rate;
-
-    const discount = !isNaN(Number(item.discount)) ? Number(item.discount) : 0;
-
-    if (discount < 0) {
-      discountedRate -= Math.abs(discount);
-    } else {
-      discountedRate -= (discountedRate * discount) / 100;
-    }
-
-    // ---------- Step 2: Update tax according to value/qty ----------
-
-
-    if (item.category[0]?.id) {
-      const category = categoryStore.getCategoryById(item.category[0].id)
-     
-      if( category){
-        const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = category;
-
-      if (taxType === 'FIXED') {
-        item.tax = fixedTax ?? 0;
-      } else {
-        const effectiveValue = item.value / (item.qty || 1); // avoid division by zero
-
-        if (effectiveValue > thresholdAmount) {
-          item.tax = taxAboveThreshold ?? 0;
-        } else {
-          item.tax = taxBelowThreshold ?? 0;
-        }
-      }
-      }
-
-    }
-
-    
-    // ---------- Step 3: Calculate base value ----------
-    let baseValue = discountedRate * (item.qty || 1);
-    
-    if (!isTaxIncluded.value) {
-      baseValue += (baseValue * item.tax) / 100;
-    }
-
-    item.value = parseFloat(baseValue.toFixed(2));
-  }
-}, { deep: true });
-
-
-const tQty = computed(() =>
-  items.value.reduce((sum, item) => {
-    if (item.barcode || item.name || item.category.length > 0) {
-      return sum + (item.qty || 1);
-    }
-    return sum
-  }, 0)
-)
 
 const startResize = (index, event) => {
   isResizing = true;
@@ -757,71 +239,6 @@ const stopResize = () => {
   document.removeEventListener('mouseup', stopResize);
 };
 
-const addNewRow = async (index,moveTonNextRow = true) => {
-  const hasEmptyRow = items.value.some(item => {
-    return !item.variantId?.trim() && !item.name?.trim() && !item.barcode?.trim() && !item.category?.length && item.qty > 0;
-  });
-
-  if (!hasEmptyRow) {
-  items.value.push({
-    id: '',
-    variantId: '',
-    sn: items.value.length + 1,
-    barcode: '',
-    category: {},
-    size: '',
-    name: '',
-    qty: 1,
-    rate: null,
-    discount: null,
-    tax: null,
-    value: 0,
-    sizes: {},
-    totalQty: 0,
-    return:false,
-    userCode: parentUserCode.value,
-    user: parentUserName.value,
-    userId: parentUserId.value,
-    cost: 0
-  });
-  }
-
-
-  await nextTick();
-  if(moveTonNextRow){
-    const component = barcodeInputs.value[index + 1];
-    const input = component?.$el?.querySelector("input");
-    if (input) input.focus();
-  }
-};
-
-
-const removeRow = (event,index) => {
-  const inputValue = event.target.value || null;
-  if (!inputValue) {
-    event.preventDefault();
-    if (items.value.length > 1) {
-    items.value.splice(index, 1);
-    // Reorder serial numbers after deletion
-    items.value.forEach((item, i) => {
-      item.sn = i + 1;
-    });
-  }
-  const component = barcodeInputs.value[index - 1 ];
-  if (component?.$el) {
-    const input = component.$el.querySelector("input");
-    if (input) {
-      input.focus();
-    } else {
-      console.warn("Input element not found inside barcodeInputs:", component.$el);
-    }
-  } else {
-    console.warn("Barcode input component is not available:", component);
-  }
-  }
-
-  
-};
 
 
 
@@ -833,50 +250,6 @@ onMounted(() => {
   });
 });
 
-const args = computed(() => ({
-  where: {
-    phone: `+91${phoneNo.value}`,
-    companies: {
-      some: {
-        companyId: useAuth().session.value?.companyId,
-      },
-    },
-  },
-  include: {
-    companies: {
-      where: {
-        companyId: useAuth().session.value?.companyId,
-      },
-      select: {
-        points: true,
-      },
-    },
-  },
-}));
-
-const fetchClientByPhone = async (phone) => {
-  isClientLoading.value = true
-
-  try {
-    if (!phone) return null
-
-    const data = await $fetch('/api/bill/findUniqueClient', {
-      query: {
-        phone: `+91${phone}`,
-      },
-    })
-
-    return data ?? null
-  } catch (error) {
-    console.error('Error fetching client by phone:', error)
-    throw error
-  } finally {
-    isClientLoading.value = false
-  }
-}
-
-
-const categories = ref([])
 
 
 const getCategories = async () => {
@@ -895,7 +268,6 @@ const getCategories = async () => {
     })
 
     categories.value = data ?? []
-    console.log('Categories fetched:', categories.value)
   } catch (error) {
     console.error('Error fetching categories:', error)
   }
@@ -954,90 +326,6 @@ const selectAllText = (index) => {
     }
   }
 };
-const fetchItemFromServer = async (barcode) => {
-  try {
-    if (!barcode) return null
-
-    const data = await $fetch('/api/bill/findFirstItem', {
-      query: { barcode },
-    })
-
-    return data ?? null
-  } catch (error) {
-    console.error('Error fetching item from server:', error)
-    throw error
-  }
-}
-
-
-const fetchItemData = async (barcode, index) => {
-  if (!barcode || !items.value[index]) return
-
-  loadingStates.value[index] = true
-  currentRequestIds.value[index] = barcode
-
-  try {
-    const data = await fetchItemFromServer(barcode)
-    console.log('Fetched item data:', data)
-
-    // ❗ Ignore stale responses
-    if (currentRequestIds.value[index] !== barcode) return
-
-    if (data) {
-      processItemResponse(data, index)
-    } else {
-      handleInvalidBarcode(index)
-    }
-  } catch (error) {
-    console.error('Error fetching item:', error)
-
-    if (currentRequestIds.value[index] === barcode) {
-      handleInvalidBarcode(index)
-    }
-  } finally {
-    loadingStates.value[index] = false
-    delete currentRequestIds.value[index]
-  }
-}
-
-const processItemResponse = (itemData, index) => {
-  if (!items.value[index]) return
-
-  const categoryId = itemData.variant.product.categoryId
-
-  items.value[index].id = itemData.id ?? ''
-  items.value[index].size = itemData.size ?? ''
-  items.value[index].cost = itemData.variant?.pprice ?? 0
-  items.value[index].name =
-    `${itemData.variant.product.subcategory?.name ?? ''} ` +
-    `${itemData.variant?.name ?? ''} ` +
-    `${itemData.variant.product.name ?? ''}`
-
-  items.value[index].category =
-    categories.value.filter(c => c.id === categoryId)
-
-  items.value[index].rate = itemData.variant?.sprice ?? 0
-  items.value[index].discount =
-    (itemData.variant?.dprice ?? 0) -
-    (itemData.variant?.sprice ?? 0)
-
-  items.value[index].tax = itemData.variant?.tax ?? 0
-  items.value[index].totalQty = itemData.qty ?? 0
-  items.value[index].sizes = itemData.variant?.sizes ?? null
-  items.value[index].variantId = itemData.variant?.id ?? ''
-}
-
-const handleInvalidBarcode = (index) => {
-  if (!items.value[index]) return
-
-  items.value[index].barcode = ''
-
-  toast.add({
-    title: 'Barcode is invalid or item is empty!',
-    color: 'red',
-  })
-}
-
 
 const selectedAction = ref(null)
 
@@ -1139,237 +427,252 @@ const send = async() => {
 }
 
 
+// ─── handleSave helpers ───────────────────────────────────────────────────────
+
+function validateBillEntries(rawItems) {
+  const finalitems = (rawItems || []).filter(
+    (item) => item?.name?.trim() || item?.barcode?.trim() || (item?.category?.length ?? 0) > 0
+  )
+  if (finalitems.length === 0) throw new Error('No valid items to bill.')
+  finalitems.forEach((item, idx) => {
+    const n = idx + 1
+    if (!item?.category?.[0]?.id) throw new Error(`Row ${n}: category is required`)
+    const qty = Number(item.qty ?? 1)
+    if (Number.isNaN(qty)) throw new Error(`Row ${n}: qty is not a valid number`)
+    if (!item.return && qty <= 0) throw new Error(`Row ${n}: qty must be greater than 0`)
+    const rate = Number(item.rate ?? 0)
+    if (Number.isNaN(rate)) throw new Error(`Row ${n}: rate is not a valid number`)
+    if (rate < 0) throw new Error(`Row ${n}: rate cannot be negative`)
+  })
+  return finalitems
+}
+
+function validateBillState({ session, items, grandTotal, paymentMethod, splitPayments, redeemedAmt, date, currentRequestIds }) {
+  if (!session?.companyId) throw new Error('Session expired. Please refresh and try again.')
+  if (Object.keys(currentRequestIds).length > 0) throw new Error('Please wait for all items to finish loading.')
+
+  // Items
+  const validItems = (items || []).filter(
+    (item) => item?.name?.trim() || item?.barcode?.trim() || (item?.category?.length ?? 0) > 0
+  )
+  if (validItems.length === 0) throw new Error('Add at least one item before saving.')
+
+  // Totals
+  const total = Number(grandTotal)
+  if (Number.isNaN(total)) throw new Error('Grand total is invalid. Check discount values.')
+  if (total < 0) throw new Error('Grand total is negative. Reduce the discount amount.')
+
+  // Redeemed amount can't exceed pre-discount total
+  if (Number(redeemedAmt) > total + Number(redeemedAmt)) {
+    // redeemedAmt is already subtracted in grandTotal, so raw check: just ensure total isn't negative
+    // (already caught above)
+  }
+
+  // Payment method
+  if (!paymentMethod) throw new Error('Select a payment method before saving.')
+  if (paymentMethod === 'Split') {
+    if (!splitPayments || splitPayments.length === 0)
+      throw new Error('Confirm the split payment breakdown before saving.')
+  }
+
+  // Date
+  if (!date || Number.isNaN(new Date(date).getTime()))
+    throw new Error('Bill date is invalid.')
+}
+
+function buildEntriesData(finalitems, companyId) {
+  return finalitems.map((item) => {
+    const base = {
+      name: item.name || '',
+      qty: Number(item.qty || 1),
+      rate: Number(item.rate || 0),
+      discount: Number(item.discount || 0),
+      tax: Number(item.tax || 0),
+      value: Number(item.value || 0),
+      cost: Number(item.cost || 0),
+      return: Boolean(item.return),
+    }
+    if (item.size) base.size = item.size
+    if (item.barcode) base.barcode = item.barcode
+    if (item.id) base.item = { connect: { id: item.id } }
+    if (item.variantId) base.variant = { connect: { id: item.variantId } }
+    if (item.category?.[0]?.id) base.category = { connect: { id: item.category[0].id } }
+    if (item.userId) {
+      base.userName = item.user
+      base.companyUser = { connect: { companyId_userId: { companyId, userId: item.userId } } }
+    }
+    return base
+  })
+}
+
+function computeBillPoints(session, grandTotalVal) {
+  const pointsValue = Number(session?.pointsValue || 0)
+  return pointsValue > 0 ? Math.round(Number(grandTotalVal || 0) / pointsValue) : 0
+}
+
+function buildBillPayload({ billInv, session, entriesData, billPoints, hasCreditPayment, refs }) {
+  const { subtotal, discount, grandTotal, returnAmt, couponValue, paymentMethod,
+          redeemedPoints, clientId, selected, splitPayments, date } = refs
+  return {
+    invoiceNumber: billInv,
+    subtotal: Number(subtotal.value) || 0,
+    discount: Number(discount.value) || 0,
+    grandTotal: Number(grandTotal.value) || 0,
+    returnAmt: Number(returnAmt.value) || 0,
+    couponValue: Number(couponValue.value) || 0,
+    paymentMethod: paymentMethod.value || 'Cash',
+    ...(redeemedPoints.value ? { redeemedPoints: Number(redeemedPoints.value) || 0 } : {}),
+    ...(clientId.value ? { billPoints: Number(billPoints) } : { billPoints: 0 }),
+    createdAt: new Date(date.value).toISOString(),
+    paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
+    type: 'BILL',
+    entries: { create: entriesData },
+    company: { connect: { id: session.companyId } },
+    companyUser: { connect: { companyId_userId: { companyId: session.companyId, userId: session.id } } },
+    ...(clientId.value && { client: { connect: { id: clientId.value } } }),
+    ...(selected.value && { account: { connect: { id: selected.value } } }),
+    ...(paymentMethod.value === 'Split' && { splitPayments: splitPayments.value }),
+  }
+}
+
+function buildPrintData({ billInv, session, finalitems, refs }) {
+  const { subtotal, discount, grandTotal, paymentMethod, splitPayments,
+          clientName, phoneNo, date } = refs
+  return {
+    invoiceNumber: billInv,
+    phone: session?.companyPhone,
+    description: session?.description,
+    thankYouNote: session?.thankYouNote,
+    refundPolicy: session?.refundPolicy,
+    returnPolicy: session?.returnPolicy,
+    date: new Date(date.value).toISOString(),
+    entries: finalitems.map((entry) => {
+      const discountVal = Number(entry.discount) < 0
+        ? Number(entry.discount)
+        : Number(entry.discount) > 0
+        ? `${Number(entry.discount)}%`
+        : 0
+      return {
+        description: entry.barcode ? entry.name : entry.category[0].name,
+        hsn: entry.category[0].hsn,
+        qty: Number(entry.qty || 1),
+        mrp: Number(entry.rate || 0),
+        discount: discountVal,
+        tax: Number(entry.tax || 0),
+        value: Number(entry.qty || 1) * Number(entry.rate || 0),
+        size: entry.size || '',
+        barcode: entry.barcode,
+        tvalue: Number(entry.value || 0),
+      }
+    }),
+    subtotal: Number(subtotal.value) || 0,
+    discount: Number(discount.value) || 0,
+    grandTotal: Number(grandTotal.value) || 0,
+    paymentMethod: paymentMethod.value,
+    companyName: session?.companyName || '',
+    companyAddress: session?.address || {},
+    gstin: session?.gstin || '',
+    ...(paymentMethod.value === 'Split' && { splitPayments: splitPayments.value }),
+    accHolderName: session?.accHolderName || '',
+    upiId: session?.upiId || '',
+    clientName: clientName.value,
+    clientPhone: phoneNo.value,
+    tqty: finalitems.reduce((sum, e) => sum + Number(e.qty || 1), 0),
+    tvalue: finalitems.reduce((sum, e) => sum + Number(e.qty || 1) * Number(e.rate || 0), 0),
+    ttvalue: finalitems.reduce((sum, e) => sum + Number(e.value || 0), 0),
+    tdiscount: finalitems.reduce((sum, e) => {
+      const qty = Number(e.qty || 1)
+      const rate = Number(e.rate || 0)
+      const d = Number(e.discount || 0)
+      return sum + (d < 0 ? Math.abs(d) * qty : ((rate * d) / 100) * qty)
+    }, 0),
+  }
+}
+
+function fireFcmNotification(companyId, billInv, grandTotalVal, session) {
+  ;(async () => {
+    try {
+      await $fetch('/api/notifyfcm', {
+        method: 'POST',
+        body: {
+          companyId,
+          excludeDeviceId: localStorage.getItem('device_id'),
+          title: `New Bill Created in ${session?.companyName}`,
+          body: `Invoice #${billInv} for ₹${Number(grandTotalVal) || 0} has been created.`,
+          data: { url: '/erp/sales' },
+        },
+      })
+    } catch {}
+  })()
+}
+
+// ─── Save handler (orchestrator) ─────────────────────────────────────────────
+
 const handleSave = async () => {
   if (isSaving.value) return
+
   isSaving.value = true
-
-  // Grab session once
-  const session = useAuth().session.value
-  const companyId = session?.companyId
-  const userId = session?.id
-
   try {
-    // 0) Online check (only in browser)
     if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
       throw new Error('No internet connection')
     }
-     uuid.value = uuidv4()
+    await nextTick()
 
-    // 1) Filter valid entries
-    const finalitems = (items.value || []).filter(
-      (item) => item?.name?.trim() || item?.barcode?.trim() || (item?.category?.length ?? 0) > 0
-    )
+    const session = useAuth().session.value
 
-    if (finalitems.length === 0) {
-      throw new Error('No valid items to bill.')
-    }
-
-    // 2) Per-entry validation
-    finalitems.forEach((item, idx) => {
-      if (!item?.category?.[0]?.id) {
-        throw new Error(`No category in entry ${idx + 1}`)
-      }
-      // Optional: ensure numeric-ish fields are numeric
-      if (Number.isNaN(Number(item.qty ?? 1))) throw new Error(`Invalid qty in entry ${idx + 1}`)
-      if (Number.isNaN(Number(item.rate ?? 0))) throw new Error(`Invalid rate in entry ${idx + 1}`)
+    // ── Pre-flight validation (runs before counter is incremented) ────────────
+    validateBillState({
+      session,
+      items: items.value,
+      grandTotal: grandTotal.value,
+      paymentMethod: paymentMethod.value,
+      splitPayments: splitPayments.value,
+      redeemedAmt: redeemedAmt.value,
+      date: date.value,
+      currentRequestIds: currentRequestIds.value,
     })
 
-    // 3) Get a new invoice number
-    const billInv = await $fetch('/api/bill/findBillCounter', {
-      method: 'POST',
-      body: { companyId, userId },
-    })
+    uuid.value = uuidv4()
+    const companyId = session?.companyId
+    const userId = session?.id
 
-    // 4) Coupons (only if customer present)
-    if (clientId.value) {
-      await generateCoupons(clientId.value, Number(grandTotal.value) || 0)
-    }
+    const finalitems = validateBillEntries(items.value)
+    // Reserve invoice number atomically before save so printData is ready immediately
+    const billInv = await $fetch('/api/bill/findBillCounter', { method: 'POST', body: { companyId, userId } })
 
-    // 5) Build derived flags + arrays
-    const pointsValue = Number(session?.pointsValue || 0)
-const billPoints =
-  pointsValue > 0
-    ? Math.round(Number(grandTotal.value || 0) / pointsValue)
-    : 0
+    if (clientId.value) await generateCoupons(clientId.value, Number(grandTotal.value) || 0)
+
+    const billPoints = computeBillPoints(session, grandTotal.value)
     const returnedItems = finalitems.filter((i) => i.return)
-
-    const entriesData = finalitems.map((item) => {
-      const base = {
-        name: item.name || '',
-        qty: Number(item.qty || 1),
-        rate: Number(item.rate || 0),
-        discount: Number(item.discount || 0),
-        tax: Number(item.tax || 0),
-        value: Number(item.value || 0),
-        cost: Number(item.cost || 0),
-        return: Boolean(item.return),
-      }
-
-      if (item.size) base.size = item.size
-      if (item.barcode) base.barcode = item.barcode
-      if (item.id) base.item = { connect: { id: item.id } }
-      if (item.variantId) base.variant = { connect: { id: item.variantId } }
-      if (item.category?.[0]?.id) base.category = { connect: { id: item.category[0].id } }
-
-      if (item.userId) {
-        base.userName = item.user
-        base.companyUser = {
-          connect: {
-            companyId_userId: {
-              companyId,
-              userId: item.userId,
-            },
-          },
-        }
-      }
-
-      return base
-    })
-
+    const entriesData = buildEntriesData(finalitems, companyId)
     const hasCreditPayment =
       paymentMethod.value === 'Credit' ||
-      (paymentMethod.value === 'Split' &&
-        Array.isArray(splitPayments.value) &&
-        splitPayments.value.some((p) => p?.method === 'Credit'))
+      (paymentMethod.value === 'Split' && splitPayments.value.some((p) => p?.method === 'Credit'))
 
-    // 6) Build payload for /api/bill/create
-    const payload = {
-      invoiceNumber: billInv,
-      subtotal: Number(subtotal.value) || 0,
-      discount: Number(discount.value) || 0,
-      grandTotal: Number(grandTotal.value) || 0,
-      // Keep prisma field camelCase; DB column can be @map("return_amt")
-      returnAmt: Number(returnAmt.value) || 0,
-      couponValue:Number(couponValue.value) || 0,
-      paymentMethod: paymentMethod.value || 'Cash',
-      ...(redeemedPoints.value ? { redeemedPoints: Number(redeemedPoints.value) || 0 } : {}),
-      ...(clientId.value ? { billPoints: Number(billPoints) } : { billPoints: 0 }),
-      createdAt: new Date(date.value).toISOString(),
-      paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
-      type: 'BILL',
-      entries: { create: entriesData },
-      company: { connect: { id: companyId } },
-      companyUser: {
-        connect: {
-          companyId_userId: { companyId, userId },
-        },
-      },
-      ...(clientId.value && { client: { connect: { id: clientId.value } } }),
-      ...(selected.value && { account: { connect: { id: selected.value } } }),
-      ...(paymentMethod.value === 'Split' && { splitPayments: splitPayments.value }),
-    }
+    const draftRefs = { subtotal, discount, grandTotal, returnAmt, couponValue, paymentMethod,
+                        redeemedPoints, clientId, selected, splitPayments, date, clientName, phoneNo }
 
-    // 7) Build print data (unchanged logic; uses finalitems)
-    printData = {
-      invoiceNumber: billInv,
-      phone: session?.companyPhone,
-      description: session?.description,
-      thankYouNote: session?.thankYouNote,
-      refundPolicy: session?.refundPolicy,
-      returnPolicy: session?.returnPolicy,
-      date: new Date(date.value).toISOString(),
-      entries: finalitems.map((entry) => {
-        const discountVal =
-          Number(entry.discount) < 0
-            ? Number(entry.discount)
-            : Number(entry.discount) > 0
-            ? `${Number(entry.discount)}%`
-            : 0
-        return {
-          description: entry.barcode ? entry.name : entry.category[0].name,
-          hsn: entry.category[0].hsn,
-          qty: Number(entry.qty || 1),
-          mrp: Number(entry.rate || 0),
-          discount: discountVal,
-          tax: Number(entry.tax || 0),
-          value: Number(entry.qty || 1) * Number(entry.rate || 0),
-          size: entry.size || '',
-          barcode: entry.barcode,
-          tvalue: Number(entry.value || 0),
-        }
-      }),
-      subtotal: Number(subtotal.value) || 0,
-      discount: Number(discount.value) || 0,
-      grandTotal: Number(grandTotal.value) || 0,
-      paymentMethod: paymentMethod.value,
-      companyName: session?.companyName || '',
-      companyAddress: session?.address || {},
-      gstin: session?.gstin || '',
-      ...(paymentMethod.value === 'Split' && { splitPayments: splitPayments.value }),
-      accHolderName: session?.accHolderName || '',
-      upiId: session?.upiId || '',
-      clientName: clientName.value,
-      clientPhone: phoneNo.value,
-      tqty: finalitems.reduce((sum, e) => sum + Number(e.qty || 1), 0),
-      tvalue: finalitems.reduce((sum, e) => sum + Number(e.qty || 1) * Number(e.rate || 0), 0),
-      ttvalue: finalitems.reduce((sum, e) => sum + Number(e.value || 0), 0),
-      tdiscount: finalitems.reduce((sum, e) => {
-        const qty = Number(e.qty || 1)
-        const rate = Number(e.rate || 0)
-        const d = Number(e.discount || 0)
-        if (d < 0) return sum + Math.abs(d) * qty
-        return sum + ((rate * d) / 100) * qty
-      }, 0),
-    }
-    
+    const payload = buildBillPayload({ billInv, session, entriesData, billPoints, hasCreditPayment, refs: draftRefs })
+    printData = buildPrintData({ billInv, session, finalitems, refs: draftRefs })
+    fireFcmNotification(companyId, billInv, grandTotal.value, session)
 
-    // 8) Fire FCM notification (non-blocking; swallow its error)
-    ;(async () => {
-      try {
-        await $fetch('/api/notifyfcm', {
-          method: 'POST',
-          body: {
-            companyId,
-            excludeDeviceId: localStorage.getItem('device_id'),
-            title: `New Bill Created in ${session?.companyName}`,
-            body: `Invoice #${billInv} for ₹${Number(grandTotal.value) || 0} has been created.`,
-            data: { url: '/erp/sales' },
-          },
-        })
-      } catch {}
-    })()
-
-
-    // 9) Create bill (await; single try/catch controls toast + state)
     await $fetch('/api/bill/create', {
       method: 'POST',
-      body: {
-        uuid: uuid.value,
-        payload,
-        items: finalitems,
-        returnedItems,
-        billPoints,
-        clientId: clientId.value,
-        companyId,
-        couponId: selectedCouponId.value?.value || null,
-        userId
-      },
+      body: { uuid: uuid.value, payload, items: finalitems, returnedItems, billPoints,
+              clientId: clientId.value, companyId, couponId: selectedCouponId.value?.value || null, userId },
     })
-
-        // 10) Refresh caches
-    // queryClient.invalidateQueries({ queryKey: ['zenstack', 'Bill', 'findMany'], exact: false })
-    // queryClient.invalidateQueries({ queryKey: ['zenstack', 'Product', 'findMany'], exact: false })
- 
 
     toast.add({ title: 'Bill created successfully!', color: 'green' })
-
-
-    // 11) Reset UI and open print modal
-     if (selectedAction.value === 'print') print()
+    if (selectedAction.value === 'print') print()
     else if (selectedAction.value === 'send') send()
     else if (selectedAction.value === 'download') download()
-
     reset()
- isSaving.value = false
   } catch (error) {
     console.error('Error creating bill', error)
-    toast.add({
-      title: 'Bill creation failed!',
-      description: error?.message || 'Unknown error',
-      color: 'red',
-    })
-     isSaving.value = false
-  } 
+    toast.add({ title: 'Bill creation failed!', description: error?.message || 'Unknown error', color: 'red' })
+  } finally {
+    isSaving.value = false
+  }
 }
 
 
@@ -1391,7 +694,6 @@ const getAccounts = async () => {
     })
 
     accounts.value = data ?? []
-    console.log('Accounts fetched:', accounts.value)
   } catch (err) {
     console.error('Error fetching accounts:', err)
   } 
@@ -1401,121 +703,8 @@ onMounted(async () => {
   await getAccounts()
 })
 
-const submitForm = async () => {
-  isSavingAcc.value = true
-
-  try {
-    if (!account.value.name) {
-      throw new Error('Please fill name')
-    }
-
-    const companyId = useAuth().session.value?.companyId
-    if (!companyId) {
-      throw new Error('Company not found')
-    }
-
-    await $fetch('/api/bill/createAccount', {
-      method: 'POST',
-      body: {
-        name: account.value.name,
-        phone: account.value.phone,
-        companyId,
-        address: {
-          street: account.value.street,
-          locality: account.value.locality,
-          city: account.value.city,
-          state: account.value.state,
-          pincode: account.value.pincode,
-        },
-      },
-    })
-
-    toast.add({
-      title: 'Account added!',
-      id: 'modal-success',
-    })
-    await getAccounts()
-    isOpen.value = false
-  } catch (error) {
-    toast.add({
-      title: 'Account creation failed!',
-      description: error.message || 'Something went wrong',
-      color: 'red',
-    })
-  } finally {
-    isSavingAcc.value = false
-  }
-}
 
 
-
-
-const submitEntryForm = async () => {
-    await entryRefetch();
-
-    if (entrydata.value) {
-        // Remove existing empty item if it exists
-        items.value = items.value.filter(item => item.id || item.barcode);
-
-        // Add fetched entries to existing items
-        const newItems = entrydata.value.map((entry, index) => ({
-            id: entry.id || '',
-            variantId: entry.variantId || '',
-            barcode: entry.barcode || '',
-            category: categories.value.filter(category => category.id === entry.categoryId) || [],
-            size: entry.size || '',
-            item: entry.name || '',
-            qty: entry.qty || 0,
-            rate: entry.rate|| 0,
-            discount: entry.discount|| 0,
-            tax: entry.tax|| 0,
-            value: entry.value|| 0,
-            sizes: entry.sizes || '{}',
-            totalQty: entry.totalQty|| 0,
-        }));
-
-        // Append the new items
-        items.value = newItems;
-
-        // Add an empty item at the end
-        items.value.push({
-            id: '', variantId: '', sn: items.value.length + 1, barcode: '',
-            category: {}, size: '', item: '', qty: 1, rate: 0,
-            discount: 0, tax: 0, value: 0, sizes: {}, totalQty: 0, cost: 0,
-            userCode: parentUserCode.value, userId: parentUserId.value, user: parentUserName.value
-        });
-
-    } else {
-        console.warn("entrydata is undefined");
-    }
-};
-
-const newBill = () => {
-  createNewBill()
-
-  // items.value = [
-  //   { id:'', variantId:'',sn: 1,size:'', barcode: '',category:[], item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, sizes:{}, totalQty:0 }
-  // ];
-  // discount.value = 0;
-  // paymentMethod.value = 'Cash';
-  // grandTotal.value = 0;
-  // returnAmt.value = 0;
-  // phoneNo.value = '';
-  // points.value = 0;
-  // name.value = '';
-  // couponValue.value = '';
-  // selected.value = {};
-  // account.value = {
-  //   name: '',
-  //   phone:'',
-  //   street: '',
-  //   locality: '',
-  //   city: '',
-  //   state: '',
-  //   pincode: '',
-  // };
-
-};
 
 const moveFocus = (currentRowIndex, currentField, direction) => {
   const baseFieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
@@ -1635,20 +824,6 @@ onMounted(() => {
   });
 });
 
-const handleReturnData = ({ returnedItems }) => {
-  items.value = items.value.filter(item =>
-      item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
-    );
-    const baseIndex = items.value.length;
-
-    returnedItems.forEach((item, i) => {
-      item.sn = baseIndex + i + 1; // Ensure sn = position in array (1-based)
-    });
-
-    items.value.push(...returnedItems);
-    addNewRow(items.value.length - 1);
-
-};
 
 watch(isClientAddModelOpen, async (val) => {
 
@@ -1668,64 +843,6 @@ watch(isClientAddModelOpen, async (val) => {
 
 
 
-const handleEnterPhone = async () => {
-  try {
-    const data = await fetchClientByPhone(phoneNo.value)
-
-    if (!data) {
-      isClientAddModelOpen.value = true
-      return
-    }
-
-    clientName.value = data.name
-    clientId.value = data.id
-    points.value = data.companies?.[0]?.points ?? 0
-         const component = discountref.value;
-    const input = component.$el.querySelector("input");
-    input.focus();
-    input.select();
-
-
-  } catch (err) {
-    console.error('Failed to fetch client:', err)
-  }
-}
-
-
-
-const handleClientAdded = (id,name) => {
-  clientName.value = name
-  clientId.value = id
-  points.value = 0
-  isClientAddModelOpen.value = false;
-};
-
-
-
-
-
-
-const handleAmountEntry = (method) => {
-  const entry = tempSplits.value[method]
-  const exists = splitPayments.value.find(p => p.method === method)
-
-  if (entry.amount && !exists) {
-    splitPayments.value.push({ method, amount: entry.amount })
-  } else if (!entry.amount && exists) {
-    // If amount cleared, remove from list
-    splitPayments.value = splitPayments.value.filter(p => p.method !== method)
-  } else if (entry.amount && exists) {
-    // Update amount if already present
-    exists.amount = entry.amount
-  }
-}
-
-
-
-// Total calculation
-const totalSplitAmount = computed(() =>
-  splitPayments.value.reduce((sum, entry) => sum + Number(entry.amount || 0), 0)
-)
 
 
 
@@ -1733,20 +850,12 @@ const handleSplit = () => {
   showSplitModal.value = true
 }
 
-
-
-// Final submission
-function submitSplitPayment() {
-  if (totalSplitAmount.value !== grandTotal.value) {
-    alert(`Total split amount must be exactly ${grandTotal.value}`)
-    return
+function onSplitConfirmed(confirmedPayments) {
+  splitPayments.value = confirmedPayments
+  if (!paymentOptions.value.includes('Split')) {
+    paymentOptions.value.push('Split')
   }
-  showSplitModal.value = false
-   if (!paymentOptions.value.includes('Split')) {
-    paymentOptions.value.push('Split');
-    paymentMethod.value = 'Split';
-  }
-  
+  paymentMethod.value = 'Split'
 }
 
 function handleCategoryChange(category, rowIndex) {
@@ -1828,225 +937,6 @@ const handleDiscountEnter = (index) => {
   }
 };
 
-const handleRedeemPoints = async () => {
-  isRedeemPoint.value = !isRedeemPoint.value
-  redeeming.value = true
-
-  try {
-    if (!clientId.value) return
-
-    const companyId = useAuth().session.value?.companyId
-    if (!companyId) throw new Error('Company not found')
-
-    if (isRedeemPoint.value) {
-      // 🔻 Redeem points
-      const redeemablePoints = Math.min(points.value, grandTotal.value)
-
-      const res = await $fetch('/api/bill/redeemClientPoints', {
-        method: 'POST',
-        body: {
-          companyId,
-          clientId: clientId.value,
-          points: redeemablePoints,
-          mode: 'redeem',
-        },
-      })
-
-      redeemedPoints.value = redeemablePoints
-      redeemedAmt.value += redeemablePoints
-      points.value = res.points
-    } else {
-      // 🔺 Revert points
-      if (redeemedPoints.value === 0) return
-
-      const res = await $fetch('/api/bill/redeemClientPoints', {
-        method: 'POST',
-        body: {
-          companyId,
-          clientId: clientId.value,
-          points: redeemedPoints.value,
-          mode: 'revert',
-        },
-      })
-
-      points.value = res.points
-      redeemedPoints.value = 0
-      redeemedAmt.value = 0
-    }
-  } catch (error) {
-    console.error('Error updating client points', error)
-  } finally {
-    redeeming.value = false
-  }
-}
-
-
-function isCouponEligible(coupon, orderValue, clientId) {
-  console.log(clientId)
-  const now = new Date();
-  const clientUsage = coupon.couponUsage.filter(u => u.clientId === clientId).length;
-  const clientAppearances = coupon.clients.filter(c => c.clientId === clientId).length;
-  if (!coupon.isActive) return false;
-  if (now < new Date(coupon.startDate) || now > new Date(coupon.endDate)) return false;
-
-  if (coupon.minOrderValue && orderValue < coupon.minOrderValue) return false;
-
-  if (coupon.usageLimit !== null && coupon.timesUsed >= coupon.usageLimit) return false;
-
-  if (coupon.perClientLimit !== null && clientUsage >= coupon.perClientLimit) {
-    return false;
-  }
-
-  // Audience rules
-  if (coupon.audienceType === 'SPECIFIC') {
-    if (!coupon.clients.some(c => c.clientId === clientId)) {
-      return false;
-    }
-  }
-
-  if (coupon.audienceType === 'GENERATE') {
-    // If client has already used as many times as appearances allow, block
-    if (clientUsage >= clientAppearances) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-const couponRefetch = async () => {
-  try {
-    const companyId = useAuth().session.value?.companyId
-    if (!companyId) {
-      console.warn('companyId not ready yet')
-      return []
-    }
-
-    const data = await $fetch('/api/bill/findManyCoupon', {
-      method: 'GET',
-      query: {
-        companyId,
-      },
-    })
-
-    allCoupons.value = data ?? []
-    return allCoupons.value
-  } catch (error) {
-    console.error('Error fetching coupons:', error)
-    return []
-  }
-}
-
-
-
-const eligibleCoupons = computed(() => {
-  if (!clientId.value) return [];
-  return (allCoupons.value || [])
-    .filter(coupon => isCouponEligible(coupon, grandTotal.value, clientId.value))
-    .map(coupon => {
-      const clientUsageCount = coupon.couponUsage.filter(u => u.clientId === clientId.value).length;
-
-      let usageInfo = '∞';
-      if (coupon.perClientLimit !== null) {
-        const remaining = coupon.perClientLimit - clientUsageCount;
-        usageInfo = remaining > 0 ? `${remaining}` : '0';
-      }
-
-      return {
-        label: `${coupon.code} (${coupon.type}) - ${usageInfo}`,
-        value: coupon.id,
-      };
-    });
-});
-
-
-
-const selectedCouponId = ref(null);
-
-
-function calculateDiscount(coupon, orderValue) {
-  if (!coupon) return { discount: 0, finalAmount: orderValue };
-
-  // 🎁 If Gift coupon → no calculation, just treat as 0 discount
-  if (coupon.type === 'GIFT') {
-    return 0;
-  }
-
-  let discount = 0;
-
-  if (coupon.type === 'PERCENTAGE') {
-    discount = (orderValue * (coupon.discountValue ?? 0)) / 100;
-
-    // apply max discount cap if set
-    if (coupon.maxDiscountAmount && discount > coupon.maxDiscountAmount) {
-      discount = coupon.maxDiscountAmount;
-    }
-  }
-
-  if (coupon.type === 'FLAT') {
-    discount = coupon.discountValue ?? 0;
-  }
-
-  // Prevent discount > orderValue
-  if (discount > orderValue) discount = orderValue;
-
-  return Math.round(discount)
-}
-
-watch(selectedCouponId, (newSelectedCouponId) => {
-  if(newSelectedCouponId){
-  redeemedAmt.value = redeemedAmt.value - couponValue.value;
-  couponValue.value = 0;
-  const chosen = allCoupons.value?.find(c => c.id === newSelectedCouponId?.value);
-  if (chosen) {
-      const result = calculateDiscount(chosen, grandTotal.value);
-      couponValue.value = result;
-      redeemedAmt.value = redeemedAmt.value + result;
-    }
-}
-});
-
-watch(
-  [items, clientId],
-  async ([newItems, newClientId], [oldItems, oldClientId]) => {
-    if (!newItems || !newClientId) return
-    if(selectedCouponId.value){
-  redeemedAmt.value = redeemedAmt.value - couponValue.value;
-  couponValue.value = 0;
-  const chosen = allCoupons.value?.find(c => c.id === selectedCouponId.value.value);
-  if (chosen) {
-      const result = calculateDiscount(chosen, grandTotal.value);
-      couponValue.value = result;
-      redeemedAmt.value = redeemedAmt.value + result;
-    }
-}
-    await couponRefetch()
-  },{deep: true,immediate: true}
-)
-
-
-const handleProductSelected = async (selectedItems) => {
-  if (!selectedItems || selectedItems.length === 0) return;
-
-  for (const item of selectedItems) {
-    const barcode = item.barcode;
-    if (!barcode) continue;
-
-    // last row index
-    const index = items.value.length - 1;
-
-    // set barcode into current row
-    items.value[index].barcode = barcode;
-
-    // fetch item details
-    await fetchItemData(barcode, index);
-
-    // create a new blank row after filling
-    addNewRow(index, true);
-
-    console.log("Added barcode:", barcode, "at index:", index);
-  }
-};
 
 
 
@@ -2098,7 +988,7 @@ const handleProductSelected = async (selectedItems) => {
       />
     </div>
      <div class="w-full flex flex-wrap gap-4 lg:hidden  py-2 px-2">
-          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
+          <UButton color="blue" class="flex-1" block @click="createNewBill" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
@@ -2137,9 +1027,9 @@ const handleProductSelected = async (selectedItems) => {
           </div>
         
        <div class="lg:grid grid-cols-1 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
-          <UInput v-if="!token" v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
+          <UInput v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
           <UInput
-            v-if="!token && isUserTrackIncluded"
+            v-if="isUserTrackIncluded"
             v-model="parentUserCode"
             type="number"
             label="User Code"
@@ -2568,12 +1458,21 @@ const handleProductSelected = async (selectedItems) => {
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Apply Coupon</label>
-              <USelectMenu 
-                v-model="selectedCouponId" 
-                :options="eligibleCoupons" 
-                placeholder="Select a coupon"
-              />
-
+              <div class="flex gap-2">
+                <USelectMenu
+                  v-model="selectedCouponId"
+                  :options="eligibleCoupons"
+                  placeholder="Select a coupon"
+                  class="flex-1"
+                />
+                <UButton
+                  v-if="selectedCouponId"
+                  icon="i-heroicons-x-mark"
+                  color="red"
+                  variant="soft"
+                  @click="selectedCouponId = null"
+                />
+              </div>
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Eligible Coupons</label>
@@ -2584,7 +1483,7 @@ const handleProductSelected = async (selectedItems) => {
               <UInput v-model="couponValue" />
             </div>
             <div class="mt-9">
-              <UButton color="primary" block @click="isOpen=true" :loading="isSavingAcc">Add Account</UButton>
+              <UButton color="primary" block @click="isOpen=true">Add Account</UButton>
             </div>
           </div>
           
@@ -2678,7 +1577,6 @@ const handleProductSelected = async (selectedItems) => {
             square
             variant="solid"
             class="w-auto"
-            :loading="isSavingAcc"
             @click="isOpen=true"
             />
           </div>
@@ -2689,7 +1587,7 @@ const handleProductSelected = async (selectedItems) => {
 
        <div v-else class="w-full gap-4 px-3 py-3 hidden lg:flex items-center">
   
-  <UButton color="blue" class="flex-1" block @click="newBill">
+  <UButton color="blue" class="flex-1" block @click="createNewBill">
     New
   </UButton>
 
@@ -2739,7 +1637,7 @@ const handleProductSelected = async (selectedItems) => {
 </div>
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
-          <UButton color="blue" class="flex-1" block @click="newBill" >New</UButton>
+          <UButton color="blue" class="flex-1" block @click="createNewBill" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
@@ -2747,28 +1645,7 @@ const handleProductSelected = async (selectedItems) => {
       </UCard>
   </UDashboardPanelContent>
 
-  <UModal v-model="isOpen">
-        <div class="p-4 space-y-4">
-          <h2 class="text-lg font-semibold">Enter Account Details</h2>
-
-          <!-- Name -->
-          <h3 class="text-md font-semibold">Personal Details</h3>
-          <UInput v-model="account.name" label="Name" placeholder="Enter full name" required />
-          <UInput v-model="account.phone" label="Phone No" placeholder="Enter Phone Number" required />
-
-          <!-- Address -->
-          <h3 class="text-md font-semibold mt-4">Address Details</h3>
-          <UInput v-model="account.street" label="Street" placeholder="Enter street name" required />
-          <UInput v-model="account.locality" label="Locality" placeholder="Enter locality" required />
-          <UInput v-model="account.city" label="City" placeholder="Enter city name" required />
-          <UInput v-model="account.state" label="State" placeholder="Enter state name" required />
-          <UInput v-model="account.pincode" label="Pincode" placeholder="Enter pincode" required />
-
-
-          <!-- Submit Button -->
-          <UButton @click="submitForm" :loading="isSavingAcc" block>Submit</UButton>
-        </div>
-      </UModal>
+  <BillingAccountModal v-model="isOpen" @account-created="getAccounts" />
 
 
      
@@ -2780,7 +1657,7 @@ const handleProductSelected = async (selectedItems) => {
 <BillingAddClient
   v-model:model="isClientAddModelOpen"
   v-model:phoneNo="phoneNo"
-  :onVerify="handlePhoneSubmit"
+  :onVerify="handleEnterPhone"
   :clientAdded="handleClientAdded"
 />
 
@@ -2790,55 +1667,14 @@ const handleProductSelected = async (selectedItems) => {
   @close="isProductSearchOpen = false"
 />
 
-<!-- split payment method modal -->
-   <UModal v-model="showSplitModal">
-  <div class="p-4 space-y-4">
-    <h2 class="text-lg font-semibold">Split Payment</h2>
-
-    <div
-      v-for="(method, index) in paymentOptionsInsplit"
-      :key="method"
-      class="flex gap-2 items-center"
-    >
-      <USelect
-        v-model="tempSplits[method].method"
-        :options="[method]"
-        disabled
-        class="w-1/2"
-      />
-      <UInput
-        v-model.number="tempSplits[method].amount"
-        type="number"
-        placeholder="Enter amount"
-        class="w-1/2"
-        @update:modelValue="() => handleAmountEntry(method)"
-      />
-    </div>
-
-    <div class="mt-4">
-      <p class="text-sm font-medium">Total Entered: ₹{{ totalSplitAmount }}</p>
-      <p
-        class="text-sm"
-        :class="{
-          'text-green-600': totalSplitAmount === grandTotal,
-          'text-red-600': totalSplitAmount !== grandTotal
-        }"
-      >
-        Grand Total: ₹{{ grandTotal }}
-      </p>
-    </div>
-
-    <UButton
-      :disabled="totalSplitAmount !== grandTotal"
-      color="green"
-      block
-      class="mt-4"
-      @click="submitSplitPayment"
-    >
-      Submit Split Payment
-    </UButton>
-  </div>
-</UModal>
+<!-- split payment modal -->
+<BillingSplitModal
+  v-model="showSplitModal"
+  v-model:tempSplits="tempSplits"
+  :grand-total="grandTotal"
+  :payment-options-in-split="paymentOptionsInsplit"
+  @confirmed="onSplitConfirmed"
+/>
 
 
     <UDashboardModal

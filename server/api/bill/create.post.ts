@@ -1,12 +1,5 @@
-import { Pool } from 'pg'
+import { pool } from '~/server/db'
 import crypto from 'crypto'
-
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  max: 10,
-  idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 10000
-})
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -20,7 +13,6 @@ export default defineEventHandler(async (event) => {
     couponId,
     uuid
   } = body
-  console.log(body)
   const TRANSIENT_ERROR_CODES = [
     '40001', '40P01', '53300', '57P01', '55006', '08006', '08003', 'P1001'
   ]
@@ -53,7 +45,7 @@ export default defineEventHandler(async (event) => {
       // Generate Bill ID
       const billId = uuid
 
-      // 1️⃣ Insert Bill — Prisma-style fields flattened
+      // 1️⃣ Insert Bill — invoice number was atomically reserved by findBillCounter before this call
       const insertBillQuery = `
         INSERT INTO bills (
           id, invoice_number, subtotal, discount, grand_total, return_amt,
@@ -196,14 +188,6 @@ export default defineEventHandler(async (event) => {
           )
         )
       }
-
-      // increment bill counter
-      updatePromises.push(
-        client.query(
-          `UPDATE companies SET bill_counter = bill_counter + 1 WHERE id = $1`,
-          [companyId]
-        )
-      )
 
       await Promise.all(updatePromises)
 
