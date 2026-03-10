@@ -653,13 +653,18 @@ const getCategories = async () => {
 const bill = ref(null)
 
 const fetchBill = async () => {
-  bill.value = await $fetch('/api/billEdit/findUniqueBill', {
-    method: 'GET',
-    query: {
-      billId: route.params.salesId,
-      companyId: useAuth().session.value?.companyId
-    }
-  })
+  dataLoading.value = true
+  try {
+    bill.value = await $fetch('/api/billEdit/findUniqueBill', {
+      method: 'GET',
+      query: {
+        billId: route.params.salesId,
+        companyId: useAuth().session.value?.companyId
+      }
+    })
+  } finally {
+    dataLoading.value = false
+  }
 }
 
 
@@ -937,6 +942,7 @@ const handleInvalidBarcode = (index) => {
 
 const handleEdit = async () => {
   isSaving.value = true;
+  printModel.value = true
   try {
 
     if (!navigator.onLine) {
@@ -1066,18 +1072,15 @@ const handleEdit = async () => {
 
     await reconcileClientPointsOnSave(newBillPoints)
 
-    // 8. Show success notification
+    // 8. Prepare for printing
+    printData = preparedPrintData;
+    printModel.value = true;
+
+    // 9. Show success notification
     toast.add({
       title: 'Bill edited successfully!',
       color: 'green',
     });
-
-   
-
-    // 9. Prepare for printing
-    printData = preparedPrintData;
-    printModel.value = true;
-
     oldClientId.value = clientId.value
     pastBillPoints.value = newBillPoints
     originalRedeemedPoints.value = Number(redeemedPoints.value || 0)
@@ -1085,6 +1088,7 @@ const handleEdit = async () => {
 
   } catch (error) {
     console.error('Error updating bill', error);
+    printModel.value = false
     toast.add({
       title: 'Bill update failed!',
       description: error.message,
