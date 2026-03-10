@@ -236,6 +236,7 @@ const pageCount = ref('5');
 const sales = ref([])
 const pageTotal = ref(0)
 const isLoading = ref(false)
+const lastFetchId = ref(0)
 
 const paymentMethodFilterOptions = [
   { label: 'Cash', value: 'Cash' },
@@ -247,6 +248,7 @@ const paymentMethodFilterOptions = [
 
 const fetchSales = async () => {
   isLoading.value = true
+  const fetchId = ++lastFetchId.value
   try {
     const res = await $fetch('/api/billSale/findManyBills', {
       method: 'POST',
@@ -266,13 +268,17 @@ const fetchSales = async () => {
       },
     })
 
+    if (fetchId !== lastFetchId.value) return
     sales.value = res.rows
     pageTotal.value = res.total   // ✅ REAL TOTAL
   } catch (err) {
+    if (fetchId !== lastFetchId.value) return
     sales.value = []
     pageTotal.value = 0
   } finally{
-    isLoading.value = false
+    if (fetchId === lastFetchId.value) {
+      isLoading.value = false
+    }
   }
 }
 

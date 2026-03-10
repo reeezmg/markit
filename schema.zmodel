@@ -400,6 +400,8 @@ model DeliveryPartner extends Base {
   // 👇 One-to-many relation
   trynbuys      Trynbuy[]  // DeliveryPartner has many Trynbuys
   deliveryPartnerEarnings DeliveryPartnerEarnings[] 
+  deliveryPartnerWalletTransactions DeliveryPartnerWalletTransaction[]
+  deliveryPartnerPayouts DeliveryPartnerPayout[]
 
 
   @@allow('read, create, update, delete', true)
@@ -440,7 +442,7 @@ model     Trynbuy {
 
   packingStatus   String?      @map("packing_status")
 
-
+  deliveryPartnerWalletTransaction DeliveryPartnerWalletTransaction[]
 
   
 
@@ -468,6 +470,43 @@ model DeliveryPartnerEarnings extends Base {
 
   @@allow("read, create, update, delete", true)
   @@map("delivery_partner_earnings")
+}
+
+model DeliveryPartnerWalletTransaction extends Base {
+  createdAt DateTime @default(now()) @map("created_at")
+  amount    Float
+  direction String
+  source    String
+  note      String?
+
+  trynbuy   Trynbuy? @relation(fields: [trynbuyId], references: [id])
+  trynbuyId String?  @map("trynbuy_id")
+
+  bill      Bill?    @relation(fields: [billId], references: [id])
+  billId    String?  @map("bill_id")
+
+  deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId String          @map("delivery_partner_id")
+
+  @@index([deliveryPartnerId])
+  @@index([trynbuyId])
+  @@index([billId])
+  @@allow("read, create, update, delete", true)
+  @@map("delivery_partner_wallet_transactions")
+}
+
+model DeliveryPartnerPayout extends Base {
+  createdAt DateTime @default(now()) @map("created_at")
+  amount    Float
+  status    String   @default("PENDING")
+  note      String?
+
+  deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId String          @map("delivery_partner_id")
+
+  @@index([deliveryPartnerId])
+  @@allow("read, create, update, delete", true)
+  @@map("delivery_partner_payouts")
 }
 
 
@@ -833,6 +872,7 @@ model Bill extends Base {
     trynbuyId      String?  @map("trynbuy_id")   
 
     isMarkit        Boolean            @default(false) @map('is_markit') 
+    deliveryPartnerWalletTransactions DeliveryPartnerWalletTransaction[]
 
     @@index([companyId, createdAt, deleted])
     @@allow("create, read, update, delete", true)

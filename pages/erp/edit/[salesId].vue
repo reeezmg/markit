@@ -34,6 +34,7 @@ const couponLoaded = ref(false);
 const selectedCouponId = ref("");
 const selectedCouponOnbill = ref(null)
 const printModel = ref(false);
+const isClientLoading = ref(false)
 
 const returnAmt = computed(() => {
   return items.value.reduce((sum, item) => {
@@ -88,7 +89,6 @@ const clientName = ref('');
 const points = ref(0);
 const clientId = ref('');
 const oldClientId = ref('');
-const newClientId = ref('');
 const scannedBarcode = ref("");
 const categoryStore = useCategoryStore()
 const userStore = useUserStore()
@@ -124,9 +124,44 @@ const account = ref({
 });
 const selected = ref(null);
 const pastBillPoints = ref(0);
-  const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
+const originalRedeemedPoints = ref(0);
+const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
+
+const computeBillPoints = (total) =>
+  pointsValue > 0 ? Math.round(Number(total || 0) / pointsValue) : 0
+
+const resetRedeemState = () => {
+  redeemedPoints.value = 0
+  redeemedAmt.value = Number(couponValue.value || 0)
+  isRedeemPoint.value = false
+}
+
+const setDisplayedPointsFromServer = (serverPoints) => {
+  const rawPoints = Number(serverPoints || 0)
+  if (clientId.value && clientId.value === oldClientId.value) {
+    points.value = Math.max(0, rawPoints - pastBillPoints.value + Number(redeemedPoints.value || 0))
+  } else {
+    points.value = Math.max(0, rawPoints)
+  }
+}
+
+const revertRedeemedPointsForCurrentClient = async () => {
+  if (!clientId.value || redeemedPoints.value <= 0) return
+  const res = await $fetch('/api/bill/redeemClientPoints', {
+    method: 'POST',
+    body: {
+      companyId: useAuth().session.value?.companyId,
+      clientId: clientId.value,
+      points: redeemedPoints.value,
+      mode: 'revert',
+    },
+  })
+  resetRedeemState()
+  originalRedeemedPoints.value = 0
+  setDisplayedPointsFromServer(res.points)
+}
 
 const items = ref([
   { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
@@ -671,25 +706,26 @@ watch(bill, async (newBill) => {
   /* ---------------- BASIC FIELDS ---------------- */
   discount.value = newBill.discount
   selected.value = newBill.accountId
-  clientId.value = newBill.client?.id
-  oldClientId.value = newBill.client?.id
+  clientId.value = newBill.client?.id || ''
+  oldClientId.value = newBill.client?.id || ''
   clientName.value = newBill.client?.name
   phoneNo.value = newBill.client?.phone?.replace(/^\+91/, '') || ''
   paymentMethod.value = newBill.paymentMethod
   date.value = new Date(newBill.createdAt).toISOString()
 
   /* ---------------- POINTS ---------------- */
-  pastBillPoints.value =
-    pointsValue > 0 ? Number(newBill.grandTotal) / pointsValue : 0
-
-  points.value = newBill.client?.companies?.[0]?.points ?? 0
+  pastBillPoints.value = computeBillPoints(newBill.grandTotal)
 
   redeemedAmt.value +=
-  Number(newBill.redeemedPoints || 0) +
-  Number(newBill.couponValue || 0)
-  redeemedPoints.value = newBill.redeemedPoints
+    Number(newBill.redeemedPoints || 0) +
+    Number(newBill.couponValue || 0)
+  redeemedPoints.value = Number(newBill.redeemedPoints || 0)
   isRedeemPoint.value = !!newBill.redeemedPoints
   couponValue.value = newBill.couponValue
+  originalRedeemedPoints.value = Number(newBill.redeemedPoints || 0)
+
+  const serverPoints = newBill.client?.companies?.[0]?.points ?? 0
+  setDisplayedPointsFromServer(serverPoints)
 
   /* ---------------- ITEMS ---------------- */
   items.value = newBill.entries.map((entry, index) => ({
@@ -937,13 +973,8 @@ const handleEdit = async () => {
     const entriesDelete = await fetchEntriesToDelete()
 
     // 4. Calculate bill points
-const billPoints =
-  Math.round(
-    (pointsValue > 0
-      ? Number(grandTotal.value || 0) / pointsValue
-      : 0
-    ) - Number(pastBillPoints.value || 0)
-  )
+    const newBillPoints = computeBillPoints(grandTotal.value)
+    const billPoints = Number(newBillPoints || 0) - Number(pastBillPoints.value || 0)
   
 
 
@@ -1028,75 +1059,35 @@ const billPoints =
         paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
         splitPayments: paymentMethod.value === 'Split' ? splitPayments.value : null,
         accountId: selected.value,
-        clientId: newClientId.value ? newClientId.value : oldClientId.value,
+        clientId: clientId.value ? clientId.value : '',
         date: new Date(date.value).toISOString(),
         companyId: useAuth().session.value?.companyId
       },
-    }    // Increment to new client (if exists)
-    console.log(oldClientId.value,newClientId.value,'old and new client ids');
-    if (clientId.value)  {
-      if(oldClientId.value && newClientId.value !== ''){
-        const res = await $fetch('/api/bill/redeemClientPoints', {
-        method: 'POST',
-        body: {
-          companyId: useAuth().session.value?.companyId,
-          clientId: oldClientId.value,
-          points: pastBillPoints.value,
-          mode: 'redeem'
-        }
-      });
-      console.log('Points decremented from old client:', res);
     }
-
-    if(newClientId.value){
-
-       const res = await $fetch('/api/bill/redeemClientPoints', {
-        method: 'POST',
-        body: {
-          companyId: useAuth().session.value?.companyId,
-          clientId: newClientId.value,
-          points: pastBillPoints.value,
-          mode: 'revert'
-        }
-      });
-      
-      points.value = res.points;
-      
-      oldClientId.value = newClientId.value
-      newClientId.value = '';
-
-      console.log('Points incremented to new client:', res);
-    }
-    }
-
-
 
     // 7. Call server endpoint
-  $fetch('/api/bill/update', {
+    await $fetch('/api/bill/update', {
       method: 'POST',
       body: requestData
-    }).then(() => {
-      //  queryClient.invalidateQueries({
-      //   queryKey: ['zenstack', 'Bill', 'findMany'],
-      //   exact: false
-      // });
-       // 8. Show success notification
+    })
+
+    await reconcileClientPointsOnSave(newBillPoints)
+
+    // 8. Show success notification
     toast.add({
       title: 'Bill edited successfully!',
       color: 'green',
     });
-    }).catch(error => {
-      toast.add({
-              title: 'Bill creation failed!',
-              color: 'red',
-            });
-    })
 
    
 
     // 9. Prepare for printing
     printData = preparedPrintData;
     printModel.value = true;
+
+    oldClientId.value = clientId.value
+    pastBillPoints.value = newBillPoints
+    originalRedeemedPoints.value = Number(redeemedPoints.value || 0)
 
 
   } catch (error) {
@@ -1309,23 +1300,44 @@ const handleEnterPhone = async() => {
       isClientAddModelOpen.value = true
       return
     }
-    
+
+  if (clientId.value && data?.id && data.id !== clientId.value) {
+    try {
+      await revertRedeemedPointsForCurrentClient()
+    } catch (error) {
+      toast.add({
+        title: 'Failed to revert redeemed points',
+        description: error.message,
+        color: 'red',
+      })
+      return
+    }
+  }
+
+  clientFound.value = true
   clientName.value = data?.name
   clientId.value = data?.id
-  newClientId.value = data?.id
-  points.value = data?.companies[0]?.points;
-  if(!data){
-    isClientAddModelOpen.value = true;
-    points.value = 0
-  }
+  setDisplayedPointsFromServer(data?.companies?.[0]?.points ?? 0)
 }
 
-const handleClientAdded = (id,name,phone) => {
+const handleClientAdded = async (id,name,phone) => {
   console.log(id,name)
+  if (clientId.value && id && id !== clientId.value) {
+    try {
+      await revertRedeemedPointsForCurrentClient()
+    } catch (error) {
+      toast.add({
+        title: 'Failed to revert redeemed points',
+        description: error.message,
+        color: 'red',
+      })
+      return
+    }
+  }
+  clientFound.value = true
   clientName.value = name
   phoneNo.value = phone
   clientId.value = id
-  newClientId.value = id
   points.value = 0
   isClientAddModelOpen.value = false;
 };
@@ -1543,18 +1555,74 @@ const handleDiscountEnter = (index) => {
   }
 };
 
+const reconcileClientPointsOnSave = async (newBillPoints) => {
+  const companyId = useAuth().session.value?.companyId
+  if (!companyId) return
+
+  const oldClient = oldClientId.value || ''
+  const newClient = clientId.value || ''
+  const oldRedeemed = Number(originalRedeemedPoints.value || 0)
+  const newRedeemed = Number(redeemedPoints.value || 0)
+
+  const updatePoints = async (clientId, points, mode) => {
+    if (!clientId || points <= 0) return
+    await $fetch('/api/bill/redeemClientPoints', {
+      method: 'POST',
+      body: {
+        companyId,
+        clientId,
+        points,
+        mode,
+      },
+    })
+  }
+
+  if (oldClient && newClient && oldClient === newClient) {
+    const earnedDelta = Number(newBillPoints || 0) - Number(pastBillPoints.value || 0)
+    if (earnedDelta > 0) await updatePoints(oldClient, earnedDelta, 'revert')
+    if (earnedDelta < 0) await updatePoints(oldClient, Math.abs(earnedDelta), 'redeem')
+
+    const redeemedDelta = newRedeemed - oldRedeemed
+    if (redeemedDelta > 0) await updatePoints(oldClient, redeemedDelta, 'redeem')
+    if (redeemedDelta < 0) await updatePoints(oldClient, Math.abs(redeemedDelta), 'revert')
+    return
+  }
+
+  if (oldClient) {
+    await updatePoints(oldClient, Number(pastBillPoints.value || 0), 'redeem')
+    await updatePoints(oldClient, oldRedeemed, 'revert')
+  }
+
+  if (newClient) {
+    await updatePoints(newClient, Number(newBillPoints || 0), 'revert')
+    await updatePoints(newClient, newRedeemed, 'redeem')
+  }
+}
+
 
 const handleRedeemPoints = async () => {
-  isRedeemPoint.value = !isRedeemPoint.value;
   redeeming.value = true;
 
-  if (isRedeemPoint.value) {
-    if (clientId.value) {
-      try {
-        // Determine the redeemable points (not more than grand total)
-        const redeemablePoints = Math.min(points.value, grandTotal.value);
+  if (!clientId.value) {
+    redeeming.value = false
+    toast.add({
+      title: 'Select a client first',
+      color: 'red',
+    })
+    return
+  }
 
-        const res = await $fetch('/api/bill/redeemClientPoints', {
+  try {
+    if (!isRedeemPoint.value) {
+      const redeemablePoints = Math.min(points.value, grandTotal.value);
+      if (redeemablePoints <= 0) {
+        toast.add({
+          title: 'No points available to redeem',
+          color: 'red',
+        })
+        return
+      }
+      const res = await $fetch('/api/bill/redeemClientPoints', {
         method: 'POST',
         body: {
           companyId: useAuth().session.value?.companyId,
@@ -1564,22 +1632,17 @@ const handleRedeemPoints = async () => {
         },
       })
 
-
-        redeemedPoints.value = redeemablePoints;
-        redeemedAmt.value = redeemablePoints + couponValue.value;
-        points.value = res.points- pastBillPoints.value;
-        console.log(res);
-
-      } catch (error) {
-        console.error('Error updating client points', error);
+      redeemedPoints.value = redeemablePoints;
+      redeemedAmt.value = redeemablePoints + couponValue.value;
+      isRedeemPoint.value = true
+      setDisplayedPointsFromServer(res.points)
+      originalRedeemedPoints.value = redeemedPoints.value
+    } else {
+      if (redeemedPoints.value <= 0) {
+        resetRedeemState()
+        return
       }
-    }
-  } else {
-    // Revert redeemed points
-    if (clientId.value) {
-      try {
-
-        const res = await $fetch('/api/bill/redeemClientPoints', {
+      const res = await $fetch('/api/bill/redeemClientPoints', {
         method: 'POST',
         body: {
           companyId: useAuth().session.value?.companyId,
@@ -1589,15 +1652,12 @@ const handleRedeemPoints = async () => {
         },
       })
 
-        points.value = res.points- pastBillPoints.value;
-        redeemedPoints.value = 0;
-        redeemedAmt.value = couponValue.value;
-        console.log(res);
-
-      } catch (error) {
-        console.error('Error updating client points', error);
-      }
+      resetRedeemState()
+      setDisplayedPointsFromServer(res.points)
+      originalRedeemedPoints.value = 0
     }
+  } catch (error) {
+    console.error('Error updating client points', error);
   }
 
   redeeming.value = false;
@@ -1605,32 +1665,22 @@ const handleRedeemPoints = async () => {
 
 
 const handleClearClient = async () => {
-   await $fetch('/api/bill/redeemClientPoints', {
-        method: 'POST',
-        body: {
-          companyId: useAuth().session.value?.companyId,
-          clientId: oldClientId.value,
-          points: pastBillPoints.value,
-          mode: 'redeem',
-        },
-      })
-      if(redeemedAmt.value){
-      await $fetch('/api/bill/redeemClientPoints', {
-            method: 'POST',
-            body: {
-              companyId: useAuth().session.value?.companyId,
-              clientId: oldClientId.value,
-              points: redeemedAmt.value - couponValue.value,
-              mode: 'revert',
-            },
-          })
-    }
+  try {
+    await revertRedeemedPointsForCurrentClient()
+  } catch (error) {
+    toast.add({
+      title: 'Failed to revert redeemed points',
+      description: error.message,
+      color: 'red',
+    })
+    return
+  }
   clientId.value = '';
   clientName.value = '';
-  points.value = '';
+  points.value = 0;
   phoneNo.value = '';
-  oldClientId.value = '';
   redeemedAmt.value = 0;
+  isRedeemPoint.value = false;
   clientFound.value = false;
 }
 
@@ -1761,15 +1811,6 @@ function calculateDiscount(coupon, orderValue) {
 
  return Math.round(discount)
 }
-
-watch(redeemedAmt.value, (oldValue, newValue) => {
-  if (newValue > 0) {
-    grandTotal.value = grandTotal.value + oldValue - newValue;
-  }
-});
-
-
-
 
 watch(selectedCouponId,async (newSelectedCouponId) => {
   if(newSelectedCouponId){

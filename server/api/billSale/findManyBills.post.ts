@@ -50,6 +50,8 @@ export default defineEventHandler(async (event) => {
     `
 
     /* 🔎 SEARCH RULES */
+    let invoiceMatchSelect = '0 AS invoice_match'
+    let orderByPrefix = ''
     if (normalizedSearch) {
       const isNumeric = /^\d+$/.test(normalizedSearch)
 
@@ -65,6 +67,7 @@ export default defineEventHandler(async (event) => {
           values.push(`%${normalizedSearch}%`)
           idx++
         } else {
+          const invoiceParamIndex = idx
           whereSQL += `
             AND (
               b.invoice_number = $${idx}
@@ -73,6 +76,8 @@ export default defineEventHandler(async (event) => {
           `
           values.push(Number(normalizedSearch), `%${normalizedSearch}%`)
           idx += 2
+          invoiceMatchSelect = `CASE WHEN b.invoice_number = $${invoiceParamIndex} THEN 1 ELSE 0 END AS invoice_match`
+          orderByPrefix = 'invoice_match DESC, '
         }
       }
     }
@@ -157,6 +162,7 @@ export default defineEventHandler(async (event) => {
           '[]'
         ) AS entries,
 
+        ${invoiceMatchSelect},
         COUNT(*) OVER() AS total_count
 
       FROM bills b
@@ -168,7 +174,7 @@ export default defineEventHandler(async (event) => {
 
       GROUP BY b.id, c.id
 
-      ORDER BY ${orderByColumn} ${orderByDirection}
+      ORDER BY ${orderByPrefix}${orderByColumn} ${orderByDirection}
       LIMIT $${idx} OFFSET $${idx + 1}
     `
 
