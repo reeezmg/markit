@@ -606,6 +606,16 @@ function fireFcmNotification(companyId, billInv, grandTotalVal, session) {
   })()
 }
 
+async function ensureClientExists() {
+  if (!clientId.value) return
+  const data = await $fetch('/api/bill/findUniqueClient', {
+    query: { phone: `+91${phoneNo.value}` },
+  })
+  if (!data?.id || data.id !== clientId.value) {
+    throw new Error('Client not found. Please re-add the client before saving.')
+  }
+}
+
 // ─── Save handler (orchestrator) ─────────────────────────────────────────────
 
 const handleSave = async () => {
@@ -640,6 +650,7 @@ const handleSave = async () => {
     // Reserve invoice number atomically before save so printData is ready immediately
     const billInv = await $fetch('/api/bill/findBillCounter', { method: 'POST', body: { companyId, userId } })
 
+    await ensureClientExists()
     if (clientId.value) await generateCoupons(clientId.value, Number(grandTotal.value) || 0)
 
     const billPoints = computeBillPoints(session, grandTotal.value)

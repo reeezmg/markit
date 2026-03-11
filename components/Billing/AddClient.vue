@@ -135,10 +135,10 @@ const handleEnterFlow = async (e: KeyboardEvent) => {
   /* CONTINUE → SUBMIT FLOW */
 if (continueRef.value?.$el === active) {
 
-  // let form submit handle login
-  continueRef.value?.$el?.click()
-    props.onVerify?.()
-
+  // Submit once on Enter when Continue is focused
+  if (!isSaving.value) {
+    login()
+  }
   return
 }
 
@@ -162,6 +162,7 @@ onBeforeUnmount(() => {
 
 const login = async () => {
 
+  if (isSaving.value) return
   isSaving.value = true
   const uuid = uuidv4()
 

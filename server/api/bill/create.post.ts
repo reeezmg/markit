@@ -44,6 +44,21 @@ export default defineEventHandler(async (event) => {
 
       // Generate Bill ID
       const billId = uuid
+      let resolvedClientId = payload.client?.connect?.id || null
+      let resolvedCouponId = couponId || null
+
+      if (resolvedClientId) {
+        const check = await client.query(
+          `SELECT 1 FROM clients WHERE id = $1`,
+          [resolvedClientId]
+        )
+        if (check.rowCount === 0) {
+          resolvedClientId = null
+          resolvedCouponId = null
+          payload.redeemedPoints = 0
+          payload.billPoints = 0
+        }
+      }
 
       // 1️⃣ Insert Bill — invoice number was atomically reserved by findBillCounter before this call
       const insertBillQuery = `
@@ -77,7 +92,7 @@ export default defineEventHandler(async (event) => {
         payload.splitPayments ? JSON.stringify(payload.splitPayments) : null,
         payload.company.connect?.id || companyId,
         payload.account?.connect?.id || null,
-        payload.client?.connect?.id || null,
+        resolvedClientId,
         payload.companyUser?.connect?.companyId_userId?.userId || null,
         payload.couponValue
       ])
@@ -124,11 +139,11 @@ export default defineEventHandler(async (event) => {
       // 3️⃣ Parallel updates (client points, stock, returns, etc.)
       const updatePromises: Promise<any>[] = []
 
-      if (clientId) {
+      if (resolvedClientId) {
         updatePromises.push(
           client.query(
             `UPDATE company_clients SET points = points + $1 WHERE company_id = $2 AND client_id = $3`,
-            [billPoints, companyId, clientId]
+            [billPoints, companyId, resolvedClientId]
           )
         )
       }
@@ -172,19 +187,19 @@ export default defineEventHandler(async (event) => {
       }
 
       // coupon usage + increment
-      if (couponId && clientId) {
+      if (resolvedCouponId && resolvedClientId) {
         const usageId = crypto.randomUUID()
         updatePromises.push(
           client.query(
             `INSERT INTO coupon_usages (id, coupon_id, client_id, bill_id, used_at)
              VALUES ($1, $2, $3, $4, now())`,
-            [usageId, couponId, clientId, billId]
+            [usageId, resolvedCouponId, resolvedClientId, billId]
           )
         )
         updatePromises.push(
           client.query(
             `UPDATE coupons SET times_used = times_used + 1 WHERE id = $1`,
-            [couponId]
+            [resolvedCouponId]
           )
         )
       }
