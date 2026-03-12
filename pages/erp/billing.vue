@@ -460,7 +460,7 @@ function validateBillState({ session, items, grandTotal, paymentMethod, splitPay
   // Totals
   const total = Number(grandTotal)
   if (Number.isNaN(total)) throw new Error('Grand total is invalid. Check discount values.')
-  if (total < 0) throw new Error('Grand total is negative. Reduce the discount amount.')
+
 
   // Redeemed amount can't exceed pre-discount total
   if (Number(redeemedAmt) > total + Number(redeemedAmt)) {
