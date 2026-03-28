@@ -11,6 +11,17 @@ steps:
         '.'
       ]
 
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    args:
+      - gcloud
+      - run
+      - deploy
+      - markit
+      - --image=asia-south1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/markit
+      - --region=asia-south1
+      - --platform=managed
+      - --allow-unauthenticated
+
 images:
   - 'asia-south1-docker.pkg.dev/$PROJECT_ID/cloud-run-source-deploy/markit'
 

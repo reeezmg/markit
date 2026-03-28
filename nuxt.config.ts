@@ -21,7 +21,7 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    preset: 'vercel',
+    preset: 'node-server',
     routeRules: {
       '/nonetwork': { prerender: true },
     },
