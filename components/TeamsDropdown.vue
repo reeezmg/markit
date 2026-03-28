@@ -46,10 +46,6 @@ const teams = (items) =>
        click: async () => {
         activeCompany.value =  item.company
        await updateCompanySession({
-          id: item.userId,
-          cleanup: item.cleanup || false,
-          cleanupCode: item.cleanupCode ?? undefined,
-          name: item.name || null,
           logo: item.company.logo ?? undefined,
           description: item.company.description ?? undefined,
           thankYouNote: item.company.thankYouNote ?? undefined,
@@ -57,7 +53,6 @@ const teams = (items) =>
           returnPolicy: item.company.returnPolicy ?? undefined,
           companyPhone: item.company.phone ?? undefined,
           commissionRate: item.company.commissionRate ?? undefined,
-          image: item.image || null,
           printerLabelSize: item.company.printerLabelSize ?? undefined,
           code: item.code ?? undefined,
           storeUniqueName: item.company.storeUniqueName ?? undefined,
