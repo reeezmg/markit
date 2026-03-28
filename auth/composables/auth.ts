@@ -64,78 +64,68 @@ export const checkEmailExist = async (email: string) => {
     return res;
 };
 
-export const updateCompanySession = async (
-  id: string | undefined,
-  cleanup: boolean | undefined,
-  name: string | null | undefined,
-  description: string | undefined,
-  thankYouNote: string | undefined,
-  refundPolicy: string | undefined,
-  returnPolicy: string | undefined,
-  companyPhone: string | undefined,
-  image: string | null | undefined,
-  code: string | undefined,
-  storeUniqueName: string | undefined,
-  isTaxIncluded: boolean | undefined,
-  isUserTrackIncluded: boolean | undefined,
-  companyId: string | undefined,
-  companyType: string | undefined,
-  companyName: string | undefined,
-  pipelineId: string | undefined,
-  role: string | undefined,
-  pointsValue: number | undefined,
-  currency: string | undefined,
-  type: string,
-  address: Record<string, any>,
-  gstin: string,
-  accHolderName: string,
-  upiId: string,
-  plan: string,
-  logo: string | undefined,
-  productInputs: Record<string, any>,
-  variantInputs: Record<string, any>,
-) => {
-  const config = useRuntimeConfig();
-  try{
-  await $fetch('/api/auth/session', {
-    method: 'PUT',
-    body: {
-      id,
-      cleanup,
-      name,
-      description,
-      thankYouNote,
-      refundPolicy,
-      returnPolicy,
-      companyPhone,
-      image,
-      code,
-      storeUniqueName,
-      isTaxIncluded,
-      isUserTrackIncluded,
-      companyId,
-      companyType,
-      companyName,
-      pipelineId,
-      role,
-      pointsValue,
-      currency,
-      type,
-      address,
-      gstin,
-      accHolderName,
-      upiId,
-      plan,
-      logo,
-      productInputs,
-      variantInputs,
-    },
-  });
-
-  await useAuth().updateSession();
-}catch(err){
+export const updateCompanySession = async (params: {
+  id?: string
+  cleanup?: boolean
+  cleanupCode?: string
+  name?: string | null
+  purchaseExpenseCategoryId?: string
+  logo?: string
+  description?: string
+  thankYouNote?: string
+  refundPolicy?: string
+  returnPolicy?: string
+  companyPhone?: string
+  commissionRate?: number
+  image?: string | null
+  email?: string
+  printerLabelSize?: string
+  code?: string
+  storeUniqueName?: string
+  isTaxIncluded?: boolean
+  isAiImage?: boolean
+  deliveryType?: string[]
+  deliveryMode?: string[]
+  fundDeliveryFees?: boolean
+  deliveryRadius?: number
+  deliveryFeesPerKm?: number
+  waitingTime?: number
+  waitingChargesPerMin?: number
+  minDeliveryCharges?: number
+  deliveryDiscountThreshold?: number
+  deliveryDiscountAmount?: number
+  isCostIncluded?: boolean
+  isUserTrackIncluded?: boolean
+  companyId?: string
+  companyType?: string
+  companyName?: string
+  pipelineId?: string
+  role?: string
+  pointsValue?: number
+  currency?: string
+  type?: string
+  address?: Record<string, any>
+  openTime?: string
+  closeTime?: string
+  gstin?: string
+  accHolderName?: string
+  ifsc?: string
+  accountNo?: string
+  bankName?: string
+  upiId?: string
+  plan?: string
+  productInputs?: Record<string, any>
+  variantInputs?: Record<string, any>
+}) => {
+  try {
+    await $fetch('/api/auth/session', {
+      method: 'PUT',
+      body: params,
+    });
+    await useAuth().updateSession();
+  } catch(err) {
     console.log(err)
-}
+  }
 };
 
 

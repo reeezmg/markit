@@ -44,7 +44,7 @@ const handleSubmit = async (e: Event) => {
             },
         });
 
-        await updateCompanySession(res?.id, res?.type, res?.name);
+        await updateCompanySession({ id: res?.id, companyType: res?.type, companyName: res?.name });
         toast.add({
             title: 'Company added !',
             id: 'modal-success',
