@@ -584,6 +584,7 @@ const groups = computed(() => [
                 <template #left>
                     <TeamsDropdown />
                 </template>
+<!-- 
                 <template v-if="auth.session.value?.companyId" #right>
                     <UTooltip text="AI Chat (C then B)">
                         <UButton
@@ -593,7 +594,7 @@ const groups = computed(() => [
                             @click="openChat"
                         />
                     </UTooltip>
-                </template>
+                </template> -->
             </UDashboardNavbar>
 
             <UDashboardSidebar>
