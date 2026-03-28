@@ -56,7 +56,10 @@ export default eventHandler(async (event) => {
     variantInputs
   } = body;
 
+  // Merge with existing session so user-specific fields (cleanup, cleanupCode, id, image, etc.)
+  // are preserved when only company fields are being updated.
   await session.update({
+    ...session.data,
     id,
     cleanup,
     cleanupCode,
