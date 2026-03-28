@@ -5,6 +5,7 @@ import { pool } from '~/server/db';
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event);
   const companyId = session.data.companyId;
+  const cleanup = session.data.cleanup ?? false;
 
   if (!companyId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
@@ -53,15 +54,16 @@ export default defineEventHandler(async (event) => {
           AND b.deleted = false
           AND b.is_markit = true
           AND b.payment_status = 'PAID'
-          AND b.created_at BETWEEN $2 AND $3;
+          AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE);
         `,
-        [companyId, startDate, endDate]
+        [companyId, startDate, endDate, cleanup]
       ),
 
       // ✅ Revenue by Category - only for is_markit = true
       client.query(
         `
-        SELECT 
+        SELECT
           COALESCE(c.name, 'Uncategorized') AS name,
           ROUND(SUM(e.value)::numeric, 2) AS total
         FROM entries e
@@ -72,10 +74,11 @@ export default defineEventHandler(async (event) => {
           AND b.is_markit = true
           AND b.payment_status = 'PAID'
           AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE)
         GROUP BY c.name
         ORDER BY total DESC;
         `,
-        [companyId, startDate, endDate]
+        [companyId, startDate, endDate, cleanup]
       ),
 
       // ✅ Bill count query - only for is_markit = true
@@ -87,9 +90,10 @@ export default defineEventHandler(async (event) => {
           AND b.deleted = false
           AND b.is_markit = true
           AND b.payment_status = 'PAID'
-          AND b.created_at BETWEEN $2 AND $3;
+          AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE);
         `,
-        [companyId, startDate, endDate]
+        [companyId, startDate, endDate, cleanup]
       )
     ]);
 

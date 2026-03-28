@@ -37,22 +37,8 @@ const activeTab = ref(0)
 
 const selectUser = (row: any) => {
     selectedUser.value = row
-    // Reset detail tab state
-    activeTab.value = 0
     salesPage.value = 1
     expensePage.value = 1
-    salesSearch.value = ''
-    expenseSearch.value = ''
-    expenseSelectedStatus.value = []
-    expenseSelectedCategory.value = []
-    salesSelectedDate.value = {
-        start: new Date(new Date().setHours(0, 0, 0, 0)),
-        end: new Date(new Date().setHours(23, 59, 59, 999)),
-    }
-    expenseSelectedDate.value = {
-        start: new Date(new Date().setHours(0, 0, 0, 0)),
-        end: new Date(new Date().setHours(23, 59, 59, 999)),
-    }
 }
 
 const closeDetail = () => {
@@ -75,6 +61,46 @@ const salesSelectedDate = ref({
 const salesLoading = ref(false)
 const salesEntries = ref<any[]>([])
 const salesTotalCount = ref(0)
+
+const salesFilterOpen          = ref(false)
+const salesBillStatus          = ref<string[]>([])
+const salesPaymentMethods      = ref<string[]>([])
+const salesMinValue            = ref<number | null>(null)
+const salesMaxValue            = ref<number | null>(null)
+const draftSalesBillStatus     = ref<string[]>([])
+const draftSalesPaymentMethods = ref<string[]>([])
+const draftSalesMinValue       = ref<number | null>(null)
+const draftSalesMaxValue       = ref<number | null>(null)
+
+const salesPaymentOptions = [
+    { label: 'Cash',   value: 'Cash' },
+    { label: 'UPI',    value: 'UPI' },
+    { label: 'Card',   value: 'Card' },
+    { label: 'Credit', value: 'Credit' },
+    { label: 'Split',  value: 'Split' },
+]
+
+const openSalesFilter = () => {
+    draftSalesBillStatus.value = [...salesBillStatus.value]
+    draftSalesPaymentMethods.value = [...salesPaymentMethods.value]
+    draftSalesMinValue.value = salesMinValue.value
+    draftSalesMaxValue.value = salesMaxValue.value
+    salesFilterOpen.value = true
+}
+
+const applySalesFilters = () => {
+    salesBillStatus.value = [...draftSalesBillStatus.value]
+    salesPaymentMethods.value = [...draftSalesPaymentMethods.value]
+    salesMinValue.value = draftSalesMinValue.value
+    salesMaxValue.value = draftSalesMaxValue.value
+    salesPage.value = 1
+    salesFilterOpen.value = false
+}
+
+const hasSalesFilter = computed(() =>
+    salesBillStatus.value.length > 0 || salesPaymentMethods.value.length > 0 ||
+    salesMinValue.value !== null || salesMaxValue.value !== null
+)
 
 const salesColumns = [
     { key: 'categoryName', label: 'Category', sortable: true },
@@ -106,15 +132,23 @@ const salesEntryArgs = computed(() => {
                     gte: startOfDay(salesSelectedDate.value.start),
                     lte: endOfDay(salesSelectedDate.value.end),
                 },
+                ...(salesPaymentMethods.value.length && {
+                    paymentMethod: { in: salesPaymentMethods.value },
+                }),
+                ...(salesBillStatus.value.length && {
+                    paymentStatus: { in: salesBillStatus.value },
+                }),
             },
+            ...(salesMinValue.value !== null && { value: { gte: salesMinValue.value } }),
+            ...(salesMaxValue.value !== null && { value: { lte: salesMaxValue.value } }),
         },
         include: {
             category: { select: { name: true } },
             bill: { select: { discount: true, paymentMethod: true, paymentStatus: true } },
         },
         orderBy: { bill: { createdAt: 'desc' as const } },
-        skip: (salesPage.value - 1) * salesPageCount.value,
-        take: salesPageCount.value,
+        skip: (salesPage.value - 1) * Number(salesPageCount.value),
+        take: Number(salesPageCount.value),
     }
 })
 
@@ -147,6 +181,45 @@ const expensePageCount = ref(10)
 const expenseSearch = ref('')
 const expenseSelectedStatus = ref<string[]>([])
 const expenseSelectedCategory = ref<string[]>([])
+
+const expenseFilterOpen          = ref(false)
+const expensePaymentModes        = ref<string[]>([])
+const expenseMinAmount           = ref<number | null>(null)
+const expenseMaxAmount           = ref<number | null>(null)
+const draftExpenseStatus         = ref<string[]>([])
+const draftExpensePaymentModes   = ref<string[]>([])
+const draftExpenseMinAmount      = ref<number | null>(null)
+const draftExpenseMaxAmount      = ref<number | null>(null)
+
+const expensePaymentOptions = [
+    { label: 'Cash',   value: 'CASH' },
+    { label: 'Bank',   value: 'BANK' },
+    { label: 'UPI',    value: 'UPI' },
+    { label: 'Card',   value: 'CARD' },
+    { label: 'Cheque', value: 'CHEQUE' },
+]
+
+const openExpenseFilter = () => {
+    draftExpenseStatus.value = [...expenseSelectedStatus.value]
+    draftExpensePaymentModes.value = [...expensePaymentModes.value]
+    draftExpenseMinAmount.value = expenseMinAmount.value
+    draftExpenseMaxAmount.value = expenseMaxAmount.value
+    expenseFilterOpen.value = true
+}
+
+const applyExpenseFilters = () => {
+    expenseSelectedStatus.value = [...draftExpenseStatus.value]
+    expensePaymentModes.value = [...draftExpensePaymentModes.value]
+    expenseMinAmount.value = draftExpenseMinAmount.value
+    expenseMaxAmount.value = draftExpenseMaxAmount.value
+    expensePage.value = 1
+    expenseFilterOpen.value = false
+}
+
+const hasExpenseFilter = computed(() =>
+    expenseSelectedStatus.value.length > 0 || expensePaymentModes.value.length > 0 ||
+    expenseMinAmount.value !== null || expenseMaxAmount.value !== null
+)
 const expenseSelectedDate = ref({
     start: new Date(new Date().setHours(0, 0, 0, 0)),
     end: new Date(new Date().setHours(23, 59, 59, 999)),
@@ -186,6 +259,15 @@ const expenseQueryArgs = computed(() => {
             ...(expenseSelectedCategory.value.length && {
                 expensecategoryId: { in: expenseSelectedCategory.value },
             }),
+            ...(expensePaymentModes.value.length && {
+                paymentMode: { in: expensePaymentModes.value },
+            }),
+            ...((expenseMinAmount.value !== null || expenseMaxAmount.value !== null) && {
+                totalAmount: {
+                    ...(expenseMinAmount.value !== null ? { gte: expenseMinAmount.value } : {}),
+                    ...(expenseMaxAmount.value !== null ? { lte: expenseMaxAmount.value } : {}),
+                },
+            }),
             expenseDate: {
                 gte: startOfDay(expenseSelectedDate.value.start),
                 lte: endOfDay(expenseSelectedDate.value.end),
@@ -196,8 +278,8 @@ const expenseQueryArgs = computed(() => {
             user: true,
         },
         orderBy: { expenseDate: 'desc' as const },
-        skip: (expensePage.value - 1) * expensePageCount.value,
-        take: expensePageCount.value,
+        skip: (expensePage.value - 1) * Number(expensePageCount.value),
+        take: Number(expensePageCount.value),
     }
 })
 
@@ -478,6 +560,81 @@ function toggleStatus(userId: string) {
 }
 
 
+// ─── Downloads ───
+const isDownloadingSales    = ref(false)
+const isDownloadingExpenses = ref(false)
+
+const downloadSales = async (format: 'excel' | 'pdf') => {
+    isDownloadingSales.value = true
+    try {
+        const res = await $fetch.raw(`/api/downloads/user-sales.${format}`, {
+            method: 'GET',
+            params: {
+                userId:         selectedUser.value.userId,
+                startDate:      startOfDay(salesSelectedDate.value.start).toISOString(),
+                endDate:        endOfDay(salesSelectedDate.value.end).toISOString(),
+                search:         salesSearch.value || undefined,
+                status:         salesBillStatus.value.length     ? salesBillStatus.value.join(',')     : undefined,
+                paymentMethods: salesPaymentMethods.value.length ? salesPaymentMethods.value.join(',') : undefined,
+                minValue:       salesMinValue.value ?? undefined,
+                maxValue:       salesMaxValue.value ?? undefined,
+            },
+        })
+        const mime = format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        const ext  = format === 'pdf' ? 'pdf' : 'xlsx'
+        const blob = new Blob([res._data as ArrayBuffer], { type: mime })
+        const url  = URL.createObjectURL(blob)
+        const a = document.createElement('a'); a.href = url; a.download = `sales-${selectedUser.value.name}.${ext}`; a.click(); URL.revokeObjectURL(url)
+    } catch (err: any) {
+        toast.add({ title: 'Download failed', color: 'red', description: err.message })
+    } finally {
+        isDownloadingSales.value = false
+    }
+}
+
+const downloadExpenses = async (format: 'excel' | 'pdf') => {
+    isDownloadingExpenses.value = true
+    try {
+        const res = await $fetch.raw(`/api/downloads/user-expenses.${format}`, {
+            method: 'GET',
+            params: {
+                userId:       selectedUser.value.userId,
+                startDate:    startOfDay(expenseSelectedDate.value.start).toISOString(),
+                endDate:      endOfDay(expenseSelectedDate.value.end).toISOString(),
+                search:       expenseSearch.value || undefined,
+                status:       expenseSelectedStatus.value.length   ? expenseSelectedStatus.value.join(',')   : undefined,
+                category:     expenseSelectedCategory.value.length ? expenseSelectedCategory.value.join(',') : undefined,
+                paymentModes: expensePaymentModes.value.length     ? expensePaymentModes.value.join(',')     : undefined,
+                minAmount:    expenseMinAmount.value ?? undefined,
+                maxAmount:    expenseMaxAmount.value ?? undefined,
+            },
+        })
+        const mime = format === 'pdf' ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        const ext  = format === 'pdf' ? 'pdf' : 'xlsx'
+        const blob = new Blob([res._data as ArrayBuffer], { type: mime })
+        const url  = URL.createObjectURL(blob)
+        const a = document.createElement('a'); a.href = url; a.download = `expenses-${selectedUser.value.name}.${ext}`; a.click(); URL.revokeObjectURL(url)
+    } catch (err: any) {
+        toast.add({ title: 'Download failed', color: 'red', description: err.message })
+    } finally {
+        isDownloadingExpenses.value = false
+    }
+}
+
+const salesDownloadItems = [
+    [
+        { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells',    click: () => downloadSales('excel') },
+        { label: 'PDF',           icon: 'i-heroicons-document-text',  click: () => downloadSales('pdf') },
+    ],
+]
+
+const expensesDownloadItems = [
+    [
+        { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells',    click: () => downloadExpenses('excel') },
+        { label: 'PDF',           icon: 'i-heroicons-document-text',  click: () => downloadExpenses('pdf') },
+    ],
+]
+
 const handleSubmit = async (e: Event) => {
     isSaving.value = true
     try {
@@ -571,8 +728,8 @@ const handleSubmit = async (e: Event) => {
 </script>
 
 <template>
-    <UDashboardPanelContent class="  p-4">
-        <div class="flex  border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
+    <UDashboardPanelContent class="p-4">
+        <div class="flex border border-gray-200 dark:border-gray-700 rounded-md ">
             <!-- ─── Left: User List ─── -->
             <div
                 :class="[
@@ -785,7 +942,7 @@ const handleSubmit = async (e: Event) => {
                 leave-from-class="opacity-100 translate-x-0"
                 leave-to-class="opacity-0 translate-x-4"
             >
-                <div v-if="selectedUser" class="flex-1 flex flex-col overflow-hidden">
+                <div v-if="selectedUser" class="flex-1 flex flex-col overflow-hidden min-h-0">
                     <!-- Detail Header -->
                     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
                         <div class="flex items-center gap-3">
@@ -839,9 +996,9 @@ const handleSubmit = async (e: Event) => {
                                     >
                                         <template #header>
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <UPopover :popper="{ placement: 'bottom-start' }">
-                                                    <UButton icon="i-heroicons-calendar-days-20-solid" size="sm" color="primary" >
-                                                        {{ format(salesSelectedDate.start, 'd MMM, yyy') }} - {{ format(salesSelectedDate.end, 'd MMM, yyy') }}
+                                                <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+                                                    <UButton icon="i-heroicons-calendar-days-20-solid" size="xs" color="gray" variant="outline" truncate class="max-w-[200px]">
+                                                        {{ format(salesSelectedDate.start, 'd MMM yy') }} – {{ format(salesSelectedDate.end, 'd MMM yy') }}
                                                     </UButton>
                                                     <template #panel="{ close }">
                                                         <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
@@ -850,10 +1007,10 @@ const handleSubmit = async (e: Event) => {
                                                                     v-for="(range, i) in ranges"
                                                                     :key="i"
                                                                     :label="range.label"
-                                                                    color="primary"
-                                                                    
+                                                                    color="gray"
+                                                                    variant="ghost"
                                                                     class="rounded-none px-6"
-                                                                    :class="[isRangeSelected(salesSelectedDate, range.duration) ? 'bg-primary-50 dark:bg-primary-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                                                                    :class="isRangeSelected(salesSelectedDate, range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'"
                                                                     truncate
                                                                     @click="selectRange(salesSelectedDate, range.duration)"
                                                                 />
@@ -866,13 +1023,30 @@ const handleSubmit = async (e: Event) => {
                                                     v-model="salesSearch"
                                                     icon="i-heroicons-magnifying-glass-20-solid"
                                                     placeholder="Search product / category"
-                                                    class="w-60"
-                                                    size="sm"
-                                                    
-                                                    
+                                                    class="w-48"
+                                                    size="xs"
                                                 />
                                             </div>
                                         </template>
+
+                                        <div class="flex items-center justify-between gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-xs text-gray-500">Rows:</span>
+                                                <USelect v-model="salesPageCount" :options="[5, 10, 20, 50]" size="xs" class="w-16" />
+                                            </div>
+                                            <div class="flex items-center gap-1">
+                                                <UButton
+                                                    icon="i-heroicons-funnel"
+                                                    size="xs"
+                                                    :color="hasSalesFilter ? 'primary' : 'gray'"
+                                                    variant="outline"
+                                                    @click="openSalesFilter"
+                                                />
+                                                <UDropdown :items="salesDownloadItems">
+                                                    <UButton icon="i-heroicons-arrow-down-tray" size="xs" color="gray" variant="outline" :loading="isDownloadingSales" />
+                                                </UDropdown>
+                                            </div>
+                                        </div>
 
                                         <UTable
                                             :rows="formattedSalesEntries"
@@ -903,26 +1077,17 @@ const handleSubmit = async (e: Event) => {
                                                 <span class="text-xs text-gray-500">
                                                     {{ salesPageFrom }}-{{ salesPageTo }} of {{ salesTotal || 0 }}
                                                 </span>
-                                                <div class="flex items-center gap-2">
-                                                    <USelect
-                                                        v-model="salesPageCount"
-                                                        :options="[5, 10, 20, 50]"
-                                                        size="xs"
-                                                        class="w-16"
-                                                        
-                                                    />
-                                                    <UPagination
-                                                        v-model="salesPage"
-                                                        :page-count="salesPageCount"
-                                                        :total="salesTotal || 0"
-                                                        size="xs"
-                                                        :ui="{
-                                                            wrapper: 'flex items-center gap-1',
-                                                            rounded: '!rounded-full min-w-[28px] justify-center',
-                                                            default: { activeButton: { color: 'primary', variant: 'outline' } },
-                                                        }"
-                                                    />
-                                                </div>
+                                                <UPagination
+                                                    v-model="salesPage"
+                                                    :page-count="salesPageCount"
+                                                    :total="salesTotal || 0"
+                                                    size="xs"
+                                                    :ui="{
+                                                        wrapper: 'flex items-center gap-1',
+                                                        rounded: '!rounded-full min-w-[28px] justify-center',
+                                                        default: { activeButton: { variant: 'outline' } },
+                                                    }"
+                                                />
                                             </div>
                                         </template>
                                     </UCard>
@@ -942,9 +1107,9 @@ const handleSubmit = async (e: Event) => {
                                     >
                                         <template #header>
                                             <div class="flex flex-wrap items-center gap-2">
-                                                <UPopover :popper="{ placement: 'bottom-start' }">
-                                                    <UButton icon="i-heroicons-calendar-days-20-solid" size="sm" color="primary">
-                                                        {{ format(expenseSelectedDate.start, 'd MMM, yyy') }} - {{ format(expenseSelectedDate.end, 'd MMM, yyy') }}
+                                                <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+                                                    <UButton icon="i-heroicons-calendar-days-20-solid" size="xs" color="gray" variant="outline" truncate class="max-w-[200px]">
+                                                        {{ format(expenseSelectedDate.start, 'd MMM yy') }} – {{ format(expenseSelectedDate.end, 'd MMM yy') }}
                                                     </UButton>
                                                     <template #panel="{ close }">
                                                         <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
@@ -953,10 +1118,10 @@ const handleSubmit = async (e: Event) => {
                                                                     v-for="(range, i) in ranges"
                                                                     :key="i"
                                                                     :label="range.label"
-                                                                    color="primary"
-                                                                    
+                                                                    color="gray"
+                                                                    variant="ghost"
                                                                     class="rounded-none px-6"
-                                                                    :class="[isRangeSelected(expenseSelectedDate, range.duration) ? 'bg-primary-50 dark:bg-primary-900/30' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                                                                    :class="isRangeSelected(expenseSelectedDate, range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'"
                                                                     truncate
                                                                     @click="selectRange(expenseSelectedDate, range.duration)"
                                                                 />
@@ -969,35 +1134,31 @@ const handleSubmit = async (e: Event) => {
                                                     v-model="expenseSearch"
                                                     icon="i-heroicons-magnifying-glass-20-solid"
                                                     placeholder="Search note / category"
-                                                    class="w-48"
-                                                    size="sm"
-                                                    
-                                                    
+                                                    class="w-44"
+                                                    size="xs"
                                                 />
-                                                <USelectMenu
-                                                    v-model="expenseSelectedStatus"
-                                                    :options="['Paid', 'Pending', 'Approved', 'Rejected']"
-                                                    multiple
-                                                    placeholder="Status"
-                                                    size="sm"
-                                                   
-                                                    
-                                                    class="w-32"
-                                                />
-                                                <USelectMenu
-                                                    v-model="expenseSelectedCategory"
-                                                    :options="expenseCategories || []"
-                                                    option-attribute="name"
-                                                    value-attribute="id"
-                                                    multiple
-                                                    placeholder="Category"
-                                                    size="sm"
-                                                 
-                                                    
-                                                    class="w-36"
-                                                />
+                                                
                                             </div>
                                         </template>
+
+                                        <div class="flex items-center justify-between gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                                            <div class="flex items-center gap-1.5">
+                                                <span class="text-xs text-gray-500">Rows:</span>
+                                                <USelect v-model="expensePageCount" :options="[5, 10, 20, 50]" size="xs" class="w-16" />
+                                            </div>
+                                            <div class="flex items-center gap-1">
+                                                <UButton
+                                                    icon="i-heroicons-funnel"
+                                                    size="xs"
+                                                    :color="hasExpenseFilter ? 'primary' : 'gray'"
+                                                    variant="outline"
+                                                    @click="openExpenseFilter"
+                                                />
+                                                <UDropdown :items="expensesDownloadItems">
+                                                    <UButton icon="i-heroicons-arrow-down-tray" size="xs" color="gray" variant="outline" :loading="isDownloadingExpenses" />
+                                                </UDropdown>
+                                            </div>
+                                        </div>
 
                                         <UTable
                                             :rows="expenses"
@@ -1037,26 +1198,17 @@ const handleSubmit = async (e: Event) => {
                                                 <span class="text-xs text-gray-500">
                                                     {{ expensePageFrom }}-{{ expensePageTo }} of {{ expenseTotal || 0 }}
                                                 </span>
-                                                <div class="flex items-center gap-2">
-                                                    <USelect
-                                                        v-model="expensePageCount"
-                                                        :options="[5, 10, 20, 50]"
-                                                        size="xs"
-                                                        class="w-16"
-                                                        color="primary"
-                                                    />
-                                                    <UPagination
-                                                        v-model="expensePage"
-                                                        :page-count="expensePageCount"
-                                                        :total="expenseTotal || 0"
-                                                        size="xs"
-                                                        :ui="{
-                                                            wrapper: 'flex items-center gap-1',
-                                                            rounded: '!rounded-full min-w-[28px] justify-center',
-                                                            default: { activeButton: { color: 'primary', variant: 'outline' } },
-                                                        }"
-                                                    />
-                                                </div>
+                                                <UPagination
+                                                    v-model="expensePage"
+                                                    :page-count="expensePageCount"
+                                                    :total="expenseTotal || 0"
+                                                    size="xs"
+                                                    :ui="{
+                                                        wrapper: 'flex items-center gap-1',
+                                                        rounded: '!rounded-full min-w-[28px] justify-center',
+                                                        default: { activeButton: { variant: 'outline' } },
+                                                    }"
+                                                />
                                             </div>
                                         </template>
                                     </UCard>
@@ -1067,6 +1219,76 @@ const handleSubmit = async (e: Event) => {
                 </div>
             </Transition>
         </div>
+
+        <!-- ─── Sales Filter Modal ─── -->
+        <UModal v-model="salesFilterOpen">
+            <UCard>
+                <template #header>
+                    <div class="text-base font-semibold">Sales Filters</div>
+                </template>
+                <div class="space-y-3">
+                    <USelectMenu
+                        v-model="draftSalesBillStatus"
+                        :options="['PAID', 'PENDING']"
+                        multiple
+                        placeholder="Status"
+                    />
+                    <USelectMenu
+                        v-model="draftSalesPaymentMethods"
+                        :options="salesPaymentOptions"
+                        option-attribute="label"
+                        value-attribute="value"
+                        multiple
+                        placeholder="Payment Method"
+                    />
+                    <div class="grid grid-cols-2 gap-3">
+                        <UInput v-model.number="draftSalesMinValue" type="number" placeholder="Min Value" />
+                        <UInput v-model.number="draftSalesMaxValue" type="number" placeholder="Max Value" />
+                    </div>
+                </div>
+                <template #footer>
+                    <div class="w-full flex justify-end gap-2">
+                        <UButton color="gray" variant="ghost" @click="salesFilterOpen = false">Cancel</UButton>
+                        <UButton color="primary" @click="applySalesFilters">Apply</UButton>
+                    </div>
+                </template>
+            </UCard>
+        </UModal>
+
+        <!-- ─── Expense Filter Modal ─── -->
+        <UModal v-model="expenseFilterOpen">
+            <UCard>
+                <template #header>
+                    <div class="text-base font-semibold">Expense Filters</div>
+                </template>
+                <div class="space-y-3">
+                    <USelectMenu
+                        v-model="draftExpenseStatus"
+                        :options="['Paid', 'Pending', 'Approved', 'Rejected']"
+                        multiple
+                        placeholder="Status"
+                    />
+                    <USelectMenu
+                        v-model="draftExpensePaymentModes"
+                        :options="expensePaymentOptions"
+                        option-attribute="label"
+                        value-attribute="value"
+                        multiple
+                        placeholder="Payment Method"
+                    />
+                    <div class="grid grid-cols-2 gap-3">
+                        <UInput v-model.number="draftExpenseMinAmount" type="number" placeholder="Min Amount" />
+                        <UInput v-model.number="draftExpenseMaxAmount" type="number" placeholder="Max Amount" />
+                    </div>
+                </div>
+                <template #footer>
+                    <div class="w-full flex justify-end gap-2">
+                        <UButton color="gray" variant="ghost" @click="expenseFilterOpen = false">Cancel</UButton>
+                        <UButton color="primary" @click="applyExpenseFilters">Apply</UButton>
+                    </div>
+                </template>
+            </UCard>
+        </UModal>
 
         <!-- ─── Modals (unchanged) ─── -->
         <UModal v-model="isOpen">

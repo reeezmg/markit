@@ -5,6 +5,7 @@ import { pool } from '~/server/db';
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event);
   const companyId = session.data.companyId;
+  const cleanup = session.data.cleanup ?? false;
 
   if (!companyId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
@@ -44,8 +45,9 @@ export default defineEventHandler(async (event) => {
          FROM bills
          WHERE company_id = $1
            AND deleted = false
-           AND payment_status = 'PAID'`,
-        [companyId]
+           AND payment_status = 'PAID'
+           AND ($2 = true OR precedence IS NOT TRUE)`,
+        [companyId, cleanup]
       ),
 
       // total discounts
@@ -54,8 +56,9 @@ export default defineEventHandler(async (event) => {
          FROM bills
          WHERE company_id = $1
            AND deleted = false
-           AND payment_status = 'PAID'`,
-        [companyId]
+           AND payment_status = 'PAID'
+           AND ($2 = true OR precedence IS NOT TRUE)`,
+        [companyId, cleanup]
       ),
 
       // total tax (sum entries.value * entries.tax/100)
@@ -65,8 +68,9 @@ export default defineEventHandler(async (event) => {
          INNER JOIN bills b ON e.bill_id = b.id
          WHERE b.company_id = $1
            AND b.deleted = false
-           AND b.payment_status = 'PAID'`,
-        [companyId]
+           AND b.payment_status = 'PAID'
+           AND ($2 = true OR b.precedence IS NOT TRUE)`,
+        [companyId, cleanup]
       ),
 
       // total items where product.status = true
@@ -127,9 +131,10 @@ export default defineEventHandler(async (event) => {
         ) sp ON b.payment_method = 'Split'
         WHERE b.company_id = $1
             AND b.deleted = false
-            AND b.payment_status = 'PAID';
+            AND b.payment_status = 'PAID'
+            AND ($2 = true OR b.precedence IS NOT TRUE);
         `,
-        [companyId]
+        [companyId, cleanup]
         )
 
     ]);

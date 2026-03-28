@@ -9,6 +9,7 @@ import {
   useCreateDistributorCredit,
   useUpdateDistributorCredit,
   useDeleteDistributorCredit,
+  useDeletePurchaseReturn,
 } from '~/lib/hooks'
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
@@ -32,7 +33,6 @@ const activeTab = ref(0)
 
 const selectDistributor = (row: any) => {
   selectedDistributor.value = row
-  activeTab.value = 0
   poExpand.value = { openedRows: [], row: null }
 }
 
@@ -41,8 +41,9 @@ const closeDetail = () => {
 }
 
 const tabs = [
+  { label: 'Transactions', icon: 'i-heroicons-credit-card' },
   { label: 'Purchase Orders', icon: 'i-heroicons-shopping-bag' },
-  { label: 'Credits', icon: 'i-heroicons-credit-card' },
+  { label: 'Purchase Returns', icon: 'i-heroicons-arrow-uturn-left' },
 ]
 
 // ─── Mutations ───
@@ -54,6 +55,7 @@ const DeleteDistributorPayment = useDeleteDistributorPayment()
 const CreateDistributorCredit = useCreateDistributorCredit()
 const UpdateDistributorCredit = useUpdateDistributorCredit()
 const DeleteDistributorCredit = useDeleteDistributorCredit()
+const DeletePurchaseReturn = useDeletePurchaseReturn({ optimisticUpdate: true })
 
 // ─── Modal state ───
 const isAdd = ref(false)
@@ -70,8 +72,18 @@ const payForm = ref({
   id: '',
   amount: 0 as number,
   remarks: '',
+  billNo: '',
   paymentType: 'CASH',
   date: new Date().toISOString().split('T')[0],
+  purchaseOrderId: '',
+})
+
+const poLinkSearch = ref('')
+const poLinkOptions = computed(() => {
+  const pos = selectedDistributor.value?.purchaseOrders ?? []
+  const q = poLinkSearch.value.trim().toLowerCase()
+  const filtered = q ? pos.filter((po: any) => String(po.purchaseOrderNo ?? '').toLowerCase().includes(q)) : pos
+  return filtered.slice(0, 5)
 })
 
 const creditForm = ref({
@@ -83,7 +95,8 @@ const creditForm = ref({
 })
 
 const resetPayForm = () => {
-  payForm.value = { id: '', amount: 0, remarks: '', paymentType: 'CASH', date: new Date().toISOString().split('T')[0] }
+  payForm.value = { id: '', amount: 0, remarks: '', billNo: '', paymentType: 'CASH', date: new Date().toISOString().split('T')[0], purchaseOrderId: '' }
+  poLinkSearch.value = ''
 }
 
 const resetCreditForm = () => {
@@ -105,6 +118,7 @@ const columns = [
   { key: 'ordersCount', label: 'Orders' },
   { key: 'totalAmount', label: 'Total' },
   { key: 'paidAmount', label: 'Paid' },
+  { key: 'returnAmount', label: 'Return' },
   { key: 'totalDue', label: 'Due' },
   { key: 'actions', label: 'Actions' },
 ]
@@ -124,7 +138,8 @@ const creditColumns = [
   { key: 'type', label: 'Type' },
   { key: 'amount', label: 'Amount' },
   { key: 'remarks', label: 'Remarks' },
-  { key: 'paymentType', label: 'PayType / Bill No' },
+  { key: 'pono', label: 'PO No' },
+  { key: 'billno', label: 'Bill No' },
   { key: 'actions', label: 'Actions' },
 ]
 
@@ -156,7 +171,16 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
       orderBy: { createdAt: 'desc' },
     },
     distributorPayments: {
-      select: { id: true, createdAt: true, amount: true, remarks: true, paymentType: true, purchaseOrderId: true },
+      select: { id: true, createdAt: true, amount: true, remarks: true, billNo: true, paymentType: true, purchaseOrderId: true, purchaseReturnId: true },
+      orderBy: { createdAt: 'desc' },
+    },
+    purchaseReturns: {
+      select: {
+        id: true, createdAt: true, totalAmount: true, subTotalAmount: true,
+        taxAmount: true, remarks: true, purchaseOrderId: true,
+        purchaseOrder: { select: { purchaseOrderNo: true, billNo: true } },
+        items: { select: { productName: true, qty: true, rate: true, subtotal: true } },
+      },
       orderBy: { createdAt: 'desc' },
     },
     purchaseOrders: {
@@ -166,8 +190,9 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
         paymentType: true,
         totalAmount: true,
         purchaseOrderNo: true,
+        billNo: true,
         distributorPayment: {
-          select: { id: true, amount: true, paymentType: true, createdAt: true, remarks: true },
+          select: { id: true, amount: true, paymentType: true, billNo: true, createdAt: true, remarks: true },
           orderBy: { createdAt: 'desc' },
         },
         products: {
@@ -216,39 +241,59 @@ const distributors = computed(() =>
     const rawCredits = d.distributorCredits || []
     const rawPayments = d.distributorPayments || []
 
-    const credits = rawCredits.map((c: any) => ({
-      ...c,
-      createdAt: new Date(c.createdAt),
-      type: 'CREDIT',
-      paymentType: c.billNo,
-      class: 'bg-red-500/20 dark:bg-red-400/20',
-    }))
-    const payments = rawPayments.map((p: any) => ({
-      ...p,
-      createdAt: new Date(p.createdAt),
-      type: 'PAYMENT',
-      paymentType: p.paymentType,
-      class: 'bg-green-500/20 dark:bg-green-400/20',
-    }))
+    const poMap = new Map((d.purchaseOrders || []).map((po: any) => [po.id, { poNo: po.purchaseOrderNo, billNo: po.billNo }]))
+
+    const credits = rawCredits.map((c: any) => {
+      const poEntry = c.purchaseOrderId ? poMap.get(c.purchaseOrderId) ?? null : null
+      return {
+        ...c,
+        createdAt: new Date(c.createdAt),
+        type: 'CREDIT',
+        pono: poEntry?.poNo ?? null,
+        billno: poEntry?.billNo ?? c.billNo ?? null,
+        class: 'bg-red-500/20 dark:bg-red-400/20',
+      }
+    })
+    const payments = rawPayments.map((p: any) => {
+      const poEntry = p.purchaseOrderId ? poMap.get(p.purchaseOrderId) ?? null : null
+      return {
+        ...p,
+        createdAt: new Date(p.createdAt),
+        type: 'PAYMENT',
+        paymentType: p.paymentType,
+        pono: poEntry?.poNo ?? null,
+        billno: p.billNo ?? poEntry?.billNo ?? null,
+        class: p.paymentType === 'RETURN' ? 'bg-orange-500/20 dark:bg-orange-400/20' : 'bg-green-500/20 dark:bg-green-400/20',
+      }
+    })
     const transactions = [...credits, ...payments].sort(
       (a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime()
     )
 
     const totalAmount = rawCredits.reduce((s: number, c: any) => s + (c.amount || 0), 0)
     const paidAmount = rawPayments.reduce((s: number, p: any) => s + (p.amount || 0), 0)
+    const returnAmount = rawPayments.filter((p: any) => p.paymentType === 'RETURN').reduce((s: number, p: any) => s + (p.amount || 0), 0)
     const purchaseOrders = (d.purchaseOrders || []).map((po: any) => ({
       ...po,
       qty: getPOQty(po),
       due: getDue(po),
     }))
+    const purchaseReturns = (d.purchaseReturns || []).map((r: any) => ({
+      ...r,
+      createdAt: new Date(r.createdAt),
+      poNo: r.purchaseOrder?.purchaseOrderNo ?? null,
+      poBillNo: r.purchaseOrder?.billNo ?? null,
+    }))
     return {
       ...d,
       totalAmount,
       paidAmount,
+      returnAmount,
       totalDue: totalAmount - paidAmount,
       ordersCount: purchaseOrders.length,
       purchaseOrders,
       transactions,
+      purchaseReturns,
     }
   }) ?? []
 )
@@ -287,7 +332,7 @@ const dateSerializer = {
 const poSearch = useLocalStorage('dist:po:search', '')
 const poSelectedDate = useLocalStorage(
   'dist:po:date',
-  { start: sub(new Date(), { days: 30 }), end: new Date() },
+  { start: sub(new Date(), { days: 7 }), end: new Date() },
   { serializer: dateSerializer }
 )
 const poPaymentTypeFilter = useLocalStorage('dist:po:paymentType', '')
@@ -307,7 +352,7 @@ function selectPoRange(duration: Duration) {
 const creditTypeFilter = useLocalStorage('dist:credit:type', 'ALL')
 const creditSelectedDate = useLocalStorage(
   'dist:credit:date',
-  { start: sub(new Date(), { days: 30 }), end: new Date() },
+  { start: sub(new Date(), { days: 7 }), end: new Date() },
   { serializer: dateSerializer }
 )
 const creditPage = useLocalStorage('dist:credit:page', 1)
@@ -318,6 +363,32 @@ function isCreditRangeSelected(duration: Duration) {
 }
 function selectCreditRange(duration: Duration) {
   creditSelectedDate.value = { start: sub(new Date(), duration), end: new Date() }
+}
+
+// ─── Returns Tab state ───
+const returnPage = useLocalStorage('dist:return:page', 1)
+const returnPageCount = useLocalStorage('dist:return:pageCount', 5)
+const returnSelectedDate = useLocalStorage(
+  'dist:return:date',
+  { start: sub(new Date(), { days: 30 }), end: new Date() },
+  { serializer: dateSerializer }
+)
+const isDownloadingReturn = ref(false)
+const returnColumns = [
+  { key: 'createdAt', label: 'Date' },
+  { key: 'poNo', label: 'PO No' },
+  { key: 'subTotalAmount', label: 'Subtotal' },
+  { key: 'taxAmount', label: 'Tax' },
+  { key: 'totalAmount', label: 'Total' },
+  { key: 'remarks', label: 'Remarks' },
+  { key: 'actions', label: '' },
+]
+
+function isReturnRangeSelected(duration: Duration) {
+  return isSameDay(returnSelectedDate.value.start, sub(new Date(), duration)) && isSameDay(returnSelectedDate.value.end, new Date())
+}
+function selectReturnRange(duration: Duration) {
+  returnSelectedDate.value = { start: sub(new Date(), duration), end: new Date() }
 }
 
 // ─── Active filter indicators ───
@@ -352,8 +423,12 @@ const filteredTransactions = computed(() => {
     const d = new Date(t.createdAt)
     return d >= from && d <= to
   })
-  if (creditTypeFilter.value !== 'ALL') {
-    list = list.filter(t => t.type === creditTypeFilter.value)
+  if (creditTypeFilter.value === 'CREDIT') {
+    list = list.filter((t: any) => t.type === 'CREDIT')
+  } else if (creditTypeFilter.value === 'PAYMENT') {
+    list = list.filter((t: any) => t.type === 'PAYMENT' && t.paymentType !== 'RETURN')
+  } else if (creditTypeFilter.value === 'RETURN') {
+    list = list.filter((t: any) => t.paymentType === 'RETURN')
   }
   return list
 })
@@ -364,6 +439,21 @@ const paginatedPOs = computed(() =>
 
 const paginatedTransactions = computed(() =>
   filteredTransactions.value.slice((creditPage.value - 1) * creditPageCount.value, creditPage.value * creditPageCount.value)
+)
+
+const selectedReturns = computed(() => selectedDistributor.value?.purchaseReturns ?? [])
+
+const filteredReturns = computed(() => {
+  const from = startOfDay(returnSelectedDate.value.start)
+  const to = endOfDay(returnSelectedDate.value.end)
+  return selectedReturns.value.filter((r: any) => {
+    const d = new Date(r.createdAt)
+    return d >= from && d <= to
+  })
+})
+
+const paginatedReturns = computed(() =>
+  filteredReturns.value.slice((returnPage.value - 1) * returnPageCount.value, returnPage.value * returnPageCount.value)
 )
 
 const resetPoFilters = () => {
@@ -378,6 +468,7 @@ const resetCreditFilters = () => {
 watch(selectedDistributor, () => {
   poPage.value = 1
   creditPage.value = 1
+  returnPage.value = 1
   poSearch.value = ''
   resetPoFilters()
   resetCreditFilters()
@@ -385,6 +476,7 @@ watch(selectedDistributor, () => {
 
 watch([poSearch, poSelectedDate, poPaymentTypeFilter, poDueOnly], () => { poPage.value = 1 }, { deep: true })
 watch([creditSelectedDate, creditTypeFilter], () => { creditPage.value = 1 }, { deep: true })
+watch([returnSelectedDate], () => { returnPage.value = 1 }, { deep: true })
 
 // ─── Action handlers ───
 const confirmDeleteDistributor = (row: any) => {
@@ -424,6 +516,8 @@ const handleDelete = async () => {
       await DeleteDistributorCredit.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
     } else if (deletingRowIdentity.value.type === 'payment') {
       await DeleteDistributorPayment.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
+    } else if (deletingRowIdentity.value.type === 'purchase-return') {
+      await DeletePurchaseReturn.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
     }
     toast.add({ title: 'Deleted successfully', color: 'green' })
     refetch()
@@ -450,6 +544,7 @@ const handleAdd = async () => {
 const openPayModal = (poRow: any = null) => {
   selectedPayRow.value = poRow
   resetPayForm()
+  if (poRow?.id) payForm.value.purchaseOrderId = poRow.id
   isOpenPay.value = true
 }
 
@@ -469,7 +564,7 @@ const handlePay = async () => {
     if (payForm.value.id) {
       await UpdateDistributorPayment.mutateAsync({
         where: { id: payForm.value.id },
-        data: { amount: payForm.value.amount, remarks: payForm.value.remarks, paymentType: payForm.value.paymentType, createdAt },
+        data: { amount: payForm.value.amount, remarks: payForm.value.remarks, billNo: payForm.value.billNo || undefined, paymentType: payForm.value.paymentType, createdAt },
         select: { id: true },
       })
       toast.add({ title: 'Payment updated', color: 'green' })
@@ -478,9 +573,10 @@ const handlePay = async () => {
         data: {
           amount: payForm.value.amount,
           remarks: payForm.value.remarks || undefined,
+          billNo: payForm.value.billNo || undefined,
           paymentType: payForm.value.paymentType,
           createdAt,
-          ...(selectedPayRow.value?.id ? { purchaseOrder: { connect: { id: selectedPayRow.value.id } } } : {}),
+          ...(payForm.value.purchaseOrderId ? { purchaseOrder: { connect: { id: payForm.value.purchaseOrderId } } } : {}),
           distributorCompany: {
             connect: {
               distributorId_companyId: {
@@ -549,12 +645,105 @@ const handleAddCredit = async () => {
   }
 }
 
+// ─── Download ───
+const isDownloadingPo      = ref(false)
+const isDownloadingCredits = ref(false)
+
+async function triggerDownload(url: string, filename: string, blob: Blob) {
+  const objectUrl = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = filename
+  a.click()
+  URL.revokeObjectURL(objectUrl)
+}
+
+const downloadPo = async (format: 'excel' | 'pdf') => {
+  isDownloadingPo.value = true
+  try {
+    const res = await $fetch.raw(`/api/downloads/distributor-po.${format}`, {
+      method: 'GET',
+      params: {
+        distributorId: selectedDistributor.value.distributorId,
+        startDate:     startOfDay(poSelectedDate.value.start).toISOString(),
+        endDate:       endOfDay(poSelectedDate.value.end).toISOString(),
+        search:        poSearch.value || undefined,
+        paymentType:   poPaymentTypeFilter.value || undefined,
+        dueOnly:       poDueOnly.value ? 'true' : undefined,
+      },
+    })
+    const mime = format === 'pdf'
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const ext  = format === 'pdf' ? 'pdf' : 'xlsx'
+    await triggerDownload('', `po-${selectedDistributor.value.distributor?.name ?? 'distributor'}.${ext}`, new Blob([res._data as ArrayBuffer], { type: mime }))
+  } catch (err: any) {
+    toast.add({ title: 'Download failed', color: 'red', description: err.message })
+  } finally {
+    isDownloadingPo.value = false
+  }
+}
+
+const downloadCredits = async (format: 'excel' | 'pdf') => {
+  isDownloadingCredits.value = true
+  try {
+    const res = await $fetch.raw(`/api/downloads/distributor-credits.${format}`, {
+      method: 'GET',
+      params: {
+        distributorId: selectedDistributor.value.distributorId,
+        startDate:     startOfDay(creditSelectedDate.value.start).toISOString(),
+        endDate:       endOfDay(creditSelectedDate.value.end).toISOString(),
+        type:          creditTypeFilter.value !== 'ALL' ? creditTypeFilter.value : undefined,
+      },
+    })
+    const mime = format === 'pdf'
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const ext  = format === 'pdf' ? 'pdf' : 'xlsx'
+    await triggerDownload('', `credits-${selectedDistributor.value.distributor?.name ?? 'distributor'}.${ext}`, new Blob([res._data as ArrayBuffer], { type: mime }))
+  } catch (err: any) {
+    toast.add({ title: 'Download failed', color: 'red', description: err.message })
+  } finally {
+    isDownloadingCredits.value = false
+  }
+}
+
+const downloadPurchaseReturn = async (returnId: string) => {
+  isDownloadingReturn.value = true
+  try {
+    const res = await $fetch.raw('/api/downloads/purchase-return.pdf', {
+      method: 'GET',
+      params: { purchaseReturnId: returnId },
+    })
+    await triggerDownload('', `return-${returnId}.pdf`, new Blob([res._data as ArrayBuffer], { type: 'application/pdf' }))
+  } catch (err: any) {
+    toast.add({ title: 'Download failed', color: 'red', description: err.message })
+  } finally {
+    isDownloadingReturn.value = false
+  }
+}
+
+const poDownloadItems = [
+  [
+    { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells', click: () => downloadPo('excel') },
+    { label: 'PDF',           icon: 'i-heroicons-document-text', click: () => downloadPo('pdf') },
+  ],
+]
+
+const creditsDownloadItems = [
+  [
+    { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells', click: () => downloadCredits('excel') },
+    { label: 'PDF',           icon: 'i-heroicons-document-text', click: () => downloadCredits('pdf') },
+  ],
+]
+
 // ─── Dropdown menus ───
 const mainAction = (row: any) => [
   [
     { label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => openForm(row.distributor) },
     { label: 'Pay', icon: 'i-heroicons-banknotes-20-solid', click: () => { selectDistributor(row); openPayModal(null) } },
     { label: 'Add Credit', icon: 'i-heroicons-credit-card-20-solid', click: () => { selectDistributor(row); openCreditModal() } },
+    { label: 'Purchase Return', icon: 'i-heroicons-arrow-uturn-left', click: () => router.push(`/distributor/add-purchase-return?distributorId=${row.distributorId}`) },
   ],
   [
     { label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDeleteDistributor(row) },
@@ -572,9 +761,23 @@ const poAction = (row: any) => {
   return items
 }
 
-const transactionAction = (row: any) => [
-  [
-    {
+const transactionAction = (row: any) => {
+  const actions: any[] = []
+  if (row.paymentType === 'RETURN') {
+    actions.push([
+      { label: 'Download', icon: 'i-heroicons-document-text', click: () => downloadPurchaseReturn(row.purchaseReturnId) },
+      { label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => router.push(`/distributor/edit-purchase-return/${row.purchaseReturnId}`) },
+    ])
+    actions.push([{
+      label: 'Delete',
+      icon: 'i-heroicons-trash-20-solid',
+      click: () => {
+        deletingRowIdentity.value = { name: `Return (₹${(row.amount || 0).toFixed(2)})`, id: row.purchaseReturnId, type: 'purchase-return' }
+        isDeleteModalOpen.value = true
+      },
+    }])
+  } else {
+    actions.push([{
       label: 'Edit',
       icon: 'i-heroicons-pencil-square-20-solid',
       click: () => {
@@ -596,16 +799,19 @@ const transactionAction = (row: any) => [
             id: row.id,
             amount: row.amount,
             remarks: row.remarks || '',
+            billNo: row.billNo || '',
             paymentType: row.paymentType || 'CASH',
             date: new Date(row.createdAt).toISOString().split('T')[0],
+            purchaseOrderId: row.purchaseOrderId || '',
           }
           isOpenPay.value = true
         }
       },
-    },
-  ],
-  [{ label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDeleteTransaction(row) }],
-]
+    }])
+    actions.push([{ label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDeleteTransaction(row) }])
+  }
+  return actions
+}
 </script>
 
 <template>
@@ -677,7 +883,10 @@ const transactionAction = (row: any) => [
                 ₹{{ (row.totalAmount || 0).toFixed(2) }}
               </template>
               <template #paidAmount-data="{ row }">
-                ₹{{ (row.paidAmount || 0).toFixed(2) }}
+                <span class="text-green-600">₹{{ (row.paidAmount || 0).toFixed(2) }}</span>
+              </template>
+              <template #returnAmount-data="{ row }">
+                <span class="text-orange-600">₹{{ (row.returnAmount || 0).toFixed(2) }}</span>
               </template>
               <template #totalDue-data="{ row }">
                 <span :class="(row.totalDue || 0) > 0 ? 'font-semibold text-red-600' : ''">
@@ -797,8 +1006,8 @@ const transactionAction = (row: any) => [
             <template #item="{ item, index }">
               <div class="flex-1 flex flex-col overflow-auto p-4">
 
-                <!-- ─── Tab 0: Purchase Orders ─── -->
-                <template v-if="index === 0">
+                <!-- ─── Tab 1: Purchase Orders ─── -->
+                <template v-if="index === 1">
                   <UCard
                     class="w-full"
                     :ui="{
@@ -848,15 +1057,6 @@ const transactionAction = (row: any) => [
                         />
                         </div>
                          <div class="flex flex-row  items-center gap-2">
-                        <!-- Filter -->
-                        <UButton
-                          icon="i-heroicons-funnel"
-                          size="xs"
-                          :color="hasPoFilter ? 'primary' : 'gray'"
-                          variant="outline"
-                          @click="poFilterOpen = true"
-                        />
-
                         <!-- New PO -->
                         <UButton
                           icon="i-heroicons-plus"
@@ -870,9 +1070,29 @@ const transactionAction = (row: any) => [
                       </div>
                     </template>
 
-                    <div class="flex items-center gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                      <span class="text-xs text-gray-500">Rows:</span>
-                      <USelect v-model="poPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
+                    <div class="flex items-center justify-between gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs text-gray-500">Rows:</span>
+                        <USelect v-model="poPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <UButton
+                          icon="i-heroicons-funnel"
+                          size="xs"
+                          :color="hasPoFilter ? 'primary' : 'gray'"
+                          variant="outline"
+                          @click="poFilterOpen = true"
+                        />
+                        <UDropdown :items="poDownloadItems">
+                          <UButton
+                            icon="i-heroicons-arrow-down-tray"
+                            size="xs"
+                            color="gray"
+                            variant="outline"
+                            :loading="isDownloadingPo"
+                          />
+                        </UDropdown>
+                      </div>
                     </div>
 
                     <UTable
@@ -914,6 +1134,7 @@ const transactionAction = (row: any) => [
                                   <th class="px-3 py-2 text-left">Date</th>
                                   <th class="px-3 py-2 text-left">Type</th>
                                   <th class="px-3 py-2 text-right">Amount</th>
+                                  <th class="px-3 py-2 text-left">Bill No</th>
                                   <th class="px-3 py-2 text-left">Remarks</th>
                                 </tr>
                               </thead>
@@ -930,6 +1151,7 @@ const transactionAction = (row: any) => [
                                     <UBadge size="xs" color="green" variant="subtle">{{ payment.paymentType }}</UBadge>
                                   </td>
                                   <td class="px-3 py-2 text-right font-medium">₹{{ payment.amount.toFixed(2) }}</td>
+                                  <td class="px-3 py-2 font-mono text-xs">{{ payment.billNo || '-' }}</td>
                                   <td class="px-3 py-2">{{ payment.remarks || '-' }}</td>
                                 </tr>
                               </tbody>
@@ -961,8 +1183,8 @@ const transactionAction = (row: any) => [
                   </UCard>
                 </template>
 
-                <!-- ─── Tab 1: Credits ─── -->
-                <template v-if="index === 1">
+                <!-- ─── Tab 0: Transactions ─── -->
+                <template v-if="index === 0">
                   <UCard
                     class="w-full"
                     :ui="{
@@ -1008,6 +1230,7 @@ const transactionAction = (row: any) => [
                             { label: 'All', value: 'ALL' },
                             { label: 'Credits', value: 'CREDIT' },
                             { label: 'Payments', value: 'PAYMENT' },
+                            { label: 'Returns', value: 'RETURN' },
                           ]"
                           option-attribute="label"
                           value-attribute="value"
@@ -1034,9 +1257,20 @@ const transactionAction = (row: any) => [
                       </div>
                     </template>
 
-                    <div class="flex items-center gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                      <span class="text-xs text-gray-500">Rows:</span>
-                      <USelect v-model="creditPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
+                    <div class="flex items-center justify-between gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs text-gray-500">Rows:</span>
+                        <USelect v-model="creditPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
+                      </div>
+                      <UDropdown :items="creditsDownloadItems">
+                        <UButton
+                          icon="i-heroicons-arrow-down-tray"
+                          size="xs"
+                          color="gray"
+                          variant="outline"
+                          :loading="isDownloadingCredits"
+                        />
+                      </UDropdown>
                     </div>
 
                     <UTable
@@ -1049,20 +1283,28 @@ const transactionAction = (row: any) => [
                       </template>
                       <template #type-data="{ row }">
                         <UBadge
-                          :color="row.type === 'CREDIT' ? 'red' : 'green'"
+                          :color="row.type === 'CREDIT' ? 'red' : row.paymentType === 'RETURN' ? 'orange' : 'green'"
                           variant="subtle"
                           size="xs"
                         >
-                          {{ row.type }}
+                          {{ row.type === 'PAYMENT' ? (row.paymentType || 'PAYMENT') : row.type }}
                         </UBadge>
                       </template>
                       <template #amount-data="{ row }">
                         <span
                           class="font-semibold"
-                          :class="row.type === 'CREDIT' ? 'text-red-600' : 'text-green-600'"
+                          :class="row.type === 'CREDIT' ? 'text-red-600' : row.paymentType === 'RETURN' ? 'text-orange-600' : 'text-green-600'"
                         >
                           ₹{{ (row.amount || 0).toFixed(2) }}
                         </span>
+                      </template>
+                      <template #pono-data="{ row }">
+                        <span v-if="row.pono" class="font-mono text-xs">{{ row.pono }}</span>
+                        <span v-else class="text-xs text-gray-400">-</span>
+                      </template>
+                      <template #billno-data="{ row }">
+                        <span v-if="row.billno" class="font-mono text-xs">{{ row.billno }}</span>
+                        <span v-else class="text-xs text-gray-400">-</span>
                       </template>
                       <template #actions-data="{ row }">
                         <UDropdown :items="transactionAction(row)">
@@ -1081,6 +1323,118 @@ const transactionAction = (row: any) => [
                           v-model="creditPage"
                           :page-count="creditPageCount"
                           :total="filteredTransactions.length"
+                          size="xs"
+                          :ui="{
+                            wrapper: 'flex items-center gap-1',
+                            rounded: '!rounded-full min-w-[28px] justify-center',
+                          }"
+                        />
+                      </div>
+                    </template>
+                  </UCard>
+                </template>
+
+                <!-- ─── Tab 2: Purchase Returns ─── -->
+                <template v-if="index === 2">
+                  <UCard
+                    class="w-full"
+                    :ui="{
+                      base: '',
+                      ring: 'ring-1 ring-primary-200 dark:ring-primary-800',
+                      divide: 'divide-y divide-primary-100 dark:divide-primary-900/40',
+                      header: { padding: 'px-4 py-3' },
+                      body: { padding: '' },
+                      footer: { padding: 'px-4 py-3' },
+                    }"
+                  >
+                    <template #header>
+                      <div class="flex items-center justify-between flex-wrap gap-2">
+                        <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+                          <UButton icon="i-heroicons-calendar-days-20-solid" size="xs" color="gray" variant="outline" truncate class="max-w-[200px]">
+                            {{ format(returnSelectedDate.start, 'd MMM yy') }} – {{ format(returnSelectedDate.end, 'd MMM yy') }}
+                          </UButton>
+                          <template #panel="{ close }">
+                            <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                              <div class="hidden sm:flex flex-col py-4">
+                                <UButton
+                                  v-for="(range, i) in ranges"
+                                  :key="i"
+                                  :label="range.label"
+                                  color="gray"
+                                  variant="ghost"
+                                  class="rounded-none px-6"
+                                  :class="isReturnRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'"
+                                  truncate
+                                  @click="selectReturnRange(range.duration)"
+                                />
+                              </div>
+                              <DatePicker v-model="returnSelectedDate" @close="close" />
+                            </div>
+                          </template>
+                        </UPopover>
+                        <UButton
+                          icon="i-heroicons-plus"
+                          size="xs"
+                          color="primary"
+                          label="New Return"
+                          @click="router.push(`/distributor/add-purchase-return?distributorId=${selectedDistributor.distributorId}`)"
+                        />
+                      </div>
+                    </template>
+
+                    <div class="flex items-center gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span class="text-xs text-gray-500">Rows:</span>
+                      <USelect v-model="returnPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
+                    </div>
+
+                    <UTable
+                      :rows="paginatedReturns"
+                      :columns="returnColumns"
+                      class="w-full"
+                    >
+                      <template #createdAt-data="{ row }">
+                        {{ new Date(row.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) }}
+                      </template>
+                      <template #poNo-data="{ row }">
+                        <span v-if="row.poNo" class="font-mono text-xs">{{ row.poNo }}</span>
+                        <span v-else class="text-xs text-gray-400">-</span>
+                      </template>
+                      <template #subTotalAmount-data="{ row }">
+                        ₹{{ (row.subTotalAmount || 0).toFixed(2) }}
+                      </template>
+                      <template #taxAmount-data="{ row }">
+                        ₹{{ (row.taxAmount || 0).toFixed(2) }}
+                      </template>
+                      <template #totalAmount-data="{ row }">
+                        <span class="font-semibold text-orange-600">₹{{ (row.totalAmount || 0).toFixed(2) }}</span>
+                      </template>
+                      <template #remarks-data="{ row }">
+                        <span class="text-xs text-gray-500">{{ row.remarks || '-' }}</span>
+                      </template>
+                      <template #actions-data="{ row }">
+                        <UDropdown :items="[
+                          [
+                            { label: 'Download', icon: 'i-heroicons-document-text', click: () => downloadPurchaseReturn(row.id) },
+                            { label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => router.push(`/distributor/edit-purchase-return/${row.id}`) },
+                          ],
+                          [
+                            { label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => { deletingRowIdentity.value = { name: `Return #${row.id.slice(-6)}`, id: row.id, type: 'purchase-return' }; isDeleteModalOpen.value = true } },
+                          ],
+                        ]">
+                          <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" size="xs" />
+                        </UDropdown>
+                      </template>
+                    </UTable>
+
+                    <template #footer>
+                      <div class="flex flex-wrap justify-between items-center gap-2">
+                        <span class="text-xs text-gray-500">
+                          {{ filteredReturns.length ? (returnPage - 1) * returnPageCount + 1 : 0 }}–{{ Math.min(returnPage * returnPageCount, filteredReturns.length) }} of {{ filteredReturns.length }}
+                        </span>
+                        <UPagination
+                          v-model="returnPage"
+                          :page-count="returnPageCount"
+                          :total="filteredReturns.length"
                           size="xs"
                           :ui="{
                             wrapper: 'flex items-center gap-1',
@@ -1114,6 +1468,9 @@ const transactionAction = (row: any) => [
           <UFormGroup label="Amount" required>
             <UInput v-model.number="payForm.amount" type="number" placeholder="Enter amount" />
           </UFormGroup>
+          <UFormGroup label="Bill No">
+            <UInput v-model="payForm.billNo" placeholder="Bill number (optional)" />
+          </UFormGroup>
           <UFormGroup label="Payment Type">
             <USelect
               v-model="payForm.paymentType"
@@ -1131,6 +1488,47 @@ const transactionAction = (row: any) => [
           <UFormGroup label="Remarks">
             <UInput v-model="payForm.remarks" placeholder="Optional remarks" />
           </UFormGroup>
+
+          <!-- ─── PO Link (new payment) ─── -->
+          <UFormGroup v-if="!payForm.id" label="Link to Purchase Order (optional)">
+            <UInput
+              v-model="poLinkSearch"
+              size="sm"
+              placeholder="Search PO No..."
+              icon="i-heroicons-magnifying-glass-20-solid"
+              class="mb-2"
+            />
+            <div class="border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
+              <div v-if="!poLinkOptions.length" class="px-3 py-2 text-xs text-gray-400">No purchase orders found.</div>
+              <button
+                v-for="po in poLinkOptions"
+                :key="po.id"
+                type="button"
+                class="w-full flex items-center justify-between px-3 py-2 text-xs text-left border-t first:border-t-0 border-gray-200 dark:border-gray-700 transition-colors"
+                :class="payForm.purchaseOrderId === po.id
+                  ? 'bg-primary-50 dark:bg-primary-900/30 font-semibold text-primary-700 dark:text-primary-300'
+                  : 'hover:bg-gray-50 dark:hover:bg-gray-800/40'"
+                @click="payForm.purchaseOrderId = payForm.purchaseOrderId === po.id ? '' : po.id"
+              >
+                <span>PO#{{ po.purchaseOrderNo }}</span>
+                <span class="text-gray-500">{{ new Date(po.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) }} · ₹{{ (po.totalAmount || 0).toFixed(2) }}</span>
+              </button>
+            </div>
+            <p v-if="payForm.purchaseOrderId" class="mt-1 text-xs text-primary-600 dark:text-primary-400">
+              Linked: PO#{{ poLinkOptions.find(p => p.id === payForm.purchaseOrderId)?.purchaseOrderNo ?? selectedDistributor?.purchaseOrders?.find((p: any) => p.id === payForm.purchaseOrderId)?.purchaseOrderNo }}
+            </p>
+          </UFormGroup>
+
+          <!-- ─── Linked PO (edit mode, read-only) ─── -->
+          <UFormGroup v-else-if="payForm.purchaseOrderId" label="Linked Purchase Order">
+            <div class="px-3 py-2 text-xs rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-primary-700 dark:text-primary-300 font-semibold">
+              PO#{{ selectedDistributor?.purchaseOrders?.find((p: any) => p.id === payForm.purchaseOrderId)?.purchaseOrderNo ?? payForm.purchaseOrderId }}
+              <span v-if="selectedDistributor?.purchaseOrders?.find((p: any) => p.id === payForm.purchaseOrderId)?.billNo" class="ml-2 text-gray-500 font-normal">
+                Bill: {{ selectedDistributor?.purchaseOrders?.find((p: any) => p.id === payForm.purchaseOrderId)?.billNo }}
+              </span>
+            </div>
+          </UFormGroup>
+
           <div class="pt-4">
             <UButton color="primary" block :loading="isSaving" @click="handlePay">Submit</UButton>
           </div>

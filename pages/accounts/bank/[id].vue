@@ -138,6 +138,13 @@ const bank = computed(() => data.value?.bank)
 const ledger = computed(() => data.value?.ledger ?? [])
 const closingBalance = computed(() => data.value?.closingBalance ?? 0)
 
+const styledLedger = computed(() =>
+  ledger.value.map(row => ({
+    ...row,
+    class: row.precedence ? 'bg-red-50 text-red-600' : undefined,
+  }))
+)
+
 const totalSales = computed(() =>
   ledger.value
     .filter(r => r.source === 'SALE')
@@ -246,7 +253,7 @@ const formatCurrency = (v: number) =>
 
       <!-- TABLE -->
       <UTable
-        :rows="ledger"
+        :rows="styledLedger"
         :loading="pending"
         :columns="[
           { key: 'date', label: 'Date' },

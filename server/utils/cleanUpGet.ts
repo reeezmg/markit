@@ -19,6 +19,7 @@ export async function previewBillsForReduction(opts: BillPreviewOptions) {
     paymentMethod,
     targetAmount,
     minBillAmount,
+    timePref,
     valuePref,
   } = opts;
 
@@ -27,6 +28,7 @@ export async function previewBillsForReduction(opts: BillPreviewOptions) {
       where: {
         companyId,
         deleted: false,
+        precedence: { not: true },
         createdAt: {
           gte: startDate,
           lte: endDate,
@@ -34,12 +36,12 @@ export async function previewBillsForReduction(opts: BillPreviewOptions) {
       },
       orderBy: [
         { grandTotal: valuePref === 'lowest' ? 'asc' : 'desc' },
+        { createdAt: timePref === 'oldest' ? 'asc' : 'desc' },
       ],
     });
     return [bills];
   });
 
-  console.log(bills, 'bills found for cleanup:', bills.length);
 
   const allTotal = bills.reduce((sum, b) => sum + (b.grandTotal ?? 0), 0);
   const allCount = bills.length;

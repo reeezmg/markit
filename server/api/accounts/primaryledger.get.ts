@@ -4,6 +4,7 @@ import { pool } from '~/server/db'
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
   const companyId = session.data.companyId
+  const cleanup = session.data.cleanup ?? false
 
   if (!companyId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
@@ -93,10 +94,11 @@ const bankInfo = {
           AND b.payment_status IN ('PAID')
           AND b.is_markit = false
           AND b.created_at < $2
+          AND ($3 = true OR b.precedence IS NOT TRUE)
       )
       SELECT
         COALESCE(SUM(
-          CASE 
+          CASE
             WHEN payment_method IN ('UPI','Card')
             THEN grand_total ELSE 0 END
         ),0)
@@ -109,8 +111,9 @@ const bankInfo = {
         AND payment_status IN ('PAID')
         AND is_markit = false
         AND created_at < $2
+        AND ($3 = true OR precedence IS NOT TRUE)
       `,
-      [companyId, from]
+      [companyId, from, cleanup]
     )
 
     const salesBefore =
@@ -256,6 +259,7 @@ const openingBalance =
           AND b.payment_status IN ('PAID')
           AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE)
       )
 
       SELECT
@@ -265,7 +269,8 @@ const openingBalance =
         'Sale via ' || b.payment_method ||
         ' (' || b.invoice_number || ')' AS description,
         0 AS debit,
-        b.grand_total AS credit
+        b.grand_total AS credit,
+        b.precedence AS precedence
       FROM bills b
       WHERE b.company_id = $1
         AND b.payment_method IN ('UPI','Card')
@@ -273,6 +278,7 @@ const openingBalance =
         AND b.payment_status IN ('PAID')
         AND b.is_markit = false
         AND b.created_at BETWEEN $2 AND $3
+        AND ($4 = true OR b.precedence IS NOT TRUE)
 
       UNION ALL
 
@@ -283,11 +289,12 @@ const openingBalance =
         'Sale via ' || s.method ||
         ' (' || s.invoice_number || ') (Split)',
         0,
-        s.amount
+        s.amount,
+        NULL::boolean
       FROM split s
       WHERE s.method IN ('UPI','Card')
       `,
-      [companyId, from, to]
+      [companyId, from, to, cleanup]
     )
 
     rows.push(...salesLedgerRes.rows)

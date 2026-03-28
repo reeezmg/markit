@@ -11,6 +11,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await useAuthSession(event)
   const companyId = session.data.companyId
+  const cleanup = session.data.cleanup ?? false
 
   if (!companyId) {
     throw createError({
@@ -149,8 +150,9 @@ export default defineEventHandler(async (event) => {
   WHERE b.company_id = $1
     AND b.deleted = false
     AND b.created_at BETWEEN $2 AND $3
+    AND ($4 = true OR b.precedence IS NOT TRUE)
   `,
-  [companyId, startDate, endDate]
+  [companyId, startDate, endDate, cleanup]
 )
 
 const sales = salesRes.rows[0]

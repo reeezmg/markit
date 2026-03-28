@@ -4,6 +4,7 @@ import { pool } from '~/server/db'
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
   const companyId = session.data.companyId
+  const cleanup = session.data.cleanup ?? false
 
   if (!companyId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
@@ -133,8 +134,9 @@ const to = query.to
         AND b.payment_status IN ('PAID','PENDING')
         AND b.is_markit = false
         AND b.created_at BETWEEN $2 AND $3
+        AND ($4 = true OR b.precedence IS NOT TRUE)
       `,
-      [companyId, from, to]
+      [companyId, from, to, cleanup]
     )
 
     const totalSales = Number(salesRes.rows[0].total_sales || 0)

@@ -11,7 +11,7 @@ const serverUrl = config.public.serverUrl
 const useAuth = () => useNuxtApp().$auth;
 
   watch(
-    () => useAuth().session.value?.companyId,
+    () => useAuth()?.session?.value?.companyId,
     (val) => {
       if (val) {
         socket.emit("joinCompany", val)

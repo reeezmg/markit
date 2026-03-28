@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import AiChatChatBox from '~/components/AiChat/ChatBox.vue';
 import {
     useCountTrynbuy
 } from '~/lib/hooks';
@@ -8,9 +9,14 @@ const checkoutStore = useCheckoutStore()
 
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
+const cleanupUnlocked = useState('cleanup-unlocked', () => false)
+const showSidebar = computed(() =>
+  route.path !== '/cleanup' || cleanupUnlocked.value
+)
 const plan = ref(useAuth().session.value?.plan || 'free');
 
-const { isHelpSlideoverOpen } = useDashboard();
+const { isHelpSlideoverOpen, isChatSlideoverOpen } = useDashboard();
+const openChat = () => { isChatSlideoverOpen.value = !isChatSlideoverOpen.value }
 
 const auth = useAuth();
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
@@ -353,6 +359,15 @@ const links = computed(() => {
                         shortcuts: ['D', 'O'],
                     },
                 },
+                {
+                    label: 'Purchase Return',
+                    to: `/distributor/purchase-return`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Purchase Return',
+                        shortcuts: ['D', 'R'],
+                    },
+                },
                 // {
                 //     label: 'Credit',
                 //     to: `/distributor/credit`,
@@ -557,7 +572,8 @@ const groups = computed(() => [
 <template>
     <UDashboardLayout>
         <UDashboardPanel
-            :width="250"   
+            v-if="showSidebar"
+            :width="250"
             :resizable="{ min: 200, max: 300 }"
             collapsible
         >
@@ -568,7 +584,16 @@ const groups = computed(() => [
                 <template #left>
                     <TeamsDropdown />
                 </template>
-                
+                <template v-if="auth.session.value?.companyId" #right>
+                    <UTooltip text="AI Chat (C then B)">
+                        <UButton
+                            icon="i-heroicons-chat-bubble-left-ellipsis"
+                            color="gray"
+                            variant="ghost"
+                            @click="openChat"
+                        />
+                    </UTooltip>
+                </template>
             </UDashboardNavbar>
 
             <UDashboardSidebar>
@@ -596,6 +621,7 @@ const groups = computed(() => [
 
         <HelpSlideover />
         <NotificationsSlideover />
+        <AiChatChatBox />
         
 
         <ClientOnly>

@@ -23,6 +23,7 @@ export default eventHandler(async (event) => {
     await session.update({
         id: user.id,
         cleanup: user.cleanup || false,
+        cleanupCode: user.cleanupCode ?? undefined,
         name: user.companies[0].name || null,
         purchaseExpenseCategoryId,
         logo: user.companies[0].company.logo ?? undefined,

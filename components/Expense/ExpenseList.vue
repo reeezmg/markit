@@ -31,6 +31,16 @@ const draftSelectedCategory = ref([])
 const draftSelectedUsers = ref<string[]>([])
 const draftMinAmount = ref<number | null>(null)
 const draftMaxAmount = ref<number | null>(null)
+const selectedPaymentMode = ref<string[]>([])
+const draftSelectedPaymentMode = ref<string[]>([])
+
+const paymentModeOptions = [
+    { label: 'Cash',   value: 'CASH' },
+    { label: 'Bank',   value: 'BANK' },
+    { label: 'UPI',    value: 'UPI' },
+    { label: 'Card',   value: 'CARD' },
+    { label: 'Cheque', value: 'CHEQUE' },
+]
 const selectedDate = ref({ 
     start: new Date(new Date().setHours(0, 0, 0, 0)) , 
     end: new Date(new Date().setHours(23, 59, 59, 999)) 
@@ -214,6 +224,10 @@ const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
                 status: { in: selectedStatus.value }
             }),
 
+            ...(selectedPaymentMode.value.length && {
+                paymentMode: { in: selectedPaymentMode.value }
+            }),
+
                 ...(selectedDate.value && {
                 expenseDate: {
                     gte: startOfDay(selectedDate.value.start),
@@ -293,11 +307,12 @@ const resetFilters = () => {
     search.value = '';
     selectedStatus.value = [];
    selectedDate.value = ({
-        start: new Date(new Date().setHours(0, 0, 0, 0)) , 
-        end: new Date(new Date().setHours(23, 59, 59, 999)) 
+        start: new Date(new Date().setHours(0, 0, 0, 0)) ,
+        end: new Date(new Date().setHours(23, 59, 59, 999))
     })
    selectedCategory.value = [];
    selectedUsers.value = [];
+   selectedPaymentMode.value = [];
    minAmount.value = null;
    maxAmount.value = null;
 };
@@ -306,6 +321,7 @@ const openFilterModal = () => {
   draftSelectedStatus.value = [...selectedStatus.value]
   draftSelectedCategory.value = [...selectedCategory.value]
   draftSelectedUsers.value = [...selectedUsers.value]
+  draftSelectedPaymentMode.value = [...selectedPaymentMode.value]
   draftMinAmount.value = minAmount.value
   draftMaxAmount.value = maxAmount.value
   isFilterModalOpen.value = true
@@ -315,6 +331,7 @@ const applyFilters = () => {
   selectedStatus.value = [...draftSelectedStatus.value]
   selectedCategory.value = [...draftSelectedCategory.value]
   selectedUsers.value = [...draftSelectedUsers.value]
+  selectedPaymentMode.value = [...draftSelectedPaymentMode.value]
   minAmount.value = draftMinAmount.value
   maxAmount.value = draftMaxAmount.value
   page.value = 1
@@ -327,6 +344,7 @@ watch(
     selectedStatus,
     selectedCategory,
     selectedUsers,
+    selectedPaymentMode,
     minAmount,
     maxAmount,
     pageCount,
@@ -345,6 +363,7 @@ watch(
     selectedStatus,
     selectedCategory,
     selectedUsers,
+    selectedPaymentMode,
     minAmount,
     maxAmount,
     page,
@@ -364,6 +383,7 @@ watch(
         selectedStatus: selectedStatus.value,
         selectedCategory: selectedCategory.value,
         selectedUsers: selectedUsers.value,
+        selectedPaymentMode: selectedPaymentMode.value,
         minAmount: minAmount.value,
         maxAmount: maxAmount.value,
         selectedDate: selectedDate.value,
@@ -388,6 +408,7 @@ onMounted(() => {
     selectedStatus.value = saved.selectedStatus ?? []
     selectedCategory.value = saved.selectedCategory ?? []
     selectedUsers.value = saved.selectedUsers ?? []
+    selectedPaymentMode.value = saved.selectedPaymentMode ?? []
     minAmount.value = saved.minAmount ?? null
     maxAmount.value = saved.maxAmount ?? null
     if (saved.selectedDate?.start && saved.selectedDate?.end) {
@@ -763,6 +784,14 @@ const handleDownloadExcel = async () => {
             :options="['Paid','Pending', 'Approved', 'Rejected']"
             multiple
             placeholder="Status"
+          />
+          <USelectMenu
+            v-model="draftSelectedPaymentMode"
+            :options="paymentModeOptions"
+            option-attribute="label"
+            value-attribute="value"
+            multiple
+            placeholder="Payment Method"
           />
           <USelectMenu
             v-model="draftSelectedCategory"

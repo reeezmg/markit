@@ -224,6 +224,7 @@ const resetFilters = () => {
     selectedPaymentMethods.value = [];
     minGrandTotal.value = null;
     maxGrandTotal.value = null;
+    selectedDate.value = { start: new Date(), end: new Date() };
 };
 
 
@@ -281,6 +282,13 @@ const fetchSales = async () => {
     }
   }
 }
+
+const styledSales = computed(() =>
+  (sales.value || []).map(row => ({
+    ...row,
+    class: row.precedence ? 'bg-red-50 text-red-600' : undefined
+  }))
+)
 
 watch(sales, (newSales) => {
    if(page.value > pageTotal.value) {
@@ -943,7 +951,6 @@ const openBill = async (id) => {
                         icon="i-heroicons-arrow-path"
                         color="gray"
                         size="xs"
-                        :disabled="search === '' && selectedStatus.length === 0 && selectedPaymentMethods.length === 0 && !minGrandTotal && !maxGrandTotal"
                         @click="resetFilters"
                     >
                         Reset
@@ -956,7 +963,7 @@ const openBill = async (id) => {
                 v-model="selectedRows"
                 v-model:sort="sort"
                 v-model:expand="expand"
-                :rows="sales"
+                :rows="styledSales"
                 :columns="columnsTable"
                 :loading="isLoading"
                 :multiple-expand="false"

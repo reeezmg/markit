@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { useAuthSession } from '~~/auth/server/utils/session'
 
 const SORT_COLUMN_MAP: Record<string, string> = {
   invoiceNumber: 'b.invoice_number',
@@ -9,6 +10,9 @@ const SORT_COLUMN_MAP: Record<string, string> = {
 }
 
 export default defineEventHandler(async (event) => {
+  const authSession = await useAuthSession(event)
+  const cleanup = authSession.data.cleanup ?? false
+
   const body = await readBody(event)
 
   const {
@@ -47,7 +51,10 @@ export default defineEventHandler(async (event) => {
     let whereSQL = `
       b.company_id = $1
       AND b.deleted = false
+      AND ($${idx} = true OR b.precedence IS NOT TRUE)
     `
+    values.push(cleanup)
+    idx++
 
     /* 🔎 SEARCH RULES */
     let invoiceMatchSelect = '0 AS invoice_match'
@@ -130,6 +137,7 @@ export default defineEventHandler(async (event) => {
     const query = `
       SELECT
         b.id,
+        b.precedence,
         b.created_at       AS "createdAt",
         b.invoice_number   AS "invoiceNumber",
         b.subtotal,

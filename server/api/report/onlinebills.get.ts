@@ -5,6 +5,7 @@ import { pool } from '~/server/db';
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event);
   const companyId = session.data.companyId;
+  const cleanup = session.data.cleanup ?? false;
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
 
   const query = getQuery(event);
@@ -30,6 +31,7 @@ export default defineEventHandler(async (event) => {
       WHERE b.company_id = $1
         AND b.deleted = false
         AND b.created_at BETWEEN $2 AND $3
+        AND ($4 = true OR b.precedence IS NOT TRUE)
     `;
 
     // Add is_markit filter if requested
@@ -41,7 +43,7 @@ export default defineEventHandler(async (event) => {
 
     const res = await client.query(
       sqlQuery,
-      [companyId, startDate, endDate]
+      [companyId, startDate, endDate, cleanup]
     );
 
     return res.rows;

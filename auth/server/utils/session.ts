@@ -17,6 +17,7 @@ const sessionConfig: SessionConfig = {
 export type AuthSession = {
     id: string;
     cleanup: boolean;
+    cleanupCode?: string;
     category: string[];
     purchaseExpenseCategoryId: string;
     name: string | null;

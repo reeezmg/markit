@@ -1,5 +1,4 @@
 let audio: HTMLAudioElement | null = null
-let unlocked = false
 
 export function useCheckoutEvents() {
   const checkoutStore = useCheckoutStore()
@@ -20,20 +19,6 @@ export function useCheckoutEvents() {
       audio = new Audio('/sounds/alert.mp3') // 👈 your MP3 path
       audio.volume = 1.0
     }
-
-    // Required: Unlock audio after a user click (autoplay rules)
-    const unlock = () => {
-      if (audio && !unlocked) {
-        audio.play().then(() => {
-          audio!.pause()
-          audio!.currentTime = 0
-          unlocked = true
-          window.removeEventListener("click", unlock)
-        }).catch(() => {})
-      }
-    }
-
-    window.addEventListener("click", unlock)
 
     // Listen to socket event
     $socket.on("checkout:success", handleCheckoutSuccess)

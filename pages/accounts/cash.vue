@@ -64,9 +64,17 @@ watch(error, e => {
 /* ---------------------------------------------------
    COMPUTED
 --------------------------------------------------- */
+const useAuth = () => useNuxtApp().$auth
 const account = computed(() => data.value?.account)
 const ledger = computed(() => data.value?.ledger ?? [])
 const closingBalance = computed(() => data.value?.closingBalance ?? 0)
+
+const styledLedger = computed(() =>
+  ledger.value.map(row => ({
+    ...row,
+    class: row.precedence ? 'bg-red-50 text-red-600' : undefined,
+  }))
+)
 
 const totalSales = computed(() =>
   ledger.value
@@ -219,7 +227,7 @@ const formatCurrency = (v: number) =>
 
       <!-- TABLE -->
       <UTable
-        :rows="ledger"
+        :rows="styledLedger"
         :loading="pending"
         :columns="[
           { key: 'date', label: 'Date' },

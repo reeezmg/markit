@@ -5,6 +5,7 @@ const _useDashboard = () => {
     const router = useRouter();
     const isHelpSlideoverOpen = ref(false);
     const isNotificationsSlideoverOpen = ref(false);
+    const isChatSlideoverOpen = ref(false);
 
     defineShortcuts({
         'd-d': () => router.push(`/dashboard`),
@@ -25,12 +26,14 @@ const _useDashboard = () => {
 
         '?': () => (isHelpSlideoverOpen.value = true),
         n: () => (isNotificationsSlideoverOpen.value = true),
+        'c-b': () => (isChatSlideoverOpen.value = !isChatSlideoverOpen.value),
     });
 
     watch(
         () => route.fullPath,
         () => {
             isHelpSlideoverOpen.value = false;
+            isChatSlideoverOpen.value = false;
             isNotificationsSlideoverOpen.value = false;
         },
     );
@@ -38,6 +41,7 @@ const _useDashboard = () => {
     return {
         isHelpSlideoverOpen,
         isNotificationsSlideoverOpen,
+        isChatSlideoverOpen,
     };
 };
 

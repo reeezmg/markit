@@ -91,10 +91,12 @@ function selectRange(duration: Duration) {
 
 // 🔹 Query
 const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
+  const cleanup = useAuth().session.value?.cleanup ?? false
   return {
     where: {
       AND: [
         { companyId: useAuth().session.value?.companyId },
+        ...(!cleanup ? [{ precedence: { not: true } }] : []),
         ...(search.value ? [{ invoiceNumber: search.value }] : []),
         ...(selectedStatus.value.length
           ? [{ OR: selectedStatus.value.map((s: any) => ({ paymentStatus: s.value })) }]
@@ -108,7 +110,11 @@ const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
       ],
       billHistories: { some: {} }
     },
-    include: { billHistories: true },
+    include: {
+      billHistories: cleanup
+        ? true
+        : { where: { precedence: { not: true } } }
+    },
     orderBy: { [sort.value.column]: sort.value.direction },
     skip: (page.value - 1) * parseInt(pageCount.value),
     take: parseInt(pageCount.value)
@@ -122,6 +128,13 @@ const countArgs = computed(() => ({
 const { data: pageTotal } = useCountBill(countArgs)
 
 const { data: bills, isLoading, refetch } = useFindManyBill(queryArgs)
+
+const styledBills = computed(() =>
+  (bills.value || []).map(row => ({
+    ...row,
+    class: row.precedence ? 'bg-red-50 text-red-600' : undefined
+  }))
+)
 
 // 🔹 Restore Action
 const restoreBill = async (id: string) => {
@@ -228,7 +241,7 @@ const restoreBill = async (id: string) => {
       <UTable
         v-model:sort="sort"
         v-model:expand="expand"
-        :rows="bills"
+        :rows="styledBills"
         :columns="columns"
         :loading="isLoading"
         :multiple-expand="false"

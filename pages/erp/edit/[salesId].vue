@@ -968,7 +968,7 @@ const handleInvalidBarcode = (index) => {
 
 const handleEdit = async () => {
   isSaving.value = true;
-  printModel.value = true
+ 
   try {
 
     if (!navigator.onLine) {
