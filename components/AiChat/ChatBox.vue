@@ -28,7 +28,7 @@ async function send() {
   loading.value = true
   await scrollToBottom()
 
-  try {
+  try { 
     const res = await $fetch<{ reply: string }>('/api/ai/chat', {
       method: 'POST',
       body: { messages: messages.value },
