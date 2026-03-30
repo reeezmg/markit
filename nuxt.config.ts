@@ -21,7 +21,7 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    preset: 'node-server',
+    preset: 'vercel',
     routeRules: {
       '/nonetwork': { prerender: true },
     },
@@ -37,14 +37,6 @@ export default defineNuxtConfig({
       noExternal: ['@electric-sql/pglite'],
     },
 
-    // ⭐ Eager load EVERYTHING → One bundle
-    build: {
-      rollupOptions: {
-        output: {
-          manualChunks: () => 'app.js'
-        }
-      }
-    }
   },
 
   modules: [
