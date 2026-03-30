@@ -492,7 +492,10 @@ if (!isZeroOpening) {
       transferRes,
 
       /* ---------- MONEY TRANSACTIONS ---------- */
-      transactionRes
+      transactionRes,
+
+      /* ---------- TRANSFER DETAIL (per account) ---------- */
+      transferDetailRes
 
     ] = await Promise.all([
 
@@ -790,6 +793,64 @@ if (!isZeroOpening) {
           AND created_at BETWEEN $2 AND $3
         `,
         [companyId, startDate, endDate]
+      ),
+
+
+
+      /* =====================================================
+         TRANSFER DETAIL — per account with real bank names
+      ===================================================== */
+
+      client.query(
+        `
+        WITH t AS (
+          SELECT
+            at.from_type,
+            at.to_type,
+            at.from_account_id,
+            at.to_account_id,
+            at.amount,
+            fb.bank_name AS from_bank_name,
+            tb.bank_name AS to_bank_name
+          FROM account_transfers at
+          LEFT JOIN bank_accounts fb ON fb.id = at.from_account_id
+          LEFT JOIN bank_accounts tb ON tb.id = at.to_account_id
+          WHERE at.company_id = $1
+            AND at.created_at BETWEEN $2 AND $3
+        ),
+        sides AS (
+          SELECT
+            CASE
+              WHEN from_type::text = 'CASH' THEN 'Cash'
+              WHEN from_type::text = 'BANK' AND from_account_id IS NULL THEN 'Primary Bank'
+              WHEN from_type::text = 'BANK' THEN COALESCE(from_bank_name, 'Bank')
+              ELSE from_type::text
+            END AS account_name,
+            amount AS debit,
+            0::numeric AS credit
+          FROM t
+          UNION ALL
+          SELECT
+            CASE
+              WHEN to_type::text = 'CASH' THEN 'Cash'
+              WHEN to_type::text = 'BANK' AND to_account_id IS NULL THEN 'Primary Bank'
+              WHEN to_type::text = 'BANK' THEN COALESCE(to_bank_name, 'Bank')
+              ELSE to_type::text
+            END AS account_name,
+            0::numeric AS debit,
+            amount AS credit
+          FROM t
+        )
+        SELECT
+          account_name,
+          SUM(debit) AS debit,
+          SUM(credit) AS credit,
+          SUM(credit) - SUM(debit) AS net
+        FROM sides
+        GROUP BY account_name
+        ORDER BY account_name
+        `,
+        [companyId, startDate, endDate]
       )
 
     ])
@@ -805,6 +866,7 @@ if (!isZeroOpening) {
     const transactions = transactionRes.rows[0]
     const categories = categoryRes.rows
     const brands = brandRes.rows
+    const transferDetail = transferDetailRes.rows
 
 
 
@@ -937,6 +999,13 @@ if (!isZeroOpening) {
           net: transferBankNet
         }
       },
+
+      transfersDisplay: transferDetail.map(r => ({
+        name:   r.account_name,
+        debit:  Number(r.debit  || 0),
+        credit: Number(r.credit || 0),
+        net:    Number(r.net    || 0),
+      })),
 
 
 

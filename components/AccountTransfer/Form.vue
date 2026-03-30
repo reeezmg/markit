@@ -64,7 +64,7 @@
 
       <div class="flex justify-end mt-4 gap-2">
         <UButton color="gray" @click="emit('cancel')">Cancel</UButton>
-        <UButton color="primary" type="submit">Save</UButton>
+        <UButton color="primary" type="submit" :loading="loading">Save</UButton>
       </div>
     </UForm>
   </UCard>
@@ -73,7 +73,7 @@
 import { ref, computed, watch } from 'vue'
 import { useFindManyBankAccount } from '~/lib/hooks'
 
-const props = defineProps<{ transfer?: any }>()
+const props = defineProps<{ transfer?: any; loading?: boolean }>()
 const emit = defineEmits(['save', 'cancel'])
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
@@ -94,12 +94,13 @@ const { data: banks } = useFindManyBankAccount(() => ({
   where: { companyId: useAuth().session.value?.companyId },
 }))
 
-const bankOptions = computed(() =>
-  banks.value?.map(b => ({
+const bankOptions = computed(() => [
+  { label: 'Primary', value: '__PRIMARY__' },
+  ...(banks.value?.map(b => ({
     label: `${b.bankName} • ${b.accountNo}`,
     value: b.id,
-  })) ?? []
-)
+  })) ?? []),
+])
 
 /* ---------------------------------------------------
    FORM STATE (NORMALIZED)
@@ -112,8 +113,8 @@ const form = ref({
   fromType: props.transfer?.fromType ?? 'CASH',
   toType: props.transfer?.toType ?? 'BANK',
 
-  fromBankId: props.transfer?.fromAccountId ?? null,
-  toBankId: props.transfer?.toAccountId ?? null,
+  fromBankId: props.transfer?.fromAccountId ?? '__PRIMARY__',
+  toBankId: props.transfer?.toAccountId ?? '__PRIMARY__',
 
   amount: props.transfer?.amount ?? '',
   note: props.transfer?.note ?? '',
@@ -122,13 +123,8 @@ const form = ref({
 /* ---------------------------------------------------
    VISIBILITY
 --------------------------------------------------- */
-const showFromBank = computed(
-  () => form.value.fromType === 'BANK' && bankOptions.value.length > 0
-)
-
-const showToBank = computed(
-  () => form.value.toType === 'BANK' && bankOptions.value.length > 0
-)
+const showFromBank = computed(() => form.value.fromType === 'BANK')
+const showToBank   = computed(() => form.value.toType   === 'BANK')
 
 /* ---------------------------------------------------
    CLEANUP WHEN TYPE CHANGES
@@ -161,14 +157,16 @@ const saveForm = () => {
     amount: Number(form.value.amount),
     note: form.value.note,
 
-    // ✅ ONLY STRING IDS
+    // ✅ ONLY STRING IDS — '__PRIMARY__' means primary (null)
     ...(form.value.fromType === 'BANK' &&
-      form.value.fromBankId && {
+      form.value.fromBankId &&
+      form.value.fromBankId !== '__PRIMARY__' && {
         fromAccountId: form.value.fromBankId,
       }),
 
     ...(form.value.toType === 'BANK' &&
-      form.value.toBankId && {
+      form.value.toBankId &&
+      form.value.toBankId !== '__PRIMARY__' && {
         toAccountId: form.value.toBankId,
       }),
   })

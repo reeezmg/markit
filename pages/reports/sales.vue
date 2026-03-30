@@ -369,6 +369,10 @@ const transfers = computed(
   () => dashboard.value?.transfers || {}
 )
 
+const transfersDisplay = computed(
+  () => dashboard.value?.transfersDisplay || []
+)
+
 const transactions = computed(
   () => dashboard.value?.transactions || {}
 )
@@ -564,22 +568,9 @@ const revenueByCategory = computed(
             <h3 class="font-semibold mb-3">Account Transfers</h3>
 
             <UTable
-              :rows="[
-                {
-                  type:'Cash',
-                  debit:transfers.cash?.debit,
-                  credit:transfers.cash?.credit,
-                  net:transfers.cash?.net
-                },
-                {
-                  type:'Bank',
-                  debit:transfers.bank?.debit,
-                  credit:transfers.bank?.credit,
-                  net:transfers.bank?.net
-                }
-              ]"
+              :rows="transfersDisplay"
               :columns="[
-                { key:'type', label:'Account' },
+                { key:'name', label:'Account' },
                 { key:'debit', label:'Debit', formatter:formatCurrency },
                 { key:'credit', label:'Credit', formatter:formatCurrency },
                 { key:'net', label:'Net', formatter:formatCurrency }
