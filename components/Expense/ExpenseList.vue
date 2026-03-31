@@ -285,6 +285,50 @@ watch(
   { immediate: true }
 );
 
+/* ── Summary cards — computed from current visible rows ── */
+const expenseTotals = computed(() => {
+  const rows = (sales.value || []) as any[]
+  const sum = (mode: string) =>
+    rows.filter((r) => r.paymentMode === mode).reduce((s, r) => s + Number(r.totalAmount || 0), 0)
+  return {
+    total:  rows.reduce((s, r) => s + Number(r.totalAmount || 0), 0),
+    cash:   sum('CASH'),
+    card:   sum('CARD'),
+    upi:    sum('UPI'),
+    bank:   sum('BANK'),
+    cheque: sum('CHEQUE'),
+  }
+})
+
+const expenseSummaryCards = computed(() => [
+  { label: 'Total Expense', value: expenseTotals.value.total,   mode: null,     icon: 'i-heroicons-banknotes' },
+  { label: 'Cash',          value: expenseTotals.value.cash,    mode: 'CASH',   icon: 'i-heroicons-currency-rupee' },
+  { label: 'Card',          value: expenseTotals.value.card,    mode: 'CARD',   icon: 'i-heroicons-credit-card' },
+  { label: 'UPI',           value: expenseTotals.value.upi,     mode: 'UPI',    icon: 'i-heroicons-device-phone-mobile' },
+  { label: 'Bank',          value: expenseTotals.value.bank,    mode: 'BANK',   icon: 'i-heroicons-building-library' },
+  { label: 'Cheque',        value: expenseTotals.value.cheque,  mode: 'CHEQUE', icon: 'i-heroicons-document-text' },
+])
+
+const activeExpenseCardMode = computed(() => {
+  if (!selectedPaymentMode.value.length) return null
+  if (selectedPaymentMode.value.length === 1) return selectedPaymentMode.value[0]
+  return '__multi__'
+})
+
+const handleExpenseCardClick = (mode: string | null) => {
+  if (mode === null) {
+    selectedPaymentMode.value = []
+  } else if (selectedPaymentMode.value.length === 1 && selectedPaymentMode.value[0] === mode) {
+    selectedPaymentMode.value = []
+  } else {
+    selectedPaymentMode.value = [mode]
+  }
+  page.value = 1
+}
+
+const formatExpenseCurrency = (val: number) =>
+  '₹' + Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -539,6 +583,30 @@ const handleDownloadExcel = async () => {
 </script>
 
 <template>
+    <!-- Expense Summary Cards -->
+    <div class="grid grid-cols-2 sm:grid-cols-6 gap-3 mb-4">
+      <button
+        v-for="card in expenseSummaryCards"
+        :key="card.label"
+        class="text-left rounded-lg border px-4 py-3 transition-all focus:outline-none"
+        :class="[
+          (card.mode === null && activeExpenseCardMode === null) ||
+          (card.mode !== null && activeExpenseCardMode === card.mode)
+            ? 'border-primary-500 bg-primary-50 dark:bg-primary-950 dark:border-primary-400 ring-2 ring-primary-400'
+            : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-400 dark:hover:border-gray-500',
+        ]"
+        @click="handleExpenseCardClick(card.mode)"
+      >
+        <div class="flex items-center gap-2 mb-1">
+          <UIcon :name="card.icon" class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+          <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{{ card.label }}</span>
+        </div>
+        <div class="text-base font-semibold text-gray-900 dark:text-white truncate">
+          {{ formatExpenseCurrency(card.value) }}
+        </div>
+      </button>
+    </div>
+
     <UCard
             class="w-full"
             :ui="{

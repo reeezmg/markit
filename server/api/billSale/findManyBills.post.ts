@@ -186,12 +186,31 @@ export default defineEventHandler(async (event) => {
       LIMIT $${idx} OFFSET $${idx + 1}
     `
 
+    /* 📊 TOTALS QUERY — same WHERE, all pages */
+    const totalsValues = [...values]
+    const totalsQuery = `
+      SELECT
+        COALESCE(SUM(b.grand_total), 0)                                                   AS total,
+        COALESCE(SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Cash'), 0)          AS cash,
+        COALESCE(SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Card'), 0)          AS card,
+        COALESCE(SUM(b.grand_total) FILTER (WHERE b.payment_method = 'UPI'), 0)           AS upi,
+        COALESCE(SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Credit'), 0)        AS credit
+      FROM bills b
+      LEFT JOIN clients c ON c.id = b.client_id
+      WHERE ${whereSQL}
+    `
+
     values.push(
       Number(pageCount),
       (Number(page) - 1) * Number(pageCount)
     )
 
-    const res = await client.query(query, values)
+    const [res, totalsRes] = await Promise.all([
+      client.query(query, values),
+      client.query(totalsQuery, totalsValues),
+    ])
+
+    const t = totalsRes.rows[0] ?? {}
 
     return {
       rows: res.rows.map(({ total_count, splitPayments, ...row }) => ({
@@ -201,6 +220,13 @@ export default defineEventHandler(async (event) => {
           : (splitPayments ?? []),
       })),
       total: res.rows[0]?.total_count ?? 0,
+      totals: {
+        total:  Number(t.total  ?? 0),
+        cash:   Number(t.cash   ?? 0),
+        card:   Number(t.card   ?? 0),
+        upi:    Number(t.upi    ?? 0),
+        credit: Number(t.credit ?? 0),
+      },
     }
   } finally {
     client.release()

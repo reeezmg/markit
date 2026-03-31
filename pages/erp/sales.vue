@@ -227,6 +227,37 @@ const resetFilters = () => {
     selectedDate.value = { start: new Date(), end: new Date() };
 };
 
+const summaryCards = computed(() => [
+  { label: 'Total Sales',  value: salesTotals.value.total,  method: null,     icon: 'i-heroicons-banknotes',     color: 'primary' },
+  { label: 'Cash',         value: salesTotals.value.cash,   method: 'Cash',   icon: 'i-heroicons-currency-rupee', color: 'green'   },
+  { label: 'Card',         value: salesTotals.value.card,   method: 'Card',   icon: 'i-heroicons-credit-card',    color: 'blue'    },
+  { label: 'UPI',          value: salesTotals.value.upi,    method: 'UPI',    icon: 'i-heroicons-device-phone-mobile', color: 'violet' },
+  { label: 'Credit',       value: salesTotals.value.credit, method: 'Credit', icon: 'i-heroicons-clock',          color: 'orange'  },
+])
+
+const activeCardMethod = computed(() => {
+  if (selectedPaymentMethods.value.length === 0) return null
+  if (selectedPaymentMethods.value.length === 1) return selectedPaymentMethods.value[0]
+  return '__multi__'
+})
+
+const handleCardClick = (method: string | null) => {
+  if (method === null) {
+    selectedPaymentMethods.value = []
+  } else if (
+    selectedPaymentMethods.value.length === 1 &&
+    selectedPaymentMethods.value[0] === method
+  ) {
+    selectedPaymentMethods.value = []
+  } else {
+    selectedPaymentMethods.value = [method]
+  }
+  page.value = 1
+}
+
+const formatCurrency = (val: number) =>
+  '₹' + Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
 
 
 // Pagination
@@ -238,6 +269,7 @@ const sales = ref([])
 const pageTotal = ref(0)
 const isLoading = ref(false)
 const lastFetchId = ref(0)
+const salesTotals = ref({ total: 0, cash: 0, card: 0, upi: 0, credit: 0 })
 
 const paymentMethodFilterOptions = [
   { label: 'Cash', value: 'Cash' },
@@ -272,6 +304,7 @@ const fetchSales = async () => {
     if (fetchId !== lastFetchId.value) return
     sales.value = res.rows
     pageTotal.value = res.total   // ✅ REAL TOTAL
+    if (res.totals) salesTotals.value = res.totals
   } catch (err) {
     if (fetchId !== lastFetchId.value) return
     sales.value = []
@@ -834,6 +867,30 @@ const openBill = async (id) => {
 
 <template>
     <UDashboardPanelContent class="pb-24">
+        <!-- Summary Cards -->
+        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+          <button
+            v-for="card in summaryCards"
+            :key="card.label"
+            class="text-left rounded-lg border px-4 py-3 transition-all focus:outline-none"
+            :class="[
+              (card.method === null && activeCardMethod === null) ||
+              (card.method !== null && activeCardMethod === card.method)
+                ? 'border-primary-500 bg-primary-50 dark:bg-primary-950 dark:border-primary-400 ring-2 ring-primary-400'
+                : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-400 dark:hover:border-gray-500',
+            ]"
+            @click="handleCardClick(card.method)"
+          >
+            <div class="flex items-center gap-2 mb-1">
+              <UIcon :name="card.icon" class="w-4 h-4 text-gray-500 dark:text-gray-400" />
+              <span class="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">{{ card.label }}</span>
+            </div>
+            <div class="text-base font-semibold text-gray-900 dark:text-white truncate">
+              {{ formatCurrency(card.value) }}
+            </div>
+          </button>
+        </div>
+
         <UCard
             class="w-full"
             :ui="{
