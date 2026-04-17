@@ -244,7 +244,7 @@ function opColor(operation: string | null): string {
         </template>
       </UDashboardNavbar>
 
-      <div class="p-4 space-y-4">
+      <div class="p-4 space-y-4 overflow-auto h-[calc(100vh-64px)]">
         <!-- Stats bar -->
         <div class="flex flex-wrap items-center gap-4 text-sm">
           <div v-if="batch?.sourceFileName" class="text-gray-500">
@@ -305,7 +305,7 @@ function opColor(operation: string | null): string {
           </template>
 
           <template #description-data="{ row }">
-            <span class="text-xs max-w-[300px] truncate block" :title="row.description">
+            <span class="text-xs max-w-[400px] whitespace-normal break-words block">
               {{ row.description }}
             </span>
           </template>
