@@ -1,4 +1,4 @@
-// @ts-ignore — markit-mcp is a file: dependency pointing to ../mcp
+// @ts-ignore — markit-mcp is installed from GitHub
 import { allTools, callTool } from 'markit-mcp'
 
 export async function getMcpClient(): Promise<null> {
