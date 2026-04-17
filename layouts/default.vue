@@ -62,15 +62,14 @@ const links = computed(() => {
         shortcuts: ['P', 'O'],
     },
     },
-
-    {
-      id: 'sales',
-      label: 'Sales',
-      to: `/erp/sales`,
-      icon: 'i-heroicons-chart-bar',
+   {
+      id: 'online',
+      label: 'Online',
+      to: `/erp/online`,
+      icon: 'i-heroicons-shopping-bag',
       tooltip: {
-        text: 'Sales',
-        shortcuts: ['E', 'S'],
+        text: 'Online Sales',
+        shortcuts: ['E', 'O'],
       },
     },
     {
@@ -193,23 +192,50 @@ const links = computed(() => {
             to: '/erp',
             icon: 'i-heroicons-credit-card',
             children: [
-                {
-                    label: 'Billing',
-                    to: `/erp/billing`,
-                    tooltip: {
-                        text: 'ERP',
-                        shortcuts: ['E', 'B'],
-                    },
-                    exact: true,
-                },
-                {
-                    label: 'Sales',
-                    to: `/erp/sales`,
-                    tooltip: {
-                        text: 'ERP',
-                        shortcuts: ['E', 'S'],
-                    },
-                },
+                ...(auth.session.value?.companyType === 'service'
+                    ? [
+                        {
+                            label: 'Quotes',
+                            to: `/quotes`,
+                            tooltip: { text: 'Quotes', shortcuts: ['E', 'Q'] },
+                            exact: true,
+                        },
+                        {
+                            label: 'Sales Orders',
+                            to: `/sales-orders`,
+                            tooltip: { text: 'Sales Orders', shortcuts: ['E', 'O'] },
+                        },
+                        {
+                            label: 'Invoices',
+                            to: `/invoices`,
+                            tooltip: { text: 'Invoices', shortcuts: ['E', 'I'] },
+                            exact: true,
+                        },
+                        {
+                            label: 'Payments Received',
+                            to: `/payments`,
+                            tooltip: { text: 'Payments Received', shortcuts: ['E', 'P'] },
+                            exact: true,
+                        },
+                    ]
+                    : [
+                        {
+                            label: 'Billing',
+                            to: `/erp/billing`,
+                            tooltip: { text: 'ERP', shortcuts: ['E', 'B'] },
+                            exact: true,
+                        },
+                        {
+                            label: 'Sales',
+                            to: `/erp/sales`,
+                            tooltip: { text: 'ERP', shortcuts: ['E', 'S'] },
+                        },
+                        {
+                            label: 'Online',
+                            to: `/erp/online`,
+                            tooltip: { text: 'Online Sales', shortcuts: ['E', 'O'] },
+                        },
+                    ]),
                 {
                     label: 'Expenses',
                     to: `/erp/expenses`,
@@ -228,6 +254,15 @@ const links = computed(() => {
                 },
             ],
         },
+        ...(auth.session.value?.companyType === 'service'
+            ? [{
+                id: 'projects',
+                label: 'Projects',
+                to: '/projects',
+                icon: 'i-heroicons-briefcase',
+                tooltip: { text: 'Projects', shortcuts: ['P'] },
+            }]
+            : []),
         {
         id: 'reports',
         label: 'Reports',
@@ -266,6 +301,18 @@ const links = computed(() => {
             tooltip: {
                 text: 'Accounts Report',
                 shortcuts: ['A', 'R'],
+            },
+            },
+            ]
+            : []),
+            ...(auth.session.value?.type === 'admin'
+            ? [
+            {
+            label: 'GST',
+            to: `/reports/gst`,
+            tooltip: {
+                text: 'GST Returns',
+                shortcuts: ['G', 'T'],
             },
             },
             ]
@@ -584,7 +631,7 @@ const groups = computed(() => [
                 <template #left>
                     <TeamsDropdown />
                 </template>
-<!-- 
+
                 <template v-if="auth.session.value?.companyId" #right>
                     <UTooltip text="AI Chat (C then B)">
                         <UButton
@@ -594,7 +641,7 @@ const groups = computed(() => [
                             @click="openChat"
                         />
                     </UTooltip>
-                </template> -->
+                </template>
             </UDashboardNavbar>
 
             <UDashboardSidebar>

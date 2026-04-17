@@ -9,7 +9,7 @@ const paymentOptions = ['Cash', 'UPI', 'Card']
 const queryClient = useQueryClient()
 const billStore = useBillStore()
 const timeZone = 'Asia/Kolkata'
-const SALES_TABLE_STATE_KEY = 'erp_sales_table_state_v1'
+const salesTableStore = useSalesTableStore()
 const toast = useToast();
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
@@ -130,53 +130,39 @@ const active = (selectedRows) => [
         },
     ],
 ];
-const action = (row: any) => {
-  if (row.isMarkit) {
-    return [
-      [
-        {
-          label: 'Open',
-          icon: 'i-heroicons-eye-20-solid',
-          click: () => router.push(`./edit/${row.id}`),
-        },
-      ],
-    ];
-  }
-
-  return [
-    [
-      {
-        label: 'Print',
-        icon: 'i-heroicons-printer',
-        click: () => print(row.id),
+const action = (row: any) => [
+  [
+    {
+      label: 'Print',
+      icon: 'i-heroicons-printer',
+      click: () => print(row.id),
+    },
+  ],
+  [
+    {
+      label: 'Details',
+      icon: 'i-heroicons-document-magnifying-glass',
+      click: () => openBill(row.id),
+    },
+  ],
+  [
+    {
+      label: 'Edit',
+      icon: 'i-heroicons-pencil-square-20-solid',
+      click: () => router.push(`./edit/${row.id}`),
+    },
+  ],
+  [
+    {
+      label: 'Delete',
+      icon: 'i-heroicons-trash-20-solid',
+      click: () => {
+        isDeleteModalOpen.value = true;
+        deletingRowIdentity.value = { name: row.invoiceNumber, id: row.id };
       },
-    ],
-    [
-      {
-        label: 'Details',
-        icon: 'i-heroicons-document-magnifying-glass',
-        click: () => openBill(row.id),
-      },
-    ],
-    [
-      {
-        label: 'Edit',
-        icon: 'i-heroicons-pencil-square-20-solid',
-        click: () => router.push(`./edit/${row.id}`),
-      },
-    ],
-    [
-      {
-        label: 'Delete',
-        icon: 'i-heroicons-trash-20-solid',
-        click: () => {
-          isDeleteModalOpen.value = true;
-          deletingRowIdentity.value = { name: row.invoiceNumber, id: row.id };
-        },
-      },
-    ],
-  ];
-};
+    },
+  ],
+];
 
 
 // Filters
@@ -298,6 +284,7 @@ const fetchSales = async () => {
         pageCount: Number(pageCount.value),
         sortColumn: sort.value.column,
         sortDirection: sort.value.direction,
+        excludeMarkit: true,
       },
     })
 
@@ -381,22 +368,20 @@ watch(
     selectedColumnKeys,
   ],
   () => {
-    if (!process.client) return
-    localStorage.setItem(
-      SALES_TABLE_STATE_KEY,
-      JSON.stringify({
-        search: search.value,
-        selectedStatus: selectedStatus.value,
-        selectedPaymentMethods: selectedPaymentMethods.value,
-        minGrandTotal: minGrandTotal.value,
-        maxGrandTotal: maxGrandTotal.value,
-        selectedDate: selectedDate.value,
-        page: page.value,
-        pageCount: pageCount.value,
-        sort: sort.value,
-        selectedColumnKeys: selectedColumnKeys.value,
-      })
-    )
+    salesTableStore.$patch({
+      search: search.value,
+      selectedStatus: selectedStatus.value,
+      selectedPaymentMethods: selectedPaymentMethods.value,
+      minGrandTotal: minGrandTotal.value,
+      maxGrandTotal: maxGrandTotal.value,
+      selectedDate: selectedDate.value
+        ? { start: selectedDate.value.start.toISOString(), end: selectedDate.value.end.toISOString() }
+        : null,
+      page: page.value,
+      pageCount: pageCount.value,
+      sort: sort.value,
+      selectedColumnKeys: selectedColumnKeys.value,
+    })
   },
   { deep: true }
 )
@@ -420,35 +405,28 @@ const applyFilters = async () => {
 }
 
 onMounted(() => {
-  if (process.client) {
-    const raw = localStorage.getItem(SALES_TABLE_STATE_KEY)
-    if (raw) {
-      try {
-        const saved = JSON.parse(raw)
-        search.value = saved.search ?? ''
-        selectedStatus.value = saved.selectedStatus ?? []
-        selectedPaymentMethods.value = saved.selectedPaymentMethods ?? []
-        minGrandTotal.value = saved.minGrandTotal ?? null
-        maxGrandTotal.value = saved.maxGrandTotal ?? null
-        if (saved.selectedDate?.start && saved.selectedDate?.end) {
-          selectedDate.value = {
-            start: new Date(saved.selectedDate.start),
-            end: new Date(saved.selectedDate.end),
-          }
-        }
-        page.value = Number(saved.page || 1)
-        pageCount.value = String(saved.pageCount || '5')
-        if (saved.sort?.column && saved.sort?.direction) {
-          sort.value = saved.sort
-        }
-        if (Array.isArray(saved.selectedColumnKeys)) {
-          selectedColumns.value = columns.value.filter((c: any) =>
-            saved.selectedColumnKeys.includes(c.key)
-          )
-        }
-      } catch (e) {
-        console.warn('Failed to parse sales table state', e)
+  {
+    const saved = salesTableStore
+    search.value = saved.search ?? ''
+    selectedStatus.value = saved.selectedStatus ?? []
+    selectedPaymentMethods.value = saved.selectedPaymentMethods ?? []
+    minGrandTotal.value = saved.minGrandTotal ?? null
+    maxGrandTotal.value = saved.maxGrandTotal ?? null
+    if (saved.selectedDate?.start && saved.selectedDate?.end) {
+      selectedDate.value = {
+        start: new Date(saved.selectedDate.start),
+        end: new Date(saved.selectedDate.end),
       }
+    }
+    page.value = Number(saved.page || 1)
+    pageCount.value = String(saved.pageCount || '5')
+    if (saved.sort?.column && saved.sort?.direction) {
+      sort.value = saved.sort
+    }
+    if (Array.isArray(saved.selectedColumnKeys) && saved.selectedColumnKeys.length > 0) {
+      selectedColumns.value = columns.value.filter((c: any) =>
+        saved.selectedColumnKeys.includes(c.key)
+      )
     }
   }
 
@@ -492,6 +470,7 @@ const fetchFilteredSalesForExport = async () => {
         pageCount: exportPageCount,
         sortColumn: sort.value.column,
         sortDirection: sort.value.direction,
+        excludeMarkit: true,
       },
     })
 

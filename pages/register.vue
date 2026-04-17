@@ -23,10 +23,15 @@ const state = reactive({
   confirmPassword: '',
   companyname: '',
   agree: false,
-  plan: ''
+  plan: '',
+  companyType: 'retail'
 });
 
 const plans = ['free','lite','pro']
+const companyTypes = [
+  { label: 'Retail', value: 'retail' },
+  { label: 'Service', value: 'service' },
+]
 
 onMounted(() => {
     state.plan = route.query.plan as string
@@ -78,7 +83,7 @@ async function onSubmit() {
       state.companyname,
       state.password.trim(),
       state.plan,
-      'buyer'
+      state.companyType
     );
     console.log(res);
     // Success logic here
@@ -242,6 +247,10 @@ const onVerifyOtp = async () => {
 
         <UFormGroup v-if="isEmailVerified" name="plan" label="Plan">
            <USelectMenu v-model="state.plan" :options="plans" />
+        </UFormGroup>
+
+        <UFormGroup v-if="isEmailVerified" name="companyType" label="Company Type">
+           <USelectMenu v-model="state.companyType" :options="companyTypes" value-attribute="value" option-attribute="label" />
         </UFormGroup>
 
         <UFormGroup v-if="isEmailVerified" name="agree">

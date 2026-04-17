@@ -36,7 +36,9 @@ export default defineEventHandler(async (event) => {
             + COALESCE(SUM(CASE WHEN sp.method = 'Card' THEN sp.amount ELSE 0 END), 0) AS card_sales,
 
           COALESCE(SUM(CASE WHEN b.payment_method = 'Credit' THEN b.grand_total ELSE 0 END), 0)
-            + COALESCE(SUM(CASE WHEN sp.method = 'Credit' THEN sp.amount ELSE 0 END), 0) AS credit_sales
+            + COALESCE(SUM(CASE WHEN sp.method = 'Credit' THEN sp.amount ELSE 0 END), 0) AS credit_sales,
+
+          COALESCE(SUM(b.commission), 0) AS total_commission
         FROM bills b
         LEFT JOIN LATERAL (
             SELECT 
@@ -120,6 +122,7 @@ export default defineEventHandler(async (event) => {
 
     return {
       totalSales: Number(sales.total_sales),
+      totalCommission: Number(sales.total_commission),
       salesByPaymentMethod: {
         Cash: cashSales,
         UPI: upiSales,
@@ -128,7 +131,7 @@ export default defineEventHandler(async (event) => {
       },
       revenueByCategory,
       categorySales,
-      billCount: Number(billCount) // ✅ Added bill count to response
+      billCount: Number(billCount),
     };
   } finally {
     client.release();

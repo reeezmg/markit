@@ -31,6 +31,36 @@ enum UserRole {
 enum CompanyType {
     seller
     buyer
+    retail
+    service
+}
+
+enum QuoteStatus {
+    DRAFT
+    SENT
+    ACCEPTED
+    DECLINED
+    EXPIRED
+}
+
+enum BillingMethod {
+    FIXED_COST
+    HOURLY
+    TASK_BASED
+}
+
+enum ProjectStatus {
+    ACTIVE
+    COMPLETED
+    ON_HOLD
+    CANCELLED
+}
+
+enum SalesOrderStatus {
+    DRAFT
+    CONFIRMED
+    CLOSED
+    CANCELLED
 }
 
 enum paymentType {
@@ -98,6 +128,8 @@ model DistributorCompany {
     distributorCredits DistributorCredit[]
     purchaseOrders   PurchaseOrder[]
     purchaseReturns  PurchaseReturn[]
+    openingDue      Float?    @default(0) @map("opening_due")
+    openingDueDate  DateTime? @map("opening_due_date")
     @@id([distributorId, companyId])
     @@allow('read,create, update, delete', auth() != null )
     @@map('distributor_companies')
@@ -119,6 +151,10 @@ model Company extends Base {
     billCounter Int @default(1) @map("bill_counter")
     purchaseCounter Int @default(1) @map("purchase_counter")
     returnCounter Int @default(1) @map("return_counter")
+    quoteCounter Int @default(1) @map("quote_counter")
+    salesOrderCounter Int @default(1) @map("sales_order_counter")
+    invoiceCounter Int @default(1) @map("invoice_counter")
+    paymentCounter Int @default(1) @map("payment_counter")
     userCodeCounter  Int   @default(1) @map("user_code_counter")
     isTaxIncluded Boolean @default(true) @map("is_tax_included")
     isCostIncluded Boolean @default(true) @map("is_cost_included")
@@ -165,6 +201,9 @@ model Company extends Base {
     purchaseOrders         PurchaseOrder[]
     items           Item[]
     trybuys             Trynbuy[] @relation("try_n_buy_company")
+    quotes              Quote[]
+    projects            Project[]
+    salesOrders         SalesOrder[]
     status      Boolean       @default(true)
     type        CompanyType
     pipeline    Pipeline?
@@ -193,7 +232,13 @@ model Company extends Base {
     AccountTransfers AccountTransfer[]
 
     commissionRate Float? @map("commission_rate")
-    
+    storeWaitingTimes TrynbuyStoreWaitingTime[]
+    deliveryPartnerStepEvents DeliveryPartnerStepEvent[]
+    aiChats AiChat[]
+    aiMemories AiMemory[]
+    statementBatches StatementBatch[]
+    statementMappings StatementMapping[]
+
     @@allow('create', auth() != null && status)
     @@allow('update', users?[userId == auth().id])
     @@allow('read', true)
@@ -376,6 +421,9 @@ model User extends Base {
     image       String?
     cleanup     Boolean       @default(false) @map("cleanup")
     cleanupCode String?       @map("cleanup_code")
+    aiChats     AiChat[]
+    aiMemories  AiMemory[]
+    statementBatches StatementBatch[]
     // everybody can signup
     @@allow('create', true)
     @@allow('update', id == auth().id)
@@ -406,8 +454,12 @@ model Client extends Base {
     otp        String?
     otpExpiry  DateTime? @map("otp_expiry")
     trynbuys           Trynbuy[]
-    coupons   CouponClient[]  
+    coupons   CouponClient[]
     couponUsage      CouponUsage[]
+    quotes    Quote[]
+    projects  Project[]
+    salesOrders SalesOrder[]
+    payments  Payment[]
     deleted       Boolean   @default(false)
     @@allow('read, create, update, delete', true)
 
@@ -451,6 +503,7 @@ model DeliveryPartner extends Base {
   dispatchAttempts  DispatchAttempt[]
   dispatchAssignments DispatchAssignment[]
   deliveryPartnerEarnings DeliveryPartnerEarnings[] 
+  deliveryPartnerStepEvents DeliveryPartnerStepEvent[]
   deliveryPartnerWalletTransactions DeliveryPartnerWalletTransaction[]
   deliveryPartnerPayouts DeliveryPartnerPayout[]
 
@@ -471,6 +524,8 @@ model     Trynbuy {
   shipping        Float?        @map("shipping")
   waitingFee      Float?        @map("waiting_fee")
   waitingTime     Float?        @map("waiting_time")
+  storeWaitingTime Float?       @map("store_waiting_time")
+  waitingStartedAt DateTime?    @map("waiting_started_at")
   deliveryType    String       @map("delivery_type")
   deliveryTime    DateTime?    @map("delivery_time")
   orderStatus     String?      @default("ORDER_RECEIVED") @map("order_status") 
@@ -484,6 +539,7 @@ model     Trynbuy {
 
   companyLocations Address[]  @relation("try_n_buy_company_locations")
   deliveryPartnerEarnings DeliveryPartnerEarnings?
+  deliveryPartnerStepEvents DeliveryPartnerStepEvent[]
 
   company        Company[]     @relation("try_n_buy_company")
 
@@ -495,14 +551,31 @@ model     Trynbuy {
   dispatchAssignment DispatchAssignment?
 
   packingStatus   String?      @map("packing_status")
+  deliveryOtp     String?      @map("delivery_otp")
+  pickupOtps      Json?        @map("pickup_otps")
 
   deliveryPartnerWalletTransaction DeliveryPartnerWalletTransaction[]
+  storeWaitingTimes TrynbuyStoreWaitingTime[]
 
-  
-
-  @@index([clientId])    
+  @@index([clientId])
   @@allow("create, read, update, delete", true)
   @@map("trynbuys")
+}
+
+model TrynbuyStoreWaitingTime {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now()) @map("created_at")
+  minutes   Float
+
+  trynbuy   Trynbuy @relation(fields: [trynbuyId], references: [id])
+  trynbuyId String  @map("trynbuy_id")
+
+  company   Company @relation(fields: [companyId], references: [id])
+  companyId String  @map("company_id")
+
+  @@index([trynbuyId])
+  @@allow("read, create, update, delete", true)
+  @@map("trynbuy_store_waiting_times")
 }
 
 model DispatchAttempt extends Base {
@@ -556,6 +629,28 @@ model DeliveryPartnerEarnings extends Base {
 
   @@allow("read, create, update, delete", true)
   @@map("delivery_partner_earnings")
+}
+
+model DeliveryPartnerStepEvent extends Base {
+  createdAt DateTime @default(now()) @map("created_at")
+  step      String
+  action    String
+  meta      Json?
+
+  trynbuy   Trynbuy  @relation(fields: [trynbuyId], references: [id])
+  trynbuyId String   @map("trynbuy_id")
+
+  deliveryPartner   DeliveryPartner? @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId String?          @map("delivery_partner_id")
+
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId String?  @map("company_id")
+
+  @@index([trynbuyId])
+  @@index([deliveryPartnerId])
+  @@index([companyId])
+  @@allow("read, create, update, delete", true)
+  @@map("delivery_partner_step_events")
 }
 
 model DeliveryPartnerWalletTransaction extends Base {
@@ -878,13 +973,15 @@ model Variant {
     writeId           String?            @default(uuid()) @map('write_id')
     cartItems       TrynbuyCartItem[]
     returnedItems   TrynbuyReturnedItem[]
-  
+    quoteItems      QuoteItem[]
+    salesOrderItems SalesOrderItem[]
+
     @@index([productId])
     @@index([companyId])
     @@allow('read', true)
     @@allow('update', true)
     @@allow('read, create, update, delete', product.company.users?[userId == auth().id])
-    
+
     @@map('variants')
 }
 
@@ -949,6 +1046,7 @@ model Bill extends Base {
     handlingFee    Float? @map("handling_fee")
     waitingFee    Float? @map("waiting_fee")
     deliveryFee   Float? @map("delivery_fee")
+    commission    Float? @map("commission")
 
     userId          String? @map("user_id")
     companyUser     CompanyUser? @relation(fields: [companyId, userId], references: [companyId, userId])
@@ -960,6 +1058,23 @@ model Bill extends Base {
     isMarkit        Boolean            @default(false) @map('is_markit')
     deliveryPartnerWalletTransactions DeliveryPartnerWalletTransaction[]
     precedence      Boolean?           @default(false)
+
+    payments        Payment[]
+
+    // ─── Service invoice fields ───
+    invoiceCode         String?     @map("invoice_code")
+    dueDate             DateTime?   @map("due_date")
+    invoicePaymentTerms String?     @map("invoice_payment_terms")
+    salesperson         String?
+    subject             String?
+    termsAndConditions  String?     @map("terms_and_conditions")
+    balanceDue          Float?      @default(0) @map("balance_due")
+    discountType        String?     @default("amount") @map("discount_type")
+    adjustment          Float?      @default(0)
+    salesOrder          SalesOrder? @relation(fields: [salesOrderId], references: [id])
+    salesOrderId        String?     @map("sales_order_id")
+    project             Project?    @relation(fields: [projectId], references: [id])
+    projectId           String?     @map("project_id")
 
     @@index([companyId, createdAt, deleted])
     @@allow("create, read, update, delete", true)
@@ -1099,7 +1214,21 @@ model Payment extends Base {
     createdAt        DateTime @default(now()) @map("created_at")
     updatedAt        DateTime @updatedAt @map("updated_at")
     company         Company @relation(fields: [companyId], references: [id],onDelete:Cascade)
-    companyId       String @map("company_id")   
+    companyId       String @map("company_id")
+
+    // ─── Service payment received fields ───
+    paymentNumber       Int?        @map("payment_number")
+    referenceNumber     String?     @map("reference_number")
+    bankCharges         Float?      @default(0) @map("bank_charges")
+    depositTo           String?     @map("deposit_to")
+    taxDeducted         String?     @default("none") @map("tax_deducted")
+    notes               String?
+    unusedAmount        Float?      @default(0) @map("unused_amount")
+    deleted             Boolean     @default(false)
+    client              Client?     @relation(fields: [clientId], references: [id])
+    clientId            String?     @map("client_id")
+    bill                Bill?       @relation(fields: [billId], references: [id])
+    billId              String?     @map("bill_id")
 
     @@allow("create, read, update, delete", true)
     @@map("payments")
@@ -1188,7 +1317,8 @@ model CompanyUser {
     entries     Entry[]
     bills       Bill[]
     expense    Expense[]
-    investment Investment[] 
+    investment Investment[]
+    projectUsers ProjectUser[]
     @@id([companyId, userId])
 
     @@allow('read,create, update, delete', auth() != null )
@@ -1499,6 +1629,8 @@ model BankAccount {
   upiId String?   @map("upi_id")
   openingBalance Decimal? @db.Decimal(12,2) @default(0) @map("opening_balance")
 
+  statementBatches StatementBatch[]
+
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -1535,4 +1667,264 @@ model AccountTransfer {
   @@index([companyId])
     @@allow('read, create, update, delete', true)
   @@map("account_transfers")
+}
+
+// ─── AI Chat ────────────────────────────────────────────────────────────────
+
+model AiChat extends Base {
+    title           String        @default("New Chat")
+    companyId       String        @map("company_id")
+    company         Company       @relation(fields: [companyId], references: [id])
+    userId          String        @map("user_id")
+    user            User          @relation(fields: [userId], references: [id])
+    aiMessages      AiChatMessage[]
+    createdAt       DateTime      @default(now()) @map("created_at")
+    updatedAt       DateTime      @updatedAt @map("updated_at")
+
+    @@index([companyId])
+    @@allow('create, read, update, delete', auth() != null)
+    @@map("ai_chats")
+}
+
+model AiChatMessage extends Base {
+    chatId          String        @map("chat_id")
+    chat            AiChat        @relation(fields: [chatId], references: [id], onDelete: Cascade)
+    role            String        // 'user' | 'assistant'
+    content         String
+    toolCalls       Json?         @map("tool_calls")  // ToolCallRecord[] stored as JSON
+    attachments     Json?         // [{type, url, name, size, duration, mimeType}]
+    createdAt       DateTime      @default(now()) @map("created_at")
+
+    @@index([chatId])
+    @@allow('create, read, update, delete', auth() != null)
+    @@map("ai_chat_messages")
+}
+
+model AiMemory extends Base {
+    companyId       String        @map("company_id")
+    company         Company       @relation(fields: [companyId], references: [id])
+    userId          String        @map("user_id")
+    user            User          @relation(fields: [userId], references: [id])
+    content         String
+    category        String?       // preference | instruction | workflow | correction
+    createdAt       DateTime      @default(now()) @map("created_at")
+
+    @@index([companyId, userId])
+    @@allow('create, read, update, delete', auth() != null)
+    @@map("ai_memories")
+}
+
+model StatementBatch extends Base {
+    companyId       String        @map("company_id")
+    company         Company       @relation(fields: [companyId], references: [id])
+    userId          String        @map("user_id")
+    user            User          @relation(fields: [userId], references: [id])
+    chatId          String?       @map("chat_id")
+    sourceFileName  String?       @map("source_file_name")
+    bankAccountId   String?       @map("bank_account_id")
+    bankAccount     BankAccount?  @relation(fields: [bankAccountId], references: [id])
+    status          String        @default("PENDING")
+    rows            StatementRow[]
+    createdAt       DateTime      @default(now()) @map("created_at")
+
+    @@index([companyId])
+    @@allow('create, read, update, delete', auth() != null)
+    @@map("statement_batches")
+}
+
+model StatementRow extends Base {
+    batchId         String        @map("batch_id")
+    batch           StatementBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+    sno             Int           @map("s_no")
+    date            String
+    description     String
+    debit           Float?
+    credit          Float?
+    balance         Float?
+    operation       String?
+    operationMeta   Json?         @map("operation_meta")
+    operationLabel  String?       @map("operation_label")
+    executed        Boolean       @default(false)
+    executionResult Json?         @map("execution_result")
+    userInput       String?       @map("user_input")
+
+    @@index([batchId])
+    @@allow('create, read, update, delete', auth() != null)
+    @@map("statement_rows")
+}
+
+model StatementMapping extends Base {
+    companyId       String        @map("company_id")
+    company         Company       @relation(fields: [companyId], references: [id])
+    remarks         String
+    operation       String
+    operationMeta   Json?         @map("operation_meta")
+    operationLabel  String?       @map("operation_label")
+    userInput       String?       @map("user_input")
+    createdAt       DateTime      @default(now()) @map("created_at")
+
+    @@index([companyId])
+    @@allow('create, read, update, delete', auth() != null)
+    @@map("statement_mappings")
+}
+
+model Quote extends Base {
+    quoteNumber         String      @map("quote_number")
+    referenceNumber     String?     @map("reference_number")
+    quoteDate           DateTime    @map("quote_date")
+    expiryDate          DateTime?   @map("expiry_date")
+    subject             String?
+    status              QuoteStatus @default(DRAFT)
+    notes               String?
+    termsAndConditions  String?     @map("terms_and_conditions")
+    discount            Float?      @default(0)
+    discountType        String?     @default("amount") @map("discount_type")
+    adjustment          Float?      @default(0)
+    subTotal            Float       @default(0) @map("sub_total")
+    total               Float       @default(0)
+    salesperson         String?
+    attachments         String[]
+    pdfTemplate         String?     @map("pdf_template")
+
+    company             Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId           String      @map("company_id")
+    client              Client?     @relation(fields: [clientId], references: [id])
+    clientId            String?     @map("client_id")
+    project             Project?    @relation(fields: [projectId], references: [id])
+    projectId           String?     @map("project_id")
+    items               QuoteItem[]
+    deleted             Boolean     @default(false)
+
+    @@index([companyId])
+    @@allow('read, create, update, delete', true)
+    @@map("quotes")
+}
+
+model QuoteItem extends Base {
+    serialNo    Int      @map("serial_no")
+    name        String?
+    description String?
+    quantity    Float    @default(1)
+    rate        Float    @default(0)
+    amount      Float    @default(0)
+    unit        String?
+
+    quote       Quote    @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+    quoteId     String   @map("quote_id")
+    variant     Variant? @relation(fields: [variantId], references: [id])
+    variantId   String?  @map("variant_id")
+
+    @@index([quoteId])
+    @@allow('read, create, update, delete', true)
+    @@map("quote_items")
+}
+
+model Project extends Base {
+    name              String
+    code              String?
+    description       String?
+    status            ProjectStatus  @default(ACTIVE)
+    billingMethod     BillingMethod  @default(FIXED_COST) @map("billing_method")
+    rate              Float          @default(0)
+    costBudget        Float?         @default(0)  @map("cost_budget")
+    revenueBudget     Float?         @default(0)  @map("revenue_budget")
+    totalCost         Float          @default(0)  @map("total_cost")
+    unbilledAmount    Float          @default(0)  @map("unbilled_amount")
+    billedAmount      Float          @default(0)  @map("billed_amount")
+    dashboardWatch    Boolean        @default(true) @map("dashboard_watch")
+
+    company           Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId         String      @map("company_id")
+    client            Client?     @relation(fields: [clientId], references: [id])
+    clientId          String?     @map("client_id")
+    users             ProjectUser[]
+    tasks             ProjectTask[]
+    quotes            Quote[]
+    salesOrders       SalesOrder[]
+    invoices          Bill[]
+    deleted           Boolean     @default(false)
+
+    @@index([companyId])
+    @@allow('read, create, update, delete', true)
+    @@map("projects")
+}
+
+model ProjectUser extends Base {
+    project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    projectId   String       @map("project_id")
+    user        CompanyUser  @relation(fields: [companyId, userId], references: [companyId, userId])
+    companyId   String       @map("company_id")
+    userId      String       @map("user_id")
+    role        String       @default("member")
+
+    @@unique([projectId, userId])
+    @@allow('read, create, update, delete', true)
+    @@map("project_users")
+}
+
+model ProjectTask extends Base {
+    name        String
+    description String?
+    billable    Boolean  @default(true)
+
+    project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+    projectId   String   @map("project_id")
+
+    @@index([projectId])
+    @@allow('read, create, update, delete', true)
+    @@map("project_tasks")
+}
+
+model SalesOrder extends Base {
+    orderNumber         String      @map("order_number")
+    referenceNumber     String?     @map("reference_number")
+    orderDate           DateTime    @map("order_date")
+    expectedShipmentDate DateTime?  @map("expected_shipment_date")
+    paymentTerms        String?     @map("payment_terms")
+    deliveryMethod      String?     @map("delivery_method")
+    salesperson         String?
+    status              SalesOrderStatus @default(DRAFT)
+    invoiced            Boolean     @default(false)
+    paymentStatus       String?     @default("UNPAID") @map("payment_status")
+    notes               String?
+    termsAndConditions  String?     @map("terms_and_conditions")
+    discount            Float?      @default(0)
+    discountType        String?     @default("amount") @map("discount_type")
+    adjustment          Float?      @default(0)
+    subTotal            Float       @default(0) @map("sub_total")
+    total               Float       @default(0)
+    attachments         String[]
+    deleted             Boolean     @default(false)
+
+    company             Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId           String      @map("company_id")
+    client              Client?     @relation(fields: [clientId], references: [id])
+    clientId            String?     @map("client_id")
+    project             Project?    @relation(fields: [projectId], references: [id])
+    projectId           String?     @map("project_id")
+    items               SalesOrderItem[]
+    invoices            Bill[]
+
+    @@index([companyId])
+    @@allow('read, create, update, delete', true)
+    @@map("sales_orders")
+}
+
+model SalesOrderItem extends Base {
+    serialNo    Int      @map("serial_no")
+    name        String?
+    description String?
+    quantity    Float    @default(1)
+    rate        Float    @default(0)
+    amount      Float    @default(0)
+    unit        String?
+
+    salesOrder  SalesOrder @relation(fields: [salesOrderId], references: [id], onDelete: Cascade)
+    salesOrderId String   @map("sales_order_id")
+    variant     Variant?  @relation(fields: [variantId], references: [id])
+    variantId   String?   @map("variant_id")
+
+    @@index([salesOrderId])
+    @@allow('read, create, update, delete', true)
+    @@map("sales_order_items")
 }

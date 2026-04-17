@@ -1,0 +1,16 @@
+{
+  "mcpServers": {
+    "markit": {
+      "command": "node",
+      "args": ["D:\\WORK\\markit-v1\\mcp\\dist\\index.js"],
+      "env": {
+        "DATABASE_URL": "postgresql://neondb_owner:npg_gHeLu8s2adzi@ep-orange-night-a1hei8bh-pooler.ap-southeast-1.aws.neon.tech/neondb?sslmode=require",
+        "COMPANY_ID": "6980e6e4-7d5d-413c-9554-24f385c9b853"
+      }
+    },
+    "test-mcp": {
+      "command": "node",
+      "args": ["D:\\WORK\\markit-v1\\test-mcp\\dist\\index.js"]
+    }
+  }
+}

@@ -1,58 +1,22 @@
-import { Client } from '@modelcontextprotocol/sdk/client/index.js'
-import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
-import path from 'path'
+// @ts-ignore — markit-mcp is a file: dependency pointing to ../mcp
+import { allTools, callTool } from 'markit-mcp'
 
-let _client: Client | null = null
-
-export async function getMcpClient(): Promise<Client> {
-  if (_client) return _client
-
-  const mcpServerPath =
-    process.env.MCP_SERVER_PATH ??
-    path.resolve(process.cwd(), '../mcp/dist/index.js')
-
-  const transport = new StdioClientTransport({
-    command: 'node',
-    args: [mcpServerPath],
-    env: {
-      ...Object.fromEntries(
-        Object.entries(process.env).filter(([, v]) => v !== undefined) as [string, string][]
-      ),
-      COMPANY_ID: '_bridge_', // overridden per-call via tool args
-    },
-  })
-
-  _client = new Client({ name: 'markit-chatbox', version: '1.0.0' }, { capabilities: {} })
-
-  try {
-    await _client.connect(transport)
-  } catch (err) {
-    _client = null
-    throw err
-  }
-
-  return _client
+export async function getMcpClient(): Promise<null> {
+  return null
 }
 
-export async function listMcpTools(client: Client) {
-  const result = await client.listTools()
-  return result.tools
+export async function listMcpTools(_client?: any) {
+  return allTools.map((t: any) => ({
+    name: t.name,
+    description: t.description ?? '',
+    inputSchema: t.inputSchema,
+  }))
 }
 
 export async function callMcpTool(
-  client: Client,
+  _client: any,
   name: string,
   args: Record<string, unknown>
 ): Promise<unknown> {
-  const result = await client.callTool({ name, arguments: args })
-  // MCP returns content array — extract the text
-  const content = (result.content as Array<{ type: string; text?: string }>)[0]
-  if (content?.type === 'text' && content.text) {
-    try {
-      return JSON.parse(content.text)
-    } catch {
-      return content.text
-    }
-  }
-  return result.content
+  return callTool(name, args)
 }

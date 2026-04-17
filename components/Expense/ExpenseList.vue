@@ -14,7 +14,7 @@ import { startOfDay, endOfDay } from 'date-fns'
 const emit = defineEmits(['edit','delete','open','values']);
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast()
-const EXPENSE_TABLE_STATE_KEY = 'erp_expense_table_state_v1'
+const expenseTableStore = useExpenseTableStore()
 const UpdateManyExpense = useUpdateManyExpense({ optimisticUpdate: true });
 const selectedRows = ref([]);
 const selectedStatus = ref([]);
@@ -276,7 +276,6 @@ const totalAmount = computed(() => {
 watch(
   [pageTotal, totalAmount],
   ([newPageTotal, newTotalAmount]) => {
-    console.log(sales.value)
     emit('values', {
       pageTotal: newPageTotal,
       totalAmount: newTotalAmount,
@@ -341,11 +340,6 @@ const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => 
 
 
 
-watchEffect(() => {
-    console.log(sales.value);
-    console.log(pageTotal.value);
-
-});
 
 const resetFilters = () => {
     search.value = '';
@@ -419,60 +413,48 @@ watch(
     selectedColumnKeys,
   ],
   () => {
-    if (!process.client) return
-    localStorage.setItem(
-      EXPENSE_TABLE_STATE_KEY,
-      JSON.stringify({
-        search: search.value,
-        selectedStatus: selectedStatus.value,
-        selectedCategory: selectedCategory.value,
-        selectedUsers: selectedUsers.value,
-        selectedPaymentMode: selectedPaymentMode.value,
-        minAmount: minAmount.value,
-        maxAmount: maxAmount.value,
-        selectedDate: selectedDate.value,
-        page: page.value,
-        pageCount: pageCount.value,
-        sort: sort.value,
-        selectedColumnKeys: selectedColumnKeys.value,
-      })
-    )
+    expenseTableStore.$patch({
+      search: search.value,
+      selectedStatus: selectedStatus.value,
+      selectedCategory: selectedCategory.value,
+      selectedUsers: selectedUsers.value,
+      selectedPaymentMode: selectedPaymentMode.value,
+      minAmount: minAmount.value,
+      maxAmount: maxAmount.value,
+      selectedDate: { start: selectedDate.value.start.toISOString(), end: selectedDate.value.end.toISOString() },
+      page: page.value,
+      pageCount: pageCount.value,
+      sort: sort.value,
+      selectedColumnKeys: selectedColumnKeys.value,
+    })
   },
   { deep: true }
 )
 
 onMounted(() => {
-  if (!process.client) return
-  const raw = localStorage.getItem(EXPENSE_TABLE_STATE_KEY)
-  if (!raw) return
-
-  try {
-    const saved = JSON.parse(raw)
-    search.value = saved.search ?? ''
-    selectedStatus.value = saved.selectedStatus ?? []
-    selectedCategory.value = saved.selectedCategory ?? []
-    selectedUsers.value = saved.selectedUsers ?? []
-    selectedPaymentMode.value = saved.selectedPaymentMode ?? []
-    minAmount.value = saved.minAmount ?? null
-    maxAmount.value = saved.maxAmount ?? null
-    if (saved.selectedDate?.start && saved.selectedDate?.end) {
-      selectedDate.value = {
-        start: new Date(saved.selectedDate.start),
-        end: new Date(saved.selectedDate.end),
-      }
+  const s = expenseTableStore
+  search.value = s.search ?? ''
+  selectedStatus.value = s.selectedStatus ?? []
+  selectedCategory.value = s.selectedCategory ?? []
+  selectedUsers.value = s.selectedUsers ?? []
+  selectedPaymentMode.value = s.selectedPaymentMode ?? []
+  minAmount.value = s.minAmount ?? null
+  maxAmount.value = s.maxAmount ?? null
+  if (s.selectedDate?.start && s.selectedDate?.end) {
+    selectedDate.value = {
+      start: new Date(s.selectedDate.start),
+      end: new Date(s.selectedDate.end),
     }
-    page.value = Number(saved.page || 1)
-    pageCount.value = String(saved.pageCount || '10')
-    if (saved.sort?.column && saved.sort?.direction) {
-      sort.value = saved.sort
-    }
-    if (Array.isArray(saved.selectedColumnKeys)) {
-      selectedColumns.value = columns.filter((c: any) =>
-        saved.selectedColumnKeys.includes(c.key)
-      )
-    }
-  } catch (e) {
-    console.warn('Failed to parse expense table state', e)
+  }
+  page.value = Number(s.page || 1)
+  pageCount.value = String(s.pageCount || '10')
+  if (s.sort?.column && s.sort?.direction) {
+    sort.value = s.sort
+  }
+  if (Array.isArray(s.selectedColumnKeys) && s.selectedColumnKeys.length > 0) {
+    selectedColumns.value = columns.filter((c: any) =>
+      s.selectedColumnKeys.includes(c.key)
+    )
   }
 })
 

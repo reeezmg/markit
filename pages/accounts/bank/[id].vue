@@ -2,9 +2,12 @@
 import { ref, computed, watch } from 'vue'
 import { format, sub, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
+import { useFindManyStatementBatch } from '~/lib/hooks/statement-batch'
 
 const route = useRoute()
+const router = useRouter()
 const toast = useToast()
+const useAuth = () => useNuxtApp().$auth
 
 /* ---------------------------------------------------
    ROUTE PARAM
@@ -162,6 +165,91 @@ const formatCurrency = (v: number) =>
     style: 'currency',
     currency: 'INR',
   }).format(v ?? 0)
+
+/* ---------------------------------------------------
+   STATEMENT BATCHES
+--------------------------------------------------- */
+const statementQuery = computed(() => ({
+  where: {
+    companyId: useAuth().session.value?.companyId,
+    ...(bankId.value ? { bankAccountId: bankId.value } : {}),
+  },
+  orderBy: { createdAt: 'desc' as const },
+  take: 10,
+  select: {
+    id: true,
+    status: true,
+    sourceFileName: true,
+    createdAt: true,
+    _count: { select: { rows: true } },
+  },
+}))
+
+const { data: statementBatches, refetch: refetchBatches } = useFindManyStatementBatch(statementQuery)
+
+const goToStatement = (batchId: string) => {
+  router.push(`/statement/${batchId}?bankAccountId=${bankId.value || 'PRIMARY'}`)
+}
+
+/* ---------------------------------------------------
+   UPLOAD STATEMENT
+--------------------------------------------------- */
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const uploading = ref(false)
+
+function triggerFileUpload() {
+  fileInputRef.value?.click()
+}
+
+async function handleFileUpload(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+
+  const allowed = ['application/pdf', 'image/jpeg', 'image/png', 'image/webp']
+  if (!allowed.includes(file.type)) {
+    toast.add({ title: 'Unsupported file type', description: 'Please upload a PDF or image (JPG, PNG, WebP)', color: 'red' })
+    input.value = ''
+    return
+  }
+
+  uploading.value = true
+  try {
+    const base64 = await fileToBase64(file)
+    const result = await $fetch('/api/statement/upload', {
+      method: 'POST',
+      body: {
+        file: base64,
+        mimeType: file.type,
+        fileName: file.name,
+        bankAccountId: bankId.value || undefined,
+      },
+    })
+    toast.add({
+      title: `Extracted ${result.rowCount} rows (${result.matched} auto-matched)`,
+      color: 'green',
+    })
+    await refetchBatches()
+    router.push(`/statement/${result.batchId}?bankAccountId=${bankId.value || 'PRIMARY'}`)
+  } catch (err: any) {
+    toast.add({ title: 'Upload failed', color: 'red', description: err.data?.statusMessage || err.message })
+  } finally {
+    uploading.value = false
+    input.value = ''
+  }
+}
+
+function fileToBase64(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => {
+      const result = reader.result as string
+      resolve(result.split(',')[1]) // strip data:...;base64, prefix
+    }
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 </script>
 
 <template>
@@ -305,6 +393,73 @@ const formatCurrency = (v: number) =>
           </span>
         </div>
       </template>
+    </UCard>
+
+    <!-- STATEMENT BATCHES -->
+    <UCard
+      class="w-full mt-4"
+      :ui="{
+        divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+        header: { padding: 'px-4 py-4' },
+        body: { padding: '' },
+      }"
+    >
+      <template #header>
+        <div class="flex justify-between items-center">
+          <h2 class="font-semibold text-sm">Statement Processing</h2>
+          <input
+            ref="fileInputRef"
+            type="file"
+            accept=".pdf,image/jpeg,image/png,image/webp"
+            class="hidden"
+            @change="handleFileUpload"
+          />
+          <UButton
+            label="Upload Statement"
+            icon="i-heroicons-document-arrow-up"
+            size="sm"
+            color="primary"
+            variant="soft"
+            :loading="uploading"
+            @click="triggerFileUpload"
+          />
+        </div>
+      </template>
+
+      <div v-if="statementBatches?.length" class="divide-y divide-gray-200 dark:divide-gray-700">
+        <button
+          v-for="sb in statementBatches"
+          :key="sb.id"
+          class="w-full px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/40 transition-colors flex items-center justify-between gap-3"
+          @click="goToStatement(sb.id)"
+        >
+          <div class="flex items-center gap-3 min-w-0">
+            <UIcon
+              :name="sb.status === 'EXECUTED' ? 'i-heroicons-check-circle' : 'i-heroicons-clock'"
+              :class="sb.status === 'EXECUTED' ? 'text-green-500' : 'text-yellow-500'"
+            />
+            <div class="min-w-0">
+              <p class="text-sm truncate">{{ sb.sourceFileName || 'Statement' }}</p>
+              <p class="text-xs text-gray-500">
+                {{ format(new Date(sb.createdAt), 'dd MMM yyyy, hh:mm a') }}
+                · {{ sb._count?.rows ?? 0 }} rows
+              </p>
+            </div>
+          </div>
+          <UBadge
+            :color="sb.status === 'EXECUTED' ? 'green' : 'yellow'"
+            variant="subtle"
+            size="xs"
+          >
+            {{ sb.status }}
+          </UBadge>
+        </button>
+      </div>
+      <div v-else class="px-4 py-6 text-center text-sm text-gray-500">
+        <UIcon name="i-heroicons-document-text" class="text-2xl mb-2" />
+        <p>No statements processed yet.</p>
+        <p class="text-xs mt-1">Upload a bank statement PDF in the AI chat to get started.</p>
+      </div>
     </UCard>
   </UDashboardPanelContent>
 </template>

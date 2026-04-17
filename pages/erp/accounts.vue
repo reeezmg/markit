@@ -10,7 +10,7 @@ import {
     useCountAccount
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
-import { sub, format, isSameDay, type Duration } from 'date-fns'
+import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 const toast = useToast();
 const UpdateBill = useUpdateBill({ optimisticUpdate: true });
 const CreateAccount = useCreateAccount({ optimisticUpdate: true });
@@ -18,7 +18,7 @@ const UpdateAccount = useUpdateAccount({ optimisticUpdate: true });
 const DeleteAccount = useDeleteAccount({ optimisticUpdate: true });
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
-const ACCOUNTS_TABLE_STATE_KEY = 'erp_accounts_table_state_v1'
+const accountsTableStore = useAccountsTableStore()
 const isSavingAcc = ref(false);
 const isOpen = ref(false);
 const account = ref({
@@ -38,10 +38,27 @@ const isPaymentMethodModalOpen = ref(false)
 const paymentMethodForPaid = ref<'Cash' | 'UPI' | 'Card'>('Cash')
 const paymentMethodBillCtx = ref<{ id: string; billNo: string; row?: any } | null>(null)
 
-const selectedDate = ref({ 
-    start: new Date() , 
-    end: new Date() 
+const selectedDate = ref({
+    start: new Date() ,
+    end: new Date()
 });
+
+const ranges = [
+  { label: 'Last 7 days',   duration: { days: 7 } },
+  { label: 'Last 14 days',  duration: { days: 14 } },
+  { label: 'Last 30 days',  duration: { days: 30 } },
+  { label: 'Last 3 months', duration: { months: 3 } },
+  { label: 'Last 6 months', duration: { months: 6 } },
+  { label: 'Last year',     duration: { years: 1 } },
+]
+const isRangeSelected = (d: Duration) =>
+  isSameDay(selectedDate.value.start, sub(new Date(), d)) &&
+  isSameDay(selectedDate.value.end, new Date())
+const selectRange = (d: Duration) => {
+  selectedDate.value = { start: sub(new Date(), d), end: new Date() }
+}
+
+const isMobile = ref(false)
 
 // Columns
 const billColumns = [
@@ -82,30 +99,24 @@ const billColumns = [
     },
 ];
 
-// Columns
-const columns = ref([
-    {
-        key: 'name',
-        label: 'Name',
-        sortable: true,
-    },
-    {
-        key: 'phone',
-        label: 'Phone',
-        sortable: true,
-    },
-    {
-        key: 'pending',
-        label: 'Pending',
-        sortable: true,
-    },
-    {
-        key: 'actions',
-        label: 'Actions',
-        sortable: false,
-    },
-]);
-
+const desktopColumns = [
+  { key: 'name',    label: 'Name',    sortable: true  },
+  { key: 'phone',   label: 'Phone',   sortable: true  },
+  { key: 'pending', label: 'Pending', sortable: true  },
+  { key: 'actions', label: 'Actions', sortable: false },
+]
+const mobileColumns = [
+  { key: 'name',    label: 'Name',    sortable: true  },
+  { key: 'pending', label: 'Pending', sortable: true  },
+  { key: 'actions', label: 'Actions', sortable: false },
+]
+const allColumns = computed(() => isMobile.value ? mobileColumns : desktopColumns)
+const selectedColumns = ref([...desktopColumns])
+const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
+const columnsTable = computed(() =>
+  allColumns.value.filter(c => selectedColumns.value.some((s: any) => s.key === c.key))
+)
+watch(allColumns, cols => { selectedColumns.value = [...cols] })
 
 const action = (row:any) => [
     [
@@ -166,25 +177,26 @@ const status = [
     },
 ];
 
-const selectedColumns = ref([]);
-watch(columns, (newColumns) => {
-  selectedColumns.value = [...newColumns];
-}, { immediate: true });
-
-const columnsTable = computed(() =>
-  columns.value.filter((column) => selectedColumns.value.includes(column))
-);
-const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
-
 const notes = ref<any>({})
 
 const search = ref<string>('');
 const selectedStatus = ref<any>([]);
-const searchStatus = ref(undefined);
+const isFilterModalOpen = ref(false)
+const draftSelectedStatus = ref<any>([])
 
+const openFilterModal = () => {
+  draftSelectedStatus.value = [...selectedStatus.value]
+  isFilterModalOpen.value = true
+}
+const applyFilters = () => {
+  selectedStatus.value = [...draftSelectedStatus.value]
+  page.value = 1
+  isFilterModalOpen.value = false
+}
 const resetFilters = () => {
     search.value = '';
     selectedStatus.value = [];
+    selectedDate.value = { start: new Date(), end: new Date() };
 };
 
 
@@ -196,18 +208,19 @@ const page = ref(1);
 const pageCount = ref('5');
 
 const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
-  const statusFilters = selectedStatus.value?.length
-    ? {
-        bill: {
-          some: {
-            deleted: false,
-            paymentStatus: {
-              in: selectedStatus.value.map((s: any) => s.value),
-            },
-          },
-        },
-      }
-    : {};
+  const hasBillFilter = selectedStatus.value?.length ||
+    (selectedDate.value?.start && selectedDate.value?.end)
+
+  const billWhere: any = { deleted: false }
+  if (selectedStatus.value?.length) {
+    billWhere.paymentStatus = { in: selectedStatus.value.map((s: any) => s.value) }
+  }
+  if (selectedDate.value?.start && selectedDate.value?.end) {
+    billWhere.createdAt = {
+      gte: startOfDay(selectedDate.value.start),
+      lte: endOfDay(selectedDate.value.end),
+    }
+  }
 
   return {
     where: {
@@ -218,7 +231,7 @@ const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
           { phone: { contains: search.value, mode: 'insensitive' } },
         ],
       }),
-      ...statusFilters,
+      ...(hasBillFilter && { bill: { some: billWhere } }),
     },
     select: {
       id: true,
@@ -367,50 +380,42 @@ watch(
     selectedColumnKeys,
   ],
   () => {
-    if (!process.client) return
-    localStorage.setItem(
-      ACCOUNTS_TABLE_STATE_KEY,
-      JSON.stringify({
-        search: search.value,
-        selectedStatus: selectedStatus.value,
-        selectedDate: selectedDate.value,
-        page: page.value,
-        pageCount: pageCount.value,
-        sort: sort.value,
-        selectedColumnKeys: selectedColumnKeys.value,
-      })
-    )
+    accountsTableStore.$patch({
+      search: search.value,
+      selectedStatus: selectedStatus.value,
+      selectedDate: selectedDate.value
+        ? { start: new Date(selectedDate.value.start).toISOString(), end: new Date(selectedDate.value.end).toISOString() }
+        : null,
+      page: page.value,
+      pageCount: pageCount.value,
+      sort: sort.value,
+      selectedColumnKeys: selectedColumnKeys.value,
+    })
   },
   { deep: true }
 )
 
 onMounted(() => {
-  if (!process.client) return
-  const raw = localStorage.getItem(ACCOUNTS_TABLE_STATE_KEY)
-  if (!raw) return
-
-  try {
-    const saved = JSON.parse(raw)
-    search.value = saved.search ?? ''
-    selectedStatus.value = saved.selectedStatus ?? []
-    if (saved.selectedDate?.start && saved.selectedDate?.end) {
-      selectedDate.value = {
-        start: new Date(saved.selectedDate.start),
-        end: new Date(saved.selectedDate.end),
-      }
+  isMobile.value = window.innerWidth < 640
+  window.addEventListener('resize', () => { isMobile.value = window.innerWidth < 640 })
+  const saved = accountsTableStore
+  search.value = saved.search ?? ''
+  selectedStatus.value = saved.selectedStatus ?? []
+  if (saved.selectedDate?.start && saved.selectedDate?.end) {
+    selectedDate.value = {
+      start: new Date(saved.selectedDate.start),
+      end: new Date(saved.selectedDate.end),
     }
-    page.value = Number(saved.page || 1)
-    pageCount.value = String(saved.pageCount || '5')
-    if (saved.sort?.column && saved.sort?.direction) {
-      sort.value = saved.sort
-    }
-    if (Array.isArray(saved.selectedColumnKeys)) {
-      selectedColumns.value = columns.value.filter((c: any) =>
-        saved.selectedColumnKeys.includes(c.key)
-      )
-    }
-  } catch (e) {
-    console.warn('Failed to parse accounts table state', e)
+  }
+  page.value = Number(saved.page || 1)
+  pageCount.value = String(saved.pageCount || '5')
+  if (saved.sort?.column && saved.sort?.direction) {
+    sort.value = saved.sort
+  }
+  if (Array.isArray(saved.selectedColumnKeys) && saved.selectedColumnKeys.length > 0) {
+    selectedColumns.value = desktopColumns.filter((c: any) =>
+      saved.selectedColumnKeys.includes(c.key)
+    )
   }
 })
 
@@ -706,39 +711,28 @@ const deleteAccountRow = async () => {
         >
         <!-- Filters -->
             <template #header>
-            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
-                <div class="flex sm:flex-row flex-col gap-3 w-full sm:w-auto">
-                <div class="flex flex-row gap-3 w-full sm:w-auto">    
-                <UInput
-                    v-model="search"
-                    icon="i-heroicons-magnifying-glass-20-solid"
-                    type="text"
-                    placeholder="Search"
-                    class="w-full sm:w-40"
-                />
-                 <USelectMenu
-                    v-model="selectedStatus"
-                    :options="status"
-                    multiple
-                    placeholder="Status"
-                    class="w-full sm:w-40"
-                />
+            <div class="flex justify-between items-center gap-3 w-full flex-wrap">
+                <div class="flex items-center gap-3 flex-wrap">
+                  <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+                    <UButton icon="i-heroicons-calendar-days-20-solid" color="orange"  size="sm">
+                      {{ format(selectedDate.start, 'd MMM, yyyy') }} – {{ format(selectedDate.end, 'd MMM, yyyy') }}
+                    </UButton>
+                    <template #panel="{ close }">
+                      <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                        <div class="hidden sm:flex flex-col py-4">
+                          <UButton v-for="(r, i) in ranges" :key="i" :label="r.label" color="gray" variant="ghost"
+                            class="rounded-none px-6"
+                            :class="isRangeSelected(r.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'"
+                            truncate @click="selectRange(r.duration)" />
+                        </div>
+                        <DatePicker v-model="selectedDate" @close="close" />
+                      </div>
+                    </template>
+                  </UPopover>
+                  <UInput v-model="search" icon="i-heroicons-magnifying-glass-20-solid"
+                    placeholder="Search..." size="sm" class="w-full sm:w-48" />
                 </div>
-                </div>
-
-                
-                <!-- Right side: Buttons -->
-                <div class="flex flex-row gap-3 w-full sm:w-auto justify-end">
-                    <UButton
-                    icon="i-heroicons-plus"
-                    size="sm"
-                    color="primary"
-                    variant="solid"
-                    label="Add Account"
-                    class="w-full flex-1 sm:w-auto sm:flex-none"
-                    @click="isOpen = true"
-                    />
-                </div>   
+                <UButton icon="i-heroicons-plus" size="sm" color="primary" label="Add Account" @click="isOpen = true" />
             </div>
         </template>
 
@@ -756,36 +750,19 @@ const deleteAccountRow = async () => {
 
                 <div class="flex gap-1.5 items-center z-10">
 
-                    <USelectMenu
-                        v-model="selectedColumns"
-                        :options="columns"
-                        multiple
-                    >
-                        <UButton
-                            icon="i-heroicons-view-columns"
-                            color="gray"
-                            size="xs"
-                        >
-                            Columns
-                        </UButton>
+                    <USelectMenu v-model="selectedColumns" :options="allColumns" multiple>
+                        <UButton icon="i-heroicons-view-columns" color="gray" size="xs">Columns</UButton>
                     </USelectMenu>
 
-                    <UButton
-                        icon="i-heroicons-arrow-down-tray"
-                        color="gray"
-                        size="xs"
-                        @click="handleDownloadExcel"
-                    >
+                    <UButton icon="i-heroicons-arrow-down-tray" color="gray" size="xs" @click="handleDownloadExcel">
                         Download
                     </UButton>
 
-                    <UButton
-                        icon="i-heroicons-funnel"
-                        color="gray"
-                        size="xs"
-                        :disabled="search === '' && selectedStatus.length === 0"
-                        @click="resetFilters"
-                    >
+                    <UButton icon="i-heroicons-funnel" color="gray" size="xs" @click="openFilterModal">
+                        Filters
+                    </UButton>
+
+                    <UButton icon="i-heroicons-arrow-path" color="gray" size="xs" @click="resetFilters">
                         Reset
                     </UButton>
                 </div>
@@ -1039,5 +1016,19 @@ const deleteAccountRow = async () => {
         </template>
     </UDashboardModal>
 
+    <UModal v-model="isFilterModalOpen">
+      <UCard>
+        <template #header><div class="text-base font-semibold">Filters</div></template>
+        <div class="space-y-3">
+          <USelectMenu v-model="draftSelectedStatus" :options="status" multiple placeholder="Payment Status" />
+        </div>
+        <template #footer>
+          <div class="w-full flex justify-end gap-2">
+            <UButton color="gray" variant="ghost" @click="isFilterModalOpen = false">Cancel</UButton>
+            <UButton color="primary" @click="applyFilters">Apply</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
     </UDashboardPanelContent>
 </template>

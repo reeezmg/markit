@@ -16,7 +16,7 @@ import {
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
 
-const TABLE_STATE_KEY = 'transfer_list_table_state_v1'
+const transferTableStore = useTransferTableStore()
 const isMobile = ref(false)
 
 /* ---------------------------------------------------
@@ -377,8 +377,7 @@ watch(
   [search, minAmount, maxAmount, fromTypeFilter, toTypeFilter, page, pageCount, sort, selectedColumnKeys,
    () => selectedDate.value.start, () => selectedDate.value.end],
   () => {
-    if (!process.client) return
-    localStorage.setItem(TABLE_STATE_KEY, JSON.stringify({
+    transferTableStore.$patch({
       search: search.value,
       minAmount: minAmount.value,
       maxAmount: maxAmount.value,
@@ -392,7 +391,7 @@ watch(
         end: selectedDate.value.end.toISOString(),
       },
       selectedColumnKeys: selectedColumnKeys.value,
-    }))
+    })
   },
   { deep: true }
 )
@@ -400,25 +399,20 @@ watch(
 onMounted(() => {
   isMobile.value = window.innerWidth < 640
   window.addEventListener('resize', () => { isMobile.value = window.innerWidth < 640 })
-  if (process.client) {
-    const raw = localStorage.getItem(TABLE_STATE_KEY)
-    if (raw) {
-      try {
-        const s = JSON.parse(raw)
-        search.value         = s.search         ?? ''
-        minAmount.value      = s.minAmount       ?? null
-        maxAmount.value      = s.maxAmount       ?? null
-        fromTypeFilter.value = s.fromTypeFilter  ?? null
-        toTypeFilter.value   = s.toTypeFilter    ?? null
-        page.value           = Number(s.page || 1)
-        pageCount.value      = String(s.pageCount || '10')
-        if (s.sort?.column) sort.value = s.sort
-        if (s.selectedDate?.start && s.selectedDate?.end)
-          selectedDate.value = { start: startOfDay(new Date(s.selectedDate.start)), end: endOfDay(new Date(s.selectedDate.end)) }
-        if (Array.isArray(s.selectedColumnKeys))
-          selectedColumns.value = desktopColumns.filter(c => s.selectedColumnKeys.includes(c.key))
-      } catch { /* ignore */ }
-    }
+  {
+    const s = transferTableStore
+    search.value         = s.search         ?? ''
+    minAmount.value      = s.minAmount       ?? null
+    maxAmount.value      = s.maxAmount       ?? null
+    fromTypeFilter.value = s.fromTypeFilter  ?? null
+    toTypeFilter.value   = s.toTypeFilter    ?? null
+    page.value           = Number(s.page || 1)
+    pageCount.value      = String(s.pageCount || '10')
+    if (s.sort?.column) sort.value = s.sort
+    if (s.selectedDate?.start && s.selectedDate?.end)
+      selectedDate.value = { start: startOfDay(new Date(s.selectedDate.start)), end: endOfDay(new Date(s.selectedDate.end)) }
+    if (Array.isArray(s.selectedColumnKeys) && s.selectedColumnKeys.length > 0)
+      selectedColumns.value = desktopColumns.filter(c => s.selectedColumnKeys.includes(c.key))
   }
 })
 </script>

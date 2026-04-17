@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
     })
   }
 
+  const cleanup = (session.data as any).cleanup ?? false
   const query = getQuery(event)
 
 const startDate = query.startDate ? new Date(query.startDate as string) : undefined
@@ -18,15 +19,16 @@ const endDate = query.endDate ? new Date(query.endDate as string) : undefined
   const entries = await prisma.entry.findMany({
     where: {
       companyId: session.data.companyId,
-      ...(startDate && endDate && {
-        bill: {
+      bill: {
+        deleted: false,
+        ...(!cleanup && { precedence: { not: true } }),
+        ...(startDate && endDate && {
           createdAt: {
             gte: new Date(startDate),
-           lte: new Date(endDate)
+            lte: new Date(endDate)
           },
-          deleted:false
-        }
-      })
+        }),
+      }
     },
     select: {
       id: true,

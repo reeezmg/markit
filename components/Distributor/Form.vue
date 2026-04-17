@@ -1,12 +1,24 @@
 
 <script setup lang="ts">
-import { useCreateDistributor,useUpdateDistributor, useDeleteDistributor } from '~/lib/hooks';
+import { useCreateDistributor, useUpdateDistributor, useDeleteDistributor, useUpdateDistributorCompany } from '~/lib/hooks';
 
 const props = defineProps({
     selectedSupplier: {
         type: Object,
         required: false
-    }
+    },
+    openingDue: {
+        type: Number,
+        default: 0
+    },
+    openingDueDate: {
+        type: String,
+        default: ''
+    },
+    distributorCompanyKey: {
+        type: Object as () => { distributorId: string; companyId: string } | null,
+        default: null
+    },
 });
 
 const iscreating = ref(false);
@@ -14,14 +26,13 @@ const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
 const CreateDistributor = useCreateDistributor()
 const UpdateDistributor = useUpdateDistributor()
-
-
+const UpdateDistributorCompany = useUpdateDistributorCompany()
 
 const supplierData = computed(() => ({
     date: props.selectedSupplier?.createdAt
         ? new Date(props.selectedSupplier?.createdAt).toISOString().split('T')[0]
         : new Date().toISOString().split('T')[0],
-    
+
     id: props.selectedSupplier?.id || '',
     name: props.selectedSupplier?.name || '',
     accHolderName: props.selectedSupplier?.accHolderName || '',
@@ -30,13 +41,16 @@ const supplierData = computed(() => ({
     bankName: props.selectedSupplier?.bankName || '',
     upiId: props.selectedSupplier?.upiId || '',
     gstin: props.selectedSupplier?.gstin || '',
-    street: props.selectedSupplier?.address.street || '',
-    locality: props.selectedSupplier?.address.locality || '',
-    city: props.selectedSupplier?.address.city || '',
-    state: props.selectedSupplier?.address.state || '',
-    pincode: props.selectedSupplier?.address.pincode || '',
+    street: props.selectedSupplier?.address?.street || '',
+    locality: props.selectedSupplier?.address?.locality || '',
+    city: props.selectedSupplier?.address?.city || '',
+    state: props.selectedSupplier?.address?.state || '',
+    pincode: props.selectedSupplier?.address?.pincode || '',
+    openingDue: props.openingDue ?? 0,
+    openingDueDate: props.openingDueDate
+        ? new Date(props.openingDueDate).toISOString().split('T')[0]
+        : '',
 }));
-
 
 const supplier = ref({...supplierData.value});
 
@@ -71,11 +85,23 @@ const submitForm = async () => {
                 
               }
     })
+    // Update opening due on distributor-company link
+    if (props.distributorCompanyKey) {
+      await UpdateDistributorCompany.mutateAsync({
+        where: {
+          distributorId_companyId: props.distributorCompanyKey,
+        },
+        data: {
+          openingDue: supplier.value.openingDue || 0,
+          openingDueDate: supplier.value.openingDueDate ? new Date(supplier.value.openingDueDate) : null,
+        },
+      })
+    }
     toast.add({
             title: 'Distributor Updated !',
             id: 'modal-success',
         });
-       
+
     }
    else{
     const res = await CreateDistributor.mutateAsync({
@@ -102,7 +128,9 @@ const submitForm = async () => {
                       connect:{
                         id:useAuth().session.value?.companyId
                       }
-                    }
+                    },
+                    openingDue: supplier.value.openingDue || 0,
+                    openingDueDate: supplier.value.openingDueDate ? new Date(supplier.value.openingDueDate) : null,
                   }
                 }
               }
@@ -145,6 +173,11 @@ const submitForm = async () => {
           <!-- GSTIN -->
           <h3 class="text-md font-semibold mt-4">Tax Information</h3>
           <UInput v-model="supplier.gstin" label="GSTIN" placeholder="Enter 15-digit GST Number" required />
+
+          <!-- Opening Due -->
+          <h3 class="text-md font-semibold mt-4">Opening Due</h3>
+          <UInput v-model.number="supplier.openingDue" label="Opening Due Amount" placeholder="Positive = you owe, Negative = they owe" type="number" step="0.01" />
+          <UInput v-model="supplier.openingDueDate" label="Opening Due Date" type="date" />
 
           <!-- Bank Account Details -->
           <h3 class="text-md font-semibold mt-4">Bank Account Details</h3>

@@ -1,9 +1,11 @@
 ---
 name: normal-table
-description: Transform a Nuxt UI list page to the standard storetools table pattern — date range picker with presets, search, toolbar (rows/page + column visibility + Excel export + filter modal + reset), sortable UTable with expandable rows, localStorage state, mobile-responsive columns, pagination with count display, delete confirm modal.
+description: Transform a Nuxt UI list page to the standard storetools table pattern — date range picker with presets, search, toolbar (rows/page + column visibility + Excel export + filter modal + reset), sortable UTable with expandable rows, Pinia store state (in-memory, no persistence), mobile-responsive columns, pagination with count display, delete confirm modal.
 ---
 
 Transform the target list page's table to match the standard storetools table pattern used in `pages/erp/sales.vue` and `pages/distributor/purchase-return.vue`.
+
+**State persistence:** use a Pinia store (in `stores/<entity>TableStore.ts`) instead of localStorage. No `persist: true` — state is in-memory only and resets on page refresh. The store is auto-imported by Nuxt; no manual import needed.
 
 ## Steps
 
@@ -17,7 +19,7 @@ Transform the target list page's table to match the standard storetools table pa
 ```ts
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
-const TABLE_STATE_KEY = '<entity>_list_table_state_v1'
+const <entity>TableStore = use<Entity>TableStore()
 const isMobile = ref(false)
 
 // ── Date range ────────────────────────────────────────────────────────────────
@@ -134,18 +136,34 @@ const handleDownloadExcel = async () => {
   }
 }
 
-// ── localStorage state ────────────────────────────────────────────────────────
+// ── Pinia store state ─────────────────────────────────────────────────────────
+// Create stores/<entity>TableStore.ts before wiring this up:
+//
+//   export const use<Entity>TableStore = defineStore('<entity>Table', {
+//     state: () => ({
+//       search: '',
+//       minTotal: null as number | null,
+//       maxTotal: null as number | null,
+//       page: 1,
+//       pageCount: '10',
+//       sort: { column: '<primary_sort_column>', direction: 'desc' as const },
+//       selectedDate: null as { start: string; end: string } | null,
+//       selectedColumnKeys: [] as string[],
+//     }),
+//   })
+//
+// No `persist: true` — state resets on page refresh.
+
 watch(
   [search, minTotal, maxTotal, page, pageCount, sort, selectedColumnKeys,
    () => selectedDate.value.start, () => selectedDate.value.end],
   () => {
-    if (!process.client) return
-    localStorage.setItem(TABLE_STATE_KEY, JSON.stringify({
+    <entity>TableStore.$patch({
       search: search.value, minTotal: minTotal.value, maxTotal: maxTotal.value,
       page: page.value, pageCount: pageCount.value, sort: sort.value,
       selectedDate: { start: selectedDate.value.start.toISOString(), end: selectedDate.value.end.toISOString() },
       selectedColumnKeys: selectedColumnKeys.value,
-    }))
+    })
   },
   { deep: true }
 )
@@ -153,23 +171,18 @@ watch(
 onMounted(() => {
   isMobile.value = window.innerWidth < 640
   window.addEventListener('resize', () => { isMobile.value = window.innerWidth < 640 })
-  if (process.client) {
-    const raw = localStorage.getItem(TABLE_STATE_KEY)
-    if (raw) {
-      try {
-        const s = JSON.parse(raw)
-        search.value    = s.search    ?? ''
-        minTotal.value  = s.minTotal  ?? null
-        maxTotal.value  = s.maxTotal  ?? null
-        page.value      = Number(s.page || 1)
-        pageCount.value = String(s.pageCount || '10')
-        if (s.sort?.column) sort.value = s.sort
-        if (s.selectedDate?.start && s.selectedDate?.end)
-          selectedDate.value = { start: new Date(s.selectedDate.start), end: new Date(s.selectedDate.end) }
-        if (Array.isArray(s.selectedColumnKeys))
-          selectedColumns.value = desktopColumns.filter(c => s.selectedColumnKeys.includes(c.key))
-      } catch { /* ignore */ }
-    }
+  {
+    const s = <entity>TableStore
+    search.value    = s.search    ?? ''
+    minTotal.value  = s.minTotal  ?? null
+    maxTotal.value  = s.maxTotal  ?? null
+    page.value      = Number(s.page || 1)
+    pageCount.value = String(s.pageCount || '10')
+    if (s.sort?.column) sort.value = s.sort
+    if (s.selectedDate?.start && s.selectedDate?.end)
+      selectedDate.value = { start: new Date(s.selectedDate.start), end: new Date(s.selectedDate.end) }
+    if (Array.isArray(s.selectedColumnKeys) && s.selectedColumnKeys.length > 0)
+      selectedColumns.value = desktopColumns.filter(c => s.selectedColumnKeys.includes(c.key))
   }
 })
 ```
@@ -193,7 +206,7 @@ onMounted(() => {
         <div class="flex justify-between items-center gap-3 w-full flex-wrap">
           <div class="flex items-center gap-3 flex-wrap">
             <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
-              <UButton icon="i-heroicons-calendar-days-20-solid" color="gray" variant="outline" size="sm">
+              <UButton icon="i-heroicons-calendar-days-20-solid" color="orange" size="sm">
                 {{ format(selectedDate.start, 'd MMM, yyyy') }} – {{ format(selectedDate.end, 'd MMM, yyyy') }}
               </UButton>
               <template #panel="{ close }">
@@ -309,6 +322,7 @@ onMounted(() => {
 ## Rules
 
 - Always read the target file first before making changes.
+- Create `stores/<entity>TableStore.ts` with the state shape matching the page's filter fields. No `persist: true`.
 - Preserve all existing logic (hooks, delete handler, PDF download, etc.) — only restructure/add.
 - Adapt column names, search fields, Excel headers, and filter fields to the actual entity.
 - If the entity has child rows (items, entries), add them to the select query and wire the expand slot.

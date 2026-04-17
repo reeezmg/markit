@@ -303,26 +303,18 @@ const variantcolumns = [
 ];
 
 const selectedColumns = ref(columns);
-const STORAGE_KEY = 'selectedColumns';
+const productsTableStore = useProductsTableStore();
 
 onMounted(() => {
-  const saved = localStorage.getItem(STORAGE_KEY);
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved);
-      // Ensure stored columns are still valid
-      selectedColumns.value = columns.filter(col =>
-        parsed.some((savedCol: any) => savedCol.key === col.key)
-      );
-    } catch (e) {
-      console.error('Failed to parse selectedColumns from localStorage:', e);
-    }
+  const { selectedColumnKeys } = productsTableStore;
+  if (selectedColumnKeys.length > 0) {
+    selectedColumns.value = columns.filter(col => selectedColumnKeys.includes(col.key));
   }
 });
 
 // Persist
 watch(selectedColumns, (newVal) => {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(newVal));
+  productsTableStore.$patch({ selectedColumnKeys: newVal.map((c: any) => c.key) });
 }, { deep: true });
 
 const columnsTable = computed(() =>

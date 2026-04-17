@@ -12,6 +12,7 @@ const orderId = route.query.id;
 
 const paymentMethod = ref('Cash');
 const tokenEntries = ref([])
+const packOtp = ref(null)
 
 const qtyInputs = ref([]);
 const barcodeInputs = ref([]);  
@@ -193,6 +194,20 @@ const trynbuyArgs = computed(() => {
 
 const { data: trynbuy, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyArgs)
 
+// Load existing pickup OTP if order is already packed (page refresh case)
+watch(trynbuy, async (val) => {
+  if (val?.orderStatus === 'PACKED' && !packOtp.value) {
+    const companyId = useAuth().session.value?.companyId;
+    const trynbuyId = val?.id;
+    if (trynbuyId && companyId) {
+      try {
+        const res = await $fetch(`/api/pack/${trynbuyId}/otp?companyId=${companyId}`, { baseURL: serverUrl });
+        if (res?.pickupOtp) packOtp.value = res.pickupOtp;
+      } catch {}
+    }
+  }
+}, { once: true })
+
 
 // ✅ Map cartItems instead of entries
 watch(
@@ -305,9 +320,13 @@ const handlePack = async () => {
     );
 
     if (trynbuyId && clientId) {
-      await $fetch(`/api/pack/${trynbuyId}/${clientId}`, {
+      const companyId = useAuth().session.value?.companyId;
+      const response = await $fetch(`/api/pack/${trynbuyId}/${clientId}?companyId=${companyId}`, {
         baseURL: serverUrl,
       });
+      if (response?.pickupOtp) {
+        packOtp.value = response.pickupOtp;
+      }
     }
 
     toast.add({
@@ -529,7 +548,14 @@ const handleSave = async () => {
 
         <!-- Other form elements -->
         <template #footer>
-        
+
+          <!-- Pickup OTP display -->
+          <div v-if="packOtp" class="mb-4 w-full p-4 bg-amber-50 border border-amber-300 rounded-xl text-center">
+            <p class="text-sm font-medium text-amber-700 mb-1">Pickup OTP for Delivery Person</p>
+            <p class="text-4xl font-mono font-bold tracking-widest text-amber-900">{{ packOtp }}</p>
+            <p class="text-xs text-amber-600 mt-1">Share this code with the delivery partner when they arrive</p>
+          </div>
+
           <div class="mb-4 w-full p-1 flex justify-end">
             <UButton
               ref="packref"

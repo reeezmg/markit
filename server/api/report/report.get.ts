@@ -9,6 +9,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await useAuthSession(event)
   const companyId = session.data.companyId
+  const cleanup = session.data.cleanup ?? false
 
   if (!companyId) {
     throw createError({
@@ -154,11 +155,12 @@ if (!isZeroOpening) {
             AND b.payment_status IN ('PAID','PENDING')
             AND b.is_markit = false
             AND b.created_at < $2
+            AND ($3 = true OR b.precedence IS NOT TRUE)
         )
 
         SELECT
           COALESCE(SUM(
-            CASE 
+            CASE
               WHEN payment_method = 'Cash'
               THEN grand_total ELSE 0 END
           ),0)
@@ -172,8 +174,9 @@ if (!isZeroOpening) {
           AND payment_status IN ('PAID','PENDING')
           AND is_markit = false
           AND created_at < $2
+          AND ($3 = true OR precedence IS NOT TRUE)
         `,
-        [companyId, startDate]
+        [companyId, startDate, cleanup]
       ),
 
 
@@ -286,11 +289,12 @@ if (!isZeroOpening) {
             AND b.payment_status IN ('PAID','PENDING')
             AND b.is_markit = false
             AND b.created_at < $2
+            AND ($3 = true OR b.precedence IS NOT TRUE)
         )
 
         SELECT
           COALESCE(SUM(
-            CASE 
+            CASE
               WHEN payment_method IN ('UPI','Card')
               THEN grand_total ELSE 0 END
           ),0)
@@ -304,8 +308,9 @@ if (!isZeroOpening) {
           AND payment_status IN ('PAID','PENDING')
           AND is_markit = false
           AND created_at < $2
+          AND ($3 = true OR precedence IS NOT TRUE)
         `,
-        [companyId, startDate]
+        [companyId, startDate, cleanup]
       ),
 
 
@@ -565,8 +570,9 @@ if (!isZeroOpening) {
           AND b.payment_status IN ('PAID','PENDING')
           AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE)
         `,
-        [companyId, startDate, endDate]
+        [companyId, startDate, endDate, cleanup]
       ),
 
 
@@ -601,11 +607,12 @@ if (!isZeroOpening) {
           AND b.payment_status = 'PAID'
           AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE)
 
         GROUP BY br.name
         ORDER BY total DESC
         `,
-        [companyId, startDate, endDate]
+        [companyId, startDate, endDate, cleanup]
       ),
 
 
@@ -626,8 +633,9 @@ if (!isZeroOpening) {
           AND payment_status IN ('PAID','PENDING')
           AND is_markit = false
           AND created_at BETWEEN $2 AND $3
+          AND ($4 = true OR precedence IS NOT TRUE)
         `,
-        [companyId, startDate, endDate]
+        [companyId, startDate, endDate, cleanup]
       ),
 
 
@@ -699,11 +707,12 @@ if (!isZeroOpening) {
           AND b.payment_status = 'PAID'
           AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE)
 
         GROUP BY c.name
         ORDER BY total DESC
         `,
-        [companyId, startDate, endDate]
+        [companyId, startDate, endDate, cleanup]
       ),
 
 

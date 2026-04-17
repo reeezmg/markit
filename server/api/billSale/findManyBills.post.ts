@@ -28,6 +28,8 @@ export default defineEventHandler(async (event) => {
     pageCount = 5,
     sortColumn = 'invoiceNumber',
     sortDirection = 'desc',
+    isMarkitOnly = false,
+    excludeMarkit = false,
   } = body
 
   if (!companyId) {
@@ -89,6 +91,13 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    /* 🛍️ Markit filter */
+    if (isMarkitOnly) {
+      whereSQL += ` AND b.is_markit = true`
+    } else if (excludeMarkit) {
+      whereSQL += ` AND (b.is_markit = false OR b.is_markit IS NULL)`
+    }
+
     /* 💳 Payment status */
     if (selectedStatus?.length) {
       whereSQL += ` AND b.payment_status::text = ANY($${idx}::text[])`
@@ -138,6 +147,7 @@ export default defineEventHandler(async (event) => {
       SELECT
         b.id,
         b.precedence,
+        b.is_markit        AS "isMarkit",
         b.created_at       AS "createdAt",
         b.invoice_number   AS "invoiceNumber",
         b.subtotal,

@@ -21,9 +21,16 @@ const useAuth = () => useNuxtApp().$auth
 // ─── Add distributor modal ───
 const openModal = ref(false)
 const selectedSupplier = ref<any>(null)
+const selectedSupplierDcData = ref<{ openingDue: number; openingDueDate: string; distributorId: string; companyId: string } | null>(null)
 
-const openForm = (supplier: any = null) => {
+const openForm = (supplier: any = null, dcRow: any = null) => {
   selectedSupplier.value = supplier
+  selectedSupplierDcData.value = dcRow ? {
+    openingDue: dcRow.openingDue ?? 0,
+    openingDueDate: dcRow.openingDueDate ?? '',
+    distributorId: dcRow.distributorId,
+    companyId: dcRow.companyId,
+  } : null
   openModal.value = true
 }
 
@@ -119,6 +126,7 @@ const columns = [
   { key: 'totalAmount', label: 'Total' },
   { key: 'paidAmount', label: 'Paid' },
   { key: 'returnAmount', label: 'Return' },
+  { key: 'openingDue', label: 'Opening Due' },
   { key: 'totalDue', label: 'Due' },
   { key: 'actions', label: 'Actions' },
 ]
@@ -286,10 +294,12 @@ const distributors = computed(() =>
     }))
     return {
       ...d,
+      openingDue: d.openingDue ?? 0,
+      openingDueDate: d.openingDueDate,
       totalAmount,
       paidAmount,
       returnAmount,
-      totalDue: totalAmount - paidAmount,
+      totalDue: (d.openingDue ?? 0) + totalAmount - paidAmount,
       ordersCount: purchaseOrders.length,
       purchaseOrders,
       transactions,
@@ -740,7 +750,7 @@ const creditsDownloadItems = [
 // ─── Dropdown menus ───
 const mainAction = (row: any) => [
   [
-    { label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => openForm(row.distributor) },
+    { label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => openForm(row.distributor, row) },
     { label: 'Pay', icon: 'i-heroicons-banknotes-20-solid', click: () => { selectDistributor(row); openPayModal(null) } },
     { label: 'Add Credit', icon: 'i-heroicons-credit-card-20-solid', click: () => { selectDistributor(row); openCreditModal() } },
     { label: 'Purchase Return', icon: 'i-heroicons-arrow-uturn-left', click: () => router.push(`/distributor/add-purchase-return?distributorId=${row.distributorId}`) },
@@ -887,6 +897,11 @@ const transactionAction = (row: any) => {
               </template>
               <template #returnAmount-data="{ row }">
                 <span class="text-orange-600">₹{{ (row.returnAmount || 0).toFixed(2) }}</span>
+              </template>
+              <template #openingDue-data="{ row }">
+                <span :class="(row.openingDue ?? 0) !== 0 ? 'text-purple-600' : ''">
+                  ₹{{ (row.openingDue ?? 0).toFixed(2) }}
+                </span>
               </template>
               <template #totalDue-data="{ row }">
                 <span :class="(row.totalDue || 0) > 0 ? 'font-semibold text-red-600' : ''">
@@ -1455,7 +1470,12 @@ const transactionAction = (row: any) => {
 
     <!-- ─── Add/Edit Distributor Modal ─── -->
     <UModal v-model="openModal">
-      <DistributorForm :selectedSupplier="selectedSupplier" />
+      <DistributorForm
+        :selectedSupplier="selectedSupplier"
+        :openingDue="selectedSupplierDcData?.openingDue ?? 0"
+        :openingDueDate="selectedSupplierDcData?.openingDueDate ?? ''"
+        :distributorCompanyKey="selectedSupplierDcData ? { distributorId: selectedSupplierDcData.distributorId, companyId: selectedSupplierDcData.companyId } : null"
+      />
     </UModal>
 
     <!-- ─── Pay Modal ─── -->

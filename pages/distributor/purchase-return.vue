@@ -8,7 +8,7 @@ const router    = useRouter()
 const useAuth   = () => useNuxtApp().$auth
 const companyId = computed(() => useAuth().session.value?.companyId)
 
-const TABLE_STATE_KEY = 'pr_list_table_state_v1'
+const purchaseReturnTableStore = usePurchaseReturnTableStore()
 const isMobile = ref(false)
 
 // ─── Date range ──────────────────────────────────────────────────────────────
@@ -278,8 +278,7 @@ watch(
   [search, minTotal, maxTotal, page, pageCount, sort, selectedColumnKeys,
    () => selectedDate.value.start, () => selectedDate.value.end],
   () => {
-    if (!process.client) return
-    localStorage.setItem(TABLE_STATE_KEY, JSON.stringify({
+    purchaseReturnTableStore.$patch({
       search:     search.value,
       minTotal:   minTotal.value,
       maxTotal:   maxTotal.value,
@@ -288,7 +287,7 @@ watch(
       sort:       sort.value,
       selectedDate: { start: selectedDate.value.start.toISOString(), end: selectedDate.value.end.toISOString() },
       selectedColumnKeys: selectedColumnKeys.value,
-    }))
+    })
   },
   { deep: true }
 )
@@ -297,24 +296,19 @@ onMounted(() => {
   isMobile.value = window.innerWidth < 640
   window.addEventListener('resize', () => { isMobile.value = window.innerWidth < 640 })
 
-  if (process.client) {
-    const raw = localStorage.getItem(TABLE_STATE_KEY)
-    if (raw) {
-      try {
-        const s = JSON.parse(raw)
-        search.value    = s.search    ?? ''
-        minTotal.value  = s.minTotal  ?? null
-        maxTotal.value  = s.maxTotal  ?? null
-        page.value      = Number(s.page || 1)
-        pageCount.value = String(s.pageCount || '10')
-        if (s.sort?.column) sort.value = s.sort
-        if (s.selectedDate?.start && s.selectedDate?.end) {
-          selectedDate.value = { start: new Date(s.selectedDate.start), end: new Date(s.selectedDate.end) }
-        }
-        if (Array.isArray(s.selectedColumnKeys)) {
-          selectedColumns.value = desktopColumns.filter(c => s.selectedColumnKeys.includes(c.key))
-        }
-      } catch { /* ignore */ }
+  {
+    const s = purchaseReturnTableStore
+    search.value    = s.search    ?? ''
+    minTotal.value  = s.minTotal  ?? null
+    maxTotal.value  = s.maxTotal  ?? null
+    page.value      = Number(s.page || 1)
+    pageCount.value = String(s.pageCount || '10')
+    if (s.sort?.column) sort.value = s.sort
+    if (s.selectedDate?.start && s.selectedDate?.end) {
+      selectedDate.value = { start: new Date(s.selectedDate.start), end: new Date(s.selectedDate.end) }
+    }
+    if (Array.isArray(s.selectedColumnKeys) && s.selectedColumnKeys.length > 0) {
+      selectedColumns.value = desktopColumns.filter(c => s.selectedColumnKeys.includes(c.key))
     }
   }
 })
