@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useFindUniqueStatementBatch, useUpdateStatementBatch } from '~/lib/hooks/statement-batch'
+import { useUpdateStatementRow, useDeleteStatementRow } from '~/lib/hooks/statement-row'
 import { useFindManyBankAccount } from '~/lib/hooks/bank-account'
 import { useFindUniqueCompany } from '~/lib/hooks'
 
@@ -97,6 +98,7 @@ const columns = [
   { key: 'credit', label: 'Credit' },
   { key: 'operation', label: 'Operation' },
   { key: 'error', label: 'Status' },
+  { key: 'actions', label: '' },
 ]
 
 // ─── Format currency ───
@@ -207,6 +209,42 @@ async function executeAll() {
     toast.add({ title: 'Execution failed', color: 'red', description: err.data?.statusMessage || err.message })
   } finally {
     executingAll.value = false
+  }
+}
+
+// ─── Ignore a row (direct update, no AI) ───
+const updateRow = useUpdateStatementRow()
+async function ignoreRow(rowId: string) {
+  findingRow.value[rowId] = true
+  try {
+    await updateRow.mutateAsync({
+      where: { id: rowId },
+      data: { operation: 'IGNORE', operationLabel: 'Ignore', operationMeta: {}, userInput: 'ignore', executed: false, executionResult: null as any },
+    })
+    toast.add({ title: 'Marked as Ignore', color: 'gray' })
+    delete rowErrors.value[rowId]
+    await refetch()
+  } catch (err: any) {
+    toast.add({ title: 'Error', color: 'red', description: err.message })
+  } finally {
+    findingRow.value[rowId] = false
+  }
+}
+
+// ─── Remove a row ───
+const deleteRow = useDeleteStatementRow()
+const removingRow = ref<Record<string, boolean>>({})
+async function removeRow(rowId: string) {
+  removingRow.value[rowId] = true
+  try {
+    await deleteRow.mutateAsync({ where: { id: rowId } })
+    toast.add({ title: 'Row removed', color: 'green' })
+    delete rowErrors.value[rowId]
+    await refetch()
+  } catch (err: any) {
+    toast.add({ title: 'Error removing row', color: 'red', description: err.message })
+  } finally {
+    removingRow.value[rowId] = false
   }
 }
 
@@ -382,7 +420,7 @@ function opColor(operation: string | null): string {
               />
             </div>
 
-            <!-- STATE 1: Unmatched — input + Assign button -->
+            <!-- STATE 1: Unmatched — input + Assign button + Ignore button -->
             <div v-else class="flex items-center gap-1">
               <UInput
                 v-model="userInputs[row.id]"
@@ -399,7 +437,26 @@ function opColor(operation: string | null): string {
                 :loading="findingRow[row.id]"
                 @click="findOperation(row.id)"
               />
+              <UButton
+                label="Ignore"
+                size="xs"
+                color="gray"
+                variant="soft"
+                :loading="findingRow[row.id]"
+                @click="ignoreRow(row.id)"
+              />
             </div>
+          </template>
+
+          <template #actions-data="{ row }">
+            <UButton
+              icon="i-heroicons-trash"
+              size="xs"
+              color="red"
+              variant="ghost"
+              :loading="removingRow[row.id]"
+              @click="removeRow(row.id)"
+            />
           </template>
 
           <template #error-data="{ row }">
