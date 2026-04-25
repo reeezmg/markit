@@ -117,6 +117,7 @@ const paymentref = ref();
 const saveref = ref();
 const isOpen = ref(false);
 const isClientAddModelOpen = ref(false);
+const showClientSuggestions = ref(false);
 const account = ref({
     name: '',
     phone:'',
@@ -606,49 +607,56 @@ const removeRow = (event,index) => {
 };
 
 
-const args = computed(() => ({
-  where: {
-    phone: `+91${phoneNo.value}`,
-    companies: {
-      some: {
-        companyId: useAuth().session.value?.companyId,
-      },
-    },
-  },
-  include: {
-    companies: {
-      where: {
-        companyId: useAuth().session.value?.companyId,
-      },
-      select: {
-        points: true,
-      },
-    },
-  },
-}));
+const clientSearchTerm = computed(() => String(phoneNo.value || '').trim())
+const clientSearchDigits = computed(() => clientSearchTerm.value.replace(/\D/g, ''))
+const companyClientMatches = ref([])
+let currentClientSearchRequestId = 0
 
+const fetchClientMatches = async (term) => {
+  const trimmedTerm = String(term || '').trim()
 
+  if (!trimmedTerm || bill.value?.isMarkit) {
+    companyClientMatches.value = []
+    return
+  }
 
- const fetchClientByPhone = async (phone) => {
+  const requestId = ++currentClientSearchRequestId
   isClientLoading.value = true
 
   try {
-    if (!phone) return null
-
-    const data = await $fetch('/api/bill/findUniqueClient', {
-      query: {
-        phone: `+91${phone}`,
-      },
+    const data = await $fetch('/api/bill/findManyClient', {
+      query: { q: trimmedTerm },
     })
 
-    return data ?? null
+    if (requestId !== currentClientSearchRequestId) return
+    companyClientMatches.value = Array.isArray(data) ? data : []
   } catch (error) {
-    console.error('Error fetching client by phone:', error)
-    throw error
+    if (requestId === currentClientSearchRequestId) {
+      companyClientMatches.value = []
+    }
+    console.error('Failed to fetch client matches:', error)
   } finally {
-    isClientLoading.value = false
+    if (requestId === currentClientSearchRequestId) {
+      isClientLoading.value = false
+    }
   }
 }
+
+const clientMatches = computed(() =>
+  (companyClientMatches.value || []).map((row) => {
+    const rawPhone = String(row.phone || '')
+    const digits = rawPhone.replace(/\D/g, '')
+
+    return {
+      id: row.id,
+      name: row.name || '',
+      phone: digits.slice(-10) || digits,
+      points: Number(row.points || 0),
+    }
+  })
+)
+
+const isClientLookupLoading = computed(() => isClientLoading.value)
 
 
 const categories = ref([])
@@ -1355,6 +1363,35 @@ const handleSplit = () => {
   paymentMethod.value = 'Split'
 }
 
+const openClientSuggestions = () => {
+  if (clientFound.value || bill.value?.isMarkit) return
+  showClientSuggestions.value = Boolean(clientSearchTerm.value)
+}
+
+const findExactClientMatch = () => {
+  const lowerSearch = clientSearchTerm.value.toLowerCase()
+  const searchDigits = clientSearchDigits.value
+
+  return clientMatches.value.find((match) => {
+    const lowerName = String(match.name || '').trim().toLowerCase()
+    const matchDigits = String(match.phone || '').replace(/\D/g, '')
+    return lowerName === lowerSearch || (searchDigits && matchDigits === searchDigits)
+  }) || null
+}
+
+const applySelectedClient = async (match) => {
+  if (clientId.value && match?.id && match.id !== clientId.value) {
+    await revertRedeemedPointsForCurrentClient()
+  }
+
+  clientFound.value = true
+  clientName.value = match?.name || ''
+  phoneNo.value = match?.phone || ''
+  clientId.value = match?.id || ''
+  setDisplayedPointsFromServer(match?.points ?? 0)
+  showClientSuggestions.value = false
+}
+
 
 // Final submission
 function submitSplitPayment() {
@@ -1368,25 +1405,36 @@ function submitSplitPayment() {
 
 
 const handleEnterPhone = async() => {
-   const data = await fetchClientByPhone(phoneNo.value)
+   if (!clientSearchTerm.value) return 'empty'
+   if (isClientLookupLoading.value) return 'loading'
 
-    if (!data) {
-      isClientAddModelOpen.value = true
-      return
+    const exactMatch = findExactClientMatch()
+    if (exactMatch) {
+      await applySelectedClient(exactMatch)
+      return 'selected'
     }
 
-  if (clientId.value && data?.id && data.id !== clientId.value) {
-    await revertRedeemedPointsForCurrentClient()
-  }
+    if (clientMatches.value.length === 1) {
+      await applySelectedClient(clientMatches.value[0])
+      return 'selected'
+    }
 
-  clientFound.value = true
-  clientName.value = data?.name
-  clientId.value = data?.id
-  setDisplayedPointsFromServer(data?.companies?.[0]?.points ?? 0)
+    if (!clientMatches.value.length) {
+      isClientAddModelOpen.value = true
+      showClientSuggestions.value = false
+      return 'create'
+    }
+
+    showClientSuggestions.value = true
+    return 'ambiguous'
+}
+
+const handleClientSearchEnter = async () => {
+  const result = await handleEnterPhone()
+  showClientSuggestions.value = result === 'ambiguous' || result === 'loading'
 }
 
 const handleClientAdded = async (id,name,phone) => {
-  console.log(id,name)
   if (clientId.value && id && id !== clientId.value) {
     await revertRedeemedPointsForCurrentClient()
   }
@@ -1395,6 +1443,7 @@ const handleClientAdded = async (id,name,phone) => {
   phoneNo.value = phone
   clientId.value = id
   points.value = 0
+  showClientSuggestions.value = false
   isClientAddModelOpen.value = false;
 };
 
@@ -1662,7 +1711,25 @@ const handleClearClient = async () => {
   redeemedAmt.value = 0;
   isRedeemPoint.value = false;
   clientFound.value = false;
+  showClientSuggestions.value = false;
 }
+
+watch(phoneNo, (newValue, oldValue) => {
+  if (newValue === oldValue) return
+  if (clientFound.value || bill.value?.isMarkit) return
+  showClientSuggestions.value = Boolean(String(newValue || '').trim())
+})
+
+watch(clientSearchTerm, (value) => {
+  if (clientFound.value || bill.value?.isMarkit) return
+  fetchClientMatches(value)
+}, { immediate: true })
+
+watch(isClientAddModelOpen, (val) => {
+  if (val) {
+    showClientSuggestions.value = false
+  }
+})
 
 function isCouponEligible(coupon, orderValue, clientId) {
   const now = new Date();
@@ -2460,14 +2527,45 @@ const couponModel = computed({
               <label class="block text-gray-700 font-medium">Cell No.</label>
               
               <div class="flex items-center gap-2">
-                <UInput
-                  v-model="phoneNo"
-                  :loading="isClientLoading"
-                  icon="i-heroicons-magnifying-glass-20-solid"
-                  @keydown.enter.prevent="handleEnterPhone"
-                  class="flex-1"
-                  :disabled="clientFound || bill?.isMarkit"
-                />
+                <div class="relative flex-1">
+                  <UInput
+                    v-model="phoneNo"
+                    :loading="isClientLookupLoading"
+                    icon="i-heroicons-magnifying-glass-20-solid"
+                    @focus="openClientSuggestions"
+                    @input="openClientSuggestions"
+                    @keydown.enter.prevent="handleClientSearchEnter"
+                    class="flex-1"
+                    :disabled="clientFound || bill?.isMarkit"
+                  />
+                  <div
+                    v-if="showClientSuggestions && phoneNo && !clientFound"
+                    class="absolute z-20 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900"
+                  >
+                    <button
+                      v-for="client in clientMatches"
+                      :key="client.id"
+                      type="button"
+                      class="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                      @mousedown.prevent="applySelectedClient(client)"
+                    >
+                      <span>{{ client.name }}</span>
+                      <span class="text-xs text-gray-500">{{ client.phone }}</span>
+                    </button>
+                    <div
+                      v-if="isClientLookupLoading && !clientMatches.length"
+                      class="px-3 py-2 text-xs text-gray-500"
+                    >
+                      Searching company clients...
+                    </div>
+                    <div
+                      v-if="!isClientLookupLoading && !clientMatches.length"
+                      class="px-3 py-2 text-xs text-gray-500"
+                    >
+                      No matching company client. Press Enter to create a new client.
+                    </div>
+                  </div>
+                </div>
                 <UButton icon="i-heroicons-x-mark" color="red" @click="handleClearClient" :disabled="bill?.isMarkit" />
               </div>
             </div>
@@ -2541,17 +2639,56 @@ const couponModel = computed({
         <div class="flex flex-row gap-2 w-full">
   <div class="flex-1">
     <label class="block text-gray-700 font-medium">Cell No.</label>
-    <UInput
-      v-model="phoneNo"
-      :loading="isClientLoading"
-      icon="i-heroicons-magnifying-glass-20-solid"
-      @keydown.enter.prevent="handleEnterPhone"
+    <div class="relative">
+      <UInput
+        v-model="phoneNo"
+        :loading="isClientLookupLoading"
+        icon="i-heroicons-magnifying-glass-20-solid"
+        @focus="openClientSuggestions"
+        @input="openClientSuggestions"
+        @keydown.enter.prevent="handleClientSearchEnter"
+        :disabled="clientFound || bill?.isMarkit"
+      />
+      <div
+        v-if="showClientSuggestions && phoneNo && !clientFound"
+        class="absolute z-20 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900"
+      >
+        <button
+          v-for="client in clientMatches"
+          :key="client.id"
+          type="button"
+          class="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+          @mousedown.prevent="applySelectedClient(client)"
+        >
+          <span>{{ client.name }}</span>
+          <span class="text-xs text-gray-500">{{ client.phone }}</span>
+        </button>
+        <div
+          v-if="isClientLookupLoading && !clientMatches.length"
+          class="px-3 py-2 text-xs text-gray-500"
+        >
+          Searching company clients...
+        </div>
+        <div
+          v-if="!isClientLookupLoading && !clientMatches.length"
+          class="px-3 py-2 text-xs text-gray-500"
+        >
+          No matching company client. Press Enter to create a new client.
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="flex items-end">
+    <UButton
+      icon="i-heroicons-x-mark"
+      color="red"
+      @click="handleClearClient"
       :disabled="bill?.isMarkit"
     />
   </div>
   <div class="flex-1">
     <label class="block text-gray-700 font-medium">Name</label>
-    <UInput v-model="clientName" :disabled="bill?.isMarkit" />
+    <UInput v-model="clientName" :disabled="clientFound || bill?.isMarkit" />
   </div>
 </div>
 

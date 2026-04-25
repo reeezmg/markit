@@ -124,7 +124,15 @@ const { showCamera, videoRef, handleScan, stopCamera } = useBillingCamera((barco
 
 
 // ─── Client lookup + points redemption ──────────────────────────────────────
-const { isClientLoading, redeeming, handleEnterPhone, handleClientAdded, handleRedeemPoints } =
+const {
+  isClientLoading,
+  clientMatches,
+  redeeming,
+  applySelectedClient,
+  handleEnterPhone,
+  handleClientAdded,
+  handleRedeemPoints,
+} =
   useBillingClient(
     phoneNo, clientId, clientName, points,
     redeemedAmt, redeemedPoints, isRedeemPoint, grandTotal,
@@ -135,6 +143,27 @@ const { isClientLoading, redeeming, handleEnterPhone, handleClientAdded, handleR
       input?.select()
     }
   )
+
+const showClientSuggestions = ref(false)
+
+const openClientSuggestions = () => {
+  showClientSuggestions.value = Boolean(String(phoneNo.value || '').trim())
+}
+
+const handleClientSearchEnter = async () => {
+  const result = await handleEnterPhone()
+  showClientSuggestions.value = result === 'ambiguous' || result === 'loading'
+}
+
+const handleClientSuggestionSelect = (match) => {
+  applySelectedClient(match)
+  showClientSuggestions.value = false
+}
+
+watch(phoneNo, (newValue, oldValue) => {
+  if (newValue === oldValue) return
+  showClientSuggestions.value = Boolean(String(newValue || '').trim())
+})
 
 // ─── Coupons (fetch, eligibility, discount calc, watchers) ──────────────────
 const { allCoupons, selectedCouponId, eligibleCoupons, couponRefetch } = useBillingCoupons(
@@ -916,6 +945,9 @@ onMounted(() => {
 
 
 watch(isClientAddModelOpen, async (val) => {
+  if (val === true) {
+    showClientSuggestions.value = false
+  }
 
   if (val === false) {
 
@@ -1581,7 +1613,44 @@ const handleDiscountEnter = (index) => {
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Cell No.</label>
-              <UInput ref="phoneInputs" v-model="phoneNo" :loading="isClientLoading" icon="i-heroicons-magnifying-glass-20-solid" @keydown.enter.prevent="handleEnterPhone"/>
+              <div class="relative">
+                <UInput
+                  ref="phoneInputs"
+                  v-model="phoneNo"
+                  :loading="isClientLoading"
+                  icon="i-heroicons-magnifying-glass-20-solid"
+                  @focus="openClientSuggestions"
+                  @input="openClientSuggestions"
+                  @keydown.enter.prevent="handleClientSearchEnter"
+                />
+                <div
+                  v-if="showClientSuggestions && phoneNo"
+                  class="absolute z-20 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900"
+                >
+                  <button
+                    v-for="client in clientMatches"
+                    :key="client.id"
+                    type="button"
+                    class="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+                    @mousedown.prevent="handleClientSuggestionSelect(client)"
+                  >
+                    <span>{{ client.name }}</span>
+                    <span class="text-xs text-gray-500">{{ client.phone }}</span>
+                  </button>
+                <div
+                  v-if="isClientLoading && !clientMatches.length"
+                  class="px-3 py-2 text-xs text-gray-500"
+                >
+                  Searching company clients...
+                </div>
+                <div
+                  v-if="!isClientLoading && !clientMatches.length"
+                  class="px-3 py-2 text-xs text-gray-500"
+                >
+                    No matching company client. Press Enter to create a new client.
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
@@ -1645,12 +1714,43 @@ const handleDiscountEnter = (index) => {
      <div class="flex flex-row gap-2 w-full">
   <div class="flex-1">
     <label class="block text-gray-700 font-medium">Cell No.</label>
-    <UInput
-      v-model="phoneNo"
-      :loading="isClientLoading"
-      icon="i-heroicons-magnifying-glass-20-solid"
-      @keydown.enter.prevent="handleEnterPhone"
-    />
+    <div class="relative">
+      <UInput
+        v-model="phoneNo"
+        :loading="isClientLoading"
+        icon="i-heroicons-magnifying-glass-20-solid"
+        @focus="openClientSuggestions"
+        @input="openClientSuggestions"
+        @keydown.enter.prevent="handleClientSearchEnter"
+      />
+      <div
+        v-if="showClientSuggestions && phoneNo"
+        class="absolute z-20 mt-1 w-full rounded-md border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-900"
+      >
+        <button
+          v-for="client in clientMatches"
+          :key="client.id"
+          type="button"
+          class="flex w-full items-center justify-between px-3 py-2 text-left text-sm hover:bg-gray-50 dark:hover:bg-gray-800"
+          @mousedown.prevent="handleClientSuggestionSelect(client)"
+        >
+          <span>{{ client.name }}</span>
+          <span class="text-xs text-gray-500">{{ client.phone }}</span>
+        </button>
+        <div
+          v-if="isClientLoading && !clientMatches.length"
+          class="px-3 py-2 text-xs text-gray-500"
+        >
+          Searching company clients...
+        </div>
+        <div
+          v-if="!isClientLoading && !clientMatches.length"
+          class="px-3 py-2 text-xs text-gray-500"
+        >
+          No matching company client. Press Enter to create a new client.
+        </div>
+      </div>
+    </div>
   </div>
   <div class="flex-1">
     <label class="block text-gray-700 font-medium">Name</label>

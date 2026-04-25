@@ -1,18 +1,7 @@
 /**
  * useBillingClient
  *
- * Manages client lookup, client-add flow, and points redemption for billing.
- *
- * @param phoneNo             Reactive phone number input ref (from useBillingDraft)
- * @param clientId            Reactive client ID ref (from useBillingDraft)
- * @param clientName          Reactive client name ref (from useBillingDraft)
- * @param points              Reactive client points ref (from useBillingDraft)
- * @param redeemedAmt         Reactive redeemed amount ref (from useBillingDraft)
- * @param redeemedPoints      Reactive redeemed points ref (from useBillingDraft)
- * @param isRedeemPoint       Reactive redeem toggle ref (from useBillingDraft)
- * @param grandTotal          Computed grand total (from useBillingDraft)
- * @param isClientAddModelOpen Ref controlling the add-client modal visibility
- * @param onClientFound       Callback to run after a client is found (e.g. focus discount input)
+ * Manages client lookup, match suggestions, client-add flow, and points redemption for billing.
  */
 export function useBillingClient(
   phoneNo: ReturnType<typeof ref>,
@@ -26,51 +15,151 @@ export function useBillingClient(
   isClientAddModelOpen: ReturnType<typeof ref>,
   onClientFound: () => void
 ) {
-  const isClientLoading = ref(false)
+  const useAuth = () => useNuxtApp().$auth
   const redeeming = ref(false)
+  const isClientLoading = ref(false)
+  const companyClients = ref<any[]>([])
+  const isApplyingSelection = ref(false)
+  const selectedClientPhone = ref('')
+  const selectedClientName = ref('')
+  const searchTerm = computed(() => String(phoneNo.value || '').trim())
+  const normalizedDigits = computed(() => searchTerm.value.replace(/\D/g, ''))
+  let currentSearchRequestId = 0
 
-  // ─── Phone lookup ────────────────────────────────────────────────────────
-
-  const fetchClientByPhone = async (phone: string) => {
-    isClientLoading.value = true
-    try {
-      if (!phone) return null
-      const data = await $fetch('/api/bill/findUniqueClient', {
-        query: { phone: `+91${phone}` },
-      })
-      return data ?? null
-    } catch (error) {
-      console.error('Error fetching client by phone:', error)
-      throw error
-    } finally {
-      isClientLoading.value = false
+  const fetchClientMatches = async (term: string) => {
+    const trimmedTerm = String(term || '').trim()
+    if (!trimmedTerm || !useAuth().session.value?.companyId) {
+      companyClients.value = []
+      return
     }
+
+    const requestId = ++currentSearchRequestId
+    isClientLoading.value = true
+
+    try {
+      const data = await $fetch('/api/bill/findManyClient', {
+        query: { q: trimmedTerm },
+      })
+
+      if (requestId !== currentSearchRequestId) return
+      companyClients.value = Array.isArray(data) ? data : []
+    } catch (error) {
+      if (requestId === currentSearchRequestId) {
+        companyClients.value = []
+      }
+      console.error('Failed to fetch client matches:', error)
+    } finally {
+      if (requestId === currentSearchRequestId) {
+        isClientLoading.value = false
+      }
+    }
+  }
+
+  const clientMatches = computed(() =>
+    (companyClients.value || []).map((row: any) => {
+      const rawPhone = String(row.phone || '')
+      const digits = rawPhone.replace(/\D/g, '')
+
+      return {
+        id: row.id,
+        name: row.name || '',
+        phone: digits.slice(-10) || digits,
+        displayPhone: rawPhone,
+        points: Number(row.points || 0),
+      }
+    })
+  )
+
+  const applySelectedClient = (match: { id: string; name: string; phone: string; points: number }) => {
+    isApplyingSelection.value = true
+    clientName.value = match.name
+    clientId.value = match.id
+    phoneNo.value = match.phone
+    points.value = match.points
+    selectedClientPhone.value = String(match.phone || '').trim().toLowerCase()
+    selectedClientName.value = String(match.name || '').trim().toLowerCase()
+    onClientFound()
+    nextTick(() => {
+      isApplyingSelection.value = false
+    })
+  }
+
+  const findExactClientMatch = () => {
+    const lowerSearch = searchTerm.value.toLowerCase()
+    const searchDigits = normalizedDigits.value
+
+    return clientMatches.value.find((match) => {
+      const lowerName = String(match.name || '').trim().toLowerCase()
+      const matchDigits = String(match.phone || '').replace(/\D/g, '')
+      return lowerName === lowerSearch || (searchDigits && matchDigits === searchDigits)
+    }) || null
   }
 
   const handleEnterPhone = async () => {
     try {
-      const data = await fetchClientByPhone(phoneNo.value)
-      if (!data) {
-        isClientAddModelOpen.value = true
-        return
+      if (!searchTerm.value) return 'empty'
+      if (isClientLoading.value) return 'loading'
+
+      const exactMatch = findExactClientMatch()
+      if (exactMatch) {
+        applySelectedClient(exactMatch)
+        return 'selected'
       }
-      clientName.value = data.name
-      clientId.value = data.id
-      points.value = data.companies?.[0]?.points ?? 0
-      onClientFound()
+
+      if (clientMatches.value.length === 1) {
+        applySelectedClient(clientMatches.value[0])
+        return 'selected'
+      }
+
+      if (clientMatches.value.length === 0) {
+        isClientAddModelOpen.value = true
+        return 'create'
+      }
+
+      return 'ambiguous'
     } catch (err) {
       console.error('Failed to fetch client:', err)
+      return 'error'
     }
   }
 
-  const handleClientAdded = (id: string, name: string) => {
+  const handleClientAdded = (id: string, name: string, phone?: string) => {
+    isApplyingSelection.value = true
     clientName.value = name
     clientId.value = id
+    if (phone) {
+      phoneNo.value = String(phone).replace(/\D/g, '').slice(-10)
+    }
     points.value = 0
+    selectedClientPhone.value = String(phoneNo.value || '').trim().toLowerCase()
+    selectedClientName.value = String(name || '').trim().toLowerCase()
     isClientAddModelOpen.value = false
+    nextTick(() => {
+      isApplyingSelection.value = false
+    })
   }
 
-  // ─── Points redemption ───────────────────────────────────────────────────
+  watch(searchTerm, (value) => {
+    if (isApplyingSelection.value) return
+
+    const normalizedValue = String(value || '').trim().toLowerCase()
+    const matchesSelectedClient =
+      normalizedValue &&
+      (normalizedValue === selectedClientPhone.value || normalizedValue === selectedClientName.value)
+
+    if (!normalizedValue || (!matchesSelectedClient && clientId.value)) {
+      clientId.value = ''
+      clientName.value = ''
+      points.value = 0
+      selectedClientPhone.value = ''
+      selectedClientName.value = ''
+    }
+  })
+
+  watch(searchTerm, (value) => {
+    if (isApplyingSelection.value) return
+    fetchClientMatches(value)
+  }, { immediate: true })
 
   const handleRedeemPoints = async () => {
     redeeming.value = true
@@ -103,7 +192,9 @@ export function useBillingClient(
 
   return {
     isClientLoading,
+    clientMatches,
     redeeming,
+    applySelectedClient,
     handleEnterPhone,
     handleClientAdded,
     handleRedeemPoints,
