@@ -254,6 +254,7 @@ const pageCount = ref('5');
 const sales = ref([])
 const pageTotal = ref(0)
 const isLoading = ref(false)
+const isDownloadLoading = ref(false)
 const lastFetchId = ref(0)
 const salesTotals = ref({ total: 0, cash: 0, card: 0, upi: 0, credit: 0 })
 
@@ -264,6 +265,24 @@ const paymentMethodFilterOptions = [
   { label: 'Credit', value: 'Credit' },
   { label: 'Split', value: 'Split' },
 ]
+
+const formatInvoiceForExport = (invoiceNumber: string | number) => {
+  const prefix = useAuth().session.value?.billPrefix
+  return prefix ? `${prefix}-${invoiceNumber}` : String(invoiceNumber ?? '')
+}
+
+const formatDateTimeForExport = (value: string | Date) =>
+  format(new Date(value), 'd MMM yyyy, hh:mm a')
+
+const getBillDiscountAmount = (row: any) => {
+  const subtotal = Number(row.subtotal || 0)
+  const tax = Number(row.tax || 0)
+  const grandTotal = Number(row.grandTotal || 0)
+  return Math.max(0, subtotal + tax - grandTotal)
+}
+
+const formatPdfCurrency = (val: number) =>
+  `Rs ${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
 
 const fetchSales = async () => {
   isLoading.value = true
@@ -472,6 +491,7 @@ const fetchFilteredSalesForExport = async () => {
         sortColumn: sort.value.column,
         sortDirection: sort.value.direction,
         excludeMarkit: true,
+        closingDate: useAuth().session.value?.closingDate ?? null,
       },
     })
 
@@ -484,7 +504,32 @@ const fetchFilteredSalesForExport = async () => {
   return allRows
 }
 
+const buildSalesExportData = (rows: any[]) => {
+  const summaryRows = [
+    { label: 'Total Sales', value: rows.reduce((sum, row) => sum + Number(row.grandTotal || 0), 0) },
+    { label: 'Total Sales - Cash', value: rows.filter((row) => row.paymentMethod === 'Cash').reduce((sum, row) => sum + Number(row.grandTotal || 0), 0) },
+    { label: 'Total Sales - Card', value: rows.filter((row) => row.paymentMethod === 'Card').reduce((sum, row) => sum + Number(row.grandTotal || 0), 0) },
+    { label: 'Total Sales - UPI', value: rows.filter((row) => row.paymentMethod === 'UPI').reduce((sum, row) => sum + Number(row.grandTotal || 0), 0) },
+    { label: 'Total Sales - Credit', value: rows.filter((row) => row.paymentMethod === 'Credit').reduce((sum, row) => sum + Number(row.grandTotal || 0), 0) },
+    { label: 'Total Discount', value: rows.reduce((sum, row) => sum + getBillDiscountAmount(row), 0) },
+    { label: 'Total Tax Collected', value: rows.reduce((sum, row) => sum + Number(row.tax || 0), 0) },
+  ]
+
+  const billRows = rows.map((row: any) => ({
+    invoiceNumber: formatInvoiceForExport(row.invoiceNumber),
+    date: row.createdAt ? formatDateTimeForExport(row.createdAt) : '',
+    subtotal: Number(row.subtotal || 0),
+    discount: getBillDiscountAmount(row),
+    grandTotal: Number(row.grandTotal || 0),
+    taxCollected: Number(row.tax || 0),
+    payment: row.paymentMethod || '',
+  }))
+
+  return { summaryRows, billRows }
+}
+
 const handleDownloadExcel = async () => {
+  isDownloadLoading.value = true
   try {
     const rows = await fetchFilteredSalesForExport()
     if (!rows.length) {
@@ -501,45 +546,85 @@ const handleDownloadExcel = async () => {
     ])
 
     const workbook = new Workbook()
-    const worksheet = workbook.addWorksheet('Sales')
+    const worksheet = workbook.addWorksheet('Sales Report')
+    const { summaryRows, billRows } = buildSalesExportData(rows)
 
     worksheet.columns = [
-      { header: 'Invoice #', key: 'invoiceNumber', width: 14 },
-      { header: 'Date', key: 'createdAt', width: 22 },
-      { header: 'Customer Name', key: 'customerName', width: 24 },
-      { header: 'Customer Phone', key: 'customerPhone', width: 18 },
-      { header: 'Sub Total', key: 'subtotal', width: 14 },
-      { header: 'Grand Total', key: 'grandTotal', width: 14 },
-      { header: 'Payment Status', key: 'paymentStatus', width: 14 },
-      { header: 'Payment Method', key: 'paymentMethod', width: 16 },
-      { header: 'Notes', key: 'notes', width: 30 },
+      { header: 'A', key: 'col1', width: 28 },
+      { header: 'B', key: 'col2', width: 18 },
+      { header: 'C', key: 'col3', width: 18 },
+      { header: 'D', key: 'col4', width: 18 },
+      { header: 'E', key: 'col5', width: 18 },
+      { header: 'F', key: 'col6', width: 18 },
+      { header: 'G', key: 'col7', width: 18 },
     ]
 
-    rows.forEach((row: any) => {
-      worksheet.addRow({
-        invoiceNumber: row.invoiceNumber ?? '',
-        createdAt: row.createdAt
-          ? new Date(row.createdAt).toLocaleString()
-          : '',
-        customerName: row.client?.name ?? '',
-        customerPhone: row.client?.phone ?? '',
-        subtotal: Number(row.subtotal || 0),
-        grandTotal: Number(row.grandTotal || 0),
-        paymentStatus: row.paymentStatus ?? '',
-        paymentMethod: row.paymentMethod ?? '',
-        notes: row.notes ?? '',
-      })
+    worksheet.mergeCells('A1:B1')
+    worksheet.getCell('A1').value = 'Sales Summary'
+    worksheet.getCell('A1').font = { bold: true, size: 14 }
+
+    worksheet.addRow(['Metric', 'Amount'])
+    summaryRows.forEach((row) => {
+      worksheet.addRow([row.label, row.value])
     })
 
-    const headerRow = worksheet.getRow(1)
-    headerRow.font = { bold: true }
-    headerRow.eachCell((cell) => {
+    const summaryHeaderRow = worksheet.getRow(2)
+    summaryHeaderRow.font = { bold: true }
+    summaryHeaderRow.eachCell((cell) => {
       cell.fill = {
         type: 'pattern',
         pattern: 'solid',
         fgColor: { argb: 'FFE5E7EB' },
       }
     })
+
+    worksheet.addRow([])
+    const billsTitleRowIndex = worksheet.lastRow!.number + 1
+    worksheet.mergeCells(`A${billsTitleRowIndex}:G${billsTitleRowIndex}`)
+    worksheet.getCell(`A${billsTitleRowIndex}`).value = 'Bills'
+    worksheet.getCell(`A${billsTitleRowIndex}`).font = { bold: true, size: 14 }
+
+    const billsHeaderRow = worksheet.addRow([
+      'Invoice Number',
+      'Date',
+      'Subtotal',
+      'Discount',
+      'Grand Total',
+      'Total Tax Collected',
+      'Payment',
+    ])
+    billsHeaderRow.font = { bold: true }
+    billsHeaderRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE5E7EB' },
+      }
+    })
+
+    billRows.forEach((row) => {
+      worksheet.addRow([
+        row.invoiceNumber,
+        row.date,
+        row.subtotal,
+        row.discount,
+        row.grandTotal,
+        row.taxCollected,
+        row.payment,
+      ])
+    })
+
+    for (let rowIndex = 3; rowIndex <= 2 + summaryRows.length; rowIndex++) {
+      worksheet.getCell(`B${rowIndex}`).numFmt = '#,##0.00'
+    }
+
+    const billsDataStart = billsHeaderRow.number + 1
+    for (let rowIndex = billsDataStart; rowIndex < billsDataStart + billRows.length; rowIndex++) {
+      worksheet.getCell(`C${rowIndex}`).numFmt = '#,##0.00'
+      worksheet.getCell(`D${rowIndex}`).numFmt = '#,##0.00'
+      worksheet.getCell(`E${rowIndex}`).numFmt = '#,##0.00'
+      worksheet.getCell(`F${rowIndex}`).numFmt = '#,##0.00'
+    }
 
     const buffer = await workbook.xlsx.writeBuffer()
     const filename = `sales-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`
@@ -555,8 +640,139 @@ const handleDownloadExcel = async () => {
       description: error?.message || 'Something went wrong',
       color: 'red',
     })
+  } finally {
+    isDownloadLoading.value = false
   }
 }
+
+const handleDownloadPdf = async () => {
+  isDownloadLoading.value = true
+  try {
+    const rows = await fetchFilteredSalesForExport()
+    if (!rows.length) {
+      toast.add({
+        title: 'No data to export',
+        color: 'orange',
+      })
+      return
+    }
+
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ])
+
+    const { summaryRows, billRows } = buildSalesExportData(rows)
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm' })
+    const session = useAuth().session.value
+    const margin = 14
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const address = session?.address || {}
+    const addressLines = [
+      [address.street, address.locality].filter(Boolean).join(', '),
+      [address.city, address.state, address.pincode].filter(Boolean).join(', '),
+    ].filter(Boolean)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(18)
+    doc.text(session?.companyName || 'Sales Report', margin, 16)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    let headerY = 23
+    addressLines.forEach((line) => {
+      doc.text(line, margin, headerY)
+      headerY += 5
+    })
+    if (session?.companyPhone) {
+      doc.text(`Phone: ${session.companyPhone}`, margin, headerY)
+      headerY += 5
+    }
+
+    doc.setFont('helvetica', 'bold')
+    doc.text('Sales Report', pageWidth - margin, 16, { align: 'right' })
+
+    doc.setFont('helvetica', 'normal')
+    doc.text(
+      `Period: ${format(selectedDate.value.start, 'd MMM yyyy')} - ${format(selectedDate.value.end, 'd MMM yyyy')}`,
+      pageWidth - margin,
+      23,
+      { align: 'right' }
+    )
+    doc.text(`Generated on: ${format(new Date(), 'd MMM yyyy, hh:mm a')}`, pageWidth - margin, 28, { align: 'right' })
+
+    autoTable(doc, {
+      startY: Math.max(36, headerY + 4),
+      head: [['Metric', 'Amount']],
+      body: summaryRows.map((row) => [row.label, formatPdfCurrency(row.value)]),
+      theme: 'grid',
+      styles: { fontSize: 10, cellPadding: 3 },
+      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 70 },
+        1: { halign: 'right', cellWidth: 35 },
+      },
+    })
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [[
+        'Invoice Number',
+        'Date',
+        'Subtotal',
+        'Discount',
+        'Grand Total',
+        'Total Tax Collected',
+        'Payment',
+      ]],
+      body: billRows.map((row) => [
+        row.invoiceNumber,
+        row.date,
+        formatPdfCurrency(row.subtotal),
+        formatPdfCurrency(row.discount),
+        formatPdfCurrency(row.grandTotal),
+        formatPdfCurrency(row.taxCollected),
+        row.payment,
+      ]),
+      tableWidth: pageWidth - margin * 2,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [100, 116, 139], textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 34 },
+        1: { cellWidth: 44 },
+        2: { halign: 'right', cellWidth: 34 },
+        3: { halign: 'right', cellWidth: 34 },
+        4: { halign: 'right', cellWidth: 34 },
+        5: { halign: 'right', cellWidth: 42 },
+        6: { cellWidth: 42 },
+      },
+    })
+
+    doc.save(`sales-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`)
+  } catch (error: any) {
+    toast.add({
+      title: 'Failed to export sales PDF',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  } finally {
+    isDownloadLoading.value = false
+  }
+}
+
+const downloadItems = [[
+  {
+    label: 'Excel',
+    icon: 'i-heroicons-table-cells',
+    click: () => handleDownloadExcel(),
+  },
+  {
+    label: 'PDF',
+    icon: 'i-heroicons-document',
+    click: () => handleDownloadPdf(),
+  },
+]]
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
     Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
@@ -966,14 +1182,18 @@ const openBill = async (id) => {
                         </UButton>
                     </USelectMenu>
 
-                    <UButton
-                        icon="i-heroicons-arrow-down-tray"
-                        color="gray"
-                        size="xs"
-                        @click="handleDownloadExcel"
-                    >
-                        Download
-                    </UButton>
+                    <UDropdown :items="downloadItems" :ui="{ width: 'w-32' }">
+                        <UButton
+                            icon="i-heroicons-arrow-down-tray"
+                            color="gray"
+                            size="xs"
+                            trailing
+                            :loading="isDownloadLoading"
+                            :disabled="isDownloadLoading"
+                        >
+                            Download
+                        </UButton>
+                    </UDropdown>
 
                     <UButton
                         icon="i-heroicons-funnel"

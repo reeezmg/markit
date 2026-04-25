@@ -33,6 +33,7 @@ const draftMinAmount = ref<number | null>(null)
 const draftMaxAmount = ref<number | null>(null)
 const selectedPaymentMode = ref<string[]>([])
 const draftSelectedPaymentMode = ref<string[]>([])
+const isDownloadLoading = ref(false)
 
 const paymentModeOptions = [
     { label: 'Cash',   value: 'CASH' },
@@ -188,73 +189,77 @@ const userFilterOptions = computed(() =>
     }))
 )
 
-// Data
-const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
+const expenseWhere = computed<Prisma.ExpenseWhereInput>(() => {
     const hasMinAmount = minAmount.value !== null && Number.isFinite(Number(minAmount.value))
     const hasMaxAmount = maxAmount.value !== null && Number.isFinite(Number(maxAmount.value))
     const selectedUserIds = (selectedUsers.value || [])
       .map((u: any) => (typeof u === 'string' ? u : u?.value))
       .filter((id: any) => typeof id === 'string' && id.length > 0)
     return {
-        where: {
-            companyId: useAuth().session.value?.companyId,
-            ...(search.value?.trim() && {
-                OR: [
-                    {
-                        note: {
+        companyId: useAuth().session.value?.companyId,
+        ...(search.value?.trim() && {
+            OR: [
+                {
+                    note: {
+                        contains: search.value.trim(),
+                        mode: 'insensitive'
+                    }
+                },
+                {
+                    expensecategory: {
+                        name: {
                             contains: search.value.trim(),
                             mode: 'insensitive'
                         }
-                    },
-                    {
-                        expensecategory: {
-                            name: {
-                                contains: search.value.trim(),
-                                mode: 'insensitive'
-                            }
-                        }
-                    },
-                    {
-                        user: {
-                            name: {
-                                contains: search.value.trim(),
-                                mode: 'insensitive'
-                            }
+                    }
+                },
+                {
+                    user: {
+                        name: {
+                            contains: search.value.trim(),
+                            mode: 'insensitive'
                         }
                     }
-                ]
-            }),
-
-            ...(selectedStatus.value.length && {
-                status: { in: selectedStatus.value }
-            }),
-
-            ...(selectedPaymentMode.value.length && {
-                paymentMode: { in: selectedPaymentMode.value }
-            }),
-
-                ...(selectedDate.value && {
-                expenseDate: {
-                    gte: startOfDay(selectedDate.value.start),
-                    lte: endOfDay(selectedDate.value.end),
                 }
-                }),
+            ]
+        }),
 
-            ...(selectedCategory.value.length && {
-                expensecategoryId: { in: selectedCategory }
-            }),
+        ...(selectedStatus.value.length && {
+            status: { in: selectedStatus.value }
+        }),
 
-            ...(selectedUserIds.length && {
-                userId: { in: selectedUserIds }
-            }),
+        ...(selectedPaymentMode.value.length && {
+            paymentMode: { in: selectedPaymentMode.value }
+        }),
 
-            ...((hasMinAmount || hasMaxAmount) && {
-                totalAmount: {
-                    ...(hasMinAmount ? { gte: Number(minAmount.value) } : {}),
-                    ...(hasMaxAmount ? { lte: Number(maxAmount.value) } : {}),
-                }
-            })
-        },
+        ...(selectedDate.value && {
+            expenseDate: {
+                gte: startOfDay(selectedDate.value.start),
+                lte: endOfDay(selectedDate.value.end),
+            }
+        }),
+
+        ...(selectedCategory.value.length && {
+            expensecategoryId: { in: selectedCategory.value }
+        }),
+
+        ...(selectedUserIds.length && {
+            userId: { in: selectedUserIds }
+        }),
+
+        ...((hasMinAmount || hasMaxAmount) && {
+            totalAmount: {
+                ...(hasMinAmount ? { gte: Number(minAmount.value) } : {}),
+                ...(hasMaxAmount ? { lte: Number(maxAmount.value) } : {}),
+            }
+        })
+    }
+})
+
+// Data
+const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
+    return {
+        where: expenseWhere.value,
 
         include:{
             expensecategory:true,
@@ -269,6 +274,12 @@ const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
 },{ enabled: !!useAuth().session.value?.companyId });
 
 const { data: sales, isLoading, error, refetch } = useFindManyExpense(queryArgs);
+const countQueryArgs = computed(() =>
+    useAuth().session.value?.companyId
+        ? { where: expenseWhere.value }
+        : undefined
+)
+const { data: totalCount } = useCountExpense(countQueryArgs);
 const  pageTotal = computed(() => sales.value?.length) ;
 const totalAmount = computed(() => {
   if (!sales.value) return 0;
@@ -330,18 +341,31 @@ const handleExpenseCardClick = (mode: string | null) => {
   page.value = 1
 }
 
+const formatPdfExpenseCurrency = (val: number) =>
+  `Rs ${Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+
 const formatExpenseCurrency = (val: number) =>
   '₹' + Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
-const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
+const pageFrom = computed(() => {
+    if (!totalCount.value) return 0
+    return (page.value - 1) * parseInt(pageCount.value) + 1
+});
 const pageTo = computed(() =>
-    Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0),
+    Math.min(page.value * parseInt(pageCount.value), totalCount.value || 0),
 );
 const selectedColumns = ref(columns);
 const columnsTable = computed(() =>
     columns.filter((column) => selectedColumns.value.includes(column)),
 );
 const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
+
+watch(totalCount, (count) => {
+  const totalPages = Math.max(1, Math.ceil(Number(count || 0) / parseInt(pageCount.value)))
+  if (page.value > totalPages) {
+    page.value = totalPages
+  }
+})
 
 
 
@@ -483,7 +507,32 @@ const multiUpdate = async(status:string,ids:any) => {
     })
 }
 
+const buildExpenseExportData = (rows: any[]) => {
+  const summaryRows = [
+    { label: 'Total Expense', value: expenseTotals.value.total },
+    { label: 'Cash', value: expenseTotals.value.cash },
+    { label: 'Card', value: expenseTotals.value.card },
+    { label: 'UPI', value: expenseTotals.value.upi },
+    { label: 'Bank', value: expenseTotals.value.bank },
+    { label: 'Cheque', value: expenseTotals.value.cheque },
+  ]
+
+  const billRows = rows.map((row: any) => ({
+    expenseNumber: row.expenseNumber ? `${useAuth().session.value?.expensePrefix || 'EXP'}-${row.expenseNumber}` : '',
+    expenseDate: row.expenseDate ? format(row.expenseDate, 'd MMM yyyy') : '',
+    category: row.expensecategory?.name || '',
+    user: row.user?.name || '',
+    note: row.note || '',
+    paymentMode: row.paymentMode || '',
+    amount: Number(row.totalAmount || 0),
+    status: row.status || '',
+  }))
+
+  return { summaryRows, billRows }
+}
+
 const handleDownloadExcel = async () => {
+  isDownloadLoading.value = true
   try {
     const rows = sales.value || []
     if (!rows.length) {
@@ -500,34 +549,85 @@ const handleDownloadExcel = async () => {
     ])
 
     const workbook = new Workbook()
-    const worksheet = workbook.addWorksheet('Expenses')
+    const worksheet = workbook.addWorksheet('Expense Report')
+    const { summaryRows, billRows } = buildExpenseExportData(rows)
 
-    const expPrefix = useAuth().session.value?.expensePrefix || 'EXP'
     worksheet.columns = [
-      { header: '#', key: 'expenseNumber', width: 14 },
-      { header: 'Date', key: 'expenseDate', width: 16 },
-      { header: 'Category', key: 'category', width: 24 },
-      { header: 'User', key: 'user', width: 24 },
-      { header: 'Note', key: 'note', width: 32 },
-      { header: 'Payment Mode', key: 'paymentMode', width: 14 },
-      { header: 'Amount', key: 'amount', width: 12 },
-      { header: 'Status', key: 'status', width: 12 },
+      { header: 'A', key: 'col1', width: 24 },
+      { header: 'B', key: 'col2', width: 18 },
+      { header: 'C', key: 'col3', width: 18 },
+      { header: 'D', key: 'col4', width: 18 },
+      { header: 'E', key: 'col5', width: 28 },
+      { header: 'F', key: 'col6', width: 16 },
+      { header: 'G', key: 'col7', width: 14 },
+      { header: 'H', key: 'col8', width: 12 },
     ]
 
-    rows.forEach((row: any) => {
-      worksheet.addRow({
-        expenseNumber: row.expenseNumber ? `${expPrefix}-${row.expenseNumber}` : '',
-        expenseDate: row.expenseDate ? format(row.expenseDate, 'd MMM yyyy') : '',
-        category: row.expensecategory?.name || '',
-        user: row.user?.name || '',
-        note: row.note || '',
-        paymentMode: row.paymentMode || '',
-        amount: Number(row.totalAmount || 0),
-        status: row.status || '',
-      })
+    worksheet.mergeCells('A1:B1')
+    worksheet.getCell('A1').value = 'Expense Summary'
+    worksheet.getCell('A1').font = { bold: true, size: 14 }
+
+    worksheet.addRow(['Metric', 'Amount'])
+    summaryRows.forEach((row) => {
+      worksheet.addRow([row.label, row.value])
     })
 
-    worksheet.getRow(1).font = { bold: true }
+    const summaryHeaderRow = worksheet.getRow(2)
+    summaryHeaderRow.font = { bold: true }
+    summaryHeaderRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE5E7EB' },
+      }
+    })
+
+    worksheet.addRow([])
+    const expensesTitleRowIndex = worksheet.lastRow!.number + 1
+    worksheet.mergeCells(`A${expensesTitleRowIndex}:H${expensesTitleRowIndex}`)
+    worksheet.getCell(`A${expensesTitleRowIndex}`).value = 'Expenses'
+    worksheet.getCell(`A${expensesTitleRowIndex}`).font = { bold: true, size: 14 }
+
+    const expenseHeaderRow = worksheet.addRow([
+      'Expense #',
+      'Date',
+      'Category',
+      'User',
+      'Note',
+      'Payment Mode',
+      'Amount',
+      'Status',
+    ])
+    expenseHeaderRow.font = { bold: true }
+    expenseHeaderRow.eachCell((cell) => {
+      cell.fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FFE5E7EB' },
+      }
+    })
+
+    billRows.forEach((row) => {
+      worksheet.addRow([
+        row.expenseNumber,
+        row.expenseDate,
+        row.category,
+        row.user,
+        row.note,
+        row.paymentMode,
+        row.amount,
+        row.status,
+      ])
+    })
+
+    for (let rowIndex = 3; rowIndex <= 2 + summaryRows.length; rowIndex++) {
+      worksheet.getCell(`B${rowIndex}`).numFmt = '#,##0.00'
+    }
+
+    const expenseDataStart = expenseHeaderRow.number + 1
+    for (let rowIndex = expenseDataStart; rowIndex < expenseDataStart + billRows.length; rowIndex++) {
+      worksheet.getCell(`G${rowIndex}`).numFmt = '#,##0.00'
+    }
 
     const buffer = await workbook.xlsx.writeBuffer()
     saveAs(
@@ -542,8 +642,141 @@ const handleDownloadExcel = async () => {
       description: error?.message || 'Something went wrong',
       color: 'red',
     })
+  } finally {
+    isDownloadLoading.value = false
   }
 }
+
+const handleDownloadPdf = async () => {
+  isDownloadLoading.value = true
+  try {
+    const rows = sales.value || []
+    if (!rows.length) {
+      toast.add({
+        title: 'No data to export',
+        color: 'orange',
+      })
+      return
+    }
+
+    const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ])
+
+    const { summaryRows, billRows } = buildExpenseExportData(rows)
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm' })
+    const margin = 14
+    const pageWidth = doc.internal.pageSize.getWidth()
+    const session = useAuth().session.value
+    const address = session?.address || {}
+    const addressLines = [
+      [address.street, address.locality].filter(Boolean).join(', '),
+      [address.city, address.state, address.pincode].filter(Boolean).join(', '),
+    ].filter(Boolean)
+
+    doc.setFont('helvetica', 'bold')
+    doc.setFontSize(18)
+    doc.text(session?.companyName || 'Expense Report', margin, 16)
+
+    doc.setFont('helvetica', 'normal')
+    doc.setFontSize(10)
+    let headerY = 23
+    addressLines.forEach((line) => {
+      doc.text(line, margin, headerY)
+      headerY += 5
+    })
+    if (session?.companyPhone) {
+      doc.text(`Phone: ${session.companyPhone}`, margin, headerY)
+      headerY += 5
+    }
+
+    doc.setFont('helvetica', 'bold')
+    doc.text('Expense Report', pageWidth - margin, 16, { align: 'right' })
+    doc.setFont('helvetica', 'normal')
+    doc.text(
+      `Period: ${format(selectedDate.value.start, 'd MMM yyyy')} - ${format(selectedDate.value.end, 'd MMM yyyy')}`,
+      pageWidth - margin,
+      23,
+      { align: 'right' }
+    )
+    doc.text(`Generated on: ${format(new Date(), 'd MMM yyyy, hh:mm a')}`, pageWidth - margin, 28, { align: 'right' })
+
+    autoTable(doc, {
+      startY: Math.max(36, headerY + 4),
+      head: [['Metric', 'Amount']],
+      body: summaryRows.map((row) => [row.label, formatPdfExpenseCurrency(row.value)]),
+      theme: 'grid',
+      styles: { fontSize: 10, cellPadding: 3 },
+      headStyles: { fillColor: [79, 70, 229], textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 70 },
+        1: { halign: 'right', cellWidth: 35 },
+      },
+    })
+
+    autoTable(doc, {
+      startY: (doc as any).lastAutoTable.finalY + 10,
+      head: [[
+        'Expense #',
+        'Date',
+        'Category',
+        'User',
+        'Note',
+        'Payment Mode',
+        'Amount',
+        'Status',
+      ]],
+      body: billRows.map((row) => [
+        row.expenseNumber,
+        row.expenseDate,
+        row.category,
+        row.user,
+        row.note,
+        row.paymentMode,
+        formatPdfExpenseCurrency(row.amount),
+        row.status,
+      ]),
+      tableWidth: pageWidth - margin * 2,
+      theme: 'grid',
+      styles: { fontSize: 9, cellPadding: 3 },
+      headStyles: { fillColor: [100, 116, 139], textColor: 255, fontStyle: 'bold' },
+      columnStyles: {
+        0: { cellWidth: 24 },
+        1: { cellWidth: 26 },
+        2: { cellWidth: 30 },
+        3: { cellWidth: 28 },
+        4: { cellWidth: 70 },
+        5: { cellWidth: 24 },
+        6: { halign: 'right', cellWidth: 26 },
+        7: { cellWidth: 24 },
+      },
+    })
+
+    doc.save(`expenses-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`)
+  } catch (error: any) {
+    toast.add({
+      title: 'Failed to export expenses PDF',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  } finally {
+    isDownloadLoading.value = false
+  }
+}
+
+const downloadItems = [[
+  {
+    label: 'Excel',
+    icon: 'i-heroicons-table-cells',
+    click: () => handleDownloadExcel(),
+  },
+  {
+    label: 'PDF',
+    icon: 'i-heroicons-document',
+    click: () => handleDownloadPdf(),
+  },
+]]
 
 // const download = async (filePath:string) => {
 //     if (!filePath) {
@@ -696,14 +929,18 @@ const handleDownloadExcel = async () => {
                         </UButton>
                     </USelectMenu>
 
-                    <UButton
-                        icon="i-heroicons-arrow-down-tray"
-                        color="gray"
-                        size="xs"
-                        @click="handleDownloadExcel"
-                    >
-                        Download
-                    </UButton>
+                    <UDropdown :items="downloadItems" :ui="{ width: 'w-32' }">
+                        <UButton
+                            icon="i-heroicons-arrow-down-tray"
+                            color="gray"
+                            size="xs"
+                            trailing
+                            :loading="isDownloadLoading"
+                            :disabled="isDownloadLoading"
+                        >
+                            Download
+                        </UButton>
+                    </UDropdown>
 
                     <UButton
                         icon="i-heroicons-funnel"
@@ -786,7 +1023,7 @@ const handleDownloadExcel = async () => {
                             to
                             <span class="font-medium">{{ pageTo }}</span>
                             of
-                            <span class="font-medium">{{ pageTotal }}</span>
+                            <span class="font-medium">{{ totalCount || 0 }}</span>
                             results
                         </span>
                     </div>
@@ -794,7 +1031,7 @@ const handleDownloadExcel = async () => {
                     <UPagination
                         v-model="page"
                         :page-count="parseInt(pageCount)"
-                        :total="pageTotal"
+                        :total="totalCount || 0"
                         :ui="{
                             wrapper: 'flex items-center gap-1',
                             rounded:

@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await useAuthSession(event)
   const companyId = session.data.companyId
+  const cleanup = session.data.cleanup ?? false
 
   if (!companyId) {
     throw createError({
@@ -59,17 +60,238 @@ export default defineEventHandler(async (event) => {
 
     const company = baseRes.rows[0] || {}
 
-    const openingCash =
-      company.cash &&
-      new Date(company.opening_cash_date) <= startDate
-        ? Number(company.cash)
-        : 0
+    let baseCash = 0
+    let baseBank = 0
 
-    const openingBank =
+    if (
+      company.cash &&
+      company.opening_cash_date &&
+      new Date(company.opening_cash_date) <= startDate
+    ) {
+      baseCash = Number(company.cash)
+    }
+
+    if (
       company.bank &&
+      company.opening_bank_date &&
       new Date(company.opening_bank_date) <= startDate
-        ? Number(company.bank)
-        : 0
+    ) {
+      baseBank = Number(company.bank)
+    }
+
+    const isZeroOpening =
+      Number(company.cash || 0) === 0 &&
+      Number(company.bank || 0) === 0
+
+    let openingCash = 0
+    let openingBank = 0
+
+    if (!isZeroOpening) {
+      const [
+        cashSalesBeforeRes,
+        cashExpensesBeforeRes,
+        cashDistributorBeforeRes,
+        cashMoneyBeforeRes,
+        cashTransferBeforeRes,
+        bankSalesBeforeRes,
+        bankExpensesBeforeRes,
+        bankDistributorBeforeRes,
+        bankMoneyBeforeRes,
+        bankTransferBeforeRes
+      ] = await Promise.all([
+        client.query(
+          `
+          WITH split AS (
+            SELECT (elem->>'amount')::numeric AS amount
+            FROM bills b
+            JOIN LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
+                THEN b.split_payments::jsonb
+                ELSE '[]'::jsonb
+              END
+            ) elem ON true
+            WHERE b.company_id = $1
+              AND b.payment_method = 'Split'
+              AND (elem->>'method') = 'Cash'
+              AND b.deleted = false
+              AND b.payment_status IN ('PAID','PENDING')
+              AND b.is_markit = false
+              AND b.created_at < $2
+              AND ($3 = true OR b.precedence IS NOT TRUE)
+          )
+          SELECT
+            COALESCE(SUM(CASE WHEN payment_method = 'Cash' THEN grand_total ELSE 0 END),0)
+            + COALESCE((SELECT SUM(amount) FROM split),0) AS total
+          FROM bills
+          WHERE company_id = $1
+            AND deleted = false
+            AND payment_status IN ('PAID','PENDING')
+            AND is_markit = false
+            AND created_at < $2
+            AND ($3 = true OR precedence IS NOT TRUE)
+          `,
+          [companyId, startDate, cleanup]
+        ),
+        client.query(
+          `
+          SELECT COALESCE(SUM(total_amount),0) AS total
+          FROM expenses
+          WHERE company_id = $1
+            AND payment_mode = 'CASH'
+            AND UPPER(status) = 'PAID'
+            AND expense_date < $2
+          `,
+          [companyId, startDate]
+        ),
+        client.query(
+          `
+          SELECT COALESCE(SUM(amount),0) AS total
+          FROM distributor_payments
+          WHERE company_id = $1
+            AND payment_type = 'CASH'
+            AND created_at < $2
+          `,
+          [companyId, startDate]
+        ),
+        client.query(
+          `
+          SELECT COALESCE(SUM(
+            CASE WHEN direction = 'RECEIVED' THEN amount ELSE -amount END
+          ),0) AS net
+          FROM money_transactions
+          WHERE company_id = $1
+            AND payment_mode = 'CASH'
+            AND status = 'PAID'
+            AND created_at < $2
+          `,
+          [companyId, startDate]
+        ),
+        client.query(
+          `
+          SELECT
+            COALESCE(SUM(CASE WHEN to_type = 'CASH' THEN amount ELSE 0 END),0)
+            -
+            COALESCE(SUM(CASE WHEN from_type = 'CASH' THEN amount ELSE 0 END),0)
+            AS net
+          FROM account_transfers
+          WHERE company_id = $1
+            AND created_at < $2
+          `,
+          [companyId, startDate]
+        ),
+        client.query(
+          `
+          WITH split AS (
+            SELECT (elem->>'amount')::numeric AS amount
+            FROM bills b
+            JOIN LATERAL jsonb_array_elements(
+              CASE
+                WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
+                THEN b.split_payments::jsonb
+                ELSE '[]'::jsonb
+              END
+            ) elem ON true
+            WHERE b.company_id = $1
+              AND b.payment_method = 'Split'
+              AND (elem->>'method') IN ('UPI','Card')
+              AND b.deleted = false
+              AND b.payment_status IN ('PAID','PENDING')
+              AND b.is_markit = false
+              AND b.created_at < $2
+              AND ($3 = true OR b.precedence IS NOT TRUE)
+          )
+          SELECT
+            COALESCE(SUM(CASE WHEN payment_method IN ('UPI','Card') THEN grand_total ELSE 0 END),0)
+            + COALESCE((SELECT SUM(amount) FROM split),0) AS total
+          FROM bills
+          WHERE company_id = $1
+            AND deleted = false
+            AND payment_status IN ('PAID','PENDING')
+            AND is_markit = false
+            AND created_at < $2
+            AND ($3 = true OR precedence IS NOT TRUE)
+          `,
+          [companyId, startDate, cleanup]
+        ),
+        client.query(
+          `
+          SELECT COALESCE(SUM(total_amount),0) AS total
+          FROM expenses
+          WHERE company_id = $1
+            AND payment_mode IN ('UPI','CARD','BANK','CHEQUE')
+            AND UPPER(status) = 'PAID'
+            AND expense_date < $2
+          `,
+          [companyId, startDate]
+        ),
+        client.query(
+          `
+          SELECT COALESCE(SUM(amount),0) AS total
+          FROM distributor_payments
+          WHERE company_id = $1
+            AND payment_type = 'BANK'
+            AND created_at < $2
+          `,
+          [companyId, startDate]
+        ),
+        client.query(
+          `
+          SELECT COALESCE(SUM(
+            CASE WHEN direction = 'RECEIVED' THEN amount ELSE -amount END
+          ),0) AS net
+          FROM money_transactions
+          WHERE company_id = $1
+            AND payment_mode = 'BANK'
+            AND status = 'PAID'
+            AND account_id IS NULL
+            AND created_at < $2
+          `,
+          [companyId, startDate]
+        ),
+        client.query(
+          `
+          SELECT
+            COALESCE(SUM(CASE WHEN to_type = 'BANK' AND to_account_id IS NULL THEN amount ELSE 0 END),0)
+            -
+            COALESCE(SUM(CASE WHEN from_type = 'BANK' AND from_account_id IS NULL THEN amount ELSE 0 END),0)
+            AS net
+          FROM account_transfers
+          WHERE company_id = $1
+            AND created_at < $2
+          `,
+          [companyId, startDate]
+        )
+      ])
+
+      const cashSalesBefore = Number(cashSalesBeforeRes.rows[0].total || 0)
+      const cashExpensesBefore = Number(cashExpensesBeforeRes.rows[0].total || 0)
+      const cashDistributorBefore = Number(cashDistributorBeforeRes.rows[0].total || 0)
+      const cashMoneyNetBefore = Number(cashMoneyBeforeRes.rows[0].net || 0)
+      const cashTransferNetBefore = Number(cashTransferBeforeRes.rows[0].net || 0)
+
+      const bankSalesBefore = Number(bankSalesBeforeRes.rows[0].total || 0)
+      const bankExpensesBefore = Number(bankExpensesBeforeRes.rows[0].total || 0)
+      const bankDistributorBefore = Number(bankDistributorBeforeRes.rows[0].total || 0)
+      const bankMoneyNetBefore = Number(bankMoneyBeforeRes.rows[0].net || 0)
+      const bankTransferNetBefore = Number(bankTransferBeforeRes.rows[0].net || 0)
+
+      openingCash =
+        baseCash +
+        cashSalesBefore -
+        cashExpensesBefore -
+        cashDistributorBefore +
+        cashMoneyNetBefore +
+        cashTransferNetBefore
+
+      openingBank =
+        baseBank +
+        bankSalesBefore -
+        bankExpensesBefore -
+        bankDistributorBefore +
+        bankMoneyNetBefore +
+        bankTransferNetBefore
+    }
 
 
 
