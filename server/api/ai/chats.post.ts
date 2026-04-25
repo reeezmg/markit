@@ -11,7 +11,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const chat = await prisma.aiChat.create({
-    data: { companyId, userId },
+    data: { companyId, userId, channel: 'WEB', sessionStatus: 'ACTIVE' },
     select: { id: true, title: true, updatedAt: true },
   })
 

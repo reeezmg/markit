@@ -1,17 +1,10 @@
 export default eventHandler(async (event) => {
     const session = await useAuthSession(event);
-    const { deliveryMode, fundDeliveryFees, deliveryRadius, deliveryFeesPerKm, waitingTime, waitingChargesPerMin, minDeliveryCharges, deliveryDiscountThreshold, deliveryDiscountAmount } = await readBody(event);
-    console.log(deliveryMode);
+    const { deliveryMode, deliveryRadius, deliveryDiscount } = await readBody(event);
     await session.update({
         deliveryMode: deliveryMode,
-        fundDeliveryFees: fundDeliveryFees,
         deliveryRadius: deliveryRadius,
-        deliveryFeesPerKm: deliveryFeesPerKm,
-        waitingTime: waitingTime,
-        waitingChargesPerMin: waitingChargesPerMin,
-        minDeliveryCharges: minDeliveryCharges,
-        deliveryDiscountThreshold: deliveryDiscountThreshold,
-        deliveryDiscountAmount: deliveryDiscountAmount,
+        deliveryDiscount: Math.max(50, Number(deliveryDiscount) || 100),
     });
     return session;
 });

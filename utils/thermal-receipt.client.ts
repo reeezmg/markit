@@ -1,4 +1,31 @@
 import jsPDF from "jspdf";
+import JsBarcode from "jsbarcode";
+
+function formatCouponDiscount(coupon: any) {
+  if (!coupon) return "";
+  if (coupon.type === "PERCENTAGE") {
+    const max = coupon.maxDiscountAmount ? ` max ${Number(coupon.maxDiscountAmount).toFixed(2)}` : "";
+    return `${Number(coupon.discountValue || 0).toFixed(2)}% off${max}`;
+  }
+  if (coupon.type === "FLAT") {
+    return `${Number(coupon.discountValue || 0).toFixed(2)} off`;
+  }
+  return "Gift coupon";
+}
+
+function createBarcodeDataUrl(value: string) {
+  const canvas = document.createElement("canvas");
+  JsBarcode(canvas, value, {
+    format: "CODE128",
+    width: 2,
+    height: 45,
+    displayValue: true,
+    font: "monospace",
+    fontSize: 14,
+    margin: 4,
+  });
+  return canvas.toDataURL("image/png");
+}
 
 export async function generateThermalReceiptPDF(data: any, filename = "receipt.pdf") {
   if (typeof window === "undefined") return;
@@ -19,7 +46,8 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   );
 
   const headerHeight = 90;
-  const footerHeight = 90;
+  const generatedCoupons = Array.isArray(data.generatedCoupons) ? data.generatedCoupons : [];
+  const footerHeight = 90 + generatedCoupons.length * 48;
   const finalHeight = headerHeight + itemHeight + footerHeight;
 
   function cleanJoin(a?: string, b?: string) {
@@ -32,9 +60,12 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   return "";
 }
 
-   const calculatedDiscount = data.discount < 0
-      ? Math.abs(data.discount)
-      : (data.subtotal * data.discount) / 100;
+   const discStr = String(data.discount ?? '')
+   const calculatedDiscount = discStr.startsWith('+')
+      ? 0
+      : Number(data.discount) < 0
+        ? Math.abs(Number(data.discount))
+        : (data.subtotal * Number(data.discount)) / 100;
 
 
   // Now create final PDF
@@ -97,6 +128,9 @@ center(
   if (data.clientName){
       txt(`Client Name: ${data.clientName}`);
       txt(`Client Phone: ${data.clientPhone}`);
+  }
+  if (Number(data.availablePoints || 0) > 0) {
+    txt(`Total Points Available: ${data.availablePoints}`);
   }
 
 
@@ -177,7 +211,7 @@ doc.text(Number(totalValue).toFixed(2), 102, y);
   y += 5;
 
   doc.text(
-    `DISC/ROUND OFF(+/-): ${data.discount}`,
+    `DISC/ROUND OFF(+/-): ${discStr.startsWith('+') ? 'Add ' + discStr : data.discount}`,
     pageWidth / 2,
     y,
     { align: "center" }
@@ -195,11 +229,23 @@ doc.text(Number(totalValue).toFixed(2), 102, y);
   );
   y += 15;
 
+  if (Number(data.redeemedPoints || 0) > 0) {
+    center(`Points Redeemed: ${data.redeemedPoints}`, 10, true);
+  }
+  if (Number(data.couponValue || 0) > 0) {
+    center(`Coupon Discount: ${Number(data.couponValue).toFixed(2)}`, 10, true);
+  }
+
   // ---------------------- SAVINGS ----------------------
   doc.setFontSize(12);
   doc.setFont("courier", "bold");
   doc.rect(5, y, pageWidth - 10, 10);
-const saving = Number(calculatedDiscount + (data.tdiscount || 0)).toFixed(2);
+const saving = Number(
+  calculatedDiscount +
+  (Number(data.tdiscount) || 0) +
+  (Number(data.couponValue) || 0) +
+  (Number(data.redeemedPoints) || 0)
+).toFixed(2);
 
 doc.text(`YOUR SAVING: ${saving}`, pageWidth / 2, y + 7, {
   align: "center",
@@ -223,7 +269,30 @@ if(data.refundPolicy){
   if (data.phone){
     center(`Customer care: ${data.phone || ""}`);
   }
+
+  if (generatedCoupons.length) {
+    y += 4;
+    line();
+    y += 6;
+    center("COUPON EARNED", 13, true);
+
+    for (const coupon of generatedCoupons) {
+      const couponNumber = coupon.code || coupon.couponNumber || coupon.id || "";
+      center(couponNumber, 16, true);
+      center(coupon.code || "", 10, true);
+      center(formatCouponDiscount(coupon), 10);
+      if (coupon.minOrderValue) center(`Min order: ${Number(coupon.minOrderValue).toFixed(2)}`, 9);
+      if (coupon.endDate) center(`Valid till: ${new Date(coupon.endDate).toLocaleDateString()}`, 9);
+
+      const barcode = createBarcodeDataUrl(couponNumber);
+      doc.addImage(barcode, "PNG", 20, y, pageWidth - 40, 22);
+      y += 28;
+      line();
+      y += 6;
+    }
+  }
   
 
   doc.save(filename);
 }
+

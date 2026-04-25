@@ -86,14 +86,8 @@ export const updateCompanySession = async (params: {
   isAiImage?: boolean
   deliveryType?: string[]
   deliveryMode?: string[]
-  fundDeliveryFees?: boolean
   deliveryRadius?: number
-  deliveryFeesPerKm?: number
-  waitingTime?: number
-  waitingChargesPerMin?: number
-  minDeliveryCharges?: number
-  deliveryDiscountThreshold?: number
-  deliveryDiscountAmount?: number
+  deliveryDiscount?: number
   isCostIncluded?: boolean
   isUserTrackIncluded?: boolean
   companyId?: string
@@ -290,4 +284,31 @@ export const updateOpeningBalance = async (openingBalance: any) => {
     await useAuth().updateSession();
 };
 
+export const updatePrefixes = async (prefixes: {
+    billPrefix: string;
+    quotePrefix: string;
+    salesOrderPrefix: string;
+    invoicePrefix: string;
+    paymentPrefix: string;
+    expensePrefix: string;
+    distributorPrefix: string;
+    distributorPaymentPrefix: string;
+    distributorCreditPrefix: string;
+    clientPrefix: string;
+    userPrefix: string;
+    accountPrefix: string;
+}) => {
+    await $fetch('/api/auth/changePrefixes', {
+        method: 'PUT',
+        body: prefixes,
+    });
+    await useAuth().updateSession();
+};
 
+export const startNewYear = async (closingDate: string) => {
+    await $fetch('/api/auth/startNewYear', {
+        method: 'PUT',
+        body: { closingDate },
+    });
+    await useAuth().updateSession();
+};

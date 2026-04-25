@@ -46,7 +46,7 @@ const formatDiscount = computed(() => {
     const c = props.coupon
     if (!c) return '-'
     if (c.type === 'PERCENTAGE') return `${c.discountValue}%${c.maxDiscountAmount ? ` (Max: ${c.maxDiscountAmount})` : ''}`
-    if (c.type === 'GIFT') return 'Gift'
+    if (c.type === 'GIFT') return c.giftBarcode ? `Gift: ${c.giftBarcode}` : 'Gift'
     return `${c.discountValue} Flat`
 })
 
@@ -348,6 +348,10 @@ watch(() => props.coupon?.id, () => {
                 <div v-if="coupon.perClientLimit" class="flex items-center gap-1">
                     <UIcon name="i-heroicons-user" class="text-gray-400 text-sm" />
                     <span>Per Client: <strong>{{ coupon.perClientLimit }}</strong></span>
+                </div>
+                <div v-if="coupon.type === 'GIFT' && coupon.giftBarcode" class="flex items-center gap-1">
+                    <UIcon name="i-heroicons-gift" class="text-gray-400 text-sm" />
+                    <span>Gift Barcode: <strong>{{ coupon.giftBarcode }}</strong></span>
                 </div>
                 <div v-if="coupon.audienceType === 'GENERATE' && coupon.minBillAmount" class="flex items-center gap-1">
                     <UIcon name="i-heroicons-banknotes" class="text-gray-400 text-sm" />

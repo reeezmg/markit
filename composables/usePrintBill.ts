@@ -1,79 +1,100 @@
 import { Capacitor } from '@capacitor/core';
-import {useReceiptPrinter} from '~/composables/useReceiptPrinter';
+import { useReceiptPrinter } from '~/composables/useReceiptPrinter';
+import { useWebUsbPrinter } from '~/composables/useWebUsbPrinter';
+
+const LOCAL_PRINT_SERVER = 'http://localhost:3001';
+const LOCAL_PRINT_TIMEOUT = 1500;
+
+function normalizeError(err: any, fallbackMessage: string): Error {
+  if (err instanceof Error) return err;
+  if (typeof err === 'string') return new Error(err);
+  return new Error(err?.message || fallbackMessage);
+}
+
 export const usePrint = () => {
-  const { printMobileBill,printMobileLabel, printMobileReport } = useReceiptPrinter();
+  const { printMobileBill, printMobileLabel, printMobileReport } = useReceiptPrinter();
+  const {
+    isWebUsbSupported,
+    hasAssignedPrinter,
+    printBillViaUsb,
+    printLabelViaUsb,
+  } = useWebUsbPrinter();
+
+  const printViaLocalServer = async (path: string, body: any) =>
+    $fetch(path, {
+      method: 'POST',
+      body,
+      baseURL: LOCAL_PRINT_SERVER,
+      timeout: LOCAL_PRINT_TIMEOUT,
+      headers: {
+        'Content-Type': 'application/json',
+      },
+    });
 
   const printBill = async (printData: any) => {
     try {
       if (Capacitor.isNativePlatform()) {
-        // ✅ Call your native print plugin here
-       const res = await printMobileBill(printData);
-       if(!res.success){
-        throw res.message
-       }
+        const res = await printMobileBill(printData);
+        if (!res.success) {
+          throw new Error(res.message);
+        }
       } else {
-        // ✅ Call your backend API when not on native
-        const data = await $fetch('/api/print-bill', {
-          method: 'POST',
-          body: printData,
-          baseURL: 'http://localhost:3001',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        });
-        return data;
+        if (isWebUsbSupported() && hasAssignedPrinter('receipt')) {
+          try {
+            return await printBillViaUsb(printData);
+          } catch (usbError) {
+            console.warn('WebUSB receipt print failed, falling back to localhost:3001', usbError);
+          }
+        }
+
+        return await printViaLocalServer('/api/print-bill', printData);
       }
     } catch (err: any) {
-      console.error('🛑 Print Bill error:', err.message || err);
-      throw err;
+      const error = normalizeError(err, 'Failed to print bill.');
+      console.error('Print Bill error:', error.message);
+      throw error;
     }
   };
 
   const printReport = async (printData: any) => {
     try {
       if (Capacitor.isNativePlatform()) {
-        const res = await printMobileReport(printData)
-       if(!res.success){
-        throw res.message
-       }
-      }else{
-      const data = await $fetch('/api/print-report', {
-        method: 'POST',
-        body: printData,
-        baseURL: 'http://localhost:3001',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      return data;
-    }
+        const res = await printMobileReport(printData);
+        if (!res.success) {
+          throw new Error(res.message);
+        }
+      } else {
+        return await printViaLocalServer('/api/print-report', printData);
+      }
     } catch (err: any) {
-      console.error('🛑 Print Report error:', err.message || err);
-      throw err;
+      const error = normalizeError(err, 'Failed to print report.');
+      console.error('Print Report error:', error.message);
+      throw error;
     }
   };
 
   const printLabel = async (labelData: any, printerLabelSize: any) => {
     try {
       if (Capacitor.isNativePlatform()) {
-        const res = await printMobileLabel(labelData, printerLabelSize)
-       if(!res.success){
-        throw res.message
-       }
-      }else{
-      const data = await $fetch('/api/print-label', {
-        method: 'POST',
-        body: labelData,
-        baseURL: 'http://localhost:3001',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-      });
-      return data;
-    }
+        const res = await printMobileLabel(labelData, printerLabelSize);
+        if (!res.success) {
+          throw new Error(res.message);
+        }
+      } else {
+        if (isWebUsbSupported() && hasAssignedPrinter('barcode')) {
+          try {
+            return await printLabelViaUsb(labelData, printerLabelSize);
+          } catch (usbError) {
+            console.warn('WebUSB barcode print failed, falling back to localhost:3001', usbError);
+          }
+        }
+
+        return await printViaLocalServer('/api/print-label', labelData);
+      }
     } catch (err: any) {
-      console.error('🛑 Print Label error:', err.message || err);
-      throw err;
+      const error = normalizeError(err, 'Failed to print labels.');
+      console.error('Print Label error:', error.message);
+      throw error;
     }
   };
 

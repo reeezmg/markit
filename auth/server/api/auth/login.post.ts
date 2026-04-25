@@ -42,14 +42,8 @@ export default eventHandler(async (event) => {
         isAiImage: user.companies[0].company.isAiImage || true,
         deliveryType: user.companies[0].company.deliveryType || [],
         deliveryMode: user.companies[0].company.deliveryMode || [],
-        fundDeliveryFees: user.companies[0].company.fundDeliveryFees || false,
         deliveryRadius: user.companies[0].company.deliveryRadius || 0,
-        deliveryFeesPerKm: user.companies[0].company.deliveryFeesPerKm || 0,
-        waitingTime: user.companies[0].company.waitingTime || 0,
-        waitingChargesPerMin: user.companies[0].company.waitingChargesPerMin || 0,
-        minDeliveryCharges: user.companies[0].company.minDeliveryCharges || 0,
-        deliveryDiscountThreshold: user.companies[0].company.deliveryDiscountThreshold || 0,
-        deliveryDiscountAmount: user.companies[0].company.deliveryDiscountAmount || 0,
+        deliveryDiscount: user.companies[0].company.deliveryDiscount || 100,
         isCostIncluded: user.companies[0].company.isCostIncluded,
         isUserTrackIncluded: user.companies[0].company.isUserTrackIncluded,
         companyId: user.companies[0].companyId,
@@ -76,6 +70,19 @@ export default eventHandler(async (event) => {
         variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, sizes, images, button }) =>
         ({ name, code, sprice, pprice, dprice, discount, qty, sizes, images, button }))(user.companies[0].company.variantinput || {}),
 
+        closingDate: user.companies[0].company.closingDate ?? null,
+        billPrefix: user.companies[0].company.billPrefix ?? '',
+        quotePrefix: user.companies[0].company.quotePrefix ?? 'QT',
+        salesOrderPrefix: user.companies[0].company.salesOrderPrefix ?? 'SO',
+        invoicePrefix: user.companies[0].company.invoicePrefix ?? 'INV',
+        paymentPrefix: user.companies[0].company.paymentPrefix ?? '',
+        expensePrefix: user.companies[0].company.expensePrefix ?? 'EXP',
+        distributorPrefix: user.companies[0].company.distributorPrefix ?? 'DIST',
+        distributorPaymentPrefix: user.companies[0].company.distributorPaymentPrefix ?? 'DP',
+        distributorCreditPrefix: user.companies[0].company.distributorCreditPrefix ?? 'DC',
+        clientPrefix: user.companies[0].company.clientPrefix ?? 'CL',
+        userPrefix: user.companies[0].company.userPrefix ?? '',
+        accountPrefix: user.companies[0].company.accountPrefix ?? 'ACC',
         authSessionVersion:process.env.AUTH_SESSION_VERSION
     });
 

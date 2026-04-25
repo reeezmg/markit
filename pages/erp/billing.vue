@@ -5,7 +5,6 @@ import { Capacitor } from '@capacitor/core';
 
 const uuid = ref('')
 
-const { generateCoupons } = useGenerateCoupons()
 const { printBill } = usePrint();
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
@@ -48,7 +47,7 @@ const userStore = useUserStore()
 
 const printModel = ref(false);
 const isSaving = ref(false);
-let printData = {}
+let printData = {}   
 const isMobile = ref(false);
 
 
@@ -142,10 +141,73 @@ const { allCoupons, selectedCouponId, eligibleCoupons, couponRefetch } = useBill
   clientId, items, grandTotal, redeemedAmt, couponValue
 )
 
+const giftCouponLineKey = 'couponGiftCouponId'
+
+const isEmptyBillingRow = (row) =>
+  !row?.variantId?.trim?.() &&
+  !row?.name?.trim?.() &&
+  !row?.barcode?.trim?.() &&
+  !(row?.category?.length > 0)
+
+const removeGiftCouponProduct = (couponId) => {
+  const coupon = allCoupons.value?.find((candidate) => candidate.id === couponId)
+  const giftBarcode = String(coupon?.giftBarcode || '').trim()
+  const index = items.value.findIndex((row) =>
+    row?.[giftCouponLineKey] === couponId ||
+    (giftBarcode && row?.barcode === giftBarcode && Number(row?.discount) === 100)
+  )
+  if (index >= 0) {
+    items.value.splice(index, 1)
+    items.value.forEach((item, i) => { item.sn = i + 1 })
+  }
+}
+
+const addGiftCouponProduct = async (coupon) => {
+  if (!coupon || coupon.type !== 'GIFT') return
+  const barcode = String(coupon.giftBarcode || '').trim()
+  if (!barcode) {
+    toast.add({ title: 'Gift product barcode missing in coupon setup', color: 'red' })
+    return
+  }
+  if (items.value.some((row) => row?.[giftCouponLineKey] === coupon.id)) return
+
+  let index = items.value.findIndex(isEmptyBillingRow)
+  if (index < 0) {
+    await addNewRow(items.value.length - 1, false)
+    index = items.value.findIndex(isEmptyBillingRow)
+  }
+  if (index < 0 || !items.value[index]) return
+
+  items.value[index].barcode = barcode
+  items.value[index][giftCouponLineKey] = coupon.id
+  items.value[index].couponGiftCode = coupon.code
+
+  await fetchItemData(barcode, index)
+
+  if (items.value[index]?.variantId) {
+    items.value[index][giftCouponLineKey] = coupon.id
+    items.value[index].couponGiftCode = coupon.code
+    items.value[index].qty = 1
+    items.value[index].discount = 100
+    await addNewRow(index, false)
+    toast.add({ title: `Gift product added for coupon ${coupon.code}`, color: 'green' })
+  }
+}
+
+watch(selectedCouponId, async (newCoupon, oldCoupon) => {
+  if (newCoupon || oldCoupon) {
+    await couponRefetch()
+  }
+  if (oldCoupon?.value) removeGiftCouponProduct(oldCoupon.value)
+  const chosen = allCoupons.value?.find((coupon) => coupon.id === newCoupon?.value)
+  if (chosen?.type === 'GIFT') await addGiftCouponProduct(chosen)
+})
+
 // ─── Reset (calls useBillingDraft.resetDraft + clears coupon + focuses barcode) ───
 const reset = () => {
   resetDraft()
   selectedCouponId.value = null
+  skipPoints.value = false
   barcodeInputs.value[0]?.$el?.querySelector('input')?.focus()
   couponRefetch()
 }
@@ -361,11 +423,11 @@ const actionItems = [
 const print = async() => {
   printModel.value = false
   try{
-  await printBill(printData)
-  toast.add({
-        title: 'Printing Success!',
-        color: 'green',
-      });
+    await printBill(printData)
+    toast.add({
+      title: 'Printing Success!',
+      color: 'green',
+    });
   }catch(err){
       printModel.value = true
       toast.add({
@@ -412,6 +474,17 @@ const send = async() => {
           receiptId: uuid.value,
         },
       })
+      if (Array.isArray(printData.generatedCoupons) && printData.generatedCoupons.length) {
+        await $fetch('/api/whatsapp/send-coupon-message', {
+          method: 'POST',
+          body: {
+            phone: printData.clientPhone,
+            name: printData.clientName,
+            companyName: printData.companyName,
+            coupons: printData.generatedCoupons,
+          },
+        })
+      }
   toast.add({
         title: 'Receipt Sent Success!',
         color: 'green',
@@ -505,6 +578,8 @@ function buildEntriesData(finalitems, companyId) {
   })
 }
 
+const skipPoints = ref(false)
+
 function computeBillPoints(session, grandTotalVal) {
   const pointsValue = Number(session?.pointsValue || 0)
   return pointsValue > 0 ? Math.round(Number(grandTotalVal || 0) / pointsValue) : 0
@@ -516,7 +591,7 @@ function buildBillPayload({ billInv, session, entriesData, billPoints, hasCredit
   return {
     invoiceNumber: billInv,
     subtotal: Number(subtotal.value) || 0,
-    discount: Number(discount.value) || 0,
+    discount: String(discount.value ?? '').startsWith('+') ? 0 : (Number(discount.value) || 0),
     grandTotal: Number(grandTotal.value) || 0,
     returnAmt: Number(returnAmt.value) || 0,
     couponValue: Number(couponValue.value) || 0,
@@ -537,7 +612,7 @@ function buildBillPayload({ billInv, session, entriesData, billPoints, hasCredit
 
 function buildPrintData({ billInv, session, finalitems, refs }) {
   const { subtotal, discount, grandTotal, paymentMethod, splitPayments,
-          clientName, phoneNo, date } = refs
+          clientName, phoneNo, date, points, redeemedPoints, couponValue } = refs
   return {
     invoiceNumber: billInv,
     phone: session?.companyPhone,
@@ -566,7 +641,7 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
       }
     }),
     subtotal: Number(subtotal.value) || 0,
-    discount: Number(discount.value) || 0,
+    discount: String(discount.value ?? ''),
     grandTotal: Number(grandTotal.value) || 0,
     paymentMethod: paymentMethod.value,
     companyName: session?.companyName || '',
@@ -577,6 +652,9 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
     upiId: session?.upiId || '',
     clientName: clientName.value,
     clientPhone: phoneNo.value,
+    availablePoints: Number(points.value) || 0,
+    redeemedPoints: Number(redeemedPoints.value) || 0,
+    couponValue: Number(couponValue.value) || 0,
     tqty: finalitems.reduce((sum, e) => sum + Number(e.qty || 1), 0),
     tvalue: finalitems.reduce((sum, e) => sum + Number(e.qty || 1) * Number(e.rate || 0), 0),
     ttvalue: finalitems.reduce((sum, e) => sum + Number(e.value || 0), 0),
@@ -651,9 +729,8 @@ const handleSave = async () => {
     const billInv = await $fetch('/api/bill/findBillCounter', { method: 'POST', body: { companyId, userId } })
 
     await ensureClientExists()
-    if (clientId.value) await generateCoupons(clientId.value, Number(grandTotal.value) || 0)
 
-    const billPoints = computeBillPoints(session, grandTotal.value)
+    const billPoints = skipPoints.value ? 0 : computeBillPoints(session, grandTotal.value)
     const returnedItems = finalitems.filter((i) => i.return)
     const entriesData = buildEntriesData(finalitems, companyId)
     const hasCreditPayment =
@@ -661,20 +738,22 @@ const handleSave = async () => {
       (paymentMethod.value === 'Split' && splitPayments.value.some((p) => p?.method === 'Credit'))
 
     const draftRefs = { subtotal, discount, grandTotal, returnAmt, couponValue, paymentMethod,
-                        redeemedPoints, clientId, selected, splitPayments, date, clientName, phoneNo }
+                        redeemedPoints, clientId, selected, splitPayments, date, clientName, phoneNo, points }
 
     const payload = buildBillPayload({ billInv, session, entriesData, billPoints, hasCreditPayment, refs: draftRefs })
     printData = buildPrintData({ billInv, session, finalitems, refs: draftRefs })
-    fireFcmNotification(companyId, billInv, grandTotal.value, session)
 
-    if (selectedAction.value === 'print') print()
-    else if (selectedAction.value === 'send') send()
-    else if (selectedAction.value === 'download') download()
-    await $fetch('/api/bill/create', {
+    const result = await $fetch('/api/bill/create', {
       method: 'POST',
       body: { uuid: uuid.value, payload, items: finalitems, returnedItems, billPoints,
               clientId: clientId.value, companyId, couponId: selectedCouponId.value?.value || null, userId },
     })
+    printData.generatedCoupons = result?.generatedCoupons || []
+    fireFcmNotification(companyId, billInv, grandTotal.value, session)
+
+    if (selectedAction.value === 'print') await print()
+    else if (selectedAction.value === 'send') await send()
+    else if (selectedAction.value === 'download') await download()
 
     toast.add({ title: 'Bill created successfully!', color: 'green' })
     reset()
@@ -1399,13 +1478,14 @@ const handleDiscountEnter = (index) => {
 
         <!-- Discount Input -->
         <div class="mb-6">
-          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
+          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-) / Add (+n)</label>
           <UInput
             ref="discountref"
-            type="number"
+            type="text"
+            inputmode="decimal"
             v-model="discount"
             @keydown.enter.prevent="handleEnterMainDiscount()"
-            placeholder="Enter discount"
+            placeholder="e.g. 10, -5, +50"
           />
         </div>
 
@@ -1511,9 +1591,11 @@ const handleDiscountEnter = (index) => {
               <label class="block text-gray-700 font-medium">Points</label>
               <UInput v-model="points" />
             </div>
-            <div>
-              <UButton v-if="!isRedeemPoint" color="green" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming">Redeem Points</UButton>
-              <UButton v-else-if="isRedeemPoint" color="red" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming">Cancel Redeem</UButton>
+            <div class="flex gap-2 mt-9">
+              <UButton v-if="!isRedeemPoint" color="green" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming">Redeem</UButton>
+              <UButton v-else-if="isRedeemPoint" color="red" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming">Cancel Redeem</UButton>
+              <UButton v-if="!skipPoints" color="red" class="flex-1" block @click="skipPoints = true">Skip Points</UButton>
+              <UButton v-else color="green" class="flex-1" block @click="skipPoints = false">Assign Points</UButton>
             </div>
           </div>
         </div>
@@ -1521,15 +1603,15 @@ const handleDiscountEnter = (index) => {
         <!-- mobile view -->
         <div  v-if="isMobile" class="lg:hidden flex flex-col gap-3 py-3 text-sm px-2" >
         <div class="">
-          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
+          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-) / Add (+n)</label>
           <UInput
           ref="discountref"
           type="text"
           v-model="discount"
-          inputmode="decimal"
+          inputmode="text"
           @keydown.enter.prevent="handleEnterMainDiscount()"
-          placeholder="Enter discount"
-          pattern="^-?[0-9]*[.,]?[0-9]*$"
+          placeholder="e.g. 10, -5, +50"
+          pattern="^[+\-]?[0-9]*[.,]?[0-9]*$"
           />
         </div>
 

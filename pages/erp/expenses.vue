@@ -18,10 +18,17 @@ const useAuth = () => useNuxtApp().$auth;
 /* ---------------------------------------------------
    CREATE EXPENSE
 --------------------------------------------------- */
-const addExpense =  (expense: any) => {
+const addExpense = async (expense: any) => {
     try {
+        // Atomically get next expense number
+        const { number: expenseNumber } = await $fetch('/api/counter/increment', {
+            method: 'POST',
+            body: { entity: 'expense' },
+        });
+
         createExpense.mutate({
             data: {
+                expenseNumber,
                 ...(expense.date && {
                     expenseDate: new Date(expense.date).toISOString(),
                 }),

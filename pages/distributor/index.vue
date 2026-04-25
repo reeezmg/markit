@@ -10,9 +10,14 @@ import {
   useUpdateDistributorCredit,
   useDeleteDistributorCredit,
   useDeletePurchaseReturn,
+  useFindManyBankAccount,
+  useCreateMoneyTransaction,
+  useUpdateMoneyTransaction,
+  useDeleteMoneyTransaction,
 } from '~/lib/hooks'
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
+import { exportToCSV } from '~/utils/export-csv'
 
 const toast = useToast()
 const router = useRouter()
@@ -63,6 +68,9 @@ const CreateDistributorCredit = useCreateDistributorCredit()
 const UpdateDistributorCredit = useUpdateDistributorCredit()
 const DeleteDistributorCredit = useDeleteDistributorCredit()
 const DeletePurchaseReturn = useDeletePurchaseReturn({ optimisticUpdate: true })
+const CreateMoneyTransaction = useCreateMoneyTransaction()
+const UpdateMoneyTransaction = useUpdateMoneyTransaction()
+const DeleteMoneyTransaction = useDeleteMoneyTransaction()
 
 // ─── Modal state ───
 const isAdd = ref(false)
@@ -99,7 +107,13 @@ const creditForm = ref({
   remarks: '',
   billNo: '',
   date: new Date().toISOString().split('T')[0],
+  creditKind: 'PRODUCT' as 'PRODUCT' | 'AMOUNT',
+  paymentMode: 'CASH' as 'CASH' | 'BANK',
+  bankAccountId: '__PRIMARY__' as string,
+  moneyTransactionId: '' as string,
 })
+
+const editingCreditKindLocked = ref(false)
 
 const resetPayForm = () => {
   payForm.value = { id: '', amount: 0, remarks: '', billNo: '', paymentType: 'CASH', date: new Date().toISOString().split('T')[0], purchaseOrderId: '' }
@@ -107,8 +121,31 @@ const resetPayForm = () => {
 }
 
 const resetCreditForm = () => {
-  creditForm.value = { id: '', amount: 0, remarks: '', billNo: '', date: new Date().toISOString().split('T')[0] }
+  creditForm.value = {
+    id: '', amount: 0, remarks: '', billNo: '',
+    date: new Date().toISOString().split('T')[0],
+    creditKind: 'PRODUCT', paymentMode: 'CASH', bankAccountId: '__PRIMARY__',
+    moneyTransactionId: '',
+  }
+  editingCreditKindLocked.value = false
 }
+
+// ─── Bank accounts for AMOUNT credit ───
+const { data: bankAccountsData } = useFindManyBankAccount(() => ({
+  where: { companyId: useAuth().session.value?.companyId },
+}))
+
+const bankOptions = computed(() => [
+  { label: 'Primary', value: '__PRIMARY__' },
+  ...(bankAccountsData.value?.map((b: any) => ({
+    label: `${b.bankName || 'Bank'} • ${b.accountNo || '—'}`,
+    value: b.id,
+  })) ?? []),
+])
+
+watch(() => creditForm.value.paymentMode, v => {
+  if (v !== 'BANK') creditForm.value.bankAccountId = '__PRIMARY__'
+})
 
 // ─── Expand states for tab tables ───
 const poExpand = ref<any>({ openedRows: [], row: null })
@@ -118,6 +155,13 @@ const sort = useLocalStorage('dist:sort', { column: 'distributor.name', directio
 const page = useLocalStorage('dist:page', 1)
 const pageCount = useLocalStorage('dist:pageCount', 10)
 const search = useLocalStorage('dist:search', '')
+const onlyDueFilter = useLocalStorage('dist:onlyDue', false)
+const minDueFilter = useLocalStorage('dist:minDue', null as number | null)
+const maxDueFilter = useLocalStorage('dist:maxDue', null as number | null)
+const isFilterModalOpen = ref(false)
+const draftOnlyDueFilter = ref(false)
+const draftMinDueFilter = ref<number | null>(null)
+const draftMaxDueFilter = ref<number | null>(null)
 
 // ─── Columns ───
 const columns = [
@@ -131,6 +175,17 @@ const columns = [
   { key: 'actions', label: 'Actions' },
 ]
 
+const selectedColumnKeys = useLocalStorage('dist:selectedColumns', columns.map(column => column.key))
+
+const selectedColumns = computed({
+  get: () => columns.filter(column => selectedColumnKeys.value.includes(column.key)),
+  set: (value) => {
+    selectedColumnKeys.value = value.map((column: any) => column.key)
+  },
+})
+
+const columnsTable = computed(() => columns.filter(column => selectedColumnKeys.value.includes(column.key)))
+
 const poColumns = [
   { key: 'purchaseOrderNo', label: 'PO No.', sortable: true },
   { key: 'createdAt', label: 'Date', sortable: true },
@@ -143,12 +198,12 @@ const poColumns = [
 
 const creditColumns = [
   { key: 'createdAt', label: 'Date' },
+  { key: 'no', label: 'No' },
   { key: 'type', label: 'Type' },
-  { key: 'amount', label: 'Amount' },
   { key: 'remarks', label: 'Remarks' },
-  { key: 'pono', label: 'PO No' },
-  { key: 'billno', label: 'Bill No' },
-  { key: 'actions', label: 'Actions' },
+  { key: 'debit', label: 'Debit' },
+  { key: 'credit', label: 'Credit' },
+  { key: 'actions', label: '' },
 ]
 
 // ─── Query ───
@@ -159,6 +214,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
   select: {
     distributorId: true,
     companyId: true,
+    distributorNumber: true,
     distributor: {
       select: {
         id: true,
@@ -175,16 +231,20 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
       },
     },
     distributorCredits: {
-      select: { id: true, createdAt: true, amount: true, remarks: true, billNo: true, purchaseOrderId: true },
+      select: {
+        id: true, creditNo: true, createdAt: true, amount: true, remarks: true, billNo: true, purchaseOrderId: true,
+        moneyTransactionId: true,
+        moneyTransaction: { select: { id: true, paymentMode: true, accountId: true } },
+      },
       orderBy: { createdAt: 'desc' },
     },
     distributorPayments: {
-      select: { id: true, createdAt: true, amount: true, remarks: true, billNo: true, paymentType: true, purchaseOrderId: true, purchaseReturnId: true },
+      select: { id: true, paymentNo: true, createdAt: true, amount: true, remarks: true, billNo: true, paymentType: true, purchaseOrderId: true, purchaseReturnId: true },
       orderBy: { createdAt: 'desc' },
     },
     purchaseReturns: {
       select: {
-        id: true, createdAt: true, totalAmount: true, subTotalAmount: true,
+        id: true, createdAt: true, returnNo: true, totalAmount: true, subTotalAmount: true,
         taxAmount: true, remarks: true, purchaseOrderId: true,
         purchaseOrder: { select: { purchaseOrderNo: true, billNo: true } },
         items: { select: { productName: true, qty: true, rate: true, subtotal: true } },
@@ -220,8 +280,6 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
     sort.value.column === 'distributor.name'
       ? { distributor: { name: sort.value.direction } }
       : { [sort.value.column]: sort.value.direction },
-  skip: (page.value - 1) * pageCount.value,
-  take: pageCount.value,
 }))
 
 const { data, isLoading, refetch } = useFindManyDistributorCompany(queryArgs)
@@ -250,28 +308,42 @@ const distributors = computed(() =>
     const rawPayments = d.distributorPayments || []
 
     const poMap = new Map((d.purchaseOrders || []).map((po: any) => [po.id, { poNo: po.purchaseOrderNo, billNo: po.billNo }]))
+    const returnMap = new Map((d.purchaseReturns || []).map((r: any) => [r.id, r.returnNo]))
 
     const credits = rawCredits.map((c: any) => {
       const poEntry = c.purchaseOrderId ? poMap.get(c.purchaseOrderId) ?? null : null
+      const isPurchase = !!c.purchaseOrderId
       return {
         ...c,
         createdAt: new Date(c.createdAt),
-        type: 'CREDIT',
+        type: isPurchase ? 'PURCHASE' : 'CREDIT',
+        no: isPurchase
+          ? (poEntry?.poNo != null ? `PO-${poEntry.poNo}` : null)
+          : (c.creditNo != null ? `DC-${c.creditNo}` : null),
+        debit: 0,
+        credit: c.amount || 0,
         pono: poEntry?.poNo ?? null,
         billno: poEntry?.billNo ?? c.billNo ?? null,
-        class: 'bg-red-500/20 dark:bg-red-400/20',
+        class: 'bg-green-50 dark:bg-green-900/20',
       }
     })
     const payments = rawPayments.map((p: any) => {
       const poEntry = p.purchaseOrderId ? poMap.get(p.purchaseOrderId) ?? null : null
+      const isReturn = p.paymentType === 'RETURN'
+      const returnNo = isReturn && p.purchaseReturnId ? returnMap.get(p.purchaseReturnId) ?? null : null
       return {
         ...p,
         createdAt: new Date(p.createdAt),
-        type: 'PAYMENT',
+        type: isReturn ? 'PURCHASE RETURN' : 'PAYMENT',
+        no: isReturn
+          ? (returnNo != null ? `PR-${returnNo}` : null)
+          : (p.paymentNo != null ? `DP-${p.paymentNo}` : null),
+        debit: p.amount || 0,
+        credit: 0,
         paymentType: p.paymentType,
         pono: poEntry?.poNo ?? null,
         billno: p.billNo ?? poEntry?.billNo ?? null,
-        class: p.paymentType === 'RETURN' ? 'bg-orange-500/20 dark:bg-orange-400/20' : 'bg-green-500/20 dark:bg-green-400/20',
+        class: 'bg-red-50 dark:bg-red-900/20',
       }
     })
     const transactions = [...credits, ...payments].sort(
@@ -308,8 +380,39 @@ const distributors = computed(() =>
   }) ?? []
 )
 
-const pageTotal = computed(() => distributors.value?.length ?? 0)
-const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1)
+const hasMainFilters = computed(() =>
+  !!search.value.trim() || onlyDueFilter.value || minDueFilter.value !== null || maxDueFilter.value !== null
+)
+
+const filteredDistributors = computed(() => {
+  let rows = distributors.value ?? []
+  if (search.value.trim()) {
+    const q = search.value.trim().toLowerCase()
+    rows = rows.filter((row: any) => {
+      const name = row.distributor?.name?.toLowerCase() ?? ''
+      const gstin = row.distributor?.gstin?.toLowerCase() ?? ''
+      const distributorNumber = String(row.distributorNumber ?? '').toLowerCase()
+      return name.includes(q) || gstin.includes(q) || distributorNumber.includes(q)
+    })
+  }
+  if (onlyDueFilter.value) {
+    rows = rows.filter((row: any) => (row.totalDue ?? 0) > 0)
+  }
+  if (minDueFilter.value !== null) {
+    rows = rows.filter((row: any) => Number(row.totalDue ?? 0) >= Number(minDueFilter.value))
+  }
+  if (maxDueFilter.value !== null) {
+    rows = rows.filter((row: any) => Number(row.totalDue ?? 0) <= Number(maxDueFilter.value))
+  }
+  return rows
+})
+
+const paginatedDistributors = computed(() =>
+  filteredDistributors.value.slice((page.value - 1) * pageCount.value, page.value * pageCount.value)
+)
+
+const pageTotal = computed(() => filteredDistributors.value.length)
+const pageFrom = computed(() => (pageTotal.value ? (page.value - 1) * pageCount.value + 1 : 0))
 const pageTo = computed(() => Math.min(page.value * pageCount.value, pageTotal.value))
 
 // Keep selected distributor in sync after refetch
@@ -319,6 +422,60 @@ watch(distributors, val => {
     if (fresh) selectedDistributor.value = fresh
   }
 })
+
+watch([search, onlyDueFilter, minDueFilter, maxDueFilter, pageCount], () => {
+  page.value = 1
+}, { deep: true })
+
+watch(pageTotal, total => {
+  const totalPages = Math.max(1, Math.ceil(total / pageCount.value))
+  if (page.value > totalPages) page.value = totalPages
+})
+
+const openMainFilterModal = () => {
+  draftOnlyDueFilter.value = onlyDueFilter.value
+  draftMinDueFilter.value = minDueFilter.value
+  draftMaxDueFilter.value = maxDueFilter.value
+  isFilterModalOpen.value = true
+}
+
+const applyMainFilters = () => {
+  onlyDueFilter.value = draftOnlyDueFilter.value
+  minDueFilter.value = draftMinDueFilter.value
+  maxDueFilter.value = draftMaxDueFilter.value
+  page.value = 1
+  isFilterModalOpen.value = false
+}
+
+const resetMainFilters = () => {
+  search.value = ''
+  onlyDueFilter.value = false
+  minDueFilter.value = null
+  maxDueFilter.value = null
+  selectedColumnKeys.value = columns.map(column => column.key)
+  sort.value = { column: 'distributor.name', direction: 'asc' }
+  page.value = 1
+  pageCount.value = 10
+}
+
+const downloadDistributorList = () => {
+  const rows = filteredDistributors.value.map((row: any) => ({
+    Distributor: row.distributor?.name ?? '',
+    Orders: row.ordersCount ?? 0,
+    Total: Number(row.totalAmount ?? 0).toFixed(2),
+    Paid: Number(row.paidAmount ?? 0).toFixed(2),
+    Return: Number(row.returnAmount ?? 0).toFixed(2),
+    'Opening Due': Number(row.openingDue ?? 0).toFixed(2),
+    Due: Number(row.totalDue ?? 0).toFixed(2),
+  }))
+
+  if (!rows.length) {
+    toast.add({ title: 'No data to export', color: 'orange' })
+    return
+  }
+
+  exportToCSV(rows, `distributors-${format(new Date(), 'yyyy-MM-dd-HHmm')}.csv`)
+}
 
 // ─── Tab data ───
 const selectedPOs = computed(() => selectedDistributor.value?.purchaseOrders ?? [])
@@ -433,12 +590,8 @@ const filteredTransactions = computed(() => {
     const d = new Date(t.createdAt)
     return d >= from && d <= to
   })
-  if (creditTypeFilter.value === 'CREDIT') {
-    list = list.filter((t: any) => t.type === 'CREDIT')
-  } else if (creditTypeFilter.value === 'PAYMENT') {
-    list = list.filter((t: any) => t.type === 'PAYMENT' && t.paymentType !== 'RETURN')
-  } else if (creditTypeFilter.value === 'RETURN') {
-    list = list.filter((t: any) => t.paymentType === 'RETURN')
+  if (creditTypeFilter.value !== 'ALL') {
+    list = list.filter((t: any) => t.type === creditTypeFilter.value)
   }
   return list
 })
@@ -500,8 +653,14 @@ const confirmDeletePO = (row: any) => {
 }
 
 const confirmDeleteTransaction = (row: any) => {
-  const label = row.type === 'CREDIT' ? (row.billNo || row.id) : (row.paymentType || row.id)
-  deletingRowIdentity.value = { name: label, id: row.id, type: row.type === 'CREDIT' ? 'credit' : 'payment' }
+  const isCreditRow = row.type === 'CREDIT' || row.type === 'PURCHASE'
+  const label = isCreditRow ? (row.no || row.billNo || row.id) : (row.no || row.paymentType || row.id)
+  deletingRowIdentity.value = {
+    name: label,
+    id: row.id,
+    type: isCreditRow ? 'credit' : 'payment',
+    moneyTransactionId: row.moneyTransactionId || null,
+  }
   isDeleteModalOpen.value = true
 }
 
@@ -524,6 +683,9 @@ const handleDelete = async () => {
       await DeletePurchaseOrder.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
     } else if (deletingRowIdentity.value.type === 'credit') {
       await DeleteDistributorCredit.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
+      if (deletingRowIdentity.value.moneyTransactionId) {
+        await DeleteMoneyTransaction.mutateAsync({ where: { id: deletingRowIdentity.value.moneyTransactionId } })
+      }
     } else if (deletingRowIdentity.value.type === 'payment') {
       await DeleteDistributorPayment.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
     } else if (deletingRowIdentity.value.type === 'purchase-return') {
@@ -579,8 +741,15 @@ const handlePay = async () => {
       })
       toast.add({ title: 'Payment updated', color: 'green' })
     } else {
+      // Atomically get next payment number
+      const { number: paymentNo } = await $fetch('/api/counter/increment', {
+        method: 'POST',
+        body: { entity: 'distributorPayment' },
+      })
+
       await CreateDistributorPayment.mutateAsync({
         data: {
+          paymentNo,
           amount: payForm.value.amount,
           remarks: payForm.value.remarks || undefined,
           billNo: payForm.value.billNo || undefined,
@@ -618,19 +787,70 @@ const handleAddCredit = async () => {
       return
     }
     const createdAt = creditForm.value.date ? new Date(creditForm.value.date) : new Date()
+    const isAmountKind = creditForm.value.creditKind === 'AMOUNT'
+
     if (creditForm.value.id) {
+      // ── EDIT ──
       await UpdateDistributorCredit.mutateAsync({
         where: { id: creditForm.value.id },
-        data: { amount: creditForm.value.amount, remarks: creditForm.value.remarks, billNo: creditForm.value.billNo, createdAt },
-        select: { id: true },
-      })
-      toast.add({ title: 'Credit updated', color: 'green' })
-    } else {
-      await CreateDistributorCredit.mutateAsync({
         data: {
           amount: creditForm.value.amount,
+          remarks: creditForm.value.remarks,
+          billNo: isAmountKind ? null : (creditForm.value.billNo || null),
+          createdAt,
+        },
+        select: { id: true },
+      })
+      // Sync linked MoneyTransaction for AMOUNT credits
+      if (creditForm.value.moneyTransactionId) {
+        await UpdateMoneyTransaction.mutateAsync({
+          where: { id: creditForm.value.moneyTransactionId },
+          data: {
+            amount: creditForm.value.amount,
+            paymentMode: creditForm.value.paymentMode,
+            accountId: creditForm.value.paymentMode === 'BANK' && creditForm.value.bankAccountId !== '__PRIMARY__'
+              ? creditForm.value.bankAccountId
+              : null,
+            createdAt,
+          },
+          select: { id: true },
+        })
+      }
+      toast.add({ title: 'Credit updated', color: 'green' })
+    } else {
+      // ── CREATE ──
+      const { number: creditNo } = await $fetch('/api/counter/increment', {
+        method: 'POST',
+        body: { entity: 'distributorCredit' },
+      })
+
+      let moneyTransactionId: string | null = null
+      if (isAmountKind) {
+        const mt = await CreateMoneyTransaction.mutateAsync({
+          data: {
+            company: { connect: { id: companyId.value! } },
+            partyType: 'SUPPLIER',
+            direction: 'RECEIVED',
+            status: 'PAID',
+            paymentMode: creditForm.value.paymentMode,
+            accountId: creditForm.value.paymentMode === 'BANK' && creditForm.value.bankAccountId !== '__PRIMARY__'
+              ? creditForm.value.bankAccountId
+              : null,
+            amount: creditForm.value.amount,
+            note: `Distributor credit from ${selectedDistributor.value.distributor?.name ?? ''}${creditForm.value.remarks ? ': ' + creditForm.value.remarks : ''}`,
+            createdAt,
+          },
+          select: { id: true },
+        })
+        moneyTransactionId = mt?.id ?? null
+      }
+
+      await CreateDistributorCredit.mutateAsync({
+        data: {
+          creditNo,
+          amount: creditForm.value.amount,
           remarks: creditForm.value.remarks || undefined,
-          billNo: creditForm.value.billNo || undefined,
+          billNo: isAmountKind ? undefined : (creditForm.value.billNo || undefined),
           createdAt,
           distributorCompany: {
             connect: {
@@ -640,6 +860,7 @@ const handleAddCredit = async () => {
               },
             },
           },
+          ...(moneyTransactionId ? { moneyTransaction: { connect: { id: moneyTransactionId } } } : {}),
         },
         select: { id: true },
       })
@@ -718,6 +939,19 @@ const downloadCredits = async (format: 'excel' | 'pdf') => {
   }
 }
 
+const downloadAllTransactions = async (row: any) => {
+  try {
+    const res = await $fetch.raw('/api/downloads/distributor-credits.pdf', {
+      method: 'GET',
+      params: { distributorId: row.distributorId },
+    })
+    const distName = row.distributor?.name ?? 'distributor'
+    await triggerDownload('', `transactions-${distName}.pdf`, new Blob([res._data as ArrayBuffer], { type: 'application/pdf' }))
+  } catch (err: any) {
+    toast.add({ title: 'Download failed', color: 'red', description: err.message })
+  }
+}
+
 const downloadPurchaseReturn = async (returnId: string) => {
   isDownloadingReturn.value = true
   try {
@@ -756,6 +990,9 @@ const mainAction = (row: any) => [
     { label: 'Purchase Return', icon: 'i-heroicons-arrow-uturn-left', click: () => router.push(`/distributor/add-purchase-return?distributorId=${row.distributorId}`) },
   ],
   [
+    { label: 'Download Transactions', icon: 'i-heroicons-arrow-down-tray', click: () => downloadAllTransactions(row) },
+  ],
+  [
     { label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDeleteDistributor(row) },
   ],
 ]
@@ -791,19 +1028,24 @@ const transactionAction = (row: any) => {
       label: 'Edit',
       icon: 'i-heroicons-pencil-square-20-solid',
       click: () => {
-        if (row.type === 'CREDIT') {
-          if (row.purchaseOrderId) {
-            router.push(`/products/add?poId=${row.purchaseOrderId}&isEdit=true`)
-          } else {
-            creditForm.value = {
-              id: row.id,
-              amount: row.amount,
-              remarks: row.remarks || '',
-              billNo: row.billNo || '',
-              date: new Date(row.createdAt).toISOString().split('T')[0],
-            }
-            isOpenCredit.value = true
+        if (row.type === 'PURCHASE') {
+          router.push(`/products/add?poId=${row.purchaseOrderId}&isEdit=true`)
+        } else if (row.type === 'CREDIT') {
+          const linked = row.moneyTransaction
+          const kind: 'PRODUCT' | 'AMOUNT' = row.moneyTransactionId ? 'AMOUNT' : 'PRODUCT'
+          creditForm.value = {
+            id: row.id,
+            amount: row.amount,
+            remarks: row.remarks || '',
+            billNo: row.billNo || '',
+            date: new Date(row.createdAt).toISOString().split('T')[0],
+            creditKind: kind,
+            paymentMode: (linked?.paymentMode === 'BANK' ? 'BANK' : 'CASH'),
+            bankAccountId: linked?.accountId ?? '__PRIMARY__',
+            moneyTransactionId: row.moneyTransactionId || '',
           }
+          editingCreditKindLocked.value = true
+          isOpenCredit.value = true
         } else {
           payForm.value = {
             id: row.id,
@@ -868,16 +1110,37 @@ const transactionAction = (row: any) => {
 
           <!-- Full table view (no distributor selected) -->
           <div v-if="!selectedDistributor">
-            <div class="flex justify-between items-center w-full px-4 py-2">
+            <div class="flex flex-wrap justify-between items-center gap-3 w-full px-4 py-3 border-b border-gray-200 dark:border-gray-700">
               <div class="flex items-center gap-1.5">
-                <span class="text-xs text-gray-500 hidden sm:block">Rows per page:</span>
-                <USelect v-model="pageCount" :options="[5, 10, 20, 30]" class="w-16" size="xs" />
+                <span class="text-sm leading-5 hidden sm:block">Rows per page:</span>
+                <USelect v-model="pageCount" :options="[5, 10, 20, 30]" class="w-20" size="xs" />
+              </div>
+              <div class="flex flex-wrap gap-1.5 items-center z-10">
+                <USelectMenu v-model="selectedColumns" :options="columns" multiple>
+                  <UButton icon="i-heroicons-view-columns" color="gray" size="xs">
+                    Columns
+                  </UButton>
+                </USelectMenu>
+                <UButton icon="i-heroicons-arrow-down-tray" color="gray" size="xs" @click="downloadDistributorList">
+                  Download
+                </UButton>
+                <UButton
+                  icon="i-heroicons-funnel"
+                  :color="hasMainFilters ? 'primary' : 'gray'"
+                  size="xs"
+                  @click="openMainFilterModal"
+                >
+                  Filters
+                </UButton>
+                <UButton icon="i-heroicons-arrow-path" color="gray" size="xs" @click="resetMainFilters">
+                  Reset
+                </UButton>
               </div>
             </div>
             <UTable
               v-model:sort="sort"
-              :rows="distributors"
-              :columns="columns"
+              :rows="paginatedDistributors"
+              :columns="columnsTable"
               :loading="isLoading"
               sort-asc-icon="i-heroicons-arrow-up"
               sort-desc-icon="i-heroicons-arrow-down"
@@ -921,10 +1184,10 @@ const transactionAction = (row: any) => {
           <!-- Compact sidebar list (distributor selected) -->
           <div v-else>
             <div v-if="isLoading" class="p-4 text-sm text-gray-500">Loading...</div>
-            <div v-else-if="!distributors?.length" class="p-4 text-sm text-gray-500">No distributors found.</div>
+            <div v-else-if="!filteredDistributors?.length" class="p-4 text-sm text-gray-500">No distributors found.</div>
             <div v-else class="divide-y divide-gray-200 dark:divide-gray-700">
               <button
-                v-for="row in distributors"
+                v-for="row in filteredDistributors"
                 :key="row.distributorId"
                 type="button"
                 class="w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/40"
@@ -1243,14 +1506,15 @@ const transactionAction = (row: any) => {
                           v-model="creditTypeFilter"
                           :options="[
                             { label: 'All', value: 'ALL' },
-                            { label: 'Credits', value: 'CREDIT' },
-                            { label: 'Payments', value: 'PAYMENT' },
-                            { label: 'Returns', value: 'RETURN' },
+                            { label: 'Purchase', value: 'PURCHASE' },
+                            { label: 'Payment', value: 'PAYMENT' },
+                            { label: 'Credit', value: 'CREDIT' },
+                            { label: 'Purchase Return', value: 'PURCHASE RETURN' },
                           ]"
                           option-attribute="label"
                           value-attribute="value"
                           size="xs"
-                          class="w-28"
+                          class="w-32"
                         />
 
                         <div class="flex items-center gap-1 ml-auto">
@@ -1296,29 +1560,28 @@ const transactionAction = (row: any) => {
                       <template #createdAt-data="{ row }">
                         {{ new Date(row.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) }}
                       </template>
+                      <template #no-data="{ row }">
+                        <span v-if="row.no" class="font-mono text-xs">{{ row.no }}</span>
+                        <span v-else class="text-xs text-gray-400">-</span>
+                      </template>
                       <template #type-data="{ row }">
                         <UBadge
-                          :color="row.type === 'CREDIT' ? 'red' : row.paymentType === 'RETURN' ? 'orange' : 'green'"
+                          :color="row.type === 'PURCHASE' ? 'blue' : row.type === 'CREDIT' ? 'red' : row.type === 'PURCHASE RETURN' ? 'orange' : 'green'"
                           variant="subtle"
                           size="xs"
                         >
-                          {{ row.type === 'PAYMENT' ? (row.paymentType || 'PAYMENT') : row.type }}
+                          {{ row.type }}
                         </UBadge>
                       </template>
-                      <template #amount-data="{ row }">
-                        <span
-                          class="font-semibold"
-                          :class="row.type === 'CREDIT' ? 'text-red-600' : row.paymentType === 'RETURN' ? 'text-orange-600' : 'text-green-600'"
-                        >
-                          ₹{{ (row.amount || 0).toFixed(2) }}
-                        </span>
+                      <template #remarks-data="{ row }">
+                        <span class="text-xs text-gray-500">{{ row.remarks || '-' }}</span>
                       </template>
-                      <template #pono-data="{ row }">
-                        <span v-if="row.pono" class="font-mono text-xs">{{ row.pono }}</span>
+                      <template #debit-data="{ row }">
+                        <span v-if="row.debit > 0" class="font-semibold text-red-600">₹{{ row.debit.toFixed(2) }}</span>
                         <span v-else class="text-xs text-gray-400">-</span>
                       </template>
-                      <template #billno-data="{ row }">
-                        <span v-if="row.billno" class="font-mono text-xs">{{ row.billno }}</span>
+                      <template #credit-data="{ row }">
+                        <span v-if="row.credit > 0" class="font-semibold text-green-600">₹{{ row.credit.toFixed(2) }}</span>
                         <span v-else class="text-xs text-gray-400">-</span>
                       </template>
                       <template #actions-data="{ row }">
@@ -1479,6 +1742,44 @@ const transactionAction = (row: any) => {
     </UModal>
 
     <!-- ─── Pay Modal ─── -->
+    <UModal v-model="isFilterModalOpen">
+      <UCard>
+        <template #header>
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold">Distributor Filters</h3>
+            <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark" @click="isFilterModalOpen = false" />
+          </div>
+        </template>
+
+        <div class="space-y-4">
+          <UCheckbox v-model="draftOnlyDueFilter" label="Show only distributors with due balance" />
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <UFormGroup label="Min Due">
+              <UInput v-model.number="draftMinDueFilter" type="number" placeholder="0" />
+            </UFormGroup>
+            <UFormGroup label="Max Due">
+              <UInput v-model.number="draftMaxDueFilter" type="number" placeholder="No limit" />
+            </UFormGroup>
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton
+              color="gray"
+              variant="soft"
+              @click="draftOnlyDueFilter = false; draftMinDueFilter = null; draftMaxDueFilter = null"
+            >
+              Clear
+            </UButton>
+            <UButton color="primary" @click="applyMainFilters">
+              Apply
+            </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
     <UModal v-model="isOpenPay">
       <UCard>
         <div class="p-4 space-y-4">
@@ -1560,15 +1861,48 @@ const transactionAction = (row: any) => {
     <UModal v-model="isOpenCredit">
       <UCard>
         <div class="p-4 space-y-4">
+          <UFormGroup label="Credit For">
+            <USelect
+              v-model="creditForm.creditKind"
+              :disabled="editingCreditKindLocked"
+              :options="[
+                { label: 'Product', value: 'PRODUCT' },
+                { label: 'Amount', value: 'AMOUNT' },
+              ]"
+              option-attribute="label"
+              value-attribute="value"
+            />
+          </UFormGroup>
           <UFormGroup label="Date">
             <UInput type="date" v-model="creditForm.date" />
           </UFormGroup>
-          <UFormGroup label="Bill No">
+          <UFormGroup v-if="creditForm.creditKind === 'PRODUCT'" label="Bill No">
             <UInput v-model="creditForm.billNo" placeholder="Bill number" />
           </UFormGroup>
           <UFormGroup label="Amount" required>
             <UInput v-model.number="creditForm.amount" type="number" placeholder="Enter amount" />
           </UFormGroup>
+          <template v-if="creditForm.creditKind === 'AMOUNT'">
+            <UFormGroup label="Payment Mode">
+              <USelect
+                v-model="creditForm.paymentMode"
+                :options="[
+                  { label: 'Cash', value: 'CASH' },
+                  { label: 'Bank', value: 'BANK' },
+                ]"
+                option-attribute="label"
+                value-attribute="value"
+              />
+            </UFormGroup>
+            <UFormGroup v-if="creditForm.paymentMode === 'BANK'" label="Bank Account">
+              <USelect
+                v-model="creditForm.bankAccountId"
+                :options="bankOptions"
+                option-attribute="label"
+                value-attribute="value"
+              />
+            </UFormGroup>
+          </template>
           <UFormGroup label="Remarks">
             <UInput v-model="creditForm.remarks" placeholder="Optional remarks" />
           </UFormGroup>

@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
         c.code,
         c.type,
         c.discount_value,
+        c.gift_barcode,
         c.max_discount_amount,
         c.min_order_value,
         c.min_bill_amount,
@@ -42,28 +43,36 @@ export default defineEventHandler(async (event) => {
 
         /* Eligible clients */
         COALESCE(
-          json_agg(DISTINCT cc.client_id)
-          FILTER (WHERE cc.client_id IS NOT NULL),
+          (
+            SELECT json_agg(
+              json_build_object(
+                'clientId', cc.client_id,
+                'usageLimit', cc.usage_limit
+              )
+            )
+            FROM coupon_clients cc
+            WHERE cc.coupon_id = c.id
+          ),
           '[]'
         ) AS eligible_clients,
 
         /* Used by clients */
         COALESCE(
-          json_agg(DISTINCT cu.client_id)
-          FILTER (WHERE cu.client_id IS NOT NULL),
+          (
+            SELECT json_agg(cu.client_id)
+            FROM coupon_usages cu
+            WHERE cu.coupon_id = c.id
+          ),
           '[]'
         ) AS used_clients
 
       FROM coupons c
-      LEFT JOIN coupon_clients cc ON cc.coupon_id = c.id
-      LEFT JOIN coupon_usages cu ON cu.coupon_id = c.id
 
       WHERE c.company_id = $1
         AND c.is_active = true
         AND c.start_date <= $2
         AND c.end_date >= $2
 
-      GROUP BY c.id
       ORDER BY c.created_at DESC
       `,
       [companyId, now]
@@ -74,6 +83,7 @@ export default defineEventHandler(async (event) => {
       code: r.code,
       type: r.type,
       discountValue: r.discount_value,
+      giftBarcode: r.gift_barcode,
       maxDiscountAmount: r.max_discount_amount,
       minOrderValue: r.min_order_value,
       minBillAmount: r.min_bill_amount,
@@ -87,8 +97,7 @@ export default defineEventHandler(async (event) => {
       endDate: r.end_date,
       isMarkit: r.is_markit,
       isActive: r.is_active,
-
-      clients: r.eligible_clients.map((clientId: string) => ({ clientId })),
+      clients: r.eligible_clients,
       couponUsage: r.used_clients.map((clientId: string) => ({ clientId })),
     }))
   } finally {

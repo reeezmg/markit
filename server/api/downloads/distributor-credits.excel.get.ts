@@ -2,6 +2,17 @@ import { defineEventHandler, getQuery, createError, setHeader } from 'h3'
 import { pool } from '~/server/db'
 import ExcelJS from 'exceljs'
 
+type RowType = 'PURCHASE' | 'CREDIT' | 'PAYMENT' | 'PURCHASE RETURN'
+
+type Row = {
+  created_at: Date
+  type: RowType
+  no: string | null
+  debit: number
+  credit: number
+  remarks: string | null
+}
+
 export default defineEventHandler(async (event) => {
 
   /* ── AUTH ── */
@@ -14,26 +25,36 @@ export default defineEventHandler(async (event) => {
   const distributorId = query.distributorId as string
   if (!distributorId) throw createError({ statusCode: 400, statusMessage: 'distributorId required' })
 
-  const startDate = query.startDate ? new Date(query.startDate as string) : new Date(0)
-  const endDate   = query.endDate   ? new Date(query.endDate   as string) : new Date()
+  const hasStart = !!query.startDate
+  const hasEnd   = !!query.endDate
+  const startDate  = hasStart ? new Date(query.startDate as string) : new Date(0)
+  const endDate    = hasEnd   ? new Date(query.endDate   as string) : new Date()
   const typeFilter = (query.type as string || 'ALL').trim().toUpperCase()
 
   const client = await pool.connect()
   try {
 
-    /* ── DISTRIBUTOR NAME ── */
+    /* ── DISTRIBUTOR + OPENING DUE ── */
     const distRes  = await client.query(`SELECT name FROM distributors WHERE id = $1`, [distributorId])
     const distName = distRes.rows[0]?.name || 'Distributor'
+
+    const dcRes = await client.query(
+      `SELECT opening_due, opening_due_date
+         FROM distributor_companies
+        WHERE distributor_id = $1 AND company_id = $2`,
+      [distributorId, companyId]
+    )
+    const openingDueBase = Number(dcRes.rows[0]?.opening_due || 0)
 
     /* ── CREDITS ── */
     const creditsRes = await client.query(
       `SELECT
+         dc.credit_no,
          dc.created_at,
          dc.amount,
          dc.remarks,
-         dc."billNo"            AS bill_no,
-         po.purchase_order_no,
-         po.bill_no             AS po_bill_no
+         dc.purchase_order_id,
+         po.purchase_order_no
        FROM distributor_credits dc
        LEFT JOIN purchase_orders po ON po.id = dc.purchase_order_id
        WHERE dc.company_id    = $1
@@ -45,57 +66,74 @@ export default defineEventHandler(async (event) => {
     /* ── PAYMENTS ── */
     const paymentsRes = await client.query(
       `SELECT
+         dp.payment_no,
          dp.created_at,
-         dp.payment_type        AS type,
+         dp.payment_type,
          dp.amount,
          dp.remarks,
-         dp.bill_no,
-         po.purchase_order_no,
-         po.bill_no             AS po_bill_no
+         dp.purchase_return_id,
+         pr.return_no
        FROM distributor_payments dp
-       LEFT JOIN purchase_orders po ON po.id = dp.purchase_order_id
+       LEFT JOIN purchase_returns pr ON pr.id = dp.purchase_return_id
        WHERE dp.company_id    = $1
          AND dp.distributor_id = $2
          AND dp.created_at    BETWEEN $3 AND $4`,
       [companyId, distributorId, startDate, endDate]
     )
 
-    type Row = {
-      created_at: Date
-      type: string
-      rowType: 'CREDIT' | 'PAYMENT'
-      amount: number
-      remarks: string | null
-      pono: string | null
-      billno: string | null
-    }
+    const credits: Row[]  = creditsRes.rows.map(r => {
+      const isPurchase = !!r.purchase_order_id
+      return {
+        created_at: r.created_at,
+        type: (isPurchase ? 'PURCHASE' : 'CREDIT') as RowType,
+        no: isPurchase
+          ? (r.purchase_order_no != null ? `PO-${r.purchase_order_no}` : null)
+          : (r.credit_no != null ? `DC-${r.credit_no}` : null),
+        debit: 0,
+        credit: Number(r.amount),
+        remarks: r.remarks,
+      }
+    })
 
-    const credits: Row[]  = creditsRes.rows.map(r => ({
-      created_at: r.created_at,
-      type:       'CREDIT',
-      rowType:    'CREDIT' as const,
-      amount:     Number(r.amount),
-      remarks:    r.remarks,
-      pono:       r.purchase_order_no ? String(r.purchase_order_no) : null,
-      billno:     r.po_bill_no ?? r.bill_no ?? null,
-    }))
-
-    const payments: Row[] = paymentsRes.rows.map(r => ({
-      created_at: r.created_at,
-      type:       r.type,
-      rowType:    'PAYMENT' as const,
-      amount:     Number(r.amount),
-      remarks:    r.remarks,
-      pono:       r.purchase_order_no ? String(r.purchase_order_no) : null,
-      billno:     r.bill_no ?? r.po_bill_no ?? null,
-    }))
+    const payments: Row[] = paymentsRes.rows.map(r => {
+      const isReturn = r.payment_type === 'RETURN'
+      return {
+        created_at: r.created_at,
+        type: (isReturn ? 'PURCHASE RETURN' : 'PAYMENT') as RowType,
+        no: isReturn
+          ? (r.return_no != null ? `PR-${r.return_no}` : null)
+          : (r.payment_no != null ? `DP-${r.payment_no}` : null),
+        debit: Number(r.amount),
+        credit: 0,
+        remarks: r.remarks,
+      }
+    })
 
     let rows: Row[] = [...credits, ...payments].sort(
-      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+      (a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
     )
 
-    if (typeFilter === 'CREDIT')  rows = rows.filter(r => r.rowType === 'CREDIT')
-    if (typeFilter === 'PAYMENT') rows = rows.filter(r => r.rowType === 'PAYMENT')
+    if (typeFilter !== 'ALL') {
+      rows = rows.filter(r => r.type === typeFilter)
+    }
+
+    /* ── OPENING BALANCE ── */
+    let openingBalance = openingDueBase
+    if (hasStart) {
+      const before = await client.query(
+        `SELECT
+           COALESCE((SELECT SUM(amount) FROM distributor_credits
+                     WHERE company_id = $1 AND distributor_id = $2 AND created_at < $3), 0) AS credits_before,
+           COALESCE((SELECT SUM(amount) FROM distributor_payments
+                     WHERE company_id = $1 AND distributor_id = $2 AND created_at < $3), 0) AS payments_before`,
+        [companyId, distributorId, startDate]
+      )
+      openingBalance = openingDueBase + Number(before.rows[0].credits_before) - Number(before.rows[0].payments_before)
+    }
+
+    const totalDebit  = rows.reduce((s, r) => s + r.debit,  0)
+    const totalCredit = rows.reduce((s, r) => s + r.credit, 0)
+    const closingBalance = openingBalance + totalCredit - totalDebit
 
     /* ── EXCEL ── */
     const workbook = new ExcelJS.Workbook()
@@ -105,16 +143,19 @@ export default defineEventHandler(async (event) => {
     const sheet = workbook.addWorksheet('Transactions')
 
     /* title */
-    const titleRow = sheet.addRow([`Credits & Payments — ${distName}`])
+    const titleRow = sheet.addRow([`Transactions — ${distName}`])
     titleRow.font = { bold: true, size: 14 }
     sheet.mergeCells('A1:F1')
 
-    sheet.addRow([`${startDate.toLocaleDateString('en-GB')} – ${endDate.toLocaleDateString('en-GB')}`])
+    const periodLabel = hasStart || hasEnd
+      ? `${startDate.toLocaleDateString('en-GB')} – ${endDate.toLocaleDateString('en-GB')}`
+      : 'All time'
+    sheet.addRow([periodLabel])
     sheet.mergeCells('A2:F2')
     sheet.addRow([])
 
     /* header */
-    const headerRow = sheet.addRow(['Date', 'Type', 'Amount (Rs)', 'Remarks', 'PO No', 'Bill No'])
+    const headerRow = sheet.addRow(['Date', 'No', 'Type', 'Remarks', 'Debit (Rs)', 'Credit (Rs)'])
     headerRow.font = { bold: true }
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDAE3F3' } }
     headerRow.eachCell(cell => { cell.border = { bottom: { style: 'thin' } } })
@@ -123,30 +164,49 @@ export default defineEventHandler(async (event) => {
     rows.forEach(r => {
       const row = sheet.addRow([
         new Date(r.created_at).toLocaleDateString('en-GB'),
-        r.type ?? '-',
-        r.amount.toFixed(2),
+        r.no ?? '-',
+        r.type,
         r.remarks ?? '-',
-        r.pono ?? '-',
-        r.billno ?? '-',
+        r.debit > 0 ? r.debit.toFixed(2) : '',
+        r.credit > 0 ? r.credit.toFixed(2) : '',
       ])
-      /* color credit rows red, return rows orange, payment rows green */
-      const typeColor = r.rowType === 'CREDIT' ? 'FFC0392B' : r.type === 'RETURN' ? 'FFD35400' : 'FF27AE60'
-      row.getCell(2).font = { color: { argb: typeColor } }
-      row.getCell(3).font = { color: { argb: typeColor } }
+      // row background: green for credit rows, red for debit rows
+      if (r.credit > 0) {
+        row.eachCell(cell => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE8F5E9' } }
+        })
+        row.getCell(6).font = { color: { argb: 'FF27AE60' }, bold: true }
+      } else if (r.debit > 0) {
+        row.eachCell(cell => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDEBE9' } }
+        })
+        row.getCell(5).font = { color: { argb: 'FFC0392B' }, bold: true }
+      }
     })
 
-    /* totals */
+    /* footer: opening balance, totals, closing balance */
     sheet.addRow([])
-    const totalCredits  = credits.reduce((s, r) => s + r.amount, 0)
-    const totalPayments = payments.reduce((s, r) => s + r.amount, 0)
-    const totalRow = sheet.addRow(['Total Credits', rs(totalCredits), 'Total Payments', rs(totalPayments), `Net Due: ${rs(totalCredits - totalPayments)}`])
-    totalRow.font = { bold: true }
+    const footerHeader = sheet.addRow(['Opening Balance', 'Total Debit', 'Total Credit', 'Closing Balance (Due)'])
+    footerHeader.font = { bold: true, color: { argb: 'FFFFFFFF' } }
+    footerHeader.eachCell(cell => {
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2980B9' } }
+      cell.alignment = { horizontal: 'center' }
+    })
+
+    const footerBody = sheet.addRow([
+      rs(openingBalance),
+      rs(totalDebit),
+      rs(totalCredit),
+      rs(closingBalance),
+    ])
+    footerBody.font = { bold: true }
+    footerBody.eachCell(cell => { cell.alignment = { horizontal: 'center' } })
 
     sheet.columns.forEach(col => { col.width = 22 })
 
     const buffer = await workbook.xlsx.writeBuffer()
     setHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    setHeader(event, 'Content-Disposition', `attachment; filename="credits-${distName.replace(/\s+/g, '-')}.xlsx"`)
+    setHeader(event, 'Content-Disposition', `attachment; filename="transactions-${distName.replace(/\s+/g, '-')}.xlsx"`)
     return Buffer.from(buffer)
 
   } finally {

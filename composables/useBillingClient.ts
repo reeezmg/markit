@@ -73,33 +73,26 @@ export function useBillingClient(
   // ─── Points redemption ───────────────────────────────────────────────────
 
   const handleRedeemPoints = async () => {
-    isRedeemPoint.value = !isRedeemPoint.value
     redeeming.value = true
 
     try {
       if (!clientId.value) return
 
-      const companyId = useNuxtApp().$auth.session.value?.companyId
-      if (!companyId) throw new Error('Company not found')
-
-      if (isRedeemPoint.value) {
+      if (!isRedeemPoint.value) {
         const redeemablePoints = Math.min(points.value, grandTotal.value)
-        const res = await $fetch('/api/bill/redeemClientPoints', {
-          method: 'POST',
-          body: { companyId, clientId: clientId.value, points: redeemablePoints, mode: 'redeem' },
-        })
+        if (redeemablePoints <= 0) return
+
         redeemedPoints.value = redeemablePoints
         redeemedAmt.value += redeemablePoints
-        points.value = res.points
+        points.value = Math.max(0, points.value - redeemablePoints)
+        isRedeemPoint.value = true
       } else {
-        if (redeemedPoints.value === 0) return
-        const res = await $fetch('/api/bill/redeemClientPoints', {
-          method: 'POST',
-          body: { companyId, clientId: clientId.value, points: redeemedPoints.value, mode: 'revert' },
-        })
-        points.value = res.points
+        if (redeemedPoints.value <= 0) return
+
         redeemedAmt.value -= redeemedPoints.value
+        points.value = Math.max(0, points.value + redeemedPoints.value)
         redeemedPoints.value = 0
+        isRedeemPoint.value = false
       }
     } catch (error) {
       console.error('Error updating client points', error)

@@ -27,6 +27,7 @@ interface Message {
 interface ChatListItem {
   id: string
   title: string
+  channel: 'WEB' | 'WHATSAPP'
   updatedAt: string
 }
 
@@ -392,7 +393,17 @@ function formatDate(dateStr: string) {
           >
             <UIcon name="i-heroicons-chat-bubble-left-ellipsis" class="text-gray-400 shrink-0" />
             <div class="flex-1 min-w-0">
-              <p class="text-sm truncate">{{ chat.title }}</p>
+              <div class="flex items-center gap-2 min-w-0">
+                <p class="text-sm truncate">{{ chat.title }}</p>
+                <span
+                  class="shrink-0 text-[10px] px-1.5 py-0.5 rounded-full border"
+                  :class="chat.channel === 'WHATSAPP'
+                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-300'
+                    : 'border-gray-200 bg-gray-50 text-gray-600 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-300'"
+                >
+                  {{ chat.channel === 'WHATSAPP' ? 'WhatsApp' : 'Web' }}
+                </span>
+              </div>
               <p class="text-xs text-gray-400">{{ formatDate(chat.updatedAt) }}</p>
             </div>
             <UButton

@@ -325,8 +325,15 @@ const handlePay = async () => {
     } else {
       /* ---------------- CREATE ---------------- */
 
+      // Atomically get next payment number
+      const { number: paymentNo } = await $fetch('/api/counter/increment', {
+        method: 'POST',
+        body: { entity: 'distributorPayment' },
+      });
+
       await CreateDistributorPayment.mutateAsync({
         data: {
+          paymentNo,
           amount: form.value.amount,
           remarks: form.value.remarks,
           paymentType: form.value.paymentType,
@@ -380,8 +387,15 @@ const handleAddCredit = async () => {
 
       showToast('Credit edited successfully', 'green');
     } else {
+      // Atomically get next credit number
+      const { number: creditNo } = await $fetch('/api/counter/increment', {
+        method: 'POST',
+        body: { entity: 'distributorCredit' },
+      });
+
       await CreateDistributorCredit.mutateAsync({
         data: {
+          creditNo,
           createdAt: form.value.date ? new Date(form.value.date) : new Date(),
           amount: form.value.amount,
           remarks: form.value.remarks,

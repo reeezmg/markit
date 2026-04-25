@@ -104,6 +104,12 @@ const submitForm = async () => {
 
     }
    else{
+    // Atomically get next distributor number
+    const { number: distributorNumber } = await $fetch('/api/counter/increment', {
+        method: 'POST',
+        body: { entity: 'distributor' },
+    });
+
     const res = await CreateDistributor.mutateAsync({
       data: {
                 name: supplier.value.name,
@@ -124,6 +130,7 @@ const submitForm = async () => {
                 },
                 companies:{
                   create:{
+                    distributorNumber,
                     company:{
                       connect:{
                         id:useAuth().session.value?.companyId

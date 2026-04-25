@@ -39,6 +39,7 @@ export default defineEventHandler(async (event) => {
     const searchParam = search ? `%${search}%` : '%'
     const res = await client.query(
       `SELECT
+         e.expense_number,
          e.expense_date,
          COALESCE(ec.name, '-') AS category,
          e.note,
@@ -78,13 +79,17 @@ export default defineEventHandler(async (event) => {
     sheet.mergeCells('A2:F2')
     sheet.addRow([])
 
-    const headerRow = sheet.addRow(['Date', 'Category', 'Note', 'Payment', 'Amount (Rs)', 'Status'])
+    const expPrefix = session.data.expensePrefix || 'EXP'
+
+    const headerRow = sheet.addRow(['#', 'Date', 'Category', 'Note', 'Payment', 'Amount (Rs)', 'Status'])
     headerRow.font = { bold: true }
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDAE3F3' } }
     headerRow.eachCell(cell => { cell.border = { bottom: { style: 'thin' } } })
 
     rows.forEach(r => {
+      const numStr = r.expense_number ? `${expPrefix}-${r.expense_number}` : '-'
       sheet.addRow([
+        numStr,
         new Date(r.expense_date).toLocaleDateString('en-GB'),
         r.category,
         r.note || '-',

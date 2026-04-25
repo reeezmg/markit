@@ -48,6 +48,7 @@ const couponData = computed(() => ({
   code: props.coupon?.code || '',
   type: typeOptions.find(opt => opt.value === props.coupon?.type) || typeOptions[0],
   discountValue: props.coupon?.discountValue || '',
+  giftBarcode: props.coupon?.giftBarcode || '',
   maxDiscountAmount: props.coupon?.maxDiscountAmount || '',
   minBillAmount: props.coupon?.minBillAmount || '',
   minOrderValue: props.coupon?.minOrderValue || '',
@@ -121,6 +122,14 @@ const saveForm = async () => {
         return;
     }
 
+    if (form.value.type.value === 'GIFT' && !String(form.value.giftBarcode || '').trim()) {
+        toast.add({
+            title: 'Please enter gift product barcode!',
+            color: 'red',
+        });
+        return;
+    }
+
     const startDate = new Date(form.value.startDate);
     const endDate = new Date(form.value.endDate);
     
@@ -135,7 +144,8 @@ const saveForm = async () => {
     // Prepare data for emission
     const couponData = {
         ...form.value,
-        discountValue: parseFloat(form.value.discountValue),
+        discountValue: form.value.type.value === 'GIFT' ? null : parseFloat(form.value.discountValue),
+        giftBarcode: form.value.type.value === 'GIFT' ? String(form.value.giftBarcode || '').trim() : null,
         maxDiscountAmount: form.value.maxDiscountAmount ? parseFloat(form.value.maxDiscountAmount) : null,
         minBillAmount: form.value.minBillAmount ? parseFloat(form.value.minBillAmount) : null,
         minOrderValue: form.value.minOrderValue ? parseFloat(form.value.minOrderValue) : null,
@@ -159,6 +169,9 @@ const saveForm = async () => {
 watch(() => form.value.type, (newType) => {
     if (newType.value === 'FLAT') {
         form.value.maxDiscountAmount = '';
+    }
+    if (newType.value !== 'GIFT') {
+        form.value.giftBarcode = '';
     }
 });
 
@@ -236,6 +249,18 @@ const showGenerateField = computed(() => form.value.audienceType.value === 'GENE
           <UInput v-model="form.maxDiscountAmount" type="number" placeholder="0.00" min="0" />
         </UFormGroup>
 
+      </div>
+    </div>
+
+    <div v-else class="col-span-2 mt-4">
+      <h3 class="text-lg font-semibold mb-2">Gift Rules</h3>
+      <div class="grid grid-cols-2 gap-4">
+        <UFormGroup label="Gift Product Barcode" required>
+          <UInput
+            v-model="form.giftBarcode"
+            placeholder="Scan or enter product barcode"
+          />
+        </UFormGroup>
       </div>
     </div>
 

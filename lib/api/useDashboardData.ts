@@ -11,6 +11,8 @@ import {
   const useAuth = () => useNuxtApp().$auth;
   
 export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
+    const closingDate = useAuth().session.value?.closingDate ?? null
+
     const companyQuery = useFindUniqueCompany({
         where: { id: useAuth().session.value?.companyId },
         select:{
@@ -35,13 +37,13 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
           { companyId: useAuth().session.value?.companyId },]}})
 
 
-            
+
     const billsQuery = useFindManyBill({
         where: {
         AND: [
             { companyId: useAuth().session.value?.companyId },
             { deleted:false },
-   
+            ...(closingDate ? [{ createdAt: { gt: new Date(closingDate) } }] : []),
           ]
           },
           include: {
@@ -54,14 +56,16 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
               },
             },
           },
-        
+
         })
 
 
     const expensesQuery = useFindManyExpense({
         where: {
         AND: [
-            { companyId: useAuth().session.value?.companyId },]},
+            { companyId: useAuth().session.value?.companyId },
+            ...(closingDate ? [{ createdAt: { gt: new Date(closingDate) } }] : []),
+          ]},
             include:{
               expensecategory:true
             }
@@ -72,7 +76,8 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
         where: {
             bill: {
               companyId: useAuth().session.value?.companyId,
-              deleted:false
+              deleted:false,
+              ...(closingDate ? { createdAt: { gt: new Date(closingDate) } } : {}),
             },
           },
           include: {

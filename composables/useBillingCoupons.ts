@@ -20,6 +20,13 @@ export function useBillingCoupons(
   const allCoupons = ref<any[]>([])
   const selectedCouponId = ref<any>(null)
 
+  function getGeneratedCouponBalance(coupon: any, cId: string) {
+    const rows = Array.isArray(coupon?.clients) ? coupon.clients : []
+    return rows
+      .filter((row: any) => row?.clientId === cId)
+      .reduce((sum: number, row: any) => sum + Math.max(0, Number(row?.usageLimit ?? 1) || 0), 0)
+  }
+
   // ─── Coupon fetch ─────────────────────────────────────────────────────────
 
   const couponRefetch = async () => {
@@ -45,7 +52,7 @@ export function useBillingCoupons(
   function isCouponEligible(coupon: any, orderValue: number, cId: string) {
     const now = new Date()
     const clientUsage = coupon.couponUsage.filter((u: any) => u.clientId === cId).length
-    const clientAppearances = coupon.clients.filter((c: any) => c.clientId === cId).length
+    const clientGeneratedBalance = getGeneratedCouponBalance(coupon, cId)
 
     if (!coupon.isActive) return false
     if (now < new Date(coupon.startDate) || now > new Date(coupon.endDate)) return false
@@ -58,7 +65,7 @@ export function useBillingCoupons(
     }
 
     if (coupon.audienceType === 'GENERATE') {
-      if (clientUsage >= clientAppearances) return false
+      if (clientGeneratedBalance <= 0) return false
     }
 
     return true
@@ -100,6 +107,9 @@ export function useBillingCoupons(
         if (coupon.perClientLimit !== null) {
           const remaining = coupon.perClientLimit - clientUsageCount
           usageInfo = remaining > 0 ? `${remaining}` : '0'
+        }
+        if (coupon.audienceType === 'GENERATE') {
+          usageInfo = `${getGeneratedCouponBalance(coupon, clientId.value)}`
         }
         return {
           label: `${coupon.code} (${coupon.type}) - ${usageInfo}`,

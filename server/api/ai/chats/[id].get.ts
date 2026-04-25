@@ -16,10 +16,16 @@ export default defineEventHandler(async (event) => {
   }
 
   const chat = await prisma.aiChat.findFirst({
-    where: { id, companyId, userId },
+    where: {
+      id,
+      companyId,
+      userId,
+      NOT: { sessionStatus: 'PENDING_COMPANY_SELECT' },
+    },
     select: {
       id: true,
       title: true,
+      channel: true,
       updatedAt: true,
       aiMessages: {
         select: {

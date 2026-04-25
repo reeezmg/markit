@@ -91,9 +91,12 @@ export function useBillingDraft() {
       return item.return ? sum - itemValue : sum + itemValue
     }, 0)
 
-    const afterDiscount = discount.value < 0
-      ? parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2))
-      : parseFloat((baseTotal - (baseTotal * discount.value) / 100).toFixed(2))
+    const discStr = String(discount.value ?? '')
+    const afterDiscount = discStr.startsWith('+')
+      ? parseFloat((baseTotal + Math.abs(parseFloat(discStr))).toFixed(2))
+      : Number(discount.value) < 0
+        ? parseFloat((baseTotal - Math.abs(Number(discount.value))).toFixed(2))
+        : parseFloat((baseTotal - (baseTotal * Number(discount.value)) / 100).toFixed(2))
 
     return afterDiscount - redeemedAmt.value
   })

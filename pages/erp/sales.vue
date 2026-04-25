@@ -285,6 +285,7 @@ const fetchSales = async () => {
         sortColumn: sort.value.column,
         sortDirection: sort.value.direction,
         excludeMarkit: true,
+        closingDate: useAuth().session.value?.closingDate ?? null,
       },
     })
 
@@ -1006,7 +1007,11 @@ const openBill = async (id) => {
                 sort-mode="manual"
                 class="w-full"
             >
-       
+
+                <template #invoiceNumber-data="{ row }">
+                    {{ useAuth().session.value?.billPrefix ? `${useAuth().session.value.billPrefix}-${row.invoiceNumber}` : row.invoiceNumber }}
+                </template>
+
                 <template #actions-data="{ row }">
                     <UDropdown  :items="action(row)">
                         <UButton

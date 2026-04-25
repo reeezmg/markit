@@ -307,6 +307,7 @@ const onVerifyOtp = async () => {
 
 <template>
     <UDashboardPanelContent class="pb-24">
+
         <UDashboardSection
             title="Theme"
             description="Customize the look and feel of your dashboard."

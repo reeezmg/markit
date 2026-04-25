@@ -39,6 +39,7 @@ export default defineEventHandler(async (event) => {
     const searchParam = search ? `%${search}%` : '%'
     const res = await client.query(
       `SELECT
+         e.expense_number,
          e.expense_date,
          COALESCE(ec.name, '-') AS category,
          e.note,
@@ -94,27 +95,34 @@ export default defineEventHandler(async (event) => {
 
     y = (doc as any).lastAutoTable.finalY + 8
 
+    const expPrefix = session.data.expensePrefix || 'EXP'
+
     autoTable(doc, {
       startY: y,
-      head: [['Date', 'Category', 'Note', 'Payment', 'Amount (Rs)', 'Status']],
+      head: [['#', 'Date', 'Category', 'Note', 'Payment', 'Amount (Rs)', 'Status']],
       body: rows.length
-        ? rows.map(r => [
-            new Date(r.expense_date).toLocaleDateString('en-GB'),
-            r.category,
-            r.note || '-',
-            r.payment_mode || '-',
-            rs(r.total_amount),
-            r.status || '-',
-          ])
-        : [['No data', '', '', '', '', '']],
+        ? rows.map(r => {
+            const numStr = r.expense_number ? `${expPrefix}-${r.expense_number}` : '-'
+            return [
+              numStr,
+              new Date(r.expense_date).toLocaleDateString('en-GB'),
+              r.category,
+              r.note || '-',
+              r.payment_mode || '-',
+              rs(r.total_amount),
+              r.status || '-',
+            ]
+          })
+        : [['No data', '', '', '', '', '', '']],
       theme: 'striped',
       headStyles: { fillColor: [52, 73, 94], textColor: 255, fontStyle: 'bold' },
       alternateRowStyles: { fillColor: [245, 245, 245] },
       styles: { fontSize: 8 },
       columnStyles: {
-        0: { cellWidth: 22 },
-        4: { halign: 'right', cellWidth: 28 },
-        5: { cellWidth: 22 },
+        0: { cellWidth: 20 },
+        1: { cellWidth: 22 },
+        5: { halign: 'right', cellWidth: 26 },
+        6: { cellWidth: 20 },
       },
     })
 

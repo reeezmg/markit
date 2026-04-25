@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
 
   const company = await prisma.company.findUnique({
     where: { id: session.data.companyId },
-    select: { salesOrderCounter: true },
+    select: { salesOrderCounter: true, salesOrderPrefix: true },
   });
 
   if (!company) {
@@ -13,5 +13,6 @@ export default defineEventHandler(async (event) => {
   }
 
   const num = String(company.salesOrderCounter).padStart(5, '0');
-  return { orderNumber: `SO-${num}` };
+  const prefix = company.salesOrderPrefix || 'SO';
+  return { orderNumber: prefix ? `${prefix}-${num}` : num };
 });

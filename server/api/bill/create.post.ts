@@ -1,5 +1,6 @@
 import { pool } from '~/server/db'
 import crypto from 'crypto'
+import { generateCouponsForBill } from '~/server/utils/generatedCoupons'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -41,6 +42,7 @@ export default defineEventHandler(async (event) => {
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
+      let generatedCoupons: any[] = []
 
       // Generate Bill ID
       const billId = uuid
@@ -142,8 +144,17 @@ export default defineEventHandler(async (event) => {
       if (resolvedClientId) {
         updatePromises.push(
           client.query(
-            `UPDATE company_clients SET points = points + $1 WHERE company_id = $2 AND client_id = $3`,
-            [billPoints, companyId, resolvedClientId]
+            `UPDATE company_clients
+             SET points = points + $1 - $2
+             WHERE company_id = $3
+               AND client_id = $4
+               AND points >= $2`,
+            [
+              Number(billPoints) || 0,
+              Number(payload.redeemedPoints) || 0,
+              companyId,
+              resolvedClientId,
+            ]
           )
         )
       }
@@ -189,6 +200,34 @@ export default defineEventHandler(async (event) => {
       // coupon usage + increment
       if (resolvedCouponId && resolvedClientId) {
         const usageId = crypto.randomUUID()
+        const selectedCouponRes = await client.query(
+          `SELECT audience_type FROM coupons WHERE id = $1`,
+          [resolvedCouponId]
+        )
+        const selectedCoupon = selectedCouponRes.rows[0]
+        if (selectedCoupon?.audience_type === 'GENERATE') {
+          const voucherRes = await client.query(
+            `
+              UPDATE coupon_clients
+              SET usage_limit = COALESCE(usage_limit, 0) - 1
+              WHERE id = (
+                SELECT id
+                FROM coupon_clients
+                WHERE coupon_id = $1
+                  AND client_id = $2
+                  AND COALESCE(usage_limit, 0) > 0
+              ORDER BY "createdAt" ASC
+              LIMIT 1
+            )
+            RETURNING id
+            `,
+            [resolvedCouponId, resolvedClientId]
+          )
+
+          if (!voucherRes.rowCount) {
+            throw new Error('No remaining uses for this generated coupon')
+          }
+        }
         updatePromises.push(
           client.query(
             `INSERT INTO coupon_usages (id, coupon_id, client_id, bill_id, used_at)
@@ -206,9 +245,17 @@ export default defineEventHandler(async (event) => {
 
       await Promise.all(updatePromises)
 
+      generatedCoupons = await generateCouponsForBill(client, {
+        clientId: resolvedClientId,
+        companyId,
+        grandTotal: payload.grandTotal || 0,
+        billId,
+        billDate: payload.createdAt,
+      })
+
       await client.query('COMMIT')
       client.release()
-      return { success: true, billId }
+      return { success: true, billId, generatedCoupons }
     } catch (error: any) {
       await client.query('ROLLBACK')
       client.release()

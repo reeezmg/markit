@@ -580,6 +580,15 @@ const links = computed(() => {
                         shortcuts: ['S', 'P'],
                     },
                 },
+                {
+                    label: 'Numbering',
+                    to: `/settings/numbering`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Numbering & Prefixes',
+                        shortcuts: ['S', 'N'],
+                    },
+                },
             ],
 
         },

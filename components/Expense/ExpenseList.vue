@@ -53,6 +53,11 @@ const pageCount = ref('10');
 
 const columns = [
     {
+        key: 'expenseNumber',
+        label: '#',
+        sortable: true,
+    },
+    {
         key: 'expenseDate',
         label: 'Date',
         sortable: true,
@@ -497,7 +502,9 @@ const handleDownloadExcel = async () => {
     const workbook = new Workbook()
     const worksheet = workbook.addWorksheet('Expenses')
 
+    const expPrefix = useAuth().session.value?.expensePrefix || 'EXP'
     worksheet.columns = [
+      { header: '#', key: 'expenseNumber', width: 14 },
       { header: 'Date', key: 'expenseDate', width: 16 },
       { header: 'Category', key: 'category', width: 24 },
       { header: 'User', key: 'user', width: 24 },
@@ -509,6 +516,7 @@ const handleDownloadExcel = async () => {
 
     rows.forEach((row: any) => {
       worksheet.addRow({
+        expenseNumber: row.expenseNumber ? `${expPrefix}-${row.expenseNumber}` : '',
         expenseDate: row.expenseDate ? format(row.expenseDate, 'd MMM yyyy') : '',
         category: row.expensecategory?.name || '',
         user: row.user?.name || '',
@@ -749,6 +757,12 @@ const handleDownloadExcel = async () => {
                 </UBadge>
             </template>
 
+        <template #expenseNumber-data="{row}">
+            <span v-if="row.expenseNumber" class="font-mono text-xs">
+              {{ (useAuth().session.value?.expensePrefix || 'EXP') + '-' + row.expenseNumber }}
+            </span>
+            <span v-else class="text-xs text-gray-400">-</span>
+        </template>
         <template #expenseDate-data="{row}">
             {{ format(row.expenseDate, 'd MMM, yyy') }}
         </template>

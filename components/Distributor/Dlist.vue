@@ -138,6 +138,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
     select: {
       distributorId: true,
       companyId: true,
+      distributorNumber: true,
       distributor: {
         select: {
           id: true,
@@ -166,6 +167,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
         amount:true,
         remarks:true,
         billNo:true,
+        creditNo:true,
       }
     },
 
@@ -175,7 +177,8 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
             id:true,
             amount:true,
             remarks:true,
-            paymentType:true
+            paymentType:true,
+            paymentNo:true,
         }
       },
       purchaseOrders: {

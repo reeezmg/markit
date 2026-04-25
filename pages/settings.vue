@@ -19,6 +19,11 @@ const links = [
             label: 'Printer',
             icon: 'i-heroicons-printer',
             to: '/settings/printer',
+        },
+        {
+            label: 'Numbering',
+            icon: 'i-heroicons-hashtag',
+            to: '/settings/numbering',
         }
     ],
 ];

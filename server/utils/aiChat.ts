@@ -16,6 +16,38 @@ export interface ChatMessage {
   toolCalls?: ToolCallRecord[]
 }
 
+interface McpToolDefinition {
+  name: string
+  description?: string
+  inputSchema: Record<string, unknown>
+}
+
+export type AiChatChannel = 'WEB' | 'WHATSAPP'
+export type AiChatSessionStatus = 'ACTIVE' | 'PENDING_COMPANY_SELECT' | 'EXPIRED'
+
+export interface PersistMessagesOptions {
+  chatId?: string | null
+  title?: string
+  channel?: AiChatChannel
+  sourcePhone?: string | null
+  sessionStatus?: AiChatSessionStatus
+  sessionStartedAt?: Date | null
+  lastSeenAt?: Date | null
+  expiresAt?: Date | null
+  companyId?: string | null
+  userId?: string | null
+  userMessage?: string
+  assistantMessage?: string
+  toolCalls?: ToolCallRecord[]
+  attachments?: unknown[]
+}
+
+export const WHATSAPP_SESSION_TTL_MS = 60 * 60 * 1000
+
+export function normalizePhoneDigits(phone: string): string {
+  return String(phone ?? '').replace(/\D/g, '')
+}
+
 export function getSystemPrompt(): string {
   const now = new Date();
   const todayIST = new Date(now.getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
@@ -150,6 +182,61 @@ Today is ${todayIST} (IST). Use this to resolve relative dates like "today", "ye
 
 export const REPORT_TOOL_NAMES = ['generate_report', 'query_db']
 
+export const SETTING_TOOL_NAMES = [
+  'get_settings',
+  'update_store_identity',
+  'update_store_policies',
+  'update_billing_settings',
+  'update_delivery_settings',
+  'update_business_hours',
+  'update_bank_details',
+  'update_opening_balance',
+  'update_store_address',
+  'update_feature_toggles',
+  'update_product_inputs',
+  'update_variant_inputs',
+  'update_printer_settings',
+  'query_db',
+]
+
+export function getSettingSystemPrompt(): string {
+  const now = new Date();
+  const todayIST = new Date(now.getTime() + 5.5 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  return `You are a store settings assistant for Markit, a retail store management app.
+You help store owners view and update their store settings through natural conversation.
+
+## Current Date
+Today is ${todayIST} (IST).
+
+## Available Settings
+You can read and update the following store settings:
+
+- **Store Identity** — Store name, phone, logo, categories
+- **Store Policies** — Description, thank you note, refund policy, return policy
+- **Billing Settings** — Tax included, cost included, loyalty points value
+- **Delivery Settings** — Delivery type/mode, fees, radius, waiting charges, discount thresholds
+- **Business Hours** — Open time, close time
+- **Bank Details** — Account holder name, IFSC, account number, bank name, UPI ID, GSTIN
+- **Opening Balance** — Cash and bank opening balances
+- **Store Address** — Street, landmark, city, state, pincode, coordinates
+- **Feature Toggles** — AI image generation, user tracking
+- **Product Input Fields** — Which fields are visible when adding products (name, brand, category, subcategory, description)
+- **Variant Input Fields** — Which fields are visible for variants (name, code, prices, discount, qty, sizes, images, button)
+- **Printer Settings** — Printer label size
+
+## Workflow
+1. If the user wants to view settings, call \`get_settings\` and present the relevant section clearly
+2. If the user wants to update settings, confirm the changes and call the appropriate update tool
+3. After updating, briefly confirm what was changed
+
+## Rules
+- Never mention companyId — it is injected automatically.
+- Always confirm before making changes: "I'll update X to Y — shall I proceed?"
+- For boolean fields, accept natural language ("turn on", "enable", "yes" → true; "turn off", "disable", "no" → false)
+- If you need to look up data to answer a question, use \`query_db\`.
+- Keep responses concise.`
+}
+
 // ─── Schema conversion helpers ────────────────────────────────────────────────
 
 function toGeminiType(schema: Record<string, unknown>): Type {
@@ -192,11 +279,21 @@ function convertSchema(schema: Record<string, unknown>): Record<string, unknown>
 
 export async function getGeminiToolsAndClient(toolFilter?: string) {
   const mcpClient = await getMcpClient()
-  let mcpTools = await listMcpTools(mcpClient)
+  let mcpTools = (await listMcpTools(mcpClient)) as McpToolDefinition[]
 
   // Filter tools for specialized agents
   if (toolFilter === 'report') {
     mcpTools = mcpTools.filter((t) => REPORT_TOOL_NAMES.includes(t.name))
+  } else if (toolFilter === 'setting') {
+    mcpTools = mcpTools.filter((t) => SETTING_TOOL_NAMES.includes(t.name))
+  } else {
+    // Default: exclude report-only and setting-only tools (they are on-demand via @report / @setting)
+    // query_db is shared, so keep it in default mode
+    const onDemandOnly = new Set([
+      ...REPORT_TOOL_NAMES.filter(n => n !== 'query_db'),
+      ...SETTING_TOOL_NAMES.filter(n => n !== 'query_db'),
+    ])
+    mcpTools = mcpTools.filter((t) => !onDemandOnly.has(t.name))
   }
 
   const geminiTools = mcpTools.map((tool) => {
@@ -250,6 +347,27 @@ export function buildContentsFromHistory(messages: ChatMessage[]): Array<{ role:
     }
   }
   return contents
+}
+
+export async function loadChatHistory(chatId: string, sessionStartedAt?: Date | null): Promise<ChatMessage[]> {
+  const messages = await prisma.aiChatMessage.findMany({
+    where: {
+      chatId,
+      ...(sessionStartedAt ? { createdAt: { gt: sessionStartedAt } } : {}),
+    },
+    orderBy: { createdAt: 'asc' },
+    select: {
+      role: true,
+      content: true,
+      toolCalls: true,
+    },
+  })
+
+  return messages.map((message) => ({
+    role: message.role as 'user' | 'assistant',
+    content: message.content,
+    toolCalls: message.toolCalls as unknown as ToolCallRecord[] | undefined,
+  }))
 }
 
 // ─── Agentic loop (shared by text and voice) ──────────────────────────────────
@@ -364,29 +482,86 @@ export async function runAgenticLoop(opts: {
 
 // ─── Persist messages to DB ───────────────────────────────────────────────────
 
-export async function persistMessages(
-  chatId: string | undefined,
-  companyId: string,
-  userId: string,
-  userMessage: string,
-  reply: string,
-  toolCalls: ToolCallRecord[] | undefined,
-  attachments?: unknown[],
-): Promise<string> {
+async function persistMessagesWithOptions(opts: PersistMessagesOptions): Promise<string> {
+  const now = new Date()
+  let chatId = opts.chatId ?? undefined
+  const updateData: Record<string, unknown> = { updatedAt: now }
+
+  if (opts.title !== undefined) updateData.title = opts.title
+  if (opts.channel !== undefined) updateData.channel = opts.channel
+  if (opts.sourcePhone !== undefined) updateData.sourcePhone = opts.sourcePhone
+  if (opts.sessionStatus !== undefined) updateData.sessionStatus = opts.sessionStatus
+  if (opts.sessionStartedAt !== undefined) updateData.sessionStartedAt = opts.sessionStartedAt
+  if (opts.lastSeenAt !== undefined) updateData.lastSeenAt = opts.lastSeenAt
+  if (opts.expiresAt !== undefined) updateData.expiresAt = opts.expiresAt
+  if (opts.companyId !== undefined) updateData.companyId = opts.companyId
+  if (opts.userId !== undefined) updateData.userId = opts.userId
+
   if (!chatId) {
-    const title = userMessage.slice(0, 80) || 'New Chat'
-    const chat = await prisma.aiChat.create({ data: { companyId, userId, title } })
+    const chat = await prisma.aiChat.create({
+      data: {
+        title: opts.title ?? (opts.userMessage ? opts.userMessage.slice(0, 80) : 'New Chat'),
+        channel: opts.channel ?? 'WEB',
+        sourcePhone: opts.sourcePhone ?? null,
+        sessionStatus: opts.sessionStatus ?? 'ACTIVE',
+        sessionStartedAt: opts.sessionStartedAt ?? null,
+        lastSeenAt: opts.lastSeenAt ?? (opts.channel === 'WHATSAPP' ? now : null),
+        expiresAt: opts.expiresAt ?? (opts.channel === 'WHATSAPP' ? new Date(now.getTime() + WHATSAPP_SESSION_TTL_MS) : null),
+        companyId: opts.companyId ?? undefined,
+        userId: opts.userId ?? undefined,
+      },
+    })
     chatId = chat.id
   } else {
-    await prisma.aiChat.update({ where: { id: chatId }, data: { updatedAt: new Date() } })
+    await prisma.aiChat.update({ where: { id: chatId }, data: updateData })
   }
 
-  await prisma.aiChatMessage.createMany({
-    data: [
-      { chatId, role: 'user', content: userMessage, attachments: attachments?.length ? attachments : undefined },
-      { chatId, role: 'assistant', content: reply, toolCalls: toolCalls ?? undefined },
-    ],
-  })
+  const messagesToCreate: Array<Record<string, unknown>> = []
+  if (opts.userMessage !== undefined) {
+    messagesToCreate.push({
+      chatId,
+      role: 'user',
+      content: opts.userMessage,
+      attachments: opts.attachments?.length ? opts.attachments : undefined,
+    })
+  }
+  if (opts.assistantMessage !== undefined) {
+    messagesToCreate.push({
+      chatId,
+      role: 'assistant',
+      content: opts.assistantMessage,
+      toolCalls: opts.toolCalls ?? undefined,
+    })
+  }
+
+  if (messagesToCreate.length) {
+    await prisma.aiChatMessage.createMany({ data: messagesToCreate as any })
+  }
 
   return chatId
+}
+
+export async function persistMessages(
+  chatIdOrOptions: string | PersistMessagesOptions | undefined,
+  companyId?: string,
+  userId?: string,
+  userMessage?: string,
+  reply?: string,
+  toolCalls?: ToolCallRecord[] | undefined,
+  attachments?: unknown[],
+): Promise<string> {
+  if (typeof chatIdOrOptions === 'object' && chatIdOrOptions !== null) {
+    return persistMessagesWithOptions(chatIdOrOptions)
+  }
+
+  return persistMessagesWithOptions({
+    chatId: chatIdOrOptions,
+    companyId: companyId ?? null,
+    userId: userId ?? null,
+    userMessage,
+    assistantMessage: reply,
+    toolCalls,
+    attachments,
+    channel: 'WEB',
+  })
 }

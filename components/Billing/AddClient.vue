@@ -168,6 +168,12 @@ const login = async () => {
 
   if (!client.value && form.name) {
 
+    // Atomically get next client number
+    const { number: clientNumber } = await $fetch('/api/counter/increment', {
+      method: 'POST',
+      body: { entity: 'client' },
+    })
+
     await CreateClient.mutate({
       data: {
         id: uuid,
@@ -176,6 +182,7 @@ const login = async () => {
         ...(form.email && { email: form.email }),
         companies: {
           create: {
+            clientNumber,
             company: {
               connect: {
                 id: useAuth().session.value?.companyId
@@ -190,20 +197,34 @@ const login = async () => {
 
   } else if (client.value) {
 
-    await UpdateClient.mutate({
-      where: { id: client.value.id },
-      data: {
-        companies: {
-          create: {
-            company: {
-              connect: {
-                id: useAuth().session.value?.companyId
+    // Check if client is already linked to this company
+    const isLinked = client.value.companies?.some(
+      (c: any) => c.companyId === useAuth().session.value?.companyId
+    )
+
+    if (!isLinked) {
+      // Atomically get next client number for new link
+      const { number: clientNumber } = await $fetch('/api/counter/increment', {
+        method: 'POST',
+        body: { entity: 'client' },
+      })
+
+      await UpdateClient.mutate({
+        where: { id: client.value.id },
+        data: {
+          companies: {
+            create: {
+              clientNumber,
+              company: {
+                connect: {
+                  id: useAuth().session.value?.companyId
+                },
               },
             },
           },
         },
-      },
-    })
+      })
+    }
 
     props.clientAdded(client.value.id, form.name)
   }

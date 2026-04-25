@@ -57,14 +57,8 @@ export type AuthSession = {
     plan:string;
     deliveryType: string[];
     deliveryMode: string[];
-    fundDeliveryFees?: boolean;
     deliveryRadius?: number;
-    deliveryFeesPerKm?: number;
-    waitingTime?: number;
-    waitingChargesPerMin?: number;
-    minDeliveryCharges?: number;
-    deliveryDiscountThreshold?: number;
-    deliveryDiscountAmount?: number;
+    deliveryDiscount?: number;
     commissionRate?: number;
     printerLabelSize?: string;
     cash?: number;

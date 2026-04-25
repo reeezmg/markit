@@ -17,7 +17,12 @@ export default defineEventHandler(async (event) => {
 
   // Verify ownership before deleting
   const chat = await prisma.aiChat.findFirst({
-    where: { id, companyId, userId },
+    where: {
+      id,
+      companyId,
+      userId,
+      NOT: { sessionStatus: 'PENDING_COMPANY_SELECT' },
+    },
     select: { id: true },
   })
 

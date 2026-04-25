@@ -47,7 +47,9 @@ export default defineEventHandler(async (event) => {
 
 
     // 🔹 How many times this client already has this coupon
-    const alreadyGiven = coupon.clients.filter(c => c.clientId === clientId).length;
+    const alreadyGiven = coupon.clients
+      .filter(c => c.clientId === clientId)
+      .reduce((sum, row) => sum + Math.max(0, Number(row?.usageLimit ?? 1) || 0), 0);
 
     // 🔹 Eligible count based on multiples of minBillAmount
     const eligibleCount = Math.floor(totalValue / (coupon.minBillAmount || 1));
@@ -70,6 +72,7 @@ export default defineEventHandler(async (event) => {
       const data = Array.from({ length: newCoupons }, () => ({
         couponId: coupon.id,
         clientId,
+        usageLimit: 1,
       }));
 
       await prisma.couponClient.createMany({

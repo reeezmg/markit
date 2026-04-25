@@ -665,6 +665,13 @@ const handleSubmit = async (e: Event) => {
         }
     else{
         const { data } = await refetchUser();
+
+        // Atomically get next user code
+        const { number: userCode } = await $fetch('/api/counter/increment', {
+            method: 'POST',
+            body: { entity: 'user' },
+        })
+
          if (data) {
         await UpdateUser.mutateAsync({
             where: { id: data.id },
@@ -676,6 +683,7 @@ const handleSubmit = async (e: Event) => {
                             },
                         name: formData.name,
                         role: formData.role.value,
+                        code: userCode,
                     }],
                 },
             },
@@ -690,6 +698,7 @@ const handleSubmit = async (e: Event) => {
                     create: {
                         name: formData.name,
                         role: formData.role.value,
+                        code: userCode,
                         company: {
                             connect: {
                                 id: useAuth().session.value?.companyId!,
@@ -826,6 +835,12 @@ const handleSubmit = async (e: Event) => {
                             </template>
                             <template #email-data="{ row }">
                                 <div>{{ row.user?.email || '-' }}</div>
+                            </template>
+                            <template #code-data="{ row }">
+                                <span v-if="row.code" class="font-mono text-xs">
+                                    {{ (useAuth().session.value?.userPrefix || '') ? `${useAuth().session.value.userPrefix}-${row.code}` : row.code }}
+                                </span>
+                                <span v-else class="text-xs text-gray-400">-</span>
                             </template>
                             <template #role-data="{ row }">
                                 <UBadge

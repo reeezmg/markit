@@ -11,10 +11,15 @@ export default defineEventHandler(async (event) => {
   }
 
   const chats = await prisma.aiChat.findMany({
-    where: { companyId, userId },
+    where: {
+      companyId,
+      userId,
+      NOT: { sessionStatus: 'PENDING_COMPANY_SELECT' },
+    },
     select: {
       id: true,
       title: true,
+      channel: true,
       updatedAt: true,
     },
     orderBy: { updatedAt: 'desc' },

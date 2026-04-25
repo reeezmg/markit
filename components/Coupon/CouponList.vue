@@ -170,7 +170,7 @@ const formatDiscount = (coupon: any) => {
     if (coupon.type === 'PERCENTAGE') {
         return `${coupon.discountValue}%${coupon.maxDiscountAmount ? ` (Max: ${coupon.maxDiscountAmount})` : ''}`;
     } else if(coupon.type === 'GIFT'){
-        return '-'
+        return coupon.giftBarcode ? `Gift: ${coupon.giftBarcode}` : 'Gift'
     }
     else {
         return `${coupon.discountValue} Flat`;
@@ -217,7 +217,7 @@ const isCurrentlyActive = (row: any) => {
                     <div class="flex flex-wrap gap-2 flex-1 min-w-0" :class="[selectedCoupon ? 'w-full' : '']">
                         <USelectMenu
                             v-model="selectedType"
-                            :options="['PERCENTAGE', 'FLAT']"
+                            :options="['PERCENTAGE', 'FLAT', 'GIFT']"
                             multiple
                             placeholder="Type"
                             class="w-28"

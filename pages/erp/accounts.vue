@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue';
-import type { Period, Range } from '~/types';
 import {
     useUpdateBill,
     useFindManyAccount,
@@ -10,7 +9,7 @@ import {
     useCountAccount
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client'
-import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
+import { format } from 'date-fns'
 const toast = useToast();
 const UpdateBill = useUpdateBill({ optimisticUpdate: true });
 const CreateAccount = useCreateAccount({ optimisticUpdate: true });
@@ -37,26 +36,6 @@ const deletingBillRowIdentity = ref({});
 const isPaymentMethodModalOpen = ref(false)
 const paymentMethodForPaid = ref<'Cash' | 'UPI' | 'Card'>('Cash')
 const paymentMethodBillCtx = ref<{ id: string; billNo: string; row?: any } | null>(null)
-
-const selectedDate = ref({
-    start: new Date() ,
-    end: new Date()
-});
-
-const ranges = [
-  { label: 'Last 7 days',   duration: { days: 7 } },
-  { label: 'Last 14 days',  duration: { days: 14 } },
-  { label: 'Last 30 days',  duration: { days: 30 } },
-  { label: 'Last 3 months', duration: { months: 3 } },
-  { label: 'Last 6 months', duration: { months: 6 } },
-  { label: 'Last year',     duration: { years: 1 } },
-]
-const isRangeSelected = (d: Duration) =>
-  isSameDay(selectedDate.value.start, sub(new Date(), d)) &&
-  isSameDay(selectedDate.value.end, new Date())
-const selectRange = (d: Duration) => {
-  selectedDate.value = { start: sub(new Date(), d), end: new Date() }
-}
 
 const isMobile = ref(false)
 
@@ -100,6 +79,7 @@ const billColumns = [
 ];
 
 const desktopColumns = [
+  { key: 'accountNumber', label: '#', sortable: true },
   { key: 'name',    label: 'Name',    sortable: true  },
   { key: 'phone',   label: 'Phone',   sortable: true  },
   { key: 'pending', label: 'Pending', sortable: true  },
@@ -196,7 +176,6 @@ const applyFilters = () => {
 const resetFilters = () => {
     search.value = '';
     selectedStatus.value = [];
-    selectedDate.value = { start: new Date(), end: new Date() };
 };
 
 
@@ -208,18 +187,11 @@ const page = ref(1);
 const pageCount = ref('5');
 
 const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
-  const hasBillFilter = selectedStatus.value?.length ||
-    (selectedDate.value?.start && selectedDate.value?.end)
+  const hasBillFilter = selectedStatus.value?.length
 
   const billWhere: any = { deleted: false }
   if (selectedStatus.value?.length) {
     billWhere.paymentStatus = { in: selectedStatus.value.map((s: any) => s.value) }
-  }
-  if (selectedDate.value?.start && selectedDate.value?.end) {
-    billWhere.createdAt = {
-      gte: startOfDay(selectedDate.value.start),
-      lte: endOfDay(selectedDate.value.end),
-    }
   }
 
   return {
@@ -235,6 +207,7 @@ const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
     },
     select: {
       id: true,
+      accountNumber: true,
       name: true,
       phone: true,
       address: true,
@@ -319,7 +292,9 @@ const handleDownloadExcel = async () => {
     const workbook = new Workbook()
     const worksheet = workbook.addWorksheet('Accounts')
 
+    const accPrefix = useAuth().session.value?.accountPrefix || 'ACC'
     worksheet.columns = [
+      { header: '#', key: 'accountNumber', width: 14 },
       { header: 'Name', key: 'name', width: 24 },
       { header: 'Phone', key: 'phone', width: 18 },
       { header: 'Pending Amount', key: 'pending', width: 16 },
@@ -328,6 +303,7 @@ const handleDownloadExcel = async () => {
 
     rows.forEach((row: any) => {
       worksheet.addRow({
+        accountNumber: row.accountNumber ? `${accPrefix}-${row.accountNumber}` : '',
         name: row.name || '',
         phone: row.phone || '',
         pending: Number(getPendingAmount(row).toFixed(2)),
@@ -354,13 +330,7 @@ const handleDownloadExcel = async () => {
 }
 
 watch(
-  [
-    search,
-    selectedStatus,
-    pageCount,
-    () => selectedDate.value?.start,
-    () => selectedDate.value?.end,
-  ],
+  [search, selectedStatus, pageCount],
   () => {
     if (page.value !== 1) page.value = 1
   },
@@ -373,8 +343,6 @@ watch(
     selectedStatus,
     page,
     pageCount,
-    () => selectedDate.value?.start,
-    () => selectedDate.value?.end,
     () => sort.value.column,
     () => sort.value.direction,
     selectedColumnKeys,
@@ -383,9 +351,6 @@ watch(
     accountsTableStore.$patch({
       search: search.value,
       selectedStatus: selectedStatus.value,
-      selectedDate: selectedDate.value
-        ? { start: new Date(selectedDate.value.start).toISOString(), end: new Date(selectedDate.value.end).toISOString() }
-        : null,
       page: page.value,
       pageCount: pageCount.value,
       sort: sort.value,
@@ -401,12 +366,6 @@ onMounted(() => {
   const saved = accountsTableStore
   search.value = saved.search ?? ''
   selectedStatus.value = saved.selectedStatus ?? []
-  if (saved.selectedDate?.start && saved.selectedDate?.end) {
-    selectedDate.value = {
-      start: new Date(saved.selectedDate.start),
-      end: new Date(saved.selectedDate.end),
-    }
-  }
   page.value = Number(saved.page || 1)
   pageCount.value = String(saved.pageCount || '5')
   if (saved.sort?.column && saved.sort?.direction) {
@@ -602,7 +561,7 @@ const openEditModal = (row:any) => {
 };
 
 
-const submitForm = () => {
+const submitForm = async () => {
   isSavingAcc.value = true
   try {
     
@@ -633,8 +592,15 @@ const submitForm = () => {
             id: 'modal-success',
         });
     } else {
+    // Atomically get next account number
+    const { number: accountNumber } = await $fetch('/api/counter/increment', {
+        method: 'POST',
+        body: { entity: 'account' },
+    });
+
     const res = CreateAccount.mutate({
       data: {
+                accountNumber,
                 name: account.value.name,
                 phone: account.value.phone,
                 address: {
@@ -713,22 +679,6 @@ const deleteAccountRow = async () => {
             <template #header>
             <div class="flex justify-between items-center gap-3 w-full flex-wrap">
                 <div class="flex items-center gap-3 flex-wrap">
-                  <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
-                    <UButton icon="i-heroicons-calendar-days-20-solid" color="orange"  size="sm">
-                      {{ format(selectedDate.start, 'd MMM, yyyy') }} – {{ format(selectedDate.end, 'd MMM, yyyy') }}
-                    </UButton>
-                    <template #panel="{ close }">
-                      <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
-                        <div class="hidden sm:flex flex-col py-4">
-                          <UButton v-for="(r, i) in ranges" :key="i" :label="r.label" color="gray" variant="ghost"
-                            class="rounded-none px-6"
-                            :class="isRangeSelected(r.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'"
-                            truncate @click="selectRange(r.duration)" />
-                        </div>
-                        <DatePicker v-model="selectedDate" @close="close" />
-                      </div>
-                    </template>
-                  </UPopover>
                   <UInput v-model="search" icon="i-heroicons-magnifying-glass-20-solid"
                     placeholder="Search..." size="sm" class="w-full sm:w-48" />
                 </div>
@@ -779,6 +729,13 @@ const deleteAccountRow = async () => {
                 sort-mode="manual"
                 class="w-full"
             >
+
+            <template #accountNumber-data="{ row }">
+              <span v-if="row.accountNumber" class="font-mono text-xs">
+                {{ (useAuth().session.value?.accountPrefix || 'ACC') + '-' + row.accountNumber }}
+              </span>
+              <span v-else class="text-xs text-gray-400">-</span>
+            </template>
 
             <template #pending-data="{ row }">
               {{ getPendingAmount(row).toFixed(2) }}

@@ -184,6 +184,7 @@ model DistributorCompany {
   purchaseReturns     PurchaseReturn[]
   openingDue          Float?               @default(0) @map("opening_due")
   openingDueDate      DateTime?            @map("opening_due_date")
+  distributorNumber   Int?                 @map("distributor_number")
 
   @@id([distributorId, companyId])
   @@map("distributor_companies")
@@ -211,20 +212,33 @@ model Company {
   invoiceCounter            Int                        @default(1) @map("invoice_counter")
   paymentCounter            Int                        @default(1) @map("payment_counter")
   userCodeCounter           Int                        @default(1) @map("user_code_counter")
+  closingDate               DateTime?                  @map("closing_date")
+  billPrefix                String?                    @default("") @map("bill_prefix")
+  quotePrefix               String?                    @default("QT") @map("quote_prefix")
+  salesOrderPrefix          String?                    @default("SO") @map("sales_order_prefix")
+  invoicePrefix             String?                    @default("INV") @map("invoice_prefix")
+  paymentPrefix             String?                    @default("") @map("payment_prefix")
+  expenseCounter            Int                        @default(1) @map("expense_counter")
+  expensePrefix             String?                    @default("EXP") @map("expense_prefix")
+  distributorCounter        Int                        @default(1) @map("distributor_counter")
+  distributorPrefix         String?                    @default("DIST") @map("distributor_prefix")
+  distributorPaymentCounter Int                        @default(1) @map("distributor_payment_counter")
+  distributorPaymentPrefix  String?                    @default("DP") @map("distributor_payment_prefix")
+  distributorCreditCounter  Int                        @default(1) @map("distributor_credit_counter")
+  distributorCreditPrefix   String?                    @default("DC") @map("distributor_credit_prefix")
+  clientCounter             Int                        @default(1) @map("client_counter")
+  clientPrefix              String?                    @default("CL") @map("client_prefix")
+  userPrefix                String?                    @default("") @map("user_prefix")
+  accountCounter            Int                        @default(1) @map("account_counter")
+  accountPrefix             String?                    @default("ACC") @map("account_prefix")
   isTaxIncluded             Boolean                    @default(true) @map("is_tax_included")
   isCostIncluded            Boolean                    @default(true) @map("is_cost_included")
   isUserTrackIncluded       Boolean                    @default(true) @map("is_usertrack_included")
   isAiImage                 Boolean                    @default(true) @map("is_ai_image")
   deliveryType              String[]                   @map("delivery_type")
   deliveryMode              String[]                   @map("delivery_mode")
-  fundDeliveryFees          Boolean                    @default(false) @map("fund_delivery_fees")
   deliveryRadius            Float?                     @map("delivery_radius")
-  deliveryFeesPerKm         Float?                     @map("delivery_fees_per_km")
-  waitingTime               Int?                       @map("waiting_time")
-  waitingChargesPerMin      Float?                     @map("waiting_charges_per_min")
-  minDeliveryCharges        Float?                     @map("min_delivery_charges")
-  deliveryDiscountThreshold Float?                     @map("delivery_discount_threshold")
-  deliveryDiscountAmount    Float?                     @map("delivery_discount_amount")
+  deliveryDiscount          Float?                     @default(100) @map("delivery_discount")
   cash                      Float?                     @default(0)
   openingCashDate           DateTime?                  @map("opening_cash_date")
   bank                      Float?                     @default(0)
@@ -364,6 +378,7 @@ model PurchaseOrder {
 model DistributorPayment {
   id                 String             @id() @default(uuid())
   createdAt          DateTime           @default(now()) @map("created_at")
+  paymentNo          Int?               @map("payment_no")
   amount             Float
   remarks            String?
   billNo             String?            @map("bill_no")
@@ -384,6 +399,7 @@ model DistributorPayment {
 model DistributorCredit {
   id                 String             @id() @default(uuid())
   createdAt          DateTime           @default(now()) @map("created_at")
+  creditNo           Int?               @map("credit_no")
   amount             Float
   remarks            String?
   billNo             String?
@@ -392,6 +408,8 @@ model DistributorCredit {
   purchaseOrder      PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
   companyId          String             @map("company_id")
   distributorCompany DistributorCompany @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+  moneyTransactionId String?            @unique() @map("money_transaction_id")
+  moneyTransaction   MoneyTransaction?  @relation(fields: [moneyTransactionId], references: [id], onDelete: SetNull)
 
   @@map("distributor_credits")
 }
@@ -731,6 +749,7 @@ model Coupon {
   code              String         @unique()
   type              CouponType
   discountValue     Float?         @map("discount_value")
+  giftBarcode       String?        @map("gift_barcode")
   maxDiscountAmount Float?         @map("max_discount_amount")
   minOrderValue     Float?         @map("min_order_value")
   startDate         DateTime       @map("start_date")
@@ -769,12 +788,14 @@ model CouponUsage {
 }
 
 model CouponClient {
-  id        String   @id() @default(uuid())
-  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
-  couponId  String   @map("coupon_id")
-  client    Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  clientId  String   @map("client_id")
-  createdAt DateTime @default(now())
+  id                  String   @id() @default(uuid())
+  coupon              Coupon   @relation(fields: [couponId], references: [id], onDelete: Cascade)
+  couponId            String   @map("coupon_id")
+  client              Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  clientId            String   @map("client_id")
+  generatedFromBillId String?  @map("generated_from_bill_id")
+  usageLimit          Int?     @map("usage_limit")
+  createdAt           DateTime @default(now())
 
   @@map("coupon_clients")
 }
@@ -1048,13 +1069,14 @@ model BillHistory {
 }
 
 model Account {
-  id        String   @id() @unique() @default(uuid())
-  name      String
-  phone     String
-  bill      Bill[]
-  address   Address?
-  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId String   @map("company_id")
+  id            String   @id() @unique() @default(uuid())
+  accountNumber Int?     @map("account_number")
+  name          String
+  phone         String
+  bill          Bill[]
+  address       Address?
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId     String   @map("company_id")
 
   @@map("accounts")
 }
@@ -1097,6 +1119,7 @@ model ExpenseCategory {
 
 model Expense {
   id                 String              @id() @unique() @default(uuid())
+  expenseNumber      Int?                @map("expense_number")
   expenseDate        DateTime            @default(now()) @map("expense_date")
   note               String?
   currency           String              @default("INR")
@@ -1235,11 +1258,12 @@ model CompanyUser {
 }
 
 model CompanyClient {
-  companyId String  @map("company_id")
-  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  clientId  String  @map("client_id")
-  client    Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
-  points    Int     @default(0)
+  companyId    String  @map("company_id")
+  company      Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId     String  @map("client_id")
+  client       Client  @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  points       Int     @default(0)
+  clientNumber Int?    @map("client_number")
 
   @@id([companyId, clientId])
   @@map("company_clients")
@@ -1398,18 +1422,19 @@ model SaveErrorRequest {
 }
 
 model MoneyTransaction {
-  id          String               @id() @default(cuid())
-  createdAt   DateTime             @default(now()) @map("created_at")
-  updatedAt   DateTime             @updatedAt() @map("updated_at")
-  companyId   String               @map("company_id")
-  company     Company              @relation(fields: [companyId], references: [id])
-  partyType   PartyType            @map("party_type")
-  direction   TransactionDirection
-  status      TransactionStatus    @default(PENDING)
-  amount      Decimal              @db.Decimal(12, 2)
-  paymentMode PaymentMode          @map("payment_mode")
-  accountId   String?              @map("account_id")
-  note        String?
+  id                String               @id() @default(cuid())
+  createdAt         DateTime             @default(now()) @map("created_at")
+  updatedAt         DateTime             @updatedAt() @map("updated_at")
+  companyId         String               @map("company_id")
+  company           Company              @relation(fields: [companyId], references: [id])
+  partyType         PartyType            @map("party_type")
+  direction         TransactionDirection
+  status            TransactionStatus    @default(PENDING)
+  amount            Decimal              @db.Decimal(12, 2)
+  paymentMode       PaymentMode          @map("payment_mode")
+  accountId         String?              @map("account_id")
+  note              String?
+  distributorCredit DistributorCredit?
 
   @@index([companyId])
   @@map("money_transactions")
@@ -1482,17 +1507,24 @@ model AccountTransfer {
 }
 
 model AiChat {
-  id         String          @id() @unique() @default(uuid())
-  title      String          @default("New Chat")
-  companyId  String          @map("company_id")
-  company    Company         @relation(fields: [companyId], references: [id])
-  userId     String          @map("user_id")
-  user       User            @relation(fields: [userId], references: [id])
-  aiMessages AiChatMessage[]
-  createdAt  DateTime        @default(now()) @map("created_at")
-  updatedAt  DateTime        @updatedAt() @map("updated_at")
+  id               String          @id() @unique() @default(uuid())
+  title            String          @default("New Chat")
+  channel          String          @default("WEB")
+  sourcePhone      String?         @map("source_phone")
+  sessionStatus    String          @default("ACTIVE") @map("session_status")
+  sessionStartedAt DateTime?       @map("session_started_at")
+  lastSeenAt       DateTime?       @map("last_seen_at")
+  expiresAt        DateTime?       @map("expires_at")
+  companyId        String?         @map("company_id")
+  company          Company?        @relation(fields: [companyId], references: [id])
+  userId           String?         @map("user_id")
+  user             User?           @relation(fields: [userId], references: [id])
+  aiMessages       AiChatMessage[]
+  createdAt        DateTime        @default(now()) @map("created_at")
+  updatedAt        DateTime        @updatedAt() @map("updated_at")
 
   @@index([companyId])
+  @@index([channel, sourcePhone])
   @@map("ai_chats")
 }
 

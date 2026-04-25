@@ -1,5 +1,4 @@
 <script setup >
-import { useFindFirstEntry,useFindManyCategory } from '~/lib/hooks';
 import Quagga from '@ericblade/quagga2'
 import {
   CapacitorBarcodeScanner,
@@ -20,7 +19,6 @@ const taxCInputs = ref([]);
 const invoiceNumber = ref(null);
 const loadingStates = ref([]);
 const categoryStore = useCategoryStore()
-const scannedBarcode = ref("");
 const barcodeInputs = ref([]);
 const categoryInputs = ref([]);
 const nameInputs = ref([]);
@@ -255,17 +253,25 @@ let startWidth = 0;
 let columnIndex = 0;
 
 
-const {
-    data: categories,
-} = useFindManyCategory(
-  {
-    where:{companyId:useAuth().session.value?.companyId},
-    select:{
-      id:true,
-      name:true
-    }
+const categories = ref([])
+
+const getCategories = async () => {
+  try {
+    const companyId = useAuth().session.value?.companyId
+    if (!companyId) return
+    const data = await $fetch('/api/bill/findManyCategory', {
+      method: 'GET',
+      query: { companyId },
+    })
+    categories.value = data ?? []
+  } catch (error) {
+    console.error('Error fetching categories:', error)
+  }
 }
-);
+
+onMounted(async () => {
+  await getCategories()
+})
 
 watch(
   returnedItems,
@@ -337,26 +343,17 @@ watch(returnedItems, async () => {
 
 
 
-const entryArgs = computed(() => ({
-  where: {
-    barcode: scannedBarcode.value,
-    bill: {
-      companyId: useAuth().session.value?.companyId,
-      invoiceNumber:Number(invoiceNumber.value)
-    },
-  },
-  include:{
-    variant:true
-  }
-}));
-
-
-
-const { data: entry ,refetch:entryRefetch} = useFindFirstEntry(entryArgs,{enabled:false});
-
 const fetchItemFromEntryByInvoice = async (barcode) => {
-  scannedBarcode.value = barcode
-  const { data } = await entryRefetch()
+  const companyId = useAuth().session.value?.companyId
+  if (!companyId || !invoiceNumber.value) return null
+  const data = await $fetch('/api/bill/findFirstEntry', {
+    method: 'GET',
+    query: {
+      barcode,
+      companyId,
+      invoiceNumber: String(invoiceNumber.value),
+    },
+  })
   return data ?? null
 }
 
@@ -384,7 +381,7 @@ const fetchItemData = async (barcode, index) => {
           ...returnedItems.value[index],
           id: data?.itemId || '',
           size: data?.size || '',
-          sizes: data?.variant?.sizes || '',
+          sizes: data?.sizes || '',
           name: data?.name,
           barcode: data?.barcode || '',
           category: categories.value.filter((c) => c.id === data?.categoryId),

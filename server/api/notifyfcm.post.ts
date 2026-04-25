@@ -1,6 +1,5 @@
-// ~/server/api/notify-company.ts
-import { defineEventHandler, readBody } from 'h3'
-import { prisma } from '~/server/utils/prisma'
+import { defineEventHandler, readBody, createError } from 'h3'
+import { pool } from '~/server/db'
 import { GoogleAuth } from 'google-auth-library'
 
 const projectId = process.env.GOOGLE_PROJECT_ID
@@ -15,79 +14,101 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, message: 'Missing required fields' })
   }
 
-  // 1. Get all userIds for the company
-  const companyUsers = await prisma.companyUser.findMany({
-    where: { 
-      companyId,
-      role:'admin'
-     },
-    select: { userId: true }
-  })
+  const client = await pool.connect()
+  try {
+    const companyUsersRes = await client.query(
+      `
+      SELECT user_id
+      FROM company_users
+      WHERE company_id = $1
+        AND role = 'admin'
+      `,
+      [companyId]
+    )
 
-  const userIds = companyUsers.map(cu => cu.userId)
+    const userIds = companyUsersRes.rows.map((row) => row.user_id).filter(Boolean)
+    if (!userIds.length) {
+      return { success: false, message: 'No users in company' }
+    }
 
-  if (!userIds.length) {
-    return { success: false, message: 'No users in company' }
-  }
+    const tokensRes = excludeDeviceId
+      ? await client.query(
+          `
+          SELECT token
+          FROM push_token
+          WHERE user_id = ANY($1::text[])
+            AND device_id <> $2
+          `,
+          [userIds, excludeDeviceId]
+        )
+      : await client.query(
+          `
+          SELECT token
+          FROM push_token
+          WHERE user_id = ANY($1::text[])
+          `,
+          [userIds]
+        )
 
-  // 2. Fetch all push tokens for those users (excluding specific device if needed)
-  const tokens = await prisma.pushToken.findMany({
-    where: {
-      userId: { in: userIds },
-      ...(excludeDeviceId && {
-        deviceId: { not: excludeDeviceId }
-      })
-    },
-    select: { token: true }
-  })
+    const registrationTokens = tokensRes.rows
+      .map((row) => row.token)
+      .filter((token): token is string => Boolean(token))
 
-  const registrationTokens = tokens.map(t => t.token).filter(Boolean)
+    if (!registrationTokens.length) {
+      return { success: false, message: 'No devices to notify' }
+    }
 
-  if (!registrationTokens.length) {
-    return { success: false, message: 'No devices to notify' }
-  }
+    if (!projectId || !clientEmail || !privateKey) {
+      return { success: false, message: 'FCM credentials are not configured' }
+    }
 
-  // 3. Create OAuth access token
-  const auth = new GoogleAuth({
-    credentials: {
-      client_email: clientEmail,
-      private_key: privateKey
-    },
-    scopes: ['https://www.googleapis.com/auth/firebase.messaging']
-  })
-
-  const client = await auth.getClient()
-  const accessToken = await client.getAccessToken()
-
-  const results = []
-
-  // 4. Send notifications one-by-one
-  for (const token of registrationTokens) {
-    const res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken.token}`,
-        'Content-Type': 'application/json'
+    const auth = new GoogleAuth({
+      credentials: {
+        client_email: clientEmail,
+        private_key: privateKey,
       },
-      body: JSON.stringify({
-        message: {
-          token,
-          data: {
-            title,
-            body: msgBody,
-            url: '/' // optional
-          },
-          android: { priority: 'high' },
-          webpush: {
-            headers: { Urgency: 'high' }
-          }
-        }
-      })
+      scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
     })
 
-    const json = await res.json()
-    results.push({ token, status: res.status, response: json })
-  }
+    const googleClient = await auth.getClient()
+    const accessToken = await googleClient.getAccessToken()
 
-  return { success: true, sent: results }
+    const results = []
+    for (const token of registrationTokens) {
+      const res = await fetch(`https://fcm.googleapis.com/v1/projects/${projectId}/messages:send`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken.token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          message: {
+            token,
+            data: {
+              title,
+              body: msgBody,
+              url: '/',
+            },
+            android: { priority: 'high' },
+            webpush: {
+              headers: { Urgency: 'high' },
+            },
+          },
+        }),
+      })
+
+      const json = await res.json()
+      results.push({ token, status: res.status, response: json })
+    }
+
+    return { success: true, sent: results }
+  } catch (error: any) {
+    console.error('notifyfcm failed:', error?.message || error)
+    return {
+      success: false,
+      message: error?.message || 'Failed to send notification',
+    }
+  } finally {
+    client.release()
+  }
 })

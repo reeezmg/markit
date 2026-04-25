@@ -8,7 +8,6 @@ import {
   CapacitorBarcodeScannerTypeHint
 } from '@capacitor/barcode-scanner'
 import { Capacitor } from '@capacitor/core';
-const { generatableCoupons, loading:generatableCouponsLoading, error:generatableCouponsError, generateCoupons } = useGenerateCoupons()
 const queryClient = useQueryClient();
 const currentRequestIds = ref({});
 const useAuth = () => useNuxtApp().$auth;
@@ -62,11 +61,14 @@ const grandTotal = computed(() => {
   }, 0);
 
   let afterDiscount = 0;
+  const discStr = String(discount.value ?? '');
 
-  if (discount.value < 0) {
-    afterDiscount = parseFloat((baseTotal - Math.abs(discount.value)).toFixed(2));
+  if (discStr.startsWith('+')) {
+    afterDiscount = parseFloat((baseTotal + Math.abs(parseFloat(discStr))).toFixed(2));
+  } else if (Number(discount.value) < 0) {
+    afterDiscount = parseFloat((baseTotal - Math.abs(Number(discount.value))).toFixed(2));
   } else {
-    afterDiscount = parseFloat((baseTotal - (baseTotal * discount.value) / 100).toFixed(2));
+    afterDiscount = parseFloat((baseTotal - (baseTotal * Number(discount.value)) / 100).toFixed(2));
   }
 
   return afterDiscount - redeemedAmt.value;
@@ -79,6 +81,7 @@ const grandTotal = computed(() => {
 const loadingStates = ref([]);
 const redeemedAmt = ref(0);
 const isRedeemPoint = ref(false);
+const skipPoints = ref(false);
 const redeeming = ref(false);
 const redeemedPoints = ref(0);
 const isAlreadyRedeemPoint = ref(false);
@@ -163,6 +166,7 @@ const resetRedeemState = () => {
   redeemedPoints.value = 0
   redeemedAmt.value = Number(couponValue.value || 0)
   isRedeemPoint.value = false
+  skipPoints.value = false
   points.value = Math.max(0, baseDisplayPoints.value)
 }
 
@@ -998,7 +1002,7 @@ const handleEdit = async () => {
     const entriesDelete = await fetchEntriesToDelete()
 
     // 4. Calculate bill points
-    const newBillPoints = computeBillPoints(grandTotal.value)
+    const newBillPoints = skipPoints.value ? 0 : computeBillPoints(grandTotal.value)
     const billPoints = Number(newBillPoints || 0) - Number(pastBillPoints.value || 0)
   
 
@@ -1037,7 +1041,7 @@ const handleEdit = async () => {
         };
       }),
       subtotal: subtotal.value,
-      discount: Number(discount.value),
+      discount: String(discount.value ?? ''),
       grandTotal: grandTotal.value,
       paymentMethod: paymentMethod.value,
       companyName: useAuth().session.value?.companyName || '',
@@ -1050,6 +1054,9 @@ const handleEdit = async () => {
       upiId: useAuth().session.value?.upiId || '',
       clientName: clientName.value,
       clientPhone: phoneNo.value,
+      availablePoints: Number(points.value) || 0,
+      redeemedPoints: Number(redeemedPoints.value) || 0,
+      couponValue: Number(couponValue.value) || 0,
       tqty: finalitems.reduce((sum, entry) => sum + entry.qty, 0),
       tvalue: finalitems.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
       ttvalue: finalitems.reduce((sum, entry) => sum + (entry.value), 0),
@@ -1076,7 +1083,7 @@ const handleEdit = async () => {
       billData: {
         id: route.params.salesId,
         subtotal: subtotal.value || 0,
-        discount: discount.value || 0,
+        discount: String(discount.value ?? '').startsWith('+') ? 0 : (Number(discount.value) || 0),
         grandTotal: grandTotal.value || 0,
         redeemedPoints: redeemedPoints.value || 0,
         couponValue:Number(couponValue.value) || 0,
@@ -1090,19 +1097,19 @@ const handleEdit = async () => {
       },
     }
 
-    // 7. Prepare for printing and trigger action first
+    // 7. Prepare for printing after the server transaction succeeds
     printData = preparedPrintData;
-    if (selectedAction.value === 'print') print()
-    else if (selectedAction.value === 'send') send()
-    else if (selectedAction.value === 'download') download()
 
     // 8. Call server endpoint
-    await $fetch('/api/bill/update', {
+    const result = await $fetch('/api/bill/update', {
       method: 'POST',
       body: requestData
     })
+    printData.generatedCoupons = result?.generatedCoupons || []
 
-    await reconcileClientPointsOnSave(newBillPoints)
+    if (selectedAction.value === 'print') await print()
+    else if (selectedAction.value === 'send') await send()
+    else if (selectedAction.value === 'download') await download()
 
     // 9. Show success notification
     toast.add({
@@ -1257,6 +1264,17 @@ const send = async() => {
           receiptId: bill.value?.invoiceNumber || uuidv4(),
         },
       })
+      if (Array.isArray(printData.generatedCoupons) && printData.generatedCoupons.length) {
+        await $fetch('/api/whatsapp/send-coupon-message', {
+          method: 'POST',
+          body: {
+            phone: printData.clientPhone,
+            name: printData.clientName,
+            companyName: printData.companyName,
+            coupons: printData.generatedCoupons,
+          },
+        })
+      }
   toast.add({
         title: 'Receipt Sent Success!',
         color: 'green',
@@ -1593,51 +1611,6 @@ const handleDiscountEnter = (index) => {
   }
 };
 
-const reconcileClientPointsOnSave = async (newBillPoints) => {
-  const companyId = useAuth().session.value?.companyId
-  if (!companyId) return
-
-  const oldClient = oldClientId.value || ''
-  const newClient = clientId.value || ''
-  const oldRedeemed = Number(originalRedeemedPoints.value || 0)
-  const newRedeemed = Number(redeemedPoints.value || 0)
-
-  const updatePoints = async (clientId, points, mode) => {
-    if (!clientId || points <= 0) return
-    await $fetch('/api/bill/redeemClientPoints', {
-      method: 'POST',
-      body: {
-        companyId,
-        clientId,
-        points,
-        mode,
-      },
-    })
-  }
-
-  if (oldClient && newClient && oldClient === newClient) {
-    const earnedDelta = Number(newBillPoints || 0) - Number(pastBillPoints.value || 0)
-    if (earnedDelta > 0) await updatePoints(oldClient, earnedDelta, 'revert')
-    if (earnedDelta < 0) await updatePoints(oldClient, Math.abs(earnedDelta), 'redeem')
-
-    const redeemedDelta = newRedeemed - oldRedeemed
-    if (redeemedDelta > 0) await updatePoints(oldClient, redeemedDelta, 'redeem')
-    if (redeemedDelta < 0) await updatePoints(oldClient, Math.abs(redeemedDelta), 'revert')
-    return
-  }
-
-  if (oldClient) {
-    await updatePoints(oldClient, Number(pastBillPoints.value || 0), 'redeem')
-    await updatePoints(oldClient, oldRedeemed, 'revert')
-  }
-
-  if (newClient) {
-    await updatePoints(newClient, Number(newBillPoints || 0), 'revert')
-    await updatePoints(newClient, newRedeemed, 'redeem')
-  }
-}
-
-
 const handleRedeemPoints = async () => {
   redeeming.value = true;
 
@@ -1694,7 +1667,9 @@ const handleClearClient = async () => {
 function isCouponEligible(coupon, orderValue, clientId) {
   const now = new Date();
   const clientUsage = coupon.couponUsage.filter(u => u.clientId === clientId).length;
-  const clientAppearances = coupon.clients.filter(c => c.clientId === clientId).length;
+  const clientAppearances = coupon.clients
+    .filter(c => c.clientId === clientId)
+    .reduce((sum, row) => sum + Math.max(0, Number(row?.usageLimit ?? 1) || 0), 0);
   if (!coupon.isActive) return false;
   if (now < new Date(coupon.startDate) || now > new Date(coupon.endDate)) return false;
 
@@ -1714,8 +1689,8 @@ function isCouponEligible(coupon, orderValue, clientId) {
   }
 
   if (coupon.audienceType === 'GENERATE') {
-    // If client has already used as many times as appearances allow, block
-    if (clientUsage >= clientAppearances) {
+    // If client has no remaining generated balance, block
+    if (clientAppearances <= 0) {
       return false;
     }
   }
@@ -1734,7 +1709,7 @@ const couponQueryArgs = computed(() => {
       endDate: { gte: now },
     },
     include: {
-      clients: { select: { clientId: true } },   // ✅ fix here
+      clients: { select: { clientId: true, usageLimit: true } },   // ✅ fix here
       couponUsage: { select: { clientId: true } },
     },
   }
@@ -1781,6 +1756,11 @@ const eligibleCoupons = computed(() => {
         const remaining = coupon.perClientLimit - clientUsageCount;
         usageInfo = remaining > 0 ? `${remaining}` : '0';
       }
+      if (coupon.audienceType === 'GENERATE') {
+        usageInfo = `${coupon.clients
+          .filter(c => c.clientId === clientId.value)
+          .reduce((sum, row) => sum + Math.max(0, Number(row?.usageLimit ?? 1) || 0), 0)}`;
+      }
 
       return {
         label: `${coupon.code} (${coupon.type}) - ${usageInfo}`,
@@ -1819,18 +1799,88 @@ function calculateDiscount(coupon, orderValue) {
  return Math.round(discount)
 }
 
-watch(selectedCouponId,async (newSelectedCouponId) => {
-  if(newSelectedCouponId){
-        await couponRefetch()
-  redeemedAmt.value = redeemedAmt.value - couponValue.value;
-  couponValue.value = 0;
-  const chosen = allCoupons.value?.find(c => c.id === newSelectedCouponId?.value);
-  if (chosen) {
-      const result = calculateDiscount(chosen, grandTotal.value);
-      couponValue.value = result;
-      redeemedAmt.value = redeemedAmt.value + result;
-    }
+const giftCouponLineKey = 'couponGiftCouponId'
+
+const isEmptyBillingRow = (row) =>
+  !row?.variantId?.trim?.() &&
+  !row?.name?.trim?.() &&
+  !row?.barcode?.trim?.() &&
+  !(row?.category?.length > 0)
+
+const removeGiftCouponProduct = (couponId) => {
+  const coupon = allCoupons.value?.find((candidate) => candidate.id === couponId)
+  const giftBarcode = String(coupon?.giftBarcode || '').trim()
+  const index = items.value.findIndex((row) =>
+    row?.[giftCouponLineKey] === couponId ||
+    (giftBarcode && row?.barcode === giftBarcode && Number(row?.discount) === 100)
+  )
+  if (index >= 0) {
+    items.value.splice(index, 1)
+    items.value.forEach((item, i) => { item.sn = i + 1 })
+  }
 }
+
+const clearSelectedCoupon = () => {
+  if (!selectedCouponId.value) return
+  couponFound.value = false
+  selectedCouponOnbill.value = null
+  selectedCouponId.value = null
+}
+
+const addGiftCouponProduct = async (coupon) => {
+  if (!coupon || coupon.type !== 'GIFT') return
+  const barcode = String(coupon.giftBarcode || '').trim()
+  if (!barcode) {
+    toast.add({ title: 'Gift product barcode missing in coupon setup', color: 'red' })
+    return
+  }
+  if (items.value.some((row) => row?.[giftCouponLineKey] === coupon.id)) return
+
+  let index = items.value.findIndex(isEmptyBillingRow)
+  if (index < 0) {
+    await addNewRow(items.value.length - 1, false)
+    index = items.value.findIndex(isEmptyBillingRow)
+  }
+  if (index < 0 || !items.value[index]) return
+
+  items.value[index].barcode = barcode
+  items.value[index][giftCouponLineKey] = coupon.id
+  items.value[index].couponGiftCode = coupon.code
+
+  await fetchItemData(barcode, index)
+
+  if (items.value[index]?.variantId) {
+    items.value[index][giftCouponLineKey] = coupon.id
+    items.value[index].couponGiftCode = coupon.code
+    items.value[index].qty = 1
+    items.value[index].discount = 100
+    await addNewRow(index, false)
+    toast.add({ title: `Gift product added for coupon ${coupon.code}`, color: 'green' })
+  }
+}
+
+watch(selectedCouponId,async (newSelectedCouponId, oldSelectedCouponId) => {
+  if (newSelectedCouponId || oldSelectedCouponId) {
+    await couponRefetch()
+  }
+  if (oldSelectedCouponId?.value && !dataLoading.value) removeGiftCouponProduct(oldSelectedCouponId.value)
+  redeemedAmt.value = redeemedAmt.value - couponValue.value
+  couponValue.value = 0
+
+  if (newSelectedCouponId) {
+    const chosen = allCoupons.value?.find(c => c.id === newSelectedCouponId?.value)
+    if (chosen) {
+      const result = calculateDiscount(chosen, grandTotal.value)
+      couponValue.value = result
+      redeemedAmt.value = redeemedAmt.value + result
+      if (!dataLoading.value && chosen.type === 'GIFT') {
+        await addGiftCouponProduct(chosen)
+      }
+      couponFound.value = true
+    }
+  } else {
+    couponFound.value = false
+  }
 });
 
 
@@ -2293,13 +2343,14 @@ const couponModel = computed({
 
         <!-- Discount Input -->
         <div class="mb-6">
-          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
+          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-) / Add (+n)</label>
           <UInput
             ref="discountref"
-            type="number"
+            type="text"
+            inputmode="decimal"
             v-model="discount"
             @keydown.enter.prevent="handleEnterMainDiscount()"
-            placeholder="Enter discount"
+            placeholder="e.g. 10, -5, +50"
             :disabled="bill?.isMarkit"
           />
         </div>
@@ -2370,12 +2421,25 @@ const couponModel = computed({
           <div>
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Apply Coupon</label>
-              <USelectMenu 
-                v-model="selectedCouponId" 
-                :options="eligibleCoupons" 
-                placeholder="Select a coupon"
-                :disabled="bill?.isMarkit"
-              />
+              <div class="flex gap-2">
+                <USelectMenu 
+                  v-model="selectedCouponId" 
+                  :options="eligibleCoupons" 
+                  placeholder="Select a coupon"
+                  class="flex-1"
+                  :disabled="bill?.isMarkit"
+                />
+                <UButton
+                  v-if="selectedCouponId"
+                  icon="i-heroicons-trash"
+                  color="red"
+                  variant="soft"
+                  :disabled="bill?.isMarkit"
+                  @click="clearSelectedCoupon"
+                >
+                  Remove Coupon
+                </UButton>
+              </div>
 
             </div>
             <div class="mb-4">
@@ -2419,8 +2483,12 @@ const couponModel = computed({
               :disabled="clientFound || bill?.isMarkit" />
             </div>
             <div>
-               <UButton v-if="!isRedeemPoint" color="green" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Redeem Points</UButton>
-              <UButton v-else-if="isRedeemPoint" color="red" class="mt-9" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Cancel Redeem</UButton>
+            <div class="flex gap-2">
+               <UButton v-if="!isRedeemPoint" color="green" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Redeem</UButton>
+              <UButton v-else-if="isRedeemPoint" color="red" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Cancel Redeem</UButton>
+              <UButton v-if="!skipPoints" color="red" class="flex-1" block @click="skipPoints = true" :disabled="bill?.isMarkit">Skip Points</UButton>
+              <UButton v-else color="green" class="flex-1" block @click="skipPoints = false" :disabled="bill?.isMarkit">Assign Points</UButton>
+            </div>
             </div>
           </div>
         </div>
@@ -2428,15 +2496,15 @@ const couponModel = computed({
         <!-- mobile view -->
         <div  v-if="isMobile" class="lg:hidden flex flex-col gap-3 py-3 text-sm px-2" >
         <div class="">
-          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-)</label>
+          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-) / Add (+n)</label>
           <UInput
           ref="discountref"
           type="text"
-          inputmode="decimal"
-          pattern="^-?[0-9]*[.,]?[0-9]*$"
+          inputmode="text"
+          pattern="^[+\-]?[0-9]*[.,]?[0-9]*$"
           v-model="discount"
           @keydown.enter.prevent="handleEnterMainDiscount()"
-          placeholder="Enter discount"
+          placeholder="e.g. 10, -5, +50"
           :disabled="bill?.isMarkit"
           />
         </div>

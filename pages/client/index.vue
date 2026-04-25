@@ -373,6 +373,7 @@ const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
           companyId,
         },
         select: {
+          clientNumber: true,
           points: true,
         },
       },
