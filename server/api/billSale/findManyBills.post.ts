@@ -70,44 +70,37 @@ export default defineEventHandler(async (event) => {
         values.push(`%${normalizedSearch}%`)
         idx++
       } else {
-        const len = normalizedSearch.length
+        const numVal = Number(normalizedSearch)
+        const fitsInt = Number.isFinite(numVal) && numVal <= 2147483647
 
-        if (len < 3) {
+        if (fitsInt) {
+          const invoiceParamIndex = idx
+          if (closingDate) {
+            whereSQL += `
+              AND (
+                (b.invoice_number = $${idx} AND b.created_at > $${idx + 2})
+                OR c.phone ILIKE $${idx + 1}
+              )
+            `
+            values.push(numVal, `%${normalizedSearch}%`, closingDate)
+            idx += 3
+          } else {
+            whereSQL += `
+              AND (
+                b.invoice_number = $${idx}
+                OR c.phone ILIKE $${idx + 1}
+              )
+            `
+            values.push(numVal, `%${normalizedSearch}%`)
+            idx += 2
+          }
+          invoiceMatchSelect = `CASE WHEN b.invoice_number = $${invoiceParamIndex} THEN 1 ELSE 0 END AS invoice_match`
+          orderByPrefix = 'invoice_match DESC, '
+        } else {
+          // Number too big to fit in int (e.g. very long phone-like string) — phone only
           whereSQL += ` AND c.phone ILIKE $${idx}`
           values.push(`%${normalizedSearch}%`)
           idx++
-        } else {
-          const numVal = Number(normalizedSearch)
-          const fitsInt = Number.isFinite(numVal) && numVal <= 2147483647
-
-          if (fitsInt) {
-            const invoiceParamIndex = idx
-            if (closingDate) {
-              whereSQL += `
-                AND (
-                  (b.invoice_number = $${idx} AND b.created_at > $${idx + 2})
-                  OR c.phone ILIKE $${idx + 1}
-                )
-              `
-              values.push(numVal, `%${normalizedSearch}%`, closingDate)
-              idx += 3
-            } else {
-              whereSQL += `
-                AND (
-                  b.invoice_number = $${idx}
-                  OR c.phone ILIKE $${idx + 1}
-                )
-              `
-              values.push(numVal, `%${normalizedSearch}%`)
-              idx += 2
-            }
-            invoiceMatchSelect = `CASE WHEN b.invoice_number = $${invoiceParamIndex} THEN 1 ELSE 0 END AS invoice_match`
-            orderByPrefix = 'invoice_match DESC, '
-          } else {
-            whereSQL += ` AND c.phone ILIKE $${idx}`
-            values.push(`%${normalizedSearch}%`)
-            idx++
-          }
         }
       }
     }
