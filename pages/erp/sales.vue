@@ -274,6 +274,9 @@ const formatInvoiceForExport = (invoiceNumber: string | number) => {
 const formatDateTimeForExport = (value: string | Date) =>
   format(new Date(value), 'd MMM yyyy, hh:mm a')
 
+const getSalesExportFilename = (extension: 'xlsx' | 'pdf') =>
+  `Sales (${format(selectedDate.value.start, 'dd-MM-yyyy')} to ${format(selectedDate.value.end, 'dd-MM-yyyy')}).${extension}`
+
 const getBillDiscountAmount = (row: any) => {
   const subtotal = Number(row.subtotal || 0)
   const tax = Number(row.tax || 0)
@@ -627,7 +630,7 @@ const handleDownloadExcel = async () => {
     }
 
     const buffer = await workbook.xlsx.writeBuffer()
-    const filename = `sales-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`
+    const filename = getSalesExportFilename('xlsx')
     saveAs(
       new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -749,7 +752,7 @@ const handleDownloadPdf = async () => {
       },
     })
 
-    doc.save(`sales-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`)
+    doc.save(getSalesExportFilename('pdf'))
   } catch (error: any) {
     toast.add({
       title: 'Failed to export sales PDF',

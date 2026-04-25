@@ -347,6 +347,9 @@ const formatPdfExpenseCurrency = (val: number) =>
 const formatExpenseCurrency = (val: number) =>
   '₹' + Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 
+const getExpenseExportFilename = (extension: 'xlsx' | 'pdf') =>
+  `Expense (${format(selectedDate.value.start, 'dd-MM-yyyy')} to ${format(selectedDate.value.end, 'dd-MM-yyyy')}).${extension}`
+
 const pageFrom = computed(() => {
     if (!totalCount.value) return 0
     return (page.value - 1) * parseInt(pageCount.value) + 1
@@ -634,7 +637,7 @@ const handleDownloadExcel = async () => {
       new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       }),
-      `expenses-${format(new Date(), 'yyyy-MM-dd-HHmm')}.xlsx`
+      getExpenseExportFilename('xlsx')
     )
   } catch (error: any) {
     toast.add({
@@ -753,7 +756,7 @@ const handleDownloadPdf = async () => {
       },
     })
 
-    doc.save(`expenses-${format(new Date(), 'yyyy-MM-dd-HHmm')}.pdf`)
+    doc.save(getExpenseExportFilename('pdf'))
   } catch (error: any) {
     toast.add({
       title: 'Failed to export expenses PDF',
