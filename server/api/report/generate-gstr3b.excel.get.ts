@@ -62,17 +62,23 @@ export default defineEventHandler(async (event) => {
         [companyId, startDate, endDate, isTaxIncluded, cleanup]
       ),
 
+      // ITC from product purchases (DistributorCredit where money_transaction_id IS NULL).
+      // Tax computed per-item via PO products → variants → items; v.tax > 0 only.
       client.query(
         `
         SELECT
-          COALESCE(SUM(pri.tax_amount), 0) AS total_itc,
-          COALESCE(SUM(pri.subtotal), 0) AS taxable_value,
-          COALESCE(SUM(pri.subtotal + pri.tax_amount), 0) AS total_inward_value
-        FROM purchase_return_items pri
-        JOIN purchase_returns pr ON pr.id = pri.purchase_return_id
-        WHERE pr.company_id = $1
-          AND pr.created_at BETWEEN $2 AND $3
-          AND pri.tax > 0
+          COALESCE(SUM(COALESCE(i.initial_qty, 0) * COALESCE(v.p_price, 0) * COALESCE(v.tax, 0) / 100), 0) AS total_itc,
+          COALESCE(SUM(COALESCE(i.initial_qty, 0) * COALESCE(v.p_price, 0)), 0) AS taxable_value,
+          COALESCE(SUM(COALESCE(i.initial_qty, 0) * COALESCE(v.p_price, 0) * (1 + COALESCE(v.tax, 0) / 100)), 0) AS total_inward_value
+        FROM distributor_credits dc
+        JOIN purchase_orders po ON po.id = dc.purchase_order_id
+        JOIN products        p  ON p.purchaseorder_id = po.id
+        JOIN variants        v  ON v.product_id = p.id
+        JOIN items           i  ON i.variant_id = v.id
+        WHERE dc.company_id           = $1
+          AND dc.money_transaction_id IS NULL
+          AND dc.created_at           BETWEEN $2 AND $3
+          AND COALESCE(v.tax, 0)      > 0
         `,
         [companyId, startDate, endDate]
       )
