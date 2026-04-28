@@ -68,6 +68,9 @@ export default defineEventHandler(async (event) => {
     let baseCash = 0
     let baseBank = 0
 
+    // Opening at start: include the company opening only if its date is
+    // on or before the window's start. Otherwise the opening event hasn't
+    // happened yet at the start of the window.
     if (
       company.cash &&
       company.opening_cash_date &&
@@ -82,6 +85,31 @@ export default defineEventHandler(async (event) => {
       new Date(company.opening_bank_date) <= startDate
     ) {
       baseBank = Number(company.bank)
+    }
+
+    // Mid-window opening injection: if the opening date falls strictly inside
+    // (start, end], the company opening materializes during the window. It
+    // doesn't belong in the opening KPI but must be added to the closing
+    // balance so closing = opening + period + injection.
+    let cashOpeningInjection = 0
+    let bankOpeningInjection = 0
+
+    if (
+      company.cash &&
+      company.opening_cash_date &&
+      new Date(company.opening_cash_date) > startDate &&
+      new Date(company.opening_cash_date) <= endDate
+    ) {
+      cashOpeningInjection = Number(company.cash)
+    }
+
+    if (
+      company.bank &&
+      company.opening_bank_date &&
+      new Date(company.opening_bank_date) > startDate &&
+      new Date(company.opening_bank_date) <= endDate
+    ) {
+      bankOpeningInjection = Number(company.bank)
     }
 
     const isZeroOpening =
@@ -335,6 +363,10 @@ if (!isZeroOpening) {
 
       /* =====================================================
          BANK DISTRIBUTOR BEFORE
+         Must match the closing-balance formula which sums
+         purchase.upi + purchase.card + purchase.bank + purchase.cheque
+         from the period query — otherwise opening+period don't conserve
+         and the closing balance changes when the start date shifts.
       ===================================================== */
 
       client.query(
@@ -342,7 +374,7 @@ if (!isZeroOpening) {
         SELECT COALESCE(SUM(amount),0) AS total
         FROM distributor_payments
         WHERE company_id = $1
-          AND payment_type = 'BANK'
+          AND payment_type IN ('UPI','CARD','BANK','CHEQUE')
           AND created_at < $2
         `,
         [companyId, startDate]
@@ -365,9 +397,9 @@ if (!isZeroOpening) {
         ),0) AS net
         FROM money_transactions
         WHERE company_id = $1
-          AND payment_mode = 'BANK'
+          AND payment_mode != 'CASH'
           AND status = 'PAID'
-          AND account_id IS NULL
+          AND (account_id IS NULL OR account_id = '')
           AND created_at < $2
         `,
         [companyId, startDate]
@@ -384,16 +416,16 @@ if (!isZeroOpening) {
         SELECT
           COALESCE(SUM(
             CASE
-              WHEN to_type = 'BANK'
-                AND to_account_id IS NULL
+              WHEN to_type != 'CASH'
+                AND (to_account_id IS NULL OR to_account_id = '')
               THEN amount ELSE 0
             END
           ),0)
           -
           COALESCE(SUM(
             CASE
-              WHEN from_type = 'BANK'
-                AND from_account_id IS NULL
+              WHEN from_type != 'CASH'
+                AND (from_account_id IS NULL OR from_account_id = '')
               THEN amount ELSE 0
             END
           ),0)
@@ -907,6 +939,7 @@ if (!isZeroOpening) {
 
     const cashBalance =
       cashOpening +
+      cashOpeningInjection +
       Number(sales.cash_sales) -
       (
         Number(exp.cash || 0) +
@@ -917,6 +950,7 @@ if (!isZeroOpening) {
 
     const bankBalance =
       bankOpening +
+      bankOpeningInjection +
       (
         Number(sales.upi_sales || 0) +
         Number(sales.card_sales || 0)

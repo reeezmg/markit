@@ -284,6 +284,18 @@ const links = computed(() => {
             ...(auth.session.value?.type === 'admin'
             ? [
             {
+            label: 'Summary',
+            to: `/reports/summary`,
+            tooltip: {
+                text: 'Business Summary',
+                shortcuts: ['R', 'M'],
+            },
+            },
+            ]
+            : []),
+            ...(auth.session.value?.type === 'admin'
+            ? [
+            {
             label: 'Profit',
             to: `/reports/profit`,
             tooltip: {
