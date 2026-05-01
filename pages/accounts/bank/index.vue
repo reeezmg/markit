@@ -14,6 +14,7 @@ import {
 
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
+const PRIMARY_BANK_DETAILS_URL = '/accounts/bank/primary'
 
 /* ---------------------------------------------------
    HOOKS
@@ -93,6 +94,8 @@ const editPrimaryBank = async (bank: any) => {
       ifsc: bank.ifsc,
       gstin: bank.gstin,
       upiId: bank.upiId,
+      bank: Number(bank.openingBalance ?? 0),
+      openingBankDate: bank.openingBankDate ? new Date(bank.openingBankDate) : null,
     },
   })
 
@@ -148,23 +151,25 @@ const { data: banks, isLoading } = useFindManyBankAccount(bankQuery)
    PRIMARY BANK
 --------------------------------------------------- */
 const primaryBankRow = computed(() => {
-  if (!company.value?.bankName) return null
-
+  const companyData = company.value
   return {
     id: 'PRIMARY_BANK',
     isPrimary: true,
-    bankName: company.value.bankName,
-    accHolderName: company.value.accHolderName,
-    accountNo: company.value.accountNo,
-    ifsc: company.value.ifsc,
-    upiId: company.value.upiId,
+    bankName: companyData?.bankName || 'Primary Bank',
+    accHolderName: companyData?.accHolderName || '',
+    accountNo: companyData?.accountNo || '',
+    ifsc: companyData?.ifsc || '',
+    upiId: companyData?.upiId || '',
     raw: {
-      accHolderName: company.value.accHolderName,
-      bankName: company.value.bankName,
-      accountNo: company.value.accountNo,
-      ifsc: company.value.ifsc,
-      gstin: company.value.gstin,
-      upiId: company.value.upiId,
+      isPrimary: true,
+      accHolderName: companyData?.accHolderName || '',
+      bankName: companyData?.bankName || '',
+      accountNo: companyData?.accountNo || '',
+      ifsc: companyData?.ifsc || '',
+      gstin: companyData?.gstin || '',
+      upiId: companyData?.upiId || '',
+      openingBalance: companyData?.bank ?? 0,
+      openingBankDate: companyData?.openingBankDate ?? null,
     },
   }
 })
@@ -203,8 +208,12 @@ const pageTo = computed(() =>
    ACTIONS
 --------------------------------------------------- */
 const goToDetails = (row: any) => {
-  if (row.isPrimary) navigateTo('/accounts/bank/primary')
-  else navigateTo(`/accounts/bank/${row.id}`)
+  if (row.isPrimary) {
+    navigateTo(PRIMARY_BANK_DETAILS_URL)
+    return
+  }
+
+  navigateTo(`/accounts/bank/${row.id}`)
 }
 
 const actionItems = (row: any) => [

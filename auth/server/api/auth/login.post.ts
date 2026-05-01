@@ -63,6 +63,8 @@ export default eventHandler(async (event) => {
         accountNo: user.companies[0].company.accountNo || '',
         bankName: user.companies[0].company.bankName || '',
         upiId: user.companies[0].company.upiId || '',
+        openingCashDate: user.companies[0].company.openingCashDate ? user.companies[0].company.openingCashDate.toISOString() : null,
+        openingBankDate: user.companies[0].company.openingBankDate ? user.companies[0].company.openingBankDate.toISOString() : null,
         plan: user.companies[0].company.plan,
         productInputs: (({ name, brand, category, subcategory, description }) =>
         ({ name, brand, category, subcategory, description }))(user.companies[0].company.productinput || {}),

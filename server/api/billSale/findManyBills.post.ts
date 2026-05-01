@@ -33,6 +33,18 @@ export default defineEventHandler(async (event) => {
     closingDate = null,
   } = body
 
+  const queryStartDate = startDate
+    ? new Date(startDate as string)
+    : new Date(0)
+
+  const queryEndDate = endDate
+    ? new Date(endDate as string)
+    : new Date()
+
+  const queryClosingDate = closingDate
+    ? new Date(closingDate as string)
+    : null
+
   if (!companyId) {
     throw createError({
       statusCode: 400,
@@ -75,14 +87,14 @@ export default defineEventHandler(async (event) => {
 
         if (fitsInt) {
           const invoiceParamIndex = idx
-          if (closingDate) {
+          if (queryClosingDate) {
             whereSQL += `
               AND (
                 (b.invoice_number = $${idx} AND b.created_at > $${idx + 2})
                 OR c.phone ILIKE $${idx + 1}
               )
             `
-            values.push(numVal, `%${normalizedSearch}%`, closingDate)
+            values.push(numVal, `%${normalizedSearch}%`, queryClosingDate)
             idx += 3
           } else {
             whereSQL += `
@@ -146,7 +158,7 @@ export default defineEventHandler(async (event) => {
       whereSQL += `
         AND b.created_at BETWEEN $${idx} AND $${idx + 1}
       `
-      values.push(startDate, endDate)
+      values.push(queryStartDate, queryEndDate)
       idx += 2
     }
 

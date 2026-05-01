@@ -330,6 +330,7 @@ watch([expenseSearch, expenseSelectedStatus, expenseSelectedCategory, () => expe
 const columns = [
     { key: 'name', label: 'Name', sortable: true },
     { key: 'email', label: 'Email', sortable: true },
+    { key: 'phone', label: 'Phone', sortable: true },
     { key: 'code', label: 'Code', sortable: true },
     { key: 'role', label: 'Role', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
@@ -339,15 +340,31 @@ const columns = [
 const formData = reactive({
     email: '',
     name: '',
+    phone: '',
     role: { label: '', value: '' },
     id:''
 });
 
 
+const resetForm = () => {
+    formData.email = ''
+    formData.name = ''
+    formData.phone = ''
+    formData.role = { label: '', value: '' }
+    formData.id = ''
+}
+
+const openCreate = () => {
+    resetForm()
+    isOpen.value = true
+}
+
 const openEdit = (row) => {
+    resetForm()
     isOpen.value = true
     formData.email = row.user.email
     formData.name = row.name
+    formData.phone = row.phone || ''
     formData.role.label = row.role
     formData.role.value = row.role
     formData.id = row.userId
@@ -652,7 +669,8 @@ const handleSubmit = async (e: Event) => {
             },
             data: {
             name: formData.name,
-            role: formData.role.value
+            role: formData.role.value,
+            phone: formData.phone?.trim() || null
             }
         }
         }
@@ -683,6 +701,7 @@ const handleSubmit = async (e: Event) => {
                             },
                         name: formData.name,
                         role: formData.role.value,
+                        phone: formData.phone?.trim() || null,
                         code: userCode,
                     }],
                 },
@@ -698,6 +717,7 @@ const handleSubmit = async (e: Event) => {
                     create: {
                         name: formData.name,
                         role: formData.role.value,
+                        phone: formData.phone?.trim() || null,
                         code: userCode,
                         company: {
                             connect: {
@@ -716,10 +736,7 @@ const handleSubmit = async (e: Event) => {
         });
     }
 
-        formData.email = ''
-        formData.name = ''
-        formData.role = { label: '', value: '' }
-        formData.id = ''
+        resetForm()
 
         isOpen.value = false;
 
@@ -787,7 +804,7 @@ const handleSubmit = async (e: Event) => {
                                     color="primary"
                                     variant="solid"
                                     label="Add user"
-                                    @click="() => (isOpen = true)"
+                                    @click="openCreate"
                                 />
                             </div>
                         </div>
@@ -835,6 +852,11 @@ const handleSubmit = async (e: Event) => {
                             </template>
                             <template #email-data="{ row }">
                                 <div>{{ row.user?.email || '-' }}</div>
+                            </template>
+                            <template #phone-data="{ row }">
+                                <div class="font-mono text-xs">
+                                    {{ row.phone || '-' }}
+                                </div>
                             </template>
                             <template #code-data="{ row }">
                                 <span v-if="row.code" class="font-mono text-xs">
@@ -1314,7 +1336,7 @@ const handleSubmit = async (e: Event) => {
                 }"
             >
                 <template #header>
-                    <div> Add user </div>
+                    <div>{{ formData.id ? 'Edit user' : 'Add user' }}</div>
                 </template>
 
                 <UFormGroup name="name" label="name" class="mb-5">
@@ -1329,6 +1351,13 @@ const handleSubmit = async (e: Event) => {
                         v-model="formData.email"
                         type="text"
                         placeholder="Enter users email"
+                    />
+                </UFormGroup>
+                <UFormGroup name="phone" label="phone" class="mb-5">
+                    <UInput
+                        v-model="formData.phone"
+                        type="tel"
+                        placeholder="Enter users phone number (optional)"
                     />
                 </UFormGroup>
                 <UFormGroup name="selectMenu" label="role" class="mb-5">

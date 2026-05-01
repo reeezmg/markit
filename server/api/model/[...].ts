@@ -1,7 +1,7 @@
 import { enhance } from '@zenstackhq/runtime' 
 import { createEventHandler } from '@zenstackhq/server/nuxt';
 import { prisma } from '~/server/prisma';
-import { UserRole } from '@prisma/client';
+import type { UserRole } from '@prisma/client';
 
 export default createEventHandler({
     getPrisma: async (event) => {

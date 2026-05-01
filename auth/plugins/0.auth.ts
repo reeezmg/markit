@@ -43,7 +43,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
       (to) => {
         const plan = session.value?.plan
 
-        if (loggedIn.value && ['/login', '/register', '/'].includes(to.path)) {
+        if (loggedIn.value && ['/login', '/register'].includes(to.path)) {
           return fallbackUrl.value
         }
 
@@ -79,7 +79,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
         await navigateTo('/login')
       } else if (
         isLoggedIn &&
-        ['/login', '/register', '/'].includes(route.path)
+        ['/login', '/register'].includes(route.path)
       ) {
         await navigateTo(redirectTo.value || '/erp/billing')
       }
@@ -93,10 +93,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
       if (
         savedRoute &&
         savedRoute !== currentRoute.fullPath &&
-        !['/login', '/register', '/'].includes(currentRoute.path)
+        !['/login', '/register'].includes(currentRoute.path)
       ) {
         await navigateTo(savedRoute)
-      } else if (['/login', '/register', '/'].includes(currentRoute.path)) {
+      } else if (['/login', '/register'].includes(currentRoute.path)) {
         const query = currentRoute.query
         const queryString =
           Object.keys(query).length > 0

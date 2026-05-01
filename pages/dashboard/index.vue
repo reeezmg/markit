@@ -22,7 +22,7 @@
             variant="soft"
             color="gray"
             size="sm"
-            to="/reports/sales"
+            to="/reports/daily"
           >
             Reports
           </UButton>

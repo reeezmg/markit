@@ -13,10 +13,10 @@ const cleanupUnlocked = useState('cleanup-unlocked', () => false)
 const showSidebar = computed(() =>
   route.path !== '/cleanup' || cleanupUnlocked.value
 )
+const isSidebarCollapsed = ref(false)
 const plan = ref(useAuth().session.value?.plan || 'free');
 
-const { isHelpSlideoverOpen, isChatSlideoverOpen } = useDashboard();
-const openChat = () => { isChatSlideoverOpen.value = !isChatSlideoverOpen.value }
+const { isHelpSlideoverOpen } = useDashboard();
 
 const auth = useAuth();
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
@@ -36,6 +36,19 @@ watch(orderCount,(val) => {
 })
 
 watch(() => checkoutStore.lastUpdate, async () => await refetch(), { immediate: true })
+
+onMounted(() => {
+  const saved = localStorage.getItem('storetools_sidebar_collapsed')
+  isSidebarCollapsed.value = saved === 'true'
+})
+
+watch(isSidebarCollapsed, (collapsed) => {
+  localStorage.setItem('storetools_sidebar_collapsed', String(collapsed))
+})
+
+const toggleSidebar = () => {
+  isSidebarCollapsed.value = !isSidebarCollapsed.value
+}
 
 
 
@@ -272,8 +285,8 @@ const links = computed(() => {
         ...(auth.session.value?.type === 'admin' || auth.session.value?.type === 'manager'
             ? [
             {
-            label: 'Sales',
-            to: `/reports/sales`,
+            label: 'Daily',
+            to: `/reports/daily`,
             tooltip: {
                 text: 'Reports',
                 shortcuts: ['R', 'S'],
@@ -634,13 +647,17 @@ const groups = computed(() => [
     },
 ]);
 
+const isRouteActive = (to?: string) => {
+  if (!to) return false
+  return route.path === to || route.path.startsWith(`${to}/`)
+}
 
 </script>
 
 <template>
     <UDashboardLayout>
         <UDashboardPanel
-            v-if="showSidebar"
+            v-if="showSidebar && !isSidebarCollapsed"
             :width="250"
             :resizable="{ min: 200, max: 300 }"
             collapsible
@@ -652,16 +669,13 @@ const groups = computed(() => [
                 <template #left>
                     <TeamsDropdown />
                 </template>
-
-                <template v-if="auth.session.value?.companyId" #right>
-                    <UTooltip text="AI Chat (C then B)">
-                        <UButton
-                            icon="i-heroicons-chat-bubble-left-ellipsis"
-                            color="gray"
-                            variant="ghost"
-                            @click="openChat"
-                        />
-                    </UTooltip>
+                <template #right>
+                    <UButton
+                        icon="i-heroicons-chevron-double-left"
+                        color="gray"
+                        variant="ghost"
+                        @click="toggleSidebar"
+                    />
                 </template>
             </UDashboardNavbar>
 
@@ -676,14 +690,79 @@ const groups = computed(() => [
 
                 <div class="flex-1" />
 
-                <!-- <UDashboardSidebarLinks :links="footerLinks" /> -->
-
                 <UDivider class="sticky bottom-0" />
 
                 <template #footer>
                     <UserDropdown />
                 </template>
             </UDashboardSidebar>
+        </UDashboardPanel>
+
+        <UDashboardPanel
+          v-else-if="showSidebar && isSidebarCollapsed"
+          :width="64"
+        >
+          <UDashboardNavbar class="!border-transparent" :ui="{ left: 'justify-center' }">
+            <template #left>
+              <UButton
+                icon="i-heroicons-chevron-double-right"
+                color="gray"
+                variant="ghost"
+                @click="toggleSidebar"
+              />
+            </template>
+          </UDashboardNavbar>
+
+          <UDashboardSidebar>
+            <div class="flex flex-col items-center gap-2 py-2">
+              <template v-for="link in links" :key="link.id || link.label">
+                <UPopover
+                  v-if="link.children?.length"
+                  mode="hover"
+                  :popper="{ placement: 'right-start', strategy: 'fixed' }"
+                >
+                  <UButton
+                    :icon="link.icon || 'i-heroicons-squares-2x2'"
+                    color="gray"
+                    :variant="isRouteActive(link.to) ? 'soft' : 'ghost'"
+                    class="w-10 h-10 justify-center"
+                  />
+
+                  <template #panel>
+                    <div class="w-60 p-2">
+                      <div class="text-sm font-medium px-2 py-1">{{ link.label }}</div>
+                      <div class="space-y-1">
+                        <NuxtLink
+                          v-for="child in link.children"
+                          :key="child.to || child.label"
+                          :to="child.to"
+                          class="block px-2 py-1.5 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-800"
+                        >
+                          {{ child.label }}
+                        </NuxtLink>
+                      </div>
+                    </div>
+                  </template>
+                </UPopover>
+
+                <UTooltip v-else :text="link.label">
+                  <UButton
+                    :to="link.to"
+                    :icon="link.icon || 'i-heroicons-squares-2x2'"
+                    color="gray"
+                    :variant="isRouteActive(link.to) ? 'soft' : 'ghost'"
+                    class="w-10 h-10 justify-center"
+                  />
+                </UTooltip>
+              </template>
+            </div>
+
+            <div class="flex-1" />
+
+            <div class="pb-2 flex justify-center">
+              <UserDropdown compact />
+            </div>
+          </UDashboardSidebar>
         </UDashboardPanel>
 
         <slot />

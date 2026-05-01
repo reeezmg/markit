@@ -29,45 +29,47 @@ export default defineEventHandler(async (event) => {
        PRIMARY BANK INFO + DATE FILTERED OPENING
     ================================================== */
     const bankRes = await client.query(
-  `
-  SELECT 
-    bank,
-    opening_bank_date,
-    bank_name,
-    acc_holder_name,
-    account_no,
-    ifsc,
-    upi_id
-  FROM companies
-  WHERE id = $1
-  `,
-  [companyId]
-)
+      `
+      SELECT 
+        bank,
+        opening_bank_date,
+        bank_name,
+        acc_holder_name,
+        account_no,
+        ifsc,
+        upi_id
+      FROM companies
+      WHERE id = $1
+      `,
+      [companyId]
+    )
 
-const c = bankRes.rows[0]
+    const c = bankRes.rows[0]
+    const companyBank = Number(c?.bank || 0)
+    const isZeroOpening = companyBank === 0
 
-let baseOpening = 0
+    let baseOpening = 0
 
-/* =================================================
-   INCLUDE ONLY IF OPENING DATE INSIDE RANGE
-================================================= */
-if (
-  c?.bank &&
-  c?.opening_bank_date &&
-  new Date(c.opening_bank_date) <= from
-) {
-  baseOpening = Number(c.bank)
-}
+    /* =================================================
+       INCLUDE ONLY IF OPENING DATE INSIDE RANGE
+    ================================================== */
+    if (
+      !isZeroOpening &&
+      c?.opening_bank_date &&
+      new Date(c.opening_bank_date) <= from
+    ) {
+      baseOpening = companyBank
+    }
 
-const bankInfo = {
-  id: 'PRIMARY',
-  type: 'PRIMARY',
-  bankName: c?.bank_name || 'Primary Bank',
-  accHolderName: c?.acc_holder_name,
-  accountNo: c?.account_no,
-  ifsc: c?.ifsc,
-  upiId: c?.upi_id,
-}
+    const bankInfo = {
+      id: 'PRIMARY',
+      type: 'PRIMARY',
+      bankName: c?.bank_name || 'Primary Bank',
+      accHolderName: c?.acc_holder_name,
+      accountNo: c?.account_no,
+      ifsc: c?.ifsc,
+      upiId: c?.upi_id,
+    }
 
 
     /* =================================================
@@ -203,13 +205,14 @@ const distributorBefore =
     /* =================================================
        FINAL OPENING
     ================================================== */
-const openingBalance =
-  baseOpening +
-  salesBefore -
-  expensesBefore -
-  distributorBefore +
-  moneyNetBefore +
-  transferNetBefore
+    const openingBalance = isZeroOpening
+      ? 0
+      : baseOpening +
+        salesBefore -
+        expensesBefore -
+        distributorBefore +
+        moneyNetBefore +
+        transferNetBefore
 
   console.log({
     baseOpening,

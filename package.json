@@ -3,12 +3,17 @@
     "private": true,
     "type": "module",
     "version": "0.0.1-prealpha.1",
+    "main": "electron/main.js",
     "scripts": {
         "dev": "nuxt dev",
+        "dev:web": "nuxt dev --port 3000",
+        "dev:electron": "concurrently -k \"cross-env BASE_URL=http://127.0.0.1:3000 nuxt dev --port 3000\" \"wait-on http://127.0.0.1:3000 && cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
         "build": "nuxt build",
         "generate": "nuxt generate",
         "prodgenerate": "nuxt generate --dotenv .env.production",
         "preview": "nuxt preview",
+        "electron:build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 NITRO_PRESET=node-server nuxt build && electron-builder",
+        "electron:dist": "cross-env NODE_OPTIONS=--max-old-space-size=8192 NITRO_PRESET=node-server nuxt build && electron-builder --publish never",
         "postinstall": "nuxt prepare",
         "lint": "eslint .",
         "typecheck": "nuxt typecheck"
@@ -142,5 +147,36 @@
         "prisma": "^5.22.0",
         "vue-tsc": "^2.0.19",
         "wait-on": "^8.0.3"
+    },
+    "build": {
+        "appId": "in.co.markit.storetools",
+        "productName": "Storetools",
+        "directories": {
+            "output": "electron-dist"
+        },
+        "files": [
+            "electron/**",
+            ".zenstack/**",
+            "zenstack/**",
+            ".output/**",
+            "package.json"
+        ],
+        "asar": true,
+        "asarUnpack": [
+            ".output/server/**",
+            ".output/public/**"
+        ],
+        "win": {
+            "target": "nsis"
+        },
+        "mac": {
+            "target": "dmg"
+        },
+        "linux": {
+            "target": [
+                "AppImage",
+                "deb"
+            ]
+        }
     }
 }

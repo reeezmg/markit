@@ -401,6 +401,7 @@ const columns = computed(() => [
   ...(isUserTrackIncluded.value ? [{ key: 'user', label: 'User' }] : []),
   { key: 'tax', label: 'TAX%' },
   { key: 'value', label: 'VALUE' },
+  { key: 'actions', label: '' },
 ]);
 
 
@@ -579,32 +580,34 @@ const selectAllText = (index) => {
 };
 
 
-const removeRow = (event,index) => {
-  const inputValue = event.target.value;
-  if (!inputValue) {
-    event.preventDefault();
-    if (items.value.length > 1) {
-    items.value.splice(index, 1);
-    // Reorder serial numbers after deletion
-    items.value.forEach((item, i) => {
-      item.sn = i + 1;
-    });
-  }
-  const component = barcodeInputs.value[index - 1 ];
+const deleteRowByIndex = (index) => {
+  if (items.value.length <= 1) return
+
+  items.value.splice(index, 1)
+  items.value.forEach((item, i) => {
+    item.sn = i + 1
+  })
+
+  const component = barcodeInputs.value[index - 1]
   if (component?.$el) {
-    const input = component.$el.querySelector("input");
+    const input = component.$el.querySelector('input')
     if (input) {
-      input.focus();
+      input.focus()
     } else {
-      console.warn("Input element not found inside barcodeInputs:", component.$el);
+      console.warn('Input element not found inside barcodeInputs:', component.$el)
     }
   } else {
-    console.warn("Barcode input component is not available:", component);
+    console.warn('Barcode input component is not available:', component)
   }
-  }
+}
 
-  
-};
+const removeRow = (event, index) => {
+  const inputValue = event?.target?.value
+  if (inputValue) return
+
+  event?.preventDefault?.()
+  deleteRowByIndex(index)
+}
 
 
 const clientSearchTerm = computed(() => String(phoneNo.value || '').trim())
@@ -2100,13 +2103,6 @@ const couponModel = computed({
                 @click="addNewRow(0,false)"
                 :disabled="bill?.isMarkit"
               />
-          <UButton  
-            color="primary" 
-            icon="i-heroicons-camera" 
-            label="Scan" 
-            @click="handleScan"
-            :disabled="bill?.isMarkit"
-          />
           </div>
         </div>
 
@@ -2237,9 +2233,7 @@ const couponModel = computed({
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
               <tr v-for="(row, index) in items" :key="row.sn">
-                <td class="py-1 whitespace-nowrap"  @click="(event) => {
-                    isDeleteModalOpen = true;
-                    deletingRowIdentity = { index, event };}">
+                <td class="py-1 whitespace-nowrap">
                   {{ row.sn }}
                 </td>
                 <td class="py-1 whitespace-nowrap">
@@ -2384,6 +2378,19 @@ const couponModel = computed({
                 </td>
                 <td class="py-1 ps-2 whitespace-nowrap"   :class="{ 'text-red-600': row.return }">
                   {{ row.value }}
+                </td>
+                <td class="py-1 ps-2 whitespace-nowrap text-right">
+                  <UButton
+                    icon="i-heroicons-trash"
+                    color="red"
+                    variant="ghost"
+                    size="xs"
+                    square
+                    title="Delete row"
+                    aria-label="Delete row"
+                    :disabled="bill?.isMarkit"
+                    @click="() => { isDeleteModalOpen = true; deletingRowIdentity = { index, sn: row.sn }; }"
+                  />
                 </td>
               </tr>
             </tbody>
@@ -2887,10 +2894,10 @@ const couponModel = computed({
     </UDashboardModal>
 
     
-     <UDashboardModal
+    <UDashboardModal
         v-model="isDeleteModalOpen"
         title="Delete Entry"
-        :description="`Are you sure you want to delete Entry No ${deletingRowIdentity.index}?`"
+        :description="`Are you sure you want to delete Entry No ${deletingRowIdentity.sn}?`"
         icon="i-heroicons-exclamation-circle"
         prevent-close
         :close-button="null"
@@ -2904,10 +2911,10 @@ const couponModel = computed({
         }"
     >
         <template #footer>
-            <UButton
+    <UButton
                 color="red"
                 label="Delete"
-                @click="() => {removeRow( deletingRowIdentity.event,deletingRowIdentity.index);isDeleteModalOpen = false; }"
+                @click="() => { deleteRowByIndex(deletingRowIdentity.index); isDeleteModalOpen = false; }"
                 :disabled="bill?.isMarkit"
             />
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" :disabled="bill?.isMarkit" />

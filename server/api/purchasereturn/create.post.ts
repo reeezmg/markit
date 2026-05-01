@@ -87,10 +87,10 @@ export default defineEventHandler(async (event) => {
              ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14)`,
             [
               crypto.randomUUID(),
-              item.itemId,
-              item.variantId,
-              item.barcode || null,
-              item.productName,
+              item.barcode?.trim() ? (item.itemId || null) : null,
+              item.barcode?.trim() ? (item.variantId || null) : null,
+              item.barcode?.trim() ? (item.barcode || null) : null,
+              item.productName || item.categoryName || '',
               item.size || null,
               item.qty,
               item.rate,
@@ -108,10 +108,12 @@ export default defineEventHandler(async (event) => {
       /* 3. Decrease stock for each returned item */
       await Promise.all(
         items.map((item: any) =>
-          client.query(
-            `UPDATE items SET qty = COALESCE(qty, 0) - $1 WHERE id = $2`,
-            [item.qty, item.itemId]
-          )
+          item.barcode?.trim() && item.itemId
+            ? client.query(
+              `UPDATE items SET qty = COALESCE(qty, 0) - $1 WHERE id = $2`,
+              [item.qty, item.itemId]
+            )
+            : Promise.resolve()
         )
       )
 

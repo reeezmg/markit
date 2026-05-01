@@ -2,6 +2,16 @@
 const props = defineProps<{ bank?: any }>()
 const emit = defineEmits(['save', 'cancel'])
 
+const toDateInputValue = (value?: string | Date | null) => {
+  if (!value) return ''
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return ''
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const form = ref({
   bankName: props.bank?.bankName ?? '',
   accHolderName: props.bank?.accHolderName ?? '',
@@ -9,7 +19,8 @@ const form = ref({
   ifsc: props.bank?.ifsc ?? '',
   gstin: props.bank?.gstin ?? '',
   upiId: props.bank?.upiId ?? '',
-  openingBalance: props.bank?.openingBalance ?? '0',
+  openingBalance: props.bank?.openingBalance ?? props.bank?.bank ?? '0',
+  openingBankDate: toDateInputValue(props.bank?.openingBankDate),
 })
 
 const submit = () => emit('save', form.value)
@@ -18,7 +29,7 @@ const submit = () => emit('save', form.value)
 <template>
   <UCard>
     <div class="text-lg font-semibold mb-4">
-      {{ props.bank ? 'Edit Bank Account' : 'Add Bank Account' }}
+      {{ props.bank?.isPrimary ? 'Edit Primary Bank' : props.bank ? 'Edit Bank Account' : 'Add Bank Account' }}
     </div>
 
     <div class="grid grid-cols-1 gap-3">
@@ -32,6 +43,12 @@ const submit = () => emit('save', form.value)
         v-model="form.openingBalance"
         type="number"
         placeholder="Opening Balance"
+      />
+      <UInput
+        v-if="props.bank?.isPrimary"
+        v-model="form.openingBankDate"
+        type="date"
+        placeholder="Opening Bank Date"
       />
     </div>
 

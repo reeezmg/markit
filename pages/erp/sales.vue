@@ -6,6 +6,8 @@ import { startOfDay, endOfDay } from 'date-fns'
 import { useQueryClient } from '@tanstack/vue-query'
 import { getQueryKey } from '@zenstackhq/tanstack-query/runtime-v5'
 const paymentOptions = ['Cash', 'UPI', 'Card']
+const allPaymentOptions = ['Cash', 'UPI', 'Card', 'Credit', 'Split']
+const paymentOptionsInsplit = ['Cash', 'UPI', 'Card', 'Credit']
 const queryClient = useQueryClient()
 const billStore = useBillStore()
 const timeZone = 'Asia/Kolkata'
@@ -19,6 +21,13 @@ const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
 const paymentMethod = ref('Cash');
 const activeBillInfo = ref({});
+const isChangePaymentMethodOpen = ref(false)
+const changePaymentMethodDraft = ref('Cash')
+const changePaymentMethodBill = ref<any | null>(null)
+const isSplitModalOpen = ref(false)
+const splitTempSplits = ref<Record<string, { method: string; amount: number | string }>>({})
+const splitBillContext = ref<any | null>(null)
+const isPostChangeActionOpen = ref(false)
 
 
 const { printBill } = usePrint();
@@ -44,8 +53,8 @@ const getColumns = (isMobile) => {
       { key: 'invoiceNumber', label: 'Inv#', sortable: true },
       { key: 'createdAt', label: 'Date', sortable: true },
       { key: 'customer', label: 'Customer', sortable: true },
-      { key: 'subtotal', label: 'Sub Total', sortable: true },
       { key: 'grandTotal', label: 'Grand Total', sortable: true },
+      { key: 'paymentMethod', label: 'Method', sortable: true },
       { key: 'paymentStatus', label: 'Payment', sortable: true },
       { key: 'notes', label: 'Notes', sortable: true },
       { key: 'actions', label: 'Actions', sortable: false },
@@ -54,8 +63,8 @@ const getColumns = (isMobile) => {
 
   return [
     { key: 'invoiceNumber', label: 'Inv#', sortable: true },
-    { key: 'subtotal', label: 'Sub Total', sortable: true },
     { key: 'grandTotal', label: 'Grand Total', sortable: true },
+    { key: 'paymentMethod', label: 'Method', sortable: true },
     { key: 'createdAt', label: 'Date', sortable: true },
     { key: 'customer', label: 'Customer', sortable: true },
     { key: 'paymentStatus', label: 'Payment', sortable: true },
@@ -130,39 +139,56 @@ const active = (selectedRows) => [
         },
     ],
 ];
-const action = (row: any) => [
-  [
-    {
-      label: 'Print',
-      icon: 'i-heroicons-printer',
-      click: () => print(row.id),
-    },
-  ],
-  [
-    {
-      label: 'Details',
-      icon: 'i-heroicons-document-magnifying-glass',
-      click: () => openBill(row.id),
-    },
-  ],
-  [
-    {
-      label: 'Edit',
-      icon: 'i-heroicons-pencil-square-20-solid',
-      click: () => router.push(`./edit/${row.id}`),
-    },
-  ],
-  [
-    {
-      label: 'Delete',
-      icon: 'i-heroicons-trash-20-solid',
-      click: () => {
-        isDeleteModalOpen.value = true;
-        deletingRowIdentity.value = { name: row.invoiceNumber, id: row.id };
+const action = (row: any) => {
+  const items = [
+    [
+      {
+        label: 'Print',
+        icon: 'i-heroicons-printer',
+        click: () => print(row.id),
       },
-    },
-  ],
-];
+    ],
+  ]
+
+  if (row?.paymentMethod) {
+    items.push([
+      {
+        label: 'Change method',
+        icon: 'i-heroicons-credit-card',
+        click: () => openChangePaymentMethod(row),
+      },
+    ])
+  }
+
+  items.push(
+    [
+      {
+        label: 'Details',
+        icon: 'i-heroicons-document-magnifying-glass',
+        click: () => openBill(row.id),
+      },
+    ],
+    [
+      {
+        label: 'Edit',
+        icon: 'i-heroicons-pencil-square-20-solid',
+        click: () => router.push(`./edit/${row.id}`),
+      },
+    ],
+    [
+      {
+        label: 'Delete',
+        icon: 'i-heroicons-trash-20-solid',
+        click: () => {
+          isDeleteModalOpen.value = true;
+          deletingRowIdentity.value = { name: row.invoiceNumber, id: row.id };
+        },
+      },
+    ],
+  )
+
+  return items
+};
 
 
 // Filters
@@ -277,6 +303,11 @@ const formatDateTimeForExport = (value: string | Date) =>
 const getSalesExportFilename = (extension: 'xlsx' | 'pdf') =>
   `Sales (${format(selectedDate.value.start, 'dd-MM-yyyy')} to ${format(selectedDate.value.end, 'dd-MM-yyyy')}).${extension}`
 
+const getUtcDateRangeForApi = () => ({
+  startDate: startOfDay(selectedDate.value?.start),
+  endDate: endOfDay(selectedDate.value?.end),
+})
+
 const getBillDiscountAmount = (row: any) => {
   const subtotal = Number(row.subtotal || 0)
   const tax = Number(row.tax || 0)
@@ -300,8 +331,7 @@ const fetchSales = async () => {
         selectedPaymentMethods: selectedPaymentMethods.value,
         minGrandTotal: minGrandTotal.value,
         maxGrandTotal: maxGrandTotal.value,
-        startDate: startOfDay(selectedDate.value?.start).toISOString(),
-        endDate: endOfDay(selectedDate.value?.end).toISOString(),
+        ...getUtcDateRangeForApi(),
         page: page.value,
         pageCount: Number(pageCount.value),
         sortColumn: sort.value.column,
@@ -487,8 +517,7 @@ const fetchFilteredSalesForExport = async () => {
         selectedPaymentMethods: selectedPaymentMethods.value,
         minGrandTotal: minGrandTotal.value,
         maxGrandTotal: maxGrandTotal.value,
-        startDate: startOfDay(selectedDate.value?.start).toISOString(),
-        endDate: endOfDay(selectedDate.value?.end).toISOString(),
+        ...getUtcDateRangeForApi(),
         page: exportPage,
         pageCount: exportPageCount,
         sortColumn: sort.value.column,
@@ -846,6 +875,192 @@ const handleChange = (value:string, row:any) => {
     notes.value[row.id] = value;
 };
 
+const buildSplitTempSplits = (splitPayments: any[] = []) => {
+  const existingPayments = Array.isArray(splitPayments) ? splitPayments : []
+  return paymentOptionsInsplit.reduce((acc, method) => {
+    const existing = existingPayments.find((payment) => payment.method === method)
+    acc[method] = {
+      method,
+      amount: existing?.amount ?? '',
+    }
+    return acc
+  }, {} as Record<string, { method: string; amount: number | string }>)
+}
+
+const buildPrintDataFromSale = (sale: any, session: any) => ({
+  invoiceNumber: sale.invoiceNumber,
+  phone: session?.companyPhone,
+  description: session?.description,
+  thankYouNote: session?.thankYouNote,
+  refundPolicy: session?.refundPolicy,
+  returnPolicy: session?.returnPolicy,
+  date: new Date(sale.createdAt).toISOString(),
+
+  entries: sale.entries.map((entry: any) => {
+    const discountVal =
+      Number(entry.discount) < 0
+        ? Number(entry.discount)
+        : Number(entry.discount) > 0
+        ? `${Number(entry.discount)}%`
+        : 0
+
+    return {
+      description: entry.barcode ? entry.name : entry.category,
+      hsn: entry.hsn || '',
+      qty: Number(entry.qty || 1),
+      mrp: Number(entry.rate || 0),
+      discount: discountVal,
+      tax: Number(entry.tax || 0),
+      value: Number(entry.qty || 1) * Number(entry.rate || 0),
+      size: entry.size || '',
+      barcode: entry.barcode,
+      tvalue: Number(entry.value || 0),
+    }
+  }),
+
+  subtotal: Number(sale.subtotal || 0),
+  discount: Number(sale.discount || 0),
+  grandTotal: Number(sale.grandTotal || 0),
+  paymentMethod: sale.paymentMethod,
+
+  companyName: session?.companyName || '',
+  companyAddress: session?.address || {},
+  gstin: session?.gstin || '',
+
+  ...(sale.paymentMethod === 'Split' && {
+    splitPayments: sale.splitPayments || [],
+  }),
+
+  accHolderName: session?.accHolderName || '',
+  upiId: session?.upiId || '',
+
+  clientName: sale.client?.name || '',
+  clientPhone: sale.client?.phone || '',
+
+  tqty: sale.entries.reduce((sum: number, e: any) => sum + Number(e.qty || 1), 0),
+  tvalue: sale.entries.reduce(
+    (sum: number, e: any) => sum + Number(e.qty || 1) * Number(e.rate || 0),
+    0
+  ),
+  ttvalue: sale.entries.reduce(
+    (sum: number, e: any) => sum + Number(e.value || 0),
+    0
+  ),
+  tdiscount: sale.entries.reduce((sum: number, e: any) => {
+    const qty = Number(e.qty || 1)
+    const rate = Number(e.rate || 0)
+    const d = Number(e.discount || 0)
+    if (d < 0) return sum + Math.abs(d) * qty
+    return sum + ((rate * d) / 100) * qty
+  }, 0),
+})
+
+const openChangePaymentMethod = (row: any) => {
+  if (row?.paymentMethod === 'Split') {
+    openSplitModal(row)
+    return
+  }
+  changePaymentMethodBill.value = { ...row }
+  changePaymentMethodDraft.value = row.paymentMethod || 'Cash'
+  isChangePaymentMethodOpen.value = true
+}
+
+const openSplitModal = (row: any) => {
+  splitBillContext.value = { ...row }
+  splitTempSplits.value = buildSplitTempSplits(row?.splitPayments || [])
+  isSplitModalOpen.value = true
+}
+
+watch(changePaymentMethodDraft, (value) => {
+  if (value === 'Split' && changePaymentMethodBill.value) {
+    isChangePaymentMethodOpen.value = false
+    openSplitModal(changePaymentMethodBill.value)
+  }
+})
+
+const updateBillPaymentMethod = async () => {
+  if (!changePaymentMethodBill.value) return
+
+  try {
+    await $fetch('/api/billSale/updatePaymentMethod', {
+      method: 'POST',
+      body: {
+        billId: changePaymentMethodBill.value.id,
+        companyId: useAuth().session.value?.companyId,
+        paymentMethod: changePaymentMethodDraft.value,
+        splitPayments: null,
+      },
+    })
+
+    const updatedSale = {
+      ...changePaymentMethodBill.value,
+      paymentMethod: changePaymentMethodDraft.value,
+    }
+
+    if (changePaymentMethodDraft.value !== 'Split') {
+      updatedSale.splitPayments = changePaymentMethodBill.value.splitPayments || []
+    }
+
+    printData.value = buildPrintDataFromSale(updatedSale, useAuth().session.value)
+    isChangePaymentMethodOpen.value = false
+    isPostChangeActionOpen.value = true
+
+    toast.add({
+      title: 'Payment method updated successfully',
+      color: 'green',
+    })
+
+    await fetchSales()
+  } catch (error: any) {
+    toast.add({
+      title: 'Failed to update payment method',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  }
+}
+
+const onSplitConfirmed = async (confirmedPayments: Array<{ method: string; amount: number | string }>) => {
+  if (!changePaymentMethodBill.value && !splitBillContext.value) return
+
+  const bill = splitBillContext.value || changePaymentMethodBill.value
+
+  try {
+    await $fetch('/api/billSale/updatePaymentMethod', {
+      method: 'POST',
+      body: {
+        billId: bill.id,
+        companyId: useAuth().session.value?.companyId,
+        paymentMethod: 'Split',
+        splitPayments: confirmedPayments,
+      },
+    })
+
+    const updatedSale = {
+      ...bill,
+      paymentMethod: 'Split',
+      splitPayments: confirmedPayments,
+    }
+
+    printData.value = buildPrintDataFromSale(updatedSale, useAuth().session.value)
+    isSplitModalOpen.value = false
+    isPostChangeActionOpen.value = true
+
+    toast.add({
+      title: 'Split payment updated successfully',
+      color: 'green',
+    })
+
+    await fetchSales()
+  } catch (error: any) {
+    toast.add({
+      title: 'Failed to update split payment',
+      description: error?.message || 'Something went wrong',
+      color: 'red',
+    })
+  }
+}
+
 const onPaymentStatusChange = async (
   id,
   status,
@@ -903,74 +1118,6 @@ const print = async (id) => {
 
   const session = useAuth().session.value
 
-  const buildPrintDataFromSale = (sale, session) => ({
-    invoiceNumber: sale.invoiceNumber,
-    phone: session?.companyPhone,
-    description: session?.description,
-    thankYouNote: session?.thankYouNote,
-    refundPolicy: session?.refundPolicy,
-    returnPolicy: session?.returnPolicy,
-    date: new Date(sale.createdAt).toISOString(),
-
-    entries: sale.entries.map(entry => {
-      const discountVal =
-        Number(entry.discount) < 0
-          ? Number(entry.discount)
-          : Number(entry.discount) > 0
-          ? `${Number(entry.discount)}%`
-          : 0
-
-      return {
-        description: entry.barcode ? entry.name : entry.category,
-        hsn: entry.hsn || '',
-        qty: Number(entry.qty || 1),
-        mrp: Number(entry.rate || 0),
-        discount: discountVal,
-        tax: Number(entry.tax || 0),
-        value: Number(entry.qty || 1) * Number(entry.rate || 0),
-        size: entry.size || '',
-        barcode: entry.barcode,
-        tvalue: Number(entry.value || 0),
-      }
-    }),
-
-    subtotal: Number(sale.subtotal || 0),
-    discount: Number(sale.discount || 0),
-    grandTotal: Number(sale.grandTotal || 0),
-    paymentMethod: sale.paymentMethod,
-
-    companyName: session?.companyName || '',
-    companyAddress: session?.address || {},
-    gstin: session?.gstin || '',
-
-    ...(sale.paymentMethod === 'Split' && {
-      splitPayments: sale.splitPayments || [],
-    }),
-
-    accHolderName: session?.accHolderName || '',
-    upiId: session?.upiId || '',
-
-    clientName: sale.client?.name || '',
-    clientPhone: sale.client?.phone || '',
-
-    tqty: sale.entries.reduce((sum, e) => sum + Number(e.qty || 1), 0),
-    tvalue: sale.entries.reduce(
-      (sum, e) => sum + Number(e.qty || 1) * Number(e.rate || 0),
-      0
-    ),
-    ttvalue: sale.entries.reduce(
-      (sum, e) => sum + Number(e.value || 0),
-      0
-    ),
-    tdiscount: sale.entries.reduce((sum, e) => {
-      const qty = Number(e.qty || 1)
-      const rate = Number(e.rate || 0)
-      const d = Number(e.discount || 0)
-      if (d < 0) return sum + Math.abs(d) * qty
-      return sum + ((rate * d) / 100) * qty
-    }, 0),
-  })
-
   printData.value = buildPrintDataFromSale(sale, session)
 
   await printBill(printData.value)
@@ -987,78 +1134,83 @@ const openBill = async (id) => {
   }
 
   const session = useAuth().session.value
-
-  const buildPrintDataFromSale = (sale, session) => ({
-    invoiceNumber: sale.invoiceNumber,
-    phone: session?.companyPhone,
-    description: session?.description,
-    thankYouNote: session?.thankYouNote,
-    refundPolicy: session?.refundPolicy,
-    returnPolicy: session?.returnPolicy,
-    date: new Date(sale.createdAt).toISOString(),
-
-    entries: sale.entries.map(entry => {
-      const discountVal =
-        Number(entry.discount) < 0
-          ? Number(entry.discount)
-          : Number(entry.discount) > 0
-          ? `${Number(entry.discount)}%`
-          : 0
-
-      return {
-        description: entry.barcode ? entry.name : entry.category,
-        hsn: entry.hsn || '',
-        qty: Number(entry.qty || 1),
-        mrp: Number(entry.rate || 0),
-        discount: discountVal,
-        tax: Number(entry.tax || 0),
-        value: Number(entry.qty || 1) * Number(entry.rate || 0),
-        size: entry.size || '',
-        barcode: entry.barcode,
-        tvalue: Number(entry.value || 0),
-      }
-    }),
-
-    subtotal: Number(sale.subtotal || 0),
-    discount: Number(sale.discount || 0),
-    grandTotal: Number(sale.grandTotal || 0),
-    paymentMethod: sale.paymentMethod,
-
-    companyName: session?.companyName || '',
-    companyAddress: session?.address || {},
-    gstin: session?.gstin || '',
-
-    ...(sale.paymentMethod === 'Split' && {
-      splitPayments: sale.splitPayments || [],
-    }),
-
-    accHolderName: session?.accHolderName || '',
-    upiId: session?.upiId || '',
-
-    clientName: sale.client?.name || '',
-    clientPhone: sale.client?.phone || '',
-
-    tqty: sale.entries.reduce((sum, e) => sum + Number(e.qty || 1), 0),
-    tvalue: sale.entries.reduce(
-      (sum, e) => sum + Number(e.qty || 1) * Number(e.rate || 0),
-      0
-    ),
-    ttvalue: sale.entries.reduce(
-      (sum, e) => sum + Number(e.value || 0),
-      0
-    ),
-    tdiscount: sale.entries.reduce((sum, e) => {
-      const qty = Number(e.qty || 1)
-      const rate = Number(e.rate || 0)
-      const d = Number(e.discount || 0)
-      if (d < 0) return sum + Math.abs(d) * qty
-      return sum + ((rate * d) / 100) * qty
-    }, 0),
-  })
   
   printData.value = buildPrintDataFromSale(sale, session)
   isPrintOpen.value = true
 
+}
+
+const send = async () => {
+  isPrintOpen.value = false
+  isPostChangeActionOpen.value = false
+  try {
+    if (!printData.value?.clientPhone) {
+      throw new Error('Client phone number is missing')
+    }
+
+    await $fetch('/api/whatsapp/send-payment-template', {
+      method: 'POST',
+      body: {
+        phone: printData.value.clientPhone,
+        name: printData.value.clientName,
+        billName: printData.value.companyName,
+        amount: printData.value.grandTotal,
+        paymentDate: printData.value.date,
+        receiptId: crypto.randomUUID?.() || String(Date.now()),
+      },
+    })
+
+    toast.add({
+      title: 'Receipt sent successfully',
+      color: 'green',
+    })
+  } catch (err: any) {
+    isPostChangeActionOpen.value = true
+    toast.add({
+      title: 'Receipt send failed!',
+      description: err.message,
+      color: 'red',
+    })
+  }
+}
+
+const printCurrentReceipt = async () => {
+  isPrintOpen.value = false
+  isPostChangeActionOpen.value = false
+  try {
+    await printBill(printData.value)
+    toast.add({
+      title: 'Printing Success!',
+      color: 'green',
+    })
+  } catch (err: any) {
+    isPostChangeActionOpen.value = true
+    toast.add({
+      title: 'Printing failed!',
+      description: err.message,
+      color: 'red',
+    })
+  }
+}
+
+const download = async () => {
+  isPrintOpen.value = false
+  isPostChangeActionOpen.value = false
+  try {
+    const { generateThermalReceiptPDF } = await import('~/utils/thermal-receipt.client')
+    await generateThermalReceiptPDF(printData.value, 'receipt.pdf')
+    toast.add({
+      title: 'Download success!',
+      color: 'green',
+    })
+  } catch (err: any) {
+    isPostChangeActionOpen.value = true
+    toast.add({
+      title: 'Download failed!',
+      description: err.message,
+      color: 'red',
+    })
+  }
 }
 
 
@@ -1254,26 +1406,21 @@ const openBill = async (id) => {
                    </div>
                 </template>
 
-                <template #grandTotal-data="{ row }">
-                    <UPopover mode="hover">
-                        {{ row.grandTotal }}
-                        <template #panel>
-                        <div class="p-4 space-y-1">
-                            <div class="font-semibold">Payment Method:</div>
-                            <div v-if="row.paymentMethod === 'Split'">
-                            <ul class="list-disc list-inside">
-                                <li v-for="(payment, idx) in row.splitPayments" :key="idx">
-                                {{ payment.method }} – ₹{{ payment.amount }}
-                                </li>
-                            </ul>
-                            </div>
-                            <div v-else>
-                            {{ row.paymentMethod }}
-                            </div>
-                        </div>
-                        </template>
-                    </UPopover>
-                    </template>
+                                <template #grandTotal-data="{ row }">
+                    <span>{{ row.grandTotal }}</span>
+                </template>
+
+                <template #paymentMethod-data="{ row }">
+                    <button
+                      v-if="row.paymentMethod === 'Split'"
+                      type="button"
+                      class="text-primary-600 dark:text-primary-400 underline underline-offset-2"
+                      @click="openSplitModal(row)"
+                    >
+                      Split
+                    </button>
+                    <span v-else>{{ row.paymentMethod }}</span>
+                </template>
 
 
                     <template #createdAt-data="{ row }">
@@ -1491,6 +1638,61 @@ const openBill = async (id) => {
         <UButton color="red" @click="isPrintOpen = false" >Close</UButton>
       </div>
     </template>
+    </UCard>
+  </UModal>
+
+  <UModal v-model="isChangePaymentMethodOpen">
+    <UCard :ui="{ ring: '', divide: 'divide-y divide-gray-100 dark:divide-gray-800' }">
+      <template #header>
+        Change payment method
+      </template>
+
+      <div class="space-y-4">
+        <USelect
+          v-model="changePaymentMethodDraft"
+          :options="allPaymentOptions"
+          class="w-full"
+          placeholder="Choose payment method"
+        />
+      </div>
+
+      <template #footer>
+        <div class="flex gap-2 w-full">
+          <UButton :disabled="!changePaymentMethodDraft" @click="updateBillPaymentMethod">Save</UButton>
+          <UButton color="red" variant="ghost" @click="isChangePaymentMethodOpen = false">Cancel</UButton>
+        </div>
+      </template>
+    </UCard>
+  </UModal>
+
+  <BillingSplitModal
+    v-model="isSplitModalOpen"
+    v-model:tempSplits="splitTempSplits"
+    :grand-total="Number(splitBillContext?.grandTotal || changePaymentMethodBill?.grandTotal || 0)"
+    :payment-options-in-split="paymentOptionsInsplit"
+    @confirmed="onSplitConfirmed"
+  />
+
+  <UModal v-model="isPostChangeActionOpen">
+    <UCard :ui="{ ring: '', divide: 'divide-y divide-gray-100 dark:divide-gray-800' }">
+      <template #header>
+        What would you like to do next?
+      </template>
+
+      <div class="space-y-2">
+        <div class="text-sm text-gray-500">
+          Choose how to use the updated bill receipt.
+        </div>
+      </div>
+
+      <template #footer>
+        <div class="flex flex-wrap gap-2 w-full">
+          <UButton @click="printCurrentReceipt">Print</UButton>
+          <UButton color="gray" variant="soft" @click="send">Send</UButton>
+          <UButton color="gray" variant="outline" @click="download">Download</UButton>
+          <UButton color="red" variant="ghost" @click="isPostChangeActionOpen = false">Close</UButton>
+        </div>
+      </template>
     </UCard>
   </UModal>
 

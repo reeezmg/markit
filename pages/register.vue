@@ -88,6 +88,7 @@ async function onSubmit() {
     console.log(res);
     // Success logic here
   } catch (error) {
+    registerLoading.value = false
     reject.value = false;
     console.error(error);
   }

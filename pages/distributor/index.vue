@@ -215,6 +215,8 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
     distributorId: true,
     companyId: true,
     distributorNumber: true,
+    openingDue: true,
+    openingDueDate: true,
     distributor: {
       select: {
         id: true,
@@ -371,7 +373,7 @@ const distributors = computed(() =>
       totalAmount,
       paidAmount,
       returnAmount,
-      totalDue: (d.openingDue ?? 0) + totalAmount - paidAmount,
+      totalDue: Number(d.openingDue ?? 0) + totalAmount - paidAmount,
       ordersCount: purchaseOrders.length,
       purchaseOrders,
       transactions,

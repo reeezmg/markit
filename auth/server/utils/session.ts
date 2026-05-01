@@ -45,6 +45,7 @@ export type AuthSession = {
     address?: any;
     openTime?: string;
     closeTime?: string;
+    closingDate?: string | null;
     gstin: string;
     accHolderName: string;
     ifsc: string;
@@ -63,6 +64,8 @@ export type AuthSession = {
     printerLabelSize?: string;
     cash?: number;
     bank?: number;
+    openingCashDate?: string | null;
+    openingBankDate?: string | null;
     productInputs?: {
         name: boolean;
         brand: boolean;

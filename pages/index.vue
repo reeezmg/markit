@@ -14,6 +14,13 @@ definePageMeta({
   colorMode: 'light',
 })
 
+const useAuth = () => useNuxtApp().$auth
+const auth = useAuth()
+
+if (auth.loggedIn.value) {
+  await navigateTo('/erp/billing', { replace: true })
+}
+
 const navLinks = [
   { label: 'Seller', icon: 'i-heroicons-building-storefront', to: '/storelanding',size:'lg' },
   { label: 'Start Shopping', icon: 'i-heroicons-arrow-right-on-rectangle', to: '/store.markit.co.in',size:'lg' },

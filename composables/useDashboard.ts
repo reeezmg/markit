@@ -12,7 +12,7 @@ const _useDashboard = () => {
         'e-b': () => router.push(`/erp/billing`),
         'e-s': () => router.push(`/erp/sales`),
         'e-e': () => router.push(`/erp/expenses`),
-        'e-r': () => router.push(`/reports/sales`),
+        'e-r': () => router.push(`/reports/daily`),
         'p-p': () => router.push(`/products`),
         'p-c': () => router.push(`/products/categories`),
         'o-o': () => router.push(`/order/orders`),

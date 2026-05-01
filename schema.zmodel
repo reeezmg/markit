@@ -413,8 +413,8 @@ model PurchaseReturn {
 model PurchaseReturnItem {
   id               String         @id @default(uuid())
   createdAt        DateTime       @default(now()) @map("created_at")
-  itemId           String         @map("item_id")
-  variantId        String         @map("variant_id")
+  itemId           String?        @map("item_id")
+  variantId        String?        @map("variant_id")
   barcode          String?
   productName      String         @map("product_name")
   size             String?

@@ -30,14 +30,23 @@ export default defineEventHandler(async (event) => {
     ================================================== */
     const cashRes = await client.query(
       `
-      SELECT cash
+      SELECT cash, opening_cash_date
       FROM companies
       WHERE id = $1
       `,
       [companyId]
     )
 
-    const baseOpening = Number(cashRes.rows[0]?.cash || 0)
+    const companyCash = Number(cashRes.rows[0]?.cash || 0)
+    const openingCashDate = cashRes.rows[0]?.opening_cash_date
+    const isZeroOpening = companyCash === 0
+
+    const baseOpening =
+      !isZeroOpening &&
+      openingCashDate &&
+      new Date(openingCashDate) <= from
+        ? companyCash
+        : 0
 
     const cashInfo = {
       id: 'CASH',
@@ -165,12 +174,13 @@ export default defineEventHandler(async (event) => {
       transferNetBefore = Number(r.rows[0].net || 0)
     }
 
-    const openingBalance =
-      baseOpening +
-      salesBefore -
-      expensesBefore +
-      moneyNetBefore +
-      transferNetBefore
+    const openingBalance = isZeroOpening
+      ? 0
+      : baseOpening +
+        salesBefore -
+        expensesBefore +
+        moneyNetBefore +
+        transferNetBefore
 
     /* =================================================
        OPENING ROW

@@ -240,7 +240,7 @@ export default defineEventHandler(async (event) => {
     const entryIds = entriesToDelete.map((entry: any) => entry.id).filter(Boolean)
     if (entryIds.length) {
       await client.query(
-        `DELETE FROM entries WHERE id = ANY($1::uuid[])`,
+        `DELETE FROM entries WHERE id = ANY($1::text[])`,
         [entryIds],
       )
     }

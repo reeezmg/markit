@@ -1,6 +1,6 @@
 
 
-import { Prisma } from '@prisma/client'
+import type { Prisma } from '@prisma/client'
 import { prisma } from '~/server/utils/prisma'
 import type { CartItem } from '~/types'
 

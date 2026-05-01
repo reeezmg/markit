@@ -70,6 +70,8 @@ interface AccountState {
 interface openBalanceState {
   cash?: number;
   bank?: number;
+  openingCashDate?: string;
+  openingBankDate?: string;
 }
 
 
@@ -120,7 +122,9 @@ const addstate = reactive<AddressState>({
 
 const openingBalance = reactive<openBalanceState>({
  cash: 0.00,
- bank: 0.00
+ bank: 0.00,
+ openingCashDate: '',
+ openingBankDate: ''
 });
 
 const timing = reactive<{open:string | undefined,close:string | undefined}>({
@@ -188,6 +192,22 @@ const deliveryTypeOptions = ['trynbuy','booking','delivery']
 
 const isSelf = computed(() => deliveryMode.value.includes('self'))
 
+const toDateInputValue = (value?: string | Date | null) => {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const toLocalMidnightDate = (value?: string) => {
+  if (!value) return null;
+  const date = new Date(`${value}T00:00:00`);
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
 
 watch(() => storeUniqueName.value, (newName) => {
   isNameChanged.value = newName !== useAuth().session.value?.storeUniqueName;
@@ -248,7 +268,9 @@ watch(accstate, (newState) => {
 watch(openingBalance, (newBalance) => {
   isOpeningBalanceChanged.value = 
     newBalance.cash !== (useAuth().session.value?.cash ) ||
-    newBalance.bank !== (useAuth().session.value?.bank );
+    newBalance.bank !== (useAuth().session.value?.bank ) ||
+    newBalance.openingCashDate !== toDateInputValue(useAuth().session.value?.openingCashDate) ||
+    newBalance.openingBankDate !== toDateInputValue(useAuth().session.value?.openingBankDate);
 }, { deep: true, immediate: true });
 
 watch(addstate, (newState) => {
@@ -306,6 +328,8 @@ const { data: info, isLoading, error, refetch } = useFindUniqueCompany({
     upiId:true,
     bank:true,
     cash:true,
+    openingCashDate:true,
+    openingBankDate:true,
     address: {
       select: {
         id: true,
@@ -333,6 +357,8 @@ watch(info, (newInfo) => {
     accstate.gstin = newInfo.gstin || ''; 
     openingBalance.cash = newInfo.cash || 0.00;
     openingBalance.bank = newInfo.bank || 0.00;
+    openingBalance.openingCashDate = toDateInputValue(newInfo.openingCashDate);
+    openingBalance.openingBankDate = toDateInputValue(newInfo.openingBankDate);
     
     if (newInfo.address) {
       addstate.street = newInfo.address.street || '';
@@ -911,6 +937,8 @@ const onOpeningBalanceChange = () => {
       data: {
         bank:openingBalance.bank,
         cash:openingBalance.cash,
+        openingCashDate: toLocalMidnightDate(openingBalance.openingCashDate),
+        openingBankDate: toLocalMidnightDate(openingBalance.openingBankDate),
       },
     });
     updateOpeningBalance(openingBalance);
@@ -1004,107 +1032,96 @@ const onAllDeliverySave = () => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
-    <SettingsTabNav />
-
     <!-- ========== STORE IDENTITY ========== -->
     <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Store Identity</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Basic information about your store</p>
 
-      <UFormGroup
-        name="username"
-        label="Store Unique Name"
-        description="Unique name used for store URL."
-        required
-        class="grid grid-cols-2 gap-2"
-        :ui="{ container: '', help: `mt-2 ${taken ? 'text-red-500 dark:text-red-400':'text-green-500 dark:text-green-400'}` }"
-      >
-        <template v-if="isNameChanged" #help>
-          {{ taken ? 'This store name is already taken' : 'available' }}
-        </template>
-        <UInput
-          v-model="storeUniqueName"
-          type="text"
-          autocomplete="off"
-          size="md"
-          input-class="ps-[128px]"
-        >
-          <template #leading>
-            <span class="text-gray-500 dark:text-gray-400 text-sm">markit.com/store/</span>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Store Unique Name</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Unique name used for store URL.</p>
+          </div>
+          <template v-if="isNameChanged">
+            <p :class="taken ? 'mt-2 text-sm text-red-500 dark:text-red-400' : 'mt-2 text-sm text-green-500 dark:text-green-400'">
+              {{ taken ? 'This store name is already taken' : 'available' }}
+            </p>
           </template>
-        </UInput>
-      </UFormGroup>
-
-      <UFormGroup
-        name="phone"
-        label="Store Phone"
-        description="Phone number for your store"
-        required
-        class="grid grid-cols-2 gap-2 mt-4"
-      >
-        <UInput
-          v-model="storePhone"
-          type="tel"
-          autocomplete="tel"
-          size="md"
-          placeholder="Enter store phone number"
-        >
-          <template #leading>
-            <span class="text-gray-500 dark:text-gray-400 text-sm">+91</span>
-          </template>
-        </UInput>
-      </UFormGroup>
-
-      <UFormGroup
-        name="logo"
-        label="Logo"
-        class="grid grid-cols-2 gap-2 mt-4"
-        help="JPG, GIF or PNG. 1MB Max."
-        :ui="{
-            container: 'flex flex-wrap items-center gap-3',
-            help: 'mt-0',
-        }"
-      >
-        <UAvatar v-if="previewUrl" :src="previewUrl" :alt="storeName" size="lg" />
-        <UAvatar v-else :src="`https://images.markit.co.in/${storeLogo}`" :alt="storeName" size="lg" />
-
-        <UButton
-            label="Choose"
-            color="white"
+          <UInput
+            v-model="storeUniqueName"
+            type="text"
+            autocomplete="off"
             size="md"
-            @click="onFileClick"
-        />
+            input-class="ps-[128px]"
+          >
+            <template #leading>
+              <span class="text-gray-500 dark:text-gray-400 text-sm">markit.com/store/</span>
+            </template>
+          </UInput>
+        </div>
 
-        <input
-            ref="fileRef"
-            type="file"
-            class="hidden"
-            accept=".jpg, .jpeg, .png, .gif"
-            @change="handleAddImageChange"
-        />
-      </UFormGroup>
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Store Phone</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Phone number for your store</p>
+          </div>
+          <UInput
+            v-model="storePhone"
+            type="tel"
+            autocomplete="tel"
+            size="md"
+            placeholder="Enter store phone number"
+          >
+            <template #leading>
+              <span class="text-gray-500 dark:text-gray-400 text-sm">+91</span>
+            </template>
+          </UInput>
+        </div>
 
-      <UFormGroup
-        name="categories"
-        label="Categories"
-        description="Your Store Categories"
-        class="grid grid-cols-2 gap-2 mt-4 mb-4"
-        :ui="{ container: '' }"
-      >
-        <USelectMenu v-model="selectedCategory" :options="category" multiple placeholder="Select Category" />
-      </UFormGroup>
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Logo</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">JPG, GIF or PNG. 1MB Max.</p>
+          </div>
+          <div class="flex flex-wrap items-center gap-3">
+            <UAvatar v-if="previewUrl" :src="previewUrl" :alt="storeName" size="lg" />
+            <UAvatar v-else :src="`https://images.markit.co.in/${storeLogo}`" :alt="storeName" size="lg" />
 
-      <div class="my-4 grid grid-cols-2 gap-2">
-        <div></div>
-        <div>
-          <UButton
+            <UButton
+              label="Choose"
+              color="white"
+              size="md"
+              @click="onFileClick"
+            />
+
+            <input
+              ref="fileRef"
+              type="file"
+              class="hidden"
+              accept=".jpg, .jpeg, .png, .gif"
+              @change="handleAddImageChange"
+            />
+          </div>
+        </div>
+
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Categories</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Your Store Categories</p>
+          </div>
+          <USelectMenu v-model="selectedCategory" :options="category" multiple placeholder="Select Category" />
+        </div>
+      </div>
+
+      <div class="my-4 flex w-full justify-end">
+        <UButton
             label="Save Store Identity"
             size="md"
             :loading="isUpdatingStoreIdentity"
             :disabled="!isStoreIdentityChanged"
             @click="onStoreIdentitySave"
           />
-        </div>
       </div>
     </div>
 
@@ -1113,90 +1130,76 @@ const onAllDeliverySave = () => {
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Description & Policies</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Store description, thank you note, and return/refund policies</p>
 
-      <UFormGroup
-        name="description"
-        label="Store Description"
-        description="Description of your store."
-        required
-        class="grid grid-cols-2 gap-2"
-        :ui="{ container: '' }"
-      >
-        <UInput
-          v-model="storeDescription"
-          :maxlength="40"
-          class="mb-5"
-        >
-          <template #trailing>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeDescription?.length }}/{{ 40 }}</span>
-          </template>
-        </UInput>
-      </UFormGroup>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Store Description</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Description of your store.</p>
+          </div>
+          <UInput
+            v-model="storeDescription"
+            :maxlength="40"
+          >
+            <template #trailing>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeDescription?.length }}/{{ 40 }}</span>
+            </template>
+          </UInput>
+        </div>
 
-      <UFormGroup
-        name="thankYouNote"
-        label="Thank You Note"
-        description="Displayed after order completion."
-        required
-        class="grid grid-cols-2 gap-2"
-      >
-        <UInput
-          v-model="storeThankYouNote"
-          :maxlength="40"
-          class="mb-5"
-        >
-          <template #trailing>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeThankYouNote?.length }}/{{ 40 }}</span>
-          </template>
-        </UInput>
-      </UFormGroup>
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Thank You Note</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Displayed after order completion.</p>
+          </div>
+          <UInput
+            v-model="storeThankYouNote"
+            :maxlength="40"
+          >
+            <template #trailing>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeThankYouNote?.length }}/{{ 40 }}</span>
+            </template>
+          </UInput>
+        </div>
 
-      <UFormGroup
-        name="refundPolicy"
-        label="Refund Policy"
-        description="Refund policy of your store."
-        required
-        class="grid grid-cols-2 gap-2"
-      >
-        <UInput
-          v-model="storeRefundPolicy"
-          :maxlength="40"
-          class="mb-5"
-        >
-          <template #trailing>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeRefundPolicy?.length }}/{{ 40 }}</span>
-          </template>
-        </UInput>
-      </UFormGroup>
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Refund Policy</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Refund policy of your store.</p>
+          </div>
+          <UInput
+            v-model="storeRefundPolicy"
+            :maxlength="40"
+          >
+            <template #trailing>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeRefundPolicy?.length }}/{{ 40 }}</span>
+            </template>
+          </UInput>
+        </div>
 
-      <UFormGroup
-        name="returnPolicy"
-        label="Return Policy"
-        description="Return policy of your store."
-        required
-        class="grid grid-cols-2 gap-2"
-      >
-        <UInput
-          v-model="storeReturnPolicy"
-          :maxlength="40"
-          class="mb-5"
-        >
-          <template #trailing>
-            <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeReturnPolicy?.length }}/{{ 40 }}</span>
-          </template>
-        </UInput>
-      </UFormGroup>
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Return Policy</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Return policy of your store.</p>
+          </div>
+          <UInput
+            v-model="storeReturnPolicy"
+            :maxlength="40"
+          >
+            <template #trailing>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeReturnPolicy?.length }}/{{ 40 }}</span>
+            </template>
+          </UInput>
+        </div>
+      </div>
 
-      <div class="my-4 grid grid-cols-2 gap-2">
-        <div></div>
-        <div>
-          <UButton
+      <div class="my-4 flex w-full justify-end">
+        <UButton
             label="Update Description"
             size="md"
             :loading="isUpdatingDescription"
             :disabled="!(isDescriptionChanged || isThankYouNoteChanged || isRefundPolicyChanged || isReturnPolicyChanged)"
             @click="onNotesUpdate"
           />
-        </div>
       </div>
     </div>
 
@@ -1205,45 +1208,40 @@ const onAllDeliverySave = () => {
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Billing & Pricing</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Tax, cost, and loyalty points configuration</p>
 
-      <UFormGroup
-        name="taxInclude"
-        label="Include Tax in Price"
-        description="Check if you want to include tax in the price."
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <UCheckbox v-model="isTaxInclude" @change="onTaxIncludeChange" />
-      </UFormGroup>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">Include Tax in Price</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Check if you want to include tax in the price.</div>
+          </div>
+          <UCheckbox v-model="isTaxInclude" @change="onTaxIncludeChange" />
+        </div>
 
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">Cost in Bill</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Check if you want to include cost in bills.</div>
+          </div>
+          <UCheckbox v-model="isCostInclude" @change="onCostIncludeChange" />
+        </div>
+      </div>
 
-      <UFormGroup
-        name="CostBill"
-        label="Cost in Bill"
-        description="Check if you want to include cost in bills."
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <UCheckbox v-model="isCostInclude" @change="onCostIncludeChange" />
-      </UFormGroup>
-
-
-      <UFormGroup
-        name="pointsValue"
-        label="Points Value"
-        description="What is the value of 1 point in your currency?"
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <UInput v-model="pointsValue" type="number" class="mb-4" />
-        <UButton
-          class="mt-2"
-          label="Update Points"
-          size="md"
-          :loading="isUpdatingPointsValue"
-          @click="onPointsValueChange"
-          :disabled="!isPointChanged"
-        />
-      </UFormGroup>
+      <div class="mt-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+        <div class="mb-3">
+          <div class="text-sm font-semibold text-gray-900 dark:text-white">Points Value</div>
+          <div class="text-sm text-gray-500 dark:text-gray-400">What is the value of 1 point in your currency?</div>
+        </div>
+        <div class="flex flex-col gap-3 sm:flex-row">
+          <UInput v-model="pointsValue" type="number" class="flex-1" />
+          <UButton
+            label="Update Points"
+            size="md"
+            :loading="isUpdatingPointsValue"
+            @click="onPointsValueChange"
+            :disabled="!isPointChanged"
+          />
+        </div>
+      </div>
     </div>
 
     <!-- ========== DELIVERY SETTINGS ========== -->
@@ -1251,70 +1249,59 @@ const onAllDeliverySave = () => {
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Delivery Settings</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Delivery types, modes, and pricing configuration</p>
 
-      <UFormGroup
-        name="deliveryType"
-        label="Delivery Type"
-        description="Your Store Delivery Type"
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <USelectMenu v-model="deliveryType" :options="deliveryTypeOptions" multiple placeholder="Select Delivery Type" />
-      </UFormGroup>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">Delivery Type</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Your Store Delivery Type</div>
+          </div>
+          <USelectMenu v-model="deliveryType" :options="deliveryTypeOptions" multiple placeholder="Select Delivery Type" />
+        </div>
 
-      <UFormGroup
-        name="deliveryMode"
-        label="Delivery Mode"
-        description="Choose your delivery mode"
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <USelectMenu
-          v-model="deliveryMode"
-          :options="deliveryModeOptions"
-          multiple
-          placeholder="Select delivery mode"
-        />
-      </UFormGroup>
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">Delivery Mode</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Choose your delivery mode</div>
+          </div>
+          <USelectMenu
+            v-model="deliveryMode"
+            :options="deliveryModeOptions"
+            multiple
+            placeholder="Select delivery mode"
+          />
+        </div>
 
-      <UFormGroup
-        name="deliveryRadius"
-        label="Delivery Radius (km)"
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <UInput v-model.number="deliveryRadius" type="number" placeholder="Enter radius in km" />
-      </UFormGroup>
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">Delivery Radius (km)</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Set the delivery reach for self delivery.</div>
+          </div>
+          <UInput v-model.number="deliveryRadius" type="number" placeholder="Enter radius in km" />
+        </div>
 
-      <!-- If Markit → Only Fund Delivery Fees -->
-      <!-- If Self → Show all fields -->
-      <UFormGroup
-        v-if="isSelf"
-        name="deliveryDiscount"
-        label="Delivery Discount (%)"
-        description="Minimum 50%, default 100%"
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <UInput
-          v-model.number="deliveryDiscount"
-          type="number"
-          min="50"
-          placeholder="Enter delivery discount percentage"
-          @blur="normalizeDeliveryDiscount"
-        />
-      </UFormGroup>
+        <div v-if="isSelf" class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">Delivery Discount (%)</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Minimum 50%, default 100%</div>
+          </div>
+          <UInput
+            v-model.number="deliveryDiscount"
+            type="number"
+            min="50"
+            placeholder="Enter delivery discount percentage"
+            @blur="normalizeDeliveryDiscount"
+          />
+        </div>
+      </div>
 
-      <div class="my-4 grid grid-cols-2 gap-2">
-        <div></div>
-        <div>
-          <UButton
+      <div class="my-4 flex w-full justify-end">
+        <UButton
             label="Save Delivery Settings"
             size="md"
             :loading="isUpdatingAllDelivery"
             :disabled="!isAllDeliveryChanged"
             @click="onAllDeliverySave"
           />
-        </div>
       </div>
     </div>
 
@@ -1323,31 +1310,31 @@ const onAllDeliverySave = () => {
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Business Hours</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Set your store opening and closing times</p>
 
-      <UFormGroup
-        name="timing"
-        label="Timing"
-        description="Your opening and closing time?"
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <div class="mb-2">
-          <div class="text-sx text-gray-500">Open time</div>
-          <UInput v-model="timing.open" type="time" label="Open time" class="mb-4" />
+      <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+        <div class="mb-3">
+          <div class="text-sm font-semibold text-gray-900 dark:text-white">Timing</div>
+          <div class="text-sm text-gray-500 dark:text-gray-400">Your opening and closing time?</div>
         </div>
-        <div class="mb-2">
-          <div class="text-sx text-gray-500">Close time</div>
-          <UInput v-model="timing.close" type="time" label="Close time" class="mb-4" />
+        <div class="grid gap-4 sm:grid-cols-2">
+          <div class="space-y-2">
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Open time</div>
+            <UInput v-model="timing.open" type="time" />
+          </div>
+          <div class="space-y-2">
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Close time</div>
+            <UInput v-model="timing.close" type="time" />
+          </div>
         </div>
-
+      <div class="mt-4 flex w-full justify-end">
         <UButton
-          class="mt-2"
           label="Update Timing"
           size="md"
           :loading="isUpdatingtiming"
           :disabled="!isTimeChanged"
-          @click="ontimingChange"
-        />
-      </UFormGroup>
+            @click="ontimingChange"
+          />
+        </div>
+      </div>
     </div>
 
     <!-- ========== BANKING & FINANCE ========== -->
@@ -1361,105 +1348,144 @@ const onAllDeliverySave = () => {
         :validate-on="['submit']"
         @submit="onaccSubmit"
       >
-        <UFormGroup
-          name="accountDetails"
-          label="Account Details"
-          description="Your bank account details used for payment settlements."
-          class="grid grid-cols-2 gap-2 mb-4"
-          :ui="{ container: '' }"
-        >
-          <div class="text-sx text-gray-500">Account Holder Name</div>
-          <UInput
-            v-model="accstate.accHolderName"
-            type="text"
-            class="mb-4"
-            autocomplete="off"
-            size="md"
-            label="Account Holder Name"
-            placeholder="Account Holder Name"
-          />
-          <div class="text-sx text-gray-500">Account No</div>
-          <UInput
-            v-model="accstate.accountNo"
-            type="text"
-            class="mb-4"
-            autocomplete="off"
-            size="md"
-            placeholder="Account No"
-          />
-          <div class="text-sx text-gray-500">IFSC Code</div>
-          <UInput
-            v-model="accstate.ifsc"
-            type="text"
-            class="mb-4"
-            autocomplete="off"
-            size="md"
-            placeholder="IFSC Code"
-          />
-          <div class="text-sx text-gray-500">Bank Name</div>
-          <UInput
-            v-model="accstate.bankName"
-            type="text"
-            class="mb-4"
-            autocomplete="off"
-            size="md"
-            placeholder="Bank Name"
-          />
-          <div class="text-sx text-gray-500">UPI ID</div>
-          <UInput
-            v-model="accstate.upiId"
-            type="text"
-            class="mb-4"
-            autocomplete="off"
-            size="md"
-            placeholder="UPI ID"
-          />
-          <div class="text-sx text-gray-500">GSTIN</div>
-          <UInput
-            v-model="accstate.gstin"
-            type="text"
-            class="mb-4"
-            autocomplete="off"
-            size="md"
-            placeholder="GSTIN"
-          />
-          <UButton class="" type="submit" label="Save Account" :loading="isUpdatingAccount" :disabled="!isAccountStateChanged"/>
-        </UFormGroup>
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-4">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Account Details</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Your bank account details used for payment settlements.</p>
+          </div>
+          <div class="grid gap-4 md:grid-cols-2">
+            <div class="space-y-2">
+              <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Account Holder Name</div>
+              <UInput
+                v-model="accstate.accHolderName"
+                type="text"
+                autocomplete="off"
+                size="md"
+                placeholder="Account Holder Name"
+              />
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Account No</div>
+              <UInput
+                v-model="accstate.accountNo"
+                type="text"
+                autocomplete="off"
+                size="md"
+                placeholder="Account No"
+              />
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium text-gray-700 dark:text-gray-300">IFSC Code</div>
+              <UInput
+                v-model="accstate.ifsc"
+                type="text"
+                autocomplete="off"
+                size="md"
+                placeholder="IFSC Code"
+              />
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Bank Name</div>
+              <UInput
+                v-model="accstate.bankName"
+                type="text"
+                autocomplete="off"
+                size="md"
+                placeholder="Bank Name"
+              />
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium text-gray-700 dark:text-gray-300">UPI ID</div>
+              <UInput
+                v-model="accstate.upiId"
+                type="text"
+                autocomplete="off"
+                size="md"
+                placeholder="UPI ID"
+              />
+            </div>
+            <div class="space-y-2">
+              <div class="text-sm font-medium text-gray-700 dark:text-gray-300">GSTIN</div>
+              <UInput
+                v-model="accstate.gstin"
+                type="text"
+                autocomplete="off"
+                size="md"
+                placeholder="GSTIN"
+              />
+            </div>
+          </div>
+          <div class="mt-5 flex w-full justify-end">
+            <UButton type="submit" label="Save Account" :loading="isUpdatingAccount" :disabled="!isAccountStateChanged"/>
+          </div>
+        </div>
       </UForm>
 
 
-      <UFormGroup
-        name="OpeningBalance"
-        label="Opening Balance"
-        description="Your store opening balance details."
-        class="grid grid-cols-2 gap-2"
-      >
-        <UInput
-          v-model="openingBalance.cash"
-          type="number"
-          size="md"
-          class="mb-4"
-          placeholder="Enter cash amount"
-        />
-        <UInput
-          v-model="openingBalance.bank"
-          type="number"
-          size="md"
-          placeholder="Enter bank amount"
-        />
-      </UFormGroup>
+      <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+        <div class="mb-4">
+          <h3 class="text-base font-semibold text-gray-900 dark:text-white">Opening Balance</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Your store opening balance details.</p>
+        </div>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+            <div class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Cash</div>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="space-y-2">
+                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Amount</div>
+                <UInput
+                  v-model="openingBalance.cash"
+                  type="number"
+                  size="md"
+                  placeholder="Enter cash amount"
+                />
+              </div>
+              <div class="space-y-2">
+                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Date</div>
+                <UInput
+                  v-model="openingBalance.openingCashDate"
+                  type="date"
+                  size="md"
+                  placeholder="Cash opening date"
+                />
+              </div>
+            </div>
+          </div>
 
-      <div class="my-4 grid grid-cols-2 gap-2">
-        <div></div>
-        <div>
-          <UButton
+          <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+            <div class="mb-3 text-sm font-semibold text-gray-900 dark:text-white">Bank</div>
+            <div class="grid gap-3 sm:grid-cols-2">
+              <div class="space-y-2">
+                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Amount</div>
+                <UInput
+                  v-model="openingBalance.bank"
+                  type="number"
+                  size="md"
+                  placeholder="Enter bank amount"
+                />
+              </div>
+              <div class="space-y-2">
+                <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Date</div>
+                <UInput
+                  v-model="openingBalance.openingBankDate"
+                  type="date"
+                  size="md"
+                  placeholder="Bank opening date"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="my-4 flex w-full justify-end">
+        <UButton
             label="Update Opening Balance"
             size="md"
             :loading="isUpdatingOpeningBalance"
             :disabled="!isOpeningBalanceChanged"
             @click="onOpeningBalanceChange"
           />
-        </div>
       </div>
     </div>
 
@@ -1468,67 +1494,64 @@ const onAllDeliverySave = () => {
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Store Location</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Pick your store location on the map and fill in address details</p>
 
-      <UFormGroup
-        name="map"
-        label="Pick Store Location"
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <div class="col-span-2">
+      <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+        <div class="mb-4">
+          <h3 class="text-base font-semibold text-gray-900 dark:text-white">Pick Store Location</h3>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Pick your store location on the map and fill in address details.</p>
+        </div>
+        <div class="mb-5">
           <MapLocationPicker @locationSelected="onLocationSelected" />
         </div>
-      </UFormGroup>
-
-      <UFormGroup
-        name="addressDetails"
-        label="Address Details"
-        description="Your Store address that will be seen by clients"
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <div class="text-sx text-gray-500">Name</div>
-        <UInput
-          v-model="addstate.name"
-          type="text"
-          class="mb-4"
-          size="md"
-          placeholder="Name"
-          disabled
-        />
-        <div class="text-sx text-gray-500">Full address</div>
-        <UInput
-          v-model="addstate.formattedAddress"
-          type="text"
-          class="mb-4"
-          size="md"
-          placeholder="Full address"
-          disabled
-        />
-        <div class="text-sx text-gray-500">Street</div>
-        <UInput
-          v-model="addstate.street"
-          type="text"
-          class="mb-4"
-          size="md"
-          placeholder="Street"
-        />
-        <div class="text-sx text-gray-500">Landmark</div>
-        <UInput
-          v-model="addstate.landmark"
-          type="text"
-          class="mb-4"
-          size="md"
-          placeholder="Landmark"
-        />
-        <UButton
-          class=""
-          type="submit"
-          label="Save Address"
-          :loading="isUpdatingAddress"
-          :disabled="!isAddressStateChanged"
-          @click="onaddSubmit"
-        />
-      </UFormGroup>
+        <div class="grid gap-4 md:grid-cols-2">
+          <div class="space-y-2">
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Name</div>
+            <UInput
+              v-model="addstate.name"
+              type="text"
+              size="md"
+              placeholder="Name"
+              disabled
+            />
+          </div>
+          <div class="space-y-2">
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Full address</div>
+            <UInput
+              v-model="addstate.formattedAddress"
+              type="text"
+              size="md"
+              placeholder="Full address"
+              disabled
+            />
+          </div>
+          <div class="space-y-2">
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Street</div>
+            <UInput
+              v-model="addstate.street"
+              type="text"
+              size="md"
+              placeholder="Street"
+            />
+          </div>
+          <div class="space-y-2">
+            <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Landmark</div>
+            <UInput
+              v-model="addstate.landmark"
+              type="text"
+              size="md"
+              placeholder="Landmark"
+            />
+          </div>
+        </div>
+        <div class="mt-5 flex w-full justify-end">
+          <UButton
+            type="submit"
+            label="Save Address"
+            :loading="isUpdatingAddress"
+            :disabled="!isAddressStateChanged"
+            @click="onaddSubmit"
+          />
+        </div>
+      </div>
     </div>
 
     <!-- ========== FEATURE TOGGLES ========== -->
@@ -1536,26 +1559,23 @@ const onAllDeliverySave = () => {
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Feature Toggles</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Enable or disable optional features for your store</p>
 
-      <UFormGroup
-        name="aiImage"
-        label="AI Image"
-        description="Check if you want to enable AI Image generation."
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <UCheckbox v-model="isAiImage" @change="onAiImageChange" />
-      </UFormGroup>
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">AI Image</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Check if you want to enable AI Image generation.</div>
+          </div>
+          <UCheckbox v-model="isAiImage" @change="onAiImageChange" />
+        </div>
 
-
-      <UFormGroup
-        name="usersReport"
-        label="Users Sales Track"
-        description="Check if you want to track user sales."
-        class="grid grid-cols-2 gap-2 mb-4"
-        :ui="{ container: '' }"
-      >
-        <UCheckbox v-model="isUserTrackInclude" @change="onUserTrackIncludeChange" />
-      </UFormGroup>
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">Users Sales Track</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Check if you want to track user sales.</div>
+          </div>
+          <UCheckbox v-model="isUserTrackInclude" @change="onUserTrackIncludeChange" />
+        </div>
+      </div>
     </div>
 
     <!-- ========== PRODUCT & VARIANT INPUTS ========== -->
@@ -1592,9 +1612,8 @@ const onAllDeliverySave = () => {
         </div>
       </div>
 
-      <div class="text-end">
+      <div class="mt-4 flex w-full justify-end">
         <UButton
-          class="mt-4 w-fit"
           @click="onInputChange"
           label="Save Inputs"
           :loading="isUpdatingInputs"

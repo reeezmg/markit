@@ -4,6 +4,8 @@ export default eventHandler(async (event) => {
     await session.update({
         cash: openingBalance.cash,
         bank: openingBalance.bank,
+        openingCashDate: openingBalance.openingCashDate || null,
+        openingBankDate: openingBalance.openingBankDate || null,
     });
     return session;
 });

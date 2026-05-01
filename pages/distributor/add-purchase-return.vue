@@ -78,6 +78,25 @@ const removeRow = (i: number) => {
   if (returnRows.value.length > 1) returnRows.value.splice(i, 1)
 }
 
+const isBlankRow = (row: any) =>
+  !String(row.barcode || '').trim() &&
+  !String(row.productName || '').trim() &&
+  !row.category &&
+  !String(row.size || '').trim() &&
+  Number(row.rate || 0) === 0 &&
+  Number(row.tax || 0) === 0 &&
+  !String(row.reason || '').trim() &&
+  !String(row.itemId || '').trim() &&
+  !String(row.variantId || '').trim()
+
+const handleCategorySelected = async (index: number) => {
+  if (index === returnRows.value.length - 1) {
+    addRow()
+  }
+  await nextTick()
+  focusInput(index, 'size')
+}
+
 // ─── Recalculate per-row ──────────────────────────────────────────────────────
 watch(returnRows, rows => {
   for (const row of rows) {
@@ -279,7 +298,7 @@ const handleSubmit = async () => {
     toast.add({ title: 'Please select a distributor', color: 'red' })
     return
   }
-  const validRows = returnRows.value.filter(r => r.productName.trim() && r.qty > 0)
+  const validRows = returnRows.value.filter(row => !isBlankRow(row))
   if (!validRows.length) {
     toast.add({ title: 'Add at least one item', color: 'red' })
     return
@@ -304,10 +323,11 @@ const handleSubmit = async () => {
         taxAmount:       totalTaxAmount.value,
         totalAmount:     grandTotal.value,
         items: validRows.map(r => ({
-          itemId:      r.itemId,
-          variantId:   r.variantId,
-          barcode:     r.barcode || undefined,
-          productName: r.productName,
+          itemId:      r.barcode?.trim() ? r.itemId : undefined,
+          variantId:   r.barcode?.trim() ? r.variantId : undefined,
+          barcode:     r.barcode?.trim() || undefined,
+          productName: r.productName || r.category?.name || '',
+          categoryName: r.category?.name || '',
           size:        r.size || undefined,
           categoryId:  r.category?.id || null,
           qty:         r.qty,
@@ -457,7 +477,7 @@ const downloadPdf = async (id?: string) => {
                   size="xs"
                   class="w-24"
                   :loading="row.loading"
-                  @keydown.enter.prevent="fetchItemData(row.barcode, i)"
+                  @keydown.enter.prevent="row.barcode?.trim() ? fetchItemData(row.barcode, i) : focusInput(i, 'category')"
                   @keydown.up.prevent="moveFocus(i, 'barcode', 'up')"
                   @keydown.down.prevent="moveFocus(i, 'barcode', 'down')"
                   @keydown.left.prevent="moveFocus(i, 'barcode', 'left')"
@@ -493,7 +513,7 @@ const downloadPdf = async (id?: string) => {
                   searchable-placeholder="Search category..."
                   class="min-w-[120px]"
                   :popper="{ placement: 'bottom-start' }"
-                  @update:modelValue="() => focusInput(i, 'size')"
+                  @update:modelValue="() => handleCategorySelected(i)"
                   @keydown.up.prevent="moveFocus(i, 'category', 'up')"
                   @keydown.down.prevent="moveFocus(i, 'category', 'down')"
                   @keydown.left.prevent="moveFocus(i, 'category', 'left')"

@@ -22,12 +22,11 @@ const {
   draftBills, selectedDraft,
   currentBill, returnAmt, subtotal, grandTotal, tQty, dateOnly,
   createNewBill, loadDraftBills, loadBill, deleteBill, resetDraft,
-  LOCAL_BILLS_KEY,
+  LOCAL_BILLS_KEY, MAX_BILL_DRAFTS,
 } = useBillingDraft()
 
-const isDeleteModalOpen = ref(false)
-const deletingRowIdentity = ref({})
 const isProductSearchOpen = ref(false);
+const RECENT_BILL_KEY = 'markit_recent_bill_id'
 
 const scannedBarcode = ref("");
 const barcodeInputs = ref([]);
@@ -50,6 +49,18 @@ const isSaving = ref(false);
 let printData = {}   
 const isMobile = ref(false);
 
+const canCreateDraft = computed(() => draftBills.value.length < MAX_BILL_DRAFTS)
+
+const handleCreateNewDraft = () => {
+  const created = createNewBill()
+  if (!created) {
+    toast.add({
+      title: `You can only keep ${MAX_BILL_DRAFTS} drafts at once.`,
+      color: 'orange',
+    })
+  }
+}
+
 
 const showSplitModal = ref(false)
 const isOpen = ref(false)
@@ -58,6 +69,11 @@ const isClientAddModelOpen = ref(false);
 
 
 const handleKeydown = async (e) => {
+  if (e.key === 'F2') {
+    e.preventDefault()
+    await openRecentBill()
+    return
+  }
 
   if (e.key === 'Enter' && e.shiftKey) {
 
@@ -111,6 +127,19 @@ const {
 // Thin wrapper so template call sites stay as removeRow($event, index)
 const removeRow = (event, index) =>
   _removeRow(event, index, (i) => barcodeInputs.value[i]?.$el?.querySelector('input')?.focus())
+
+const deleteRowByIndex = (index) => {
+  if (items.value.length <= 1) return
+
+  items.value.splice(index, 1)
+  items.value.forEach((item, i) => {
+    item.sn = i + 1
+  })
+
+  const component = barcodeInputs.value[index - 1]
+  const input = component?.$el?.querySelector('input')
+  input?.focus()
+}
 
 // Camera / barcode scanning (web Quagga2 + native Capacitor)
 const { showCamera, videoRef, handleScan, stopCamera } = useBillingCamera((barcode) => {
@@ -264,6 +293,7 @@ const columns = computed(() => {
     cols.push({ key: 'cost', label: 'Cost' })
   }
   cols.push({ key: 'value', label: 'Value' })
+  cols.push({ key: 'actions', label: '' })
   return cols
 })
 
@@ -438,6 +468,19 @@ function selectAction(action) {
   }
 }
 
+const openRecentBill = async () => {
+  const recentBillId = localStorage.getItem(RECENT_BILL_KEY)
+  if (!recentBillId) {
+    toast.add({
+      title: 'No recent bill found',
+      color: 'orange',
+    })
+    return
+  }
+
+  await navigateTo(`/erp/edit/${recentBillId}`)
+}
+
 const actionItems = [
   [
     { label: 'Print', click: () => selectAction('print') },
@@ -445,6 +488,14 @@ const actionItems = [
     { label: 'Download', click: () => selectAction('download') },
     { label: 'None', click: () => selectAction(null) }
   ]
+]
+
+const draftMenuItems = [
+  [
+    { label: 'Reset', icon: 'i-heroicons-arrow-path', click: () => reset() },
+    { label: 'Add Row', icon: 'i-heroicons-plus', click: () => addNewRow(0, false) },
+    { label: 'Recent Bill', icon: 'i-heroicons-document-text', shortcuts: ['F2'], click: () => openRecentBill() },
+  ],
 ]
 
 
@@ -777,6 +828,9 @@ const handleSave = async () => {
       body: { uuid: uuid.value, payload, items: finalitems, returnedItems, billPoints,
               clientId: clientId.value, companyId, couponId: selectedCouponId.value?.value || null, userId },
     })
+    if (result?.billId) {
+      localStorage.setItem(RECENT_BILL_KEY, result.billId)
+    }
     printData.generatedCoupons = result?.generatedCoupons || []
     fireFcmNotification(companyId, billInv, grandTotal.value, session)
 
@@ -1110,7 +1164,7 @@ const handleDiscountEnter = (index) => {
       />
     </div>
      <div class="w-full flex flex-wrap gap-4 lg:hidden  py-2 px-2">
-          <UButton color="blue" class="flex-1" block @click="createNewBill" >New</UButton>
+          <UButton color="blue" class="flex-1" block :disabled="!canCreateDraft" @click="handleCreateNewDraft" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
@@ -1195,18 +1249,13 @@ const handleDiscountEnter = (index) => {
       </template>
     </USelectMenu>
 
-    <UButton
-      color="primary"
-      icon="i-heroicons-arrow-path"
-      class="flex-shrink-0"
-      @click="reset"
-    />
-    <UButton
-      color="primary"
-      icon="i-heroicons-plus"
-      class="flex-shrink-0"
-      @click="addNewRow(0,false)"
-    />
+    <UDropdown :items="draftMenuItems">
+      <UButton
+        color="primary"
+        icon="i-heroicons-ellipsis-horizontal"
+        class="flex-shrink-0"  
+      />
+    </UDropdown>
   </div>
    <UButton  v-if="Capacitor.isNativePlatform()" color="primary" icon="i-heroicons-camera" label="Scan" block class="lg:col-start-11 lg:col-span-2" @click="handleScan"/>
   
@@ -1343,9 +1392,7 @@ const handleDiscountEnter = (index) => {
             </thead>
             <tbody class="divide-y divide-gray-50 dark:divide-gray-800">
   <tr v-for="(row, index) in items" :key="row.sn">
-    <td class="py-1 whitespace-nowrap" :class="{ 'text-red-600': row.return }" @click="(event) => {
-      isDeleteModalOpen = true;
-      deletingRowIdentity = { index, event };}">
+    <td class="py-1 whitespace-nowrap" :class="{ 'text-red-600': row.return }">
       {{ row.sn }}
     </td>
     <td class="py-1 whitespace-nowrap">
@@ -1485,6 +1532,19 @@ const handleDiscountEnter = (index) => {
     </td>
     <td class="py-1 ps-2 whitespace-nowrap"  :class="{ 'text-red-600': row.return }">
       {{ row.value }}
+    </td>
+    <td class="py-1 whitespace-nowrap text-right">
+      <UButton
+        icon="i-heroicons-trash"
+        color="red"
+        variant="ghost"
+        size="xs"
+        square
+        title="Delete row"
+        aria-label="Delete row"
+        :disabled="bill?.isMarkit"
+        @click="deleteRowByIndex(index)"
+      />
     </td>
   </tr>
 </tbody>
@@ -1780,7 +1840,7 @@ const handleDiscountEnter = (index) => {
 
        <div v-else class="w-full gap-4 px-3 py-3 hidden lg:flex items-center">
   
-  <UButton color="blue" class="flex-1" block @click="createNewBill">
+  <UButton color="blue" class="flex-1" block :disabled="!canCreateDraft" @click="handleCreateNewDraft">
     New
   </UButton>
 
@@ -1830,7 +1890,7 @@ const handleDiscountEnter = (index) => {
 </div>
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
-          <UButton color="blue" class="flex-1" block @click="createNewBill" >New</UButton>
+          <UButton color="blue" class="flex-1" block :disabled="!canCreateDraft" @click="handleCreateNewDraft" >New</UButton>
           <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
@@ -1906,32 +1966,6 @@ const handleDiscountEnter = (index) => {
                 @click="download"
             />
             <UButton color="red" label="Cancel" @click="printModel = false" />
-        </template>
-    </UDashboardModal>
-
-     <UDashboardModal
-        v-model="isDeleteModalOpen"
-        title="Delete Entry"
-        :description="`Are you sure you want to delete Entry No ${deletingRowIdentity.index}?`"
-        icon="i-heroicons-exclamation-circle"
-        prevent-close
-        :close-button="null"
-        :ui="{
-            icon: {
-                base: 'text-red-500 dark:text-red-400',
-            },
-            footer: {
-                base: 'ml-16',
-            },
-        }"
-    >
-        <template #footer>
-            <UButton
-                color="red"
-                label="Delete"
-                @click="() => {removeRow( deletingRowIdentity.event,deletingRowIdentity.index);isDeleteModalOpen = false; }"
-            />
-            <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
         </template>
     </UDashboardModal>
 

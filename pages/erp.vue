@@ -12,7 +12,9 @@ definePageMeta({
     <UDashboardPage>
         <UDashboardPanel grow>
             <UDashboardNavbar title="ERP">
+
             </UDashboardNavbar>
+
             <NuxtPage />
         </UDashboardPanel>
     </UDashboardPage>

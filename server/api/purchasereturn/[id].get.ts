@@ -30,7 +30,8 @@ export default defineEventHandler(async (event) => {
 
     const itemsRes = await client.query(
       `SELECT
-         pri.id, pri.item_id, pri.variant_id, pri.barcode, pri.product_name,
+         pri.id, pri.item_id, pri.variant_id, pri.barcode,
+         COALESCE(NULLIF(pri.product_name, ''), c.name) AS product_name,
          pri.size, pri.qty, pri.rate, pri.tax, pri.tax_amount, pri.subtotal, pri.reason,
          pri.category_id, c.name AS category_name
        FROM purchase_return_items pri

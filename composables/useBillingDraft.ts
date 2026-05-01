@@ -6,6 +6,7 @@
  */
 
 const LOCAL_BILLS_KEY = 'bills'
+const MAX_BILL_DRAFTS = 5
 
 const PAYMENT_OPTIONS_IN_SPLIT = ['Cash', 'UPI', 'Card', 'Credit']
 
@@ -194,6 +195,7 @@ export function useBillingDraft() {
 
   function createNewBill() {
     const existing = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]')
+    if (existing.length >= MAX_BILL_DRAFTS) return false
     const newBillNo = (existing.length + 1).toString()
 
     billNo.value = newBillNo
@@ -222,6 +224,7 @@ export function useBillingDraft() {
     localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify(existing))
     loadDraftBills()
     selectedDraft.value = newBill
+    return true
   }
 
   function deleteBill(billNumber: string) {
@@ -289,6 +292,6 @@ export function useBillingDraft() {
     currentBill, returnAmt, subtotal, grandTotal, tQty, dateOnly,
     // Functions
     createNewBill, loadDraftBills, loadBill, deleteBill, resetDraft,
-    LOCAL_BILLS_KEY,
+    LOCAL_BILLS_KEY, MAX_BILL_DRAFTS,
   }
 }

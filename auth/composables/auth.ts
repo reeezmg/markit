@@ -107,6 +107,8 @@ export const updateCompanySession = async (params: {
   accountNo?: string
   bankName?: string
   upiId?: string
+  openingCashDate?: string | null
+  openingBankDate?: string | null
   plan?: string
   productInputs?: Record<string, any>
   variantInputs?: Record<string, any>
@@ -275,7 +277,12 @@ export const updatePrinterLabelSize = async (printerLabelSize: string) => {
 
 
 
-export const updateOpeningBalance = async (openingBalance: any) => {
+export const updateOpeningBalance = async (openingBalance: {
+    cash?: number;
+    bank?: number;
+    openingCashDate?: string | null;
+    openingBankDate?: string | null;
+}) => {
     const config = useRuntimeConfig();
     await $fetch('/api/auth/changeOpeningBalance', {
         method: 'PUT',

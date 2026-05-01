@@ -72,10 +72,11 @@ export default defineEventHandler(async (event) => {
 
     /* ── Items ── */
     const itemsRes = await client.query(
-      `SELECT product_name, barcode, size, qty, rate, tax, tax_amount, subtotal, reason
-       FROM purchase_return_items
-       WHERE purchase_return_id = $1
-       ORDER BY created_at`,
+      `SELECT COALESCE(NULLIF(pri.product_name, ''), c.name) AS product_name, pri.barcode, pri.size, pri.qty, pri.rate, pri.tax, pri.tax_amount, pri.subtotal, pri.reason
+       FROM purchase_return_items pri
+       LEFT JOIN categories c ON c.id = pri.category_id
+       WHERE pri.purchase_return_id = $1
+       ORDER BY pri.created_at`,
       [purchaseReturnId]
     )
 

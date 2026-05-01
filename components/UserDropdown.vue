@@ -3,11 +3,28 @@ import { useMessaging } from '~/composables/useMessaging'
 import { deleteToken, getToken } from 'firebase/messaging';
 import { Capacitor } from '@capacitor/core';
 
-const { isHelpSlideoverOpen } = useDashboard();
+const { isHelpSlideoverOpen, isChatSlideoverOpen } = useDashboard();
 const { isDashboardSearchModalOpen } = useUIState();
 const { metaSymbol } = useShortcuts();
 const useAuth = () => useNuxtApp().$auth;
 const { $client } = useNuxtApp();
+const props = withDefaults(defineProps<{
+  compact?: boolean
+}>(), {
+  compact: false,
+})
+
+const dropdownUi = computed(() => (
+  props.compact
+    ? { width: 'w-56', item: { disabled: 'cursor-text select-text' } }
+    : { width: 'w-full', item: { disabled: 'cursor-text select-text' } }
+))
+
+const dropdownPopper = computed(() => (
+  props.compact
+    ? { strategy: 'fixed', placement: 'right-start' as const }
+    : { strategy: 'absolute', placement: 'top' as const }
+))
 
 let messaging;
 if (!Capacitor.isNativePlatform()) {
@@ -47,6 +64,11 @@ const items = computed(() => [
       to: '/settings',
     },
     {
+      label: 'AI Chat',
+      icon: 'i-heroicons-chat-bubble-left-ellipsis',
+      click: () => (isChatSlideoverOpen.value = true),
+    },
+    {
       label: 'Help & Support',
       icon: 'i-heroicons-question-mark-circle',
       shortcuts: ['?'],
@@ -68,21 +90,23 @@ const items = computed(() => [
 
 <template>
     <UDropdown
-        mode="click"
+        :mode="props.compact ? 'hover' : 'click'"
         :items="items"
-        :ui="{ width: 'w-full', item: { disabled: 'cursor-text select-text' } }"
-        :popper="{ strategy: 'absolute', placement: 'top' }"
-        class="w-full"
+        :ui="dropdownUi"
+        :popper="dropdownPopper"
+        :class="props.compact ? '' : 'w-full'"
     >
         <template #default="{ open }">
             <UButton
                 color="gray"
                 variant="ghost"
-                class="w-full"
-                :label="useAuth().session.value?.name"
-                :class="[open && 'bg-gray-50 dark:bg-gray-800']"
+                :class="[
+                  props.compact ? 'w-10 h-10 justify-center px-0' : 'w-full',
+                  open && 'bg-gray-50 dark:bg-gray-800'
+                ]"
+                :label="props.compact ? undefined : useAuth().session.value?.name"
             >
-                <template #leading>
+                <template v-if="!props.compact" #leading>
                     <UAvatar
                         :src="`https://images.markit.co.in/${useAuth().session.value?.image}`" 
                         :alt="useAuth().session.value?.name!"
@@ -92,8 +116,8 @@ const items = computed(() => [
 
                 <template #trailing>
                     <UIcon
-                        name="i-heroicons-ellipsis-vertical"
-                        class="w-5 h-5 ml-auto"
+                        :name="props.compact ? 'i-heroicons-ellipsis-horizontal' : 'i-heroicons-ellipsis-vertical'"
+                        :class="props.compact ? 'w-5 h-5' : 'w-5 h-5 ml-auto'"
                     />
                 </template>
             </UButton>
