@@ -194,17 +194,15 @@ const trynbuyArgs = computed(() => {
 
 const { data: trynbuy, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyArgs)
 
-// Load existing pickup OTP if order is already packed (page refresh case)
+// Load existing pickup OTP for this store if it was already generated.
 watch(trynbuy, async (val) => {
-  if (val?.orderStatus === 'PACKED' && !packOtp.value) {
-    const companyId = useAuth().session.value?.companyId;
-    const trynbuyId = val?.id;
-    if (trynbuyId && companyId) {
-      try {
-        const res = await $fetch(`/api/pack/${trynbuyId}/otp?companyId=${companyId}`, { baseURL: serverUrl });
-        if (res?.pickupOtp) packOtp.value = res.pickupOtp;
-      } catch {}
-    }
+  const companyId = useAuth().session.value?.companyId;
+  const trynbuyId = val?.id;
+  if (trynbuyId && companyId && !packOtp.value) {
+    try {
+      const res = await $fetch(`/api/pack/${trynbuyId}/otp?companyId=${companyId}`, { baseURL: serverUrl });
+      if (res?.pickupOtp) packOtp.value = res.pickupOtp;
+    } catch {}
   }
 }, { once: true })
 
@@ -314,7 +312,7 @@ const handlePack = async () => {
       items.value.map(row =>
         UpdateTrynbuyCartItem.mutateAsync({
           where: { id: row.id },
-          data: { status: row.outOfStock ? 'OUTOFSTOCK' : 'PACKED' },
+          data: { status: row.outOfStock ? 'OUTOFSTOCK' : 'ORDER_RECEIVED' },
         })
       )
     );
@@ -330,7 +328,7 @@ const handlePack = async () => {
     }
 
     toast.add({
-      title: 'All items marked as packed & client notified',
+      title: 'Store packed status saved & client notified',
       color: 'green',
     });
   } catch (err) {

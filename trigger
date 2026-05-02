@@ -125,6 +125,8 @@ BEGIN
     -- Determine operation type
     IF OLD.deleted IS DISTINCT FROM TRUE AND NEW.deleted = TRUE THEN
         op := 'DELETED';
+    ELSIF OLD.deleted = TRUE AND NEW.deleted IS DISTINCT FROM TRUE THEN
+        op := 'RESTORED';
     ELSE
         op := 'UPDATE';
     END IF;

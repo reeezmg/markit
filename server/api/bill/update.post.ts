@@ -110,6 +110,44 @@ export default defineEventHandler(async (event) => {
     const itemsWithId = items.filter((item: any) => item.entryId)
     const itemsWithoutId = items.filter((item: any) => !item.entryId)
 
+    // Update the bills row FIRST so the trigger_bill_update fires while entries are still
+    // in their pre-edit state — this gives bill_history an accurate OLD-state snapshot.
+    await client.query(
+      `
+      UPDATE bills
+      SET
+        subtotal = $2,
+        discount = $3,
+        grand_total = $4,
+        redeemed_points = $5,
+        coupon_value = $6,
+        payment_method = $7,
+        payment_status = $8,
+        split_payments = $9::jsonb,
+        account_id = $10,
+        client_id = $11,
+        created_at = $12,
+        company_id = $13,
+        updated_at = now()
+      WHERE id = $1
+      `,
+      [
+        billData.id,
+        billData.subtotal || 0,
+        billData.discount || 0,
+        billData.grandTotal || 0,
+        currentRedeemedPoints,
+        billData.couponValue || 0,
+        billData.paymentMethod || 'Cash',
+        billData.paymentStatus || 'PAID',
+        toJson(billData.splitPayments),
+        billData.accountId || null,
+        resolvedClientId,
+        billData.date,
+        resolvedCompanyId,
+      ],
+    )
+
     for (const item of itemsWithoutId) {
       await client.query(
         `
@@ -145,6 +183,63 @@ export default defineEventHandler(async (event) => {
     }
 
     for (const item of itemsWithId) {
+      const oldEntryRes = await client.query(
+        `SELECT qty, return, item_id FROM entries WHERE id = $1`,
+        [item.entryId],
+      )
+      const oldEntry = oldEntryRes.rows[0]
+
+      if (oldEntry?.item_id) {
+        const oldQty = toNumber(oldEntry.qty)
+        if (oldEntry.return) {
+          await client.query(
+            `
+            UPDATE items
+            SET sold_qty = COALESCE(sold_qty, 0) + $1,
+                qty = COALESCE(qty, 0) - $1
+            WHERE id = $2
+            `,
+            [oldQty, oldEntry.item_id],
+          )
+        } else {
+          await client.query(
+            `
+            UPDATE items
+            SET sold_qty = COALESCE(sold_qty, 0) - $1,
+                qty = COALESCE(qty, 0) + $1
+            WHERE id = $2
+            `,
+            [oldQty, oldEntry.item_id],
+          )
+        }
+      }
+
+      const newItemId = item.id?.trim() || null
+      if (newItemId) {
+        const newQty = toNumber(item.qty || 1)
+        if (item.return) {
+          await client.query(
+            `
+            UPDATE items
+            SET sold_qty = COALESCE(sold_qty, 0) - $1,
+                qty = COALESCE(qty, 0) + $1
+            WHERE id = $2
+            `,
+            [newQty, newItemId],
+          )
+        } else {
+          await client.query(
+            `
+            UPDATE items
+            SET sold_qty = COALESCE(sold_qty, 0) + $1,
+                qty = COALESCE(qty, 0) - $1
+            WHERE id = $2
+            `,
+            [newQty, newItemId],
+          )
+        }
+      }
+
       await client.query(
         `
         UPDATE entries
@@ -244,42 +339,6 @@ export default defineEventHandler(async (event) => {
         [entryIds],
       )
     }
-
-    await client.query(
-      `
-      UPDATE bills
-      SET
-        subtotal = $2,
-        discount = $3,
-        grand_total = $4,
-        redeemed_points = $5,
-        coupon_value = $6,
-        payment_method = $7,
-        payment_status = $8,
-        split_payments = $9::jsonb,
-        account_id = $10,
-        client_id = $11,
-        created_at = $12,
-        company_id = $13,
-        updated_at = now()
-      WHERE id = $1
-      `,
-      [
-        billData.id,
-        billData.subtotal || 0,
-        billData.discount || 0,
-        billData.grandTotal || 0,
-        currentRedeemedPoints,
-        billData.couponValue || 0,
-        billData.paymentMethod || 'Cash',
-        billData.paymentStatus || 'PAID',
-        toJson(billData.splitPayments),
-        billData.accountId || null,
-        resolvedClientId,
-        billData.date,
-        resolvedCompanyId,
-      ],
-    )
 
     if (oldClientId && oldClientId === resolvedClientId) {
       const delta = (currentBillPoints - currentRedeemedPoints) - (oldBillPoints - oldRedeemedPoints)

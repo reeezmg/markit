@@ -250,8 +250,7 @@ model Company extends Base {
     AccountTransfers AccountTransfer[]
 
     commissionRate Float? @map("commission_rate")
-    storeWaitingTimes TrynbuyStoreWaitingTime[]
-    deliveryPartnerStepEvents DeliveryPartnerStepEvent[]
+    orderStatusEvents OrderStatusEvent[]
     aiChats AiChat[]
     aiMemories AiMemory[]
     statementBatches StatementBatch[]
@@ -525,7 +524,7 @@ model DeliveryPartner extends Base {
   dispatchAttempts  DispatchAttempt[]
   dispatchAssignments DispatchAssignment[]
   deliveryPartnerEarnings DeliveryPartnerEarnings[] 
-  deliveryPartnerStepEvents DeliveryPartnerStepEvent[]
+  orderStatusEvents OrderStatusEvent[]
   deliveryPartnerWalletTransactions DeliveryPartnerWalletTransaction[]
   deliveryPartnerPayouts DeliveryPartnerPayout[]
 
@@ -561,7 +560,7 @@ model     Trynbuy {
 
   companyLocations Address[]  @relation("try_n_buy_company_locations")
   deliveryPartnerEarnings DeliveryPartnerEarnings?
-  deliveryPartnerStepEvents DeliveryPartnerStepEvent[]
+  orderStatusEvents OrderStatusEvent[]
 
   company        Company[]     @relation("try_n_buy_company")
 
@@ -572,32 +571,15 @@ model     Trynbuy {
   dispatchAttempts  DispatchAttempt[]
   dispatchAssignment DispatchAssignment?
 
-  packingStatus   String?      @map("packing_status")
   deliveryOtp     String?      @map("delivery_otp")
   pickupOtps      Json?        @map("pickup_otps")
+  storeStatuses   Json?        @map("store_statuses")
 
   deliveryPartnerWalletTransaction DeliveryPartnerWalletTransaction[]
-  storeWaitingTimes TrynbuyStoreWaitingTime[]
 
   @@index([clientId])
   @@allow("create, read, update, delete", true)
   @@map("trynbuys")
-}
-
-model TrynbuyStoreWaitingTime {
-  id        String   @id @default(cuid())
-  createdAt DateTime @default(now()) @map("created_at")
-  minutes   Float
-
-  trynbuy   Trynbuy @relation(fields: [trynbuyId], references: [id])
-  trynbuyId String  @map("trynbuy_id")
-
-  company   Company @relation(fields: [companyId], references: [id])
-  companyId String  @map("company_id")
-
-  @@index([trynbuyId])
-  @@allow("read, create, update, delete", true)
-  @@map("trynbuy_store_waiting_times")
 }
 
 model DispatchAttempt extends Base {
@@ -653,7 +635,7 @@ model DeliveryPartnerEarnings extends Base {
   @@map("delivery_partner_earnings")
 }
 
-model DeliveryPartnerStepEvent extends Base {
+model OrderStatusEvent extends Base {
   createdAt DateTime @default(now()) @map("created_at")
   step      String
   action    String
@@ -672,7 +654,7 @@ model DeliveryPartnerStepEvent extends Base {
   @@index([deliveryPartnerId])
   @@index([companyId])
   @@allow("read, create, update, delete", true)
-  @@map("delivery_partner_step_events")
+  @@map("order_status_events")
 }
 
 model DeliveryPartnerWalletTransaction extends Base {

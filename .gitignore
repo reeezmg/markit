@@ -36,6 +36,3 @@ zenstack/
 .zenstack/
 electron-dist/
 electron/
-
-# Local scratch / accidental files
-pages/reports/daily.vue

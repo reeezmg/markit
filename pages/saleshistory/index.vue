@@ -2,14 +2,12 @@
 import { Switch } from '@headlessui/vue'
 import type { Period, Range } from '~/types'
 import {
-  useUpdateBill,
   useFindManyBill,
   useCountBill
 } from '~/lib/hooks'
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 
-const UpdateBill = useUpdateBill()
 const router = useRouter()
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()
@@ -138,12 +136,23 @@ const styledBills = computed(() =>
 
 // 🔹 Restore Action
 const restoreBill = async (id: string) => {
-  await UpdateBill.mutateAsync({
-    where: { id },
-    data: { deleted: false }
-  })
-  toast.add({ title: 'Bill Restored!', color: 'green' })
-  refetch()
+  try {
+    await $fetch('/api/billSale/restoreBill', {
+      method: 'POST',
+      body: {
+        billId: id,
+        companyId: useAuth().session.value?.companyId,
+      },
+    })
+    toast.add({ title: 'Bill Restored!', color: 'green' })
+    refetch()
+  } catch (err: any) {
+    toast.add({
+      title: 'Failed to restore bill',
+      description: err?.data?.statusMessage || err?.message,
+      color: 'red',
+    })
+  }
 }
 </script>
 

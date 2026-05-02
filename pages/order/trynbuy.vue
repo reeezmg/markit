@@ -66,6 +66,7 @@ const sort = ref({ column: 'createdAt', direction: 'desc' as const })
 const expand = ref({ openedRows: [], row: null })
 const page = ref(1)
 const pageCount = ref('10')
+const currentCompanyId = computed(() => useAuth().session.value?.companyId || null)
 
 // ✅ Helper Computed
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1)
@@ -88,7 +89,7 @@ const queryArgs = computed<Prisma.TrynbuyFindManyArgs>(() => ({
       // ✅ Fetch Trynbuys linked to current company (M2M relation)
       {
         company: {
-          some: { id: useAuth().session.value?.companyId },
+          some: { id: currentCompanyId.value },
         },
       },
       ...(search.value ? [{ orderNumber: search.value }] : []),
@@ -119,7 +120,7 @@ const queryArgs = computed<Prisma.TrynbuyFindManyArgs>(() => ({
         // ✅ Only include items whose product’s company matches the logged-in company
         variant: {
           product: {
-            companyId: useAuth().session.value?.companyId,
+            companyId: currentCompanyId.value,
           },
         },
       },
@@ -134,7 +135,7 @@ const queryArgs = computed<Prisma.TrynbuyFindManyArgs>(() => ({
     },
      bill:{
             where:{
-              companyId: useAuth().session.value?.companyId,
+              companyId: currentCompanyId.value,
             }
           }
   },
@@ -312,6 +313,18 @@ const handleChange = (value: string, row: any) => {
                 })
               : '-'
           }}
+        </template>
+
+        <template #deliveryType-data="{ row }">
+          <div class="flex flex-col gap-1">
+            <span>{{ row.deliveryType || '-' }}</span>
+            <span
+              v-if="currentCompanyId && row.pickupOtps?.[currentCompanyId]"
+              class="text-xs font-mono font-semibold text-amber-700"
+            >
+              OTP: {{ row.pickupOtps[currentCompanyId] }}
+            </span>
+          </div>
         </template>
 
        <template #status-data="{ row }">
