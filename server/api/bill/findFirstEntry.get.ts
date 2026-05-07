@@ -35,12 +35,12 @@ export default defineEventHandler(async (event) => {
         e.rate,
         e.discount,
         e.tax,
-        e.value,
-        e.size,
-        e.item_id       AS "itemId",
-        e.variant_id    AS "variantId",
-        e.category_id   AS "categoryId",
-        v.sizes
+      e.value,
+      e.size,
+      e.item_id       AS "itemId",
+      e.variant_id    AS "variantId",
+      e.category_id   AS "categoryId",
+      NULL::jsonb     AS "sizes"
       FROM entries e
       INNER JOIN bills b ON b.id = e.bill_id
       LEFT JOIN variants v ON v.id = e.variant_id

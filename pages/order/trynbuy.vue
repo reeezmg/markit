@@ -37,6 +37,7 @@ const columns = [
   { key: 'deliveryType', label: 'Delivery', sortable: true },
   { key: 'deliveryTime', label: 'Delivery Time', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
+  { key: 'qty', label: 'Qty', sortable: false },
   { key: 'actions', label: 'Actions', sortable: false },
 ]
 
@@ -133,6 +134,15 @@ const queryArgs = computed<Prisma.TrynbuyFindManyArgs>(() => ({
         item: true,
       },
     },
+    returnedItems: {
+      where: {
+        variant: {
+          product: {
+            companyId: currentCompanyId.value,
+          },
+        },
+      },
+    },
      bill:{
             where:{
               companyId: currentCompanyId.value,
@@ -185,6 +195,55 @@ const handleUpdate = async (id: string) => {
 
 const handleChange = (value: string, row: any) => {
   notes.value[row.id] = value
+}
+
+// ✅ Qty column helpers (per current store)
+const sumQty = (rows: any[]) =>
+  (rows || []).reduce((sum, r) => sum + (Number(r?.quantity) || 0), 0)
+
+const totalQty = (row: any) => sumQty(row?.cartItems)
+const returnedQty = (row: any) => sumQty(row?.returnedItems)
+const outOfStockQty = (row: any) =>
+  sumQty((row?.cartItems || []).filter((ci: any) => ci?.status === 'OUTOFSTOCK'))
+const keptQty = (row: any) =>
+  Math.max(totalQty(row) - returnedQty(row) - outOfStockQty(row), 0)
+const isOrderComplete = (row: any) =>
+  String(row?.orderStatus || '').toUpperCase() === 'COMPLETED'
+
+const qtyTooltip = (row: any) => {
+  const parts: string[] = []
+  if (isOrderComplete(row)) {
+    parts.push(`kept:${keptQty(row)}`)
+    parts.push(`returned:${returnedQty(row)}`)
+  } else {
+    parts.push(`total:${totalQty(row)}`)
+  }
+  const oos = outOfStockQty(row)
+  if (oos > 0) parts.push(`outofstock:${oos}`)
+  return parts.join(', ')
+}
+
+// ✅ Order status pill mapping
+const orderStatusColor = (status?: string | null) => {
+  switch (String(status || '').toUpperCase()) {
+    case 'ORDER_RECEIVED': return 'yellow'
+    case 'PACKED': return 'blue'
+    case 'PICKED': return 'cyan'
+    case 'DELIVERED': return 'orange'
+    case 'DECISION_DONE': return 'purple'
+    case 'RETURNED': return 'pink'
+    case 'COMPLETED': return 'green'
+    case 'CANCELLED': return 'red'
+    default: return 'gray'
+  }
+}
+
+const formatStatus = (status?: string | null) => {
+  if (!status) return '-'
+  return String(status)
+    .split('_')
+    .map(w => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+    .join(' ')
 }
 </script>
 
@@ -330,36 +389,29 @@ const handleChange = (value: string, row: any) => {
        <template #status-data="{ row }">
         <UBadge
           size="sm"
-          :color="
-            (row.cartItems?.[0]?.status === 'BILLED'
-              ? 'green'
-              : row.cartItems?.[0]?.status === 'ALL_RETURNED'
-              ? 'purple'
-              : row.cartItems?.[0]?.status === 'CANCELLED'
-              ? 'red'
-              : row.cartItems?.[0]?.status === 'OUTOFSTOCK'
-              ? 'red'
-              : row.cartItems?.[0]?.status === 'DELIVERED'
-              ? 'orange'
-              : row.cartItems?.[0]?.status === 'ORDER_RECEIVED'
-              ? 'yellow'
-              : 'gray')
-          "
+          :color="orderStatusColor(row.orderStatus)"
           variant="subtle"
         >
-          {{
-            row.cartItems?.[0]?.status
-              ? row.cartItems[0].status
-                  .split('_')
-                  .map(
-                    w =>
-                      w.charAt(0).toUpperCase() +
-                      w.slice(1).toLowerCase()
-                  )
-                  .join(' ')
-              : '-'
-          }}
+          {{ formatStatus(row.orderStatus) }}
         </UBadge>
+      </template>
+
+      <template #qty-data="{ row }">
+        <UTooltip :text="qtyTooltip(row)">
+          <div class="flex flex-wrap gap-1">
+            <template v-if="isOrderComplete(row)">
+              <UBadge size="sm" color="green" variant="subtle">{{ keptQty(row) }}</UBadge>
+              <UBadge size="sm" color="red" variant="subtle">{{ returnedQty(row) }}</UBadge>
+            </template>
+            <UBadge v-else size="sm" color="blue" variant="subtle">{{ totalQty(row) }}</UBadge>
+            <UBadge
+              v-if="outOfStockQty(row) > 0"
+              size="sm"
+              color="gray"
+              variant="subtle"
+            >{{ outOfStockQty(row) }}</UBadge>
+          </div>
+        </UTooltip>
       </template>
 
 

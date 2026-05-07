@@ -28,6 +28,7 @@ const selectedDate = ref({ start: new Date(), end: new Date() })
 const getColumns = (isMobile) => {
   if (!isMobile) {
     return [
+      { key: 'orderNumber', label: 'Order#', sortable: true },
       { key: 'invoiceNumber', label: 'Inv#', sortable: true },
       { key: 'createdAt', label: 'Date', sortable: true },
       { key: 'customer', label: 'Customer', sortable: true },
@@ -38,6 +39,7 @@ const getColumns = (isMobile) => {
     ]
   }
   return [
+    { key: 'orderNumber', label: 'Order#', sortable: true },
     { key: 'invoiceNumber', label: 'Inv#', sortable: true },
     { key: 'grandTotal', label: 'Grand Total', sortable: true },
     { key: 'createdAt', label: 'Date', sortable: true },
@@ -65,12 +67,12 @@ const action = (row: any) => [
     {
       label: 'Open',
       icon: 'i-heroicons-eye-20-solid',
-      click: () => router.push(`./edit/${row.id}`),
+      click: () => router.push(`/erp/online/${row.id}`),
     },
   ],
   [
     {
-      label: 'Details',
+      label: 'Bill',
       icon: 'i-heroicons-document-magnifying-glass',
       click: () => openBill(row.id),
     },
@@ -166,7 +168,7 @@ const kpiCards = computed(() => {
 })
 
 // Pagination / table
-const sort = ref({ column: 'invoiceNumber', direction: 'desc' as const })
+const sort = ref({ column: 'orderNumber', direction: 'desc' as const })
 const expand = ref({ openedRows: [], row: null })
 const page = ref(1)
 const pageCount = ref('5')
@@ -366,6 +368,7 @@ const handleDownloadExcel = async () => {
     const workbook = new Workbook()
     const worksheet = workbook.addWorksheet('Online Sales')
     worksheet.columns = [
+      { header: 'Order #', key: 'orderNumber', width: 14 },
       { header: 'Invoice #', key: 'invoiceNumber', width: 14 },
       { header: 'Date', key: 'createdAt', width: 22 },
       { header: 'Customer Name', key: 'customerName', width: 24 },
@@ -376,6 +379,7 @@ const handleDownloadExcel = async () => {
     ]
     rows.forEach((row: any) => {
       worksheet.addRow({
+        orderNumber: row.orderNumber ?? '',
         invoiceNumber: row.invoiceNumber ?? '',
         createdAt: row.createdAt ? new Date(row.createdAt).toLocaleString() : '',
         customerName: row.client?.name ?? '',

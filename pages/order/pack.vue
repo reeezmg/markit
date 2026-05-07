@@ -8,7 +8,40 @@ const toast = useToast();
 const route = useRoute();
 const router = useRouter();
 const UpdateTrynbuyCartItem = useUpdateTrynbuyCartItem()
+const UpdateItem = useUpdateItem()
 const orderId = route.query.id;
+
+// Out-of-stock modal state
+const oosModalOpen = ref(false)
+const oosModalRow = ref(null)
+const oosModalStep = ref(null) // 'updateStock' | 'assignOos' | null
+const oosLoading = ref(false)
+const cancelModalOpen = ref(false)
+const cancelReason = ref('')
+const cancelLoading = ref(false)
+
+// Format any numeric value to 2 decimal places for display.
+const fmt2 = (n) => (Number(n) || 0).toFixed(2)
+
+// Order-status gating for the Pack page
+const STATUS_RANK = {
+  ORDER_RECEIVED: 10,
+  PACKED: 20,
+  PICKED: 30,
+  DELIVERED: 40,
+  DECISION_DONE: 50,
+  RETURNED: 60,
+  COMPLETED: 70,
+  CANCELLED: 100,
+}
+const statusRank = (s) => STATUS_RANK[String(s || '').toUpperCase()] || 0
+const orderStatus = computed(() => trynbuy.value?.orderStatus || '')
+const isPickedOrLater = computed(() => statusRank(orderStatus.value) >= STATUS_RANK.PICKED)
+const isDecisionDoneOrLater = computed(() => statusRank(orderStatus.value) >= STATUS_RANK.DECISION_DONE)
+// Show "returned" red highlight only when the order has reached DECISION_DONE and this row was returned
+const isReturnedHighlighted = (row) => isDecisionDoneOrLater.value && !!row.isReturned
+// Unified "row should be displayed in red" — out-of-stock OR returned-after-decision
+const isRowRed = (row) => row.outOfStock || isReturnedHighlighted(row)
 
 const paymentMethod = ref('Cash');
 const tokenEntries = ref([])
@@ -24,6 +57,9 @@ const items = ref([
 ]);
 const config = useRuntimeConfig();
 const serverUrl = config.public.serverUrl
+
+const getCurrentCompanyId = () => useAuth().session.value?.companyId || null
+const getCurrentClientId = () => trynbuy.value?.client?.id || null
 
 
 const order = ref({
@@ -46,6 +82,7 @@ const columns = ref([
   { key: 'rate', label: 'RATE' },
   { key: 'discount', label: 'DISC %' },
   { key: 'tax', label: 'TAX%' },
+  { key: 'stock', label: 'STOCK' },
   { key: 'value', label: 'VALUE' },
   { key: 'action', label: '' },
 
@@ -119,6 +156,8 @@ const trynbuyArgs = computed(() => {
       deliveryType: true,
       deliveryTime: true,
       orderStatus: true,
+      pickupOtps: true,
+      deliveryOtp: true,
 
       // ✅ Delivery location details
       location: {
@@ -184,8 +223,28 @@ const trynbuyArgs = computed(() => {
               id: true,
               barcode: true,
               size: true,
+              qty: true,
             },
           },
+        },
+      },
+
+      // ✅ Returned items (filtered to this company) — used to flag rows after DECISION_DONE
+      returnedItems: {
+        where: {
+          variant: {
+            product: {
+              companyId: {
+                equals: companyId,
+              },
+            },
+          },
+        },
+        select: {
+          id: true,
+          itemId: true,
+          variantId: true,
+          quantity: true,
         },
       },
     },
@@ -194,17 +253,14 @@ const trynbuyArgs = computed(() => {
 
 const { data: trynbuy, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyArgs)
 
-// Load existing pickup OTP for this store if it was already generated.
-watch(trynbuy, async (val) => {
-  const companyId = useAuth().session.value?.companyId;
-  const trynbuyId = val?.id;
-  if (trynbuyId && companyId && !packOtp.value) {
-    try {
-      const res = await $fetch(`/api/pack/${trynbuyId}/otp?companyId=${companyId}`, { baseURL: serverUrl });
-      if (res?.pickupOtp) packOtp.value = res.pickupOtp;
-    } catch {}
-  }
-}, { once: true })
+// Always render the saved OTP from DB on page open / reload.
+// pickup_otps is per-store (set when this store clicks Pack); delivery_otp is
+// generated at order creation and used when the delivery partner finalises drop-off.
+watchEffect(() => {
+  const companyId = useAuth().session.value?.companyId
+  const fromDb = trynbuy.value?.pickupOtps?.[companyId] || trynbuy.value?.deliveryOtp
+  if (fromDb) packOtp.value = fromDb
+})
 
 
 // ✅ Map cartItems instead of entries
@@ -213,13 +269,17 @@ watch(
   (newData) => {
     if (!newData || !newData.cartItems) return
     console.log(trynbuy)
+    const returned = Array.isArray(newData.returnedItems) ? newData.returnedItems : []
+    const returnedItemIds = new Set(returned.map(r => r.itemId).filter(Boolean))
+
     items.value = newData.cartItems.map((cartItem, index) => {
       const variant = cartItem.variant || {}
       const item = cartItem.item || {}
 
       const baseRate = variant.sprice || 0
       const qty = cartItem.quantity || 1
-      const discount = variant.discount || 0
+      // Match billing convention: discount = dprice − sprice (absolute amount, can be negative)
+      const discount = (variant.dprice ?? 0) - (variant.sprice ?? 0)
       const tax = variant.tax || 0
 
       let value = qty * baseRate
@@ -229,11 +289,13 @@ watch(
       return {
         id: cartItem.id,
         variantId: variant.id,
+        itemId: item.id || null,
         sn: index + 1,
         name: `${variant.product?.name}-${variant.name}` || '',
         barcode: item.barcode || '',
         size: item.size || '',
         qty,
+        stock: Number(item.qty ?? 0),
         rate: baseRate,
         discount,
         tax,
@@ -241,6 +303,7 @@ watch(
         image: variant.images?.[0] || null,
         status: cartItem.status || 'ORDER_RECEIVED',
         outOfStock: cartItem.status === 'OUTOFSTOCK',
+        isReturned: returnedItemIds.has(item.id),
       }
     })
   },
@@ -270,7 +333,59 @@ const handleOutOfStock = async (row) => {
     title: 'Item marked out of stock',
     color: 'green',
   });
+
+  await notifyMarketplaceAndDelivery()
 };
+
+// Open the out-of-stock modal — if stock > 0 we ask to zero it first,
+// otherwise we go straight to the OOS assignment confirmation.
+const openOosModal = (row) => {
+  if (row.outOfStock) return
+  oosModalRow.value = row
+  oosModalStep.value = (Number(row.stock) || 0) > 0 ? 'updateStock' : 'assignOos'
+  oosModalOpen.value = true
+}
+
+const closeOosModal = () => {
+  oosModalOpen.value = false
+  oosModalStep.value = null
+  oosModalRow.value = null
+  oosLoading.value = false
+}
+
+const confirmUpdateStock = async (yes) => {
+  const row = oosModalRow.value
+  if (!row) return
+  if (yes && row.itemId) {
+    try {
+      oosLoading.value = true
+      await UpdateItem.mutateAsync({
+        where: { id: row.itemId },
+        data: { qty: 0 },
+      })
+      const idx = items.value.findIndex(it => it.id === row.id)
+      if (idx !== -1) items.value[idx].stock = 0
+      toast.add({ title: 'Stock updated to 0', color: 'green' })
+    } catch (err) {
+      console.error(err)
+      toast.add({ title: 'Failed to update stock', color: 'red' })
+      oosLoading.value = false
+      return
+    }
+    oosLoading.value = false
+  }
+  oosModalStep.value = 'assignOos'
+}
+
+const confirmAssignOos = async (yes) => {
+  const row = oosModalRow.value
+  if (yes && row) {
+    oosLoading.value = true
+    await handleOutOfStock(row)
+    oosLoading.value = false
+  }
+  closeOosModal()
+}
 
 const handleInStock = async (row) => {
   if (!row.outOfStock) return;
@@ -293,7 +408,35 @@ const handleInStock = async (row) => {
     title: 'Item marked In stock',
     color: 'green',
   });
+
+  await notifyMarketplaceAndDelivery()
 };
+
+const notifyMarketplaceAndDelivery = async () => {
+  const clientId = getCurrentClientId()
+  const trynbuyId = trynbuy.value?.id || null
+
+  if (!clientId || !trynbuyId) return
+
+  try {
+    await $fetch(`/api/pack/${trynbuyId}/${clientId}`, {
+      baseURL: serverUrl,
+    })
+  } catch (error) {
+    console.error('Failed to sync pack update', error)
+  }
+}
+
+const openCancelModal = () => {
+  cancelReason.value = ''
+  cancelModalOpen.value = true
+}
+
+const closeCancelModal = () => {
+  if (cancelLoading.value) return
+  cancelModalOpen.value = false
+  cancelReason.value = ''
+}
 
 
 
@@ -339,6 +482,60 @@ const handlePack = async () => {
     });
   }
 };
+
+const handleCancelStore = async () => {
+  const clientId = getCurrentClientId()
+  const trynbuyId = trynbuy.value?.id || null
+  const companyId = getCurrentCompanyId()
+  const reason = cancelReason.value.trim()
+
+  if (!clientId || !trynbuyId || !companyId) {
+    toast.add({
+      title: 'Missing order details for cancellation',
+      color: 'red',
+    })
+    return
+  }
+
+  if (!reason) {
+    toast.add({
+      title: 'Cancellation reason is required',
+      color: 'red',
+    })
+    return
+  }
+
+  try {
+    cancelLoading.value = true
+    const response = await $fetch(`/api/pack/${trynbuyId}/${clientId}/cancel-store`, {
+      method: 'POST',
+      baseURL: serverUrl,
+      body: {
+        companyId,
+        reason,
+      },
+    })
+
+    toast.add({
+      title: response?.partialCancellation
+        ? 'This store was cancelled. Remaining stores stay active.'
+        : 'Order cancelled successfully.',
+      color: 'green',
+    })
+
+    closeCancelModal()
+    await trynbuyRefetch()
+    router.push('/order/trynbuy')
+  } catch (error) {
+    console.error(error)
+    toast.add({
+      title: error?.data?.error || error?.message || 'Unable to cancel this store',
+      color: 'red',
+    })
+  } finally {
+    cancelLoading.value = false
+  }
+}
 
 
 
@@ -500,39 +697,57 @@ const handleSave = async () => {
                   :src="`https://images.markit.co.in/${row.image}`"
                   :class="[
                     'w-12 h-12 rounded-md object-cover border',
-                    row.outOfStock ? 'border-red-500' : 'border-gray-200'
+                    isRowRed(row) ? 'border-red-500' : 'border-gray-200'
                   ]"
                 />
               </td>
-                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
-                  <UInput v-model="row.barcode" ref="barcodeInputs"  size="sm" :class="{ 'oos-input': row.outOfStock }" />
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': isRowRed(row) }">
+                  <UInput v-model="row.barcode" ref="barcodeInputs"  size="sm" :class="{ 'oos-input': isRowRed(row) }" />
                 </td>
-                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
-                  <UInput v-model="row.name" size="sm" :class="{ 'oos-input': row.outOfStock }"  @keydown.enter="addNewRow(index)" disabled/>
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': isRowRed(row) }">
+                  <UInput v-model="row.name" size="sm" :class="{ 'oos-input': isRowRed(row) }"  @keydown.enter="addNewRow(index)" disabled/>
                 </td>
-                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
-                  <UInput v-model="row.qty"  ref="qtyInputs" type="number" size="sm" :class="{ 'oos-input': row.outOfStock }"  @keydown.enter="addNewRow(index)" disabled/>
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': isRowRed(row) }">
+                  <UInput v-model="row.qty"  ref="qtyInputs" type="number" size="sm" :class="{ 'oos-input': isRowRed(row) }"  @keydown.enter="addNewRow(index)" disabled/>
                 </td>
-                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
-                  <UInput v-model="row.rate" type="number" size="sm" :class="{ 'oos-input': row.outOfStock }"  @keydown.enter="addNewRow(index)" disabled/>
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': isRowRed(row) }">
+                  <UInput :model-value="fmt2(row.rate)" type="text" size="sm" :class="{ 'oos-input': isRowRed(row) }"  @keydown.enter="addNewRow(index)" disabled/>
                 </td>
-                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
-                  <UInput v-model="row.discount" type="number" size="sm" :class="{ 'oos-input': row.outOfStock }"  @keydown.enter="addNewRow(index)"/>
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': isRowRed(row) }">
+                  <UInput
+                    :model-value="row.discount"
+                    type="number"
+                    step="0.01"
+                    size="sm"
+                    :class="{ 'oos-input': isRowRed(row) }"
+                    @update:model-value="v => row.discount = Number(v) || 0"
+                    @blur="row.discount = Number(fmt2(row.discount))"
+                    @keydown.enter="addNewRow(index)"
+                  />
                 </td>
-                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': row.outOfStock }">
-                  <UInput v-model="row.tax" type="number" size="sm" :class="{ 'oos-input': row.outOfStock }" @keydown.enter="addNewRow(index)" disabled />
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': isRowRed(row) }">
+                  <UInput :model-value="fmt2(row.tax)" type="text" size="sm" :class="{ 'oos-input': isRowRed(row) }" @keydown.enter="addNewRow(index)" disabled />
                 </td>
-                <td class="py-1 ps-2 whitespace-nowrap" :class="{'text-red-500': row.outOfStock}">
-                  {{ row.outOfStock ? -row.value: row.value }}
+                <td class="py-1 whitespace-nowrap" :class="{ 'text-red-500': isRowRed(row) }">
+                  <UInput
+                    :model-value="row.stock"
+                    type="number"
+                    size="sm"
+                    :class="{ 'oos-input': isRowRed(row) || row.stock <= 0 }"
+                    disabled
+                  />
+                </td>
+                <td class="py-1 ps-2 whitespace-nowrap" :class="{'text-red-500': isRowRed(row)}">
+                  {{ row.outOfStock ? '-' + fmt2(row.value) : fmt2(row.value) }}
                 </td>
                 <td>
-                  <div class="py-1">
+                  <div v-if="!isPickedOrLater" class="py-1">
                     <UButton
                       :color="row.outOfStock ? 'green' : 'red'"
                       variant="ghost"
                       :icon="row.outOfStock ? 'i-heroicons-check-circle' : 'i-heroicons-x-circle'"
                       :title="row.outOfStock ? 'Mark in stock' : 'Mark out of stock'"
-                      @click="row.outOfStock ? handleInStock(row) : handleOutOfStock(row)"
+                      @click="row.outOfStock ? handleInStock(row) : openOosModal(row)"
                     />
                   </div>
                 </td>
@@ -554,10 +769,19 @@ const handleSave = async () => {
             <p class="text-xs text-amber-600 mt-1">Share this code with the delivery partner when they arrive</p>
           </div>
 
-          <div class="mb-4 w-full p-1 flex justify-end">
+          <div class="mb-4 w-full p-1 flex justify-between gap-3">
+            <UButton
+              color="red"
+              variant="solid"
+              icon="i-heroicons-x-circle"
+              @click="openCancelModal"
+            >
+              Cancel
+            </UButton>
             <UButton
               ref="packref"
               icon="i-heroicons-clipboard-document-check"
+              :disabled="isPickedOrLater"
               @click="handlePack"
             >
               Pack
@@ -567,7 +791,134 @@ const handleSave = async () => {
         
     </template>
       </UCard>
- 
+
+      <!-- Out-of-stock confirmation modal -->
+      <UModal v-model="oosModalOpen" :prevent-close="oosLoading">
+        <UCard
+          :ui="{
+            ring: '',
+            divide: 'divide-y divide-gray-100 dark:divide-gray-800',
+          }"
+        >
+          <template #header>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+              {{ oosModalStep === 'updateStock' ? 'Update product stock?' : 'Mark out of stock?' }}
+            </h3>
+          </template>
+
+          <div v-if="oosModalRow" class="space-y-2 text-sm">
+            <p class="text-gray-700 dark:text-gray-300">
+              <span class="font-medium">{{ oosModalRow.name }}</span>
+              <span v-if="oosModalRow.barcode" class="text-gray-500"> · {{ oosModalRow.barcode }}</span>
+            </p>
+
+            <p v-if="oosModalStep === 'updateStock'" class="text-gray-600 dark:text-gray-400">
+              Current stock is <span class="font-semibold text-gray-900 dark:text-white">{{ oosModalRow.stock }}</span>.
+              Do you want to update this product item's qty to 0?
+            </p>
+            <p v-else class="text-gray-600 dark:text-gray-400">
+              Assign this item as out of stock for this order?
+            </p>
+          </div>
+
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <template v-if="oosModalStep === 'updateStock'">
+                <UButton
+                  color="gray"
+                  variant="outline"
+                  :disabled="oosLoading"
+                  @click="confirmUpdateStock(false)"
+                >
+                  No
+                </UButton>
+                <UButton
+                  color="primary"
+                  :loading="oosLoading"
+                  @click="confirmUpdateStock(true)"
+                >
+                  Yes
+                </UButton>
+              </template>
+              <template v-else>
+                <UButton
+                  color="gray"
+                  variant="outline"
+                  :disabled="oosLoading"
+                  @click="confirmAssignOos(false)"
+                >
+                  No
+                </UButton>
+                <UButton
+                  color="red"
+                  :loading="oosLoading"
+                  @click="confirmAssignOos(true)"
+                >
+                  Yes
+                </UButton>
+              </template>
+            </div>
+          </template>
+        </UCard>
+      </UModal>
+
+      <UModal v-model="cancelModalOpen" :prevent-close="cancelLoading">
+        <UCard
+          :ui="{
+            ring: '',
+            divide: 'divide-y divide-gray-100 dark:divide-gray-800',
+          }"
+        >
+          <template #header>
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">
+              Cancel store from this order?
+            </h3>
+          </template>
+
+          <div class="space-y-4 text-sm">
+            <p class="text-gray-600 dark:text-gray-400">
+              This will cancel only this store's items. If this is the last active store, the full order will be cancelled.
+            </p>
+
+            <div class="rounded-lg border border-red-200 bg-red-50 p-3">
+              <div class="text-xs font-medium uppercase tracking-wide text-red-700">Fixed penalty</div>
+              <div class="mt-1 text-lg font-semibold text-red-900">Rs 50</div>
+            </div>
+
+            <div>
+              <label class="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-200">
+                Cancellation reason
+              </label>
+              <UTextarea
+                v-model="cancelReason"
+                :rows="4"
+                placeholder="Enter the cancellation reason"
+              />
+            </div>
+          </div>
+
+          <template #footer>
+            <div class="flex justify-end gap-2">
+              <UButton
+                color="gray"
+                variant="outline"
+                :disabled="cancelLoading"
+                @click="closeCancelModal"
+              >
+                Back
+              </UButton>
+              <UButton
+                color="red"
+                :loading="cancelLoading"
+                @click="handleCancelStore"
+              >
+                Confirm Cancel
+              </UButton>
+            </div>
+          </template>
+        </UCard>
+      </UModal>
+
   </UDashboardPanelContent>
 </template>
 

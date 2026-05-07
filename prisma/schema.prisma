@@ -239,6 +239,7 @@ model Company {
   deliveryMode              String[]             @map("delivery_mode")
   deliveryRadius            Float?               @map("delivery_radius")
   deliveryDiscount          Float?               @default(100) @map("delivery_discount")
+  operationFeesShare        Float?               @default(0) @map("operation_fees_share")
   cash                      Float?               @default(0)
   openingCashDate           DateTime?            @map("opening_cash_date")
   bank                      Float?               @default(0)
@@ -294,6 +295,7 @@ model Company {
   AccountTransfers          AccountTransfer[]
   commissionRate            Float?               @map("commission_rate")
   orderStatusEvents         OrderStatusEvent[]
+  companyPenalties          CompanyPenalty[]
   aiChats                   AiChat[]
   aiMemories                AiMemory[]
   statementBatches          StatementBatch[]
@@ -474,33 +476,36 @@ model User {
 }
 
 model Client {
-  id             String               @id() @unique() @default(uuid())
-  email          String?              @unique()
-  name           String
-  password       String?
-  gender         String?
-  dob            String?
-  phone          String               @unique()
-  status         Boolean              @default(true)
-  pipelineStatus String               @default("new") @map("pipeline_status")
-  companies      CompanyClient[]
-  cart           CartCompanyClient[]
-  address        Address[]
-  bills          Bill[]
-  conversations  ClientConversation[]
-  users          UserClient[]
-  notifications  Notification[]
-  likeCompanies  LikeCompanyClient[]
-  otp            String?
-  otpExpiry      DateTime?            @map("otp_expiry")
-  trynbuys       Trynbuy[]
-  coupons        CouponClient[]
-  couponUsage    CouponUsage[]
-  quotes         Quote[]
-  projects       Project[]
-  salesOrders    SalesOrder[]
-  payments       Payment[]
-  deleted        Boolean              @default(false)
+  id                String               @id() @unique() @default(uuid())
+  email             String?              @unique()
+  name              String
+  password          String?
+  gender            String?
+  dob               String?
+  phone             String               @unique()
+  status            Boolean              @default(true)
+  pipelineStatus    String               @default("new") @map("pipeline_status")
+  companies         CompanyClient[]
+  cart              CartCompanyClient[]
+  address           Address[]
+  bills             Bill[]
+  conversations     ClientConversation[]
+  users             UserClient[]
+  notifications     Notification[]
+  likeCompanies     LikeCompanyClient[]
+  otp               String?
+  otpExpiry         DateTime?            @map("otp_expiry")
+  cancellationFees  Float                @default(0) @map("cancellation_fees")
+  cancellationCount Int                  @default(0) @map("cancellation_count")
+  ban               Boolean              @default(false)
+  trynbuys          Trynbuy[]
+  coupons           CouponClient[]
+  couponUsage       CouponUsage[]
+  quotes            Quote[]
+  projects          Project[]
+  salesOrders       SalesOrder[]
+  payments          Payment[]
+  deleted           Boolean              @default(false)
 
   @@map("clients")
 }
@@ -541,6 +546,8 @@ model DeliveryPartner {
   orderStatusEvents                 OrderStatusEvent[]
   deliveryPartnerWalletTransactions DeliveryPartnerWalletTransaction[]
   deliveryPartnerPayouts            DeliveryPartnerPayout[]
+  deliveryPartnerBonuses            DeliveryPartnerBonus[]
+  deliveryPartnerPenalties          DeliveryPartnerPenalty[]
 
   @@map("delivery_partners")
 }
@@ -557,7 +564,10 @@ model Trynbuy {
   shipping                         Float?                             @map("shipping")
   waitingFee                       Float?                             @map("waiting_fee")
   waitingTime                      Float?                             @map("waiting_time")
-  storeWaitingTime                 Float?                             @map("store_waiting_time")
+  waitingFeesCustomer              Float?                             @default(0) @map("waiting_fees_customer")
+  deliveryFeesCustomer             Float?                             @default(0) @map("delivery_fees_customer")
+  waitingFeesStore                 Json?                              @map("waiting_fees_store")
+  deliveryFeesStore                Json?                              @map("delivery_fees_store")
   waitingStartedAt                 DateTime?                          @map("waiting_started_at")
   deliveryType                     String                             @map("delivery_type")
   deliveryTime                     DateTime?                          @map("delivery_time")
@@ -571,12 +581,16 @@ model Trynbuy {
   clientId                         String?                            @map("client_id")
   companyLocations                 Address[]                          @relation("try_n_buy_company_locations")
   deliveryPartnerEarnings          DeliveryPartnerEarnings?
+  markitBill                       MarkitBill?
   orderStatusEvents                OrderStatusEvent[]
   company                          Company[]                          @relation("try_n_buy_company")
   deliveryPartner                  DeliveryPartner?                   @relation(fields: [deliveryPartnerId], references: [id])
   deliveryPartnerId                String?                            @map("delivery_partner_id")
   dispatchAttempts                 DispatchAttempt[]
   dispatchAssignment               DispatchAssignment?
+  companyPenalties                 CompanyPenalty[]
+  deliveryPartnerBonuses           DeliveryPartnerBonus[]
+  deliveryPartnerPenalties         DeliveryPartnerPenalty[]
   deliveryOtp                      String?                            @map("delivery_otp")
   pickupOtps                       Json?                              @map("pickup_otps")
   storeStatuses                    Json?                              @map("store_statuses")
@@ -626,12 +640,47 @@ model DeliveryPartnerEarnings {
   surge             String?
   distance          Float?
   waitingTime       Float?          @map("waiting_time")
+  storeWaitings     Json?           @map("store_waitings")
   trynbuy           Trynbuy         @relation(fields: [trynbuyId], references: [id])
   trynbuyId         String          @unique() @map("trynbuy_id")
   deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id])
   deliveryPartnerId String          @map("delivery_partner_id")
 
   @@map("delivery_partner_earnings")
+}
+
+model MarkitBill {
+  id                            String   @id() @unique() @default(uuid())
+  createdAt                     DateTime @default(now()) @map("created_at")
+  updatedAt                     DateTime @updatedAt() @map("updated_at")
+  trynbuy                       Trynbuy  @relation(fields: [trynbuyId], references: [id])
+  trynbuyId                     String   @unique() @map("trynbuy_id")
+  clientId                      String?  @map("client_id")
+  deliveryPartnerId             String?  @map("delivery_partner_id")
+  paymentMethod                 String?  @map("payment_method")
+  status                        String   @default("PENDING")
+  customerGrandTotal            Float?   @map("customer_grand_total")
+  storeBills                    Json?    @map("store_bills")
+  keptItems                     Json?    @map("kept_items")
+  returnedItems                 Json?    @map("returned_items")
+  commissionTotal               Float?   @default(0) @map("commission_total")
+  companyPenaltiesTotal         Float?   @default(0) @map("company_penalties_total")
+  deliveryPartnerPenaltiesTotal Float?   @default(0) @map("delivery_partner_penalties_total")
+  deliveryPartnerBonusesTotal   Float?   @default(0) @map("delivery_partner_bonuses_total")
+  customerCancellationFees      Float?   @default(0) @map("customer_cancellation_fees")
+  markitCouponId                String?  @map("markit_coupon_id")
+  markitCouponCode              String?  @map("markit_coupon_code")
+  markitCouponValue             Float?   @default(0) @map("markit_coupon_value")
+  deliveryPayout                Json?    @map("delivery_payout")
+  deliveryPayoutTotal           Float?   @default(0) @map("delivery_payout_total")
+  deliveryDiscount              Float?   @default(0) @map("delivery_discount")
+  waitingDiscount               Float?   @default(0) @map("waiting_discount")
+  netPlatformAmount             Float?   @default(0) @map("net_platform_amount")
+  meta                          Json?
+
+  @@index([clientId])
+  @@index([deliveryPartnerId])
+  @@map("markit_bills")
 }
 
 model OrderStatusEvent {
@@ -684,6 +733,63 @@ model DeliveryPartnerPayout {
 
   @@index([deliveryPartnerId])
   @@map("delivery_partner_payouts")
+}
+
+model DeliveryPartnerBonus {
+  id                String          @id() @unique() @default(uuid())
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @default(now()) @map("updated_at")
+  amount            Float
+  reason            String?
+  source            String?         @default("MANUAL")
+  adminEmail        String?         @map("admin_email")
+  meta              Json?
+  trynbuy           Trynbuy?        @relation(fields: [trynbuyId], references: [id])
+  trynbuyId         String?         @map("trynbuy_id")
+  deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId String          @map("delivery_partner_id")
+
+  @@index([deliveryPartnerId])
+  @@index([trynbuyId])
+  @@map("delivery_partner_bonuses")
+}
+
+model DeliveryPartnerPenalty {
+  id                String          @id() @unique() @default(uuid())
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @default(now()) @map("updated_at")
+  amount            Float
+  reason            String?
+  source            String?         @default("MANUAL")
+  adminEmail        String?         @map("admin_email")
+  meta              Json?
+  trynbuy           Trynbuy?        @relation(fields: [trynbuyId], references: [id])
+  trynbuyId         String?         @map("trynbuy_id")
+  deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id])
+  deliveryPartnerId String          @map("delivery_partner_id")
+
+  @@index([deliveryPartnerId])
+  @@index([trynbuyId])
+  @@map("delivery_partner_penalties")
+}
+
+model CompanyPenalty {
+  id         String   @id() @unique() @default(uuid())
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @default(now()) @map("updated_at")
+  amount     Float
+  reason     String?
+  source     String?  @default("MANUAL")
+  adminEmail String?  @map("admin_email")
+  meta       Json?
+  trynbuy    Trynbuy? @relation(fields: [trynbuyId], references: [id])
+  trynbuyId  String?  @map("trynbuy_id")
+  company    Company  @relation(fields: [companyId], references: [id])
+  companyId  String   @map("company_id")
+
+  @@index([companyId])
+  @@index([trynbuyId])
+  @@map("company_penalties")
 }
 
 model DeliveryNotification {
@@ -980,6 +1086,7 @@ model Bill {
   handlingFee                       Float?                             @map("handling_fee")
   waitingFee                        Float?                             @map("waiting_fee")
   deliveryFee                       Float?                             @map("delivery_fee")
+  storeWaitingFee                   Float?                             @map("store_waiting_fee")
   commission                        Float?                             @map("commission")
   userId                            String?                            @map("user_id")
   companyUser                       CompanyUser?                       @relation(fields: [companyId, userId], references: [companyId, userId])

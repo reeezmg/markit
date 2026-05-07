@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
         b.id,
         b.created_at           AS "createdAt",
         b.invoice_number       AS "invoiceNumber",
+        t.order_number         AS "orderNumber",
         b.subtotal,
         b.discount,
         b.tax,
@@ -33,16 +34,21 @@ export default defineEventHandler(async (event) => {
         b.redeemed_points      AS "redeemedPoints",
         b.bill_points          AS "billPoints",
         b.delivery_fees        AS "deliveryFees",
+        b.waiting_fee          AS "waitingFee",
+        b.commission           AS "commission",
         b.payment_method       AS "paymentMethod",
         b.payment_status       AS "paymentStatus",
         b.split_payments       AS "splitPayments",
         b.notes,
         b.return_deadline      AS "returnDeadline",
         b.account_id           AS "accountId",
+        b.company_id           AS "companyId",
+        b.trynbuy_id           AS "trynbuyId",
         b.type,
         b.status,
         b.is_markit            AS "isMarkit",
         b.coupon_value         AS "couponValue",
+        COALESCE(cp.total_penalty, 0) AS "storeCancellationFine",
 
         -- Address
         json_build_object(
@@ -66,10 +72,17 @@ export default defineEventHandler(async (event) => {
         ) AS client
 
       FROM bills b
+      LEFT JOIN trynbuys t ON t.id = b.trynbuy_id
       LEFT JOIN addresses a ON a.id = b.address_id
       LEFT JOIN clients c ON c.id = b.client_id
       LEFT JOIN company_clients cc
         ON cc.client_id = c.id AND cc.company_id = $2
+      LEFT JOIN (
+        SELECT trynbuy_id, company_id, SUM(amount) AS total_penalty
+        FROM company_penalties
+        GROUP BY trynbuy_id, company_id
+      ) cp
+        ON cp.trynbuy_id = b.trynbuy_id AND cp.company_id = b.company_id
 
       WHERE b.id = $1
         AND b.company_id = $2
@@ -83,6 +96,44 @@ export default defineEventHandler(async (event) => {
     }
 
     const bill = billRes.rows[0]
+
+    if (bill.trynbuyId && bill.companyId) {
+      const earningsRes = await client.query(
+        `
+        SELECT store_waitings
+        FROM delivery_partner_earnings
+        WHERE trynbuy_id = $1
+        LIMIT 1
+        `,
+        [bill.trynbuyId]
+      )
+
+      const storeWaitings = earningsRes.rows[0]?.store_waitings
+      let parsedStoreWaitings: any[] = []
+
+      try {
+        parsedStoreWaitings = Array.isArray(storeWaitings)
+          ? storeWaitings
+          : typeof storeWaitings === 'string'
+            ? JSON.parse(storeWaitings)
+            : storeWaitings || []
+      } catch {
+        parsedStoreWaitings = []
+      }
+
+      const matchedStoreWaiting = parsedStoreWaitings.find((row) =>
+        row?.companyId === bill.companyId || row?.company_id === bill.companyId
+      )
+
+      bill.storeWaitingFee = Number(
+        matchedStoreWaiting?.waitingFees
+        ?? matchedStoreWaiting?.waitingFee
+        ?? matchedStoreWaiting?.amount
+        ?? 0
+      )
+    } else {
+      bill.storeWaitingFee = 0
+    }
 
     /* ----------------------------------------
        ENTRIES

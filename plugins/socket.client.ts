@@ -8,7 +8,13 @@ const serverUrl = config.public.serverUrl
     withCredentials: true,
   })
 
-const useAuth = () => useNuxtApp().$auth;
+  const useAuth = () => useNuxtApp().$auth;
+  const joinCurrentCompany = () => {
+    const companyId = useAuth()?.session?.value?.companyId
+    if (companyId) {
+      socket.emit("joinCompany", companyId)
+    }
+  }
 
   watch(
     () => useAuth()?.session?.value?.companyId,
@@ -19,6 +25,8 @@ const useAuth = () => useNuxtApp().$auth;
     },
     { immediate: true }
   )
+
+  socket.on("connect", joinCurrentCompany)
 
   nuxtApp.provide("socket", socket)
 })

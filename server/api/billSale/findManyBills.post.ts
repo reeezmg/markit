@@ -3,6 +3,7 @@ import { pool } from '~/server/db'
 import { useAuthSession } from '~~/auth/server/utils/session'
 
 const SORT_COLUMN_MAP: Record<string, string> = {
+  orderNumber: 'COALESCE(t.order_number, 0)',
   invoiceNumber: 'b.invoice_number',
   createdAt: 'b.created_at',
   grandTotal: 'b.grand_total',
@@ -26,7 +27,7 @@ export default defineEventHandler(async (event) => {
     endDate,
     page = 1,
     pageCount = 5,
-    sortColumn = 'invoiceNumber',
+    sortColumn = 'orderNumber',
     sortDirection = 'desc',
     isMarkitOnly = false,
     excludeMarkit = false,
@@ -175,6 +176,7 @@ export default defineEventHandler(async (event) => {
         b.precedence,
         b.is_markit        AS "isMarkit",
         b.created_at       AS "createdAt",
+        t.order_number     AS "orderNumber",
         b.invoice_number   AS "invoiceNumber",
         b.subtotal,
         b.discount,
@@ -210,13 +212,14 @@ export default defineEventHandler(async (event) => {
         COUNT(*) OVER() AS total_count
 
       FROM bills b
+      LEFT JOIN trynbuys t ON t.id = b.trynbuy_id
       LEFT JOIN clients c ON c.id = b.client_id
       LEFT JOIN entries e ON e.bill_id = b.id
       LEFT JOIN categories cat ON cat.id = e.category_id
 
       WHERE ${whereSQL}
 
-      GROUP BY b.id, c.id
+      GROUP BY b.id, c.id, t.order_number
 
       ORDER BY ${orderByPrefix}${orderByColumn} ${orderByDirection}
       LIMIT $${idx} OFFSET $${idx + 1}

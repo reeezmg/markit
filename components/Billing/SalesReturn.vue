@@ -365,6 +365,23 @@ const fetchItemFromCatalog = async (barcode) => {
   return data ?? null
 }
 
+const mapEntryToReturnRow = (row, data, barcode) => ({
+  ...row,
+  id: data?.itemId || '',
+  size: data?.size || '',
+  sizes: data?.sizes || '',
+  name: data?.name || '',
+  barcode: data?.barcode || barcode || '',
+  category: categories.value.filter((c) => c.id === data?.categoryId),
+  qty: data?.qty ?? 1,
+  rate: data?.rate ?? 0,
+  discount: data?.discount ?? null,
+  tax: data?.tax ?? 0,
+  value: data?.value ?? 0,
+  totalQty: data?.qty ?? 0,
+  variantId: data?.variantId || '',
+})
+
 const fetchItemData = async (barcode, index) => {
   if (!barcode || !returnedItems.value[index]) return
 
@@ -377,19 +394,11 @@ const fetchItemData = async (barcode, index) => {
     if (hasInvoice) {
       data = await fetchItemFromEntryByInvoice(barcode)
       if (data) {
-        returnedItems.value[index] = {
-          ...returnedItems.value[index],
-          id: data?.itemId || '',
-          size: data?.size || '',
-          sizes: data?.sizes || '',
-          name: data?.name,
-          barcode: data?.barcode || '',
-          category: categories.value.filter((c) => c.id === data?.categoryId),
-          discount: data?.discount || 0,
-          rate: data?.rate || 0,
-          totalQty: data?.qty || 0,
-          variantId: data?.variantId || '',
-        }
+        returnedItems.value[index] = mapEntryToReturnRow(
+          returnedItems.value[index],
+          data,
+          barcode
+        )
       }
     } else {
       data = await fetchItemFromCatalog(barcode)
