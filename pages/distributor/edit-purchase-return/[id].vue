@@ -61,7 +61,7 @@ const poOptions = computed(() =>
 const emptyRow = () => ({
   barcode: '', itemId: '', variantId: '', productName: '', size: '',
   category: null as { id: string; name: string; hsn: string } | null,
-  qty: 1, rate: 0, tax: 0, taxAmount: 0, subtotal: 0,
+  qty: 1, rate: 0, subtotal: 0,
   reason: '', loading: false,
 })
 
@@ -79,7 +79,6 @@ const isBlankRow = (row: any) =>
   !row.category &&
   !String(row.size || '').trim() &&
   Number(row.rate || 0) === 0 &&
-  Number(row.tax || 0) === 0 &&
   !String(row.reason || '').trim() &&
   !String(row.itemId || '').trim() &&
   !String(row.variantId || '').trim()
@@ -95,15 +94,13 @@ const handleCategorySelected = async (index: number) => {
 // ─── Recalculate per-row ──────────────────────────────────────────────────────
 watch(returnRows, rows => {
   for (const row of rows) {
-    row.taxAmount = parseFloat(((row.qty * row.rate * row.tax) / 100).toFixed(2))
-    row.subtotal  = parseFloat((row.qty * row.rate + row.taxAmount).toFixed(2))
+    row.subtotal = parseFloat((row.qty * row.rate).toFixed(2))
   }
 }, { deep: true })
 
 // ─── Totals ───────────────────────────────────────────────────────────────────
 const subTotalAmount = computed(() => returnRows.value.reduce((s, r) => s + r.qty * r.rate, 0))
-const totalTaxAmount = computed(() => returnRows.value.reduce((s, r) => s + r.taxAmount, 0))
-const grandTotal     = computed(() => parseFloat((subTotalAmount.value + totalTaxAmount.value).toFixed(2)))
+const grandTotal     = computed(() => parseFloat(subTotalAmount.value.toFixed(2)))
 
 // ─── Fetch item by barcode ────────────────────────────────────────────────────
 async function fetchItemData(barcode: string, index: number) {
@@ -121,7 +118,6 @@ async function fetchItemData(barcode: string, index: number) {
     row.productName = item.variant?.product?.name ?? ''
     row.size        = item.size ?? ''
     row.rate        = item.variant?.pprice ?? 0
-    row.tax         = item.variant?.tax ?? 0
     row.barcode     = barcode
     const catId     = item.variant?.product?.categoryId
     row.category    = catId ? (categories.value.find(c => c.id === catId) ?? null) : null
@@ -143,10 +139,9 @@ const categoryInputs = ref<any[]>([])
 const sizeInputs     = ref<any[]>([])
 const qtyInputs      = ref<any[]>([])
 const rateInputs     = ref<any[]>([])
-const taxInputs      = ref<any[]>([])
 const reasonInputs   = ref<any[]>([])
 
-const fieldOrder = ['barcode', 'name', 'category', 'size', 'qty', 'rate', 'tax', 'reason'] as const
+const fieldOrder = ['barcode', 'name', 'category', 'size', 'qty', 'rate', 'reason'] as const
 
 const focusInput = async (rowIndex: number, field: string) => {
   await nextTick()
@@ -158,7 +153,6 @@ const focusInput = async (rowIndex: number, field: string) => {
       case 'size':      sizeInputs.value[rowIndex]?.$el?.querySelector('input')?.select(); break
       case 'qty':       qtyInputs.value[rowIndex]?.$el?.querySelector('input')?.select(); break
       case 'rate':      rateInputs.value[rowIndex]?.$el?.querySelector('input')?.select(); break
-      case 'tax':       taxInputs.value[rowIndex]?.$el?.querySelector('input')?.select(); break
       case 'reason':    reasonInputs.value[rowIndex]?.$el?.querySelector('input')?.select(); break
     }
   } catch (e) { /* ignore */ }
@@ -276,8 +270,6 @@ onMounted(async () => {
       category:    item.categoryId ? (categories.value.find(c => c.id === item.categoryId) ?? null) : null,
       qty:         item.qty,
       rate:        item.rate,
-      tax:         item.tax,
-      taxAmount:   item.taxAmount,
       subtotal:    item.subtotal,
       reason:      item.reason,
       loading:     false,
@@ -322,7 +314,6 @@ const handleSubmit = async () => {
         remarks:         remarks.value || undefined,
         returnDate:      returnDate.value,
         subTotalAmount:  subTotalAmount.value,
-        taxAmount:       totalTaxAmount.value,
         totalAmount:     grandTotal.value,
         items: validRows.map(r => ({
           itemId:      r.barcode?.trim() ? r.itemId : undefined,
@@ -334,8 +325,6 @@ const handleSubmit = async () => {
           categoryId:  r.category?.id || null,
           qty:         r.qty,
           rate:        r.rate,
-          tax:         r.tax,
-          taxAmount:   r.taxAmount,
           subtotal:    r.subtotal,
           reason:      r.reason || undefined,
         })),
@@ -430,8 +419,6 @@ const handleSubmit = async () => {
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-16">Size</th>
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-16">Qty</th>
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-20">Rate</th>
-              <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-14">Tax%</th>
-              <th class="px-2 py-2 text-right text-xs font-medium text-gray-500 w-20">Tax Amt</th>
               <th class="px-2 py-2 text-right text-xs font-medium text-gray-500 w-22">Subtotal</th>
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Reason</th>
               <th class="px-2 py-2 w-8"></th>
@@ -548,24 +535,6 @@ const handleSubmit = async () => {
                 />
               </td>
 
-              <!-- Tax% -->
-              <td class="px-2 py-1.5">
-                <UInput
-                  :ref="el => taxInputs[i] = el"
-                  v-model.number="row.tax"
-                  type="number"
-                  size="xs"
-                  class="w-14"
-                  @keydown.up.prevent="moveFocus(i, 'tax', 'up')"
-                  @keydown.down.prevent="moveFocus(i, 'tax', 'down')"
-                  @keydown.left.prevent="moveFocus(i, 'tax', 'left')"
-                  @keydown.right.prevent="moveFocus(i, 'tax', 'right')"
-                />
-              </td>
-
-              <!-- Tax Amt -->
-              <td class="px-2 py-1.5 text-right text-xs">{{ row.taxAmount.toFixed(2) }}</td>
-
               <!-- Subtotal -->
               <td class="px-2 py-1.5 text-right text-xs font-medium">₹{{ row.subtotal.toFixed(2) }}</td>
 
@@ -614,10 +583,6 @@ const handleSubmit = async () => {
             <div class="flex justify-between">
               <span class="text-gray-500">Subtotal</span>
               <span>₹{{ subTotalAmount.toFixed(2) }}</span>
-            </div>
-            <div class="flex justify-between">
-              <span class="text-gray-500">Tax</span>
-              <span>₹{{ totalTaxAmount.toFixed(2) }}</span>
             </div>
             <div class="flex justify-between font-semibold text-base border-t border-gray-200 dark:border-gray-700 pt-1">
               <span>Grand Total</span>

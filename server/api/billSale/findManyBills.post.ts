@@ -230,12 +230,114 @@ export default defineEventHandler(async (event) => {
     const totalsQuery = `
       SELECT
         COALESCE(SUM(b.grand_total), 0)                                                   AS total,
-        COALESCE(SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Cash'), 0)          AS cash,
-        COALESCE(SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Card'), 0)          AS card,
-        COALESCE(SUM(b.grand_total) FILTER (WHERE b.payment_method = 'UPI'), 0)           AS upi,
-        COALESCE(SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Credit'), 0)        AS credit
+        COALESCE(
+          SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Cash'),
+          0
+        )
+        +
+        COALESCE(
+          SUM(
+            CASE
+              WHEN b.payment_method = 'Split' THEN split_totals.cash
+              ELSE 0
+            END
+          ),
+          0
+        )                                                                                 AS cash,
+        COALESCE(
+          SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Card'),
+          0
+        )
+        +
+        COALESCE(
+          SUM(
+            CASE
+              WHEN b.payment_method = 'Split' THEN split_totals.card
+              ELSE 0
+            END
+          ),
+          0
+        )                                                                                 AS card,
+        COALESCE(
+          SUM(b.grand_total) FILTER (WHERE b.payment_method = 'UPI'),
+          0
+        )
+        +
+        COALESCE(
+          SUM(
+            CASE
+              WHEN b.payment_method = 'Split' THEN split_totals.upi
+              ELSE 0
+            END
+          ),
+          0
+        )                                                                                 AS upi,
+        COALESCE(
+          SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Credit'),
+          0
+        )
+        +
+        COALESCE(
+          SUM(
+            CASE
+              WHEN b.payment_method = 'Split' THEN split_totals.credit
+              ELSE 0
+            END
+          ),
+          0
+        )                                                                                 AS credit
       FROM bills b
       LEFT JOIN clients c ON c.id = b.client_id
+      LEFT JOIN LATERAL (
+        SELECT
+          COALESCE(
+            SUM(
+              CASE
+                WHEN split_item ->> 'method' = 'Cash'
+                THEN COALESCE(NULLIF(split_item ->> 'amount', '')::numeric, 0)
+                ELSE 0
+              END
+            ),
+            0
+          ) AS cash,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN split_item ->> 'method' = 'Card'
+                THEN COALESCE(NULLIF(split_item ->> 'amount', '')::numeric, 0)
+                ELSE 0
+              END
+            ),
+            0
+          ) AS card,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN split_item ->> 'method' = 'UPI'
+                THEN COALESCE(NULLIF(split_item ->> 'amount', '')::numeric, 0)
+                ELSE 0
+              END
+            ),
+            0
+          ) AS upi,
+          COALESCE(
+            SUM(
+              CASE
+                WHEN split_item ->> 'method' = 'Credit'
+                THEN COALESCE(NULLIF(split_item ->> 'amount', '')::numeric, 0)
+                ELSE 0
+              END
+            ),
+            0
+          ) AS credit
+        FROM jsonb_array_elements(
+          CASE
+            WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
+            THEN b.split_payments::jsonb
+            ELSE '[]'::jsonb
+          END
+        ) AS split_item
+      ) split_totals ON true
       WHERE ${whereSQL}
     `
 
