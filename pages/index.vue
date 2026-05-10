@@ -23,7 +23,7 @@ if (auth.loggedIn.value) {
 
 const navLinks = [
   { label: 'Seller', icon: 'i-heroicons-building-storefront', to: '/storelanding',size:'lg' },
-  { label: 'Start Shopping', icon: 'i-heroicons-arrow-right-on-rectangle', to: '/store.markit.co.in',size:'lg' },
+  { label: 'Start Shopping', icon: 'i-heroicons-arrow-right-on-rectangle', to: 'https://store.markit.co.in', size: 'lg' },
 ]
 
 const features = [
