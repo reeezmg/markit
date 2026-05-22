@@ -8,6 +8,7 @@ import {
 
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()
+const router = useRouter()
 const companyId = useAuth().session.value?.companyId
 
 // ─── Selected order & detail panel ───
@@ -33,7 +34,7 @@ const search = ref('')
 const page = ref(1)
 const pageCount = ref(10)
 const selectedStatus = ref<any[]>([])
-const sort = ref({ column: 'createdAt', direction: 'desc' as const })
+const sort = ref({ column: 'orderDate', direction: 'desc' as const })
 
 const statusOptions = [
     { label: 'Draft', value: 'DRAFT' },
@@ -192,8 +193,7 @@ const formatCurrency = (amount: number) => {
 const editingOrder = ref<any>(null)
 
 const onNewOrder = () => {
-    editingOrder.value = null
-    isNewOrderOpen.value = true
+    router.push('/sales-orders/add')
 }
 
 const onOrderSaved = () => {
@@ -679,11 +679,6 @@ const convertOptions = (row: any) => [[
             </Transition>
         </div>
 
-        <!-- New Sales Order Modal -->
-        <SalesOrdersNewSalesOrderModal
-            v-model="isNewOrderOpen"
-            :editing-order="editingOrder"
-            @saved="onOrderSaved"
-        />
+
     </UDashboardPanelContent>
 </template>

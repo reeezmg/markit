@@ -3,6 +3,7 @@ import type { FormError, FormSubmitEvent } from '#ui/types';
 import { useUpdateCompany, useFindUniqueCompany, useUpsertAddress } from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
 import AwsService from '~/composables/aws';
+import { billingUnitOptions, billingUnitSelectOptions, normalizeBillingUnits } from '~/utils/billing-units';
 
 interface ImageData {
     file: File;
@@ -178,6 +179,30 @@ const variantInputs = reactive([
   { key: 'button', label: 'Button', value: useAuth().session.value?.variantInputs?.button  },
 ])
 
+const selectedBillingUnits = ref<string[]>(
+  normalizeBillingUnits(useAuth().session.value?.variantInputs?.unit)
+)
+
+const savedBillingUnits = computed(() =>
+  billingUnitOptions.filter((unit) => selectedBillingUnits.value.includes(unit))
+)
+
+const onBillingUnitsChange = (units: string[] | string | null | undefined) => {
+  if (!units) {
+    selectedBillingUnits.value = ['Nos']
+    return
+  }
+
+  const next = Array.isArray(units) ? units : [units]
+  if (next.includes('All')) {
+    selectedBillingUnits.value = [...billingUnitOptions]
+    return
+  }
+
+  const normalized = billingUnitOptions.filter((unit) => next.includes(unit))
+  selectedBillingUnits.value = normalized.length ? normalized : ['Nos']
+}
+
 
 
 const deliveryType = ref<string[]>(useAuth().session.value?.deliveryType || [])
@@ -294,6 +319,14 @@ watch(productInputs, (newInputs) => {
 watch(variantInputs, (newInputs) => {
   isInputsChanged.value = isInputsChanged.value || newInputs.some(input => input.value !== useAuth().session.value?.variantInputs?.[input.key]);
 }, { deep: true, immediate: true });
+
+watch(selectedBillingUnits, (newUnits) => {
+  const currentUnits = normalizeBillingUnits(useAuth().session.value?.variantInputs?.unit)
+  isInputsChanged.value =
+    isInputsChanged.value ||
+    newUnits.length !== currentUnits.length ||
+    newUnits.some((unit) => !currentUnits.includes(unit))
+}, { deep: true, immediate: true })
 
 const { data: taken } = useFindUniqueCompany({
   where: computed(() => ({
@@ -645,7 +678,7 @@ const onCostIncludeChange = () => {
   }
 };
 
-const onInputChange = () => {
+const onInputChange = async () => {
   isUpdatingInputs.value = true;
   try {
       if (!navigator.onLine) {
@@ -655,9 +688,12 @@ const onInputChange = () => {
     })
   }
     const productinputData = Object.fromEntries(productInputs.map(input => [input.key, input.value]));
-    const variantinputData = Object.fromEntries(variantInputs.map(input => [input.key, input.value]));
+    const variantinputData = {
+      ...Object.fromEntries(variantInputs.map(input => [input.key, input.value])),
+      unit: savedBillingUnits.value,
+    };
 
-    const res= UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -670,7 +706,7 @@ const onInputChange = () => {
         },
       },
     });
-    updateSession(productinputData, variantinputData);
+    await updateSession(productinputData, variantinputData);
     toast.add({ title: 'Product and Variant inputs updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating Product and Variant inputs',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
@@ -1226,20 +1262,64 @@ const onAllDeliverySave = () => {
         </div>
       </div>
 
-      <div class="mt-4 rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-        <div class="mb-3">
-          <div class="text-sm font-semibold text-gray-900 dark:text-white">Points Value</div>
-          <div class="text-sm text-gray-500 dark:text-gray-400">What is the value of 1 point in your currency?</div>
+      <div class="mt-4 grid gap-4 md:grid-cols-2">
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">Units used in software</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">
+              Select the units that should be available while billing and editing products. `Nos` stays as the default when only one unit is chosen.
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <div class="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+              <USelectMenu
+                class="min-w-0"
+                :model-value="selectedBillingUnits"
+                @update:modelValue="onBillingUnitsChange"
+                :options="billingUnitSelectOptions"
+                multiple
+                searchable
+                placeholder="Select units"
+              >
+                <template #label>
+                  <span v-if="selectedBillingUnits.length">{{ selectedBillingUnits.join(', ') }}</span>
+                  <span v-else class="text-gray-400">Select units</span>
+                </template>
+              </USelectMenu>
+
+              <UButton
+                label="Save Units"
+                color="primary"
+                class="self-start whitespace-nowrap"
+                :loading="isUpdatingInputs"
+                :disabled="!isInputsChanged"
+                @click="onInputChange"
+              />
+            </div>
+
+            <div class="text-xs text-gray-500 dark:text-gray-400">
+              Use <span class="font-medium text-gray-700 dark:text-gray-200">All</span> to enable every unit, or select just <span class="font-medium text-gray-700 dark:text-gray-200">Nos</span> if you want a single unit everywhere.
+            </div>
+          </div>
         </div>
-        <div class="flex flex-col gap-3 sm:flex-row">
-          <UInput v-model="pointsValue" type="number" class="flex-1" />
-          <UButton
-            label="Update Points"
-            size="md"
-            :loading="isUpdatingPointsValue"
-            @click="onPointsValueChange"
-            :disabled="!isPointChanged"
-          />
+
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">Points Value</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">What is the value of 1 point in your currency?</div>
+          </div>
+          <div class="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
+            <UInput v-model="pointsValue" type="number" class="min-w-0" />
+            <UButton
+              label="Update Points"
+              size="md"
+              class="self-start whitespace-nowrap"
+              :loading="isUpdatingPointsValue"
+              @click="onPointsValueChange"
+              :disabled="!isPointChanged"
+            />
+          </div>
         </div>
       </div>
     </div>

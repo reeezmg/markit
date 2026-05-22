@@ -8,6 +8,7 @@ import {
 
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()
+const router = useRouter()
 const companyId = useAuth().session.value?.companyId
 
 // ─── Selected invoice & detail panel ───
@@ -200,8 +201,7 @@ const formatCurrency = (amount: number) => {
 const editingInvoice = ref<any>(null)
 
 const onNewInvoice = () => {
-    editingInvoice.value = null
-    isNewInvoiceOpen.value = true
+    router.push('/invoices/add')
 }
 
 const onInvoiceSaved = () => {
@@ -671,11 +671,6 @@ const sendOptions = (row: any) => [[
             </Transition>
         </div>
 
-        <!-- New Invoice Modal -->
-        <InvoicesNewInvoiceModal
-            v-model="isNewInvoiceOpen"
-            :editing-invoice="editingInvoice"
-            @saved="onInvoiceSaved"
-        />
+
     </UDashboardPanelContent>
 </template>

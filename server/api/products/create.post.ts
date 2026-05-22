@@ -96,17 +96,18 @@ export default defineEventHandler(async (event) => {
 
         const insertVariantSQL = `
           INSERT INTO variants(
-            id, name, code, s_price, p_price, d_price,
+            id, name, code, unit, s_price, p_price, d_price,
             discount, delivery_type, status, tax, images,
             company_id, product_id, created_at, updated_at
           )
-          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,now(),now())
+          VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,now(),now())
         `
 
         await client.query(insertVariantSQL, [
           variantId,
           variant.name || '',
           variant.code || null,
+          variant.unit || 'Nos',
           variant.sprice || 0,
           variant.pprice || 0,
           variant.dprice || 0,

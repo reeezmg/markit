@@ -48,6 +48,7 @@ interface Variant {
   name: string;
   key:string;
   code: string;
+  unit?: string;
   qty: number;
   sprice: number;
   pprice: number;
@@ -114,6 +115,7 @@ const cacheKey = [
     variants: newProduct.data.variants?.create?.map(v => ({
       id: v.id,
       name: v.name,
+      unit: v.unit ?? 'Nos',
       sprice: v.sprice,
       pprice: v.pprice,
       dprice: v.dprice,
@@ -229,6 +231,7 @@ const UpdateProduct = useUpdateProduct({
         updatedVariants[existingVariantIndex] = {
           ...existingVariant,
           name: variantData?.name ?? existingVariant.name,
+          unit: variantData?.unit ?? existingVariant.unit,
           sprice: variantData?.sprice ?? existingVariant.sprice,
           pprice: variantData?.pprice ?? existingVariant.pprice,
           dprice: variantData?.dprice ?? existingVariant.dprice,
@@ -280,6 +283,7 @@ const UpdateProduct = useUpdateProduct({
         const newVariant = {
           id: variantInput.where.id,
           name: variantData?.name ?? '',
+          unit: variantData?.unit ?? 'Nos',
           sprice: variantData?.sprice ?? 0,
           pprice: variantData?.pprice ?? 0,
           dprice: variantData?.dprice ?? 0,
@@ -362,6 +366,7 @@ const selectedProduct: Ref<Product> = ref({
     key:'',
     name: '',
     code: '',
+    unit: 'Nos',
     qty: 0,
     sprice: 0,
     pprice: 0,
@@ -412,6 +417,7 @@ const variants = ref<{
     key:String;
     name: string; 
     code: string; 
+    unit?: string;
     qty: number; 
     sprice: number; 
     pprice: number; 
@@ -424,6 +430,7 @@ const variants = ref<{
     key:String(idCounter.value++),
     name: '', 
     code: '', 
+    unit: 'Nos',
     qty: 0, 
     sprice: 0, 
     pprice: 0, 
@@ -616,6 +623,7 @@ const handleAdd = async (e: Event) => {
               id: uuidv4(),
               name: variant.name || '',
               ...(variant.code && { code: variant.code }),
+              unit: variant.unit || 'Nos',
               sprice: variant.sprice || 0,
               pprice: variant.pprice || 0,
               dprice: variant.dprice || 0,
@@ -778,6 +786,7 @@ const updatedProduct =  UpdateProduct.mutate({
         update: {
           name: v.name || '',
           code: v.code || null,
+          unit: v.unit || 'Nos',
           sprice: v.sprice || 0,
           pprice: v.pprice || 0,
           dprice: v.dprice || 0,
@@ -820,6 +829,7 @@ const updatedProduct =  UpdateProduct.mutate({
           id: v.id,
           name: v.name || '',
           code: v.code || null,
+          unit: v.unit || 'Nos',
           sprice: v.sprice || 0,
           pprice: v.pprice || 0,
           dprice: v.dprice || 0,
@@ -883,6 +893,7 @@ const addVariant = () => {
     key: String(idCounter.value++),
     name: '',
     code: '',
+    unit: 'Nos',
     qty: 0,
     sprice: 0,
     pprice: 0,
@@ -1396,6 +1407,7 @@ const handleNewProduct = () => {
                       :editName="selectedProduct?.variants[index]?.name " 
                       :editCode="selectedProduct?.variants[index]?.code || variants[0]?.code"
                       :editQty="selectedProduct?.variants[index]?.qty"
+                      :editUnit="selectedProduct?.variants[index]?.unit || variants[0]?.unit"
                       :editsPrice="selectedProduct?.variants[index]?.sprice || variants[0]?.sprice"
                       :editpPrice="selectedProduct?.variants[index]?.pprice || variants[0]?.pprice"
                       :editdPrice="selectedProduct?.variants[index]?.dprice || variants[0]?.dprice"

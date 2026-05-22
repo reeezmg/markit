@@ -221,6 +221,7 @@ model Company extends Base {
     items           Item[]
     trybuys             Trynbuy[] @relation("try_n_buy_company")
     quotes              Quote[]
+    quoteCustomFieldValues QuoteCustomFieldValue[]
     projects            Project[]
     salesOrders         SalesOrder[]
     status      Boolean       @default(true)
@@ -257,6 +258,7 @@ model Company extends Base {
     aiMemories AiMemory[]
     statementBatches StatementBatch[]
     statementMappings StatementMapping[]
+    generalPreferences GeneralPreference[]
 
     @@allow('create', auth() != null && status)
     @@allow('update', users?[userId == auth().id])
@@ -287,6 +289,7 @@ model Variantinput extends Base {
   dprice      Boolean @default(true)
   discount    Boolean @default(true)
   qty         Boolean @default(true)
+  unit        String[] @default(["Nos"])
   sizes       Boolean @default(true)
   images      Boolean @default(true)
   button      Boolean @default(true)
@@ -295,6 +298,21 @@ model Variantinput extends Base {
   companyId   String @unique @map("company_id")
 
   @@map("variant_inputs")
+}
+
+model GeneralPreference extends Base {
+  pageName String @map("page_name")
+  key      String @map("preference_key")
+  value    Json   @map("preference_value")
+  active   Boolean @default(true)
+
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String  @map("company_id")
+
+  @@unique([companyId, pageName, key])
+  @@index([companyId, pageName])
+  @@allow("create, read, update, delete", true)
+  @@map("general_preferences")
 }
 
 
@@ -556,6 +574,18 @@ model     Trynbuy {
   deliveryFeesCustomer Float?   @default(0) @map("delivery_fees_customer")
   waitingFeesStore     Json?    @map("waiting_fees_store")
   deliveryFeesStore    Json?    @map("delivery_fees_store")
+  // Multi-stop tour decomposition. Current shape:
+  //   { _model: 'tour-segments', [companyId]: { forward: meters, backward: meters } }
+  // where each store's `forward` = tour segment LEAVING this store, and `backward`
+  // = tour segment ARRIVING at this store on the return path. Σ forwards = full
+  // forward tour, Σ backwards = full backward tour.
+  // Legacy shapes (no _model marker): per-store independent distances, or a
+  // single point-to-point number. Readers in server/routes/checkout.js skip the
+  // return-leg deduction for legacy rows.
+  companyDistances     Json?    @map("company_distances")
+  // Sum of tour segments — i.e. the actual multi-stop tour distance.
+  forwardMeters        Float?   @map("forward_meters")
+  backwardMeters       Float?   @map("backward_meters")
   waitingStartedAt DateTime?    @map("waiting_started_at")
   deliveryType    String       @map("delivery_type")
   deliveryTime    DateTime?    @map("delivery_time")
@@ -588,6 +618,13 @@ model     Trynbuy {
   deliveryOtp     String?      @map("delivery_otp")
   pickupOtps      Json?        @map("pickup_otps")
   storeStatuses   Json?        @map("store_statuses")
+
+  // Driver rejection log keyed by deliveryPartnerId:
+  //   { "<deliveryPartnerId>": { count: number, reasons: string[], rejectedAt: string[] } }
+  // count = total rejections by that driver for this order. reasons[] / rejectedAt[]
+  // grow in lock-step with count (one entry per rejection event). Populated by
+  // server/dispatch/response.js handleDispatchReject + worker.js handleTimeout.
+  rejectedDrivers Json?        @default("{}") @map("rejected_drivers")
 
   deliveryPartnerWalletTransaction DeliveryPartnerWalletTransaction[]
 
@@ -672,6 +709,7 @@ model MarkitBill extends Base {
   deliveryPartnerPenaltiesTotal  Float? @default(0) @map("delivery_partner_penalties_total")
   deliveryPartnerBonusesTotal    Float? @default(0) @map("delivery_partner_bonuses_total")
   customerCancellationFees       Float? @default(0) @map("customer_cancellation_fees")
+  customerAllReturnFee           Float? @default(0) @map("customer_all_return_fee")
 
   markitCouponId    String? @map("markit_coupon_id")
   markitCouponCode  String? @map("markit_coupon_code")
@@ -1077,6 +1115,7 @@ model Variant {
     updatedAt   DateTime          @updatedAt @map("updated_at")
     name        String            
     code        String?            
+    unit        String?           @default("Nos")
     status      Boolean           @default(true)
     sprice      Float @map("s_price")
     pprice      Float? @map("p_price")
@@ -1931,6 +1970,7 @@ model Quote extends Base {
     project             Project?    @relation(fields: [projectId], references: [id])
     projectId           String?     @map("project_id")
     items               QuoteItem[]
+    customFieldValue    QuoteCustomFieldValue?
     deleted             Boolean     @default(false)
 
     @@index([companyId])
@@ -1955,6 +1995,19 @@ model QuoteItem extends Base {
     @@index([quoteId])
     @@allow('read, create, update, delete', true)
     @@map("quote_items")
+}
+
+model QuoteCustomFieldValue extends Base {
+    values    Json      @map("field_values")
+
+    quote     Quote     @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+    quoteId   String    @unique @map("quote_id")
+    company   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId String    @map("company_id")
+
+    @@index([companyId])
+    @@allow('read, create, update, delete', true)
+    @@map("quote_custom_field_values")
 }
 
 model Project extends Base {

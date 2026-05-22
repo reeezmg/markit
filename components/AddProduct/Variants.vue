@@ -3,12 +3,14 @@ import * as z from 'zod';
 import { useForm } from 'vee-validate';
 import { toTypedSchema } from '@vee-validate/zod';
 import { v4 as uuidv4 } from 'uuid';
+import { billingUnitOptions, normalizeBillingUnits } from '~/utils/billing-units';
 
 const props = defineProps<{
     id?: string | null;
     editName?: string | null;
     editCode?: string | null;
     editQty?: number | null;
+    editUnit?: string | null;
     editsPrice?: number | null;
     editpPrice?: number | null;
     editDiscount?: number | null;
@@ -63,8 +65,33 @@ const [sprice, spriceAttrs] = defineField('sprice');
 const [pprice, ppriceAttrs] = defineField('pprice');
 const [dprice, dpriceAttrs] = defineField('dprice');
 const [discount, discountAttrs] = defineField('discount');
+const unit = ref('Nos');
 
 const variantInputs = ref(useAuth().session.value?.variantInputs)
+const availableUnits = computed(() => {
+  const units = useAuth().session.value?.variantInputs?.unit
+  return normalizeBillingUnits(units)
+})
+
+const showUnitSelect = computed(() => availableUnits.value.length > 1)
+const defaultUnit = computed(() => availableUnits.value[0] || 'Nos')
+
+const unitOptions = billingUnitOptions.map((unit) => ({ label: unit, value: unit }))
+
+const unitMenuOptions = computed(() => {
+  const units = normalizeBillingUnits(availableUnits.value)
+  const filteredOptions = unitOptions.filter((option) => units.includes(option.value))
+  const missingOptions = units
+    .filter((unit) => !filteredOptions.some((option) => option.value === unit))
+    .map((unit) => ({ label: unit, value: unit }))
+  const currentUnit =
+    unit.value && !filteredOptions.some((option) => option.value === unit.value)
+      ? [{ label: unit.value, value: unit.value }]
+      : []
+  const options = [...filteredOptions, ...missingOptions, ...currentUnit]
+
+  return options.length ? options : unitOptions
+})
 
 
 
@@ -92,6 +119,7 @@ const resetForm = () => {
     name.value = '';
     code.value = '';
     qty.value = 0;
+    unit.value = defaultUnit.value;
     sprice.value = 0;
     pprice.value = 0;
     dprice.value = 0;
@@ -115,6 +143,16 @@ watch(() => props.editCode, (newCode) => {
 
 watch(() => props.editQty, (newQty) => {
     qty.value = newQty ?? 0;
+}, { immediate: true });
+
+watch(() => props.editUnit, (newUnit) => {
+    unit.value = normalizeBillingUnits(newUnit ? [newUnit] : [])[0] || defaultUnit.value;
+}, { immediate: true });
+
+watch(defaultUnit, (newDefaultUnit) => {
+  if (!props.editUnit) {
+    unit.value = newDefaultUnit || 'Nos';
+  }
 }, { immediate: true });
 
 
@@ -201,6 +239,7 @@ watch(
       name: newName,
       code: newCode,
       qty: qty.value,
+      unit: unit.value,
       sprice: newSPrice,
       pprice: newPPrice,
       dprice: newDPrice,
@@ -271,11 +310,31 @@ defineExpose({ resetForm });
 
     <!-- Quantity (Full Width) -->
     <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2" v-if="variantInputs?.qty">
-      <UInput v-model="qty" v-bind="qtyAttrs" type="number" placeholder="Enter quantity" :disabled="items.length > 1" />
+      <div class="flex gap-2">
+        <USelectMenu
+          v-if="showUnitSelect"
+          v-model="unit"
+          :options="unitMenuOptions"
+          value-attribute="value"
+          option-attribute="label"
+          searchable
+          creatable
+          placeholder="Unit"
+          class="w-36 shrink-0"
+        />
+        <UInput
+          v-model="qty"
+          v-bind="qtyAttrs"
+          type="number"
+          placeholder="Enter quantity"
+          :disabled="items.length > 1"
+          :class="showUnitSelect ? 'flex-1' : 'w-full'"
+        />
+      </div>
     </UFormGroup>
   </div>
 
-  <!-- Sizes (Full Width) -->
+  <!-- Units / Sizes (Full Width) -->
   <div class="w-full" v-if="variantInputs?.sizes">
     <template v-if="items[0]?.size !== null">
       <label class="block text-sm font-medium leading-6 dark:text-white mt-4">Items & Quantities</label>

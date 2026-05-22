@@ -33,8 +33,8 @@ export default defineEventHandler(async (event) => {
         b.grand_total          AS "grandTotal",
         b.redeemed_points      AS "redeemedPoints",
         b.bill_points          AS "billPoints",
-        b.delivery_fees        AS "deliveryFees",
-        b.waiting_fee          AS "waitingFee",
+        COALESCE((t.delivery_fees_store ->> b.company_id)::numeric, 0) AS "deliveryFees",
+        COALESCE((t.waiting_fees_store  ->> b.company_id)::numeric, 0) AS "waitingFee",
         b.commission           AS "commission",
         b.payment_method       AS "paymentMethod",
         b.payment_status       AS "paymentStatus",
@@ -166,6 +166,7 @@ export default defineEventHandler(async (event) => {
         -- Variant
         json_build_object(
           'id', v.id,
+          'unit', v.unit,
           'images', v.images
         ) AS variant
 

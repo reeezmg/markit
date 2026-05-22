@@ -9,12 +9,144 @@ import {
 
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()
-const companyId = useAuth().session.value?.companyId
+const router = useRouter()
+const authSession = useAuth().session
+const companyId = authSession.value?.companyId
+const currentUserId = authSession.value?.id
+const currentUserRole = authSession.value?.role
 
 // ─── Selected quote & detail panel ───
 const selectedQuote = ref<any>(null)
 const activeTab = ref(0)
 const isNewQuoteOpen = ref(false)
+const isAcceptanceModalOpen = ref(false)
+const isRetainFieldsModalOpen = ref(false)
+const isConverting = ref(false)
+const pendingConversion = ref<{ quote: any; target: 'invoice' | 'sales-order' } | null>(null)
+const conversionWillMarkAccepted = ref(false)
+const retainFields = reactive({
+    customerNotes: false,
+    termsAndConditions: false,
+    address: false,
+})
+
+const retainPreferenceKeys = {
+    invoice: 'quote.toInvoice.retainFields',
+    'sales-order': 'quote.toSalesOrder.retainFields',
+} as const
+
+const retainFieldOptions = [
+    { key: 'customerNotes', label: 'Customer Notes' },
+    { key: 'termsAndConditions', label: 'Terms & Conditions' },
+    { key: 'address', label: 'Address' },
+] as const
+
+const quotePreferences = reactive({
+    general: {
+        allowEditingAcceptedQuotes: false,
+    },
+    approval: {
+        type: 'none',
+        approverIds: [] as string[],
+        levels: [] as Array<{ approverIds?: string[] }>,
+    },
+    customActions: {
+        actions: [] as any[],
+    },
+    recordLocking: {
+        enabled: false,
+        lockWhenStatus: [] as string[],
+        restrictedActions: [] as string[],
+        appliesToRoles: [] as string[],
+        allowAdminsToBypass: true,
+    },
+})
+
+const loadQuotePreferences = async () => {
+    try {
+        const preferences = await $fetch<any[]>('/api/general-preferences', {
+            query: { pageName: 'quotes' },
+        })
+        const byKey = Object.fromEntries((preferences || []).map((pref) => [pref.key, pref.value]))
+
+        quotePreferences.general = {
+            ...quotePreferences.general,
+            ...(byKey.general || {}),
+        }
+        quotePreferences.approval = {
+            ...quotePreferences.approval,
+            ...(byKey.approval || {}),
+        }
+        quotePreferences.customActions = {
+            ...quotePreferences.customActions,
+            ...(byKey.customActions || {}),
+        }
+        quotePreferences.recordLocking = {
+            ...quotePreferences.recordLocking,
+            ...(byKey.recordLocking || {}),
+        }
+    } catch {
+        // Preferences are optional; default behavior keeps quotes usable.
+    }
+}
+
+const actionKeyByStatus: Record<string, string> = {
+    SENT: 'send',
+    ACCEPTED: 'markAccepted',
+    DECLINED: 'markDeclined',
+}
+
+const shouldLockAction = (quote: any, action: string) => {
+    const lock = quotePreferences.recordLocking
+    if (!lock.enabled) return false
+    if (lock.allowAdminsToBypass && currentUserRole === 'admin') return false
+    if (lock.appliesToRoles?.length && !lock.appliesToRoles.includes(currentUserRole || '')) return false
+    if (lock.lockWhenStatus?.length && !lock.lockWhenStatus.includes(quote.status)) return false
+
+    return lock.restrictedActions?.includes(action)
+}
+
+const canEditQuote = (quote: any) => {
+    if (shouldLockAction(quote, 'edit')) return false
+    if (quote.status === 'ACCEPTED' && !quotePreferences.general.allowEditingAcceptedQuotes) return false
+    return true
+}
+
+const approvalApproverIds = computed(() => {
+    if (quotePreferences.approval.type === 'simple') {
+        return quotePreferences.approval.approverIds || []
+    }
+
+    if (quotePreferences.approval.type === 'multiLevel') {
+        return (quotePreferences.approval.levels || [])
+            .flatMap((level: any) => level.approverIds || [])
+    }
+
+    return []
+})
+
+const isCurrentUserApprover = computed(() =>
+    Boolean(currentUserId && approvalApproverIds.value.includes(currentUserId))
+)
+
+const approvalBlocksSend = () =>
+    quotePreferences.approval.type !== 'none' && !isCurrentUserApprover.value && currentUserRole !== 'admin'
+
+const runCustomActions = (trigger: string, quote: any) => {
+    const actions = quotePreferences.customActions.actions || []
+    actions
+        .filter((action: any) => action.active && action.trigger === trigger)
+        .forEach((action: any) => {
+            toast.add({
+                title: `Custom action: ${action.name || action.actionType}`,
+                description: `Triggered for ${quote.quoteNumber || 'quote'}`,
+                icon: 'i-heroicons-bolt',
+                color: 'blue',
+            })
+        })
+}
+
+onMounted(loadQuotePreferences)
 
 const selectQuote = (row: any) => {
     selectedQuote.value = row
@@ -34,7 +166,7 @@ const search = ref('')
 const page = ref(1)
 const pageCount = ref(10)
 const selectedStatus = ref<any[]>([])
-const sort = ref({ column: 'createdAt', direction: 'desc' as const })
+const sort = ref({ column: 'quoteDate', direction: 'desc' as const })
 
 const statusOptions = [
     { label: 'Draft', value: 'DRAFT' },
@@ -102,6 +234,11 @@ const DeleteQuote = useDeleteQuote({ optimisticUpdate: true })
 const isDeleting = ref(false)
 
 const deleteQuote = async (quote: any) => {
+    if (shouldLockAction(quote, 'delete')) {
+        toast.add({ title: 'Delete is locked for this quote', color: 'red' })
+        return
+    }
+
     isDeleting.value = true
     try {
         await UpdateQuote.mutateAsync({
@@ -111,6 +248,7 @@ const deleteQuote = async (quote: any) => {
         if (selectedQuote.value?.id === quote.id) {
             selectedQuote.value = null
         }
+        runCustomActions('delete', quote)
         toast.add({ title: 'Quote deleted', icon: 'i-heroicons-check-circle', color: 'green' })
     } catch (error) {
         toast.add({ title: 'Failed to delete quote', icon: 'i-heroicons-exclamation-circle', color: 'red' })
@@ -120,6 +258,21 @@ const deleteQuote = async (quote: any) => {
 }
 
 const updateStatus = async (quote: any, status: string) => {
+    const actionKey = actionKeyByStatus[status]
+    if (actionKey && shouldLockAction(quote, actionKey)) {
+        toast.add({ title: 'This action is locked for this quote', color: 'red' })
+        return
+    }
+
+    if (status === 'SENT' && approvalBlocksSend()) {
+        toast.add({
+            title: 'Approval required before sending',
+            description: 'This quote needs approval based on quote preferences.',
+            color: 'red',
+        })
+        return
+    }
+
     try {
         await UpdateQuote.mutateAsync({
             where: { id: quote.id },
@@ -128,6 +281,9 @@ const updateStatus = async (quote: any, status: string) => {
         if (selectedQuote.value?.id === quote.id) {
             selectedQuote.value = { ...selectedQuote.value, status }
         }
+        if (status === 'SENT') runCustomActions('send', quote)
+        if (status === 'ACCEPTED') runCustomActions('markAccepted', quote)
+        if (status === 'DECLINED') runCustomActions('markDeclined', quote)
         toast.add({ title: `Quote marked as ${status}`, icon: 'i-heroicons-check-circle', color: 'green' })
     } catch (error) {
         toast.add({ title: 'Failed to update status', icon: 'i-heroicons-exclamation-circle', color: 'red' })
@@ -139,26 +295,31 @@ const quoteActions = (row: any) => [
     [{
         label: 'Edit',
         icon: 'i-heroicons-pencil-square',
+        disabled: !canEditQuote(row),
         click: () => { editingQuote.value = row; isNewQuoteOpen.value = true },
     }],
     [{
         label: 'Mark as Sent',
         icon: 'i-heroicons-paper-airplane',
+        disabled: shouldLockAction(row, 'send') || approvalBlocksSend(),
         click: () => updateStatus(row, 'SENT'),
     },
     {
         label: 'Mark as Accepted',
         icon: 'i-heroicons-check-circle',
+        disabled: shouldLockAction(row, 'markAccepted'),
         click: () => updateStatus(row, 'ACCEPTED'),
     },
     {
         label: 'Mark as Declined',
         icon: 'i-heroicons-x-circle',
+        disabled: shouldLockAction(row, 'markDeclined'),
         click: () => updateStatus(row, 'DECLINED'),
     }],
     [{
         label: 'Delete',
         icon: 'i-heroicons-trash',
+        disabled: shouldLockAction(row, 'delete'),
         click: () => deleteQuote(row),
     }],
 ]
@@ -193,8 +354,7 @@ const formatCurrency = (amount: number) => {
 const editingQuote = ref<any>(null)
 
 const onNewQuote = () => {
-    editingQuote.value = null
-    isNewQuoteOpen.value = true
+    router.push('/quotes/add')
 }
 
 const onQuoteSaved = () => {
@@ -202,11 +362,125 @@ const onQuoteSaved = () => {
     editingQuote.value = null
 }
 
+const setRetainFields = (value?: Partial<typeof retainFields>) => {
+    retainFields.customerNotes = Boolean(value?.customerNotes)
+    retainFields.termsAndConditions = Boolean(value?.termsAndConditions)
+    retainFields.address = Boolean(value?.address)
+}
+
+const loadRetainPreference = async (target: 'invoice' | 'sales-order') => {
+    try {
+        const preference = await $fetch<any>('/api/general-preferences', {
+            query: {
+                pageName: 'quotes',
+                key: retainPreferenceKeys[target],
+            },
+        })
+        setRetainFields(preference?.value)
+    } catch {
+        setRetainFields()
+    }
+}
+
+const openRetainFieldsModal = async () => {
+    if (!pendingConversion.value) return
+    await loadRetainPreference(pendingConversion.value.target)
+    isRetainFieldsModalOpen.value = true
+}
+
+const startConversion = async (quote: any, target: 'invoice' | 'sales-order') => {
+    const actionKey = target === 'invoice' ? 'convertToInvoice' : 'convertToSalesOrder'
+    if (shouldLockAction(quote, actionKey)) {
+        toast.add({ title: 'Conversion is locked for this quote', color: 'red' })
+        return
+    }
+
+    pendingConversion.value = { quote, target }
+    conversionWillMarkAccepted.value = quote.status !== 'ACCEPTED'
+
+    if (conversionWillMarkAccepted.value) {
+        isAcceptanceModalOpen.value = true
+        return
+    }
+
+    await openRetainFieldsModal()
+}
+
+const continueAfterAcceptance = async () => {
+    isAcceptanceModalOpen.value = false
+    await openRetainFieldsModal()
+}
+
+const resetConversionState = () => {
+    pendingConversion.value = null
+    conversionWillMarkAccepted.value = false
+    isAcceptanceModalOpen.value = false
+    isRetainFieldsModalOpen.value = false
+}
+
+const convertPendingQuote = async () => {
+    if (!pendingConversion.value) return
+
+    isConverting.value = true
+    const { quote, target } = pendingConversion.value
+    const retainPayload = {
+        customerNotes: retainFields.customerNotes,
+        termsAndConditions: retainFields.termsAndConditions,
+        address: retainFields.address,
+    }
+
+    try {
+        await $fetch('/api/general-preferences', {
+            method: 'PUT',
+            body: {
+                pageName: 'quotes',
+                key: retainPreferenceKeys[target],
+                value: retainPayload,
+            },
+        })
+
+        const result = await $fetch<any>(`/api/quotes/${quote.id}/convert`, {
+            method: 'POST',
+            body: {
+                target,
+                markAccepted: conversionWillMarkAccepted.value,
+                retainFields: retainPayload,
+            },
+        })
+
+        if (selectedQuote.value?.id === quote.id) {
+            selectedQuote.value = { ...selectedQuote.value, status: 'ACCEPTED' }
+        }
+        quote.status = 'ACCEPTED'
+
+        toast.add({
+            title: target === 'invoice' ? 'Quote converted to invoice' : 'Quote converted to sales order',
+            description: result?.number ? `Created ${result.number}` : undefined,
+            icon: 'i-heroicons-check-circle',
+            color: 'green',
+        })
+        if (conversionWillMarkAccepted.value) runCustomActions('markAccepted', quote)
+        runCustomActions('convert', quote)
+
+        resetConversionState()
+    } catch (error: any) {
+        toast.add({
+            title: 'Failed to convert quote',
+            description: error?.data?.statusMessage || error?.message || 'Please try again',
+            icon: 'i-heroicons-exclamation-circle',
+            color: 'red',
+        })
+    } finally {
+        isConverting.value = false
+    }
+}
+
 // ─── Send dropdown ───
 const sendOptions = (row: any) => [[
     {
         label: 'Email',
         icon: 'i-heroicons-envelope',
+        disabled: shouldLockAction(row, 'send') || approvalBlocksSend(),
         click: () => {
             updateStatus(row, 'SENT')
         },
@@ -218,14 +492,14 @@ const convertOptions = (row: any) => [[
     {
         label: 'Convert to Invoice',
         icon: 'i-heroicons-document-text',
-        disabled: true,
-        click: () => {},
+        disabled: shouldLockAction(row, 'convertToInvoice'),
+        click: () => startConversion(row, 'invoice'),
     },
     {
         label: 'Convert to Sales Order',
         icon: 'i-heroicons-clipboard-document-list',
-        disabled: true,
-        click: () => {},
+        disabled: shouldLockAction(row, 'convertToSalesOrder'),
+        click: () => startConversion(row, 'sales-order'),
     },
 ]]
 </script>
@@ -431,6 +705,7 @@ const convertOptions = (row: any) => [[
                                 variant="ghost"
                                 size="xs"
                                 label="Edit"
+                                :disabled="!canEditQuote(selectedQuote)"
                                 @click="() => { editingQuote = selectedQuote; isNewQuoteOpen = true }"
                             />
                             <UDropdown :items="sendOptions(selectedQuote)">
@@ -513,8 +788,8 @@ const convertOptions = (row: any) => [[
                                                     <p class="mt-0.5 font-medium">{{ formatDate(selectedQuote.quoteDate) }}</p>
                                                 </div>
                                                 <div>
-                                                    <span class="text-primary-600 dark:text-primary-400">Creation Date</span>
-                                                    <p class="mt-0.5 font-medium">{{ formatDate(selectedQuote.createdAt) }}</p>
+                                                    <span class="text-primary-600 dark:text-primary-400">Quote Date</span>
+                                                    <p class="mt-0.5 font-medium">{{ formatDate(selectedQuote.quoteDate) }}</p>
                                                 </div>
                                                 <div>
                                                     <span class="text-primary-600 dark:text-primary-400">Salesperson</span>
@@ -646,11 +921,64 @@ const convertOptions = (row: any) => [[
             </Transition>
         </div>
 
-        <!-- New Quote Modal -->
-        <QuotesNewQuoteModal
-            v-model="isNewQuoteOpen"
-            :editing-quote="editingQuote"
-            @saved="onQuoteSaved"
-        />
+
     </UDashboardPanelContent>
+
+    <UModal v-model="isAcceptanceModalOpen">
+        <UCard>
+            <template #header>
+                <div class="text-base font-semibold">Mark quote as accepted?</div>
+            </template>
+
+            <div class="space-y-2 text-sm text-gray-600 dark:text-gray-300">
+                <p>
+                    This quote must be accepted before it can be converted to
+                    {{ pendingConversion?.target === 'invoice' ? 'an invoice' : 'a sales order' }}.
+                </p>
+                <p>Do you want me to mark it as accepted, then continue the conversion?</p>
+            </div>
+
+            <template #footer>
+                <div class="flex justify-end gap-2">
+                    <UButton color="gray" variant="ghost" @click="resetConversionState">Cancel</UButton>
+                    <UButton color="primary" @click="continueAfterAcceptance">Mark Accepted & Continue</UButton>
+                </div>
+            </template>
+        </UCard>
+    </UModal>
+
+    <UModal v-model="isRetainFieldsModalOpen">
+        <UCard>
+            <div class="space-y-4">
+                <p class="text-base text-gray-800 dark:text-gray-100">
+                    Select the fields in a quote that you'd like to retain when you convert it into a
+                    {{ pendingConversion?.target === 'invoice' ? 'invoice' : 'sales order' }}.
+                </p>
+
+                <div class="space-y-3">
+                    <UCheckbox
+                        v-for="field in retainFieldOptions"
+                        :key="field.key"
+                        v-model="retainFields[field.key]"
+                        :label="field.label"
+                    />
+                </div>
+
+                <p class="text-sm text-gray-500">
+                    Above selection can be changed anytime from your Settings.
+                </p>
+            </div>
+
+            <template #footer>
+                <div class="flex justify-start gap-2">
+                    <UButton color="primary" :loading="isConverting" @click="convertPendingQuote">
+                        Save & Continue
+                    </UButton>
+                    <UButton color="gray" variant="ghost" :disabled="isConverting" @click="resetConversionState">
+                        Cancel
+                    </UButton>
+                </div>
+            </template>
+        </UCard>
+    </UModal>
 </template>

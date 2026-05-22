@@ -31,6 +31,7 @@ interface Variant {
   name: string;
   key:string;
   code: string;
+  unit?: string;
   qty: number;
   sprice: number;
   pprice: number;
@@ -95,6 +96,7 @@ const variants = ref<{
     key:String;
     name: string; 
     code: string; 
+    unit?: string;
     qty: number; 
     sprice: number; 
     pprice: number; 
@@ -107,6 +109,7 @@ const variants = ref<{
     key:String(idCounter.value++),
     name: '', 
     code: '', 
+    unit: 'Nos',
     qty: 0, 
     sprice: 0, 
     pprice: 0, 
@@ -188,6 +191,7 @@ const {data: selectedProductRaw, isLoading, refetch:productRefetch} = useFindUni
         id:true,
         name:true,
         code:true,
+        unit:true,
         sprice:true,
         pprice:true,
         dprice:true,
@@ -303,6 +307,7 @@ const updatedProduct =   UpdateProduct.mutateAsync({
         update: {
           name: v.name || '',
           code: v.code || null,
+          unit: v.unit || 'Nos',
           sprice: v.sprice || 0,
           pprice: v.pprice || 0,
           dprice: v.dprice || 0,
@@ -346,6 +351,7 @@ const updatedProduct =   UpdateProduct.mutateAsync({
           id: v.id,
           name: v.name || '',
           code: v.code || null,
+          unit: v.unit || 'Nos',
           sprice: v.sprice || 0,
           pprice: v.pprice || 0,
           dprice: v.dprice || 0,
@@ -405,6 +411,7 @@ const addVariant = () => {
     key: String(idCounter.value++),
     name: '',
     code: '',
+    unit: 'Nos',
     qty: 0,
     sprice: 0,
     pprice: 0,
@@ -675,6 +682,7 @@ const confirmPrint = async () => {
             :editName="selectedProduct?.variants[index]?.name" 
             :editCode="selectedProduct?.variants[index]?.code"
             :editQty="selectedProduct?.variants[index]?.qty"
+            :editUnit="selectedProduct?.variants[index]?.unit || variants[0]?.unit"
             :editsPrice="selectedProduct?.variants[index]?.sprice"
             :editpPrice="selectedProduct?.variants[index]?.pprice"
             :editdPrice="selectedProduct?.variants[index]?.dprice"
@@ -765,6 +773,7 @@ const confirmPrint = async () => {
                   :editName="selectedProduct?.variants[index].name"
                   :editCode="selectedProduct?.variants[index].code"
                   :editQty="selectedProduct?.variants[index].qty"
+                  :editUnit="selectedProduct?.variants[index].unit || variants[0]?.unit"
                   :editsPrice="selectedProduct?.variants[index].sprice"
                   :editpPrice="selectedProduct?.variants[index].pprice"
                   :editSizes="selectedProduct?.variants[index].sizes"

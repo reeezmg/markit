@@ -48,6 +48,10 @@ const printModel = ref(false);
 const isSaving = ref(false);
 let printData = {}   
 const isMobile = ref(false);
+const showUnitColumn = computed(() => {
+  const units = useAuth().session.value?.variantInputs?.unit
+  return Array.isArray(units) && units.length > 1
+})
 
 const canCreateDraft = computed(() => draftBills.value.length < MAX_BILL_DRAFTS)
 
@@ -278,15 +282,16 @@ const resizableTable = ref(null); // Reference to the table element
 
 // Table column definitions — drives the <thead> via v-for
 const columns = computed(() => {
-  const cols = [
+const cols = [
     { key: 'sn', label: 'SN' },
     { key: 'barcode', label: 'Barcode' },
     { key: 'category', label: 'Category' },
     { key: 'name', label: 'Name' },
     { key: 'rate', label: 'Rate' },
     { key: 'qty', label: 'Qty' },
-    { key: 'discount', label: 'Discount' },
   ]
+  if (showUnitColumn.value) cols.push({ key: 'unit', label: 'Unit' })
+  cols.push({ key: 'discount', label: 'Discount' })
   if (isUserTrackIncluded.value) cols.push({ key: 'user', label: 'User' })
   cols.push({ key: 'tax', label: 'Tax' })
   if (useAuth().session.value?.role === 'admin' && useAuth().session.value?.isCostIncluded === true) {
@@ -693,6 +698,8 @@ function buildBillPayload({ billInv, session, entriesData, billPoints, hasCredit
 function buildPrintData({ billInv, session, finalitems, refs }) {
   const { subtotal, discount, grandTotal, paymentMethod, splitPayments,
           clientName, phoneNo, date, points, redeemedPoints, couponValue } = refs
+  const units = session?.variantInputs?.unit
+  const showUnit = Array.isArray(units) && units.length > 1
   return {
     invoiceNumber: billInv,
     phone: session?.companyPhone,
@@ -701,6 +708,7 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
     refundPolicy: session?.refundPolicy,
     returnPolicy: session?.returnPolicy,
     date: new Date(date.value).toISOString(),
+    showUnit,
     entries: finalitems.map((entry) => {
       const discountVal = Number(entry.discount) < 0
         ? Number(entry.discount)
@@ -716,6 +724,7 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
         tax: Number(entry.tax || 0),
         value: Number(entry.qty || 1) * Number(entry.rate || 0),
         size: entry.size || '',
+        unit: entry.unit || 'Nos',
         barcode: entry.barcode,
         tvalue: Number(entry.value || 0),
       }
@@ -1325,8 +1334,8 @@ const handleDiscountEnter = (index) => {
       />
     </div>
 
-    <!-- Row 2: Category | Rate | Tax -->
-    <div class="grid grid-cols-3 gap-2 z-10 ">
+    <!-- Row 2: Category | Qty | Unit | Tax -->
+    <div :class="showUnitColumn ? 'grid grid-cols-4 gap-2 z-10' : 'grid grid-cols-3 gap-2 z-10'">
       <USelectMenu
         v-model="row.category"
         :options="categories"
@@ -1354,6 +1363,9 @@ const handleDiscountEnter = (index) => {
        @keyup.enter="moveFocus(index, 'qty', 'right')"
        @keyup.tab.prevent="moveFocus(index, 'qty', 'right')"
       />
+      <div v-if="showUnitColumn" class="flex items-center px-2 text-sm text-gray-500 dark:text-gray-400">
+        {{ row.unit || 'Nos' }}
+      </div>
      
       <UInput
         v-model="row.tax"
@@ -1481,6 +1493,9 @@ const handleDiscountEnter = (index) => {
         @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
         @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
       />
+    </td>
+    <td v-if="showUnitColumn" class="py-1 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+      {{ row.unit || 'Nos' }}
     </td>
    <td class="py-1 whitespace-nowrap">
     <UInput 

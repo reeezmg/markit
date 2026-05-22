@@ -1,3 +1,5 @@
+import { normalizeBillingUnits } from '~/utils/billing-units';
+
 export default eventHandler(async (event) => {
 
     const session = await useAuthSession(event);
@@ -69,8 +71,19 @@ export default eventHandler(async (event) => {
         productInputs: (({ name, brand, category, subcategory, description }) =>
         ({ name, brand, category, subcategory, description }))(user.companies[0].company.productinput || {}),
 
-        variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, sizes, images, button }) =>
-        ({ name, code, sprice, pprice, dprice, discount, qty, sizes, images, button }))(user.companies[0].company.variantinput || {}),
+        variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, unit, sizes, images, button }) => ({
+        name,
+        code,
+        sprice,
+        pprice,
+        dprice,
+        discount,
+        qty,
+        unit: normalizeBillingUnits(unit),
+        sizes,
+        images,
+        button,
+        }))(user.companies[0].company.variantinput || {}),
 
         closingDate: user.companies[0].company.closingDate ?? null,
         billPrefix: user.companies[0].company.billPrefix ?? '',

@@ -895,6 +895,7 @@ const buildPrintDataFromSale = (sale: any, session: any) => ({
   refundPolicy: session?.refundPolicy,
   returnPolicy: session?.returnPolicy,
   date: new Date(sale.createdAt).toISOString(),
+  showUnit: Array.isArray(session?.variantInputs?.unit) && session.variantInputs.unit.length > 1,
 
   entries: sale.entries.map((entry: any) => {
     const discountVal =
@@ -913,6 +914,7 @@ const buildPrintDataFromSale = (sale: any, session: any) => ({
       tax: Number(entry.tax || 0),
       value: Number(entry.qty || 1) * Number(entry.rate || 0),
       size: entry.size || '',
+      unit: entry.unit || entry.variant?.unit || 'Nos',
       barcode: entry.barcode,
       tvalue: Number(entry.value || 0),
     }

@@ -17,6 +17,10 @@ const { printBill } = usePrint();
 const router = useRouter();
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
+const showUnitColumn = computed(() => {
+  const units = useAuth().session.value?.variantInputs?.unit
+  return Array.isArray(units) && units.length > 1
+})
 const isSavingAcc = ref(false);
 const issalesReturnModelOpen = ref(false);
 const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
@@ -189,7 +193,7 @@ const revertRedeemedPointsForCurrentClient = async () => {
 }
 
 const items = ref([
-  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'',item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
+  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'', unit:'', item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
 ]);
 
 
@@ -397,6 +401,7 @@ const columns = computed(() => [
   { key: 'name', label: 'NAME' },
   { key: 'rate', label: 'RATE' },
   { key: 'qty', label: 'QTY' },
+  ...(showUnitColumn.value ? [{ key: 'unit', label: 'UNIT' }] : []),
   { key: 'discount', label: 'DISC %' },
   ...(isUserTrackIncluded.value ? [{ key: 'user', label: 'User' }] : []),
   { key: 'tax', label: 'TAX%' },
@@ -777,6 +782,7 @@ watch(bill, async (newBill) => {
     barcode: entry.barcode || '',
     category: categories.value.filter(c => c.id === entry.categoryId),
     size: entry.item?.size || '',
+    unit: entry.variant?.unit || '',
     sizes: entry.sizes || null,
     qty: entry.qty || 1,
     rate: entry.rate || 0,
@@ -796,6 +802,7 @@ watch(bill, async (newBill) => {
     barcode: '',
     category: [],
     size: '',
+    unit: '',
     name: '',
     qty: 1,
     rate: 0,
@@ -1027,6 +1034,7 @@ const handleEdit = async () => {
       thankYouNote:useAuth().session.value?.thankYouNote,
       refundPolicy:useAuth().session.value?.refundPolicy,
       returnPolicy:useAuth().session.value?.returnPolicy,
+      showUnit: showUnitColumn.value,
       entries: finalitems.map(entry => {
         let calculatedDiscount = 0;
         
@@ -1047,6 +1055,7 @@ const handleEdit = async () => {
           tax: entry.tax,
           value: entry.qty * entry.rate,
           size: entry.size,
+          unit: entry.unit || 'Nos',
           barcode: entry.barcode,
           tvalue: entry.value,
         };
@@ -2167,8 +2176,8 @@ const couponModel = computed({
               />
             </div>
 
-            <!-- Row 2: Category | Rate | Tax -->
-            <div class="grid grid-cols-3 gap-2 ">
+            <!-- Row 2: Category | Qty | Unit | Tax -->
+            <div :class="showUnitColumn ? 'grid grid-cols-4 gap-2' : 'grid grid-cols-3 gap-2'">
               <USelectMenu
                 v-model="row.category"
                 :options="categories"
@@ -2196,7 +2205,10 @@ const couponModel = computed({
                 @keydown.enter="moveFocus(index, 'qty', 'right')"
                 :disabled="bill?.isMarkit"
               />
-            
+              <div v-if="showUnitColumn" class="flex items-center px-2 text-sm text-gray-500 dark:text-gray-400">
+                {{ row.unit || 'Nos' }}
+              </div>
+
               <UInput
                 v-model="row.tax"
                 ref="taxInputs"
@@ -2313,24 +2325,27 @@ const couponModel = computed({
                     :disabled="bill?.isMarkit"
                   />
                 </td>
-                <td class="py-1 whitespace-nowrap">
-                  <UInput 
-                    v-model="row.qty"  
-                    ref="qtyInputs" 
-                    type="number" 
+    <td class="py-1 whitespace-nowrap">
+      <UInput 
+        v-model="row.qty"  
+        ref="qtyInputs" 
+        type="number" 
                     size="sm"  
                     :color="row.return ? 'red' : undefined"
                     @keydown.enter="moveFocus(index, 'qty', 'right')"
                     @keydown.up.prevent="moveFocus(index, 'qty', 'up')"
                     @keydown.down.prevent="moveFocus(index, 'qty', 'down')"
-                    @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
-                    @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
-                    :disabled="bill?.isMarkit"
-                  />
-                </td>
-                <td class="py-1 whitespace-nowrap">
-                <UInput 
-                  v-model="row.discount" 
+        @keydown.left.prevent="moveFocus(index, 'qty', 'left')"
+        @keydown.right.prevent="moveFocus(index, 'qty', 'right')"
+        :disabled="bill?.isMarkit"
+      />
+    </td>
+    <td v-if="showUnitColumn" class="py-1 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+      {{ row.unit || 'Nos' }}
+    </td>
+    <td class="py-1 whitespace-nowrap">
+      <UInput 
+        v-model="row.discount" 
                   type="number"
                   ref="discountInputs" 
                   size="sm"

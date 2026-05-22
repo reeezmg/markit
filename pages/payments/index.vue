@@ -8,6 +8,7 @@ import {
 
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()
+const router = useRouter()
 const companyId = useAuth().session.value?.companyId
 
 // ─── Selected payment & detail panel ───
@@ -153,8 +154,7 @@ const formatCurrency = (amount: number) => {
 const editingPayment = ref<any>(null)
 
 const onNewPayment = () => {
-    editingPayment.value = null
-    isNewPaymentOpen.value = true
+    router.push('/payments/add')
 }
 
 const onPaymentSaved = () => {
@@ -526,11 +526,5 @@ const sendOptions = (row: any) => [[
             </Transition>
         </div>
 
-        <!-- Record Payment Modal -->
-        <PaymentsRecordPaymentModal
-            v-model="isNewPaymentOpen"
-            :editing-payment="editingPayment"
-            @saved="onPaymentSaved"
-        />
     </UDashboardPanelContent>
 </template>

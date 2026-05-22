@@ -43,24 +43,29 @@
       <hr class="my-1 border-dashed border-black" />
 
       <!-- TABLE HEADER -->
-      <div class="grid grid-cols-[6mm_29mm_6mm_13mm_13mm_13mm] font-bold">
+      <div :class="columnsClass" class="font-bold">
         <span>SL</span>
         <span>DESCRIPTION</span>
+        <span v-if="showUnit" class="text-right">UNIT</span>
         <span class="text-right">QTY</span>
         <span class="text-right">MRP</span>
         <span class="text-right">TAX</span>
         <span class="text-right">DISC</span>
       </div>
 
-      <div class="grid grid-cols-[6mm_29mm_6mm_13mm_13mm_13mm] font-bold">
-        <span></span><span></span><span></span><span></span>
+      <div :class="columnsClass" class="font-bold">
+        <span></span>
+        <span></span>
+        <span v-if="showUnit"></span>
+        <span></span>
+        <span></span>
         <span class="text-right">HSN</span>
         <span class="text-right">T.VALUE</span>
       </div>
 
       <!-- ITEMS -->
       <div v-for="(item, i) in data.entries" :key="i" class="mt-1 mb-4">
-        <div class="grid grid-cols-[6mm_29mm_6mm_13mm_13mm_13mm]">
+        <div :class="columnsClass">
           <span>{{ i + 1 }}</span>
 
           <span class="break-words">
@@ -72,14 +77,20 @@
             </div>
           </span>
 
+          <span v-if="showUnit" class="text-right">{{ item.unit || 'Nos' }}</span>
           <span class="text-right">{{ item.qty }}</span>
           <span class="text-right">{{ money(item.mrp) }}</span>
           <span class="text-right">{{ item.tax }}%</span>
           <span class="text-right">{{ item.discount }}</span>
         </div>
 
-        <div class="grid grid-cols-[6mm_29mm_6mm_13mm_13mm_13mm]">
-          <span></span><span></span><span></span><span></span>
+        <div :class="columnsClass">
+          <span></span>
+          <span></span>
+          <span v-if="showUnit"></span>
+          <span></span>
+          <span></span>
+          <span></span>
           <span class="text-right">{{ item.hsn }}</span>
           <span class="text-right">{{ money(item.tvalue) }}</span>
         </div>
@@ -88,9 +99,10 @@
       <hr class="my-1 border-dashed border-black" />
 
       <!-- TOTALS -->
-      <div class="grid grid-cols-[6mm_29mm_6mm_13mm_13mm_13mm] font-bold">
+      <div :class="columnsClass" class="font-bold">
         <span></span>
         <span>TOTAL</span>
+        <span v-if="showUnit"></span>
         <span class="text-right">{{ data.tqty }}</span>
         <span class="text-right">{{ money(data.tvalue) }}</span>
         <span class="text-right">{{ money(data.tdiscount) }}</span>
@@ -134,6 +146,13 @@
 <script setup lang="ts">
 const props = defineProps<{ data: any }>()
 console.log('Receipt data:', props.data)
+
+const showUnit = computed(() => Boolean(props.data?.showUnit))
+const columnsClass = computed(() =>
+  showUnit.value
+    ? 'grid grid-cols-[6mm_23mm_8mm_6mm_11mm_11mm_11mm]'
+    : 'grid grid-cols-[6mm_29mm_6mm_13mm_13mm_13mm]'
+)
 
 const join = (a?: string, b?: string) =>
   a && b ? `${a}, ${b}` : a || b || ''
