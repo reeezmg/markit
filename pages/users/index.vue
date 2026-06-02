@@ -515,7 +515,10 @@ const queryArgs = computed(() => {
       AND: [
         {
           companyId: useAuth().session.value?.companyId,
-          deleted: false
+          deleted: false,
+          user: {
+            cleanup: false,
+          },
         },
         {
           name: {
