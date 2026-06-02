@@ -61,6 +61,55 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
+    if (cleanup) {
+      await client.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS original_subtotal DOUBLE PRECISION')
+      await client.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS original_grand_total DOUBLE PRECISION')
+      await client.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS original_discount DOUBLE PRECISION')
+      await client.query('ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_rate DOUBLE PRECISION')
+      await client.query('ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_value DOUBLE PRECISION')
+      await client.query('ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_discount DOUBLE PRECISION')
+    }
+
+    const cleanupBillSelect = cleanup
+      ? `
+        COALESCE(NULLIF(b.original_subtotal, 0), b.subtotal) AS "originalSubtotal",
+        COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total) AS "originalGrandTotal",
+        COALESCE(b.original_discount, b.discount) AS "originalDiscount",
+      `
+      : ''
+
+    const cleanupEntrySelect = cleanup
+      ? `
+              'originalRate', COALESCE(NULLIF(e.original_rate, 0), e.rate),
+              'originalValue', COALESCE(NULLIF(e.original_value, 0), e.value),
+              'originalDiscount', COALESCE(e.original_discount, e.discount),
+      `
+      : ''
+
+    const billSubtotalExpr = cleanup
+      ? 'COALESCE(NULLIF(b.original_subtotal, 0), b.subtotal)'
+      : 'b.subtotal'
+
+    const billTotalExpr = cleanup
+      ? 'COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total)'
+      : 'b.grand_total'
+
+    const billDiscountExpr = cleanup
+      ? 'COALESCE(b.original_discount, b.discount)'
+      : 'b.discount'
+
+    const entryRateExpr = cleanup
+      ? 'COALESCE(NULLIF(e.original_rate, 0), e.rate)'
+      : 'e.rate'
+
+    const entryValueExpr = cleanup
+      ? 'COALESCE(NULLIF(e.original_value, 0), e.value)'
+      : 'e.value'
+
+    const entryDiscountExpr = cleanup
+      ? 'COALESCE(e.original_discount, e.discount)'
+      : 'e.discount'
+
     const values: any[] = [companyId]
     let idx = 2
 
@@ -143,13 +192,13 @@ export default defineEventHandler(async (event) => {
     }
 
     if (minGrandTotal !== undefined && minGrandTotal !== null && minGrandTotal !== '') {
-      whereSQL += ` AND b.grand_total >= $${idx}`
+      whereSQL += ` AND ${billTotalExpr} >= $${idx}`
       values.push(Number(minGrandTotal))
       idx++
     }
 
     if (maxGrandTotal !== undefined && maxGrandTotal !== null && maxGrandTotal !== '') {
-      whereSQL += ` AND b.grand_total <= $${idx}`
+      whereSQL += ` AND ${billTotalExpr} <= $${idx}`
       values.push(Number(maxGrandTotal))
       idx++
     }
@@ -164,7 +213,9 @@ export default defineEventHandler(async (event) => {
     }
 
     const orderByColumn =
-      SORT_COLUMN_MAP[sortColumn] || 'b.invoice_number'
+      sortColumn === 'grandTotal'
+        ? billTotalExpr
+        : (SORT_COLUMN_MAP[sortColumn] || 'b.invoice_number')
 
     const orderByDirection =
       sortDirection === 'asc' ? 'ASC' : 'DESC'
@@ -178,10 +229,11 @@ export default defineEventHandler(async (event) => {
         b.created_at       AS "createdAt",
         t.order_number     AS "orderNumber",
         b.invoice_number   AS "invoiceNumber",
-        b.subtotal,
-        b.discount,
+        ${billSubtotalExpr} AS subtotal,
+        ${cleanupBillSelect}
+        ${billDiscountExpr} AS discount,
         b.tax,
-        b.grand_total      AS "grandTotal",
+        ${billTotalExpr}   AS "grandTotal",
         b.payment_status   AS "paymentStatus",
         b.payment_method   AS "paymentMethod",
         b.notes,
@@ -198,11 +250,12 @@ export default defineEventHandler(async (event) => {
               'barcode', e.barcode,
               'category', cat.name,
               'name', e.name,
-              'rate', e.rate,
+              'rate', ${entryRateExpr},
+              ${cleanupEntrySelect}
               'qty', e.qty,
-              'discount', e.discount,
+              'discount', ${entryDiscountExpr},
               'tax', e.tax,
-              'value', e.value
+              'value', ${entryValueExpr}
             )
           ) FILTER (WHERE e.id IS NOT NULL),
           '[]'
@@ -229,9 +282,9 @@ export default defineEventHandler(async (event) => {
     const totalsValues = [...values]
     const totalsQuery = `
       SELECT
-        COALESCE(SUM(b.grand_total), 0)                                                   AS total,
+        COALESCE(SUM(${billTotalExpr}), 0)                                                AS total,
         COALESCE(
-          SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Cash'),
+          SUM(${billTotalExpr}) FILTER (WHERE b.payment_method = 'Cash'),
           0
         )
         +
@@ -245,7 +298,7 @@ export default defineEventHandler(async (event) => {
           0
         )                                                                                 AS cash,
         COALESCE(
-          SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Card'),
+          SUM(${billTotalExpr}) FILTER (WHERE b.payment_method = 'Card'),
           0
         )
         +
@@ -259,7 +312,7 @@ export default defineEventHandler(async (event) => {
           0
         )                                                                                 AS card,
         COALESCE(
-          SUM(b.grand_total) FILTER (WHERE b.payment_method = 'UPI'),
+          SUM(${billTotalExpr}) FILTER (WHERE b.payment_method = 'UPI'),
           0
         )
         +
@@ -273,7 +326,7 @@ export default defineEventHandler(async (event) => {
           0
         )                                                                                 AS upi,
         COALESCE(
-          SUM(b.grand_total) FILTER (WHERE b.payment_method = 'Credit'),
+          SUM(${billTotalExpr}) FILTER (WHERE b.payment_method = 'Credit'),
           0
         )
         +

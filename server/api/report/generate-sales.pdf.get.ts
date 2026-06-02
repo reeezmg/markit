@@ -36,11 +36,29 @@ export default defineEventHandler(async (event) => {
     ? new Date(query.endDate as string)
     : new Date()
 
+  const billTotalExpr = cleanup
+    ? 'COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total)'
+    : 'b.grand_total'
+
+  const billSubtotalExpr = cleanup
+    ? 'COALESCE(NULLIF(b.original_subtotal, 0), b.subtotal)'
+    : 'b.subtotal'
+
 
 
   const client = await pool.connect()
 
   try {
+    if (cleanup) {
+      await client.query(`
+        ALTER TABLE bills
+        ADD COLUMN IF NOT EXISTS original_subtotal DOUBLE PRECISION
+      `)
+      await client.query(`
+        ALTER TABLE bills
+        ADD COLUMN IF NOT EXISTS original_grand_total DOUBLE PRECISION
+      `)
+    }
 
     /* =====================================================
        BASE OPENING (COMPANY)
@@ -122,15 +140,15 @@ export default defineEventHandler(async (event) => {
               AND ($3 = true OR b.precedence IS NOT TRUE)
           )
           SELECT
-            COALESCE(SUM(CASE WHEN payment_method = 'Cash' THEN grand_total ELSE 0 END),0)
+            COALESCE(SUM(CASE WHEN b.payment_method = 'Cash' THEN ${billTotalExpr} ELSE 0 END),0)
             + COALESCE((SELECT SUM(amount) FROM split),0) AS total
-          FROM bills
-          WHERE company_id = $1
-            AND deleted = false
-            AND payment_status IN ('PAID','PENDING')
-            AND is_markit = false
-            AND created_at < $2
-            AND ($3 = true OR precedence IS NOT TRUE)
+          FROM bills b
+          WHERE b.company_id = $1
+            AND b.deleted = false
+            AND b.payment_status IN ('PAID','PENDING')
+            AND b.is_markit = false
+            AND b.created_at < $2
+            AND ($3 = true OR b.precedence IS NOT TRUE)
           `,
           [companyId, startDate, cleanup]
         ),
@@ -203,15 +221,15 @@ export default defineEventHandler(async (event) => {
               AND ($3 = true OR b.precedence IS NOT TRUE)
           )
           SELECT
-            COALESCE(SUM(CASE WHEN payment_method IN ('UPI','Card') THEN grand_total ELSE 0 END),0)
+            COALESCE(SUM(CASE WHEN b.payment_method IN ('UPI','Card') THEN ${billTotalExpr} ELSE 0 END),0)
             + COALESCE((SELECT SUM(amount) FROM split),0) AS total
-          FROM bills
-          WHERE company_id = $1
-            AND deleted = false
-            AND payment_status IN ('PAID','PENDING')
-            AND is_markit = false
-            AND created_at < $2
-            AND ($3 = true OR precedence IS NOT TRUE)
+          FROM bills b
+          WHERE b.company_id = $1
+            AND b.deleted = false
+            AND b.payment_status IN ('PAID','PENDING')
+            AND b.is_markit = false
+            AND b.created_at < $2
+            AND ($3 = true OR b.precedence IS NOT TRUE)
           `,
           [companyId, startDate, cleanup]
         ),
@@ -306,7 +324,7 @@ export default defineEventHandler(async (event) => {
     COALESCE(SUM(
       CASE 
         WHEN b.payment_method NOT IN ('Split','Credit')
-        THEN b.grand_total 
+        THEN ${billTotalExpr}
         ELSE 0 
       END
     ),0)
@@ -322,7 +340,7 @@ export default defineEventHandler(async (event) => {
     /* CASH */
     COALESCE(SUM(
       CASE WHEN b.payment_method = 'Cash'
-      THEN b.grand_total ELSE 0 END
+      THEN ${billTotalExpr} ELSE 0 END
     ),0)
     +
     COALESCE(SUM(
@@ -333,7 +351,7 @@ export default defineEventHandler(async (event) => {
     /* UPI */
     COALESCE(SUM(
       CASE WHEN b.payment_method = 'UPI'
-      THEN b.grand_total ELSE 0 END
+      THEN ${billTotalExpr} ELSE 0 END
     ),0)
     +
     COALESCE(SUM(
@@ -344,7 +362,7 @@ export default defineEventHandler(async (event) => {
     /* CARD */
     COALESCE(SUM(
       CASE WHEN b.payment_method = 'Card'
-      THEN b.grand_total ELSE 0 END
+      THEN ${billTotalExpr} ELSE 0 END
     ),0)
     +
     COALESCE(SUM(
@@ -583,26 +601,26 @@ const billsRes = await client.query(
   SELECT
     invoice_number AS invoice,
     created_at AS date,
-    COALESCE(subtotal,0) AS subtotal,
-    COALESCE(subtotal,0) - COALESCE(grand_total,0) AS discount,
-    grand_total AS total,
-    payment_method AS payment
+    COALESCE(${billSubtotalExpr},0) AS subtotal,
+    COALESCE(${billSubtotalExpr},0) - COALESCE(${billTotalExpr},0) AS discount,
+    ${billTotalExpr} AS total,
+    b.payment_method AS payment
 
-  FROM bills
+  FROM bills b
 
-  WHERE company_id = $1
-    AND deleted = false
+  WHERE b.company_id = $1
+    AND b.deleted = false
 
     /* EXCLUDE CREDIT BILLS */
-    AND payment_method != 'Credit'
+    AND b.payment_method != 'Credit'
 
     /* EXCLUDE PENDING BILLS */
-    AND payment_status != 'PENDING'
+    AND b.payment_status != 'PENDING'
 
-    AND created_at BETWEEN $2 AND $3
-    AND ($4 = true OR precedence IS NOT TRUE)
+    AND b.created_at BETWEEN $2 AND $3
+    AND ($4 = true OR b.precedence IS NOT TRUE)
 
-  ORDER BY created_at DESC
+  ORDER BY b.created_at DESC
   `,
   [companyId, startDate, endDate, cleanup]
 )

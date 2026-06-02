@@ -34,11 +34,29 @@ export default defineEventHandler(async (event) => {
     ? new Date(query.endDate as string)
     : new Date()
 
+  const billTotalExpr = cleanup
+    ? 'COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total)'
+    : 'b.grand_total'
+
+  const entryValueExpr = cleanup
+    ? 'COALESCE(NULLIF(e.original_value, 0), e.value)'
+    : 'e.value'
+
 
 
   const client = await pool.connect()
 
   try {
+    if (cleanup) {
+      await client.query(`
+        ALTER TABLE bills
+        ADD COLUMN IF NOT EXISTS original_grand_total DOUBLE PRECISION
+      `)
+      await client.query(`
+        ALTER TABLE entries
+        ADD COLUMN IF NOT EXISTS original_value DOUBLE PRECISION
+      `)
+    }
 
     /* =====================================================
        BASE OPENING (RUN FIRST — Needed for calc)
@@ -189,20 +207,20 @@ if (!isZeroOpening) {
         SELECT
           COALESCE(SUM(
             CASE
-              WHEN payment_method = 'Cash'
-              THEN grand_total ELSE 0 END
+              WHEN b.payment_method = 'Cash'
+              THEN ${billTotalExpr} ELSE 0 END
           ),0)
           +
           COALESCE((SELECT SUM(amount) FROM split),0)
           AS total
 
-        FROM bills
-        WHERE company_id = $1
-          AND deleted = false
-          AND payment_status IN ('PAID','PENDING')
-          AND is_markit = false
-          AND created_at < $2
-          AND ($3 = true OR precedence IS NOT TRUE)
+        FROM bills b
+        WHERE b.company_id = $1
+          AND b.deleted = false
+          AND b.payment_status IN ('PAID','PENDING')
+          AND b.is_markit = false
+          AND b.created_at < $2
+          AND ($3 = true OR b.precedence IS NOT TRUE)
         `,
         [companyId, startDate, cleanup]
       ),
@@ -323,20 +341,20 @@ if (!isZeroOpening) {
         SELECT
           COALESCE(SUM(
             CASE
-              WHEN payment_method IN ('UPI','Card')
-              THEN grand_total ELSE 0 END
+              WHEN b.payment_method IN ('UPI','Card')
+              THEN ${billTotalExpr} ELSE 0 END
           ),0)
           +
           COALESCE((SELECT SUM(amount) FROM split),0)
           AS total
 
-        FROM bills
-        WHERE company_id = $1
-          AND deleted = false
-          AND payment_status IN ('PAID','PENDING')
-          AND is_markit = false
-          AND created_at < $2
-          AND ($3 = true OR precedence IS NOT TRUE)
+        FROM bills b
+        WHERE b.company_id = $1
+          AND b.deleted = false
+          AND b.payment_status IN ('PAID','PENDING')
+          AND b.is_markit = false
+          AND b.created_at < $2
+          AND ($3 = true OR b.precedence IS NOT TRUE)
         `,
         [companyId, startDate, cleanup]
       ),
@@ -547,7 +565,7 @@ if (!isZeroOpening) {
         SELECT
           COALESCE(SUM(
             CASE WHEN b.payment_method NOT IN ('Split','Credit')
-            THEN b.grand_total ELSE 0 END
+            THEN ${billTotalExpr} ELSE 0 END
           ),0)
           +
           COALESCE(SUM(
@@ -557,7 +575,7 @@ if (!isZeroOpening) {
 
           COALESCE(SUM(
             CASE WHEN b.payment_method = 'Cash'
-            THEN b.grand_total ELSE 0 END
+            THEN ${billTotalExpr} ELSE 0 END
           ),0)
           + COALESCE(SUM(
             CASE WHEN sp.method = 'Cash'
@@ -566,7 +584,7 @@ if (!isZeroOpening) {
 
           COALESCE(SUM(
             CASE WHEN b.payment_method = 'UPI'
-            THEN b.grand_total ELSE 0 END
+            THEN ${billTotalExpr} ELSE 0 END
           ),0)
           + COALESCE(SUM(
             CASE WHEN sp.method = 'UPI'
@@ -575,7 +593,7 @@ if (!isZeroOpening) {
 
           COALESCE(SUM(
             CASE WHEN b.payment_method = 'Card'
-            THEN b.grand_total ELSE 0 END
+            THEN ${billTotalExpr} ELSE 0 END
           ),0)
           + COALESCE(SUM(
             CASE WHEN sp.method = 'Card'
@@ -617,7 +635,7 @@ if (!isZeroOpening) {
         `
         SELECT 
           COALESCE(br.name, 'Unbranded') AS name,
-          ROUND(SUM(e.value)::numeric,2) AS total,
+          ROUND(SUM(${entryValueExpr})::numeric,2) AS total,
           COALESCE(SUM(e.qty),0) AS qty
 
         FROM entries e
@@ -656,16 +674,16 @@ if (!isZeroOpening) {
       client.query(
         `
         SELECT COALESCE(SUM(
-          CASE WHEN payment_method = 'Credit'
-          THEN grand_total ELSE 0 END
+          CASE WHEN b.payment_method = 'Credit'
+          THEN ${billTotalExpr} ELSE 0 END
         ),0) AS total_credit_sales
-        FROM bills
-        WHERE company_id = $1
-          AND deleted = false
-          AND payment_status IN ('PAID','PENDING')
-          AND is_markit = false
-          AND created_at BETWEEN $2 AND $3
-          AND ($4 = true OR precedence IS NOT TRUE)
+        FROM bills b
+        WHERE b.company_id = $1
+          AND b.deleted = false
+          AND b.payment_status IN ('PAID','PENDING')
+          AND b.is_markit = false
+          AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE)
         `,
         [companyId, startDate, endDate, cleanup]
       ),
@@ -727,7 +745,7 @@ if (!isZeroOpening) {
         `
         SELECT 
           COALESCE(c.name, 'Uncategorized') AS name,
-          ROUND(SUM(e.value)::numeric,2) AS total,
+          ROUND(SUM(${entryValueExpr})::numeric,2) AS total,
           COALESCE(SUM(e.qty),0) AS qty
 
         FROM entries e

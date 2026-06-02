@@ -15,6 +15,7 @@ const salesTableStore = useSalesTableStore()
 const toast = useToast();
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
+const canSeeCleanupRealValues = computed(() => useAuth().session.value?.cleanup === true)
 const isMobile = ref(false);
 const isOpen = ref(false);
 const isDeleteModalOpen = ref(false)
@@ -49,7 +50,7 @@ const selectedDate = ref({
 
 const getColumns = (isMobile) => {
   if (!isMobile) {
-    return [
+    const desktopColumns = [
       { key: 'invoiceNumber', label: 'Inv#', sortable: true },
       { key: 'createdAt', label: 'Date', sortable: true },
       { key: 'customer', label: 'Customer', sortable: true },
@@ -59,9 +60,13 @@ const getColumns = (isMobile) => {
       { key: 'notes', label: 'Notes', sortable: true },
       { key: 'actions', label: 'Actions', sortable: false },
     ];
+    if (canSeeCleanupRealValues.value) {
+      desktopColumns.splice(4, 0, { key: 'originalGrandTotal', label: 'Real Total', sortable: false })
+    }
+    return desktopColumns
   }
 
-  return [
+  const mobileColumns = [
     { key: 'invoiceNumber', label: 'Inv#', sortable: true },
     { key: 'grandTotal', label: 'Grand Total', sortable: true },
     { key: 'paymentMethod', label: 'Method', sortable: true },
@@ -71,13 +76,17 @@ const getColumns = (isMobile) => {
     { key: 'notes', label: 'Notes', sortable: true },
     { key: 'actions', label: 'Actions', sortable: false },
   ];
+  if (canSeeCleanupRealValues.value) {
+    mobileColumns.splice(2, 0, { key: 'originalGrandTotal', label: 'Real Total', sortable: false })
+  }
+  return mobileColumns
 };
 
 // Call it with the current isMobile value
 const columns = computed(() => getColumns(isMobile.value));
 
 
-const entrycolumns = [
+const entrycolumns = computed(() => [
     {
         key: 'barcode',
         label: 'Barcode',
@@ -98,6 +107,11 @@ const entrycolumns = [
         label: 'Rate',
         sortable: true,
     },
+    ...(canSeeCleanupRealValues.value ? [{
+        key: 'originalRate',
+        label: 'Real Rate',
+        sortable: true,
+    }] : []),
     {
         key: 'qty',
         label: 'Quantity',
@@ -108,6 +122,11 @@ const entrycolumns = [
         label: 'Discount',
         sortable: true,
     },
+    ...(canSeeCleanupRealValues.value ? [{
+        key: 'originalDiscount',
+        label: 'Real Discount',
+        sortable: true,
+    }] : []),
     {
         key: 'tax',
         label: 'Tax',
@@ -118,12 +137,17 @@ const entrycolumns = [
         label: 'Value',
         sortable: true,
     },
+    ...(canSeeCleanupRealValues.value ? [{
+        key: 'originalValue',
+        label: 'Real Value',
+        sortable: true,
+    }] : []),
     {
         key: 'actions',
         label: 'Actions',
         sortable: false,
     },
-];
+]);
 
 
 

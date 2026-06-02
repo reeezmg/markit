@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '~/server/prisma';
 
 type BillCleanupOptions = {
@@ -19,46 +20,39 @@ export async function applyBillDeletionCleanup(opts: BillCleanupOptions) {
       },
     });
 
-    // Step 2: Get bills that remain and need renumbering (from startDate)
-    const billsToRenumber = await tx.bill.findMany({
-      where: {
-        companyId,
-        createdAt: { gte: startDate },
-      },
-      orderBy: { createdAt: 'asc' },
-      select: {
-        id: true,
-        invoiceNumber: true, // already a number
-      },
-    });
-
-    // Step 3: Renumber sequentially
-    let currentNumber = leastInvoice || 0;
-    
-
-    for (const bill of billsToRenumber) {
-      const num = bill.invoiceNumber ?? 0;
-
-      // Skip if current bill number is already less than the least
-      if (num < leastInvoice) {
-        currentNumber = Math.max(currentNumber, num + 1);
-        continue;
-      }
-
-      // Update invoice number (as int)
-      await tx.bill.update({
-        where: { id: bill.id },
-        data: { invoiceNumber: currentNumber },
-      });
-
-      currentNumber++;
-    }
+    // Step 2: Renumber remaining bills in one round-trip instead of one update per bill.
+    const [renumberResult] = await tx.$queryRaw<
+      { updated_count: number; last_invoice: number }[]
+    >(Prisma.sql`
+      WITH ordered AS (
+        SELECT
+          id,
+          (${leastInvoice}::integer + ROW_NUMBER() OVER (ORDER BY created_at ASC, id ASC) - 1)::integer AS new_invoice_number
+        FROM bills
+        WHERE company_id = ${companyId}
+          AND created_at >= CAST(${startDate} AS timestamp)
+          AND COALESCE(invoice_number, 0) >= ${leastInvoice}
+      ),
+      updated AS (
+        UPDATE bills AS b
+        SET
+          invoice_number = ordered.new_invoice_number,
+          updated_at = NOW()
+        FROM ordered
+        WHERE b.id = ordered.id
+        RETURNING b.invoice_number
+      )
+      SELECT
+        COUNT(*)::integer AS updated_count,
+        COALESCE(MAX(invoice_number), ${leastInvoice - 1})::integer AS last_invoice
+      FROM updated
+    `);
 
     return {
       totalDeleted: deleteResult.count,
       deletedBillIds: deleteBillIds,
       invoiceFixed: true,
-      lastInvoice: currentNumber - 1,
+      lastInvoice: renumberResult?.last_invoice ?? leastInvoice - 1,
     };
   }, {
     maxWait: 1000000000,

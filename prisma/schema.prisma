@@ -1080,9 +1080,12 @@ model Bill {
   updatedAt                         DateTime                           @updatedAt() @map("updated_at")
   invoiceNumber                     Int?                               @map("invoice_number")
   subtotal                          Float?
+  originalSubtotal                  Float?                             @map("original_subtotal")
   discount                          Float?
+  originalDiscount                  Float?                             @map("original_discount")
   tax                               Float?
   grandTotal                        Float?                             @map("grand_total")
+  originalGrandTotal                Float?                             @map("original_grand_total")
   returnAmt                         Float?                             @map("return_amt")
   deliveryFees                      Float?                             @map("delivery_fees")
   paymentMethod                     String?                            @map("payment_method")
@@ -1146,9 +1149,12 @@ model Entry {
   barcode     String?
   qty         Float?
   rate        Float?
+  originalRate Float?     @map("original_rate")
   discount    Float?
+  originalDiscount Float? @map("original_discount")
   tax         Float?
   value       Float?
+  originalValue Float?    @map("original_value")
   size        String?
   userName    String?      @map("user_name")
   companyId   String?      @map("company_id")
