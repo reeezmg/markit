@@ -9,7 +9,6 @@ import {
     useFindManyProduct,
     useUpdateProduct,
     useUpdateManyProduct,
-    useCreatePurchaseOrder,
     useUpdateVariant,
     useCountProduct,
     useDeleteProduct,
@@ -33,7 +32,6 @@ const UpdateProduct = useUpdateProduct({ optimisticUpdate: true });
 const DeleteProduct = useDeleteProduct({ optimisticUpdate: true });
 const UpdateManyProduct = useUpdateManyProduct({ optimisticUpdate: true });
 const Updatevariant = useUpdateVariant({ optimisticUpdate: true });
-const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
@@ -323,7 +321,6 @@ const columnsTable = computed(() =>
 
 // Selected Rows
 const selectedRows = ref([]);
-const isAdd = ref(false);
 const itemBarcode = ref('');
 const isPhotoSaving = ref(false);
 
@@ -828,19 +825,8 @@ async function toggleVariantStatus(id: string, status:boolean) {
     }
 
 
-const handleAdd = async () => {
-  try {
-    isAdd.value = true;
-
-    const res = await $fetch('/api/purchaseorder/create', {
-      method: 'POST',
-    });
-    router.push(`products/add?poId=${res?.id}`);
-  } catch (error) {
-    console.error('Failed to create purchase order:', error);
-  } finally {
-    isAdd.value = false;
-  }
+const handleAdd = () => {
+  router.push('/products/add');
 };
 
 
@@ -967,7 +953,6 @@ const handleAddPhoto = async () => {
         color="primary"
         variant="solid"
         label="Add Product"
-        :loading="isAdd"
         @click="handleAdd"
       />
       <UButton

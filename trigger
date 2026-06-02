@@ -1,29 +1,26 @@
 -- bills
-
+-- Single source of truth for the retail/store/markit invoice number.
+-- Quote-converted invoices use a separate scheme (invoice_code / invoice_counter),
+-- so we skip any row that already carries an invoice_code and never burn a
+-- bill_counter value for it. The atomic UPDATE ... RETURNING locks the company
+-- row once and assigns invoice_number = the new counter value, inside the
+-- caller's transaction (so it rolls back with a failed insert => gapless).
 CREATE OR REPLACE FUNCTION generate_invoice_number()
 RETURNS TRIGGER AS $$
-DECLARE
-    new_invoice_number INT;
 BEGIN
-    -- Get the current billCounter for the company
-    SELECT bill_counter INTO new_invoice_number
-    FROM companies
-    WHERE id = NEW.company_id
-    FOR UPDATE;
-
-    -- Set the invoice number in the new bill
-    NEW.invoice_number := new_invoice_number + 1;
-
-    -- Increment the billCounter in the Company table
-    UPDATE companies
-    SET bill_counter = bill_counter + 1
-    WHERE id = NEW.company_id;
+    IF NEW.invoice_code IS NULL THEN
+        UPDATE companies
+        SET bill_counter = bill_counter + 1
+        WHERE id = NEW.company_id
+        RETURNING bill_counter INTO NEW.invoice_number;
+    END IF;
 
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
--- Attach the trigger to the `bills` table
+-- Attach the trigger to the `bills` table (idempotent)
+DROP TRIGGER IF EXISTS trigger_generate_invoice_number ON bills;
 CREATE TRIGGER trigger_generate_invoice_number
 BEFORE INSERT ON bills
 FOR EACH ROW

@@ -662,6 +662,7 @@ model DeliveryPartnerEarnings {
   distance          Float?
   waitingTime       Float?          @map("waiting_time")
   storeWaitings     Json?           @map("store_waitings")
+  cancellationFees  String?         @map("cancellation_fees")
   trynbuy           Trynbuy         @relation(fields: [trynbuyId], references: [id])
   trynbuyId         String          @unique() @map("trynbuy_id")
   deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id])
@@ -989,25 +990,25 @@ model Brand {
 }
 
 model Product {
-  id              String        @id() @default(uuid())
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt() @map("updated_at")
+  id              String         @id() @default(uuid())
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt() @map("updated_at")
   name            String
-  status          Boolean       @default(true)
+  status          Boolean        @default(true)
   rating          Float?
   description     String?
-  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId       String        @map("company_id")
-  category        Category?     @relation(fields: [categoryId], references: [id])
-  categoryId      String?       @map("category_id")
-  subcategory     Subcategory?  @relation(fields: [subcategoryId], references: [id])
-  subcategoryId   String?       @map("subcategory_id")
-  brand           Brand?        @relation(fields: [brandId], references: [id])
-  brandId         String?       @map("brand_id")
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId       String         @map("company_id")
+  category        Category?      @relation(fields: [categoryId], references: [id])
+  categoryId      String?        @map("category_id")
+  subcategory     Subcategory?   @relation(fields: [subcategoryId], references: [id])
+  subcategoryId   String?        @map("subcategory_id")
+  brand           Brand?         @relation(fields: [brandId], references: [id])
+  brandId         String?        @map("brand_id")
   variants        Variant[]
-  purchaseorder   PurchaseOrder @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
-  purchaseorderId String        @map("purchaseorder_id")
-  writeId         String?       @default(uuid()) @map("write_id")
+  purchaseorder   PurchaseOrder? @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
+  purchaseorderId String?        @map("purchaseorder_id")
+  writeId         String?        @default(uuid()) @map("write_id")
 
   @@index([categoryId])
   @@index([subcategoryId])

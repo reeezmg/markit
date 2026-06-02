@@ -62,7 +62,12 @@ export default defineEventHandler(async (event) => {
         }
       }
 
-      // 1️⃣ Insert Bill — invoice number was atomically reserved by findBillCounter before this call
+      // invoice_number is assigned by the BEFORE INSERT trigger
+      // (trigger_generate_invoice_number — see storetools/trigger). We pass null
+      // and read the trigger-assigned value back via RETURNING.
+      const billCompanyId = payload.company?.connect?.id || companyId
+
+      // 1️⃣ Insert Bill
       const insertBillQuery = `
         INSERT INTO bills (
           id, invoice_number, subtotal, discount, grand_total, return_amt,
@@ -76,11 +81,12 @@ export default defineEventHandler(async (event) => {
           $11, $12, $13, $14, $15,
           $16, $17, now(), $18
         )
+        RETURNING invoice_number
       `
 
-      await client.query(insertBillQuery, [
+      const billInsertRes = await client.query(insertBillQuery, [
         billId,
-        payload.invoiceNumber || null,
+        null,
         payload.subtotal || 0,
         payload.discount || 0,
         payload.grandTotal || 0,
@@ -92,50 +98,52 @@ export default defineEventHandler(async (event) => {
         payload.paymentStatus || 'PAID',
         payload.type || 'BILL',
         payload.splitPayments ? JSON.stringify(payload.splitPayments) : null,
-        payload.company.connect?.id || companyId,
+        billCompanyId,
         payload.account?.connect?.id || null,
         resolvedClientId,
         payload.companyUser?.connect?.companyId_userId?.userId || null,
         payload.couponValue
       ])
+      const invoiceNumber = billInsertRes.rows[0]?.invoice_number ?? null
 
-      // 2️⃣ Insert Entries (payload.entries.create)
+      // 2️⃣ Insert Entries — single multi-row INSERT (one round-trip)
       if (payload.entries?.create?.length) {
-        const entryInserts = payload.entries.create.map((entry: any) => {
-          const entryId = crypto.randomUUID()
-          return client.query(
-            `
-              INSERT INTO entries (
-                id, name, qty, rate, discount, tax, value, size, barcode,
-                return, variant_id, item_id, category_id, company_id, user_id, bill_id, user_name
-              )
-              VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9,
-                $10, $11, $12, $13, $14, $15, $16, $17
-              )
-            `,
-            [
-              entryId,
-              entry.name || '',
-              entry.qty || 1,
-              entry.rate || 0,
-              entry.discount || 0,
-              entry.tax || 0,
-              entry.value || 0,
-              entry.size || null,
-              entry.barcode || null,
-              entry.return || false,
-              entry.variant?.connect?.id || null,
-              entry.item?.connect?.id || null,
-              entry.category?.connect?.id || null,
-              companyId,
-              entry.companyUser?.connect?.companyId_userId?.userId || null,
-              billId,
-              entry.userName || null
-            ]
+        const ENTRY_COLS = 17
+        const entryValues: any[] = []
+        const entryRows = payload.entries.create.map((entry: any, i: number) => {
+          const base = i * ENTRY_COLS
+          entryValues.push(
+            crypto.randomUUID(),
+            entry.name || '',
+            entry.qty || 1,
+            entry.rate || 0,
+            entry.discount || 0,
+            entry.tax || 0,
+            entry.value || 0,
+            entry.size || null,
+            entry.barcode || null,
+            entry.return || false,
+            entry.variant?.connect?.id || null,
+            entry.item?.connect?.id || null,
+            entry.category?.connect?.id || null,
+            companyId,
+            entry.companyUser?.connect?.companyId_userId?.userId || null,
+            billId,
+            entry.userName || null
           )
+          const ph = Array.from({ length: ENTRY_COLS }, (_, k) => `$${base + k + 1}`)
+          return `(${ph.join(', ')})`
         })
-        await Promise.all(entryInserts)
+        await client.query(
+          `
+            INSERT INTO entries (
+              id, name, qty, rate, discount, tax, value, size, barcode,
+              return, variant_id, item_id, category_id, company_id, user_id, bill_id, user_name
+            )
+            VALUES ${entryRows.join(', ')}
+          `,
+          entryValues
+        )
       }
 
       // 3️⃣ Parallel updates (client points, stock, returns, etc.)
@@ -159,42 +167,49 @@ export default defineEventHandler(async (event) => {
         )
       }
 
-      // stock updates
-      for (const item of items) {
-        if (!item.return) {
-          if (item.variantId)
-            updatePromises.push(
-              client.query(
-                `UPDATE items SET sold_qty = COALESCE(sold_qty, 0) + $1 WHERE id = $2`,
-                [item.qty, item.id]
-              )
-            )
-          if (item.id)
-            updatePromises.push(
-              client.query(
-                `UPDATE items SET qty = COALESCE(qty, 0) - $1 WHERE id = $2`,
-                [item.qty, item.id]
-              )
-            )
-        }
+      // stock updates — aggregate sold_qty/qty deltas per item (sales + returns)
+      // into a single bulk UPDATE instead of up to 2 queries per item.
+      const stockDeltas = new Map<string, { sold: number; qty: number }>()
+      const addDelta = (id: string, sold: number, qty: number) => {
+        const cur = stockDeltas.get(id) || { sold: 0, qty: 0 }
+        cur.sold += sold
+        cur.qty += qty
+        stockDeltas.set(id, cur)
       }
 
-      // returned stock
+      // sales: sold_qty += qty (only if variantId), qty -= qty (requires id)
+      for (const item of items) {
+        if (item.return || !item.id) continue
+        const q = Number(item.qty) || 0
+        addDelta(item.id, item.variantId ? q : 0, -q)
+      }
+
+      // returns: sold_qty -= qty (only if variantId), qty += qty (requires id)
       for (const item of returnedItems) {
-        if (item.variantId)
-          updatePromises.push(
-            client.query(
-              `UPDATE items SET sold_qty = COALESCE(sold_qty, 0) - $1 WHERE id = $2`,
-              [item.qty, item.id]
-            )
+        if (!item.id) continue
+        const q = Number(item.qty) || 0
+        addDelta(item.id, item.variantId ? -q : 0, q)
+      }
+
+      if (stockDeltas.size) {
+        const ids: string[] = []
+        const soldDeltas: number[] = []
+        const qtyDeltas: number[] = []
+        for (const [id, d] of stockDeltas) {
+          ids.push(id)
+          soldDeltas.push(d.sold)
+          qtyDeltas.push(d.qty)
+        }
+        updatePromises.push(
+          client.query(
+            `UPDATE items AS i
+             SET sold_qty = COALESCE(i.sold_qty, 0) + u.sold_delta,
+                 qty      = COALESCE(i.qty, 0) + u.qty_delta
+             FROM unnest($1::text[], $2::int[], $3::int[]) AS u(id, sold_delta, qty_delta)
+             WHERE i.id = u.id`,
+            [ids, soldDeltas, qtyDeltas]
           )
-        if (item.id)
-          updatePromises.push(
-            client.query(
-              `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE id = $2`,
-              [item.qty, item.id]
-            )
-          )
+        )
       }
 
       // coupon usage + increment
@@ -255,7 +270,7 @@ export default defineEventHandler(async (event) => {
 
       await client.query('COMMIT')
       client.release()
-      return { success: true, billId, generatedCoupons }
+      return { success: true, billId, invoiceNumber, generatedCoupons }
     } catch (error: any) {
       await client.query('ROLLBACK')
       client.release()

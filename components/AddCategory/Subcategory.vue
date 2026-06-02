@@ -66,6 +66,9 @@ watchEffect(() => {
     name: name.value,
     description: description.value,
     image: selectedFiles.value[0]?.uuid || props.editFile,
+    imageFile: selectedFiles.value[0]?.file
+      ? selectedFiles.value[0]
+      : undefined,
     status: status.value
   });
 });

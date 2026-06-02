@@ -1,17 +1,61 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
 import { v4 as uuidv4 } from 'uuid';
-import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant,useUpdateManyDistributorCredit, useDeleteManyDistributorCredit, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany,useCreateDistributorPayment, useUpdateManyDistributorPayment , useDeleteManyDistributorPayment} from '~/lib/hooks';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
-import type { paymentType as PType } from '@prisma/client';
-import { useQueryClient } from '@tanstack/vue-query';
-const queryClient = useQueryClient();
 const { printLabel } = usePrint();
 const router = useRouter();
+const route = useRoute();
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
+const draft = useProductDraft();
+const draftProductIds = computed({
+  get: () => draft.productIds.value,
+  set: (value: string[]) => {
+    draft.productIds.value = value
+  }
+})
+const draftPurchaseInfo = computed(() => draft.purchaseInfo.value)
+const draftProducts = computed(() => draft.draftProducts.value)
+const selectedDraft = computed({
+  get: () => draft.selectedDraft.value,
+  set: (value: any) => {
+    draft.selectedDraft.value = value
+  }
+})
+const currentDraftNo = computed(() => draft.draftNo.value)
+const isDistributorPurchaseOrderFlow = computed(
+  () => route.query.from === 'distributor-purchase-order'
+)
+const returnTo = computed(() => {
+  const value = Array.isArray(route.query.returnTo)
+    ? route.query.returnTo[0]
+    : route.query.returnTo
+
+  return typeof value === 'string' && value.startsWith('/')
+    ? value
+    : '/products'
+})
+const editPurchaseOrderId = computed(() => String(route.query.poId || ''))
+const isEditingPurchaseOrder = computed(
+  () => route.query.isEdit === 'true' && !!editPurchaseOrderId.value
+)
+const activePurchaseOrderId = computed(() =>
+  isEditingPurchaseOrder.value ? editPurchaseOrderId.value : draft.poId.value
+)
+const tableProductIds = computed(() =>
+  isEditingPurchaseOrder.value ? undefined : draftProductIds.value
+)
+
+const onDraftProductDeleted = (id: string) => {
+  draft.productIds.value = draft.productIds.value.filter(productId => productId !== id)
+  draft.stagedProducts.value = draft.stagedProducts.value.filter((p: any) => p.id !== id)
+}
+
+const sameJson = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b)
+
 const isAdd = ref(false);
 const settledMap = ref(new Map());
+const pendingDraftProducts = ref<any[]>([]);
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 const deliveryType = ref<string>('')
 const billDate = ref<string>('');
@@ -36,7 +80,8 @@ interface BarcodeItem {
   barcode: string;
   code: string;
   productName: string;
-  name: string;
+  name?: string;
+  variantName: string;
   sprice: number;
   size?: string | null;
 }
@@ -74,281 +119,30 @@ interface Product {
 
 
 
-const route = useRoute();
-const poId = computed(() => String(route.query.poId || ''));
-const isEdit = computed(() => String(route.query.isEdit || ''));
 const oldPaymentType = ref<string>('');
 
 
-const CreateProduct = useCreateProduct({
-  invalidate: false, // we'll manually invalidate
-
-  onMutate: async (newProduct) => {
-  const purchaseOrderId = newProduct.data.purchaseorder?.connect?.id
-
-const cacheKey = [
-    'zenstack', 'PurchaseOrder', 'findUnique',
-    {
-      where: { id: purchaseOrderId },
-      include: { products: { include: { variants: { include: { items: true } } } } }
-    },
-    {
-      infinite: false,
-      optimisticUpdate: true
-    }
-]
+// Product create/update now go through raw-SQL endpoints (/api/products/create,
+// /api/products/update). settledMap is toggled manually at the call sites
+// (handleAdd / handleEdit) — no optimistic query-cache machinery needed.
 
 
-  const previous = queryClient.getQueryData(cacheKey)
-  settledMap.value.set(newProduct.data.id, false);
-  // ✅ Transform payload to match cached DB structure
-  const optimisticProduct = {
-    id: newProduct.data.id,
-    name: newProduct.data.name,
-    brandId: newProduct.data.brand?.connect?.id ?? null,
-    description: newProduct.data.description,
-    status: newProduct.data.status,
-    companyId: newProduct.data.company?.connect?.id ?? null,
-    categoryId: newProduct.data.category?.connect?.id ?? null,
-    subcategoryId: newProduct.data.subcategory?.connect?.id ?? null,
-    purchaseorderId: purchaseOrderId,
-    variants: newProduct.data.variants?.create?.map(v => ({
-      id: v.id,
-      name: v.name,
-      unit: v.unit ?? 'Nos',
-      sprice: v.sprice,
-      pprice: v.pprice,
-      dprice: v.dprice,
-      discount: v.discount,
-      status: v.status,
-      tax: v.tax,
-      images: v.images ?? [],
-      companyId: v.company?.connect?.id ?? null,
-      productId: newProduct.data.id,
-      items: v.items?.create?.map(i => ({
-        id: i.id,
-        size: i.size,
-        qty: i.qty,
-        companyId: i.company?.connect?.id ?? null,
-        variantId: v.id
-      })) ?? []
-    })) ?? []
+// Raw-SQL: purchase order (edit flow) read — replaces useFindUniquePurchaseOrder
+const editPurchaseOrder = ref<any>(null)
+const refetchEditPurchaseOrder = async () => {
+  if (!isEditingPurchaseOrder.value || !editPurchaseOrderId.value) {
+    editPurchaseOrder.value = null
+    return { data: null }
   }
-
-  if (previous && typeof previous === 'object') {
-   
-    queryClient.setQueryData(cacheKey, {
-      ...previous,
-      products: [...(previous.products ?? []), optimisticProduct]
-    })
+  try {
+    editPurchaseOrder.value = await $fetch(`/api/purchaseorder/${editPurchaseOrderId.value}`)
+  } catch (e) {
+    console.error('Failed to load purchase order', e)
+    editPurchaseOrder.value = null
   }
-
-  return { previous, cacheKey, productId: optimisticProduct.id }
-},
-
-  onError: (_err, _newData, ctx) => {
-    if (ctx?.previous) {
-      queryClient.setQueryData(ctx.cacheKey, ctx.previous)
-    }
-  },
-
-  onSettled: (_data, _error, _vars, ctx) => {
-    settledMap.value.set(ctx?.productId, true);
-    if (ctx?.cacheKey) {
-      queryClient.invalidateQueries({
-        queryKey: ctx.cacheKey,
-        exact: true
-      })
-    }
-  }
-})
-
-const UpdateProduct = useUpdateProduct({
-
-  invalidate: false, // we'll manually invalidate
-
-  onMutate: async (updatedProductInput) => {
-  const purchaseOrderId = poId.value;
-
-  if (!purchaseOrderId) return;
-
-  const cacheKey = [
-    'zenstack', 'PurchaseOrder', 'findUnique',
-    {
-      where: { id: purchaseOrderId },
-      include: { products: { include: { variants: { include: { items: true } } } } }
-    },
-    {
-      infinite: false,
-      optimisticUpdate: true
-    }
-  ];
-
-  const previous = queryClient.getQueryData(cacheKey);
-
-
-  if (!previous || typeof previous !== 'object') return;
-
-  const input = updatedProductInput.data;
-  const productId = updatedProductInput.where.id;
-  settledMap.value.set(productId, false);
-  // First, handle the product-level updates
-  const updatedProducts = (previous.products ?? []).map(product => {
-    if (product.id !== productId) return product;
-
-    // Update the product fields
-    const updatedProduct = {
-      ...product,
-      name: input.name ?? product.name,
-      brandId: input.brand?.connect?.id ?? product.brandId,
-      description: input.description ?? product.description,
-      status: input.status ?? product.status,
-      companyId: input.company?.connect?.id ?? product.companyId,
-      categoryId: input.category?.connect?.id ?? product.categoryId,
-      subcategoryId: input.subcategory?.connect?.id ?? product.subcategoryId,
-    };
-
-    // Handle variants
-    if (!input.variants) return updatedProduct;
-
-    // First apply deleteMany (remove variants not in the input)
-    const variantsToKeep = input.variants.upsert?.map(v => v.where.id) ?? [];
-    let updatedVariants = product.variants.filter(v => 
-      variantsToKeep.includes(v.id)
-    );
-
-    // Then handle upsert operations
-    input.variants.upsert?.forEach(variantInput => {
-      const existingVariantIndex = updatedVariants.findIndex(
-        v => v.id === variantInput.where.id
-      );
-
-      const variantData = variantInput.update ?? variantInput.create;
-      
-      if (existingVariantIndex >= 0) {
-        // Update existing variant
-        const existingVariant = updatedVariants[existingVariantIndex];
-        updatedVariants[existingVariantIndex] = {
-          ...existingVariant,
-          name: variantData?.name ?? existingVariant.name,
-          unit: variantData?.unit ?? existingVariant.unit,
-          sprice: variantData?.sprice ?? existingVariant.sprice,
-          pprice: variantData?.pprice ?? existingVariant.pprice,
-          dprice: variantData?.dprice ?? existingVariant.dprice,
-          discount: variantData?.discount ?? existingVariant.discount,
-          status: variantData?.status ?? existingVariant.status,
-          tax: variantData?.tax ?? existingVariant.tax,
-          images: variantData?.images ?? existingVariant.images,
-        };
-
-        // Handle items for this variant
-        if (variantData?.items) {
-          // First apply deleteMany (remove items not in the input)
-          const itemsToKeep = variantData.items.upsert?.map(i => i.where?.id) ?? [];
-          let updatedItems = existingVariant.items.filter(i => 
-            i.id && itemsToKeep.includes(i.id)
-          );
-
-          // Then handle upsert operations for items
-          variantData.items.upsert?.forEach(itemInput => {
-            const existingItemIndex = updatedItems.findIndex(
-              i => i.id === itemInput.where?.id
-            );
-
-            const itemData = itemInput.update ?? itemInput.create;
-            
-            if (existingItemIndex >= 0) {
-              // Update existing item
-              updatedItems[existingItemIndex] = {
-                ...updatedItems[existingItemIndex],
-                size: itemData?.size ?? updatedItems[existingItemIndex].size,
-                qty: itemData?.qty ?? updatedItems[existingItemIndex].qty,
-              };
-            } else {
-              // Add new item
-              updatedItems.push({
-                id: itemInput.where?.id ?? null,
-                size: itemData?.size ?? null,
-                qty: itemData?.qty ?? 0,
-                companyId: useAuth().session.value?.companyId ?? null,
-                variantId: variantInput.where.id,
-              });
-            }
-          });
-
-          updatedVariants[existingVariantIndex].items = updatedItems;
-        }
-      } else {
-        // Add new variant
-        const newVariant = {
-          id: variantInput.where.id,
-          name: variantData?.name ?? '',
-          unit: variantData?.unit ?? 'Nos',
-          sprice: variantData?.sprice ?? 0,
-          pprice: variantData?.pprice ?? 0,
-          dprice: variantData?.dprice ?? 0,
-          discount: variantData?.discount ?? 0,
-          status: variantData?.status ?? true,
-          tax: variantData?.tax ?? 0,
-          images: variantData?.images ?? [],
-          companyId: useAuth().session.value?.companyId ?? null,
-          productId: productId,
-          items: (variantData?.items?.upsert ?? []).map(itemInput => ({
-            id: itemInput.where?.id ?? null,
-            size: (itemInput.update ?? itemInput.create)?.size ?? null,
-            qty: (itemInput.update ?? itemInput.create)?.qty ?? 0,
-            companyId: useAuth().session.value?.companyId ?? null,
-            variantId: variantInput.where.id,
-          })),
-        };
-        updatedVariants.push(newVariant);
-      }
-    });
-
-    return {
-      ...updatedProduct,
-      variants: updatedVariants,
-    };
-  });
-
-
-
-  queryClient.setQueryData(cacheKey, {
-    ...previous,
-    products: updatedProducts
-  });
-  return { previous, cacheKey, productId : productId };
-},
-
-  onError: (_err, _newData, ctx) => {
-    if (ctx?.previous) {
-      queryClient.setQueryData(ctx.cacheKey, ctx.previous);
-    }
-  },
-
-  onSettled: (_data, _error, _vars, ctx) => {
-      settledMap.value.set(ctx?.productId, true);
-    if (ctx?.cacheKey) {
-      queryClient.invalidateQueries({
-        queryKey: ctx.cacheKey,
-        exact: true
-      });
-    }
-  }
-});
-
-
-const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
-const CreateDistributorCredit = useCreateDistributorCredit({ optimisticUpdate: true });
-const UpdateManyDistributorCredit = useUpdateManyDistributorCredit({ optimisticUpdate: true });
-const DeleteManyDistributorCredit = useDeleteManyDistributorCredit({ optimisticUpdate: true });
-
-const CreateDistributorPayment = useCreateDistributorPayment({ optimisticUpdate: true });
-const UpdateManyDistributorPayment = useUpdateManyDistributorPayment({ optimisticUpdate: true });
-const DeleteManyDistributorPayment = useDeleteManyDistributorPayment({ optimisticUpdate: true });
-
-const UpdateDistributorCompany = useUpdateDistributorCompany({ optimisticUpdate: true });
-const UpdatePurchaseOrder = useUpdatePurchaseOrder({ optimisticUpdate: true });
+  return { data: editPurchaseOrder.value }
+}
+watch(isEditingPurchaseOrder, (v) => { if (v) refetchEditPurchaseOrder() }, { immediate: true })
 const awsService = new AwsService();
 const selectedProduct: Ref<Product> = ref({
   id: uuidv4(), 
@@ -398,7 +192,7 @@ const brand = ref('');
 const description = ref('');
 const live = ref<boolean>();
 let files = reactive<ImageData[]>([]);
-const category = ref({});
+const category = ref<any>({});
 const subcategory = ref('');
 
 const barcodes = ref<BarcodeItem[]>([]);
@@ -440,16 +234,118 @@ const variants = ref<{
     images: [] 
 }]);
 
-const { data: categoryTax } = useFindUniqueCategory({
-  where: computed(() => ({ id: category.value.id })),
-  select: {
-    fixedTax: true,
-    taxBelowThreshold: true,
-    taxAboveThreshold: true,
-    thresholdAmount: true,
-    taxType: true,
+const isApplyingDraft = ref(false);
+
+const stripDraftImages = (variantList: any[]) =>
+  (variantList || []).map((variant) => ({
+    ...variant,
+    images: [],
+    items: Array.isArray(variant.items) && variant.items.length
+      ? variant.items
+      : [{ id: uuidv4(), size: null, qty: undefined }],
+  }));
+
+const applyDraftToForm = () => {
+  isApplyingDraft.value = true;
+  const savedForm = draft.form.value || {};
+
+  name.value = savedForm.name || '';
+  brand.value = savedForm.brandId || '';
+  description.value = savedForm.description || '';
+  category.value = savedForm.category || {};
+  subcategory.value = savedForm.subcategoryId || '';
+  live.value = savedForm.live ?? true;
+  deliveryType.value = savedForm.deliveryType || deliveryType.value;
+  variants.value = stripDraftImages(savedForm.variants || []);
+
+  selectedProduct.value = {
+    id: savedForm.editingProductId || uuidv4(),
+    name: name.value,
+    brandId: brand.value,
+    brand: {},
+    description: description.value,
+    files: [],
+    category: category.value,
+    subcategory: {},
+    categoryId: category.value?.id || '',
+    subcategoryId: subcategory.value,
+    variants: variants.value,
+  };
+
+  const info = draft.purchaseInfo.value || {};
+  distributorId.value = info.distributorId || '';
+  paymentType.value = info.paymentType || '';
+  oldPaymentType.value = info.oldPaymentType || '';
+  billNo.value = info.billNo || '';
+  deliveryType.value = savedForm.deliveryType || deliveryType.value;
+  totalAmount.value = info.total || 0;
+  discount.value = info.discount || 0;
+  tax.value = info.taxPercent || 0;
+  adjustment.value = info.adjustment || 0;
+  billDate.value = info.billDate || new Date().toISOString().split('T')[0];
+
+  nextTick(() => {
+    isApplyingDraft.value = false;
+  });
+};
+
+watch(() => draft.draftNo.value, applyDraftToForm);
+
+// Block Chrome's defaults for the Ctrl+ shortcuts used on this page so they
+// reliably trigger our app actions instead (V=paste, R=reload, S=save-page,
+// D=bookmark, Enter=submit-form). Capture phase + window-level so it fires
+// before Chrome routes the keydown to its built-in handlers, regardless of
+// which element has focus on the page.
+const blockChromeShortcutsOnPage = (e: KeyboardEvent) => {
+  if (!e.ctrlKey || e.altKey || e.metaKey) return;
+  const key = e.key.toLowerCase();
+  const isEnter = e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter';
+  if (key === 'v' || key === 'r' || key === 's' || key === 'd' || isEnter) {
+    e.preventDefault();
   }
-},{ enabled: computed(() => !!category.value.id) });
+};
+
+onMounted(() => {
+  applyDraftToForm();
+  window.addEventListener('keydown', blockChromeShortcutsOnPage, { capture: true });
+});
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', blockChromeShortcutsOnPage, { capture: true });
+});
+
+const persistDraftForm = () => {
+  // Skip until hydration completes — child components emit empty `update`
+  // events during their setup-time `immediate: true` watchers, which would
+  // otherwise wipe the saved draft before useProductDraft hydrates from
+  // localStorage on mount.
+  if (!draft.isReady.value || isApplyingDraft.value) return;
+  const nextForm = {
+    ...draft.form.value,
+    editingProductId: clearInputs.value ? '' : selectedProduct.value?.id,
+    name: name.value,
+    brandId: brand.value,
+    description: description.value,
+    category: category.value,
+    subcategoryId: subcategory.value,
+    live: live.value,
+    deliveryType: deliveryType.value,
+    variants: stripDraftImages(variants.value),
+  };
+  if (!sameJson(draft.form.value, nextForm)) {
+    draft.form.value = nextForm;
+  }
+};
+
+const categoryTax = ref<any>(null)
+watch(() => category.value?.id, async (id) => {
+  if (!id) { categoryTax.value = null; return }
+  try {
+    categoryTax.value = await $fetch('/api/products/category-tax', { query: { id } })
+  } catch {
+    categoryTax.value = null
+  }
+}, { immediate: true });
 
 
 const createValue = (data: any) => {
@@ -458,6 +354,7 @@ const createValue = (data: any) => {
     description.value = data.description;
     category.value = data.category;
     subcategory.value = data.subcategory;
+    persistDraftForm();
 };
 
 watch(category, (newProduct) => {
@@ -465,17 +362,34 @@ watch(category, (newProduct) => {
 }, { deep: true });
 
 const updateVariant = (index,data: any) => {
-  variants.value[index] = { ...variants.value[index], ...data };
+  const current = variants.value[index] || {};
+  const nextVariant = { ...current, ...data };
+  if (sameJson(current, nextVariant)) return;
+  variants.value[index] = nextVariant;
+  selectedProduct.value = {
+    ...selectedProduct.value,
+    variants: variants.value,
+  };
   console.log('Updated variant:', variants.value[index]);
+  persistDraftForm();
 };
 
 
 const liveValue = (data: any) => {
     live.value = data.live;
+    persistDraftForm();
 };
 
 const fileValue = (data: any) => {
-    variants.value[data.index].images = [...data.files]; 
+    const current = variants.value[data.index] || {};
+    const nextVariant = { ...current, images: [...data.files] };
+    if (sameJson(current, nextVariant)) return;
+    variants.value[data.index] = nextVariant;
+    selectedProduct.value = {
+      ...selectedProduct.value,
+      variants: variants.value,
+    };
+    persistDraftForm();
   
 };
 
@@ -488,7 +402,19 @@ watch(isOpenAdd, (newVal) => {
 const handleProductSelected = (product:any) => {
   selectedProduct.value = product;
   console.log('Selected product:', selectedProduct.value);
+  name.value = product.name || '';
+  brand.value = product.brandId || '';
+  description.value = product.description || '';
+  category.value = product.category || {};
+  subcategory.value = product.subcategoryId || '';
+  variants.value = stripDraftImages(product.variants || []);
+  selectedProduct.value = {
+    ...selectedProduct.value,
+    variants: variants.value,
+  };
+  draft.form.value.editingProductId = product.id;
   clearInputs.value = false;
+  persistDraftForm();
 };
 
 const handleDistributorValue = (data:any) => {
@@ -503,201 +429,144 @@ const handleDistributorValue = (data:any) => {
   tax.value = data.taxPercent
   adjustment.value = data.adjustment
   billDate.value = data.billDate
+  const nextPurchaseInfo = {
+    distributorId: data.distributorId || '',
+    billNo: data.billNo || '',
+    billDate: data.billDate || new Date().toISOString().split('T')[0],
+    paymentType: data.paymentType || '',
+    oldPaymentType: data.oldPaymentType || '',
+    discount: data.discount || 0,
+    taxPercent: data.taxPercent || 0,
+    adjustment: data.adjustment || 0,
+    subtotal: data.subtotal || 0,
+    total: data.total || 0,
+  }
+  if (!sameJson(draft.purchaseInfo.value, nextPurchaseInfo)) {
+    draft.purchaseInfo.value = nextPurchaseInfo
+  }
 
 };
 
-const handleAdd = async (e: Event) => {
+const snapshotProductForm = () => ({
+  name: name.value || '',
+  brand: brand.value,
+  description: description.value || '',
+  category: category.value ? { ...category.value } : {},
+  subcategory: subcategory.value,
+  live: live.value,
+  deliveryType: deliveryType.value || 'trynbuy',
+  variants: variants.value.map((variant) => ({
+    ...variant,
+    items: (variant.items || []).map((item) => ({ ...item })),
+    images: [...(variant.images || [])],
+  })),
+});
 
+const makePendingDraftProduct = (productId: string, productSnapshot: any) => ({
+  id: productId,
+  name: productSnapshot.name || 'Untitled product',
+  category: productSnapshot.category || {},
+  categoryId: productSnapshot.category?.id || '',
+  subcategoryId: productSnapshot.subcategory || '',
+  isPending: true,
+  variants: productSnapshot.variants.map((variant: any) => ({
+    ...variant,
+    items: (variant.items || []).map((item: any) => ({
+      ...item,
+      initialQty: item.initialQty ?? item.qty ?? 0,
+    })),
+  })),
+});
+
+// Build a fully self-contained, localStorage-serializable product object from
+// the current form snapshot. Images are stored as { uuid, view } (the files are
+// already uploaded to S3) so the staged product survives a refresh. This same
+// shape is what /api/products/save-batch consumes on Save.
+const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
+  id: productId,
+  name: snap.name || '',
+  brandId: snap.brand || null,
+  description: snap.description || '',
+  status: snap.live ?? true,
+  categoryId: snap.category?.id || null,
+  subcategoryId: snap.subcategory || null,
+  deliveryType: snap.deliveryType || 'trynbuy',
+  categoryTax: catTax,
+  // display metadata for the left table + barcode labels
+  category: snap.category ? { id: snap.category.id, name: snap.category.name, targetAudience: snap.category.targetAudience } : null,
+  variants: (snap.variants || []).map((variant: any) => ({
+    id: variant.id || uuidv4(),
+    name: variant.name || '',
+    code: variant.code || null,
+    unit: variant.unit || 'Nos',
+    sprice: variant.sprice || 0,
+    pprice: variant.pprice || 0,
+    dprice: variant.dprice || 0,
+    discount: variant.discount || 0,
+    images: variantInputs?.value?.images ? (variant.images || []).map((f: any) => ({ uuid: f.uuid, view: f.view })) : [],
+    items: (variant.items || []).map((size: any) => ({ id: size.id || uuidv4(), size: size.size || null, qty: size.qty || 0 })),
+  })),
+})
+
+const handleAdd = async (e: Event) => {
   isLoad.value = true
   e.preventDefault();
   try {
-
     if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
-         toast.add({
-           title: 'No internet connection',
-           color: 'red',
-         });
-         throw new Error('No internet connection')
-       }
-
-
-    // if (!name.value || name.value.trim() === '') {
-    //   toast.add({
-    //     title: 'Please fill product name',
-    //     color: 'red',
-    //   });
-    //   return;
-    // }
-    if (!category.value || category.value.id.trim() === '') {
-      toast.add({
-        title: 'Please fill product category',
-        color: 'red',
-      });
+      toast.add({ title: 'No internet connection', color: 'red' });
+      throw new Error('No internet connection')
+    }
+    if (!category.value || !category.value.id?.trim()) {
+      toast.add({ title: 'Please fill product category', color: 'red' });
       return;
     }
-
-     for (const v of variants.value) {
+    for (const v of variants.value) {
       if (v.dprice > v.sprice) {
-        console.log(v)
-        toast.add({
-          title: `In variant : Discount price cannot be greater than selling price`,
-          color: 'red',
-        });
-        return; // stop execution if any variant is invalid
+        toast.add({ title: `In variant : Discount price cannot be greater than selling price`, color: 'red' });
+        return;
       }
     }
 
- 
+    const productId = uuidv4();
+    const productSnapshot = snapshotProductForm();
+    const snapshotCategoryTax = categoryTax.value ? { ...categoryTax.value } : null;
 
-
- const base64files = await Promise.all(
-  variants.value.flatMap((variant) =>
-    (variant.images || []) // ← fallback to empty array
-      .filter((file) => file.file instanceof File)
-      .map(async (file) => {
-        const base64 = await prepareFileForApi(file.file);
-        return { base64, uuid: file.uuid, view: file.view };
-      })
-  )
-);
-
-  if (base64files.length > 0) {
-    const awsres = await Promise.all(
-      base64files.map((file) =>
-        awsService.uploadBase64File(file.base64, file.uuid, file.view, category.value.name, category.value.targetAudience, useAuth().session.value?.isAiImage)
+    // Upload images to S3 now — File objects can't live in localStorage, but the
+    // resulting uuids can. The DB write itself is deferred to Save.
+    const base64files = await Promise.all(
+      productSnapshot.variants.flatMap((variant) =>
+        (variant.images || [])
+          .filter((file) => file.file instanceof File)
+          .map(async (file) => {
+            const base64 = await prepareFileForApi(file.file);
+            return { base64, uuid: file.uuid, view: file.view };
+          })
       )
     );
-}
-  console.log(variants.value)
+    if (base64files.length > 0) {
+      await Promise.all(
+        base64files.map((file) =>
+          awsService.uploadBase64File(file.base64, file.uuid, file.view, productSnapshot.category?.name, productSnapshot.category?.targetAudience, useAuth().session.value?.isAiImage)
+        )
+      );
+    }
 
-    const productRes = CreateProduct.mutate({
-      data: {
-        id: uuidv4(),
-        name: name.value || '',
-        description: description.value || '',
-        status: live.value ?? undefined,
-        company: {
-          connect: {
-            id: useAuth().session.value?.companyId,
-          },
-        },
-        purchaseorder: {
-          connect: { id: poId.value },
-        },
-        ...(category.value && {
-          category: { connect: { id: category.value.id } }
-        }),
-        ...(brand.value && {
-          brand: { connect: { id: brand.value } }
-        }),
-        ...(subcategory.value && {
-          subcategory: { connect: { id: subcategory.value } }
-        }),
-        variants: {
-          create: variants.value.map((variant) => {
-            let tax = 0;
-            if (categoryTax.value) {
-              if (categoryTax.value.taxType === 'FIXED') {
-                tax = categoryTax.value.fixedTax || 0;
-              } else if (categoryTax.value.taxType === 'VARIABLE') {
-                const threshold = categoryTax.value.thresholdAmount || 0;
-                tax = (variant.sprice || 0) > threshold
-                  ? (categoryTax.value.taxAboveThreshold || 0)
-                  : (categoryTax.value.taxBelowThreshold || 0);
-              }
-            }
+    // Stage locally (no DB write). Persisted to localStorage via the draft watcher.
+    draft.stagedProducts.value = [
+      ...draft.stagedProducts.value,
+      buildStagedProduct(productId, productSnapshot, snapshotCategoryTax),
+    ];
 
-            const itemsToCreate = (variant.items && variant.items.length > 0)
-              ? variant.items.map((size) => ({
-                id: uuidv4(),
-                  size: size.size || null,
-                  qty: size.qty || 0,
-                  initialQty: size.qty || 0,
-                  company: {
-                    connect: { id: useAuth().session.value?.companyId },
-                  },
-                }))
-              : [];
-
-            return {
-              id: uuidv4(),
-              name: variant.name || '',
-              ...(variant.code && { code: variant.code }),
-              unit: variant.unit || 'Nos',
-              sprice: variant.sprice || 0,
-              pprice: variant.pprice || 0,
-              dprice: variant.dprice || 0,
-              discount: variant.discount || 0,
-              deliveryType: deliveryType.value || 'trynbuy',
-              status: true,
-              tax,
-              ...(variantInputs?.value.images && { images: (variant.images || [])
-                .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
-                .map((file) => file.uuid),}),
-              company: {
-                connect: { id: useAuth().session.value?.companyId },
-              },
-              ...(itemsToCreate.length > 0 && {
-                items: {
-                  create: itemsToCreate,
-                }
-              })
-            };
-
-          })
-        }
-      },
-      select: { id: true }
-    });
-
-
-//     const productRes = await $fetch('/api/products/create', {
-//   method: "POST",
-//   body: {
-//     payload: {
-//       name: name.value,
-//       brand: brand.value,
-//       description: description.value,
-//       status: live.value
-//     },
-//     companyId: useAuth().session.value?.companyId,
-//     poId: poId.value,
-//     category: category.value,
-//     subcategory: subcategory.value,
-//     variants: variants.value,
-//     categoryTax: categoryTax.value,
-//     deliveryType: deliveryType.value
-//   }
-// })
-
-  
-
-    toast.add({
-      title: 'Product Added!',
-      id: 'modal-success',
-    });
-      handleReset();
-    isOpenAdd.value = false
+    handleReset();
+    isOpenAdd.value = false;
+    toast.add({ title: 'Product Added!', id: 'modal-success' });
   } catch (err: any) {
-    console.log(err.info?.message ?? err);
-  }finally{
+    console.log(err?.info?.message ?? err);
+    toast.add({ title: 'Failed to add product', color: 'red' });
+  } finally {
     isLoad.value = false
   }
- 
 };
-
-function calculateTax(variant) {
-  if (!categoryTax.value) return 0;
-
-  if (categoryTax.value.taxType === 'FIXED') {
-    return categoryTax.value.fixedTax || 0;
-  }
-
-  const threshold = categoryTax.value.thresholdAmount || 0;
-  return (variant.sprice || 0) > threshold
-    ? (categoryTax.value.taxAboveThreshold || 0)
-    : (categoryTax.value.taxBelowThreshold || 0);
-}
 
 
 
@@ -705,179 +574,53 @@ const handleEdit = async (e: Event) => {
   e.preventDefault();
   isLoad.value = true
   try {
-  
-     if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
-          toast.add({
-            title: 'No internet connection',
-            color: 'red',
-          });
-          throw new Error('No internet connection')
-        }
+    if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
+      toast.add({ title: 'No internet connection', color: 'red' });
+      throw new Error('No internet connection')
+    }
     if (!category.value || category.value.id.trim() === '') {
-      toast.add({
-        title: 'Please fill product category',
-        color: 'red',
-      });
+      toast.add({ title: 'Please fill product category', color: 'red' });
       return;
     }
-     for (const v of variants.value) {
+    for (const v of variants.value) {
       if (v.dprice > v.sprice) {
-        console.log(v)
-        toast.add({
-          title: `In variant : Discount price cannot be greater than selling price`,
-          color: 'red',
-        });
-        return; // stop execution if any variant is invalid
+        toast.add({ title: `In variant : Discount price cannot be greater than selling price`, color: 'red' });
+        return;
       }
     }
 
+    const productId = selectedProduct.value.id;
+    const snap = snapshotProductForm();
+    const snapshotCategoryTax = categoryTax.value ? { ...categoryTax.value } : null;
+
+    // Upload any newly attached images to S3 (uuids persist in the staged product).
     const base64files = await Promise.all(
-  variants.value.flatMap((variant) =>
-    (variant.images || []) // ← fallback to empty array
-      .filter((file) => file.file instanceof File)
-      .map(async (file) => {
-        const base64 = await prepareFileForApi(file.file);
-        return { base64, uuid: file.uuid };
-      })
-  )
-);
-
-
+      snap.variants.flatMap((variant) =>
+        (variant.images || [])
+          .filter((file) => file.file instanceof File)
+          .map(async (file) => {
+            const base64 = await prepareFileForApi(file.file);
+            return { base64, uuid: file.uuid, view: file.view };
+          })
+      )
+    );
     if (base64files.length > 0) {
-      const awsres = await Promise.all(
+      await Promise.all(
         base64files.map((file) =>
-          awsService.uploadBase64File(file.base64, file.uuid, file.view, category.value.name, category.value.targetAudience, useAuth().session.value?.isAiImage)
+          awsService.uploadBase64File(file.base64, file.uuid, file.view, snap.category?.name, snap.category?.targetAudience, useAuth().session.value?.isAiImage)
         )
       );
     }
 
-   const productId = selectedProduct.value.id;
-
-const updatedProduct =  UpdateProduct.mutate({
-  where: { id: productId },
-  data: {
-    name: name.value || '',
-    description: description.value || '',
-    status: live.value ?? undefined,
-    company: {
-      connect: { id: useAuth().session.value?.companyId },
-    },
-    ...(category.value && {
-      category: { connect: { id: category.value.id } }
-    }),
-    ...(brand.value && {
-      brand: { connect: { id: brand.value } }
-    }),
-    ...(subcategory.value && {
-      subcategory: { connect: { id: subcategory.value } }
-    }),
-
-    variants: {
-      // 1. Delete removed variants
-      deleteMany: {
-        id: {
-          notIn: variants.value.filter(v => v.id).map(v => v.id),
-        },
-      },
-
-      // 2. Upsert variants (update if exists, create if not)
-      upsert: variants.value.map(v => ({
-        where: { id: v.id }, // Prisma ignores if no match found
-        update: {
-          name: v.name || '',
-          code: v.code || null,
-          unit: v.unit || 'Nos',
-          sprice: v.sprice || 0,
-          pprice: v.pprice || 0,
-          dprice: v.dprice || 0,
-          deliveryType: deliveryType.value || 'trynbuy',
-          discount: v.discount || 0,
-          status: true,
-          images: v.images?.map(file => file.uuid) || [],
-          tax: calculateTax(v),
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-          items: {
-            // Delete removed items
-            deleteMany: {
-              id: {
-                notIn: v.items.filter(item => item.id).map(item => item.id)
-              }
-            },
-            // Upsert items
-            upsert: v.items.map(item => ({
-              where: { id: item.id },
-              update: {
-                size: item.size || null,
-                qty: item.qty || 0,
-                initialQty: item.qty || 0,
-              },
-              create: {
-                id:item.id,
-                size: item.size || null,
-                qty: item.qty || 0,
-                initialQty: item.qty || 0,
-                company: {
-                  connect: { id: useAuth().session.value?.companyId },
-                },
-              }
-            }))
-          }
-        },
-        create: {
-          id: v.id,
-          name: v.name || '',
-          code: v.code || null,
-          unit: v.unit || 'Nos',
-          sprice: v.sprice || 0,
-          pprice: v.pprice || 0,
-          dprice: v.dprice || 0,
-          discount: v.discount || 0,
-          deliveryType: deliveryType.value || 'trynbuy',
-          status: true,
-             ...(variantInputs?.value.images && { images: (v.images || [])
-                .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
-                .map((file) => file.uuid),}),
-          tax: calculateTax(v),
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-          product: {
-            connect: { id: productId }
-          },
-          items: {
-            create: v.items.map(item => ({
-              id: item.id,
-              size: item.size || null,
-              qty: item.qty || 0,
-              initialQty: item.qty || 0,
-              company: {
-                connect: { id: useAuth().session.value?.companyId },
-              }
-            }))
-          }
-        }
-      }))
-    }
-  },
-  select: { id: true }
-});
-
+    // Replace the staged product in place — still no DB write.
+    const updated = buildStagedProduct(productId, snap, snapshotCategoryTax);
+    draft.stagedProducts.value = draft.stagedProducts.value.map((p: any) => (p.id === productId ? updated : p));
 
     handleReset();
-
-    toast.add({
-      title: 'Product Edited!',
-      id: 'modal-success',
-    });
-    
+    toast.add({ title: 'Product Edited!', id: 'modal-success' });
   } catch (err: any) {
     console.log(err)
-    toast.add({
-        title: `Something went wrong!`,
-        color: 'red',
-      });
+    toast.add({ title: `Something went wrong!`, color: 'red' });
   }
   finally{
     isLoad.value = false
@@ -888,30 +631,41 @@ const updatedProduct =  UpdateProduct.mutate({
 
 const addVariant = () => {
   const newVariants = [...selectedProduct.value.variants];
+  // Copy every field (qty/prices/unit/code/items/images) from the most recent
+  // variant so the user doesn't have to re-type the same values. Only the
+  // name is left blank — that's the one field that must be unique per variant.
+  // Variant id and per-item ids are regenerated to avoid DB collisions.
+  const last = newVariants[newVariants.length - 1];
+  const copiedItems = (last?.items?.length)
+    ? last.items.map((item: any) => ({ ...item, id: uuidv4() }))
+    : [{ id: uuidv4(), size: null, qty: undefined }];
+
   newVariants.push({
-    id: uuidv4(), // ✅ generate a unique ID
+    id: uuidv4(),
     key: String(idCounter.value++),
     name: '',
-    code: '',
-    unit: 'Nos',
-    qty: 0,
-    sprice: 0,
-    pprice: 0,
-    dprice: 0,
-    discount: 0,
-    items: [{ id: uuidv4(), size: null, qty: undefined }],
-    images: [],
+    code: last?.code ?? '',
+    unit: last?.unit ?? 'Nos',
+    qty: last?.qty ?? 0,
+    sprice: last?.sprice ?? 0,
+    pprice: last?.pprice ?? 0,
+    dprice: last?.dprice ?? 0,
+    discount: last?.discount ?? 0,
+    items: copiedItems,
+    images: [...(last?.images ?? [])],
   });
 
   selectedProduct.value = {
     ...selectedProduct.value,
     variants: newVariants,
   };
+  variants.value = newVariants;
+  persistDraftForm();
 };
 
 
 const removeVariant = (index: number) => {
-  
+
     // If a product is selected, modify its variants array
     const newVariants = [...selectedProduct.value.variants]; // Create a shallow copy
     newVariants.splice(index, 1); // Remove the variant at the specified index
@@ -923,8 +677,348 @@ const removeVariant = (index: number) => {
     };
 
     variants.value.splice(index, 1);
-   
+    persistDraftForm();
 
+
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Keyboard shortcuts + arrow navigation for the right-side form pane.
+// All Ctrl+ shortcuts call preventDefault + stopPropagation to override
+// Chrome's defaults (V=paste, R=reload, S=save-page, D=bookmark).
+// Bindings:
+//   Ctrl+V      — add a new variant, focus its Name input
+//   Ctrl+R      — remove the variant containing the currently focused input
+//                 (blocked when only one variant remains), focus the next variant
+//   Ctrl+S      — add a size row to the focused variant, focus the new row's size input
+//   Ctrl+D      — delete the focused size row, focus the previous size (or variant name)
+//   Ctrl+Enter  — trigger Add Product / Edit Product save
+//   ↑ / ↓       — move focus to the closest input above / below (always)
+//   ← / →       — move focus when caret is at the left / right edge of the input
+// ─────────────────────────────────────────────────────────────────────────────
+const formPaneRef = ref<HTMLElement | null>(null);
+// Wrapper div around the currently-open USelectMenu — used by ArrowLeft/Right
+// to close it (mirrors pages/erp/billing.vue:movecatgeory).
+const presentSelectRef = ref<HTMLElement | null>(null);
+
+const resolveSelectWrapper = (el: HTMLElement | null): HTMLElement | null => {
+  if (!el) return null;
+  const candidates: HTMLElement[] = [
+    ...(createRef.value?.getAllSelectWrappers?.() ?? []),
+    ...((variantRef.value ?? [])
+      .map((v: any) => v?.getSelectWrapper?.())
+      .filter((w: any): w is HTMLElement => !!w)),
+  ];
+  return candidates.find(w => w === el || w.contains(el)) ?? null;
+};
+
+const findVariantIndexFromEl = (el: HTMLElement | null): number | null => {
+  const root = el?.closest?.('[data-variant-index]') as HTMLElement | null;
+  if (!root) return null;
+  const idx = Number(root.getAttribute('data-variant-index'));
+  return Number.isFinite(idx) ? idx : null;
+};
+
+const findSizeIndexFromEl = (el: HTMLElement | null): number | null => {
+  const row = el?.closest?.('[data-size-index]') as HTMLElement | null;
+  if (!row) return null;
+  const idx = Number(row.getAttribute('data-size-index'));
+  return Number.isFinite(idx) ? idx : null;
+};
+
+const focusVariantFirst = (index: number) => {
+  nextTick(() => nextTick(() => {
+    const refInstance = variantRef.value?.[index];
+    refInstance?.focusFirst?.();
+  }));
+};
+
+const triggerSave = (e: Event) => {
+  if (isLoad.value) return;
+  if (clearInputs.value) handleAdd(e);
+  else handleEdit(e);
+};
+
+// Text-like input types where the caret position is meaningful. `number` is
+// included so left/right navigate through digits first, but its
+// `selectionStart` is `null` per spec — fall back to value-length heuristic:
+// empty value → at-edge (lets the user escape), non-empty → not-at-edge (let
+// the native caret move; user can Tab/Shift+Tab to leave).
+const TEXT_INPUT_TYPES = new Set(['text', 'search', 'tel', 'url', 'password', 'email', 'number']);
+const isCaretAtLeftEdge = (el: HTMLInputElement): boolean => {
+  if (!TEXT_INPUT_TYPES.has(el.type)) return true;
+  if (el.selectionStart === null) return (el.value ?? '').length === 0;
+  return el.selectionStart === 0 && el.selectionEnd === 0;
+};
+const isCaretAtRightEdge = (el: HTMLInputElement): boolean => {
+  if (!TEXT_INPUT_TYPES.has(el.type)) return true;
+  if (el.selectionStart === null) return (el.value ?? '').length === 0;
+  const len = (el.value ?? '').length;
+  return el.selectionStart === len && el.selectionEnd === len;
+};
+
+const findFocusableNeighbor = (
+  current: HTMLElement,
+  direction: 'up' | 'down' | 'left' | 'right'
+): HTMLElement | null => {
+  const container = formPaneRef.value;
+  if (!container) return null;
+  const all = Array.from(
+    container.querySelectorAll('input, textarea, button')
+  ) as HTMLElement[];
+  const visible = all.filter(el => {
+    if (el === current) return false;
+    if ((el as HTMLInputElement).disabled) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    return true;
+  });
+
+  const cr = current.getBoundingClientRect();
+  const cx = cr.left + cr.width / 2;
+  const cy = cr.top + cr.height / 2;
+
+  let best: { el: HTMLElement; score: number } | null = null;
+  for (const el of visible) {
+    const r = el.getBoundingClientRect();
+    const ex = r.left + r.width / 2;
+    const ey = r.top + r.height / 2;
+
+    let primary = 0;
+    let cross = 0;
+    if (direction === 'up') {
+      if (ey >= cy - 4) continue;
+      primary = cy - ey;
+      cross = Math.abs(ex - cx);
+    } else if (direction === 'down') {
+      if (ey <= cy + 4) continue;
+      primary = ey - cy;
+      cross = Math.abs(ex - cx);
+    } else if (direction === 'left') {
+      if (ex >= cx - 4) continue;
+      if (Math.abs(ey - cy) > Math.max(cr.height, r.height)) continue;
+      primary = cx - ex;
+      cross = Math.abs(ey - cy);
+    } else {
+      if (ex <= cx + 4) continue;
+      if (Math.abs(ey - cy) > Math.max(cr.height, r.height)) continue;
+      primary = ex - cx;
+      cross = Math.abs(ey - cy);
+    }
+    const score = primary + cross * 3;
+    if (!best || score < best.score) best = { el, score };
+  }
+  return best?.el ?? null;
+};
+
+const focusElement = (el: HTMLElement | null) => {
+  if (!el) return;
+  el.focus();
+  if (el.tagName === 'INPUT') {
+    const input = el as HTMLInputElement;
+    if (TEXT_INPUT_TYPES.has(input.type)) input.select?.();
+  }
+};
+
+// Tab/Shift+Tab fallback — when there's no in-row neighbor on left/right,
+// jump to the previous/next focusable element in DOM order. This wraps to the
+// last field of the row above (or first field of the row below) the way users
+// expect from a typical form.
+const findDocOrderNeighbor = (
+  current: HTMLElement,
+  direction: 'prev' | 'next'
+): HTMLElement | null => {
+  const container = formPaneRef.value;
+  if (!container) return null;
+  const all = Array.from(
+    container.querySelectorAll('input, textarea, button')
+  ) as HTMLElement[];
+  const visible = all.filter(el => {
+    if ((el as HTMLInputElement).disabled) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    return true;
+  });
+  const idx = visible.indexOf(current);
+  if (idx === -1) return null;
+  return visible[direction === 'prev' ? idx - 1 : idx + 1] ?? null;
+};
+
+const onFormKeydown = (e: KeyboardEvent) => {
+  const target = e.target as HTMLElement | null;
+  if (!target) return;
+  const tag = target.tagName;
+  const isInput = tag === 'INPUT';
+  const isTextarea = tag === 'TEXTAREA';
+
+  // Ctrl+ shortcuts. preventDefault + stopPropagation on every branch so
+  // Chrome's defaults (V=paste, R=reload, S=save-page, D=bookmark,
+  // Enter=submit-form) are fully suppressed on this page.
+  if (e.ctrlKey && !e.altKey && !e.metaKey) {
+    const key = e.key.toLowerCase();
+    const isEnterKey = e.key === 'Enter' || e.code === 'Enter' || e.code === 'NumpadEnter';
+    if (isEnterKey) {
+      e.preventDefault();
+      e.stopPropagation();
+      triggerSave(e);
+      return;
+    }
+    if (key === 'v') {
+      e.preventDefault();
+      e.stopPropagation();
+      addVariant();
+      const newIndex = variants.value.length - 1;
+      focusVariantFirst(newIndex);
+      return;
+    }
+    if (key === 'r') {
+      e.preventDefault();
+      e.stopPropagation();
+      const vIdx = findVariantIndexFromEl(target);
+      if (vIdx == null) return;
+      if (variants.value.length <= 1) {
+        toast.add({ title: 'At least one variant is required', color: 'orange' });
+        return;
+      }
+      removeVariant(vIdx);
+      const nextIdx = Math.min(vIdx, variants.value.length - 1);
+      focusVariantFirst(nextIdx);
+      return;
+    }
+    if (key === 's') {
+      e.preventDefault();
+      e.stopPropagation();
+      const vIdx = findVariantIndexFromEl(target);
+      if (vIdx == null) return;
+      const vRef = variantRef.value?.[vIdx];
+      vRef?.addItem?.();
+      nextTick(() => vRef?.focusLastSize?.());
+      return;
+    }
+    if (key === 'd') {
+      e.preventDefault();
+      e.stopPropagation();
+      const vIdx = findVariantIndexFromEl(target);
+      const sIdx = findSizeIndexFromEl(target);
+      if (vIdx == null || sIdx == null) return;
+      const vRef = variantRef.value?.[vIdx];
+      vRef?.removeItem?.(sIdx);
+      nextTick(() => {
+        const itemsArr = (vRef?.items?.value ?? vRef?.items) as any[] | undefined;
+        const newLen = itemsArr?.length ?? 0;
+        // removeItem keeps one row but nulls its size — template hides size
+        // rows when items[0].size === null, so treat that as "all gone".
+        const sizesGone = newLen === 0 || (newLen === 1 && itemsArr?.[0]?.size === null);
+        if (!sizesGone) {
+          const focusIdx = Math.min(sIdx, newLen - 1);
+          vRef?.focusSizeAt?.(focusIdx, 'size');
+        } else {
+          vRef?.focusFirst?.();
+        }
+      });
+      return;
+    }
+  }
+
+  // Arrow navigation (no Alt/Ctrl/Meta)
+  if (e.altKey || e.ctrlKey || e.metaKey) return;
+  if (!['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.key)) return;
+
+  // Textarea — only escape via arrows when cursor is at the matching edge:
+  //   Up    → only when caret is on the first line
+  //   Down  → only when caret is on the last line
+  //   Left  → only when caret is at position 0
+  //   Right → only when caret is at end of text
+  // Otherwise let native cursor movement happen.
+  if (isTextarea) {
+    const ta = target as HTMLTextAreaElement;
+    const value = ta.value ?? '';
+    const start = ta.selectionStart ?? 0;
+    const end = ta.selectionEnd ?? 0;
+    if (e.key === 'ArrowUp') {
+      if (value.substring(0, start).includes('\n')) return;
+    } else if (e.key === 'ArrowDown') {
+      if (value.substring(end).includes('\n')) return;
+    } else if (e.key === 'ArrowLeft') {
+      if (start !== 0 || end !== 0) return;
+    } else if (e.key === 'ArrowRight') {
+      if (start !== value.length || end !== value.length) return;
+    }
+  }
+
+  // ── USelectMenu interop ────────────────────────────────────────────────
+  // Trigger button uses aria-haspopup="listbox" + aria-expanded. When the
+  // menu is searchable, focus lands on a search input inside the [role=
+  // "listbox"] panel while the menu is open.
+  //   • Up / Down on the trigger OR inside the open panel → let Headless UI
+  //     handle (open menu / move option highlight).
+  //   • Left / Right on a closed trigger → navigate fields as usual.
+  //   • Left / Right on an OPEN trigger / inside the panel → close the menu
+  //     and keep focus on the trigger (do NOT navigate). User can arrow
+  //     again from the closed trigger to move on.
+  const isSelectTrigger =
+    target.tagName === 'BUTTON' &&
+    (target.getAttribute('aria-haspopup') === 'listbox' ||
+      target.getAttribute('role') === 'combobox');
+  const isSelectOpen = isSelectTrigger && target.getAttribute('aria-expanded') === 'true';
+  const isInsideListbox = !!target.closest('[role="listbox"]');
+
+  if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
+    if (isSelectTrigger || isInsideListbox) {
+      if (isSelectTrigger) presentSelectRef.value = resolveSelectWrapper(target);
+      return; // native handles option nav
+    }
+    const next = findFocusableNeighbor(target, e.key === 'ArrowUp' ? 'up' : 'down');
+    if (next) {
+      e.preventDefault();
+      focusElement(next);
+    }
+    return;
+  }
+
+  // Left/Right
+  if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
+    const dir = e.key === 'ArrowLeft' ? 'left' : 'right';
+
+    // Caret edge check for plain inputs (already handled for textarea above)
+    if (isInput) {
+      const input = target as HTMLInputElement;
+      const atEdge = dir === 'left' ? isCaretAtLeftEdge(input) : isCaretAtRightEdge(input);
+      if (!atEdge) return;
+    }
+
+    // Open USelectMenu → close via the saved wrapper, keep focus on the
+    // trigger button (no neighbor nav). Mirrors pages/erp/billing.vue.
+    if (isSelectOpen || isInsideListbox) {
+      e.preventDefault();
+      const wrapper = presentSelectRef.value ?? resolveSelectWrapper(target);
+      const button = wrapper?.querySelector('button') as HTMLElement | null;
+      if (!button) {
+        target.dispatchEvent(
+          new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })
+        );
+        return;
+      }
+      button.focus();
+      button.click();
+      nextTick(() => {
+        button.focus();
+        presentSelectRef.value = null;
+      });
+      return;
+    }
+
+    // First try in-row neighbor; fall back to Shift+Tab / Tab order so the
+    // leftmost field jumps to the last field of the row above, and the
+    // rightmost field jumps to the first field of the row below.
+    const next =
+      findFocusableNeighbor(target, dir) ??
+      findDocOrderNeighbor(target, dir === 'left' ? 'prev' : 'next');
+    if (next) {
+      e.preventDefault();
+      focusElement(next);
+    }
+  }
 };
 
 watch(variants, (newVariants) => {
@@ -932,35 +1026,19 @@ watch(variants, (newVariants) => {
   console.log("Variants updated:", newVariants);
 },{immediate: true, deep: true}); 
 
-const queryParams = computed(() => (
-  {
-  where: { id: poId.value },
-  include: {
-    products: { 
-      include: { 
-        subcategory: true,
-        category: true,
-        brand: true,
-        variants: { 
-          include: { 
-            items: true 
-          } 
-        } 
-      }
-     },
-  },
-}
-));
-
-const {
-  data: items,
-  isLoading,
-  error,
-  refetch:itemRefetch,
-} = useFindUniquePurchaseOrder(queryParams)
+// Deferred model: nothing is written to the DB until Save, so the left table
+// renders the in-memory/localStorage staged products directly — no fetch, no
+// placeholder swap, no flicker. In PO-edit mode it also shows the existing PO's
+// products (already persisted) above any newly staged ones.
+const isLoading = ref(false)
+const tableProducts = computed(() =>
+  isEditingPurchaseOrder.value
+    ? [...(editPurchaseOrder.value?.products || []), ...draft.stagedProducts.value]
+    : draft.stagedProducts.value
+)
 
 
-const addProductTopBarRef = ref(null)
+const addProductTopBarRef = ref<any>(null)
 
 
 const resetTopBar = () => {
@@ -989,235 +1067,221 @@ const printBarcodes = async() => {
   }
 }
 
-const handleSave = async () => {
+const isCreatePOConfirmOpen = ref(false)
+const isSavingWithPOIntent = ref(false)
+
+const generateBarcodes = (products: any[]) => {
+  barcodes.value = (products || []).flatMap(product =>
+    product.variants.flatMap(variant =>
+      variant.items.flatMap(item =>
+        item.qty === 0
+          ? []
+          : Array.from({ length: item.qty ?? 1 }, () => ({
+              barcode: item.barcode ?? '',
+              code: variant.code ?? '',
+              shopname: useAuth().session.value?.companyName,
+              productName: product.name || product.category?.name || '',
+              brand: product.brand?.name || product.subcategory?.name || '',
+              name: variant.name || '',
+              variantName: variant.name || '',
+              sprice: variant.sprice,
+              ...(variant.sprice !== variant.dprice && {
+                dprice: variant.dprice
+              }),
+              size: item.size
+            }))
+      )
+    )
+  )
+}
+
+const handleSave = () => {
+  const hasProducts = draft.stagedProducts.value.length > 0
+    || (isEditingPurchaseOrder.value && !!editPurchaseOrder.value?.products?.length)
+
+  if (!hasProducts) {
+    toast.add({ title: 'Add at least one product before saving.', color: 'red' })
+    return
+  }
+
+  if (isEditingPurchaseOrder.value) {
+    handleSaveEditedPurchaseOrder()
+    return
+  }
+
+  if (isDistributorPurchaseOrderFlow.value) {
+    openPurchaseInfoForSave()
+    return
+  }
+
+  isCreatePOConfirmOpen.value = true
+}
+
+const handleSaveEditedPurchaseOrder = async () => {
+  isSave.value = true
+  try {
+    // PO-edit: batch-create any newly staged products into the existing PO, then
+    // refresh + print. Staged products are cleared only after the batch succeeds.
+    if (draft.stagedProducts.value.length) {
+      await $fetch('/api/products/save-batch', {
+        method: 'POST',
+        body: { products: draft.stagedProducts.value, poId: editPurchaseOrderId.value },
+      })
+      draft.stagedProducts.value = []
+    }
+    const result = await refetchEditPurchaseOrder()
+    generateBarcodes(result.data?.products || editPurchaseOrder.value?.products || [])
+    isOpen.value = true
+  } catch (error) {
+    console.error('Failed to save products / prepare labels', error)
+    toast.add({ title: 'Failed to save products', color: 'red' })
+  } finally {
+    isSave.value = false
+  }
+}
+
+const handleSaveNoPO = async () => {
+  isSave.value = true
+  try {
+    // Batch-create all staged products in ONE transaction (no PO).
+    const res: any = await $fetch('/api/products/save-batch', {
+      method: 'POST',
+      body: { products: draft.stagedProducts.value },
+    })
+    generateBarcodes(res?.products || [])
+    clearCurrentDraftForNextProducts()   // reset staged ONLY after success
+    isOpen.value = true
+  } catch (error) {
+    console.error('Failed to save products', error)
+    toast.add({ title: 'Failed to save products', color: 'red' })
+    // keep staged products as-is so the user can retry
+  } finally {
+    isSave.value = false
+    isCreatePOConfirmOpen.value = false
+  }
+}
+
+const openPurchaseInfoForSave = () => {
+  isCreatePOConfirmOpen.value = false
+  isSavingWithPOIntent.value = true
+  addProductTopBarRef.value?.openPurchaseInfo()
+}
+
+const onPurchaseInfoSubmitted = async () => {
+  if (isEditingPurchaseOrder.value) {
+    await saveEditedPurchaseInfo()
+    return
+  }
+
+  if (!isSavingWithPOIntent.value) return
+  await handleSaveWithPO()
+}
+
+const saveEditedPurchaseInfo = async () => {
   isSave.value = true
 
   try {
-    console.log('🚀 handleSave started')
-
-    /* ---------------------------------
-       0️⃣ NORMALIZE BILL DATE
-    ---------------------------------- */
+    const activePoId = editPurchaseOrderId.value
     const createdAtDate = billDate.value
       ? new Date(billDate.value)
       : new Date()
 
-    /* ---------------------------------
-       1️⃣ VALIDATION
-    ---------------------------------- */
-    if (!items.value?.products) {
-      throw new Error('No items found')
-    }
-
-    /* ---------------------------------
-       2️⃣ BARCODE GENERATION
-    ---------------------------------- */
-    barcodes.value = items.value.products.flatMap(product =>
-      product.variants.flatMap(variant =>
-        variant.items.flatMap(item =>
-          item.qty === 0
-            ? []
-            : Array.from({ length: item.qty ?? 1 }, () => ({
-                barcode: item.barcode ?? '',
-                code: variant.code ?? '',
-                shopname: useAuth().session.value?.companyName,
-                productName: product.name || product.category?.name || '',
-                brand: product.brand?.name || product.subcategory?.name || '',
-                name: variant.name || '',
-                sprice: variant.sprice,
-                ...(variant.sprice !== variant.dprice && {
-                  dprice: variant.dprice
-                }),
-                size: item.size
-              }))
-        )
-      )
-    )
-
-    isOpen.value = true
-
-    /* ---------------------------------
-       3️⃣ PAYMENT / CREDIT LOGIC
-    ---------------------------------- */
-    const companyId = useAuth().session.value?.companyId!
-    const distributorCompanyKey = {
-      distributorId: distributorId.value,
-      companyId
-    }
-
-    const newType = paymentType.value || null
-    const oldType = oldPaymentType.value || null
-
-    const isNewCredit = newType === 'CREDIT'
-    const wasOldCredit = oldType === 'CREDIT'
-    const hasNew = newType !== null
-    const hasOld = oldType !== null
-
-    console.table({ newType, oldType })
-
-    /* ---------------------------------
-       PAYMENT STATE MACHINE (NO RETURNS)
-    ---------------------------------- */
-
-    if (!hasNew && !hasOld) {
-      console.log('🚫 CASE 0: no old, no new')
-    }
-
-    else if (hasNew && !hasOld) {
-      console.log('🆕 CASE 1: old empty → new exists')
-
-      if (isNewCredit) {
-        console.log('➕ Create CREDIT')
-        await CreateDistributorCredit.mutateAsync({
-          data: {
-            billNo: billNo.value,
-            amount: totalAmount.value,
-            createdAt: createdAtDate,
-            purchaseOrder: { connect: { id: poId.value } },
-            distributorCompany: {
-              connect: { distributorId_companyId: distributorCompanyKey }
-            }
-          }
-        })
-      } else {
-        console.log('➕ Create PAYMENT')
-        await CreateDistributorPayment.mutateAsync({
-          data: {
-            amount: totalAmount.value,
-            paymentType: newType as PType,
-            createdAt: createdAtDate,
-            purchaseOrder: { connect: { id: poId.value } },
-            distributorCompany: {
-              connect: { distributorId_companyId: distributorCompanyKey }
-            }
-          }
-        })
-      }
-    }
-
-    else if (!hasNew && hasOld) {
-      console.log('🧹 CASE 2: old exists → new empty')
-
-      if (wasOldCredit) {
-        await DeleteManyDistributorCredit.mutateAsync({
-          where: { purchaseOrderId: poId.value }
-        })
-      } else {
-        await DeleteManyDistributorPayment.mutateAsync({
-          where: { purchaseOrderId: poId.value }
-        })
-      }
-    }
-
-    else if (isNewCredit && wasOldCredit) {
-      console.log('🔁 CASE 3: credit → credit')
-      await UpdateManyDistributorCredit.mutateAsync({
-        where: { purchaseOrderId: poId.value },
-        data: {
-          amount: totalAmount.value,
-          billNo: billNo.value,
-          createdAt: createdAtDate
-        }
-      })
-    }
-
-    else if (!isNewCredit && wasOldCredit) {
-      console.log('🔄 CASE 4: credit → non-credit')
-      await DeleteManyDistributorCredit.mutateAsync({
-        where: { purchaseOrderId: poId.value }
-      })
-
-      await CreateDistributorPayment.mutateAsync({
-        data: {
-          amount: totalAmount.value,
-          paymentType: newType as PType,
+    // One atomic endpoint: replays the credit/payment transition matrix
+    // (keyed by purchase_order_id) + updates the PO row.
+    await $fetch('/api/purchaseorder/update', {
+      method: 'POST',
+      body: {
+        poId: activePoId,
+        payment: {
+          paymentType: paymentType.value || null,
+          oldPaymentType: oldPaymentType.value || null,
+          billNo: billNo.value || null,
+          distributorId: distributorId.value || null,
+          totalAmount: totalAmount.value,
+          subTotalAmount: subTotalAmount.value,
+          discount: discount.value || 0,
+          tax: tax.value || 0,
+          adjustment: adjustment.value || 0,
           createdAt: createdAtDate,
-          purchaseOrder: { connect: { id: poId.value } },
-          distributorCompany: {
-            connect: { distributorId_companyId: distributorCompanyKey }
-          }
-        }
-      })
-    }
-
-    else if (!isNewCredit && !wasOldCredit) {
-      console.log('🔁 CASE 5: non-credit → non-credit')
-      await UpdateManyDistributorPayment.mutateAsync({
-        where: { purchaseOrderId: poId.value },
-        data: {
-          amount: totalAmount.value,
-          paymentType: newType as PType,
-          createdAt: createdAtDate
-        }
-      })
-    }
-
-    else if (isNewCredit && !wasOldCredit) {
-      console.log('🔄 CASE 6: non-credit → credit')
-      await DeleteManyDistributorPayment.mutateAsync({
-        where: { purchaseOrderId: poId.value }
-      })
-
-      await CreateDistributorCredit.mutateAsync({
-        data: {
-          amount: totalAmount.value,
-          billNo: billNo.value,
-          createdAt: createdAtDate,
-          purchaseOrder: { connect: { id: poId.value } },
-          distributorCompany: {
-            connect: { distributorId_companyId: distributorCompanyKey }
-          }
-        }
-      })
-    }
-
-    /* ---------------------------------
-       4️⃣ UPDATE PURCHASE ORDER (ALWAYS)
-    ---------------------------------- */
-    console.log('🧾 Updating purchase order')
-    await UpdatePurchaseOrder.mutateAsync({
-      where: { id: poId.value },
-      data: {
-        ...paymentType.value && { paymentType: paymentType.value as PType },
-         ...(billNo.value && { billNo: billNo.value }),
-        createdAt: createdAtDate,
-        totalAmount: totalAmount.value || subTotalAmount.value,
-        subTotalAmount: subTotalAmount.value,
-        ...discount.value && { discount: discount.value },
-        ...tax.value && { tax: tax.value },
-        ...adjustment.value && { adjustment: adjustment.value },
-        
-      }
+        },
+      },
     })
 
-    /* ---------------------------------
-       5️⃣ LINK DISTRIBUTOR COMPANY (ALWAYS)
-    ---------------------------------- */
-    if (distributorId.value) {
-      console.log('🔗 Linking distributor company')
-      await UpdateDistributorCompany.mutateAsync({
-        where: {
-          distributorId_companyId: {
-            distributorId: distributorId.value,
-            companyId
-          }
-        },
-        data: {
-          purchaseOrders: {
-            connect: { id: poId.value }
-          }
-        }
-      })
-    }
-
-  } catch (error) {
-    console.error('❌ Failed to save purchase order', error)
+    oldPaymentType.value = paymentType.value
+    addProductTopBarRef.value?.syncPaymentState?.()
+    await refetchEditPurchaseOrder()
+    toast.add({ title: 'Purchase info updated', color: 'green' })
+  } catch (error: any) {
+    console.error('Failed to update purchase info', error)
+    toast.add({
+      title: 'Failed to update purchase info',
+      description: error?.message,
+      color: 'red'
+    })
   } finally {
     isSave.value = false
-    paymentType.value = ''
-    oldPaymentType.value = ''
-    console.log('✅ handleSave finished')
+    isSavingWithPOIntent.value = false
   }
+}
+
+const handleSaveWithPO = async () => {
+  isSave.value = true
+
+  try {
+    const createdAtDate = billDate.value
+      ? new Date(billDate.value)
+      : new Date()
+
+    // Create flow: ONE atomic transaction creates all staged products, the PO
+    // (number = counter-1), links them, and creates the PO-linked credit/payment.
+    const res: any = await $fetch('/api/products/save-batch', {
+      method: 'POST',
+      body: {
+        products: draft.stagedProducts.value,
+        po: {
+          paymentType: paymentType.value || null,
+          billNo: billNo.value || null,
+          distributorId: distributorId.value || null,
+          totalAmount: totalAmount.value,
+          subTotalAmount: subTotalAmount.value,
+          discount: discount.value || 0,
+          tax: tax.value || 0,
+          adjustment: adjustment.value || 0,
+          createdAt: createdAtDate,
+        },
+      },
+    })
+
+    if (!res?.poId) throw new Error('Purchase order was not created')
+    generateBarcodes(res.products || [])
+    clearCurrentDraftForNextProducts()   // reset staged + PO info ONLY after success
+    isOpen.value = true
+  } catch (error) {
+    console.error('Failed to save purchase order', error)
+    toast.add({ title: 'Failed to save purchase order', color: 'red' })
+    // keep staged products + purchase info as-is so the user can retry
+  } finally {
+    isSave.value = false
+    isSavingWithPOIntent.value = false
+  }
+}
+
+const clearCurrentDraftForNextProducts = () => {
+  draft.resetDraft()
+  pendingDraftProducts.value = []
+  settledMap.value = new Map()
+  distributorId.value = ''
+  paymentType.value = ''
+  oldPaymentType.value = ''
+  billNo.value = ''
+  totalAmount.value = 0
+  subTotalAmount.value = 0
+  discount.value = 0
+  tax.value = 0
+  adjustment.value = 0
+  billDate.value = new Date().toISOString().split('T')[0]
+  resetTopBar()
+  handleReset()
 }
 
 
@@ -1230,16 +1294,17 @@ const handleReset = () => {
   });
   mediaRefs.value.forEach((media:any) => media?.resetForm());
   variants.value = [{
-    id:'',
-    key:'',
+    id: uuidv4(),
+    key: String(idCounter.value++),
     name: '', 
     code: '', 
+    unit: 'Nos',
     qty: 0, 
     sprice: 0, 
     pprice: 0, 
     dprice: 0, 
     discount: 0, 
-    items: [], 
+    items: [{ id: uuidv4(), size: null, qty: undefined }], 
     images: []
   }];
   selectedProduct.value = {
@@ -1254,31 +1319,29 @@ const handleReset = () => {
     categoryId: '',
     subcategoryId: '',
     variants: [{
-        id:'',
-        key:'',
+        id: uuidv4(),
+        key: String(idCounter.value++),
         name: '', 
         code: '', 
+        unit: 'Nos',
         qty: 0, 
         sprice: 0, 
         pprice: 0, 
         dprice: 0, 
         discount: 0, 
-        items: [], 
+        items: [{ id: uuidv4(), size: null, qty: undefined }], 
         images: [] 
     }]
 }
+  persistDraftForm()
 }
 
 
 const handleSkip = () => {
      isAdd.value =true
-     if(isEdit.value){
-      router.push(`/distributor/purchaseOrder`)
-     }else{
-      router.push(`/products`)
-     }
-   
-         resetTopBar()
+    draft.deleteDraft(draft.draftNo.value)
+    router.push(returnTo.value)
+    resetTopBar()
     isAdd.value =false
     isOpen.value = false
 }
@@ -1286,17 +1349,19 @@ const handleSkip = () => {
 
 const handleAddNew = async() => {
      isAdd.value =true
-    
-    const res = await $fetch('/api/purchaseorder/create', {
-      method: 'POST',
-    });
-   router.push(`/products/add?poId=${res?.id}`)
+    clearCurrentDraftForNextProducts()
     isAdd.value =false
     isOpen.value = false
 }
 
 const handleNewProduct = () => {
   isOpenAdd.value = true
+}
+
+const onDeleteDraft = (no: string) => {
+  if (!no) return
+  if (!confirm(`Delete Draft ${no}?`)) return
+  draft.deleteDraft(no)
 }
 
 
@@ -1307,8 +1372,55 @@ const handleNewProduct = () => {
 
 <template>
     <UDashboardPanelContent>
-       
-          <AddProductTopBar  ref="addProductTopBarRef" @update="handleDistributorValue" :totalAmount="subTotalAmount" :distributorId="items?.distributorId" :paymentType="items?.paymentType" :billNo="items?.billNo" :discount="items?.discount" :tax="items?.tax" :adjustment="items?.adjustment" :billDate="items?.createdAt" />   
+          <AddProductTopBar
+            ref="addProductTopBarRef"
+            @update="handleDistributorValue"
+            @submit="onPurchaseInfoSubmitted"
+            :totalAmount="subTotalAmount"
+            :distributorId="isEditingPurchaseOrder ? editPurchaseOrder?.distributorId : draftPurchaseInfo.distributorId"
+            :paymentType="isEditingPurchaseOrder ? editPurchaseOrder?.paymentType : draftPurchaseInfo.paymentType"
+            :billNo="isEditingPurchaseOrder ? editPurchaseOrder?.billNo : draftPurchaseInfo.billNo"
+            :discount="isEditingPurchaseOrder ? editPurchaseOrder?.discount : draftPurchaseInfo.discount"
+            :tax="isEditingPurchaseOrder ? editPurchaseOrder?.tax : draftPurchaseInfo.taxPercent"
+            :adjustment="isEditingPurchaseOrder ? editPurchaseOrder?.adjustment : draftPurchaseInfo.adjustment"
+            :billDate="isEditingPurchaseOrder ? editPurchaseOrder?.createdAt : draftPurchaseInfo.billDate"
+            :purchase-order-no="isEditingPurchaseOrder ? editPurchaseOrder?.purchaseOrderNo : null"
+            :show-purchase-info-button="isEditingPurchaseOrder"
+            :submit-loading="isSave"
+          >
+            <template v-if="!isEditingPurchaseOrder" #draft>
+              <div class="flex items-center gap-2">
+
+                <USelectMenu
+                  v-model="selectedDraft"
+                  :options="draftProducts"
+                  option-attribute="draftNo"
+                >
+                  <template #label>
+                    <span>Draft {{ currentDraftNo }}</span>
+                  </template>
+                  <template #option="{ option }">
+                    <div class="flex items-center justify-between gap-2 w-full">
+                      <span>Draft {{ option.draftNo }}</span>
+                      <UButton
+                        icon="i-heroicons-trash"
+                        size="2xs"
+                        color="red"
+                        variant="ghost"
+                        square
+                        @click.stop.prevent="onDeleteDraft(option.draftNo)"
+                      />
+                    </div>
+                  </template>
+                </USelectMenu>
+                <UButton
+                  icon="i-heroicons-plus"
+                  :disabled="draftProducts.length >= draft.MAX_DRAFTS"
+                  @click="draft.createNewDraft"
+                />
+              </div>
+            </template>
+          </AddProductTopBar>
 
           <UDivider class="py-4"/>
 
@@ -1326,7 +1438,18 @@ const handleNewProduct = () => {
                 </div>
 
               <UPageCard class="m-3">
-                <AddProductTable @product-selected="handleProductSelected" @clicked="isOpenAdd = true" @total-amount = "(data) => subTotalAmount = data" :settledMap="settledMap"/>
+                <AddProductTable
+                  @product-selected="handleProductSelected"
+                  @clicked="isOpenAdd = true"
+                  @total-amount="(data) => subTotalAmount = data"
+                  @product-deleted="onDraftProductDeleted"
+                  :settledMap="settledMap"
+                  :poId="editPurchaseOrderId"
+                  :productIds="tableProductIds"
+                  :pendingProducts="pendingDraftProducts"
+                  :products="tableProducts"
+                  :loading="isLoading"
+                />
               </UPageCard>
 
               <div class="m-3">
@@ -1342,7 +1465,7 @@ const handleNewProduct = () => {
             </div>
             
 
-            <div class=" md:flex md:flex-col md:w-1/2">
+            <div ref="formPaneRef" class=" md:flex md:flex-col md:w-1/2" @keydown.capture="onFormKeydown">
               <div class="flex flex-row">
               <div>
               <div v-if="clearInputs" class="mx-3 mt-3">
@@ -1387,7 +1510,7 @@ const handleNewProduct = () => {
                 </UPageCard> -->
 
                
-                  <div v-for="(variant, index) in ( selectedProduct?.variants)" :key="variant.key" class="mb-3">
+                  <div v-for="(variant, index) in variants" :key="variant.key" :data-variant-index="index" class="mb-3">
                     <UPageCard class="m-3" id="Variants">
                     <div class="flex justify-between items-centerp-3 rounded-lg">
                       <div class="text-xl mb-4">Variant {{index+1}}</div>
@@ -1403,22 +1526,22 @@ const handleNewProduct = () => {
                     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
                     <AddProductVariants   
                       ref="variantRef"
-                      :id="selectedProduct?.variants[index]?.id"
-                      :editName="selectedProduct?.variants[index]?.name " 
-                      :editCode="selectedProduct?.variants[index]?.code || variants[0]?.code"
-                      :editQty="selectedProduct?.variants[index]?.qty"
-                      :editUnit="selectedProduct?.variants[index]?.unit || variants[0]?.unit"
-                      :editsPrice="selectedProduct?.variants[index]?.sprice || variants[0]?.sprice"
-                      :editpPrice="selectedProduct?.variants[index]?.pprice || variants[0]?.pprice"
-                      :editdPrice="selectedProduct?.variants[index]?.dprice || variants[0]?.dprice"
-                      :editDiscount="selectedProduct?.variants[index]?.discount || variants[0]?.discount"
-                      :editItems="selectedProduct?.variants[index]?.items"
+                      :id="variant.id"
+                      :editName="variant.name" 
+                      :editCode="variant.code"
+                      :editQty="variant.qty"
+                      :editUnit="variant.unit"
+                      :editsPrice="variant.sprice"
+                      :editpPrice="variant.pprice"
+                      :editdPrice="variant.dprice"
+                      :editDiscount="variant.discount"
+                      :editItems="variant.items"
           
                       @update="updateVariant(index,$event)" />
                       <AddProductMedia
                       v-if="variantInputs?.images"
                       ref="mediaRefs"
-                      :editFile="selectedProduct && selectedProduct.variants[index]?.images"
+                      :editFile="variant.images"
                       :index="index" 
                       :categoryName="category.name"
                       :targetAudience="category.targetAudience"
@@ -1506,6 +1629,21 @@ const handleNewProduct = () => {
         </template>
        
 
+      </UCard>
+    </UModal>
+
+    <UModal v-model="isCreatePOConfirmOpen">
+      <UCard>
+        <template #header>
+          <h3 class="text-base font-semibold">Create Purchase Order</h3>
+        </template>
+        <p>Create a purchase order for this?</p>
+        <template #footer>
+          <div class="flex justify-end gap-3">
+            <UButton color="gray" variant="soft" label="No" :loading="isSave" @click="handleSaveNoPO" />
+            <UButton color="green" label="Yes" @click="openPurchaseInfoForSave" />
+          </div>
+        </template>
       </UCard>
     </UModal>
 

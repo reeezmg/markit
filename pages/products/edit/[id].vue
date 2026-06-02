@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import {useUpdateProduct, useFindUniqueCategory, useFindUniqueProduct} from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
 const router = useRouter();
 const toast = useToast();
@@ -63,7 +62,6 @@ const selectedVariant = ref<any>(null)
 const printQtyMap = ref<Record<string, number>>({})
 
 const route = useRoute();
-const UpdateProduct = useUpdateProduct();
 
 const awsService = new AwsService();
 
@@ -121,16 +119,15 @@ const variants = ref<{
 
 
 
-const { data:categoryTax } = useFindUniqueCategory({
-  where: computed(() => ({ id: category.value.id })),
-  select: {
-    fixedTax: true,
-    taxBelowThreshold: true,
-    taxAboveThreshold: true,
-    thresholdAmount: true,
-    taxType: true,
+const categoryTax = ref<any>(null)
+watch(() => category.value?.id, async (id) => {
+  if (!id) { categoryTax.value = null; return }
+  try {
+    categoryTax.value = await $fetch('/api/products/category-tax', { query: { id } })
+  } catch {
+    categoryTax.value = null
   }
-},{ enabled: computed(() => !!category.value.id) });
+}, { immediate: true });
 
 
 const createValue = (data: any) => {
@@ -173,42 +170,19 @@ function calculateTax(variant) {
 
 
 
-const {data: selectedProductRaw, isLoading, refetch:productRefetch} = useFindUniqueProduct({
-  where: { id: route.params.id },
-  select: {
-    id: true,
-    updatedAt:true,
-    name: true,
-    description: true,
-    categoryId: true,
-    subcategoryId: true,
-    category: true,
-    brand: true,
-    brandId: true,
-    subcategory: true,
-    variants: {
-      select: {
-        id:true,
-        name:true,
-        code:true,
-        unit:true,
-        sprice:true,
-        pprice:true,
-        dprice:true,
-        discount:true,
-        images:true,
-        items: {
-          select: {
-            id:true,
-            barcode: true,
-            size: true,
-            qty: true,
-          }
-        }
-      }
-    }
+const selectedProductRaw = ref<any>(null);
+const isLoading = ref(true);
+const productRefetch = async () => {
+  isLoading.value = true;
+  try {
+    selectedProductRaw.value = await $fetch(`/api/products/${route.params.id}`);
+  } catch (e) {
+    console.error('Failed to load product', e);
+  } finally {
+    isLoading.value = false;
   }
-});
+};
+onMounted(productRefetch);
 
 const selectedProduct = ref();
 
@@ -270,120 +244,34 @@ const handleEdit = async (e: Event) => {
     }
 
    const productId = selectedProduct.value.id;
-   console.log(variantInputs?.value.images )
 
-const updatedProduct =   UpdateProduct.mutateAsync({
-  where: { id: productId },
-  data: {
-    name: name.value || '',
-    ...brand.value && {
-    brand: {
-      connect: { id: brand.value}
+await $fetch('/api/products/update', {
+  method: 'POST',
+  body: {
+    productId,
+    product: {
+      name: name.value || '',
+      brandId: brand.value || null,
+      description: description.value || '',
+      status: live.value ?? null,
+      categoryId: category.value?.id || null,
+      subcategoryId: subcategory.value || null,
     },
-    },
-    description: description.value || '',
-    status: live.value ?? undefined,
-    company: {
-      connect: { id: useAuth().session.value?.companyId },
-    },
-    ...(category.value && {
-      category: { connect: { id: category.value.id } }
-    }),
-    ...(subcategory.value && {
-      subcategory: { connect: { id: subcategory.value } }
-    }),
-
-    variants: {
-      // 1. Delete removed variants
-      deleteMany: {
-        id: {
-          notIn: variants.value.filter(v => v.id).map(v => v.id),
-        },
-      },
-
-      // 2. Upsert variants (update if exists, create if not)
-      upsert: variants.value.map(v => ({
-        where: { id: v.id }, // Prisma ignores if no match found
-        update: {
-          name: v.name || '',
-          code: v.code || null,
-          unit: v.unit || 'Nos',
-          sprice: v.sprice || 0,
-          pprice: v.pprice || 0,
-          dprice: v.dprice || 0,
-          discount: v.discount || 0,
-          status: true,
-          ...(variantInputs?.value.images && { 
-          images: (v.images || [])
-            .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
-            .map((file) => file.uuid),
-          }),
-          tax: calculateTax(v),
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-          items: {
-            // Delete removed items
-            deleteMany: {
-              id: {
-                notIn: v.items.filter(item => item.id).map(item => item.id)
-              }
-            },
-            // Upsert items
-            upsert: v.items.map(item => ({
-              where: { id: item.id },
-              update: {
-                size: item.size || null,
-                qty: item.qty || 0,
-              },
-              create: {
-                id:item.id,
-                size: item.size || null,
-                qty: item.qty || 0,
-                company: {
-                  connect: { id: useAuth().session.value?.companyId },
-                },
-              }
-            }))
-          }
-        },
-        create: {
-          id: v.id,
-          name: v.name || '',
-          code: v.code || null,
-          unit: v.unit || 'Nos',
-          sprice: v.sprice || 0,
-          pprice: v.pprice || 0,
-          dprice: v.dprice || 0,
-          discount: v.discount || 0,
-          status: true,
-          ...(variantInputs?.value.images && { 
-          images: (v.images || [])
-            .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
-            .map((file) => file.uuid),
-          }),
-          tax: calculateTax(v),
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-          product: {
-            connect: { id: productId }
-          },
-          items: {
-            create: v.items.map(item => ({
-              id: item.id,
-              size: item.size || null,
-              qty: item.qty || 0,
-              company: {
-                connect: { id: useAuth().session.value?.companyId },
-              }
-            }))
-          }
-        }
-      }))
-    }
-  },
-  select: { id: true }
+    variants: variants.value.map(v => ({
+      id: v.id,
+      name: v.name || '',
+      code: v.code || null,
+      unit: v.unit || 'Nos',
+      sprice: v.sprice || 0,
+      pprice: v.pprice || 0,
+      dprice: v.dprice || 0,
+      discount: v.discount || 0,
+      images: v.images || [],
+      items: v.items.map(item => ({ id: item.id, size: item.size || null, qty: item.qty || 0 })),
+    })),
+    categoryTax: categoryTax.value,
+    updateImages: !!variantInputs?.value?.images,
+  }
 });
     await productRefetch();
     toast.add({

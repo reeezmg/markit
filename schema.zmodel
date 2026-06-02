@@ -674,6 +674,10 @@ model DeliveryPartnerEarnings extends Base {
   distance     Float?
   waitingTime  Float?  @map("waiting_time")
   storeWaitings Json?   @map("store_waitings")
+  // Per-event cancellation payouts (₹15 per arrived-not-picked store at cancel time).
+  // Accumulates across multiple per-store cancels; settled separately from deliverFees.
+  // See server/routes/pack.js cancel-store + server/routes/companyportal/orders.js cancel.
+  cancellationFees String? @map("cancellation_fees")
 
   // 👇 Each earning belongs to one Trynbuy
   trynbuy      Trynbuy  @relation(fields: [trynbuyId], references: [id])
@@ -1095,8 +1099,8 @@ model Product {
     brand        Brand?           @relation(fields: [brandId], references: [id])
     brandId      String?            @map('brand_id')
     variants    Variant[]         
-    purchaseorder     PurchaseOrder @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
-    purchaseorderId   String            @map('purchaseorder_id')
+    purchaseorder     PurchaseOrder? @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
+    purchaseorderId   String?           @map('purchaseorder_id')
     writeId           String?            @default(uuid()) @map('write_id')
 
     @@index([categoryId])

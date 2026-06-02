@@ -670,11 +670,11 @@ function computeBillPoints(session, grandTotalVal) {
   return pointsValue > 0 ? Math.round(Number(grandTotalVal || 0) / pointsValue) : 0
 }
 
-function buildBillPayload({ billInv, session, entriesData, billPoints, hasCreditPayment, refs }) {
+function buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, refs }) {
   const { subtotal, discount, grandTotal, returnAmt, couponValue, paymentMethod,
           redeemedPoints, clientId, selected, splitPayments, date } = refs
   return {
-    invoiceNumber: billInv,
+    // invoiceNumber is assigned server-side inside the create transaction
     subtotal: Number(subtotal.value) || 0,
     discount: String(discount.value ?? '').startsWith('+') ? 0 : (Number(discount.value) || 0),
     grandTotal: Number(grandTotal.value) || 0,
@@ -814,8 +814,6 @@ const handleSave = async () => {
     const userId = session?.id
 
     const finalitems = validateBillEntries(items.value)
-    // Reserve invoice number atomically before save so printData is ready immediately
-    const billInv = await $fetch('/api/bill/findBillCounter', { method: 'POST', body: { companyId, userId } })
 
     await ensureClientExists()
 
@@ -829,8 +827,7 @@ const handleSave = async () => {
     const draftRefs = { subtotal, discount, grandTotal, returnAmt, couponValue, paymentMethod,
                         redeemedPoints, clientId, selected, splitPayments, date, clientName, phoneNo, points }
 
-    const payload = buildBillPayload({ billInv, session, entriesData, billPoints, hasCreditPayment, refs: draftRefs })
-    printData = buildPrintData({ billInv, session, finalitems, refs: draftRefs })
+    const payload = buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, refs: draftRefs })
 
     const result = await $fetch('/api/bill/create', {
       method: 'POST',
@@ -840,6 +837,10 @@ const handleSave = async () => {
     if (result?.billId) {
       localStorage.setItem(RECENT_BILL_KEY, result.billId)
     }
+
+    // Invoice number is assigned by the create transaction — use it for the receipt
+    const billInv = result?.invoiceNumber
+    printData = buildPrintData({ billInv, session, finalitems, refs: draftRefs })
     printData.generatedCoupons = result?.generatedCoupons || []
     fireFcmNotification(companyId, billInv, grandTotal.value, session)
 
@@ -975,7 +976,7 @@ const movecatgeory = (rowIndex) => {
       comboInput.focus();
     } else {
       ul.focus(); // fallback
-    }
+    }  
 
     // Add key listener to ul
     ul.addEventListener('keydown', function handler(e) {

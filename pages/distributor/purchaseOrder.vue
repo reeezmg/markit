@@ -162,14 +162,16 @@ const { data: pageTotal } = useCountPurchaseOrder({
 // -------------------------------------
 // CALCULATIONS
 // -------------------------------------
+const asArray = (value: any) => Array.isArray(value) ? value : []
+
 const getPurchaseOrderQty = (po: any) =>
-  po.products.reduce(
+  asArray(po?.products).reduce(
     (sum: number, p: any) =>
       sum +
-      p.variants.reduce(
+      asArray(p?.variants).reduce(
         (vSum: number, v: any) =>
           vSum +
-          v.items.reduce(
+          asArray(v?.items).reduce(
             (iSum: number, i: any) => iSum + (i.initialQty ?? 0),
             0
           ),
@@ -179,15 +181,15 @@ const getPurchaseOrderQty = (po: any) =>
   )
 
 const getDueAmount = (po: any) => {
-  if (po.paymentType !== 'CREDIT') return null
+  if (po?.paymentType !== 'CREDIT') return null
 
   const paid =
-    po.distributorPayment?.reduce(
+    asArray(po?.distributorPayment).reduce(
       (sum: number, p: any) => sum + (p.amount ?? 0),
       0
-    ) ?? 0
+    )
 
-  return po.totalAmount - paid
+  return (po?.totalAmount ?? 0) - paid
 }
 
 // -------------------------------------
@@ -210,7 +212,15 @@ watch(rows, val => {
 // ACTION HANDLERS
 // -------------------------------------
 const openEdit = (row: any) => {
-  router.push(`/products/add?poId=${row.id}&isEdit=true`)
+  router.push({
+    path: '/products/add',
+    query: {
+      poId: row.id,
+      isEdit: 'true',
+      from: 'distributor-purchase-order',
+      returnTo: '/distributor/purchaseOrder',
+    },
+  })
 }
 
 const confirmDelete = (row: any) => {
@@ -311,10 +321,15 @@ const handlePay = async () => {
 const handleAdd = async () => {
   try {
     isAdd.value = true
-    const res = await $fetch('/api/purchaseorder/create', { method: 'POST' })
-    router.push(`/products/add?poId=${res?.id}`)
+    router.push({
+      path: '/products/add',
+      query: {
+        from: 'distributor-purchase-order',
+        returnTo: '/distributor/purchaseOrder',
+      },
+    })
   } catch (error) {
-    console.error('Failed to create purchase order:', error)
+    console.error('Failed to open purchase order flow:', error)
   } finally {
     isAdd.value = false
   }

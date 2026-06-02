@@ -9,8 +9,7 @@ import {
   useCreateBill,
   useFindFirstCompany,
   useUpdateVariant,
-  useUpdateItem,
-  useUpdateCompany
+  useUpdateItem
 } from '~/lib/hooks';
 
 import type { PaymentStatus, paymentType,OrderStatus } from '@prisma/client';
@@ -57,7 +56,6 @@ interface NotificationPayload {
 
 // Hooks
 const CreateBill = useCreateBill();
-const UpdateCompany = useUpdateCompany();
 const UpdateVariant = useUpdateVariant();
 const UpdateItem = useUpdateItem();
 const useClientAuth = () => useNuxtApp().$authClient;
@@ -139,26 +137,11 @@ const handleSubmit = async (e?: Event) => {
     }
 
   try {
-        const billid = await UpdateCompany.mutateAsync({
-      where:{
-        id:useAuth().session.value?.companyId
-      },
-    data: {
-        billCounter: {
-          increment: 1, 
-      },
-    },
-    select:{
-        billCounter:true,
-      }
-    })
-
-   
-        
-
+    // invoice_number is assigned by the BEFORE INSERT trigger on `bills`
+    // (trigger_generate_invoice_number). Prisma returns the trigger-assigned
+    // value on the created row (data.invoiceNumber) — do not increment here.
     // Create the bill data with proper typing
     const billData = {
-      invoiceNumber: billid.billCounter,
       grandTotal: total.value,
       discount: discount.value,
       subtotal: subtotal.value,
