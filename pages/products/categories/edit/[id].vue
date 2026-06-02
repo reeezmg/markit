@@ -7,10 +7,9 @@ import {
   useCreateSubcategory,
   useDeleteSubcategory,
 } from '~/lib/hooks';
-import type { Category, Subcategory } from '@prisma/client';
+import type { Subcategory } from '@prisma/client';
 
 const route = useRoute();
-const router = useRouter();
 const toast = useToast();
 const categoryStore = useCategoryStore();
 const UpdateCategory = useUpdateCategory();
@@ -21,14 +20,24 @@ const awsService = new AwsService();
 const useAuth = () => useNuxtApp().$auth;
 
 interface ImageData {
-  file: File;
+  file?: File;
   uuid: string;
 }
 
-const linkList = ['Create', 'Subcategories', 'Live'];
+type SubcategoryForm = Partial<Subcategory & {
+  isNew?: boolean;
+  imageFile?: ImageData;
+}>;
 
-// Form data
-const isLoading = ref(false);
+const subcategoryColumns = [
+  { key: 'name', label: 'Name' },
+  { key: 'description', label: 'Description' },
+  { key: 'status', label: 'Status' },
+  { key: 'actions', label: 'Actions' },
+];
+
+const isCategorySaving = ref(false);
+const isSubcategorySaving = ref(false);
 const name = ref('');
 const hsn = ref('');
 const shortCut = ref('');
@@ -40,12 +49,19 @@ const taxBelowThreshold = ref(0);
 const taxAboveThreshold = ref(0);
 const margin = ref(0);
 const live = ref(true);
-const targetAudience = ref<string | null>(null); // ✅ Added field here
+const targetAudience = ref<string | null>(null);
 const files = reactive<ImageData[]>([]);
-const subcategories = ref<Array<Partial<Subcategory & { isNew?: boolean }>>>([]);
+const subcategories = ref<SubcategoryForm[]>([]);
 
-// Fetch and populate category data
-const { data: category } = useFindUniqueCategory({
+const isSubcategoryModalOpen = ref(false);
+const subcategoryModalMode = ref<'add' | 'edit'>('add');
+const selectedSubcategoryIndex = ref<number | null>(null);
+const subcategoryDraft = ref<SubcategoryForm | null>(null);
+const subcategoryModalKey = ref(0);
+const isDeleteModalOpen = ref(false);
+const deletingSubcategoryIndex = ref<number | null>(null);
+
+const { data: category, refetch: refetchCategory } = useFindUniqueCategory({
   where: { id: route.params.id as string },
   include: { subcategories: true },
 });
@@ -63,10 +79,11 @@ watchEffect(() => {
     taxAboveThreshold.value = category.value.taxAboveThreshold || 0;
     margin.value = category.value.margin || 0;
     live.value = category.value.status;
-    targetAudience.value = category.value.targetAudience || null; // ✅ Pre-fill
+    targetAudience.value = category.value.targetAudience || null;
 
+    files.splice(0, files.length);
     if (category.value.image) {
-      files.push({ uuid: category.value.image } as ImageData);
+      files.push({ uuid: category.value.image });
     }
 
     subcategories.value = category.value.subcategories.map((sc) => ({
@@ -76,7 +93,6 @@ watchEffect(() => {
   }
 });
 
-// Handle main category updates
 const createValue = (data: any) => {
   name.value = data.name;
   hsn.value = data.hsn;
@@ -88,38 +104,130 @@ const createValue = (data: any) => {
   taxBelowThreshold.value = data.taxBelowThreshold;
   taxAboveThreshold.value = data.taxAboveThreshold;
   margin.value = data.margin;
-  targetAudience.value = data.targetAudience || null; // ✅ Capture from emitted event
+  targetAudience.value = data.targetAudience || null;
+  if (data.live !== undefined) {
+    live.value = data.live;
+  }
+
   if (data.file) {
-    files.push(data.file);
+    files.splice(0, files.length, data.file);
   }
 };
 
-const updateSubcategory = (index: number, data: Partial<Subcategory>) => {
-  subcategories.value[index] = { ...subcategories.value[index], ...data };
-};
-
-const liveValue = (data: boolean) => {
-  live.value = data;
-};
-
-// Add / Delete subcategory handlers
-const handleAddSubCategory = () => {
-  subcategories.value.push({
+const openAddSubcategory = () => {
+  subcategoryModalMode.value = 'add';
+  selectedSubcategoryIndex.value = null;
+  subcategoryDraft.value = {
     id: `new-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
     name: '',
     description: '',
     status: true,
     isNew: true,
-  });
+  };
+  subcategoryModalKey.value += 1;
+  isSubcategoryModalOpen.value = true;
 };
 
-const handleDeleteSubCategory = async (index: number) => {
+const openEditSubcategory = (row: SubcategoryForm) => {
+  const index = subcategories.value.findIndex((subcat) => subcat.id === row.id);
+  selectedSubcategoryIndex.value = index;
+  subcategoryModalMode.value = 'edit';
+  subcategoryDraft.value = { ...row };
+  subcategoryModalKey.value += 1;
+  isSubcategoryModalOpen.value = true;
+};
+
+const updateSubcategoryDraft = (data: SubcategoryForm) => {
+  subcategoryDraft.value = {
+    ...subcategoryDraft.value,
+    ...data,
+  };
+};
+
+const closeSubcategoryModal = () => {
+  isSubcategoryModalOpen.value = false;
+  selectedSubcategoryIndex.value = null;
+  subcategoryDraft.value = null;
+};
+
+const getCompanyId = () => {
+  const companyId = useAuth().session.value?.companyId;
+  if (!companyId) {
+    throw new Error('Company session not found');
+  }
+
+  return companyId;
+};
+
+const getSubcategoryPayload = (subcat: SubcategoryForm, companyId: string) => ({
+  name: subcat.name || '',
+  description: subcat.description || '',
+  status: subcat.status,
+  image: subcat.image || undefined,
+  company: {
+    connect: { id: companyId },
+  },
+  category: {
+    connect: { id: route.params.id as string },
+  },
+});
+
+const saveSubcategoryDraft = async () => {
+  if (!subcategoryDraft.value?.name?.trim()) {
+    toast.add({ title: 'Subcategory name is required', color: 'red' });
+    return;
+  }
+
+  isSubcategorySaving.value = true;
+
+  try {
+    const companyId = getCompanyId();
+    await uploadImage(subcategoryDraft.value.imageFile);
+
+    if (subcategoryModalMode.value === 'add') {
+      await CreateSubcategory.mutateAsync({
+        data: getSubcategoryPayload(subcategoryDraft.value, companyId),
+      });
+      toast.add({ title: 'Subcategory added', color: 'green' });
+    } else if (subcategoryDraft.value.id) {
+      await UpdateSubcategory.mutateAsync({
+        where: { id: subcategoryDraft.value.id },
+        data: getSubcategoryPayload(subcategoryDraft.value, companyId),
+      });
+      toast.add({ title: 'Subcategory updated', color: 'green' });
+    }
+
+    await refetchCategory();
+    closeSubcategoryModal();
+  } catch (error: any) {
+    toast.add({
+      title: subcategoryModalMode.value === 'add'
+        ? 'Error adding subcategory'
+        : 'Error updating subcategory',
+      description: error.message,
+      color: 'red',
+    });
+  } finally {
+    isSubcategorySaving.value = false;
+  }
+};
+
+const openDeleteSubcategory = (row: SubcategoryForm) => {
+  deletingSubcategoryIndex.value = subcategories.value.findIndex((subcat) => subcat.id === row.id);
+  isDeleteModalOpen.value = true;
+};
+
+const confirmDeleteSubcategory = async () => {
+  const index = deletingSubcategoryIndex.value;
+  if (index === null || index < 0) return;
+
   const subcat = subcategories.value[index];
 
   if (!subcat.isNew && subcat.id) {
     try {
       await DeleteSubcategory.mutateAsync({ where: { id: subcat.id } });
       toast.add({ title: 'Subcategory deleted', color: 'green' });
+      await refetchCategory();
     } catch (error) {
       toast.add({ title: 'Error deleting subcategory', color: 'red' });
       return;
@@ -127,28 +235,39 @@ const handleDeleteSubCategory = async (index: number) => {
   }
 
   subcategories.value.splice(index, 1);
+  isDeleteModalOpen.value = false;
+  deletingSubcategoryIndex.value = null;
 };
 
-// Submit updated category
-const handleSubmit = async (e: Event) => {
-  isLoading.value = true;
-  e.preventDefault();
-  try {
-    // 1️⃣ Upload image if changed
-    const base64files = await Promise.all(
-      files
-        .filter((file) => file.file)
-        .map(async (file) => {
-          const base64 = await prepareFileForApi(file.file);
-          return { base64, uuid: file.uuid };
-        })
-    );
-    const uploads = base64files.map((file) =>
-      awsService.uploadBase64File(file.base64, file.uuid)
-    );
+const subcategoryActions = (row: SubcategoryForm) => [
+  [
+    {
+      label: 'Edit',
+      icon: 'i-heroicons-pencil-square-20-solid',
+      click: () => openEditSubcategory(row),
+    },
+  ],
+  [
+    {
+      label: 'Delete',
+      icon: 'i-heroicons-trash-20-solid',
+      click: () => openDeleteSubcategory(row),
+    },
+  ],
+];
 
-    // 2️⃣ Update main category
-    const categoryUpdate = UpdateCategory.mutateAsync({
+const uploadImage = async (image?: ImageData) => {
+  if (!image?.file) return;
+  const base64 = await prepareFileForApi(image.file);
+  await awsService.uploadBase64File(base64, image.uuid);
+};
+
+const saveCategory = async () => {
+  isCategorySaving.value = true;
+
+  try {
+    await uploadImage(files[0]);
+    await UpdateCategory.mutateAsync({
       where: { id: route.params.id as string },
       data: {
         name: name.value,
@@ -163,43 +282,16 @@ const handleSubmit = async (e: Event) => {
         taxBelowThreshold: taxBelowThreshold.value,
         taxAboveThreshold: taxAboveThreshold.value,
         margin: margin.value,
-        targetAudience: targetAudience.value || undefined, // ✅ Include target audience
+        targetAudience: targetAudience.value || undefined,
       },
     });
-
-    // 3️⃣ Handle subcategories
-    const subcategoryUpdates = subcategories.value.map(async (subcat) => {
-      const data = {
-        name: subcat.name,
-        description: subcat.description,
-        status: subcat.status,
-        image: subcat.image,
-        company: {
-          connect: { id: useAuth().session.value?.companyId },
-        },
-        category: {
-          connect: { id: route.params.id as string },
-        },
-      };
-
-      if (subcat.isNew) {
-        return CreateSubcategory.mutateAsync({ data });
-      } else if (subcat.id) {
-        return UpdateSubcategory.mutateAsync({
-          where: { id: subcat.id },
-          data,
-        });
-      }
-    });
-
-    await Promise.all([categoryUpdate, ...subcategoryUpdates, ...uploads]);
 
     toast.add({
       title: 'Category updated successfully!',
       color: 'green',
     });
     await categoryStore.refreshCategories();
-    router.push('/products/categories');
+    await refetchCategory();
   } catch (error: any) {
     toast.add({
       title: 'Error updating category',
@@ -207,101 +299,175 @@ const handleSubmit = async (e: Event) => {
       color: 'red',
     });
   } finally {
-    isLoading.value = false;
+    isCategorySaving.value = false;
   }
-};
-
-// Smooth scroll for quick links
-const scrollToSection = (sectionId: string) => {
-  const section = document.getElementById(sectionId);
-  if (section) section.scrollIntoView({ behavior: 'smooth' });
 };
 </script>
 
 <template>
   <UDashboardPanelContent class="pb-24">
-    <div class="flex flex-row">
-      <!-- Sidebar -->
-      <div class="w-1/4 sm:block hidden">
-        <UPageCard class="m-3">
-          <div class="text-lg"> Quick Links</div>
-          <div v-for="item in linkList" :key="item">
-            <hr class="h-px my-6 bg-gray-200 border-0 dark:bg-gray-700" />
-            <ULink
-              :to="'#' + item"
-              @click="scrollToSection(item)"
-              active-class="text-primary"
-              inactive-class="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
-            >
-              {{ item }}
-            </ULink>
-          </div>
-        </UPageCard>
-      </div>
+    <div class="space-y-4">
+      <UPageCard>
+        <AddCategoryCreate
+          :editName="category?.name"
+          :editHsn="category?.hsn"
+          :editShortCut="category?.shortCut"
+          :editDescription="category?.description"
+          :taxType="category?.taxType"
+          :thresholdAmount="category?.thresholdAmount"
+          :taxBelowThreshold="category?.taxBelowThreshold"
+          :taxAboveThreshold="category?.taxAboveThreshold"
+          :margin="category?.margin"
+          :fixedTax="category?.fixedTax"
+          :editFile="category?.image"
+          :targetAudience="category?.targetAudience"
+          :editLive="live"
+          @update="createValue"
+        />
 
-      <!-- Main Form -->
-      <div class="flex flex-col sm:w-3/4 w-full">
-        <UPageCard class="m-3" id="Create">
-          <!-- ✅ Now emits targetAudience too -->
-          <AddCategoryCreate
-            :editName="category?.name"
-            :editHsn="category?.hsn"
-            :editShortCut="category?.shortCut"
-            :editDescription="category?.description"
-            :taxType="category?.taxType"
-            :thresholdAmount="category?.thresholdAmount"
-            :taxBelowThreshold="category?.taxBelowThreshold"
-            :margin="category?.margin"
-            :fixedTax="category?.fixedTax"
-            :editFile="category?.image"
-            :targetAudience="category?.targetAudience"
-            @update="createValue"
-          />
-        </UPageCard>
+        <div class="mt-6 flex justify-end">
+          <UButton
+            type="button"
+            icon="i-heroicons-check"
+            :loading="isCategorySaving"
+            @click="saveCategory"
+          >
+            Save Category
+          </UButton>
+        </div>
+      </UPageCard>
 
-        <UPageCard class="m-3" id="Subcategories">
-          <div class="text-xl mb-4">Subcategories</div>
-
-          <div v-for="(subcat, index) in subcategories" :key="subcat.id">
-            <AddCategorySubcategory
-              :index="index"
-              :id="subcat.id"
-              :editName="subcat.name"
-              :editDescription="subcat.description"
-              :editFile="subcat.image"
-              :editStatus="subcat.status"
-              @update="(data) => updateSubcategory(index, data)"
-            />
-            <div class="mt-4 w-full text-end">
-              <UButton
-                label="Delete"
-                trailing-icon="i-heroicons-x-mark"
-                size="sm"
-                color="red"
-                @click="handleDeleteSubCategory(index)"
-              />
-            </div>
-            <hr class="h-px my-6 bg-gray-200 border-0 dark:bg-gray-700" />
+      <UPageCard>
+        <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <div class="text-xl">Subcategories</div>
+            <p class="text-sm text-gray-500 dark:text-gray-400">
+              Manage subcategories from the table actions.
+            </p>
           </div>
 
           <UButton
-            label="Add Subcategory"
-            trailing-icon="i-heroicons-plus"
-            size="sm"
+            type="button"
+            label="Add New Subcategory"
+            icon="i-heroicons-plus"
             color="primary"
-            block
-            @click="handleAddSubCategory"
+            @click="openAddSubcategory"
           />
-        </UPageCard>
-
-        <UPageCard class="m-3" id="Live">
-          <AddCategoryLive :editLive="live" @update="liveValue" />
-        </UPageCard>
-
-        <div class="mt-5 text-end">
-          <UButton @click="handleSubmit" icon="i-heroicons-check" :loading="isLoading"> Save </UButton>
         </div>
-      </div>
+
+        <UTable
+          class="mt-4"
+          :rows="subcategories"
+          :columns="subcategoryColumns"
+        >
+          <template #name-data="{ row }">
+            <div class="flex items-center gap-3">
+              <UAvatar
+                :src="row.image ? `https://images.markit.co.in/${row.image}` : undefined"
+                :alt="row.name || 'Subcategory'"
+                size="sm"
+              />
+              <span class="font-medium">{{ row.name || '-' }}</span>
+            </div>
+          </template>
+
+          <template #description-data="{ row }">
+            <span class="line-clamp-2 text-sm text-gray-600 dark:text-gray-300">
+              {{ row.description || '-' }}
+            </span>
+          </template>
+
+          <template #status-data="{ row }">
+            <UBadge :color="row.status ? 'green' : 'gray'" variant="subtle">
+              {{ row.status ? 'Active' : 'Inactive' }}
+            </UBadge>
+          </template>
+
+          <template #actions-data="{ row }">
+            <UDropdown :items="subcategoryActions(row)">
+              <UButton
+                type="button"
+                color="gray"
+                variant="ghost"
+                icon="i-heroicons-ellipsis-horizontal-20-solid"
+              />
+            </UDropdown>
+          </template>
+
+          <template #empty-state>
+            <div class="flex flex-col items-center justify-center gap-2 py-8 text-center">
+              <UIcon name="i-heroicons-table-cells" class="text-3xl text-gray-400" />
+              <p class="text-sm text-gray-500">No subcategories added yet.</p>
+            </div>
+          </template>
+        </UTable>
+      </UPageCard>
     </div>
+
+    <UModal v-model="isSubcategoryModalOpen">
+      <UCard
+        :ui="{
+          ring: '',
+          divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+        }"
+      >
+        <template #header>
+          <div class="flex items-center justify-between">
+            <h3 class="text-base font-semibold">
+              {{ subcategoryModalMode === 'add' ? 'Add Subcategory' : 'Edit Subcategory' }}
+            </h3>
+            <UButton
+              type="button"
+              color="gray"
+              variant="ghost"
+              icon="i-heroicons-x-mark-20-solid"
+              @click="closeSubcategoryModal"
+            />
+          </div>
+        </template>
+
+        <AddCategorySubcategory
+          v-if="subcategoryDraft"
+          :key="subcategoryModalKey"
+          :index="selectedSubcategoryIndex ?? subcategories.length"
+          :id="subcategoryDraft.id as string"
+          :editName="subcategoryDraft.name ?? undefined"
+          :editDescription="subcategoryDraft.description ?? undefined"
+          :editFile="subcategoryDraft.image ?? undefined"
+          :editStatus="subcategoryDraft.status"
+          @update="updateSubcategoryDraft"
+        />
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton type="button" color="gray" variant="soft" @click="closeSubcategoryModal">
+              Cancel
+            </UButton>
+            <UButton
+              type="button"
+              color="primary"
+              :loading="isSubcategorySaving"
+              @click="saveSubcategoryDraft"
+            >
+              {{ subcategoryModalMode === 'add' ? 'Add' : 'Update' }}
+            </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
+    <UDashboardModal
+      v-model="isDeleteModalOpen"
+      title="Delete Subcategory"
+      description="Are you sure you want to delete this subcategory?"
+      icon="i-heroicons-exclamation-circle"
+      prevent-close
+      :close-button="null"
+    >
+      <template #footer>
+        <UButton type="button" color="red" label="Delete" @click="confirmDeleteSubcategory" />
+        <UButton type="button" color="gray" label="Cancel" @click="isDeleteModalOpen = false" />
+      </template>
+    </UDashboardModal>
   </UDashboardPanelContent>
 </template>

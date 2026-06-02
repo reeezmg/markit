@@ -148,19 +148,71 @@ export default defineEventHandler(async (event) => {
       ],
     )
 
+    // Snapshot the pre-edit state of every edited entry in ONE query
+    // (was one SELECT per edited row). Entries are still pre-edit here, which
+    // is also what the trigger_bill_update snapshot above relied on.
+    const editEntryIds = itemsWithId.map((i: any) => i.entryId).filter(Boolean)
+    const oldEntryMap = new Map<string, { qty: any; return: boolean; item_id: string | null }>()
+    if (editEntryIds.length) {
+      const oldEntriesRes = await client.query(
+        `SELECT id, qty, return, item_id FROM entries WHERE id = ANY($1::text[])`,
+        [editEntryIds],
+      )
+      for (const row of oldEntriesRes.rows) {
+        oldEntryMap.set(row.id, { qty: row.qty, return: row.return, item_id: row.item_id })
+      }
+    }
+
+    // Accumulate every stock delta (edits reverse old + apply new, new rows,
+    // deletes reverse) keyed by item id, applied in a single UPDATE at the end.
+    const stockDeltas = new Map<string, { sold: number; qty: number }>()
+    const addDelta = (id: string | null, sold: number, qty: number) => {
+      if (!id) return
+      const cur = stockDeltas.get(id) || { sold: 0, qty: 0 }
+      cur.sold += sold
+      cur.qty += qty
+      stockDeltas.set(id, cur)
+    }
+
+    // edited entries: reverse the OLD effect, then apply the NEW effect
+    for (const item of itemsWithId) {
+      const oldEntry = oldEntryMap.get(item.entryId)
+      if (oldEntry?.item_id) {
+        const oldQty = toNumber(oldEntry.qty)
+        if (oldEntry.return) addDelta(oldEntry.item_id, oldQty, -oldQty)
+        else addDelta(oldEntry.item_id, -oldQty, oldQty)
+      }
+      const newItemId = item.id?.trim() || null
+      if (newItemId) {
+        const newQty = toNumber(item.qty || 1)
+        if (item.return) addDelta(newItemId, -newQty, newQty)
+        else addDelta(newItemId, newQty, -newQty)
+      }
+    }
+
+    // brand-new entries: apply stock effect
     for (const item of itemsWithoutId) {
-      await client.query(
-        `
-        INSERT INTO entries (
-          id, name, qty, rate, discount, tax, value, size, barcode,
-          return, variant_id, item_id, category_id, company_id, user_id, bill_id, user_name
-        )
-        VALUES (
-          $1, $2, $3, $4, $5, $6, $7, $8, $9,
-          $10, $11, $12, $13, $14, $15, $16, $17
-        )
-        `,
-        [
+      if (!item.id) continue
+      const q = toNumber(item.qty)
+      if (item.return) addDelta(item.id, -q, q)
+      else addDelta(item.id, q, -q)
+    }
+
+    // deleted entries: reverse their original effect
+    for (const item of entriesToDelete) {
+      if (!item.itemId) continue
+      const q = toNumber(item.qty)
+      if (item.return) addDelta(item.itemId, q, -q)
+      else addDelta(item.itemId, -q, q)
+    }
+
+    // Insert brand-new entries in ONE multi-row INSERT
+    if (itemsWithoutId.length) {
+      const COLS = 17
+      const values: any[] = []
+      const rows = itemsWithoutId.map((item: any, i: number) => {
+        const base = i * COLS
+        values.push(
           crypto.randomUUID(),
           item.name || '',
           item.qty || 1,
@@ -178,158 +230,109 @@ export default defineEventHandler(async (event) => {
           item.userId?.trim() || null,
           billData.id,
           item.user || null,
-        ],
-      )
-    }
-
-    for (const item of itemsWithId) {
-      const oldEntryRes = await client.query(
-        `SELECT qty, return, item_id FROM entries WHERE id = $1`,
-        [item.entryId],
-      )
-      const oldEntry = oldEntryRes.rows[0]
-
-      if (oldEntry?.item_id) {
-        const oldQty = toNumber(oldEntry.qty)
-        if (oldEntry.return) {
-          await client.query(
-            `
-            UPDATE items
-            SET sold_qty = COALESCE(sold_qty, 0) + $1,
-                qty = COALESCE(qty, 0) - $1
-            WHERE id = $2
-            `,
-            [oldQty, oldEntry.item_id],
-          )
-        } else {
-          await client.query(
-            `
-            UPDATE items
-            SET sold_qty = COALESCE(sold_qty, 0) - $1,
-                qty = COALESCE(qty, 0) + $1
-            WHERE id = $2
-            `,
-            [oldQty, oldEntry.item_id],
-          )
-        }
-      }
-
-      const newItemId = item.id?.trim() || null
-      if (newItemId) {
-        const newQty = toNumber(item.qty || 1)
-        if (item.return) {
-          await client.query(
-            `
-            UPDATE items
-            SET sold_qty = COALESCE(sold_qty, 0) - $1,
-                qty = COALESCE(qty, 0) + $1
-            WHERE id = $2
-            `,
-            [newQty, newItemId],
-          )
-        } else {
-          await client.query(
-            `
-            UPDATE items
-            SET sold_qty = COALESCE(sold_qty, 0) + $1,
-                qty = COALESCE(qty, 0) - $1
-            WHERE id = $2
-            `,
-            [newQty, newItemId],
-          )
-        }
-      }
-
+        )
+        const ph = Array.from({ length: COLS }, (_, k) => `$${base + k + 1}`)
+        return `(${ph.join(', ')})`
+      })
       await client.query(
         `
-        UPDATE entries
-        SET
-          company_id = $2,
-          barcode = $3,
-          qty = $4,
-          rate = $5,
-          name = $6,
-          discount = $7,
-          tax = $8,
-          value = $9,
-          return = $10,
-          variant_id = $11,
-          category_id = $12,
-          item_id = $13,
-          user_id = $14,
-          user_name = $15
-        WHERE id = $1
+        INSERT INTO entries (
+          id, name, qty, rate, discount, tax, value, size, barcode,
+          return, variant_id, item_id, category_id, company_id, user_id, bill_id, user_name
+        )
+        VALUES ${rows.join(', ')}
+        `,
+        values,
+      )
+    }
+
+    // Update edited entries in ONE bulk UPDATE (was one UPDATE per row)
+    if (itemsWithId.length) {
+      const ids: string[] = []
+      const companyIds: (string | null)[] = []
+      const barcodes: (string | null)[] = []
+      const qtys: number[] = []
+      const rates: number[] = []
+      const names: string[] = []
+      const discounts: number[] = []
+      const taxes: number[] = []
+      const valuesArr: number[] = []
+      const returns: boolean[] = []
+      const variantIds: (string | null)[] = []
+      const categoryIds: (string | null)[] = []
+      const itemIds: (string | null)[] = []
+      const userIds: (string | null)[] = []
+      const userNames: (string | null)[] = []
+      for (const item of itemsWithId) {
+        ids.push(item.entryId)
+        companyIds.push(resolvedCompanyId)
+        barcodes.push(item.barcode || null)
+        qtys.push(toNumber(item.qty || 1))
+        rates.push(toNumber(item.rate || 0))
+        names.push(item.name || '')
+        discounts.push(toNumber(item.discount || 0))
+        taxes.push(toNumber(item.tax || 0))
+        valuesArr.push(toNumber(item.value || 0))
+        returns.push(item.return || false)
+        variantIds.push(item.variantId?.trim() || null)
+        categoryIds.push(item.category?.[0]?.id?.trim() || null)
+        itemIds.push(item.id?.trim() || null)
+        userIds.push(item.userId?.trim() || null)
+        userNames.push(item.user || null)
+      }
+      await client.query(
+        `
+        UPDATE entries AS e
+        SET company_id  = u.company_id,
+            barcode     = u.barcode,
+            qty         = u.qty,
+            rate        = u.rate,
+            name        = u.name,
+            discount    = u.discount,
+            tax         = u.tax,
+            value       = u.value,
+            return      = u.return,
+            variant_id  = u.variant_id,
+            category_id = u.category_id,
+            item_id     = u.item_id,
+            user_id     = u.user_id,
+            user_name   = u.user_name
+        FROM unnest(
+          $1::text[], $2::text[], $3::text[], $4::float8[], $5::float8[],
+          $6::text[], $7::float8[], $8::float8[], $9::float8[], $10::bool[],
+          $11::text[], $12::text[], $13::text[], $14::text[], $15::text[]
+        ) AS u(
+          id, company_id, barcode, qty, rate, name, discount, tax, value,
+          return, variant_id, category_id, item_id, user_id, user_name
+        )
+        WHERE e.id = u.id
         `,
         [
-          item.entryId,
-          resolvedCompanyId,
-          item.barcode || null,
-          item.qty || 1,
-          item.rate || 0,
-          item.name || '',
-          item.discount || 0,
-          item.tax || 0,
-          item.value || 0,
-          item.return || false,
-          item.variantId?.trim() || null,
-          item.category?.[0]?.id?.trim() || null,
-          item.id?.trim() || null,
-          item.userId?.trim() || null,
-          item.user || null,
+          ids, companyIds, barcodes, qtys, rates,
+          names, discounts, taxes, valuesArr, returns,
+          variantIds, categoryIds, itemIds, userIds, userNames,
         ],
       )
     }
 
-    for (const item of itemsWithoutId) {
-      if (!item.id) continue
-
-      if (item.return) {
-        await client.query(
-          `
-          UPDATE items
-          SET sold_qty = COALESCE(sold_qty, 0) - $1,
-              qty = COALESCE(qty, 0) + $1
-          WHERE id = $2
-          `,
-          [item.qty, item.id],
-        )
-      } else {
-        await client.query(
-          `
-          UPDATE items
-          SET sold_qty = COALESCE(sold_qty, 0) + $1,
-              qty = COALESCE(qty, 0) - $1
-          WHERE id = $2
-          `,
-          [item.qty, item.id],
-        )
+    // Apply all accumulated stock deltas in ONE bulk UPDATE
+    if (stockDeltas.size) {
+      const ids: string[] = []
+      const soldDeltas: number[] = []
+      const qtyDeltas: number[] = []
+      for (const [id, d] of stockDeltas) {
+        ids.push(id)
+        soldDeltas.push(d.sold)
+        qtyDeltas.push(d.qty)
       }
-    }
-
-    for (const item of entriesToDelete) {
-      if (!item.itemId) continue
-
-      if (item.return) {
-        await client.query(
-          `
-          UPDATE items
-          SET sold_qty = COALESCE(sold_qty, 0) + $1,
-              qty = COALESCE(qty, 0) - $1
-          WHERE id = $2
-          `,
-          [item.qty, item.itemId],
-        )
-      } else {
-        await client.query(
-          `
-          UPDATE items
-          SET sold_qty = COALESCE(sold_qty, 0) - $1,
-              qty = COALESCE(qty, 0) + $1
-          WHERE id = $2
-          `,
-          [item.qty, item.itemId],
-        )
-      }
+      await client.query(
+        `UPDATE items AS i
+         SET sold_qty = COALESCE(i.sold_qty, 0) + u.sold_delta,
+             qty      = COALESCE(i.qty, 0) + u.qty_delta
+         FROM unnest($1::text[], $2::numeric[], $3::numeric[]) AS u(id, sold_delta, qty_delta)
+         WHERE i.id = u.id`,
+        [ids, soldDeltas, qtyDeltas],
+      )
     }
 
     const entryIds = entriesToDelete.map((entry: any) => entry.id).filter(Boolean)

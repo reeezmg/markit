@@ -12,6 +12,5 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 404, statusMessage: 'Company not found' });
   }
 
-  const prefix = company.paymentPrefix || '';
-  return { paymentNumber: prefix ? `${prefix}-${company.paymentCounter}` : company.paymentCounter };
+  return { paymentNumber: company.paymentCounter };
 });

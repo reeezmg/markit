@@ -707,7 +707,7 @@ const handleAdd = async () => {
   try {
     isAdd.value = true
     const res = await $fetch('/api/purchaseorder/create', { method: 'POST' })
-    router.push(`/products/add?poId=${res?.id}`)
+    router.push(`/products/purchase?poId=${res?.id}`)
   } catch (error) {
     console.error('Failed to create purchase order:', error)
   } finally {
@@ -1001,7 +1001,7 @@ const mainAction = (row: any) => [
 
 const poAction = (row: any) => {
   const items: any[] = [
-    [{ label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => router.push(`/products/add?poId=${row.id}&isEdit=true`) }],
+    [{ label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => router.push(`/products/purchase?poId=${row.id}&isEdit=true`) }],
   ]
   if (row.paymentType === 'CREDIT') {
     items.push([{ label: 'Pay', icon: 'i-heroicons-banknotes-20-solid', click: () => openPayModal(row) }])
@@ -1031,7 +1031,7 @@ const transactionAction = (row: any) => {
       icon: 'i-heroicons-pencil-square-20-solid',
       click: () => {
         if (row.type === 'PURCHASE') {
-          router.push(`/products/add?poId=${row.purchaseOrderId}&isEdit=true`)
+          router.push(`/products/purchase?poId=${row.purchaseOrderId}&isEdit=true`)
         } else if (row.type === 'CREDIT') {
           const linked = row.moneyTransaction
           const kind: 'PRODUCT' | 'AMOUNT' = row.moneyTransactionId ? 'AMOUNT' : 'PRODUCT'

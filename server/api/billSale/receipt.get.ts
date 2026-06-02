@@ -60,6 +60,7 @@ export default defineEventHandler(async (event) => {
               'category', cat.name,
               'hsn', cat.hsn,
               'qty', e.qty,
+              'unit', COALESCE(v.unit, 'Nos'),
               'rate', e.rate,
               'discount', e.discount,
               'tax', e.tax,
@@ -74,6 +75,7 @@ export default defineEventHandler(async (event) => {
       LEFT JOIN addresses ad ON ad.company_id = co.id AND ad.active = true
       LEFT JOIN clients cl ON cl.id = b.client_id
       LEFT JOIN entries e ON e.bill_id = b.id
+      LEFT JOIN variants v ON v.id = e.variant_id
       LEFT JOIN categories cat ON cat.id = e.category_id
 
       WHERE b.id = $1
@@ -93,7 +95,6 @@ export default defineEventHandler(async (event) => {
 
     const sale = rows[0]
     const company = sale.company
-    console.log('SALE ENTRIES:', sale.entries)
     /* 🧾 FINAL PRINT DATA (MATCHES buildPrintDataFromSale) */
     return {
       invoiceNumber: sale.invoiceNumber,
@@ -115,6 +116,7 @@ export default defineEventHandler(async (event) => {
           description: e.barcode ? e.name : e.category,
           hsn: e.hsn || '',
           qty: Number(e.qty || 1),
+          unit: e.unit || 'Nos',
           mrp: Number(e.rate || 0),
           discount: discountVal,
           tax: Number(e.tax || 0),

@@ -8,6 +8,7 @@ export default defineEventHandler(async (event) => {
   /* ── AUTH ── */
   const session = await useAuthSession(event)
   const companyId = session.data.companyId
+  const cleanup = session.data.cleanup ?? false
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
   /* ── PARAMS ── */
@@ -54,8 +55,9 @@ export default defineEventHandler(async (event) => {
          AND b.deleted    = false
          AND b.created_at BETWEEN $3 AND $4
          AND ($5 = '%' OR e.name ILIKE $5 OR c.name ILIKE $5)
+         AND ($6 = true OR b.precedence IS NOT TRUE)
        ORDER BY b.created_at DESC`,
-      [companyId, userId, startDate, endDate, searchParam]
+      [companyId, userId, startDate, endDate, searchParam, cleanup]
     )
 
     let rows = res.rows.map(r => ({

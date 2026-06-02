@@ -100,18 +100,128 @@ const resetForm = () => {
   resetValidation()
 }
 
-defineExpose({ resetForm })
+/* -----------------------------
+SELECT MENU REFS (for parent keyboard navigation)
+------------------------------ */
+const brandSelectRef = ref<any>(null)
+const categorySelectRef = ref<any>(null)
+const subcategorySelectRef = ref<any>(null)
+
+const showBrandModal = ref(false)
+const showCategoryModal = ref(false)
+const showSubcategoryModal = ref(false)
+const pendingBrandName = ref('')
+const pendingCategoryName = ref('')
+const pendingSubcategoryName = ref('')
+const activeQuickCreateSelect = ref<'brand' | 'category' | 'subcategory' | null>(null)
+
+// Each select is wrapped in <div ref="..."> so the parent can close an open
+// menu via wrapper.querySelector('button').focus()/click() — see
+// pages/erp/billing.vue:movecatgeory.
+const getAllSelectWrappers = (): HTMLElement[] =>
+  [brandSelectRef.value, categorySelectRef.value, subcategorySelectRef.value]
+    .filter((w): w is HTMLElement => !!w)
+
+// After a user picks an option from any select, return focus to the trigger
+// button so they can keep tabbing/arrowing. Guarded by an
+// activeElement-inside-listbox check so prop-driven hydration (e.g. clicking
+// an existing product to edit) doesn't steal focus.
+const focusBackOnSelect = (wrapper: any, val: any) => {
+  const isEmpty = !val || (typeof val === 'object' && Object.keys(val).length === 0)
+  if (isEmpty) return
+  if (!(document.activeElement as HTMLElement | null)?.closest('[role="listbox"]')) return
+  nextTick(() => {
+    (wrapper.value?.querySelector('button') as HTMLElement | null)?.focus()
+  })
+}
+
+watch(brandSelectedRow, (val) => focusBackOnSelect(brandSelectRef, val))
+watch(selectedRow, (val) => focusBackOnSelect(categorySelectRef, val))
+watch(subselectedRow, (val) => focusBackOnSelect(subcategorySelectRef, val))
+
+defineExpose({ resetForm, getAllSelectWrappers })
+
+const focusSelectTrigger = (wrapper: any) => {
+  nextTick(() => {
+    (wrapper.value?.querySelector('button') as HTMLElement | null)?.focus()
+  })
+}
+
+const openCreateBrandModal = (query: string) => {
+  pendingBrandName.value = query.trim()
+  activeQuickCreateSelect.value = 'brand'
+  showBrandModal.value = true
+}
+
+const openCreateCategoryModal = (query: string) => {
+  pendingCategoryName.value = query.trim()
+  activeQuickCreateSelect.value = 'category'
+  showCategoryModal.value = true
+}
+
+const openCreateSubcategoryModal = (query: string) => {
+  pendingSubcategoryName.value = query.trim()
+  activeQuickCreateSelect.value = 'subcategory'
+  showSubcategoryModal.value = true
+}
+
+const onBrandCreated = (brand: any) => {
+  brandSelectedRow.value = brand
+}
+
+const onCategoryCreated = (category: any) => {
+  selectedRow.value = category
+}
+
+const onSubcategoryCreated = (subcategory: any) => {
+  subselectedRow.value = subcategory
+}
+
+watch(showBrandModal, (open) => {
+  if (!open && activeQuickCreateSelect.value === 'brand') {
+    focusSelectTrigger(brandSelectRef)
+    activeQuickCreateSelect.value = null
+  }
+})
+
+watch(showCategoryModal, (open) => {
+  if (!open && activeQuickCreateSelect.value === 'category') {
+    focusSelectTrigger(categorySelectRef)
+    activeQuickCreateSelect.value = null
+  }
+})
+
+watch(showSubcategoryModal, (open) => {
+  if (!open && activeQuickCreateSelect.value === 'subcategory') {
+    focusSelectTrigger(subcategorySelectRef)
+    activeQuickCreateSelect.value = null
+  }
+})
 
 /* -----------------------------
 WATCHERS
 ------------------------------ */
 
 /* Reset sub + brand when category changes */
-watch(subcategories, () => {
+watch(subcategories, (newSubcategories) => {
+  if (
+    subselectedRow.value?.id &&
+    newSubcategories?.some((subcategory: any) => subcategory.id === subselectedRow.value.id)
+  ) {
+    return
+  }
+
   subselectedRow.value = {}
 })
 
-watch(brands, () => {
+watch(brands, (newBrands) => {
+  if (
+    brandSelectedRow.value?.id &&
+    newBrands?.some((brand: any) => brand.id === brandSelectedRow.value.id)
+  ) {
+    return
+  }
+
   brandSelectedRow.value = {}
 })
 
@@ -228,6 +338,7 @@ watch(
 
     <!-- BRAND (SELECT MENU now) -->
     <UFormGroup label="Brand" v-if="productInputs?.brand">
+      <div ref="brandSelectRef">
       <USelectMenu
         v-model="brandSelectedRow"
         :options="brands"
@@ -275,11 +386,27 @@ watch(
             {{ brand.name }}
           </span>
         </template>
+
+        <template #option-empty="{ query }">
+          <UButton
+            size="xs"
+            variant="ghost"
+            block
+            icon="i-heroicons-plus"
+            :label="`Create '${query}'`"
+            :disabled="!query?.trim()"
+            @pointerdown.prevent.stop
+            @mousedown.prevent.stop
+            @click.prevent.stop="openCreateBrandModal(query)"
+          />
+        </template>
       </USelectMenu>
+      </div>
     </UFormGroup>
 
     <!-- CATEGORY -->
     <UFormGroup label="Category" v-if="productInputs?.category">
+      <div ref="categorySelectRef">
       <USelectMenu
         v-model="selectedRow"
         :options="categories"
@@ -294,11 +421,27 @@ watch(
           </span>
           <span v-else>Select</span>
         </template>
+
+        <template #option-empty="{ query }">
+          <UButton
+            size="xs"
+            variant="ghost"
+            block
+            icon="i-heroicons-plus"
+            :label="`Create '${query}'`"
+            :disabled="!query?.trim()"
+            @pointerdown.prevent.stop
+            @mousedown.prevent.stop
+            @click.prevent.stop="openCreateCategoryModal(query)"
+          />
+        </template>
       </USelectMenu>
+      </div>
     </UFormGroup>
 
     <!-- SUBCATEGORY -->
     <UFormGroup label="Sub-Category" v-if="productInputs?.subcategory">
+      <div ref="subcategorySelectRef">
       <USelectMenu
         v-model="subselectedRow"
         :options="subcategories"
@@ -313,7 +456,22 @@ watch(
           </span>
           <span v-else>Select</span>
         </template>
+
+        <template #option-empty="{ query }">
+          <UButton
+            size="xs"
+            variant="ghost"
+            block
+            icon="i-heroicons-plus"
+            :label="`Create '${query}'`"
+            :disabled="!query?.trim()"
+            @pointerdown.prevent.stop
+            @mousedown.prevent.stop
+            @click.prevent.stop="openCreateSubcategoryModal(query)"
+          />
+        </template>
       </USelectMenu>
+      </div>
     </UFormGroup>
 
     <!-- DESCRIPTION -->
@@ -330,4 +488,24 @@ watch(
       />
     </UFormGroup>
   </div>
+
+  <AddProductQuickCreateBrandModal
+    v-model="showBrandModal"
+    :preset-name="pendingBrandName"
+    @created="onBrandCreated"
+  />
+
+  <AddProductQuickCreateCategoryModal
+    v-model="showCategoryModal"
+    :preset-name="pendingCategoryName"
+    @created="onCategoryCreated"
+  />
+
+  <AddProductQuickCreateSubcategoryModal
+    v-model="showSubcategoryModal"
+    :preset-name="pendingSubcategoryName"
+    :preset-category-id="selectedRow?.id"
+    :preset-category-name="selectedRow?.name"
+    @created="onSubcategoryCreated"
+  />
 </template>

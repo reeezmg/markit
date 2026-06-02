@@ -12,7 +12,7 @@ const PAYMENT_OPTIONS_IN_SPLIT = ['Cash', 'UPI', 'Card', 'Credit']
 
 function makeEmptyItem() {
   return {
-    id: '', variantId: '', name: '', sn: 1, barcode: '', category: [], size: '',
+    id: '', variantId: '', name: '', sn: 1, barcode: '', category: [], size: '', unit: '',
     item: '', qty: 1, rate: null, discount: null, tax: null, value: 0,
     cost: 0, sizes: {}, totalQty: 0, return: false, userCode: null, userId: null, user: null,
   }
@@ -190,7 +190,10 @@ export function useBillingDraft() {
     selected.value = bill.selected ?? null
     const defaultSplits = Object.fromEntries(PAYMENT_OPTIONS_IN_SPLIT.map(m => [m, { method: m, amount: null }]))
     tempSplits.value = { ...defaultSplits, ...(bill.tempSplits ?? {}) }
-    items.value = bill.items ?? []
+    items.value = (bill.items ?? []).map((item: any) => ({
+      unit: item.unit ?? '',
+      ...item,
+    }))
   }
 
   function createNewBill() {

@@ -366,8 +366,9 @@ export default defineEventHandler(async (event) => {
       WHERE b.company_id = $1
         AND b.deleted = false
         AND b.created_at BETWEEN $2 AND $3
+        AND ($4 = true OR b.precedence IS NOT TRUE)
       `,
-      [companyId, startDate, endDate]
+      [companyId, startDate, endDate, cleanup]
     )
 
     const sales = salesRes.rows[0]
@@ -589,10 +590,11 @@ export default defineEventHandler(async (event) => {
         AND payment_method != 'Credit'
         AND payment_status != 'PENDING'
         AND created_at BETWEEN $2 AND $3
+        AND ($4 = true OR precedence IS NOT TRUE)
 
       ORDER BY created_at DESC
       `,
-      [companyId, startDate, endDate]
+      [companyId, startDate, endDate, cleanup]
     )
 
 

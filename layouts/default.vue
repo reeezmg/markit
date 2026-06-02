@@ -614,6 +614,15 @@ const links = computed(() => {
                         shortcuts: ['S', 'N'],
                     },
                 },
+                {
+                    label: 'Preferences',
+                    to: `/settings/preferences`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Preferences',
+                        shortcuts: ['S', 'R'],
+                    },
+                },
             ],
 
         },
@@ -717,7 +726,7 @@ const isRouteActive = (to?: string) => {
             <div class="flex flex-col items-center gap-2 py-2">
               <template v-for="link in links" :key="link.id || link.label">
                 <UPopover
-                  v-if="link.children?.length"
+                  v-if="'children' in link && link.children?.length"
                   mode="hover"
                   :popper="{ placement: 'right-start', strategy: 'fixed' }"
                 >
@@ -733,7 +742,7 @@ const isRouteActive = (to?: string) => {
                       <div class="text-sm font-medium px-2 py-1">{{ link.label }}</div>
                       <div class="space-y-1">
                         <NuxtLink
-                          v-for="child in link.children"
+                          v-for="child in ('children' in link ? link.children : [])"
                           :key="child.to || child.label"
                           :to="child.to"
                           class="block px-2 py-1.5 rounded text-sm hover:bg-gray-100 dark:hover:bg-gray-800"

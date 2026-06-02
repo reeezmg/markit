@@ -10,6 +10,7 @@ export default defineEventHandler(async (event) => {
 
   const session = await useAuthSession(event)
   const companyId = session.data.companyId
+  const cleanup = session.data.cleanup ?? false
 
   if (!companyId) {
     throw createError({
@@ -78,8 +79,9 @@ export default defineEventHandler(async (event) => {
         AND b.deleted=false
         AND b.is_markit=false
         AND b.created_at BETWEEN $2 AND $3
+        AND ($4 = true OR b.precedence IS NOT TRUE)
       `,
-      [companyId, startDate, endDate]
+      [companyId, startDate, endDate, cleanup]
     )
 
     const totalSales = Number(
@@ -115,6 +117,7 @@ export default defineEventHandler(async (event) => {
           AND b.is_markit=false
           AND b.payment_status='PAID'
           AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE)
       )
 
       SELECT
@@ -127,7 +130,7 @@ export default defineEventHandler(async (event) => {
         ),0) AS total_cogs
       FROM entry_calc
       `,
-      [companyId, startDate, endDate]
+      [companyId, startDate, endDate, cleanup]
     )
 
     const totalCOGS = Number(

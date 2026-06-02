@@ -147,7 +147,7 @@ const projectActions = (row: any) => [
 
 // ─── New Transaction dropdown ───
 const newTransactionItems = computed(() => [[
-    { label: 'Create Quote', icon: 'i-heroicons-document-text', click: () => router.push({ path: '/quotes', query: { newFromProject: selectedProject.value?.id } }) },
+    { label: 'Create Quote', icon: 'i-heroicons-document-text', click: () => router.push({ path: '/quotes/add', query: { newFromProject: selectedProject.value?.id } }) },
     { label: 'Create Invoice', icon: 'i-heroicons-document-duplicate', disabled: true },
     { label: 'Create Sales Order', icon: 'i-heroicons-clipboard-document-list', disabled: true },
 ], [
@@ -180,8 +180,7 @@ const formatCurrency = (amount: number) => {
 }
 
 const onNewProject = () => {
-    editingProject.value = null
-    isNewProjectOpen.value = true
+    router.push('/projects/add')
 }
 
 const onProjectSaved = () => {
@@ -535,11 +534,6 @@ const onProjectSaved = () => {
             </Transition>
         </div>
 
-        <!-- New Project Modal -->
-        <ProjectsNewProjectModal
-            v-model="isNewProjectOpen"
-            :editing-project="editingProject"
-            @saved="onProjectSaved"
-        />
+
     </UDashboardPanelContent>
 </template>

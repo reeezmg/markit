@@ -3,12 +3,14 @@ import * as z from 'zod';
 import { useForm } from 'vee-validate';
 import { toTypedSchema } from '@vee-validate/zod';
 import { v4 as uuidv4 } from 'uuid';
+import { billingUnitOptions, normalizeBillingUnits } from '~/utils/billing-units';
 
 const props = defineProps<{
     id?: string | null;
     editName?: string | null;
     editCode?: string | null;
     editQty?: number | null;
+    editUnit?: string | null;
     editsPrice?: number | null;
     editpPrice?: number | null;
     editDiscount?: number | null;
@@ -63,9 +65,35 @@ const [sprice, spriceAttrs] = defineField('sprice');
 const [pprice, ppriceAttrs] = defineField('pprice');
 const [dprice, dpriceAttrs] = defineField('dprice');
 const [discount, discountAttrs] = defineField('discount');
+const unit = ref('Nos');
 
 const variantInputs = ref(useAuth().session.value?.variantInputs)
+const availableUnits = computed(() => {
+  const units = useAuth().session.value?.variantInputs?.unit
+  return normalizeBillingUnits(units)
+})
 
+const showUnitSelect = computed(() => availableUnits.value.length > 1)
+const defaultUnit = computed(() => availableUnits.value[0] || 'Nos')
+
+const unitOptions = billingUnitOptions.map((unit) => ({ label: unit, value: unit }))
+
+const unitMenuOptions = computed(() => {
+  const units = normalizeBillingUnits(availableUnits.value)
+  const filteredOptions = unitOptions.filter((option) => units.includes(option.value))
+  const missingOptions = units
+    .filter((unit) => !filteredOptions.some((option) => option.value === unit))
+    .map((unit) => ({ label: unit, value: unit }))
+  const currentUnit =
+    unit.value && !filteredOptions.some((option) => option.value === unit.value)
+      ? [{ label: unit.value, value: unit.value }]
+      : []
+  const options = [...filteredOptions, ...missingOptions, ...currentUnit]
+
+  return options.length ? options : unitOptions
+})
+
+const lastEmittedPayload = ref('')
 
 
 const addItem = () => {
@@ -74,8 +102,6 @@ const addItem = () => {
         items.value = [];
     }
     items.value.push({ id: uuidv4(), size: '', qty: undefined });
-
-  
 };
 
 const removeItem = (index: number) => {
@@ -87,11 +113,29 @@ const removeItem = (index: number) => {
     }
 };
 
+const rootEl = ref<HTMLElement | null>(null);
+
+const focusFirst = () => {
+    const input = rootEl.value?.querySelector('input') as HTMLInputElement | null;
+    input?.focus();
+    input?.select?.();
+};
+const focusSizeAt = (index: number, field: 'size' | 'qty' = 'size') => {
+    const row = rootEl.value?.querySelector(`[data-size-index="${index}"]`) as HTMLElement | null;
+    if (!row) return;
+    const inputs = row.querySelectorAll('input');
+    const input = (field === 'size' ? inputs[0] : inputs[1]) as HTMLInputElement | undefined;
+    input?.focus();
+    input?.select?.();
+};
+const focusLastSize = () => focusSizeAt(items.value.length - 1, 'size');
+
 
 const resetForm = () => {
     name.value = '';
     code.value = '';
     qty.value = 0;
+    unit.value = defaultUnit.value;
     sprice.value = 0;
     pprice.value = 0;
     dprice.value = 0;
@@ -115,6 +159,16 @@ watch(() => props.editCode, (newCode) => {
 
 watch(() => props.editQty, (newQty) => {
     qty.value = newQty ?? 0;
+}, { immediate: true });
+
+watch(() => props.editUnit, (newUnit) => {
+    unit.value = normalizeBillingUnits(newUnit ? [newUnit] : [])[0] || defaultUnit.value;
+}, { immediate: true });
+
+watch(defaultUnit, (newDefaultUnit) => {
+  if (!props.editUnit) {
+    unit.value = newDefaultUnit || 'Nos';
+  }
 }, { immediate: true });
 
 
@@ -189,33 +243,60 @@ watch(
   ([newId, newItems, newName, newCode, newQty, newSPrice, newPPrice, newDPrice, newDiscount]) => {
     console.log('watching items',newId);
 
-    // If newItems is empty, populate it with default value
+    // If newItems is empty, populate it with default value.
+    // NOTE: only treat an explicit `null` size as "no-sizes mode". An empty
+    // string means the user just clicked "Add Sizes" and hasn't typed the
+    // size value yet — we must preserve it so the row stays rendered.
         const updatedItems =
         newItems.length === 0 ||
-        (newItems.length === 1 && (!newItems[0].size || newItems[0].size === ''))
+        (newItems.length === 1 && newItems[0].size === null)
             ? [{id: newItems[0]?.id , size: null, qty: newQty }]
             : newItems;
 
-    emit('update', {
+    const payload = {
       ...(newId && { id: newId }),
       name: newName,
       code: newCode,
       qty: qty.value,
+      unit: unit.value,
       sprice: newSPrice,
       pprice: newPPrice,
       dprice: newDPrice,
       discount: newDiscount,
       items: updatedItems,
-    });
+    };
+
+    const payloadKey = JSON.stringify(payload);
+    if (payloadKey === lastEmittedPayload.value) return;
+    lastEmittedPayload.value = payloadKey;
+    emit('update', payload);
   },
   { deep: true, immediate: true }
 );
 
 
 
-defineExpose({ resetForm });
+// Unit select is wrapped in <div ref="unitSelectRef"> so the parent can do
+// `wrapper.querySelector('button').focus()/click()` to close the menu —
+// mirrors the pattern in pages/erp/billing.vue (movecatgeory).
+const unitSelectRef = ref<HTMLElement | null>(null);
+const getSelectWrapper = (): HTMLElement | null => unitSelectRef.value ?? null;
+
+// After a user picks a unit, return focus to the trigger button. Guarded by
+// an activeElement-inside-listbox check so programmatic unit changes (e.g.
+// prop hydration / resetForm) don't steal focus.
+watch(unit, (val) => {
+  if (!val) return;
+  if (!(document.activeElement as HTMLElement | null)?.closest('[role="listbox"]')) return;
+  nextTick(() => {
+    (unitSelectRef.value?.querySelector('button') as HTMLElement | null)?.focus();
+  });
+});
+
+defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLastSize, items, getSelectWrapper });
 </script>
 <template>
+  <div ref="rootEl" data-variant-root>
   <div class="grid grid-cols-2 gap-4 mb-3">
     <!-- Variant Name -->
     <UFormGroup label="Variant Name" v-if="variantInputs?.name">
@@ -229,25 +310,25 @@ defineExpose({ resetForm });
 
     <!-- Selling Price -->
     <UFormGroup label="Selling Price" required :error="errors.sprice && errors.sprice" v-if="variantInputs?.sprice">
-      <UInput v-model="sprice" v-bind="spriceAttrs" type="number" placeholder="Enter selling price" step="0.01" />
+      <UInput v-model.number="sprice" v-bind="spriceAttrs" type="text" inputmode="decimal" placeholder="Enter selling price" />
     </UFormGroup>
 
     <!-- Purchase Price -->
     <UFormGroup label="Purchase Price" v-if="variantInputs?.pprice">
-      <UInput v-model="pprice" v-bind="ppriceAttrs" type="number" placeholder="Enter purchase price" step="0.01" />
+      <UInput v-model.number="pprice" v-bind="ppriceAttrs" type="text" inputmode="decimal" placeholder="Enter purchase price" />
     </UFormGroup>
 
     <!-- Discount Price -->
-   <UFormGroup 
-    label="Discount Price" 
-    v-if="variantInputs?.dprice" 
+   <UFormGroup
+    label="Discount Price"
+    v-if="variantInputs?.dprice"
     :error="errors.dprice && errors.dprice"
   >
     <UInput
-      v-model="dprice"
+      v-model.number="dprice"
       v-bind="dpriceAttrs"
-      type="number"
-      step="0.01"
+      type="text"
+      inputmode="decimal"
       @focus="isEditingDPrice = true; isEditingDiscount = false"
       @blur="isEditingDPrice = false; isdPriceChanged=true"
     />
@@ -257,9 +338,9 @@ defineExpose({ resetForm });
     <!-- Discount % -->
     <UFormGroup label="Discount %" v-if="variantInputs?.discount">
       <UInput
-      v-model="discount"
-      type="number"
-      step="0.01"
+      v-model.number="discount"
+      type="text"
+      inputmode="decimal"
       @focus="isEditingDiscount = true; isEditingDPrice = false"
       @blur="isEditingDiscount = false"
     />
@@ -271,19 +352,41 @@ defineExpose({ resetForm });
 
     <!-- Quantity (Full Width) -->
     <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2" v-if="variantInputs?.qty">
-      <UInput v-model="qty" v-bind="qtyAttrs" type="number" placeholder="Enter quantity" :disabled="items.length > 1" />
+      <div class="flex gap-2">
+        <div ref="unitSelectRef" v-if="showUnitSelect" class="w-36 shrink-0">
+        <USelectMenu
+          v-model="unit"
+          :options="unitMenuOptions"
+          value-attribute="value"
+          option-attribute="label"
+          searchable
+          creatable
+          placeholder="Unit"
+          class="w-full"
+        />
+        </div>
+        <UInput
+          v-model.number="qty"
+          v-bind="qtyAttrs"
+          type="text"
+          inputmode="numeric"
+          placeholder="Enter quantity"
+          :disabled="items.length > 1"
+          :class="showUnitSelect ? 'flex-1' : 'w-full'"
+        />
+      </div>
     </UFormGroup>
   </div>
 
-  <!-- Sizes (Full Width) -->
+  <!-- Units / Sizes (Full Width) -->
   <div class="w-full" v-if="variantInputs?.sizes">
     <template v-if="items[0]?.size !== null">
       <label class="block text-sm font-medium leading-6 dark:text-white mt-4">Items & Quantities</label>
-      <div v-for="(item, index) in items" :key="index" class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
-        <UInput v-model="item.size" type="text" placeholder="Size" class="w-full" />
-        <UInput v-model.number="item.qty" type="number" placeholder="Quantity" class="w-full" />
+      <div v-for="(item, index) in items" :key="index" :data-size-index="index" class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+        <UInput v-model="item.size" :data-size-field="'size'" type="text" placeholder="Size" class="w-full" />
+        <UInput v-model.number="item.qty" :data-size-field="'qty'" type="text" inputmode="numeric" placeholder="Quantity" class="w-full" />
         <button type="button" @click="removeItem(index)" class="w-full text-red-500 border border-red-500 rounded-md">
-          Remove
+          Delete
         </button>
       </div>
     </template>
@@ -296,5 +399,6 @@ defineExpose({ resetForm });
     >
       Add Sizes
     </button>
+  </div>
   </div>
 </template>

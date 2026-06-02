@@ -1,5 +1,6 @@
 import type { H3Event, SessionConfig } from 'h3';
 import crypto from 'uncrypto';
+import { normalizeBillingUnits } from '~/utils/billing-units';
 
 const runtimeAuth = useRuntimeConfig().auth;
 console.log('Auth Config:', runtimeAuth);
@@ -81,6 +82,7 @@ export type AuthSession = {
         dprice: boolean;
         discount: boolean;
         qty: boolean;
+        unit?: string[];
         sizes: boolean;
         images: boolean;
         button: boolean;
@@ -112,3 +114,5 @@ export async function hash(str: string) {
         .join('');
     return hashHex;
 }
+
+export { normalizeBillingUnits };

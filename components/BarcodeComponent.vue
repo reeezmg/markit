@@ -8,7 +8,7 @@
             <span v-if="item.color">Color: {{ item.color }}</span>
             <span v-if="item.size">Size: {{ item.size }}</span>
           </p>
-          <p class="price">Price: ${{ item.sprice.toFixed(2) }}</p>
+          <p class="price">Price: ₹{{ item.sprice.toFixed(2) }}</p>
         </div>
       </div>
     </div>

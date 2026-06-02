@@ -35,6 +35,7 @@ const props = defineProps<{
   fixedTax?: number | null;
   margin?: number | null;
   targetAudience?: string | null;
+  editLive?: boolean | null;
 }>();
 
 const emit = defineEmits(['update']);
@@ -76,6 +77,7 @@ const [taxBelowThreshold, taxBelowThresholdAttrs] = defineField('taxBelowThresho
 const [taxAboveThreshold, taxAboveThresholdAttrs] = defineField('taxAboveThreshold');
 const [margin, marginAttrs] = defineField('margin');
 const [targetAudience, targetAudienceAttrs] = defineField('targetAudience');
+const live = ref(props.editLive !== undefined && props.editLive !== null ? props.editLive : true);
 
 watchEffect(() => {
   if (props.editName) name.value = props.editName;
@@ -93,6 +95,7 @@ watchEffect(() => {
   if (props.taxAboveThreshold) taxAboveThreshold.value = props.taxAboveThreshold;
   if (props.margin) margin.value = props.margin;
   if (props.targetAudience) targetAudience.value = props.targetAudience;
+  if (props.editLive !== undefined && props.editLive !== null) live.value = props.editLive;
 });
 
 function handleAddImageChange(e: Event) {
@@ -123,6 +126,7 @@ watchEffect(() => {
     taxAboveThreshold: taxAboveThreshold.value,
     margin: margin.value,
     targetAudience: targetAudience.value,
+    live: live.value,
   });
 });
 
@@ -146,39 +150,37 @@ watch(hsn, (newVal) => {
   <div>
     <div class="text-xl mb-4">Category</div>
     <hr class="h-px my-8 bg-gray-200 border-0 dark:bg-gray-700" />
-    <div
-      class="flex sm:flex-row flex-col sm:justify-start justify-center sm:items-start items-center space-x-2"
-    >
-      <div class="mb-5">
+    <div class="flex flex-col gap-6 lg:flex-row lg:items-start">
+      <div class="shrink-0">
         <div class="block text-sm font-medium leading-6 dark:text-white mb-1">
           Image
         </div>
-        <label for="image">
+        <label for="image" class="block cursor-pointer">
           <div
             v-if="imagePreviewUrl"
-            class="flex justify-center items-center border border-gray-200 dark:border-gray-700 w-32 h-36"
+            class="flex h-40 w-full items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900 sm:w-40"
           >
             <img
               :src="imagePreviewUrl"
               alt="Selected Image"
-              style="max-width: 100%; max-height: 100%"
+              class="h-full w-full object-cover"
             />
           </div>
 
           <div
             v-else-if="!imagePreviewUrl && selectedFile?.uuid"
-            class="flex justify-center items-center border border-gray-200 dark:border-gray-700 w-32 h-36"
+            class="flex h-40 w-full items-center justify-center overflow-hidden rounded-lg border border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900 sm:w-40"
           >
             <img
               :src="`https://images.markit.co.in/${selectedFile.uuid}`"
               alt="Selected Image"
-              style="max-width: 100%; max-height: 100%"
+              class="h-full w-full object-cover"
             />
           </div>
 
           <div
             v-else
-            class="flex justify-center items-center border border-gray-200 dark:border-gray-700 w-32 h-36"
+            class="flex h-40 w-full items-center justify-center rounded-lg border border-dashed border-gray-300 bg-gray-50 dark:border-gray-700 dark:bg-gray-900 sm:w-40"
           >
             <UIcon name="i-heroicons-camera" class="text-4xl" />
           </div>
@@ -191,10 +193,16 @@ watch(hsn, (newVal) => {
             @change="handleAddImageChange"
           />
         </label>
+
+        <div class="mt-4 flex items-center justify-between rounded-lg border border-gray-200 px-3 py-2 dark:border-gray-700">
+          <span class="text-sm font-medium text-gray-700 dark:text-gray-200">Get it live</span>
+          <UToggle v-model="live" />
+        </div>
       </div>
 
-      <div class="w-full mt-1">
-        <UFormGroup label="Name" required :error="errors.name && errors.name" class="w-full mb-3">
+      <div class="w-full">
+        <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <UFormGroup label="Name" required :error="errors.name && errors.name" class="w-full">
           <UInput id="name" v-model="name" v-bind="nameAttrs" type="text" class="w-full" />
         </UFormGroup>
 
@@ -202,7 +210,7 @@ watch(hsn, (newVal) => {
           <UInput id="hsn" v-model="hsn" v-bind="hsnAttrs" type="text" class="w-full" />
         </UFormGroup>
 
-        <UFormGroup label="Tax Type" required class="w-full mt-4 mb-3">
+        <UFormGroup label="Tax Type" required class="w-full">
           <USelect
             v-model="taxType"
             v-bind="taxTypeAttrs"
@@ -210,8 +218,10 @@ watch(hsn, (newVal) => {
             class="w-full"
           />
         </UFormGroup>
+        </div>
 
-        <UFormGroup v-if="taxType === 'FIXED'" label="Fixed Tax (%)" class="w-full mb-3">
+        <div class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
+        <UFormGroup v-if="taxType === 'FIXED'" label="Fixed Tax (%)" class="w-full">
           <UInput
             v-model="fixedTax"
             v-bind="fixedTaxAttrs"
@@ -221,7 +231,7 @@ watch(hsn, (newVal) => {
           />
         </UFormGroup>
 
-        <div v-if="taxType === 'VARIABLE'" class="space-y-3">
+        <template v-if="taxType === 'VARIABLE'">
           <UFormGroup label="Threshold Amount (₹)" class="w-full">
             <UInput
               v-model="thresholdAmount"
@@ -248,9 +258,9 @@ watch(hsn, (newVal) => {
               class="w-full"
             />
           </UFormGroup>
-        </div>
+        </template>
 
-        <UFormGroup label="Short Cut" class="w-full my-3">
+        <UFormGroup label="Short Cut" class="w-full">
           <UInput
             id="shortCut"
             v-model="shortCut"
@@ -260,7 +270,7 @@ watch(hsn, (newVal) => {
           />
         </UFormGroup>
 
-        <UFormGroup label="Profit Margin" class="w-full my-3">
+        <UFormGroup label="Profit Margin" class="w-full">
           <UInput
             id="margin"
             v-model="margin"
@@ -271,7 +281,7 @@ watch(hsn, (newVal) => {
         </UFormGroup>
 
         <!-- ✅ New Select Field -->
-       <UFormGroup label="Target Audience" class="w-full my-3">
+       <UFormGroup label="Target Audience" class="w-full">
   <USelect
     id="targetAudience"
     v-model="targetAudience"
@@ -280,6 +290,7 @@ watch(hsn, (newVal) => {
     class="w-full"
   />
 </UFormGroup>
+        </div>
 
 
       </div>

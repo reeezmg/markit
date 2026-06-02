@@ -1,8 +1,11 @@
 <template>
   <!-- HEADER -->
   <div class="flex flex-col sm:flex-row justify-between gap-4">
-    <div class="flex items-center gap-3">
+    <div class="flex flex-wrap items-center gap-3">
+      <slot name="draft" />
+
       <UButton
+        v-if="showPurchaseInfoButton"
         label="Purchase Info"
         icon="i-heroicons-document-text"
         size="sm"
@@ -12,6 +15,14 @@
       <span class="font-semibold">
         Total: ₹{{ finalTotal.toFixed(2) }}
       </span>
+      <UBadge
+        v-if="purchaseOrderNo"
+        color="gray"
+        variant="soft"
+        class="font-mono"
+      >
+        PO #{{ purchaseOrderNo }}
+      </UBadge>
     </div>
 
     <div class="flex items-center gap-2">
@@ -25,7 +36,7 @@
   </div>
 
   <!-- PURCHASE INFO MODAL -->
-  <UModal v-model="isPurchaseInfoOpen">
+  <UModal v-model="isPurchaseInfoOpen" :prevent-close="isPurchaseInfoDoneLoading">
     <div class="p-4 space-y-4">
       <h2 class="text-lg font-semibold">Purchase Information</h2>
            <!-- 🆕 BILL DATE -->
@@ -132,7 +143,9 @@
 
       <UButton
         block
-        @click="isPurchaseInfoOpen = false"
+        :loading="isPurchaseInfoDoneLoading"
+        :disabled="isPurchaseInfoDoneLoading"
+        @click="onPurchaseInfoDone"
       >
         Done
       </UButton>
@@ -206,6 +219,9 @@ const props = withDefaults(defineProps<{
   discount?: number
   tax?: number
   adjustment?: number
+  submitLoading?: boolean
+  purchaseOrderNo?: number | string | null
+  showPurchaseInfoButton?: boolean
 }>(), {
   totalAmount: 0,
   distributorId: '',
@@ -214,7 +230,10 @@ const props = withDefaults(defineProps<{
   billDate: '',
   discount: 0,
   tax: 0,
-  adjustment: 0
+  adjustment: 0,
+  submitLoading: false,
+  purchaseOrderNo: null,
+  showPurchaseInfoButton: true
 })
 
 /* ------------------------------------
@@ -225,6 +244,22 @@ const useAuth = () => useNuxtApp().$auth
 
 const isPurchaseInfoOpen = ref(false)
 const isDistributorOpen = ref(false)
+const isPurchaseInfoSubmitPending = ref(false)
+const purchaseOrderNo = computed(() => props.purchaseOrderNo)
+const showPurchaseInfoButton = computed(() => props.showPurchaseInfoButton)
+const isPurchaseInfoDoneLoading = computed(
+  () => isPurchaseInfoSubmitPending.value || props.submitLoading
+)
+
+watch(
+  () => props.submitLoading,
+  (loading) => {
+    if (loading || !isPurchaseInfoSubmitPending.value) return
+
+    isPurchaseInfoSubmitPending.value = false
+    closePurchaseInfo()
+  }
+)
 
 /* ------------------------------------
    DISTRIBUTOR
@@ -383,7 +418,7 @@ const finalTotal = computed(() => {
 /* ------------------------------------
    EMIT (OLD + NEW)
 ------------------------------------ */
-const emit = defineEmits(['update'])
+const emit = defineEmits(['update', 'submit'])
 
 watch(
   [
@@ -504,10 +539,45 @@ const reset = () => {
   // ⚠️ DO NOT reset oldPaymentType
 }
 
+const openPurchaseInfo = () => {
+  isPurchaseInfoOpen.value = true
+}
+
+const closePurchaseInfo = () => {
+  isPurchaseInfoOpen.value = false
+}
+
+const syncPaymentState = () => {
+  oldPaymentType.value = paymentType.value || null
+}
+
+const onPurchaseInfoDone = async () => {
+  if (isPurchaseInfoDoneLoading.value) return
+  if (!paymentType.value) {
+    toast.add({
+      title: 'Payment method is required',
+      color: 'red',
+    })
+    return
+  }
+
+  isPurchaseInfoSubmitPending.value = true
+  emit('submit')
+
+  await nextTick()
+  if (!props.submitLoading) {
+    isPurchaseInfoSubmitPending.value = false
+    closePurchaseInfo()
+  }
+}
+
 /* ------------------------------------
    EXPOSE
 ------------------------------------ */
 defineExpose({
-  reset
+  reset,
+  openPurchaseInfo,
+  closePurchaseInfo,
+  syncPaymentState,
 })
 </script>

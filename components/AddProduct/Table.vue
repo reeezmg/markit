@@ -1,41 +1,65 @@
 <script setup lang="ts">
-import { ref, computed, watchEffect } from 'vue';
-import { useFindUniquePurchaseOrder, useDeleteProduct } from '~/lib/hooks';
-const isEdit = computed(() => String(route.query.isEdit || ''));
-const emit = defineEmits(['product-selected','clicked','total-amount']);
+import { ref, computed, watch } from 'vue';
+const emit = defineEmits(['product-selected','clicked','total-amount', 'product-deleted']);
 const props = defineProps<{
   settledMap: Map<string, boolean>;
+  productIds?: string[];
+  poId?: string;
+  pendingProducts?: any[];
+  products?: any[];   // single source of truth, fetched by the parent (raw-SQL)
+  loading?: boolean;  // parent's fetch loading state
 }>();
-const isSettled = (productId: string) => props.settledMap.get(productId) ?? true;
-const totalAmount = ref('');
-
-const DeleteProduct = useDeleteProduct({
-  optimisticUpdate: true
-});
-
 const route = useRoute();
-const poId = computed(() => String(route.query.poId || ''));
+const isEdit = computed(() => String(route.query.isEdit || ''));
+const isSettled = (productId: string) => props.settledMap.get(productId) ?? true;
+const totalAmount = ref(0);
+const toast = useToast();
 
-const queryParams = computed(() => ({
-  where: { id: poId.value },
-  include: {
-    products: { include: { variants: { include: { items: true } } } },
+// Ids hidden from the visible table while their DELETE is in flight (optimistic
+// remove). On error we drop the id from this set and the row reappears; on
+// success the watcher below prunes it once the parent's refetched data drops it.
+const deletingIds = ref<Set<string>>(new Set());
+
+const productIds = computed(() => props.productIds || []);
+const isDraftMode = computed(() => props.productIds !== undefined);
+
+// The parent owns data fetching now (no internal query) — so there is no
+// separate-timing flicker between the pending placeholder and the real row.
+const showTableLoading = computed(() => !!props.loading && !(props.products?.length))
+
+const sourceProducts = computed(() => {
+  const persistedProducts = props.products || [];
+
+  const applyDeletingFilter = (list: any[]) =>
+    deletingIds.value.size ? list.filter((p: any) => !deletingIds.value.has(p.id)) : list;
+
+  if (!isDraftMode.value) return applyDeletingFilter(persistedProducts);
+
+  const pendingProducts = props.pendingProducts || [];
+  if (!pendingProducts.length) return applyDeletingFilter(persistedProducts);
+
+  // Merge by id with stable ordering — the same row updates in place from
+  // pending snapshot → persisted DB data, no swap/reset:
+  //   • Keep pending order first (so a freshly added row stays where it was placed).
+  //   • Append persisted products that don't have a pending entry.
+  //   • When both exist for the same id, prefer the persisted version so the
+  //     row's data refreshes without changing its position in the list.
+  const persistedById = new Map(persistedProducts.map((product: any) => [product.id, product]))
+  const pendingById = new Map(pendingProducts.map((product: any) => [product.id, product]))
+  const orderedIds: string[] = []
+  for (const p of pendingProducts) orderedIds.push(p.id)
+  for (const p of persistedProducts) {
+    if (!pendingById.has(p.id)) orderedIds.push(p.id)
   }
-}));
-
-const {
-  data: PO,
-  isLoading,
-  error,
-  refetch,
-} = useFindUniquePurchaseOrder(queryParams);
+  return applyDeletingFilter(orderedIds.map(id => persistedById.get(id) ?? pendingById.get(id)))
+});
 
 
 watch(
-  () => PO.value, 
+  sourceProducts, 
   (val) => {
     if (!val) return
-    const variants = val.products.flatMap((product) => product.variants)
+    const variants = val.flatMap((product) => product.variants)
     totalAmount.value = variants.reduce((sum, variant) => {
       if (!variant.items || !Array.isArray(variant.items)) return sum
 
@@ -56,11 +80,13 @@ watch(
 
 // Compute table data
 const products = computed(() => {
-  return PO.value?.products?.map(product => ({
+  return sourceProducts.value?.map(product => ({
     id: product.id,
     name: product.name,
     quantity: 1, 
-    variants: product.variants
+    variants: product.variants,
+    isPending: product.isPending,
+    raw: product,
   })) || [];
 });
 
@@ -80,14 +106,55 @@ const variantColumns = [
 // Expand state
 const expand = ref({ openedRows: [], row: null });
 
-// 🟢 Remove product function
-const removeProduct = (id:string) => {
-  try {
-     DeleteProduct.mutate({ where: { id } });
-  } catch (err) {
-    console.log(err);
-  }
+// 🟢 Remove product function — optimistic:
+//   1. Hide the row immediately by adding its id to `deletingIds`.
+//   2. Fire the DELETE mutation in the background.
+//   3. On success → tell parent (so it can drop the id from `draft.productIds`,
+//      which triggers a refetch); the watcher below prunes `deletingIds` once
+//      the refreshed data no longer contains the id.
+//   4. On error → restore the row by removing the id from `deletingIds`,
+//      and surface the error via a toast.
+const removeProduct = (id: string) => {
+  if (!isSettled(id)) return;
+  if (deletingIds.value.has(id)) return;
+  deletingIds.value = new Set([...deletingIds.value, id]);
+  $fetch('/api/products/delete', { method: 'POST', body: { id } })
+    .then(() => {
+      emit('product-deleted', id);
+    })
+    .catch((err: any) => {
+      const next = new Set(deletingIds.value);
+      next.delete(id);
+      deletingIds.value = next;
+      toast.add({
+        title: 'Failed to delete product',
+        description: err?.data?.statusMessage ?? err?.message,
+        color: 'red',
+      });
+    });
 };
+
+// Prune deletingIds only after the id is truly gone everywhere:
+//   • not in `productIds` (parent has emitted product-deleted on success)
+//   • AND not in `draftProducts`/PO (post-refetch confirms it's gone)
+//
+// Pruning earlier (e.g. as soon as ZenStack's optimisticUpdate scrubs the
+// row from cache) causes a flicker on fast clicks: the parent still has the
+// id while the mutation is in flight, and any momentary cache state that
+// reflects the id back (e.g. placeholderData during the new query key's
+// fetch) would briefly re-show the row before it disappears again.
+watch([() => props.products, () => productIds.value], () => {
+  if (!deletingIds.value.size) return;
+  const persistedList = props.products || [];
+  const dataIds = new Set(persistedList.map((p: any) => p.id));
+  const propIds = new Set(productIds.value);
+  const cleaned = new Set(
+    [...deletingIds.value].filter(id => dataIds.has(id) || propIds.has(id))
+  );
+  if (cleaned.size !== deletingIds.value.size) {
+    deletingIds.value = cleaned;
+  }
+});
 
 const normalizeProductForEdit = (product: any) => {
   if (!isEdit.value) return product;
@@ -105,7 +172,8 @@ const normalizeProductForEdit = (product: any) => {
 };
 
 const editProduct = (id: string) => {
-  const selected = PO.value?.products?.find(p => p.id === id);
+  if (!isSettled(id)) return;
+  const selected = sourceProducts.value?.find(p => p.id === id);
 
   if (selected) {
     const normalizedProduct = normalizeProductForEdit(selected);
@@ -116,7 +184,8 @@ const editProduct = (id: string) => {
 };
 
 const editProductsm = (id: string) => {
-  const selected = PO.value?.products?.find(p => p.id === id);
+  if (!isSettled(id)) return;
+  const selected = sourceProducts.value?.find(p => p.id === id);
 
   if (selected) {
     const normalizedProduct = normalizeProductForEdit(selected);
@@ -132,7 +201,7 @@ const editProductsm = (id: string) => {
 
 <template>
   <div>
-    <UTable class="w-full table-auto" :loading="isLoading" v-model:expand="expand" :rows="products" :columns="columns">
+    <UTable class="w-full table-auto" :loading="showTableLoading" v-model:expand="expand" :rows="products" :columns="columns">
        <template #qty-data="{ row }">
   {{
     row.variants?.reduce((variantTotal, variant) => {
@@ -179,6 +248,11 @@ const editProductsm = (id: string) => {
         </div>
 
         <div class="md:hidden">
+        <UButton :loading="!isSettled(row.id)" v-if="!isSettled(row.id)"
+          size="sm"
+          color="gray"
+          variant="ghost"
+        />
         <UButton
          v-if="isSettled(row.id)"
           icon="i-heroicons-trash"

@@ -27,6 +27,7 @@ const UpdateClient = useUpdateClient({
 })
 
 const isSaving = ref(false)
+const isHydratingClient = ref(false)
 
 const form = reactive({
   phone: '',
@@ -34,7 +35,8 @@ const form = reactive({
   email: '',
 })
 
-const phoneDigits = computed(() => String(form.phone || '').replace(/\D/g, '').slice(0, 10))
+const normalizePhoneDigits = (value: unknown) => String(value || '').replace(/\D/g, '').slice(-10)
+const phoneDigits = computed(() => normalizePhoneDigits(form.phone))
 const isValidPhone = computed(() => phoneDigits.value.length === 10)
 
 const args = computed(() => ({
@@ -46,16 +48,21 @@ const args = computed(() => ({
   },
 }))
 
-const { data: client, isLoading } = useFindUniqueClient(
+const { data: client, isLoading, refetch: refetchClient } = useFindUniqueClient(
   args,
   computed(() => ({
     enabled: isValidPhone.value,
   }))
 )
 
+const applyClientToForm = (existingClient: any) => {
+  form.name = existingClient?.name || ''
+  form.email = existingClient?.email || ''
+}
+
 watch(phoneNo, (val) => {
   const rawValue = String(val || '').trim()
-  const digits = rawValue.replace(/\D/g, '').slice(0, 10)
+  const digits = normalizePhoneDigits(rawValue)
 
   form.phone = digits
 
@@ -66,9 +73,25 @@ watch(phoneNo, (val) => {
 
 watch(client, (val) => {
   if (val) {
-    form.name = val.name
-    form.email = val.email || ''
-  } else if (!String(phoneNo.value || '').replace(/\D/g, '').length) {
+    applyClientToForm(val)
+    return
+  }
+
+  const rawValue = String(phoneNo.value || '').trim()
+  const hasPhoneSeed = normalizePhoneDigits(rawValue).length > 0
+
+  form.email = ''
+
+  if (!hasPhoneSeed && rawValue) {
+    form.name = rawValue
+  } else {
+    form.name = ''
+  }
+})
+
+watch(phoneDigits, (digits) => {
+  if (digits.length < 10 && !String(phoneNo.value || '').trim()) {
+    form.name = ''
     form.email = ''
   }
 })
@@ -77,7 +100,7 @@ watch(model, (isOpen) => {
   if (!isOpen) return
 
   const rawValue = String(phoneNo.value || '').trim()
-  const digits = rawValue.replace(/\D/g, '').slice(0, 10)
+  const digits = normalizePhoneDigits(rawValue)
 
   form.phone = digits
   form.email = ''
@@ -89,6 +112,38 @@ watch(model, (isOpen) => {
   }
 })
 
+const getExistingClient = async () => {
+  if (!isValidPhone.value) return client.value
+
+  try {
+    const result = await refetchClient()
+    return result?.data || client.value
+  } catch {
+    return client.value
+  }
+}
+
+const hydrateClientFromPhone = async () => {
+  if (!isValidPhone.value || isHydratingClient.value) return client.value
+
+  isHydratingClient.value = true
+
+  try {
+    const existingClient = await getExistingClient()
+
+    if (existingClient?.id) {
+      applyClientToForm(existingClient)
+      return existingClient
+    }
+
+    form.name = ''
+    form.email = ''
+    return null
+  } finally {
+    isHydratingClient.value = false
+  }
+}
+
 const handleEnterFlow = async (e: KeyboardEvent) => {
   if (e.key !== 'Enter') return
 
@@ -97,8 +152,13 @@ const handleEnterFlow = async (e: KeyboardEvent) => {
   const active = document.activeElement as HTMLElement
 
   if (phoneRef.value?.$el?.contains(active)) {
+    const existingClient = await hydrateClientFromPhone()
     await nextTick()
-    nameRef.value?.$el?.querySelector('input')?.focus()
+    if (existingClient?.id) {
+      continueRef.value?.$el?.focus()
+    } else {
+      nameRef.value?.$el?.querySelector('input')?.focus()
+    }
     return
   }
 
@@ -127,68 +187,107 @@ onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleEnterFlow)
 })
 
+const currentCompanyId = computed(() => useAuth().session.value?.companyId)
+
+const isUniquePhoneError = (error: any) => {
+  const message = String(error?.info?.message || error?.data?.message || error?.message || '')
+
+  return (
+    error?.code === 'P2002' ||
+    error?.info?.code === 'P2002' ||
+    error?.data?.code === 'P2002' ||
+    message.includes('Unique constraint failed')
+  )
+}
+
+const linkClientToCompany = async (existingClient: any) => {
+  const companyId = currentCompanyId.value
+
+  if (!companyId) {
+    throw new Error('Company not found')
+  }
+
+  const isLinked = existingClient?.companies?.some((c: any) => c.companyId === companyId)
+
+  if (isLinked) return
+
+  const { number: clientNumber } = await $fetch('/api/counter/increment', {
+    method: 'POST',
+    body: { entity: 'client' },
+  })
+
+  await UpdateClient.mutateAsync({
+    where: { id: existingClient.id },
+    data: {
+      companies: {
+        create: {
+          clientNumber,
+          company: {
+            connect: {
+              id: companyId,
+            },
+          },
+        },
+      },
+    },
+  })
+}
+
 const login = async () => {
   if (isSaving.value || !isValidPhone.value || !form.name) return
 
   isSaving.value = true
-  const uuid = uuidv4()
+  const phone = `+91${phoneDigits.value}`
 
   try {
-    if (!client.value) {
+    const companyId = currentCompanyId.value
+
+    if (!companyId) {
+      throw new Error('Company not found')
+    }
+
+    const existingClient = await getExistingClient()
+
+    if (existingClient?.id) {
+      await linkClientToCompany(existingClient)
+      props.clientAdded(existingClient.id, existingClient.name || form.name, phoneDigits.value)
+    } else {
+      const uuid = uuidv4()
       const { number: clientNumber } = await $fetch('/api/counter/increment', {
         method: 'POST',
         body: { entity: 'client' },
       })
 
-      await CreateClient.mutate({
-        data: {
-          id: uuid,
-          name: form.name,
-          phone: `+91${phoneDigits.value}`,
-          ...(form.email && { email: form.email }),
-          companies: {
-            create: {
-              clientNumber,
-              company: {
-                connect: {
-                  id: useAuth().session.value?.companyId,
-                },
-              },
-            },
-          },
-        },
-      })
-
-      props.clientAdded(uuid, form.name, phoneDigits.value)
-    } else {
-      const isLinked = client.value.companies?.some(
-        (c: any) => c.companyId === useAuth().session.value?.companyId
-      )
-
-      if (!isLinked) {
-        const { number: clientNumber } = await $fetch('/api/counter/increment', {
-          method: 'POST',
-          body: { entity: 'client' },
-        })
-
-        await UpdateClient.mutate({
-          where: { id: client.value.id },
+      try {
+        await CreateClient.mutateAsync({
           data: {
+            id: uuid,
+            name: form.name,
+            phone,
+            ...(form.email && { email: form.email }),
             companies: {
               create: {
                 clientNumber,
                 company: {
                   connect: {
-                    id: useAuth().session.value?.companyId,
+                    id: companyId,
                   },
                 },
               },
             },
           },
         })
-      }
+        props.clientAdded(uuid, form.name, phoneDigits.value)
+      } catch (error: any) {
+        if (!isUniquePhoneError(error)) throw error
 
-      props.clientAdded(client.value.id, form.name, phoneDigits.value)
+        const racedClient = await getExistingClient()
+
+        if (!racedClient?.id) throw error
+
+        await linkClientToCompany(racedClient)
+        props.clientAdded(racedClient.id, racedClient.name || form.name, phoneDigits.value)
+      }
     }
 
     toast.add({
@@ -201,7 +300,7 @@ const login = async () => {
   } catch (error: any) {
     toast.add({
       title: 'Failed to add client',
-      description: error?.message || 'Please try again',
+      description: error?.info?.message || error?.message || 'Please try again',
       color: 'red',
     })
   } finally {
@@ -230,7 +329,7 @@ const login = async () => {
               v-model="form.phone"
               type="tel"
               placeholder="Enter phone"
-              :loading="isLoading"
+              :loading="isLoading || isHydratingClient"
             >
               <template #leading>+91</template>
             </UInput>

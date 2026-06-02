@@ -101,7 +101,7 @@ export function useBillingItems(
     if (!hasEmptyRow) {
       items.value.push({
         id: '', variantId: '', sn: items.value.length + 1, barcode: '',
-        category: {}, size: '', name: '', qty: 1, rate: null, discount: null,
+        category: {}, size: '', unit: '', name: '', qty: 1, rate: null, discount: null,
         tax: null, value: 0, sizes: {}, totalQty: 0, return: false, cost: 0,
         userCode: parentUser.code.value,
         user: parentUser.name.value,
@@ -145,6 +145,7 @@ export function useBillingItems(
 
     items.value[index].id = itemData.id ?? ''
     items.value[index].size = itemData.size ?? ''
+    items.value[index].unit = itemData.variant?.unit ?? 'Nos'
     items.value[index].cost = itemData.variant?.pprice ?? 0
     items.value[index].name =
       `${itemData.variant.product.subcategory?.name ?? ''} ` +

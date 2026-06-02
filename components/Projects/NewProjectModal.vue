@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { resolveComponent } from 'vue'
 import {
     useCreateProject,
     useUpdateProject,
@@ -7,12 +8,31 @@ import {
 } from '~/lib/hooks'
 
 const open = defineModel({ type: Boolean, default: false })
-const props = defineProps<{ editingProject?: any }>()
-const emit = defineEmits(['saved'])
+const props = defineProps<{ editingProject?: any; mode?: 'slideover' | 'page'; initialName?: string }>()
+const emit = defineEmits(['saved', 'cancel'])
 
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()
 const companyId = useAuth().session.value?.companyId
+const isPageMode = computed(() => props.mode === 'page')
+const wrapperComponent = computed(() => isPageMode.value ? 'div' : resolveComponent('USlideover'))
+
+const wrapperProps = computed(() => isPageMode.value
+    ? { class: 'flex flex-col h-full overflow-hidden rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900' }
+    : {
+        modelValue: open.value,
+        'onUpdate:modelValue': (value: boolean) => {
+            open.value = value
+        },
+        ui: {
+            wrapper: 'fixed inset-0 flex z-[80]',
+            overlay: {
+                base: 'fixed inset-0 transition-opacity',
+                background: 'bg-gray-200/75 dark:bg-gray-800/75',
+            },
+            width: 'w-screen max-w-3xl',
+        },
+    })
 
 const CreateProject = useCreateProject({ optimisticUpdate: true })
 const UpdateProject = useUpdateProject({ optimisticUpdate: true })
@@ -39,6 +59,36 @@ const billingMethodOptions = [
     { label: 'Hourly', value: 'HOURLY' },
     { label: 'Task Based', value: 'TASK_BASED' },
 ]
+
+const initializeForm = () => {
+    if (props.editingProject) {
+        form.name = props.editingProject.name || ''
+        form.code = props.editingProject.code || ''
+        form.clientId = props.editingProject.clientId || ''
+        form.billingMethod = props.editingProject.billingMethod || 'FIXED_COST'
+        form.description = props.editingProject.description || ''
+        form.costBudget = props.editingProject.costBudget || 0
+        form.revenueBudget = props.editingProject.revenueBudget || 0
+        form.rate = props.editingProject.rate || 0
+        form.dashboardWatch = props.editingProject.dashboardWatch ?? true
+        form.users = (props.editingProject.users || []).map((pu: any) => ({
+            companyId: pu.companyId,
+            userId: pu.userId,
+            name: pu.user?.name || '-',
+            email: pu.user?.user?.email || '-',
+            role: pu.role || 'member',
+        }))
+        form.tasks = (props.editingProject.tasks || []).map((t: any) => ({
+            name: t.name || '',
+            description: t.description || '',
+            billable: t.billable ?? true,
+        }))
+        return
+    }
+
+    resetForm()
+    form.name = props.initialName || ''
+}
 
 // ─── Client search ───
 const clientSearch = ref('')
@@ -131,7 +181,7 @@ const saveProject = async () => {
         }
 
         if (props.editingProject?.id) {
-            await UpdateProject.mutateAsync({
+            const updatedProject = await UpdateProject.mutateAsync({
                 where: { id: props.editingProject.id },
                 data: {
                     ...projectData,
@@ -154,8 +204,12 @@ const saveProject = async () => {
                     },
                 },
             })
+            emit('saved', {
+                id: updatedProject?.id || props.editingProject.id,
+                name: updatedProject?.name || form.name,
+            })
         } else {
-            await CreateProject.mutateAsync({
+            const createdProject = await CreateProject.mutateAsync({
                 data: {
                     ...projectData,
                     company: { connect: { id: companyId } },
@@ -176,11 +230,16 @@ const saveProject = async () => {
                     },
                 },
             })
+            emit('saved', {
+                id: createdProject?.id,
+                name: createdProject?.name || form.name,
+            })
         }
 
         toast.add({ title: props.editingProject ? 'Project updated' : 'Project created', icon: 'i-heroicons-check-circle', color: 'green' })
-        emit('saved')
-        open.value = false
+        if (!isPageMode.value) {
+            open.value = false
+        }
         resetForm()
     } catch (error: any) {
         console.error(error)
@@ -206,42 +265,34 @@ const resetForm = () => {
 }
 
 // ─── Populate on edit ───
+const closeForm = () => {
+    if (isPageMode.value) {
+        emit('cancel')
+        return
+    }
+    open.value = false
+}
+
+onMounted(() => {
+    if (isPageMode.value) {
+        initializeForm()
+    }
+})
+
 watch(() => open.value, (isOpen) => {
-    if (isOpen && props.editingProject) {
-        form.name = props.editingProject.name || ''
-        form.code = props.editingProject.code || ''
-        form.clientId = props.editingProject.clientId || ''
-        form.billingMethod = props.editingProject.billingMethod || 'FIXED_COST'
-        form.description = props.editingProject.description || ''
-        form.costBudget = props.editingProject.costBudget || 0
-        form.revenueBudget = props.editingProject.revenueBudget || 0
-        form.rate = props.editingProject.rate || 0
-        form.dashboardWatch = props.editingProject.dashboardWatch ?? true
-        form.users = (props.editingProject.users || []).map((pu: any) => ({
-            companyId: pu.companyId,
-            userId: pu.userId,
-            name: pu.user?.name || '-',
-            email: pu.user?.user?.email || '-',
-            role: pu.role || 'member',
-        }))
-        form.tasks = (props.editingProject.tasks || []).map((t: any) => ({
-            name: t.name || '',
-            description: t.description || '',
-            billable: t.billable ?? true,
-        }))
-    } else if (isOpen) {
-        resetForm()
+    if (isOpen && !isPageMode.value) {
+        initializeForm()
     }
 })
 </script>
 
 <template>
-    <USlideover v-model="open" :ui="{ width: 'max-w-2xl' }">
+    <component :is="wrapperComponent" v-bind="wrapperProps">
         <div class="flex flex-col h-full">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 class="text-lg font-semibold">{{ editingProject ? 'Edit Project' : 'New Project' }}</h2>
-                <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="open = false" />
+                <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="closeForm" />
             </div>
 
             <!-- Form -->
@@ -396,8 +447,8 @@ watch(() => open.value, (isOpen) => {
             <!-- Footer -->
             <div class="flex items-center gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
                 <UButton color="primary" variant="solid" label="Save" :loading="isSaving" @click="saveProject" />
-                <UButton color="gray" variant="ghost" label="Cancel" @click="open = false" />
+                <UButton color="gray" variant="ghost" label="Cancel" @click="closeForm" />
             </div>
         </div>
-    </USlideover>
+    </component>
 </template>

@@ -135,7 +135,7 @@ When the user uploads a supplier invoice, purchase bill, or distributor bill (PD
    - \`variants\`: array with name, sprice, pprice, and items (size + qty)
 
 6. **Return link** — After all products are created, respond with a summary and a clickable link:
-   "I've created Purchase Order #{purchaseOrderNo} with {N} products (total: ₹{totalAmount}). [Click here to review and edit the order](/products/add?poId={purchaseOrderId}&isEdit=true)"
+   "I've created Purchase Order #{purchaseOrderNo} with {N} products (total: ₹{totalAmount}). [Click here to review and edit the order](/products/purchase?poId={purchaseOrderId}&isEdit=true)"
 
 **Important rules:**
 - Always call \`create_purchase_order\` BEFORE any \`create_product\` — every product must belong to a PO.

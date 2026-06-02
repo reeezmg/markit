@@ -19,6 +19,9 @@ const oosLoading = ref(false)
 const cancelModalOpen = ref(false)
 const cancelReason = ref('')
 const cancelLoading = ref(false)
+const packLoading = ref(false)
+const cancelConfirmCountdown = ref(0)
+let cancelConfirmTimer = null
 
 // Format any numeric value to 2 decimal places for display.
 const fmt2 = (n) => (Number(n) || 0).toFixed(2)
@@ -38,6 +41,13 @@ const statusRank = (s) => STATUS_RANK[String(s || '').toUpperCase()] || 0
 const orderStatus = computed(() => trynbuy.value?.orderStatus || '')
 const isPickedOrLater = computed(() => statusRank(orderStatus.value) >= STATUS_RANK.PICKED)
 const isDecisionDoneOrLater = computed(() => statusRank(orderStatus.value) >= STATUS_RANK.DECISION_DONE)
+const currentCompanyId = computed(() => useAuth().session.value?.companyId || null)
+const currentStoreStatus = computed(() => {
+  const companyId = currentCompanyId.value
+  if (!companyId) return null
+  return trynbuy.value?.storeStatuses?.[companyId] || null
+})
+const isCurrentStorePacked = computed(() => !!currentStoreStatus.value?.packed)
 // Show "returned" red highlight only when the order has reached DECISION_DONE and this row was returned
 const isReturnedHighlighted = (row) => isDecisionDoneOrLater.value && !!row.isReturned
 // Unified "row should be displayed in red" — out-of-stock OR returned-after-decision
@@ -156,6 +166,7 @@ const trynbuyArgs = computed(() => {
       deliveryType: true,
       deliveryTime: true,
       orderStatus: true,
+      storeStatuses: true,
       pickupOtps: true,
       deliveryOtp: true,
 
@@ -229,24 +240,6 @@ const trynbuyArgs = computed(() => {
         },
       },
 
-      // ✅ Returned items (filtered to this company) — used to flag rows after DECISION_DONE
-      returnedItems: {
-        where: {
-          variant: {
-            product: {
-              companyId: {
-                equals: companyId,
-              },
-            },
-          },
-        },
-        select: {
-          id: true,
-          itemId: true,
-          variantId: true,
-          quantity: true,
-        },
-      },
     },
   }
 })
@@ -257,9 +250,14 @@ const { data: trynbuy, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyA
 // pickup_otps is per-store (set when this store clicks Pack); delivery_otp is
 // generated at order creation and used when the delivery partner finalises drop-off.
 watchEffect(() => {
-  const companyId = useAuth().session.value?.companyId
-  const fromDb = trynbuy.value?.pickupOtps?.[companyId] || trynbuy.value?.deliveryOtp
-  if (fromDb) packOtp.value = fromDb
+  const companyId = currentCompanyId.value
+  if (!companyId || !isCurrentStorePacked.value) {
+    packOtp.value = null
+    return
+  }
+
+  const fromDb = trynbuy.value?.pickupOtps?.[companyId] || null
+  packOtp.value = fromDb
 })
 
 
@@ -269,12 +267,11 @@ watch(
   (newData) => {
     if (!newData || !newData.cartItems) return
     console.log(trynbuy)
-    const returned = Array.isArray(newData.returnedItems) ? newData.returnedItems : []
-    const returnedItemIds = new Set(returned.map(r => r.itemId).filter(Boolean))
 
     items.value = newData.cartItems.map((cartItem, index) => {
       const variant = cartItem.variant || {}
       const item = cartItem.item || {}
+      const status = cartItem.status || 'ORDER_RECEIVED'
 
       const baseRate = variant.sprice || 0
       const qty = cartItem.quantity || 1
@@ -301,9 +298,9 @@ watch(
         tax,
         value,
         image: variant.images?.[0] || null,
-        status: cartItem.status || 'ORDER_RECEIVED',
-        outOfStock: cartItem.status === 'OUTOFSTOCK',
-        isReturned: returnedItemIds.has(item.id),
+        status,
+        outOfStock: status === 'OUTOFSTOCK',
+        isReturned: String(status).toUpperCase() === 'RETURNED',
       }
     })
   },
@@ -428,14 +425,31 @@ const notifyMarketplaceAndDelivery = async () => {
 }
 
 const openCancelModal = () => {
+  if (isCurrentStorePacked.value || isPickedOrLater.value) return
   cancelReason.value = ''
+  cancelConfirmCountdown.value = 5
+  if (cancelConfirmTimer) clearInterval(cancelConfirmTimer)
+  cancelConfirmTimer = setInterval(() => {
+    if (cancelConfirmCountdown.value <= 1) {
+      cancelConfirmCountdown.value = 0
+      clearInterval(cancelConfirmTimer)
+      cancelConfirmTimer = null
+      return
+    }
+    cancelConfirmCountdown.value -= 1
+  }, 1000)
   cancelModalOpen.value = true
 }
 
 const closeCancelModal = () => {
   if (cancelLoading.value) return
+  if (cancelConfirmTimer) {
+    clearInterval(cancelConfirmTimer)
+    cancelConfirmTimer = null
+  }
   cancelModalOpen.value = false
   cancelReason.value = ''
+  cancelConfirmCountdown.value = 0
 }
 
 
@@ -444,10 +458,13 @@ const closeCancelModal = () => {
 //pack all items
 
 const handlePack = async () => {
+  if (packLoading.value) return
+
   const clientId = trynbuy.value?.client?.id || null;
   const trynbuyId = trynbuy.value?.id || null;
 
   try {
+    packLoading.value = true
     if (!trynbuyId) throw new Error("Missing Trynbuy ID");
     if (!items.value.length) throw new Error("No cart items found for this Trynbuy");
 
@@ -468,6 +485,9 @@ const handlePack = async () => {
       if (response?.pickupOtp) {
         packOtp.value = response.pickupOtp;
       }
+      // Refresh trynbuy so storeStatuses[companyId].packed flips to true and
+      // the OTP block (gated on isCurrentStorePacked) renders immediately.
+      await trynbuyRefetch();
     }
 
     toast.add({
@@ -480,6 +500,8 @@ const handlePack = async () => {
       title: 'Something went wrong while packing',
       color: 'red',
     });
+  } finally {
+    packLoading.value = false
   }
 };
 
@@ -536,6 +558,13 @@ const handleCancelStore = async () => {
     cancelLoading.value = false
   }
 }
+
+onBeforeUnmount(() => {
+  if (cancelConfirmTimer) {
+    clearInterval(cancelConfirmTimer)
+    cancelConfirmTimer = null
+  }
+})
 
 
 
@@ -763,17 +792,19 @@ const handleSave = async () => {
         <template #footer>
 
           <!-- Pickup OTP display -->
-          <div v-if="packOtp" class="mb-4 w-full p-4 bg-amber-50 border border-amber-300 rounded-xl text-center">
+          <div v-if="isCurrentStorePacked && packOtp" class="mb-4 w-full p-4 bg-amber-50 border border-amber-300 rounded-xl text-center">
             <p class="text-sm font-medium text-amber-700 mb-1">Pickup OTP for Delivery Person</p>
             <p class="text-4xl font-mono font-bold tracking-widest text-amber-900">{{ packOtp }}</p>
             <p class="text-xs text-amber-600 mt-1">Share this code with the delivery partner when they arrive</p>
           </div>
 
-          <div class="mb-4 w-full p-1 flex justify-between gap-3">
+          <div class="mb-4 w-full p-1 flex justify-end gap-3">
             <UButton
+              v-if="!isCurrentStorePacked && !isPickedOrLater"
               color="red"
               variant="solid"
               icon="i-heroicons-x-circle"
+              :disabled="packLoading"
               @click="openCancelModal"
             >
               Cancel
@@ -781,10 +812,11 @@ const handleSave = async () => {
             <UButton
               ref="packref"
               icon="i-heroicons-clipboard-document-check"
-              :disabled="isPickedOrLater"
+              :loading="packLoading"
+              :disabled="isPickedOrLater || packLoading"
               @click="handlePack"
             >
-              Pack
+              {{ packLoading ? 'Packing...' : 'Pack' }}
             </UButton>
           </div>
 
@@ -905,14 +937,15 @@ const handleSave = async () => {
                 :disabled="cancelLoading"
                 @click="closeCancelModal"
               >
-                Back
+                No
               </UButton>
               <UButton
                 color="red"
+                :disabled="cancelLoading || cancelConfirmCountdown > 0"
                 :loading="cancelLoading"
                 @click="handleCancelStore"
               >
-                Confirm Cancel
+                {{ cancelConfirmCountdown > 0 ? `Yes (${cancelConfirmCountdown})` : 'Yes' }}
               </UButton>
             </div>
           </template>

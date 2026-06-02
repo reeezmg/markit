@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
 
         v.id                     AS variant_id,
         v.name                   AS variant_name,
+        v.unit                   AS unit,
         v.s_price                AS sprice,
         v.d_price                AS dprice,
         v.p_price                AS pprice,
@@ -89,6 +90,7 @@ export default defineEventHandler(async (event) => {
       variant: {
         id: r.variant_id,
         name: r.variant_name,
+        unit: r.unit,
         sprice: Number(r.sprice),
         dprice: Number(r.dprice),
         tax: Number(r.tax),

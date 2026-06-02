@@ -600,10 +600,11 @@ const billsRes = await client.query(
     AND payment_status != 'PENDING'
 
     AND created_at BETWEEN $2 AND $3
+    AND ($4 = true OR precedence IS NOT TRUE)
 
   ORDER BY created_at DESC
   `,
-  [companyId, startDate, endDate]
+  [companyId, startDate, endDate, cleanup]
 )
 
 

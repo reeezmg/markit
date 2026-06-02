@@ -84,7 +84,7 @@ const purchaseOrderAction = (row:any) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`/products/add?poId=${row.id}`),
+            click: () => router.push(`/products/purchase?poId=${row.id}`),
         },
     
         {

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { BillingAddClient } from '#components'
+import { hash } from '~/composables/hash'
 import { format } from 'date-fns'
 import {
     useCreateSalesOrder,
@@ -7,23 +9,67 @@ import {
     useFindManyCompanyClient,
     useFindManyCompanyUser,
     useFindManyProject,
+    useCreateUser,
+    useUpdateUser,
+    useFindUniqueUser,
 } from '~/lib/hooks'
 
 const open = defineModel({ type: Boolean, default: false })
-const props = defineProps<{ editingOrder?: any }>()
-const emit = defineEmits(['saved'])
+const props = defineProps<{ editingOrder?: any; mode?: 'slideover' | 'page' }>()
+const emit = defineEmits(['saved', 'cancel'])
 
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()
+const route = useRoute()
 const companyId = useAuth().session.value?.companyId
+const isPageMode = computed(() => props.mode === 'page')
+
+const wrapperProps = computed(() => isPageMode.value
+    ? { class: 'flex flex-col h-full overflow-hidden rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900' }
+    : {
+        modelValue: open.value,
+        'onUpdate:modelValue': (value: boolean) => {
+            open.value = value
+        },
+        ui: { width: 'max-w-2xl' },
+    })
 
 const CreateSalesOrder = useCreateSalesOrder({ optimisticUpdate: true })
 const UpdateSalesOrder = useUpdateSalesOrder({ optimisticUpdate: true })
 const UpdateCompany = useUpdateCompany({ optimisticUpdate: true })
+const CreateUser = useCreateUser({ optimisticUpdate: true })
+const UpdateUser = useUpdateUser({ optimisticUpdate: true })
 
 const isSaving = ref(false)
+const isClientAddModelOpen = ref(false)
+const isSalespersonAddModelOpen = ref(false)
+const isProjectAddModelOpen = ref(false)
+const newClientSeed = ref('')
+const manualClientOption = ref<{ label: string; value: string } | null>(null)
+const manualSalespersonOption = ref<{ label: string; value: string } | null>(null)
+const manualProjectOption = ref<{ label: string; value: string } | null>(null)
+const categories = ref<any[]>([])
+const itemSearchStates = reactive<Record<number, {
+    query: string
+    open: boolean
+    loading: boolean
+    options: any[]
+}>>({})
+const itemSearchContainers = ref<HTMLElement[]>([])
 
-// ─── Form state ───
+const createBlankItem = (serialNo: number) => ({
+    serialNo,
+    name: '',
+    description: '',
+    quantity: 1,
+    rate: 0,
+    amount: 0,
+    variantId: '',
+    category: [] as any[],
+    categoryId: '',
+    unit: null as string | null,
+})
+
 const form = reactive({
     clientId: '' as string,
     orderNumber: '',
@@ -34,12 +80,19 @@ const form = reactive({
     deliveryMethod: '',
     salesperson: '',
     projectId: '' as string,
-    items: [{ serialNo: 1, name: '', description: '', quantity: 1, rate: 0, amount: 0, variantId: '' }] as any[],
+    items: [createBlankItem(1)] as any[],
     discount: 0,
     discountType: 'amount' as 'amount' | 'percent',
     adjustment: 0,
     notes: '',
     termsAndConditions: '',
+})
+
+const salespersonForm = reactive({
+    name: '',
+    email: '',
+    phone: '',
+    role: 'user',
 })
 
 const paymentTermsOptions = [
@@ -52,68 +105,429 @@ const paymentTermsOptions = [
     { label: 'Due end of next month', value: 'Due end of next month' },
 ]
 
-// ─── Fetch order number ───
+const userRoleOptions = [
+    { label: 'Admin', value: 'admin' },
+    { label: 'Manager', value: 'manager' },
+    { label: 'Biller', value: 'biller' },
+    { label: 'Accountant', value: 'accountant' },
+    { label: 'User', value: 'user' },
+]
+
+const fetchCategories = async () => {
+    if (!companyId) return
+
+    try {
+        categories.value = await $fetch('/api/bill/findManyCategory', {
+            query: { companyId },
+        })
+    } catch {
+        categories.value = []
+    }
+}
+
+const getItemSearchState = (index: number) => {
+    if (!itemSearchStates[index]) {
+        itemSearchStates[index] = {
+            query: '',
+            open: false,
+            loading: false,
+            options: [],
+        }
+    }
+
+    return itemSearchStates[index]
+}
+
+const closeItemSearchMenus = () => {
+    Object.values(itemSearchStates).forEach((state) => {
+        state.open = false
+    })
+}
+
+const setItemSearchContainer = (el: Element | ComponentPublicInstance | null, index: number) => {
+    if (el instanceof HTMLElement) {
+        itemSearchContainers.value[index] = el
+    }
+}
+
+const handleOutsideItemSearchClick = (event: PointerEvent) => {
+    const target = event.target as Node | null
+    if (!target) return
+
+    const clickedInsideSearch = itemSearchContainers.value.some((container) =>
+        container?.contains(target)
+    )
+
+    if (!clickedInsideSearch) {
+        closeItemSearchMenus()
+    }
+}
+
+const getItemName = (itemData: any) => [
+    itemData?.variant?.product?.subcategory?.name,
+    itemData?.variant?.name,
+    itemData?.variant?.product?.name,
+].filter(Boolean).join(' ')
+
+const getItemOptionLabel = (itemData: any) => {
+    const name = getItemName(itemData)
+    const size = itemData?.size ? ` - ${itemData.size}` : ''
+    const barcode = itemData?.barcode ? ` (${itemData.barcode})` : ''
+
+    return `${name}${size}${barcode}`.trim()
+}
+
+const searchItems = async (query: string, index: number, limit = 3) => {
+    const state = getItemSearchState(index)
+    const trimmedQuery = query.trim()
+
+    state.query = trimmedQuery
+
+    if (!trimmedQuery) {
+        state.options = []
+        state.open = false
+        return []
+    }
+
+    state.loading = true
+
+    try {
+        const results = await $fetch<any[]>('/api/bill/searchItems', {
+            query: { q: trimmedQuery, limit },
+        })
+
+        if (state.query !== trimmedQuery) return state.options
+
+        state.options = results || []
+        return state.options
+    } catch {
+        state.options = []
+        return []
+    } finally {
+        state.loading = false
+    }
+}
+
+const populateItemFromSearch = (index: number, itemData: any) => {
+    const item = form.items[index]
+    if (!item || !itemData) return
+
+    const categoryId = itemData?.variant?.product?.categoryId || ''
+    const matchedCategory = categories.value.find((category: any) => category.id === categoryId)
+    const fallbackCategory = itemData?.variant?.product?.category
+        ? {
+            id: categoryId,
+            name: itemData.variant.product.category.name,
+            hsn: itemData.variant.product.category.hsn,
+        }
+        : null
+
+    item.name = getItemName(itemData)
+    item.description = itemData?.barcode || ''
+    item.rate = itemData?.variant?.sprice || 0
+    item.amount = item.quantity * item.rate
+    item.variantId = itemData?.variant?.id || ''
+    item.categoryId = categoryId
+    item.category = matchedCategory ? [matchedCategory] : fallbackCategory ? [fallbackCategory] : []
+    item.unit = itemData?.variant?.unit || null
+
+    const state = getItemSearchState(index)
+    state.open = false
+    state.options = []
+}
+
+const handleItemSearchInput = async (index: number) => {
+    const item = form.items[index]
+    if (!item) return
+
+    item.variantId = ''
+    const results = await searchItems(item.name || '', index, 3)
+    getItemSearchState(index).open = results.length > 0
+}
+
+const selectItemSearchOption = (index: number, itemData: any) => {
+    populateItemFromSearch(index, itemData)
+    updateItemAmount(index)
+}
+
+const selectFirstItemForSearch = async (index: number) => {
+    const item = form.items[index]
+    if (!item?.name?.trim()) return
+
+    const state = getItemSearchState(index)
+    state.open = false
+
+    const results = await searchItems(item.name, index, 1)
+    const firstMatch = results[0]
+
+    if (!firstMatch) {
+        toast.add({ title: 'No matching item found', color: 'red' })
+        return
+    }
+
+    populateItemFromSearch(index, firstMatch)
+    updateItemAmount(index)
+}
+
+const handleOrderItemCategoryChange = (index: number) => {
+    const item = form.items[index]
+    if (!item) return
+
+    if (item.category?.length > 1) {
+        item.category = [item.category[item.category.length - 1]]
+    }
+
+    item.categoryId = item.category?.[0]?.id || ''
+}
+
 const fetchOrderNumber = async () => {
     try {
         const res = await $fetch<{ orderNumber: string }>('/api/sales-orders/next-number')
         form.orderNumber = res.orderNumber
-    } catch (error) {
+    } catch {
         form.orderNumber = 'SO-00001'
     }
 }
 
-// ─── Client search ───
+const resetSalespersonForm = () => {
+    salespersonForm.name = ''
+    salespersonForm.email = ''
+    salespersonForm.phone = ''
+    salespersonForm.role = 'user'
+}
+
+const initializeForm = async () => {
+    if (props.editingOrder) {
+        form.clientId = props.editingOrder.clientId || ''
+        form.orderNumber = props.editingOrder.orderNumber
+        form.referenceNumber = props.editingOrder.referenceNumber || ''
+        form.orderDate = format(new Date(props.editingOrder.orderDate), 'yyyy-MM-dd')
+        form.expectedShipmentDate = props.editingOrder.expectedShipmentDate ? format(new Date(props.editingOrder.expectedShipmentDate), 'yyyy-MM-dd') : ''
+        form.paymentTerms = props.editingOrder.paymentTerms || ''
+        form.deliveryMethod = props.editingOrder.deliveryMethod || ''
+        form.salesperson = props.editingOrder.salesperson || ''
+        form.projectId = props.editingOrder.projectId || ''
+        form.discount = props.editingOrder.discount || 0
+        form.discountType = props.editingOrder.discountType || 'amount'
+        form.adjustment = props.editingOrder.adjustment || 0
+        form.notes = props.editingOrder.notes || ''
+        form.termsAndConditions = props.editingOrder.termsAndConditions || ''
+        form.items = (props.editingOrder.items || []).map((item: any, i: number) => ({
+            serialNo: i + 1,
+            name: item.name || '',
+            description: item.description || '',
+            quantity: item.quantity,
+            rate: item.rate,
+            amount: item.amount,
+            variantId: item.variantId || '',
+            category: [],
+            categoryId: '',
+            unit: item.unit || null,
+        }))
+        if (!form.items.length) {
+            form.items = [createBlankItem(1)]
+        }
+        return
+    }
+
+    resetForm()
+    await fetchOrderNumber()
+
+    const projectId = Array.isArray(route.query.newFromProject)
+        ? route.query.newFromProject[0]
+        : route.query.newFromProject
+
+    if (projectId) {
+        form.projectId = String(projectId)
+    }
+}
+
 const clientSearch = ref('')
-const { data: clients } = useFindManyCompanyClient(computed(() => ({
+const trimmedClientSearch = computed(() => clientSearch.value.trim())
+const { data: clients, refetch: refetchClients } = useFindManyCompanyClient(computed(() => ({
     where: { companyId, client: { deleted: false, ...(clientSearch.value ? { name: { contains: clientSearch.value, mode: 'insensitive' } } : {}) } },
     include: { client: true },
     take: 20,
 })))
 
-const clientOptions = computed(() =>
-    (clients.value || []).map((cc: any) => ({
+const clientOptions = computed(() => {
+    const options = (clients.value || []).map((cc: any) => ({
         label: cc.client?.name || cc.name || '-',
         value: cc.client?.id || cc.clientId,
     }))
-)
 
-// ─── Salesperson search ───
-const { data: companyUsers } = useFindManyCompanyUser(computed(() => ({
+    if (manualClientOption.value && !options.some((option: any) => option.value === manualClientOption.value?.value)) {
+        options.unshift(manualClientOption.value)
+    }
+
+    return options
+})
+
+const openCreateClientModal = (query = trimmedClientSearch.value) => {
+    clientSearch.value = query
+    newClientSeed.value = query
+    isClientAddModelOpen.value = true
+}
+
+const handleClientAdded = async (id: string, name: string, phone: string) => {
+    manualClientOption.value = { label: name, value: id }
+    clientSearch.value = name
+    form.clientId = id
+    newClientSeed.value = phone || name
+    isClientAddModelOpen.value = false
+    await refetchClients()
+}
+
+const salespersonSearch = ref('')
+const trimmedSalespersonSearch = computed(() => salespersonSearch.value.trim())
+const { data: companyUsers, refetch: refetchCompanyUsers } = useFindManyCompanyUser(computed(() => ({
     where: { companyId, deleted: false },
     take: 50,
 })))
 
-const salespersonOptions = computed(() =>
-    (companyUsers.value || []).map((u: any) => ({
+const salespersonOptions = computed(() => {
+    const options = (companyUsers.value || []).map((u: any) => ({
         label: u.name || u.user?.email || '-',
         value: u.name || u.user?.email || '-',
     }))
+
+    if (manualSalespersonOption.value && !options.some((option: any) => option.value === manualSalespersonOption.value?.value)) {
+        options.unshift(manualSalespersonOption.value)
+    }
+
+    return options
+})
+
+const { refetch: refetchExistingSalesperson } = useFindUniqueUser(
+    computed(() => ({
+        where: { email: salespersonForm.email || '' },
+    })),
+    {
+        enabled: false,
+    }
 )
 
-// ─── Project search ───
-const { data: projectsList } = useFindManyProject(computed(() => ({
+const openCreateSalespersonModal = (query = trimmedSalespersonSearch.value) => {
+    salespersonSearch.value = query
+    resetSalespersonForm()
+    salespersonForm.name = query
+    isSalespersonAddModelOpen.value = true
+}
+
+const saveSalesperson = async () => {
+    if (!salespersonForm.name || !salespersonForm.email) {
+        toast.add({ title: 'Name and email are required', color: 'red' })
+        return
+    }
+
+    isSaving.value = true
+    try {
+        const { data: existingUser } = await refetchExistingSalesperson()
+        const { number: userCode } = await $fetch('/api/counter/increment', {
+            method: 'POST',
+            body: { entity: 'user' },
+        })
+
+        if (existingUser) {
+            await UpdateUser.mutateAsync({
+                where: { id: existingUser.id },
+                data: {
+                    companies: {
+                        create: [{
+                            company: {
+                                connect: { id: companyId },
+                            },
+                            name: salespersonForm.name,
+                            role: salespersonForm.role,
+                            phone: salespersonForm.phone?.trim() || null,
+                            code: userCode,
+                        }],
+                    },
+                },
+            })
+        } else {
+            await CreateUser.mutateAsync({
+                data: {
+                    email: salespersonForm.email,
+                    password: await hash(salespersonForm.email),
+                    companies: {
+                        create: {
+                            name: salespersonForm.name,
+                            role: salespersonForm.role,
+                            phone: salespersonForm.phone?.trim() || null,
+                            code: userCode,
+                            company: {
+                                connect: { id: companyId! },
+                            },
+                        },
+                    },
+                },
+            })
+        }
+
+        manualSalespersonOption.value = {
+            label: salespersonForm.name,
+            value: salespersonForm.name,
+        }
+        form.salesperson = salespersonForm.name
+        salespersonSearch.value = salespersonForm.name
+        isSalespersonAddModelOpen.value = false
+        await refetchCompanyUsers()
+        toast.add({ title: 'Salesperson created', color: 'green' })
+    } catch (error: any) {
+        toast.add({
+            title: 'Failed to create salesperson',
+            description: error?.info?.message ?? error?.message ?? 'Please try again',
+            color: 'red',
+        })
+    } finally {
+        isSaving.value = false
+    }
+}
+
+const projectSearch = ref('')
+const trimmedProjectSearch = computed(() => projectSearch.value.trim())
+const { data: projectsList, refetch: refetchProjects } = useFindManyProject(computed(() => ({
     where: { companyId, deleted: false },
     take: 50,
 })))
 
-const projectOptions = computed(() =>
-    (projectsList.value || []).map((p: any) => ({
+const projectOptions = computed(() => {
+    const options = (projectsList.value || []).map((p: any) => ({
         label: p.name,
         value: p.id,
     }))
-)
 
-// ─── Items ───
+    if (manualProjectOption.value && !options.some((option: any) => option.value === manualProjectOption.value?.value)) {
+        options.unshift(manualProjectOption.value)
+    }
+
+    return options
+})
+
+const openCreateProjectModal = (query = trimmedProjectSearch.value) => {
+    projectSearch.value = query
+    window.setTimeout(() => {
+        isProjectAddModelOpen.value = true
+    }, 0)
+}
+
+const handleProjectSaved = async (project?: { id?: string; name?: string }) => {
+    if (project?.id && project?.name) {
+        manualProjectOption.value = {
+            label: project.name,
+            value: project.id,
+        }
+        form.projectId = project.id
+        projectSearch.value = project.name
+    }
+
+    isProjectAddModelOpen.value = false
+    await refetchProjects()
+}
+
 const addItem = () => {
-    form.items.push({
-        serialNo: form.items.length + 1,
-        name: '',
-        description: '',
-        quantity: 1,
-        rate: 0,
-        amount: 0,
-        variantId: '',
-    })
+    form.items.push(createBlankItem(form.items.length + 1))
 }
 
 const removeItem = (index: number) => {
@@ -128,7 +542,6 @@ const updateItemAmount = (index: number) => {
     item.amount = item.quantity * item.rate
 }
 
-// ─── Computed totals ───
 const subTotal = computed(() =>
     form.items.reduce((sum, item) => sum + (item.quantity * item.rate), 0)
 )
@@ -144,7 +557,6 @@ const total = computed(() =>
     subTotal.value - discountAmount.value + (form.adjustment || 0)
 )
 
-// ─── Save ───
 const saveOrder = async (status: 'DRAFT' | 'CONFIRMED') => {
     if (!form.orderNumber) {
         toast.add({ title: 'Sales order number is required', color: 'red' })
@@ -217,7 +629,6 @@ const saveOrder = async (status: 'DRAFT' | 'CONFIRMED') => {
                 },
             })
 
-            // Increment sales order counter
             await UpdateCompany.mutateAsync({
                 where: { id: companyId },
                 data: { salesOrderCounter: { increment: 1 } },
@@ -226,7 +637,9 @@ const saveOrder = async (status: 'DRAFT' | 'CONFIRMED') => {
 
         toast.add({ title: props.editingOrder ? 'Sales order updated' : 'Sales order created', icon: 'i-heroicons-check-circle', color: 'green' })
         emit('saved')
-        open.value = false
+        if (!isPageMode.value) {
+            open.value = false
+        }
         resetForm()
     } catch (error: any) {
         console.error(error)
@@ -236,7 +649,6 @@ const saveOrder = async (status: 'DRAFT' | 'CONFIRMED') => {
     }
 }
 
-// ─── Reset ───
 const resetForm = () => {
     form.clientId = ''
     form.orderNumber = ''
@@ -247,66 +659,62 @@ const resetForm = () => {
     form.deliveryMethod = ''
     form.salesperson = ''
     form.projectId = ''
-    form.items = [{ serialNo: 1, name: '', description: '', quantity: 1, rate: 0, amount: 0, variantId: '' }]
+    form.items = [createBlankItem(1)]
     form.discount = 0
     form.discountType = 'amount'
     form.adjustment = 0
     form.notes = ''
     form.termsAndConditions = ''
+    clientSearch.value = ''
+    salespersonSearch.value = ''
+    projectSearch.value = ''
+    manualClientOption.value = null
+    manualSalespersonOption.value = null
+    manualProjectOption.value = null
+    newClientSeed.value = ''
+    resetSalespersonForm()
 }
 
-// ─── Populate on edit ───
+const closeForm = () => {
+    if (isPageMode.value) {
+        emit('cancel')
+        return
+    }
+    open.value = false
+}
+
+onMounted(() => {
+    fetchCategories()
+    document.addEventListener('pointerdown', handleOutsideItemSearchClick)
+
+    if (isPageMode.value) {
+        initializeForm()
+    }
+})
+
+onBeforeUnmount(() => {
+    document.removeEventListener('pointerdown', handleOutsideItemSearchClick)
+})
+
 watch(() => open.value, async (isOpen) => {
-    if (isOpen) {
-        if (props.editingOrder) {
-            form.clientId = props.editingOrder.clientId || ''
-            form.orderNumber = props.editingOrder.orderNumber
-            form.referenceNumber = props.editingOrder.referenceNumber || ''
-            form.orderDate = format(new Date(props.editingOrder.orderDate), 'yyyy-MM-dd')
-            form.expectedShipmentDate = props.editingOrder.expectedShipmentDate ? format(new Date(props.editingOrder.expectedShipmentDate), 'yyyy-MM-dd') : ''
-            form.paymentTerms = props.editingOrder.paymentTerms || ''
-            form.deliveryMethod = props.editingOrder.deliveryMethod || ''
-            form.salesperson = props.editingOrder.salesperson || ''
-            form.projectId = props.editingOrder.projectId || ''
-            form.discount = props.editingOrder.discount || 0
-            form.discountType = props.editingOrder.discountType || 'amount'
-            form.adjustment = props.editingOrder.adjustment || 0
-            form.notes = props.editingOrder.notes || ''
-            form.termsAndConditions = props.editingOrder.termsAndConditions || ''
-            form.items = (props.editingOrder.items || []).map((item: any, i: number) => ({
-                serialNo: i + 1,
-                name: item.name || '',
-                description: item.description || '',
-                quantity: item.quantity,
-                rate: item.rate,
-                amount: item.amount,
-                variantId: item.variantId || '',
-            }))
-            if (!form.items.length) {
-                form.items = [{ serialNo: 1, name: '', description: '', quantity: 1, rate: 0, amount: 0, variantId: '' }]
-            }
-        } else {
-            resetForm()
-            await fetchOrderNumber()
-        }
+    if (isOpen && !isPageMode.value) {
+        await fetchCategories()
+        await initializeForm()
     }
 })
 </script>
 
 <template>
-    <USlideover v-model="open" :ui="{ width: 'max-w-2xl' }">
+    <component :is="isPageMode ? 'div' : 'USlideover'" v-bind="wrapperProps">
         <div class="flex flex-col h-full">
-            <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 class="text-lg font-semibold">
                     {{ editingOrder ? 'Edit Sales Order' : 'New Sales Order' }}
                 </h2>
-                <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="open = false" />
+                <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="closeForm" />
             </div>
 
-            <!-- Scrollable form content -->
             <div class="flex-1 overflow-y-auto px-6 py-4 space-y-5">
-                <!-- Customer -->
                 <UFormGroup label="Customer Name" required>
                     <USelectMenu
                         v-model="form.clientId"
@@ -318,13 +726,24 @@ watch(() => open.value, async (isOpen) => {
                         placeholder="Select or add a customer"
                         @update:query="(q: string) => clientSearch = q"
                     >
-                        <template #empty>
-                            <span class="text-sm text-gray-500">No customers found</span>
+                        <template #option-empty="{ query }">
+                            <span class="block px-1 py-1">
+                                <UButton
+                                    size="xs"
+                                    color="primary"
+                                    variant="ghost"
+                                    block
+                                    icon="i-heroicons-plus"
+                                    :label="`Create customer '${query}'`"
+                                    @pointerdown.prevent.stop
+                                    @mousedown.prevent.stop
+                                    @click.prevent.stop="openCreateClientModal(query)"
+                                />
+                            </span>
                         </template>
                     </USelectMenu>
                 </UFormGroup>
 
-                <!-- Row: Order# + Reference# -->
                 <div class="grid grid-cols-2 gap-4">
                     <UFormGroup label="Sales Order#" required>
                         <UInput v-model="form.orderNumber" disabled />
@@ -334,7 +753,6 @@ watch(() => open.value, async (isOpen) => {
                     </UFormGroup>
                 </div>
 
-                <!-- Row: Dates -->
                 <div class="grid grid-cols-2 gap-4">
                     <UFormGroup label="Sales Order Date" required>
                         <UInput v-model="form.orderDate" type="date" />
@@ -344,7 +762,6 @@ watch(() => open.value, async (isOpen) => {
                     </UFormGroup>
                 </div>
 
-                <!-- Row: Payment Terms + Delivery Method -->
                 <div class="grid grid-cols-2 gap-4">
                     <UFormGroup label="Payment Terms">
                         <USelectMenu
@@ -356,16 +773,10 @@ watch(() => open.value, async (isOpen) => {
                         />
                     </UFormGroup>
                     <UFormGroup label="Delivery Method">
-                        <USelectMenu
-                            v-model="form.deliveryMethod"
-                            :options="[]"
-                            placeholder="Select a delivery method"
-                            creatable
-                        />
+                        <UInput v-model="form.deliveryMethod" placeholder="Enter delivery method" />
                     </UFormGroup>
                 </div>
 
-                <!-- Row: Salesperson + Project -->
                 <div class="grid grid-cols-2 gap-4">
                     <UFormGroup label="Salesperson">
                         <USelectMenu
@@ -374,9 +785,25 @@ watch(() => open.value, async (isOpen) => {
                             value-attribute="value"
                             option-attribute="label"
                             searchable
-                            placeholder="Select or Add Salesperson"
-                            creatable
-                        />
+                            placeholder="Select or add salesperson"
+                            @update:query="(q: string) => salespersonSearch = q"
+                        >
+                            <template #option-empty="{ query }">
+                                <span class="block px-1 py-1">
+                                    <UButton
+                                        size="xs"
+                                        color="primary"
+                                        variant="ghost"
+                                        block
+                                        icon="i-heroicons-plus"
+                                        :label="`Create salesperson '${query}'`"
+                                        @pointerdown.prevent.stop
+                                        @mousedown.prevent.stop
+                                        @click.prevent.stop="openCreateSalespersonModal(query)"
+                                    />
+                                </span>
+                            </template>
+                        </USelectMenu>
                     </UFormGroup>
                     <UFormGroup label="Project Name">
                         <USelectMenu
@@ -386,34 +813,108 @@ watch(() => open.value, async (isOpen) => {
                             option-attribute="label"
                             searchable
                             placeholder="Select a project"
-                        />
+                            @update:query="(q: string) => projectSearch = q"
+                        >
+                            <template #option-empty="{ query }">
+                                <span class="block px-1 py-1">
+                                    <UButton
+                                        size="xs"
+                                        color="primary"
+                                        variant="ghost"
+                                        block
+                                        icon="i-heroicons-plus"
+                                        :label="`Create project '${query}'`"
+                                        @pointerdown.prevent.stop
+                                        @mousedown.prevent.stop
+                                        @click.prevent.stop="openCreateProjectModal(query)"
+                                    />
+                                </span>
+                            </template>
+                        </USelectMenu>
                     </UFormGroup>
                 </div>
 
-                <!-- Item Table -->
                 <div>
                     <div class="flex items-center justify-between mb-2">
                         <h3 class="text-sm font-semibold">Item Table</h3>
                     </div>
-                    <div class="border rounded-md overflow-hidden">
+                    <div class="relative overflow-visible rounded-md border">
                         <table class="w-full text-sm">
                             <thead class="bg-gray-50 dark:bg-gray-800">
                                 <tr>
-                                    <th class="px-3 py-2 text-left font-medium text-xs text-gray-500 w-[40%]">ITEM DETAILS</th>
-                                    <th class="px-3 py-2 text-center font-medium text-xs text-gray-500 w-[15%]">QUANTITY</th>
-                                    <th class="px-3 py-2 text-center font-medium text-xs text-gray-500 w-[15%]">RATE</th>
-                                    <th class="px-3 py-2 text-right font-medium text-xs text-gray-500 w-[20%]">AMOUNT</th>
-                                    <th class="px-3 py-2 w-[10%]"></th>
+                                    <th class="px-3 py-2 text-left font-medium text-xs text-gray-500 w-[32%]">ITEM DETAILS</th>
+                                    <th class="px-3 py-2 text-left font-medium text-xs text-gray-500 w-[22%]">CATEGORY</th>
+                                    <th class="px-3 py-2 text-center font-medium text-xs text-gray-500 w-[13%]">QUANTITY</th>
+                                    <th class="px-3 py-2 text-center font-medium text-xs text-gray-500 w-[13%]">RATE</th>
+                                    <th class="px-3 py-2 text-right font-medium text-xs text-gray-500 w-[14%]">AMOUNT</th>
+                                    <th class="px-3 py-2 w-[6%]"></th>
                                 </tr>
                             </thead>
                             <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
                                 <tr v-for="(item, index) in form.items" :key="index">
-                                    <td class="px-3 py-2">
+                                    <td
+                                        :ref="(el) => setItemSearchContainer(el, index)"
+                                        class="px-3 py-2 relative"
+                                    >
                                         <UInput
                                             v-model="item.name"
                                             placeholder="Type or click to select an item."
                                             size="sm"
+                                            :loading="getItemSearchState(index).loading"
+                                            autocomplete="off"
+                                            @update:model-value="handleItemSearchInput(index)"
+                                            @keydown.enter.prevent="selectFirstItemForSearch(index)"
+                                            @focus="() => {
+                                                const state = getItemSearchState(index)
+                                                state.open = state.options.length > 0
+                                            }"
                                         />
+                                        <div
+                                            v-if="getItemSearchState(index).open && getItemSearchState(index).options.length"
+                                            class="absolute left-3 right-3 top-[42px] z-[9999] overflow-hidden rounded-md border border-gray-200 bg-white shadow-2xl ring-1 ring-black/5 dark:border-gray-700 dark:bg-gray-900"
+                                        >
+                                            <button
+                                                v-for="option in getItemSearchState(index).options"
+                                                :key="option.id"
+                                                type="button"
+                                                class="flex w-full flex-col gap-0.5 px-3 py-2 text-left text-sm hover:bg-orange-50 dark:hover:bg-gray-800"
+                                                @mousedown.prevent="selectItemSearchOption(index, option)"
+                                            >
+                                                <span class="font-medium text-gray-800 dark:text-gray-100">
+                                                    {{ getItemOptionLabel(option) }}
+                                                </span>
+                                                <span class="text-xs text-gray-500">
+                                                    {{ option.variant?.product?.category?.name || 'No category' }}
+                                                    <template v-if="option.variant?.sprice"> · ₹{{ option.variant.sprice }}</template>
+                                                    <template v-if="option.qty !== undefined"> · Stock {{ option.qty }}</template>
+                                                </span>
+                                            </button>
+                                        </div>
+                                    </td>
+                                    <td class="px-3 py-2">
+                                        <USelectMenu
+                                            v-model="item.category"
+                                            :options="categories"
+                                            option-attribute="name"
+                                            option-key="id"
+                                            track-by="id"
+                                            multiple
+                                            searchable
+                                            searchable-placeholder="Search a Category..."
+                                            placeholder="Select Category"
+                                            size="sm"
+                                            @update:model-value="handleOrderItemCategoryChange(index)"
+                                        >
+                                            <template #label>
+                                                <span v-if="item.category?.length" class="truncate">
+                                                    {{ item.category.map((category: any) => category.name).join(', ') }}
+                                                </span>
+                                                <span v-else class="text-gray-400">Category</span>
+                                            </template>
+                                            <template #option="{ option: category }">
+                                                <span class="truncate">{{ category.name }}</span>
+                                            </template>
+                                        </USelectMenu>
                                     </td>
                                     <td class="px-3 py-2">
                                         <UInput
@@ -464,7 +965,6 @@ watch(() => open.value, async (isOpen) => {
                     </div>
                 </div>
 
-                <!-- Summary -->
                 <div class="flex justify-end">
                     <div class="w-72 space-y-3">
                         <div class="flex justify-between text-sm">
@@ -488,7 +988,7 @@ watch(() => open.value, async (isOpen) => {
                                         size="xs"
                                         @click="form.discountType = 'amount'"
                                     >
-                                        ₹
+                                        Rs
                                     </UButton>
                                     <UButton
                                         :color="form.discountType === 'percent' ? 'primary' : 'gray'"
@@ -512,13 +1012,12 @@ watch(() => open.value, async (isOpen) => {
                             />
                         </div>
                         <div class="flex justify-between text-sm font-semibold border-t pt-2 border-gray-200 dark:border-gray-700">
-                            <span>Total (₹)</span>
+                            <span>Total (Rs)</span>
                             <span>{{ total.toFixed(2) }}</span>
                         </div>
                     </div>
                 </div>
 
-                <!-- Notes -->
                 <UFormGroup label="Customer Notes">
                     <UTextarea
                         v-model="form.notes"
@@ -527,7 +1026,6 @@ watch(() => open.value, async (isOpen) => {
                     />
                 </UFormGroup>
 
-                <!-- Terms & Conditions -->
                 <UFormGroup label="Terms & Conditions">
                     <UTextarea
                         v-model="form.termsAndConditions"
@@ -537,7 +1035,6 @@ watch(() => open.value, async (isOpen) => {
                 </UFormGroup>
             </div>
 
-            <!-- Footer buttons -->
             <div class="flex items-center gap-3 px-6 py-4 border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
                 <UButton
                     color="gray"
@@ -557,9 +1054,58 @@ watch(() => open.value, async (isOpen) => {
                     color="gray"
                     variant="ghost"
                     label="Cancel"
-                    @click="open = false"
+                    @click="closeForm"
                 />
             </div>
         </div>
-    </USlideover>
+
+        <BillingAddClient
+            v-model:model="isClientAddModelOpen"
+            v-model:phoneNo="newClientSeed"
+            :clientAdded="handleClientAdded"
+        />
+
+        <UModal v-model="isSalespersonAddModelOpen">
+            <UCard>
+                <template #header>
+                    <div class="text-base font-semibold">Add Salesperson</div>
+                </template>
+
+                <div class="space-y-4">
+                    <UFormGroup label="Name" required>
+                        <UInput v-model="salespersonForm.name" placeholder="Enter salesperson name" />
+                    </UFormGroup>
+                    <UFormGroup label="Email" required>
+                        <UInput v-model="salespersonForm.email" type="email" placeholder="Enter salesperson email" />
+                    </UFormGroup>
+                    <UFormGroup label="Phone">
+                        <UInput v-model="salespersonForm.phone" type="tel" placeholder="Enter salesperson phone" />
+                    </UFormGroup>
+                    <UFormGroup label="Role">
+                        <USelectMenu
+                            v-model="salespersonForm.role"
+                            :options="userRoleOptions"
+                            value-attribute="value"
+                            option-attribute="label"
+                            placeholder="Select role"
+                        />
+                    </UFormGroup>
+                </div>
+
+                <template #footer>
+                    <div class="flex justify-end gap-2">
+                        <UButton color="gray" variant="ghost" @click="isSalespersonAddModelOpen = false">Cancel</UButton>
+                        <UButton color="primary" :loading="isSaving" @click="saveSalesperson">Save</UButton>
+                    </div>
+                </template>
+            </UCard>
+        </UModal>
+
+        <ProjectsNewProjectModal
+            v-model="isProjectAddModelOpen"
+            mode="slideover"
+            :initial-name="projectSearch"
+            @saved="handleProjectSaved"
+        />
+    </component>
 </template>

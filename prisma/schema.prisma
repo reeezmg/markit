@@ -191,62 +191,62 @@ model DistributorCompany {
 }
 
 model Company {
-  id                        String               @id() @unique() @default(uuid())
+  id                        String                  @id() @unique() @default(uuid())
   name                      String
-  storecode                 Int                  @unique() @default(autoincrement())
-  storeUniqueName           String?              @unique() @map("store_unique_name")
+  storecode                 Int                     @unique() @default(autoincrement())
+  storeUniqueName           String?                 @unique() @map("store_unique_name")
   logo                      String?
-  description               String?              @default("")
-  thankYouNote              String?              @default("") @map("thank_you_note")
-  refundPolicy              String?              @default("") @map("refund_policy")
-  returnPolicy              String?              @default("") @map("return_policy")
+  description               String?                 @default("")
+  thankYouNote              String?                 @default("") @map("thank_you_note")
+  refundPolicy              String?                 @default("") @map("refund_policy")
+  returnPolicy              String?                 @default("") @map("return_policy")
   phone                     String?
-  currency                  String               @default("INR")
+  currency                  String                  @default("INR")
   images                    String?
-  pointsValue               Int                  @default(0) @map("points_value")
-  billCounter               Int                  @default(1) @map("bill_counter")
-  purchaseCounter           Int                  @default(1) @map("purchase_counter")
-  returnCounter             Int                  @default(1) @map("return_counter")
-  quoteCounter              Int                  @default(1) @map("quote_counter")
-  salesOrderCounter         Int                  @default(1) @map("sales_order_counter")
-  invoiceCounter            Int                  @default(1) @map("invoice_counter")
-  paymentCounter            Int                  @default(1) @map("payment_counter")
-  userCodeCounter           Int                  @default(1) @map("user_code_counter")
-  closingDate               DateTime?            @map("closing_date")
-  billPrefix                String?              @default("") @map("bill_prefix")
-  quotePrefix               String?              @default("QT") @map("quote_prefix")
-  salesOrderPrefix          String?              @default("SO") @map("sales_order_prefix")
-  invoicePrefix             String?              @default("INV") @map("invoice_prefix")
-  paymentPrefix             String?              @default("") @map("payment_prefix")
-  expenseCounter            Int                  @default(1) @map("expense_counter")
-  expensePrefix             String?              @default("EXP") @map("expense_prefix")
-  distributorCounter        Int                  @default(1) @map("distributor_counter")
-  distributorPrefix         String?              @default("DIST") @map("distributor_prefix")
-  distributorPaymentCounter Int                  @default(1) @map("distributor_payment_counter")
-  distributorPaymentPrefix  String?              @default("DP") @map("distributor_payment_prefix")
-  distributorCreditCounter  Int                  @default(1) @map("distributor_credit_counter")
-  distributorCreditPrefix   String?              @default("DC") @map("distributor_credit_prefix")
-  clientCounter             Int                  @default(1) @map("client_counter")
-  clientPrefix              String?              @default("CL") @map("client_prefix")
-  userPrefix                String?              @default("") @map("user_prefix")
-  accountCounter            Int                  @default(1) @map("account_counter")
-  accountPrefix             String?              @default("ACC") @map("account_prefix")
-  isTaxIncluded             Boolean              @default(true) @map("is_tax_included")
-  isCostIncluded            Boolean              @default(true) @map("is_cost_included")
-  isUserTrackIncluded       Boolean              @default(true) @map("is_usertrack_included")
-  isAiImage                 Boolean              @default(true) @map("is_ai_image")
-  deliveryType              String[]             @map("delivery_type")
-  deliveryMode              String[]             @map("delivery_mode")
-  deliveryRadius            Float?               @map("delivery_radius")
-  deliveryDiscount          Float?               @default(100) @map("delivery_discount")
-  operationFeesShare        Float?               @default(0) @map("operation_fees_share")
-  cash                      Float?               @default(0)
-  openingCashDate           DateTime?            @map("opening_cash_date")
-  bank                      Float?               @default(0)
-  openingBankDate           DateTime?            @map("opening_bank_date")
-  plan                      String               @default("free") @map("plan")
-  openTime                  String               @default("9:30") @map("open_time")
-  closeTime                 String               @default("9:30") @map("close_time")
+  pointsValue               Int                     @default(0) @map("points_value")
+  billCounter               Int                     @default(1) @map("bill_counter")
+  purchaseCounter           Int                     @default(1) @map("purchase_counter")
+  returnCounter             Int                     @default(1) @map("return_counter")
+  quoteCounter              Int                     @default(1) @map("quote_counter")
+  salesOrderCounter         Int                     @default(1) @map("sales_order_counter")
+  invoiceCounter            Int                     @default(1) @map("invoice_counter")
+  paymentCounter            Int                     @default(1) @map("payment_counter")
+  userCodeCounter           Int                     @default(1) @map("user_code_counter")
+  closingDate               DateTime?               @map("closing_date")
+  billPrefix                String?                 @default("") @map("bill_prefix")
+  quotePrefix               String?                 @default("QT") @map("quote_prefix")
+  salesOrderPrefix          String?                 @default("SO") @map("sales_order_prefix")
+  invoicePrefix             String?                 @default("INV") @map("invoice_prefix")
+  paymentPrefix             String?                 @default("") @map("payment_prefix")
+  expenseCounter            Int                     @default(1) @map("expense_counter")
+  expensePrefix             String?                 @default("EXP") @map("expense_prefix")
+  distributorCounter        Int                     @default(1) @map("distributor_counter")
+  distributorPrefix         String?                 @default("DIST") @map("distributor_prefix")
+  distributorPaymentCounter Int                     @default(1) @map("distributor_payment_counter")
+  distributorPaymentPrefix  String?                 @default("DP") @map("distributor_payment_prefix")
+  distributorCreditCounter  Int                     @default(1) @map("distributor_credit_counter")
+  distributorCreditPrefix   String?                 @default("DC") @map("distributor_credit_prefix")
+  clientCounter             Int                     @default(1) @map("client_counter")
+  clientPrefix              String?                 @default("CL") @map("client_prefix")
+  userPrefix                String?                 @default("") @map("user_prefix")
+  accountCounter            Int                     @default(1) @map("account_counter")
+  accountPrefix             String?                 @default("ACC") @map("account_prefix")
+  isTaxIncluded             Boolean                 @default(true) @map("is_tax_included")
+  isCostIncluded            Boolean                 @default(true) @map("is_cost_included")
+  isUserTrackIncluded       Boolean                 @default(true) @map("is_usertrack_included")
+  isAiImage                 Boolean                 @default(true) @map("is_ai_image")
+  deliveryType              String[]                @map("delivery_type")
+  deliveryMode              String[]                @map("delivery_mode")
+  deliveryRadius            Float?                  @map("delivery_radius")
+  deliveryDiscount          Float?                  @default(100) @map("delivery_discount")
+  operationFeesShare        Float?                  @default(0) @map("operation_fees_share")
+  cash                      Float?                  @default(0)
+  openingCashDate           DateTime?               @map("opening_cash_date")
+  bank                      Float?                  @default(0)
+  openingBankDate           DateTime?               @map("opening_bank_date")
+  plan                      String                  @default("free") @map("plan")
+  openTime                  String                  @default("9:30") @map("open_time")
+  closeTime                 String                  @default("9:30") @map("close_time")
   users                     CompanyUser[]
   entries                   Entry[]
   category                  String[]
@@ -265,25 +265,26 @@ model Company {
   variants                  Variant[]
   purchaseOrders            PurchaseOrder[]
   items                     Item[]
-  trybuys                   Trynbuy[]            @relation("try_n_buy_company")
+  trybuys                   Trynbuy[]               @relation("try_n_buy_company")
   quotes                    Quote[]
+  quoteCustomFieldValues    QuoteCustomFieldValue[]
   projects                  Project[]
   salesOrders               SalesOrder[]
-  status                    Boolean              @default(true)
+  status                    Boolean                 @default(true)
   type                      CompanyType
   pipeline                  Pipeline?
   coupon                    Coupon[]
-  accHolderName             String?              @map("acc_holder_name")
+  accHolderName             String?                 @map("acc_holder_name")
   ifsc                      String?
-  accountNo                 String?              @map("account_no")
-  bankName                  String?              @map("bank_name")
+  accountNo                 String?                 @map("account_no")
+  bankName                  String?                 @map("bank_name")
   gstin                     String?
-  upiId                     String?              @map("upi_id")
-  printerLabelSize          String?              @map("printer_label_size")
+  upiId                     String?                 @map("upi_id")
+  printerLabelSize          String?                 @map("printer_label_size")
   notifications             Notification[]
   address                   Address?
   distributor               DistributorCompany[]
-  barcodeCounter            Int                  @default(1) @map("barcode_counter")
+  barcodeCounter            Int                     @default(1) @map("barcode_counter")
   likeCompanies             LikeCompanyClient[]
   productinput              Productinput?
   variantinput              Variantinput?
@@ -293,13 +294,14 @@ model Company {
   CashAccounts              CashAccount[]
   BankAccounts              BankAccount[]
   AccountTransfers          AccountTransfer[]
-  commissionRate            Float?               @map("commission_rate")
+  commissionRate            Float?                  @map("commission_rate")
   orderStatusEvents         OrderStatusEvent[]
   companyPenalties          CompanyPenalty[]
   aiChats                   AiChat[]
   aiMemories                AiMemory[]
   statementBatches          StatementBatch[]
   statementMappings         StatementMapping[]
+  generalPreferences        GeneralPreference[]
 
   @@map("companies")
 }
@@ -318,21 +320,36 @@ model Productinput {
 }
 
 model Variantinput {
-  id        String  @id() @unique() @default(uuid())
-  name      Boolean @default(true)
-  code      Boolean @default(true)
-  sprice    Boolean @default(true)
-  pprice    Boolean @default(true)
-  dprice    Boolean @default(true)
-  discount  Boolean @default(true)
-  qty       Boolean @default(true)
-  sizes     Boolean @default(true)
-  images    Boolean @default(true)
-  button    Boolean @default(true)
-  company   Company @relation(fields: [companyId], references: [id])
-  companyId String  @unique() @map("company_id")
+  id        String   @id() @unique() @default(uuid())
+  name      Boolean  @default(true)
+  code      Boolean  @default(true)
+  sprice    Boolean  @default(true)
+  pprice    Boolean  @default(true)
+  dprice    Boolean  @default(true)
+  discount  Boolean  @default(true)
+  qty       Boolean  @default(true)
+  unit      String[] @default(["Nos"])
+  sizes     Boolean  @default(true)
+  images    Boolean  @default(true)
+  button    Boolean  @default(true)
+  company   Company  @relation(fields: [companyId], references: [id])
+  companyId String   @unique() @map("company_id")
 
   @@map("variant_inputs")
+}
+
+model GeneralPreference {
+  id        String  @id() @unique() @default(uuid())
+  pageName  String  @map("page_name")
+  key       String  @map("preference_key")
+  value     Json    @map("preference_value")
+  active    Boolean @default(true)
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String  @map("company_id")
+
+  @@unique([companyId, pageName, key])
+  @@index([companyId, pageName])
+  @@map("general_preferences")
 }
 
 model Distributor {
@@ -568,6 +585,9 @@ model Trynbuy {
   deliveryFeesCustomer             Float?                             @default(0) @map("delivery_fees_customer")
   waitingFeesStore                 Json?                              @map("waiting_fees_store")
   deliveryFeesStore                Json?                              @map("delivery_fees_store")
+  companyDistances                 Json?                              @map("company_distances")
+  forwardMeters                    Float?                             @map("forward_meters")
+  backwardMeters                   Float?                             @map("backward_meters")
   waitingStartedAt                 DateTime?                          @map("waiting_started_at")
   deliveryType                     String                             @map("delivery_type")
   deliveryTime                     DateTime?                          @map("delivery_time")
@@ -594,6 +614,7 @@ model Trynbuy {
   deliveryOtp                      String?                            @map("delivery_otp")
   pickupOtps                       Json?                              @map("pickup_otps")
   storeStatuses                    Json?                              @map("store_statuses")
+  rejectedDrivers                  Json?                              @default("{}") @map("rejected_drivers")
   deliveryPartnerWalletTransaction DeliveryPartnerWalletTransaction[]
 
   @@index([clientId])
@@ -641,6 +662,7 @@ model DeliveryPartnerEarnings {
   distance          Float?
   waitingTime       Float?          @map("waiting_time")
   storeWaitings     Json?           @map("store_waitings")
+  cancellationFees  String?         @map("cancellation_fees")
   trynbuy           Trynbuy         @relation(fields: [trynbuyId], references: [id])
   trynbuyId         String          @unique() @map("trynbuy_id")
   deliveryPartner   DeliveryPartner @relation(fields: [deliveryPartnerId], references: [id])
@@ -668,6 +690,7 @@ model MarkitBill {
   deliveryPartnerPenaltiesTotal Float?   @default(0) @map("delivery_partner_penalties_total")
   deliveryPartnerBonusesTotal   Float?   @default(0) @map("delivery_partner_bonuses_total")
   customerCancellationFees      Float?   @default(0) @map("customer_cancellation_fees")
+  customerAllReturnFee          Float?   @default(0) @map("customer_all_return_fee")
   markitCouponId                String?  @map("markit_coupon_id")
   markitCouponCode              String?  @map("markit_coupon_code")
   markitCouponValue             Float?   @default(0) @map("markit_coupon_value")
@@ -967,25 +990,25 @@ model Brand {
 }
 
 model Product {
-  id              String        @id() @default(uuid())
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt() @map("updated_at")
+  id              String         @id() @default(uuid())
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt() @map("updated_at")
   name            String
-  status          Boolean       @default(true)
+  status          Boolean        @default(true)
   rating          Float?
   description     String?
-  company         Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId       String        @map("company_id")
-  category        Category?     @relation(fields: [categoryId], references: [id])
-  categoryId      String?       @map("category_id")
-  subcategory     Subcategory?  @relation(fields: [subcategoryId], references: [id])
-  subcategoryId   String?       @map("subcategory_id")
-  brand           Brand?        @relation(fields: [brandId], references: [id])
-  brandId         String?       @map("brand_id")
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId       String         @map("company_id")
+  category        Category?      @relation(fields: [categoryId], references: [id])
+  categoryId      String?        @map("category_id")
+  subcategory     Subcategory?   @relation(fields: [subcategoryId], references: [id])
+  subcategoryId   String?        @map("subcategory_id")
+  brand           Brand?         @relation(fields: [brandId], references: [id])
+  brandId         String?        @map("brand_id")
   variants        Variant[]
-  purchaseorder   PurchaseOrder @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
-  purchaseorderId String        @map("purchaseorder_id")
-  writeId         String?       @default(uuid()) @map("write_id")
+  purchaseorder   PurchaseOrder? @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
+  purchaseorderId String?        @map("purchaseorder_id")
+  writeId         String?        @default(uuid()) @map("write_id")
 
   @@index([categoryId])
   @@index([subcategoryId])
@@ -999,6 +1022,7 @@ model Variant {
   updatedAt          DateTime              @updatedAt() @map("updated_at")
   name               String
   code               String?
+  unit               String?               @default("Nos")
   status             Boolean               @default(true)
   sprice             Float                 @map("s_price")
   pprice             Float?                @map("p_price")
@@ -1703,31 +1727,32 @@ model StatementMapping {
 }
 
 model Quote {
-  id                 String      @id() @unique() @default(uuid())
-  quoteNumber        String      @map("quote_number")
-  referenceNumber    String?     @map("reference_number")
-  quoteDate          DateTime    @map("quote_date")
-  expiryDate         DateTime?   @map("expiry_date")
+  id                 String                 @id() @unique() @default(uuid())
+  quoteNumber        String                 @map("quote_number")
+  referenceNumber    String?                @map("reference_number")
+  quoteDate          DateTime               @map("quote_date")
+  expiryDate         DateTime?              @map("expiry_date")
   subject            String?
-  status             QuoteStatus @default(DRAFT)
+  status             QuoteStatus            @default(DRAFT)
   notes              String?
-  termsAndConditions String?     @map("terms_and_conditions")
-  discount           Float?      @default(0)
-  discountType       String?     @default("amount") @map("discount_type")
-  adjustment         Float?      @default(0)
-  subTotal           Float       @default(0) @map("sub_total")
-  total              Float       @default(0)
+  termsAndConditions String?                @map("terms_and_conditions")
+  discount           Float?                 @default(0)
+  discountType       String?                @default("amount") @map("discount_type")
+  adjustment         Float?                 @default(0)
+  subTotal           Float                  @default(0) @map("sub_total")
+  total              Float                  @default(0)
   salesperson        String?
   attachments        String[]
-  pdfTemplate        String?     @map("pdf_template")
-  company            Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId          String      @map("company_id")
-  client             Client?     @relation(fields: [clientId], references: [id])
-  clientId           String?     @map("client_id")
-  project            Project?    @relation(fields: [projectId], references: [id])
-  projectId          String?     @map("project_id")
+  pdfTemplate        String?                @map("pdf_template")
+  company            Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String                 @map("company_id")
+  client             Client?                @relation(fields: [clientId], references: [id])
+  clientId           String?                @map("client_id")
+  project            Project?               @relation(fields: [projectId], references: [id])
+  projectId          String?                @map("project_id")
   items              QuoteItem[]
-  deleted            Boolean     @default(false)
+  customFieldValue   QuoteCustomFieldValue?
+  deleted            Boolean                @default(false)
 
   @@index([companyId])
   @@map("quotes")
@@ -1749,6 +1774,18 @@ model QuoteItem {
 
   @@index([quoteId])
   @@map("quote_items")
+}
+
+model QuoteCustomFieldValue {
+  id        String  @id() @unique() @default(uuid())
+  values    Json    @map("field_values")
+  quote     Quote   @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+  quoteId   String  @unique() @map("quote_id")
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String  @map("company_id")
+
+  @@index([companyId])
+  @@map("quote_custom_field_values")
 }
 
 model Project {

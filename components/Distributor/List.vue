@@ -134,7 +134,7 @@ const formEdit = async(row:any) => {
   form.value = {...row, date: new Date(row.createdAt).toISOString().split('T')[0]} as any;
   if(form.value.type === 'CREDIT'){
     if(form.value.purchaseOrderId){
-      router.push(`/products/add?poId=${form.value.purchaseOrderId}&isEdit=true`)
+      router.push(`/products/purchase?poId=${form.value.purchaseOrderId}&isEdit=true`)
     }else{
         isOpenCredit.value = true
     }

@@ -10,12 +10,24 @@ import {
 } from '~/lib/hooks'
 
 const open = defineModel({ type: Boolean, default: false })
-const props = defineProps<{ editingPayment?: any }>()
-const emit = defineEmits(['saved'])
+const props = defineProps<{ editingPayment?: any; mode?: 'slideover' | 'page' }>()
+const emit = defineEmits(['saved', 'cancel'])
 
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()
 const companyId = useAuth().session.value?.companyId
+const paymentPrefix = useAuth().session.value?.paymentPrefix || ''
+const isPageMode = computed(() => props.mode === 'page')
+
+const wrapperProps = computed(() => isPageMode.value
+    ? { class: 'flex flex-col h-full overflow-hidden rounded-md border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900' }
+    : {
+        modelValue: open.value,
+        'onUpdate:modelValue': (value: boolean) => {
+            open.value = value
+        },
+        ui: { width: 'max-w-2xl' },
+    })
 
 const CreatePayment = useCreatePayment({ optimisticUpdate: true })
 const UpdatePayment = useUpdatePayment({ optimisticUpdate: true })
@@ -38,6 +50,12 @@ const form = reactive({
     billId: '' as string,
     notes: '',
 })
+
+const paymentNumberDisplay = computed(() =>
+    form.paymentNumber
+        ? (paymentPrefix ? `${paymentPrefix}-${form.paymentNumber}` : String(form.paymentNumber))
+        : ''
+)
 
 const paymentModeOptions = [
     { label: 'Cash', value: 'Cash' },
@@ -66,6 +84,26 @@ const fetchPaymentNumber = async () => {
     } catch (error) {
         form.paymentNumber = 1
     }
+}
+
+const initializeForm = async () => {
+    if (props.editingPayment) {
+        form.clientId = props.editingPayment.clientId || ''
+        form.amount = props.editingPayment.amount || 0
+        form.bankCharges = props.editingPayment.bankCharges || 0
+        form.paymentDate = format(new Date(props.editingPayment.paymentDate), 'yyyy-MM-dd')
+        form.paymentNumber = props.editingPayment.paymentNumber || 0
+        form.paymentMode = props.editingPayment.paymentMode || 'Cash'
+        form.depositTo = props.editingPayment.depositTo || 'Petty Cash'
+        form.referenceNumber = props.editingPayment.referenceNumber || ''
+        form.taxDeducted = props.editingPayment.taxDeducted || 'none'
+        form.billId = props.editingPayment.billId || ''
+        form.notes = props.editingPayment.notes || ''
+        return
+    }
+
+    resetForm()
+    await fetchPaymentNumber()
 }
 
 // ─── Client search ───
@@ -175,7 +213,9 @@ const savePayment = async (status: string) => {
 
         toast.add({ title: props.editingPayment ? 'Payment updated' : 'Payment recorded', icon: 'i-heroicons-check-circle', color: 'green' })
         emit('saved')
-        open.value = false
+        if (!isPageMode.value) {
+            open.value = false
+        }
         resetForm()
     } catch (error: any) {
         console.error(error)
@@ -201,37 +241,36 @@ const resetForm = () => {
 }
 
 // ─── Populate on edit ───
+const closeForm = () => {
+    if (isPageMode.value) {
+        emit('cancel')
+        return
+    }
+    open.value = false
+}
+
+onMounted(() => {
+    if (isPageMode.value) {
+        initializeForm()
+    }
+})
+
 watch(() => open.value, async (isOpen) => {
-    if (isOpen) {
-        if (props.editingPayment) {
-            form.clientId = props.editingPayment.clientId || ''
-            form.amount = props.editingPayment.amount || 0
-            form.bankCharges = props.editingPayment.bankCharges || 0
-            form.paymentDate = format(new Date(props.editingPayment.paymentDate), 'yyyy-MM-dd')
-            form.paymentNumber = props.editingPayment.paymentNumber || 0
-            form.paymentMode = props.editingPayment.paymentMode || 'Cash'
-            form.depositTo = props.editingPayment.depositTo || 'Petty Cash'
-            form.referenceNumber = props.editingPayment.referenceNumber || ''
-            form.taxDeducted = props.editingPayment.taxDeducted || 'none'
-            form.billId = props.editingPayment.billId || ''
-            form.notes = props.editingPayment.notes || ''
-        } else {
-            resetForm()
-            await fetchPaymentNumber()
-        }
+    if (isOpen && !isPageMode.value) {
+        await initializeForm()
     }
 })
 </script>
 
 <template>
-    <USlideover v-model="open" :ui="{ width: 'max-w-2xl' }">
+    <component :is="isPageMode ? 'div' : 'USlideover'" v-bind="wrapperProps">
         <div class="flex flex-col h-full">
             <!-- Header -->
             <div class="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
                 <h2 class="text-lg font-semibold">
                     {{ editingPayment ? 'Edit Payment' : 'Record Payment' }}
                 </h2>
-                <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="open = false" />
+                <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="closeForm" />
             </div>
 
             <!-- Scrollable form content -->
@@ -273,7 +312,7 @@ watch(() => open.value, async (isOpen) => {
                         <UInput v-model="form.paymentDate" type="date" />
                     </UFormGroup>
                     <UFormGroup label="Payment #" required>
-                        <UInput v-model.number="form.paymentNumber" type="number" disabled />
+                        <UInput :model-value="paymentNumberDisplay" type="text" disabled />
                     </UFormGroup>
                 </div>
 
@@ -409,9 +448,9 @@ watch(() => open.value, async (isOpen) => {
                     color="gray"
                     variant="ghost"
                     label="Cancel"
-                    @click="open = false"
+                    @click="closeForm"
                 />
             </div>
         </div>
-    </USlideover>
+    </component>
 </template>
