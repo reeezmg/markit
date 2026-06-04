@@ -245,7 +245,7 @@ const handleEdit = async (e: Event) => {
 
    const productId = selectedProduct.value.id;
 
-await $fetch('/api/products/update', {
+const updateResult: any = await $fetch('/api/products/update', {
   method: 'POST',
   body: {
     productId,
@@ -273,7 +273,11 @@ await $fetch('/api/products/update', {
     updateImages: !!variantInputs?.value?.images,
   }
 });
-    await productRefetch();
+    if (updateResult?.product) {
+      selectedProductRaw.value = updateResult.product;
+    } else {
+      await productRefetch();
+    }
     toast.add({
       title: 'Product Edited!',
       id: 'modal-success',

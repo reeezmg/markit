@@ -104,6 +104,8 @@ export default defineEventHandler(async (event) => {
       const variantRows: any[][] = []
       const itemRows: any[][] = []
       const productIds: string[] = []
+      let returnedVariants: any[] = []
+      let returnedItems: any[] = []
 
       for (const p of products) {
         const productId = p.id || crypto.randomUUID()
@@ -141,17 +143,23 @@ export default defineEventHandler(async (event) => {
       if (variantRows.length) {
         const { sql, params } = multiRow(variantRows, 'true,now(),now()')
         // columns: id,name,code,unit,s_price,p_price,d_price,discount,delivery_type,tax,images,company_id,product_id,status,created_at,updated_at
-        await client.query(
-          `INSERT INTO variants (id, name, code, unit, s_price, p_price, d_price, discount, delivery_type, tax, images, company_id, product_id, status, created_at, updated_at) VALUES ${sql}`,
+        const variantsRes = await client.query(
+          `INSERT INTO variants (id, name, code, unit, s_price, p_price, d_price, discount, delivery_type, tax, images, company_id, product_id, status, created_at, updated_at)
+           VALUES ${sql}
+           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, product_id`,
           params,
         )
+        returnedVariants = variantsRes.rows
       }
       if (itemRows.length) {
         const { sql, params } = multiRow(itemRows, 'now(),now()')
-        await client.query(
-          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, created_at, updated_at) VALUES ${sql}`,
+        const itemsRes = await client.query(
+          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, created_at, updated_at)
+           VALUES ${sql}
+           RETURNING id, barcode, size, qty, variant_id`,
           params,
         )
+        returnedItems = itemsRes.rows
       }
 
       // 3) PO-linked credit/payment (no money_transaction → no cash/bank ledger cascade)
@@ -171,19 +179,7 @@ export default defineEventHandler(async (event) => {
         }
       }
 
-      // 4) read back with trigger-generated barcodes for label printing
-      const variantsRes = await client.query(
-        `SELECT id, name, code, unit, s_price, p_price, d_price, discount, product_id
-         FROM variants WHERE product_id = ANY($1::text[]) ORDER BY created_at ASC`,
-        [productIds],
-      )
-      const variantIds = variantsRes.rows.map((v) => v.id)
-      const itemsRes = variantIds.length
-        ? await client.query(
-            `SELECT id, barcode, size, qty, variant_id FROM items WHERE variant_id = ANY($1::text[]) ORDER BY created_at ASC`,
-            [variantIds],
-          )
-        : { rows: [] as any[] }
+      // 4) read back product names; variant/item rows already came from INSERT ... RETURNING.
       const prodMetaRes = await client.query(
         `SELECT p.id, p.name, c.name AS category_name, b.name AS brand_name, s.name AS subcategory_name
          FROM products p
@@ -198,13 +194,13 @@ export default defineEventHandler(async (event) => {
       client.release()
 
       const itemsByVariant = new Map<string, any[]>()
-      for (const it of itemsRes.rows) {
+      for (const it of returnedItems) {
         const list = itemsByVariant.get(it.variant_id) || []
         list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty })
         itemsByVariant.set(it.variant_id, list)
       }
       const variantsByProduct = new Map<string, any[]>()
-      for (const v of variantsRes.rows) {
+      for (const v of returnedVariants) {
         const list = variantsByProduct.get(v.product_id) || []
         list.push({
           id: v.id, name: v.name, code: v.code, sprice: v.s_price, dprice: v.d_price,

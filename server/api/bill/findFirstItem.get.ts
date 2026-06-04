@@ -66,7 +66,6 @@ export default defineEventHandler(async (event) => {
 
       WHERE i.barcode = $1
         AND i.company_id = $2
-        AND COALESCE(i.qty, 0) > 0
 
       LIMIT 1;
       `,
