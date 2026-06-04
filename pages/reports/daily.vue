@@ -36,6 +36,8 @@ const selectedDate = ref({
 
 const auth = useNuxtApp().$auth
 const companyName = computed(() => auth.session.value?.companyName || '')
+const canUseCleanupToggle = computed(() => auth.session.value?.cleanup === true)
+const showCleanedValues = ref(false)
 
 const toast = useToast()
 const { printReport } = usePrint()
@@ -92,7 +94,8 @@ const fetchReportFromServer = async () => {
       method: 'GET',
       params: {
         startDate: startOfDay(selectedDate.value.start).toISOString(),
-        endDate: endOfDay(selectedDate.value.end).toISOString()
+        endDate: endOfDay(selectedDate.value.end).toISOString(),
+        showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value
       }
     })
 
@@ -136,7 +139,7 @@ const fetchExpenseFromServer = async () => {
    WATCHERS
 ========================= */
 
-watch([selectedDate, companyName], () => {
+watch([selectedDate, companyName, showCleanedValues], () => {
   fetchReportFromServer()
 })
 
@@ -173,7 +176,8 @@ const downloadPDF = async () => {
       method: 'GET',
       params: {
         startDate: startOfDay(selectedDate.value.start).toISOString(),
-        endDate: endOfDay(selectedDate.value.end).toISOString()
+        endDate: endOfDay(selectedDate.value.end).toISOString(),
+        showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value
       },
       headers: { Accept: 'application/pdf' }
     })
@@ -210,7 +214,8 @@ const downloadExcel = async () => {
       method: 'GET',
       params: {
         startDate: startOfDay(selectedDate.value.start).toISOString(),
-        endDate: endOfDay(selectedDate.value.end).toISOString()
+        endDate: endOfDay(selectedDate.value.end).toISOString(),
+        showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value
       },
       headers: {
         Accept:
@@ -447,6 +452,16 @@ const revenueByCategory = computed(
             </UPopover>
 
             <!-- Export -->
+            <div
+              v-if="canUseCleanupToggle"
+              class="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 dark:border-gray-700"
+            >
+              <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                Cleaned values
+              </span>
+              <UToggle v-model="showCleanedValues" />
+            </div>
+
               <UDropdown :items="actions()">
                 <UButton
                   label="Export / Print"

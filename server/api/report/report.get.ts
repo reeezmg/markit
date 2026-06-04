@@ -25,6 +25,9 @@ export default defineEventHandler(async (event) => {
   ===================================================== */
 
   const query = getQuery(event)
+  const showCleanedValues = String(query.showCleanedValues) === 'true'
+  const useOriginalCleanupValues = cleanup && !showCleanedValues
+  const includeCleanupPrecedence = cleanup && !showCleanedValues
 
   const startDate = query.startDate
     ? new Date(query.startDate as string)
@@ -34,11 +37,11 @@ export default defineEventHandler(async (event) => {
     ? new Date(query.endDate as string)
     : new Date()
 
-  const billTotalExpr = cleanup
+  const billTotalExpr = useOriginalCleanupValues
     ? 'COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total)'
     : 'b.grand_total'
 
-  const entryValueExpr = cleanup
+  const entryValueExpr = useOriginalCleanupValues
     ? 'COALESCE(NULLIF(e.original_value, 0), e.value)'
     : 'e.value'
 
@@ -222,7 +225,7 @@ if (!isZeroOpening) {
           AND b.created_at < $2
           AND ($3 = true OR b.precedence IS NOT TRUE)
         `,
-        [companyId, startDate, cleanup]
+        [companyId, startDate, includeCleanupPrecedence]
       ),
 
 
@@ -356,7 +359,7 @@ if (!isZeroOpening) {
           AND b.created_at < $2
           AND ($3 = true OR b.precedence IS NOT TRUE)
         `,
-        [companyId, startDate, cleanup]
+        [companyId, startDate, includeCleanupPrecedence]
       ),
 
 
@@ -622,7 +625,7 @@ if (!isZeroOpening) {
           AND b.created_at BETWEEN $2 AND $3
           AND ($4 = true OR b.precedence IS NOT TRUE)
         `,
-        [companyId, startDate, endDate, cleanup]
+        [companyId, startDate, endDate, includeCleanupPrecedence]
       ),
 
 
@@ -662,7 +665,7 @@ if (!isZeroOpening) {
         GROUP BY br.name
         ORDER BY total DESC
         `,
-        [companyId, startDate, endDate, cleanup]
+        [companyId, startDate, endDate, includeCleanupPrecedence]
       ),
 
 
@@ -685,7 +688,7 @@ if (!isZeroOpening) {
           AND b.created_at BETWEEN $2 AND $3
           AND ($4 = true OR b.precedence IS NOT TRUE)
         `,
-        [companyId, startDate, endDate, cleanup]
+        [companyId, startDate, endDate, includeCleanupPrecedence]
       ),
 
 
@@ -762,7 +765,7 @@ if (!isZeroOpening) {
         GROUP BY c.name
         ORDER BY total DESC
         `,
-        [companyId, startDate, endDate, cleanup]
+        [companyId, startDate, endDate, includeCleanupPrecedence]
       ),
 
 

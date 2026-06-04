@@ -32,7 +32,11 @@ export default defineEventHandler(async (event) => {
     isMarkitOnly = false,
     excludeMarkit = false,
     closingDate = null,
+    showCleanedValues = false,
   } = body
+
+  const useOriginalCleanupValues = cleanup && showCleanedValues !== true
+  const includeCleanupPrecedence = cleanup && showCleanedValues !== true
 
   const queryStartDate = startDate
     ? new Date(startDate as string)
@@ -70,7 +74,7 @@ export default defineEventHandler(async (event) => {
       await client.query('ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_discount DOUBLE PRECISION')
     }
 
-    const cleanupBillSelect = cleanup
+    const cleanupBillSelect = useOriginalCleanupValues
       ? `
         COALESCE(NULLIF(b.original_subtotal, 0), b.subtotal) AS "originalSubtotal",
         COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total) AS "originalGrandTotal",
@@ -78,7 +82,7 @@ export default defineEventHandler(async (event) => {
       `
       : ''
 
-    const cleanupEntrySelect = cleanup
+    const cleanupEntrySelect = useOriginalCleanupValues
       ? `
               'originalRate', COALESCE(NULLIF(e.original_rate, 0), e.rate),
               'originalValue', COALESCE(NULLIF(e.original_value, 0), e.value),
@@ -86,27 +90,27 @@ export default defineEventHandler(async (event) => {
       `
       : ''
 
-    const billSubtotalExpr = cleanup
+    const billSubtotalExpr = useOriginalCleanupValues
       ? 'COALESCE(NULLIF(b.original_subtotal, 0), b.subtotal)'
       : 'b.subtotal'
 
-    const billTotalExpr = cleanup
+    const billTotalExpr = useOriginalCleanupValues
       ? 'COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total)'
       : 'b.grand_total'
 
-    const billDiscountExpr = cleanup
+    const billDiscountExpr = useOriginalCleanupValues
       ? 'COALESCE(b.original_discount, b.discount)'
       : 'b.discount'
 
-    const entryRateExpr = cleanup
+    const entryRateExpr = useOriginalCleanupValues
       ? 'COALESCE(NULLIF(e.original_rate, 0), e.rate)'
       : 'e.rate'
 
-    const entryValueExpr = cleanup
+    const entryValueExpr = useOriginalCleanupValues
       ? 'COALESCE(NULLIF(e.original_value, 0), e.value)'
       : 'e.value'
 
-    const entryDiscountExpr = cleanup
+    const entryDiscountExpr = useOriginalCleanupValues
       ? 'COALESCE(e.original_discount, e.discount)'
       : 'e.discount'
 
@@ -118,7 +122,7 @@ export default defineEventHandler(async (event) => {
       AND b.deleted = false
       AND ($${idx} = true OR b.precedence IS NOT TRUE)
     `
-    values.push(cleanup)
+    values.push(includeCleanupPrecedence)
     idx++
 
     /* 🔎 SEARCH RULES */

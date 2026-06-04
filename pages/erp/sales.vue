@@ -15,7 +15,9 @@ const salesTableStore = useSalesTableStore()
 const toast = useToast();
 const router = useRouter();
 const useAuth = () => useNuxtApp().$auth;
-const canSeeCleanupRealValues = computed(() => useAuth().session.value?.cleanup === true)
+const canUseCleanupToggle = computed(() => useAuth().session.value?.cleanup === true)
+const showCleanedValues = ref(false)
+const canSeeCleanupRealValues = computed(() => canUseCleanupToggle.value && !showCleanedValues.value)
 const isMobile = ref(false);
 const isOpen = ref(false);
 const isDeleteModalOpen = ref(false)
@@ -362,6 +364,7 @@ const fetchSales = async () => {
         sortDirection: sort.value.direction,
         excludeMarkit: true,
         closingDate: useAuth().session.value?.closingDate ?? null,
+        showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value,
       },
     })
 
@@ -408,6 +411,7 @@ watch(
     () => selectedDate.value?.end,
     () => sort.value.column,
     () => sort.value.direction,
+    showCleanedValues,
   ],
   fetchSales
 )
@@ -422,6 +426,7 @@ watch(
     pageCount,
     () => selectedDate.value?.start,
     () => selectedDate.value?.end,
+    showCleanedValues,
   ],
   () => {
     if (page.value !== 1) page.value = 1
@@ -548,6 +553,7 @@ const fetchFilteredSalesForExport = async () => {
         sortDirection: sort.value.direction,
         excludeMarkit: true,
         closingDate: useAuth().session.value?.closingDate ?? null,
+        showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value,
       },
     })
 
@@ -1334,6 +1340,16 @@ const download = async () => {
                 </div>
 
                 <div class="flex gap-1.5 items-center z-10">
+                    <div
+                        v-if="canUseCleanupToggle"
+                        class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 dark:border-gray-700"
+                    >
+                        <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
+                            Cleaned values
+                        </span>
+                        <UToggle v-model="showCleanedValues" />
+                    </div>
+
                     <UDropdown
                         v-if="selectedRows.length > 1"
                         :items="active(selectedRows)"

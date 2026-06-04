@@ -26,6 +26,9 @@ export default defineEventHandler(async (event) => {
   ===================================================== */
 
   const query = getQuery(event)
+  const showCleanedValues = String(query.showCleanedValues) === 'true'
+  const useOriginalCleanupValues = cleanup && !showCleanedValues
+  const includeCleanupPrecedence = cleanup && !showCleanedValues
 
   const startDate = query.startDate
     ? new Date(query.startDate as string)
@@ -35,11 +38,11 @@ export default defineEventHandler(async (event) => {
     ? new Date(query.endDate as string)
     : new Date()
 
-  const billTotalExpr = cleanup
+  const billTotalExpr = useOriginalCleanupValues
     ? 'COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total)'
     : 'b.grand_total'
 
-  const billSubtotalExpr = cleanup
+  const billSubtotalExpr = useOriginalCleanupValues
     ? 'COALESCE(NULLIF(b.original_subtotal, 0), b.subtotal)'
     : 'b.subtotal'
 
@@ -149,7 +152,7 @@ export default defineEventHandler(async (event) => {
             AND b.created_at < $2
             AND ($3 = true OR b.precedence IS NOT TRUE)
           `,
-          [companyId, startDate, cleanup]
+          [companyId, startDate, includeCleanupPrecedence]
         ),
         client.query(
           `
@@ -230,7 +233,7 @@ export default defineEventHandler(async (event) => {
             AND b.created_at < $2
             AND ($3 = true OR b.precedence IS NOT TRUE)
           `,
-          [companyId, startDate, cleanup]
+          [companyId, startDate, includeCleanupPrecedence]
         ),
         client.query(
           `
@@ -386,7 +389,7 @@ export default defineEventHandler(async (event) => {
         AND b.created_at BETWEEN $2 AND $3
         AND ($4 = true OR b.precedence IS NOT TRUE)
       `,
-      [companyId, startDate, endDate, cleanup]
+      [companyId, startDate, endDate, includeCleanupPrecedence]
     )
 
     const sales = salesRes.rows[0]
@@ -612,7 +615,7 @@ export default defineEventHandler(async (event) => {
 
       ORDER BY b.created_at DESC
       `,
-      [companyId, startDate, endDate, cleanup]
+      [companyId, startDate, endDate, includeCleanupPrecedence]
     )
 
 
