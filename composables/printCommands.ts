@@ -28,6 +28,24 @@ function textStart(text: unknown, width: number): string {
   return textStr + ' '.repeat(width - textStr.length);
 }
 
+function wordWrap(text: string, width: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    if (!current) {
+      current = word.slice(0, width);
+    } else if (current.length + 1 + word.length <= width) {
+      current += ' ' + word;
+    } else {
+      lines.push(current);
+      current = word.slice(0, width);
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [''];
+}
+
 function parseMoneyInput(value: unknown): number {
   if (typeof value === 'string') {
     const normalized = value.replace(/[^\d.+-]/g, '').trim();
@@ -262,12 +280,21 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .rule({ style: 'single' });
 
   (bill.entries || []).forEach((item: any, index: number) => {
+    const descLines = wordWrap(item.description || '', COLUMN_WIDTHS.description);
+    // First line: SL + first desc chunk + HSN + TAX
     encoder.text(
       textStart((index + 1).toString(), COLUMN_WIDTHS.sl) +
-        textStart(item.description || '', COLUMN_WIDTHS.description) +
+        textStart(descLines[0], COLUMN_WIDTHS.description) +
         textStart(item.hsn || '', COLUMN_WIDTHS.hsn) +
         textStart(item.tax || '', COLUMN_WIDTHS.tax),
     );
+    // Extra description lines on their own rows
+    for (let j = 1; j < descLines.length; j++) {
+      encoder.text(
+        ' '.repeat(COLUMN_WIDTHS.sl) + descLines[j],
+      );
+    }
+    // Second row: QTY + MRP + VALUE + DISC + T.VALUE
     encoder.text(
       '    ' +
         textStart(item.qty || 0, COLUMN_WIDTHS.qty) +
@@ -276,6 +303,7 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
         textStart(formatDiscountCell(item.discount), COLUMN_WIDTHS.disc) +
         textStart(formatMoney(item.tvalue), COLUMN_WIDTHS.tvalue),
     );
+    encoder.newline(1);
   });
 
   encoder

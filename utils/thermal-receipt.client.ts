@@ -151,37 +151,33 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
 
   // ---------------------- ITEM ROWS WITH WRAPPED DESCRIPTION ----------------------
   data.entries.forEach((item: any, i: number) => {
-    // Wrap description (fits 30mm width)
+    const rowStartY = y;
+
+    // Wrap description to fit its column width
     const descLines = doc.splitTextToSize(item.description || "", 30);
 
-    // SL number on first line
+    // Line 1: SL, first desc line, QTY, MRP, TAX, DISC
     doc.text(String(i + 1), 5, y);
-
-    // First line of description
     doc.text(descLines[0], 15, y);
-
-    // Right-side columns SAME LINE
     doc.text(String(item.qty), 50, y);
     doc.text(String(item.mrp), 65, y);
     doc.text(`${item.tax}%`, 85, y);
-     doc.text(String(item.discount || 0), 102, y);
- 
+    doc.text(String(item.discount || 0), 102, y);
+    y += 5;
 
-    // Remaining description lines (if any)
+    // Remaining description lines — each on its own line
     for (let j = 1; j < descLines.length; j++) {
-      y += 5;
       doc.text(descLines[j], 15, y);
+      y += 5;
     }
 
-    // TAX + VALUE next line
-    y += 5;
-   
-     doc.text(String(item.hsn || ""), 85, y);
+    // HSN + VALUE row
+    doc.text(String(item.hsn || ""), 85, y);
     doc.text(String(item.value || 0), 102, y);
-  
+    y += 5;
 
-    // Extra spacing between items
-    y += 6;
+    // Always add a blank gap between items so next item never shares a line
+    y += 3;
   });
 
   y += 2;
