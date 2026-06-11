@@ -320,6 +320,43 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .bold(false)
     .rule({ style: 'single' });
 
+  // ── Tax summary table ────────────────────────────────────────────────────
+  const taxGroups: Record<number, number> = {};
+  (bill.entries || []).forEach((item: any) => {
+    const rate = Number(item.tax || 0);
+    if (!rate) return;
+    const val = Number(item.tvalue || 0);
+    taxGroups[rate] = (taxGroups[rate] || 0) + val;
+  });
+
+  const taxRates = Object.keys(taxGroups).map(Number).sort((a, b) => a - b);
+  if (taxRates.length > 0) {
+    const C = { tax: 6, sgst: 14, cgst: 14, total: 14 };
+    encoder.rule({ style: 'single' });
+    encoder.bold(true).text(
+      textStart('TAX', C.tax) +
+      textStart('SGST', C.sgst) +
+      textStart('CGST', C.cgst) +
+      textStart('TOTAL', C.total),
+    ).bold(false);
+    encoder.rule({ style: 'single' });
+
+    taxRates.forEach((rate) => {
+      const lineVal = taxGroups[rate];
+      const taxAmt = bill.isTaxIncluded
+        ? lineVal - lineVal / (1 + rate / 100)
+        : lineVal * (rate / 100);
+      const half = taxAmt / 2;
+      encoder.text(
+        textStart(`${rate}%`, C.tax) +
+        textStart(formatMoney(half), C.sgst) +
+        textStart(formatMoney(half), C.cgst) +
+        textStart(formatMoney(taxAmt), C.total),
+      );
+    });
+    encoder.rule({ style: 'single' });
+  }
+
   encoder
     .align('center')
     .text(centerText('DISC/ROUND OFF(+/-)', 38) + textStart(billDiscountText, 10))

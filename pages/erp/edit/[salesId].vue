@@ -1066,6 +1066,7 @@ const handleEdit = async () => {
       discount: String(discount.value ?? ''),
       grandTotal: grandTotal.value,
       paymentMethod: paymentMethod.value,
+      isTaxIncluded: useAuth().session.value?.isTaxIncluded || false,
       companyName: useAuth().session.value?.companyName || '',
       companyAddress: useAuth().session.value?.address || {},
       gstin: useAuth().session.value?.gstin || '',

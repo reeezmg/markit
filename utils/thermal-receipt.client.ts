@@ -200,6 +200,41 @@ doc.text(Number(totalValue).toFixed(2), 102, y);
   line();
   y += 5;
 
+  // ---------------------- TAX SUMMARY TABLE ----------------------
+  const taxGroups: Record<number, number> = {};
+  data.entries.forEach((item: any) => {
+    const rate = Number(item.tax || 0);
+    if (!rate) return;
+    taxGroups[rate] = (taxGroups[rate] || 0) + Number(item.tvalue || 0);
+  });
+  const taxRates = Object.keys(taxGroups).map(Number).sort((a, b) => a - b);
+  if (taxRates.length > 0) {
+    doc.setFont("courier", "bold");
+    doc.setFontSize(9);
+    const col = { tax: 5, sgst: 35, cgst: 70, total: 102 };
+    doc.text("TAX%", col.tax, y);
+    doc.text("SGST", col.sgst, y);
+    doc.text("CGST", col.cgst, y);
+    doc.text("TOTAL", col.total, y);
+    y += 5;
+    doc.setFont("courier", "normal");
+    taxRates.forEach((rate) => {
+      const lineVal = taxGroups[rate];
+      const taxAmt = data.isTaxIncluded
+        ? lineVal - lineVal / (1 + rate / 100)
+        : lineVal * (rate / 100);
+      const half = taxAmt / 2;
+      doc.text(`${rate}%`, col.tax, y);
+      doc.text(half.toFixed(2), col.sgst, y);
+      doc.text(half.toFixed(2), col.cgst, y);
+      doc.text(taxAmt.toFixed(2), col.total, y);
+      y += 5;
+    });
+    doc.setLineWidth(0.2);
+    doc.line(5, y, pageWidth - 5, y);
+    y += 5;
+  }
+
   doc.text(
     `DISC/ROUND OFF(+/-): ${discStr.startsWith('+') ? 'Add ' + discStr : data.discount}`,
     pageWidth / 2,

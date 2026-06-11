@@ -733,6 +733,7 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
     discount: String(discount.value ?? ''),
     grandTotal: Number(grandTotal.value) || 0,
     paymentMethod: paymentMethod.value,
+    isTaxIncluded: session?.isTaxIncluded || false,
     companyName: session?.companyName || '',
     companyAddress: session?.address || {},
     gstin: session?.gstin || '',
