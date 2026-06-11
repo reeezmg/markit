@@ -110,10 +110,19 @@ const handleSubmit = async (e: Event) => {
           },
         },
         subcategories: {
-          create: subcategory.value.map((sub) => ({
+          create: subcategory.value.map((sub: any) => ({
             name: sub.name,
             description: sub.description ?? '',
-            image: sub.files?.uuid ?? null,
+            image: sub.image ?? null,
+            ...(sub.shortCut && { shortCut: sub.shortCut }),
+            hsn: sub.hsn || undefined,
+            taxType: sub.taxType || 'FIXED',
+            fixedTax: sub.fixedTax || undefined,
+            thresholdAmount: sub.thresholdAmount || undefined,
+            taxBelowThreshold: sub.taxBelowThreshold || undefined,
+            taxAboveThreshold: sub.taxAboveThreshold || undefined,
+            margin: sub.margin || undefined,
+            status: sub.status ?? true,
             company: {
               connect: {
                 id: useAuth().session.value?.companyId,

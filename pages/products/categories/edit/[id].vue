@@ -39,6 +39,7 @@ type SubcategoryForm = Partial<Subcategory & {
 
 const subcategoryColumns = [
   { key: 'name', label: 'Name' },
+  { key: 'shortCut', label: 'Code' },
   { key: 'description', label: 'Description' },
   { key: 'status', label: 'Status' },
   { key: 'actions', label: 'Actions' },
