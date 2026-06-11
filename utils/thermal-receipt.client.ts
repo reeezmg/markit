@@ -255,7 +255,7 @@ doc.text(`YOUR SAVING: ${saving}`, pageWidth / 2, y + 7, {
     const rowH = 6;
     const tableRows = taxRates.length;
     const tableH = rowH * (1 + tableRows) + 8; // header row + data rows + padding
-    doc.setLineWidth(0.4);
+    doc.setLineWidth(0.9);
     doc.rect(5, y, pageWidth - 10, tableH);
     y += 5;
     doc.setFont("courier", "bold");
