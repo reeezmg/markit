@@ -201,10 +201,24 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .text(bill.companyName || '')
     .newline(1)
     .bold(false)
-    .size(1, 1)
-    .text(`${companyAddress.name || ''} ${companyAddress.street || ''}`.trim())
-    .text(`${companyAddress.locality || ''}, ${companyAddress.city || ''}`)
-    .text(`${companyAddress.state || ''} - ${companyAddress.pincode || ''}`)
+    .size(1, 1);
+
+  const addressLine = [
+    companyAddress.street,
+    companyAddress.locality,
+    companyAddress.city,
+    companyAddress.state,
+    companyAddress.pincode,
+  ]
+    .map((v: any) => (v ?? '').toString().trim())
+    .filter(Boolean)
+    .join(', ');
+
+  if (addressLine) {
+    encoder.text(addressLine).newline(1);
+  }
+
+  encoder
     .newline(1)
     .text(`GSTIN:${bill.gstin || ''}`)
     .newline(1)

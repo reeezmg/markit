@@ -50,16 +50,6 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   const footerHeight = 90 + generatedCoupons.length * 48;
   const finalHeight = headerHeight + itemHeight + footerHeight;
 
-  function cleanJoin(a?: string, b?: string) {
-  const left = a?.trim() || "";
-  const right = b?.trim() || "";
-
-  if (left && right) return `${left}, ${right}`;
-  if (left) return left;
-  if (right) return right;
-  return "";
-}
-
    const discStr = String(data.discount ?? '')
    const calculatedDiscount = discStr.startsWith('+')
       ? 0
@@ -99,23 +89,25 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
 
   // ---------------------- HEADER ----------------------
   center(data.companyName, 14, true);
-center(
-  [data.companyAddress?.name?.trim(), data.companyAddress?.street?.trim()]
+
+  const addressLine = [
+    data.companyAddress?.street,
+    data.companyAddress?.locality,
+    data.companyAddress?.city,
+    data.companyAddress?.state,
+    data.companyAddress?.pincode,
+  ]
+    .map((v: any) => (v ?? "").toString().trim())
     .filter(Boolean)
-    .join(" "),
-  10
-)
+    .join(", ");
 
-
-center(
-  cleanJoin(data.companyAddress?.locality, data.companyAddress?.city),
-  10
-)
-
-center(
-  cleanJoin(data.companyAddress?.state, data.companyAddress?.pincode),
-  10
-)
+  if (addressLine) {
+    doc.setFontSize(10);
+    doc.setFont("courier", "normal");
+    // splitTextToSize wraps on word boundaries (won't break a word mid-way)
+    const addressLines = doc.splitTextToSize(addressLine, pageWidth - 10);
+    addressLines.forEach((l: string) => center(l, 10));
+  }
 
   if (data.gstin) center(`GSTIN: ${data.gstin}`);
 
