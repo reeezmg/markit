@@ -113,6 +113,8 @@ function formatBillDiscountDisplay(discount: unknown, calculatedDiscount: unknow
 function formatDiscountCell(discount: unknown): string {
   if (discount === null || discount === undefined || discount === '') return '0';
   const rawDiscount = String(discount);
+  // Negative discounts (flat amounts) should not get a % symbol
+  if (rawDiscount.includes('-') || Number(rawDiscount) < 0) return rawDiscount;
   return rawDiscount.endsWith('%') ? rawDiscount : `${rawDiscount}%`;
 }
 
