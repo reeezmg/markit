@@ -525,6 +525,15 @@ function onaccSubmit(event: FormSubmitEvent<AccountState>) {
         upiId: accstate.upiId,
       }
     });
+    // Keep the session in sync so GSTIN / bank details show up on receipts immediately
+    updateAccountDetails({
+      accHolderName: accstate.accHolderName,
+      ifsc: accstate.ifsc,
+      accountNo: accstate.accountNo,
+      bankName: accstate.bankName,
+      gstin: accstate.gstin,
+      upiId: accstate.upiId,
+    });
     toast.add({ title: 'Account details updated',description: error.statusMessage, color: 'green', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.log(error);
