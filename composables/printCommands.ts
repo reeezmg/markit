@@ -286,7 +286,7 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
       textStart((index + 1).toString(), COLUMN_WIDTHS.sl) +
         textStart(descLines[0], COLUMN_WIDTHS.description) +
         textStart(item.hsn || '', COLUMN_WIDTHS.hsn) +
-        textStart(item.tax || '', COLUMN_WIDTHS.tax),
+        textStart(`${item.tax || 0}%`, COLUMN_WIDTHS.tax),
     );
     // Extra description lines on their own rows
     for (let j = 1; j < descLines.length; j++) {
@@ -319,43 +319,6 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     )
     .bold(false)
     .rule({ style: 'single' });
-
-  // ── Tax summary table ────────────────────────────────────────────────────
-  const taxGroups: Record<number, number> = {};
-  (bill.entries || []).forEach((item: any) => {
-    const rate = Number(item.tax || 0);
-    if (!rate) return;
-    const val = Number(item.tvalue || 0);
-    taxGroups[rate] = (taxGroups[rate] || 0) + val;
-  });
-
-  const taxRates = Object.keys(taxGroups).map(Number).sort((a, b) => a - b);
-  if (taxRates.length > 0) {
-    const C = { tax: 6, sgst: 14, cgst: 14, total: 14 };
-    encoder.rule({ style: 'single' });
-    encoder.bold(true).text(
-      textStart('TAX', C.tax) +
-      textStart('SGST', C.sgst) +
-      textStart('CGST', C.cgst) +
-      textStart('TOTAL', C.total),
-    ).bold(false);
-    encoder.rule({ style: 'single' });
-
-    taxRates.forEach((rate) => {
-      const lineVal = taxGroups[rate];
-      const taxAmt = bill.isTaxIncluded
-        ? lineVal - lineVal / (1 + rate / 100)
-        : lineVal * (rate / 100);
-      const half = taxAmt / 2;
-      encoder.text(
-        textStart(`${rate}%`, C.tax) +
-        textStart(formatMoney(half), C.sgst) +
-        textStart(formatMoney(half), C.cgst) +
-        textStart(formatMoney(taxAmt), C.total),
-      );
-    });
-    encoder.rule({ style: 'single' });
-  }
 
   encoder
     .align('center')
@@ -398,6 +361,49 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .newline(1)
     .rule({ style: 'single' })
     .newline(1);
+
+  // ── Tax summary table (boxed, below savings) ─────────────────────────────
+  const taxGroups: Record<number, number> = {};
+  (bill.entries || []).forEach((item: any) => {
+    const rate = Number(item.tax || 0);
+    if (!rate) return;
+    taxGroups[rate] = (taxGroups[rate] || 0) + Number(item.tvalue || 0);
+  });
+  const taxRates = Object.keys(taxGroups).map(Number).sort((a, b) => a - b);
+  if (taxRates.length > 0) {
+    const C = { tax: 6, sgst: 14, cgst: 14, total: 14 };
+    encoder
+      .rule({ style: 'double' })
+      .bold(true)
+      .invert(true)
+      .align('center')
+      .text(centerText('TAX SUMMARY', 48))
+      .invert(false)
+      .align('left')
+      .text(
+        textStart('TAX', C.tax) +
+        textStart('SGST', C.sgst) +
+        textStart('CGST', C.cgst) +
+        textStart('TOTAL', C.total),
+      )
+      .bold(false)
+      .rule({ style: 'single' });
+
+    taxRates.forEach((rate) => {
+      const lineVal = taxGroups[rate];
+      const taxAmt = bill.isTaxIncluded
+        ? lineVal - lineVal / (1 + rate / 100)
+        : lineVal * (rate / 100);
+      const half = taxAmt / 2;
+      encoder.text(
+        textStart(`${rate}%`, C.tax) +
+        textStart(formatMoney(half), C.sgst) +
+        textStart(formatMoney(half), C.cgst) +
+        textStart(formatMoney(taxAmt), C.total),
+      );
+    });
+    encoder.rule({ style: 'double' }).newline(1);
+  }
 
   if (upiPayment) {
     const qrLink = `upi://pay?pa=${bill.upiId}&am=${upiPayment.amount}&cu=INR`;
