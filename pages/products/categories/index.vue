@@ -186,13 +186,28 @@ const searchStatus = ref(undefined);
 const resetFilters = () => {
     search.value = '';
     selectedStatus.value = [];
+    page.value = 1;
 };
 
 // Pagination
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
-const page = ref(1);
-const pageCount = ref(10);
+
+const LS_PAGE_COUNT_KEY = 'categories_pageCount';
+const SS_PAGE_KEY = 'categories_page';
+
+const page = ref(Number(sessionStorage.getItem(SS_PAGE_KEY)) || 1);
+const pageCount = ref(Number(localStorage.getItem(LS_PAGE_COUNT_KEY)) || 10);
+
+watch(pageCount, (val) => {
+    localStorage.setItem(LS_PAGE_COUNT_KEY, String(val));
+    page.value = 1;
+});
+
+watch(page, (val) => {
+    sessionStorage.setItem(SS_PAGE_KEY, String(val));
+});
+
 const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
 const pageTo = computed(() =>
     Math.min(page.value * pageCount.value, pageTotal.value || 0),
@@ -281,6 +296,13 @@ const {
 const countArgs = computed(() => ({ where: queryArgs.where }));
 const { data: pageTotal } = useCountCategory(countArgs);
 
+// If the restored page is beyond the last page (e.g. data was deleted), snap back to 1
+watch(pageTotal, (total) => {
+    if (!total) return;
+    const lastPage = Math.ceil(total / pageCount.value);
+    if (page.value > lastPage) page.value = 1;
+});
+
 // Precompute total quantity once per category/subcategory so the table cells
 // don't re-run the nested products->variants->items reduce on every render
 // (which made expanding a row noticeably slow).
@@ -322,6 +344,10 @@ watchEffect(() => {
     queryArgs.take = parseInt(pageCount.value);
 
     refetch();
+});
+
+watch([search, selectedStatus], () => {
+    page.value = 1;
 });
 
 const removeCategory = () => {
