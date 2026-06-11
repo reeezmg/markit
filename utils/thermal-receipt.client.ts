@@ -54,7 +54,7 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   const left = a?.trim() || "";
   const right = b?.trim() || "";
 
-  if (left && right) return `${left}, ${right}`;
+  if (left && right) return `${left} ${right}`;
   if (left) return left;
   if (right) return right;
   return "";
