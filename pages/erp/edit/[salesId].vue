@@ -451,9 +451,12 @@ watch(items, async () => {
 
     if (item.category[0]?.id) {
       const category = categoryStore.getCategoryById(item.category[0].id)
-     
-      if( category){
-        const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = category;
+      // Subcategory tax takes priority over category tax when configured
+      const sub = item._subcategory || null
+      const taxSource = (sub && (sub.fixedTax != null || sub.taxBelowThreshold != null)) ? sub : category
+
+      if( taxSource){
+        const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = taxSource;
       if (taxType === 'FIXED') {
         item.tax = fixedTax ?? 0;
       } else {
