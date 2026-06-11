@@ -34,6 +34,23 @@ export const useCategoryStore = defineStore('category', () => {
     return categories.value.find((c) => c.shortCut === shortCut) || null
   }
 
+  // Parse "catShortCut-subShortCut" or plain "catShortCut"
+  // Returns { category, subcategory } where subcategory may be null
+  function resolveShortCut(input: string): { category: any; subcategory: any } | null {
+    const parts = input.split('-')
+    const catShortCut = parts[0]
+    const subShortCut = parts.length > 1 ? parts.slice(1).join('-') : null
+
+    const category = categories.value.find((c) => c.shortCut === catShortCut) || null
+    if (!category) return null
+
+    const subcategory = subShortCut
+      ? (category.subcategories || []).find((s: any) => s.shortCut === subShortCut) || null
+      : null
+
+    return { category, subcategory }
+  }
+
   return {
     categories,
     loading,
@@ -42,5 +59,6 @@ export const useCategoryStore = defineStore('category', () => {
     refreshCategories,
     getCategoryById,
     getCategoryByShortCut,
+    resolveShortCut,
   }
 })

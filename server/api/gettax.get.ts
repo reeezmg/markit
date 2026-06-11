@@ -6,16 +6,30 @@ export default defineEventHandler(async (event) => {
 
   const category = await prisma.category.findMany({
     where: {
-      companyId: session.data.companyId ,
+      companyId: session.data.companyId,
     },
     select: {
-      id:true,
-      shortCut:true,
+      id: true,
+      shortCut: true,
       fixedTax: true,
       taxBelowThreshold: true,
       taxAboveThreshold: true,
       thresholdAmount: true,
       taxType: true,
+      subcategories: {
+        select: {
+          id: true,
+          shortCut: true,
+          name: true,
+          hsn: true,
+          taxType: true,
+          fixedTax: true,
+          thresholdAmount: true,
+          taxBelowThreshold: true,
+          taxAboveThreshold: true,
+          margin: true,
+        },
+      },
     },
   });
 

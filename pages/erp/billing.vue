@@ -417,8 +417,19 @@ const handleEnterBarcode = (barcode,index) => {
     input.select();
   }else{
     if(!pattern.test(barcode)){
-      const categorystore = categoryStore.getCategoryByShortCut(barcode)
-      items.value[index].category = categories.value.filter(category =>category.id === categorystore.id)
+      const resolved = categoryStore.resolveShortCut(barcode)
+      if (resolved?.category) {
+        items.value[index].category = categories.value.filter(c => c.id === resolved.category.id)
+        if (resolved.subcategory) {
+          items.value[index].name = resolved.subcategory.name
+          items.value[index].subcategoryId = resolved.subcategory.id
+          items.value[index]._subcategory = resolved.subcategory
+        } else {
+          items.value[index].name = ''
+          items.value[index].subcategoryId = null
+          items.value[index]._subcategory = null
+        }
+      }
       items.value[index].barcode = '';
       const component = rateInputs.value[index];
       const input = component.$el.querySelector("input");
