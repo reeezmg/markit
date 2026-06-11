@@ -138,8 +138,8 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   doc.text("QTY", 50, y);
   doc.text("MRP", 65, y);
 
-  doc.text("TAX", 85, y);
-    doc.text("DISC", 102, y);
+  doc.text("DISC", 85, y);
+    doc.text("TAX", 102, y);
 
 
   y += 5;
@@ -156,13 +156,13 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
     // Wrap description to fit its column width
     const descLines = doc.splitTextToSize(item.description || "", 30);
 
-    // Line 1: SL, first desc line, QTY, MRP, TAX, DISC
+    // Line 1: SL, first desc line, QTY, MRP, DISC, TAX
     doc.text(String(i + 1), 5, y);
     doc.text(descLines[0], 15, y);
     doc.text(String(item.qty), 50, y);
     doc.text(String(item.mrp), 65, y);
-    doc.text(`${item.tax}%`, 85, y);
-    doc.text(String(item.discount || 0), 102, y);
+    doc.text(String(item.discount || 0), 85, y);
+    doc.text(`${item.tax}%`, 102, y);
     y += 5;
 
     // Remaining description lines — each on its own line
