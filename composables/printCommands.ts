@@ -413,7 +413,7 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
       .newline(1)
       .text('Scan to pay via UPI')
       .newline(2)
-      .qrcode(qrLink, { model: 1, size: 8, errorlevel: 'h' })
+      .qrcode(qrLink, { model: 1, size: 5, errorlevel: 'h' })
       .align('left')
       .newline(1);
   }
