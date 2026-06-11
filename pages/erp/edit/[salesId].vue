@@ -781,6 +781,8 @@ watch(bill, async (newBill) => {
     name: entry.name || '',
     barcode: entry.barcode || '',
     category: categories.value.filter(c => c.id === entry.categoryId),
+    categoryName: entry.categoryName || '',
+    categoryHsn: entry.categoryHsn || '',
     size: entry.item?.size || '',
     unit: entry.variant?.unit || '',
     sizes: entry.sizes || null,
@@ -1047,8 +1049,8 @@ const handleEdit = async () => {
         }
 
         return {
-          description: entry.barcode ? entry.name : entry.category[0].name,
-          hsn: entry.category[0].hsn,
+          description: entry.barcode ? entry.name : (entry.category[0]?.name || entry.categoryName || ''),
+          hsn: entry.category[0]?.hsn || entry.categoryHsn || '',
           qty: entry.qty,
           mrp: entry.rate,
           discount: calculatedDiscount,

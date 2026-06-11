@@ -156,6 +156,8 @@ export default defineEventHandler(async (event) => {
         e.user_name         AS "userName",
         e.company_id        AS "companyUser",
         e.user_id           AS "userId",
+        cat.name            AS "categoryName",
+        cat.hsn             AS "categoryHsn",
 
         -- Item
         json_build_object(
@@ -173,6 +175,7 @@ export default defineEventHandler(async (event) => {
       FROM entries e
       LEFT JOIN items i ON i.id = e.item_id
       LEFT JOIN variants v ON v.id = e.variant_id
+      LEFT JOIN categories cat ON cat.id = e.category_id
       WHERE e.bill_id = $1
       `,
       [billId]
