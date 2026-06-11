@@ -379,6 +379,8 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
       .align('center')
       .text(centerText('TAX SUMMARY', 48))
       .invert(false)
+      .bold(false)
+      .newline(1)
       .align('left')
       .text(
         textStart('TAX', C.tax) +
@@ -386,7 +388,6 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
         textStart('CGST', C.cgst) +
         textStart('TOTAL', C.total),
       )
-      .bold(false)
       .rule({ style: 'single' });
 
     taxRates.forEach((rate) => {
