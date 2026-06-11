@@ -377,7 +377,7 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
       .bold(true)
       .invert(true)
       .align('center')
-      .text(centerText('TAX SUMMARY', 48))
+      .text('TAX SUMMARY')
       .invert(false)
       .bold(false)
       .newline(1)
