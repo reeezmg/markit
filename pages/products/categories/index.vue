@@ -7,6 +7,7 @@ import {
     useUpdateCategory,
     useUpdateManyCategory,
     useFindManyCategory,
+    useCountCategory,
     useDeleteCategory,
     useDeleteProduct
 } from '~/lib/hooks';
@@ -192,10 +193,9 @@ const sort = ref({ column: 'id', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
 const page = ref(1);
 const pageCount = ref(10);
-const pageTotal = ref(0); // This value should be dynamic coming from the API
 const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
 const pageTo = computed(() =>
-    Math.min(page.value * pageCount.value, pageTotal.value),
+    Math.min(page.value * pageCount.value, pageTotal.value || 0),
 );
 
 
@@ -276,6 +276,11 @@ const {
     refetch,
 } = useFindManyCategory(queryArgs);
 
+// Total count of matching categories (independent of the current page's `take`),
+// so pagination shows the correct number of pages.
+const countArgs = computed(() => ({ where: queryArgs.where }));
+const { data: pageTotal } = useCountCategory(countArgs);
+
 // Precompute total quantity once per category/subcategory so the table cells
 // don't re-run the nested products->variants->items reduce on every render
 // (which made expanding a row noticeably slow).
@@ -304,9 +309,6 @@ const tableRows = computed(() =>
     })),
 );
 
-watch(products, () => {
-    pageTotal.value = products.value ? products.value.length : 0;
-});
 
 watchEffect(() => {
     queryArgs.where.AND[0].name.contains = search.value;
