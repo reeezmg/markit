@@ -228,7 +228,7 @@ const pageTo = computed(() =>
 const queryArgs = reactive({
     where: {
         AND: [
-            { name: { contains: search.value } },
+            { name: { contains: search.value, mode: 'insensitive' } },
             { companyId: useAuth().session.value?.companyId },
             {
                 OR: [{ status: true }, { status: false }],
@@ -342,7 +342,7 @@ const tableRows = computed(() =>
 
 
 watchEffect(() => {
-    queryArgs.where.AND[0].name.contains = search.value;
+    queryArgs.where.AND[0].name = { contains: search.value, mode: 'insensitive' };
     queryArgs.where.AND[0].OR = selectedStatus.value?.map((item) => {
         return { status: item.value };
     });
