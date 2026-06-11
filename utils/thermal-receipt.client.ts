@@ -54,7 +54,7 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   const left = a?.trim() || "";
   const right = b?.trim() || "";
 
-  if (left && right) return `${left} ${right}`;
+  if (left && right) return `${left}, ${right}`;
   if (left) return left;
   if (right) return right;
   return "";
@@ -100,7 +100,9 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   // ---------------------- HEADER ----------------------
   center(data.companyName, 14, true);
 center(
-  cleanJoin(data.companyAddress?.name, data.companyAddress?.street),
+  [data.companyAddress?.name?.trim(), data.companyAddress?.street?.trim()]
+    .filter(Boolean)
+    .join(" "),
   10
 )
 
