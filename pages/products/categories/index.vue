@@ -276,9 +276,36 @@ const {
     refetch,
 } = useFindManyCategory(queryArgs);
 
+// Precompute total quantity once per category/subcategory so the table cells
+// don't re-run the nested products->variants->items reduce on every render
+// (which made expanding a row noticeably slow).
+const computeQty = (productList) =>
+    productList?.reduce((productTotal, product) => {
+        const variantQty = product.variants?.reduce((variantTotal, variant) => {
+            const itemQty = variant.items?.reduce(
+                (itemTotal, item) => itemTotal + (item.qty || 0),
+                0,
+            ) || 0;
+            return variantTotal + itemQty;
+        }, 0) || 0;
+        return productTotal + variantQty;
+    }, 0) || 0;
+
+const tableRows = computed(() =>
+    (products.value || []).map((category) => ({
+        ...category,
+        totalQty: computeQty(category.products),
+        productsCount: category.products?.length || 0,
+        subcategories: category.subcategories?.map((sub) => ({
+            ...sub,
+            totalQty: computeQty(sub.products),
+            productsCount: sub.products?.length || 0,
+        })) || [],
+    })),
+);
+
 watch(products, () => {
     pageTotal.value = products.value ? products.value.length : 0;
-    console.log(products);
 });
 
 watchEffect(() => {
@@ -514,7 +541,7 @@ const downloadReport = async () => {
                 v-model="selectedRows"
                 v-model:sort="sort"
                 v-model:expand="expand"
-                :rows="products"
+                :rows="tableRows"
                 :columns="columnsTable"
                 :loading="isLoading"
                 sort-asc-icon="i-heroicons-arrow-up"
@@ -612,23 +639,13 @@ const downloadReport = async () => {
                 </template>
 
                 <template #qty-data="{ row }">
-                    {{
-                        row.products?.reduce((productTotal, product) => {
-                        const variantQty = product.variants?.reduce((variantTotal, variant) => {
-                            const itemQty = variant.items?.reduce((itemTotal, item) => {
-                            return itemTotal + (item.qty || 0);
-                            }, 0) || 0;
-                            return variantTotal + itemQty;
-                        }, 0) || 0;
-                        return productTotal + variantQty;
-                        }, 0) || 0
-                    }}
+                    {{ row.totalQty }}
                     </template>
 
 
 
                 <template #products-data="{ row }">
-                    {{ row.products.length }}
+                    {{ row.productsCount }}
                 </template>
 
                 <template #expand="{ row }">
@@ -652,21 +669,11 @@ const downloadReport = async () => {
                 </template>
 
            <template #products-data="{ row }">
-                    {{ row.products.length }}
+                    {{ row.productsCount }}
                 </template>
 
                 <template #qty-data="{ row }">
-                    {{
-                        row.products?.reduce((productTotal, product) => {
-                        const variantQty = product.variants?.reduce((variantTotal, variant) => {
-                            const itemQty = variant.items?.reduce((itemTotal, item) => {
-                            return itemTotal + (item.qty || 0);
-                            }, 0) || 0;
-                            return variantTotal + itemQty;
-                        }, 0) || 0;
-                        return productTotal + variantQty;
-                        }, 0) || 0
-                    }}
+                    {{ row.totalQty }}
                     </template>
 
 
