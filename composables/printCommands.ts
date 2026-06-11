@@ -409,10 +409,12 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
   if (upiPayment) {
     const qrLink = `upi://pay?pa=${bill.upiId}&am=${upiPayment.amount}&cu=INR`;
     encoder
+      .align('center')
       .newline(1)
       .text('Scan to pay via UPI')
       .newline(2)
       .qrcode(qrLink, { model: 1, size: 8, errorlevel: 'h' })
+      .align('left')
       .newline(1);
   }
 
