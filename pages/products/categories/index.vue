@@ -196,16 +196,22 @@ const expand = ref({ openedRows: [], row: null });
 const LS_PAGE_COUNT_KEY = 'categories_pageCount';
 const SS_PAGE_KEY = 'categories_page';
 
-const page = ref(Number(sessionStorage.getItem(SS_PAGE_KEY)) || 1);
-const pageCount = ref(Number(localStorage.getItem(LS_PAGE_COUNT_KEY)) || 10);
+const page = ref(1);
+const pageCount = ref(10);
+
+onMounted(() => {
+    pageCount.value = Number(localStorage.getItem(LS_PAGE_COUNT_KEY)) || 10;
+    const savedPage = Number(sessionStorage.getItem(SS_PAGE_KEY)) || 1;
+    page.value = savedPage;
+});
 
 watch(pageCount, (val) => {
-    localStorage.setItem(LS_PAGE_COUNT_KEY, String(val));
+    if (process.client) localStorage.setItem(LS_PAGE_COUNT_KEY, String(val));
     page.value = 1;
 });
 
 watch(page, (val) => {
-    sessionStorage.setItem(SS_PAGE_KEY, String(val));
+    if (process.client) sessionStorage.setItem(SS_PAGE_KEY, String(val));
 });
 
 const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
