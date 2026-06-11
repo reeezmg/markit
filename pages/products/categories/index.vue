@@ -9,9 +9,11 @@ import {
     useFindManyCategory,
     useCountCategory,
     useDeleteCategory,
+    useDeleteManyCategory,
     useDeleteProduct
 } from '~/lib/hooks';
 const DeleteCategory = useDeleteCategory({ optimisticUpdate: true });
+const DeleteManyCategory = useDeleteManyCategory({ optimisticUpdate: true });
 const UpdateCategory = useUpdateCategory({ optimisticUpdate: true });
 const DeleteProduct = useDeleteProduct({ optimisticUpdate: true });
 const UpdateManyCategory = useUpdateManyCategory({ optimisticUpdate: true });
@@ -121,6 +123,7 @@ const active = (selectedRows) => [
             key: 'delete',
             label: 'Delete',
             icon: 'i-heroicons-trash',
+            click: () => multiDelete(selectedRows),
         },
     ],
 ];
@@ -396,6 +399,30 @@ const removeProduct = () => {
     } catch (error) {
         // Handle error
         console.error('Error updating product status:', error);
+    }
+}
+
+ function multiDelete(rows) {
+    // Categories that still have products cannot be deleted
+    const withProducts = rows.filter((r) => r.products?.length);
+    const deletable = rows.filter((r) => !r.products?.length).map((r) => r.id);
+
+    if (withProducts.length) {
+        toast.add({
+            title: 'Some categories were not deleted',
+            description: `Clear products from: ${withProducts.map((r) => r.name).join(', ')}`,
+            color: 'red',
+        });
+    }
+
+    if (!deletable.length) return;
+
+    try {
+        DeleteManyCategory.mutate({ where: { id: { in: deletable } } });
+        selectedRows.value = [];
+        toast.add({ title: 'Categories deleted', color: 'green' });
+    } catch (error) {
+        console.error('Error deleting categories:', error);
     }
 }
 
