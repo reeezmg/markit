@@ -446,6 +446,171 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
   return encoder.encode();
 }
 
+// ─── Column widths for report (48-char paper) ────────────────────────────────
+const REPORT_COL = { label: 28, value: 20 };
+const REPORT_EXP = { date: 7, cat: 14, note: 17, amt: 10 };
+
+function fmtAmt(val: number): string {
+  return `Rs.${Number(val || 0).toFixed(2)}`;
+}
+
+function reportRow(label: string, value: number, encoder: any) {
+  encoder
+    .text(textStart(label, REPORT_COL.label) + textStart(fmtAmt(value), REPORT_COL.value))
+    .newline(1);
+}
+
+function sectionHeader(title: string, encoder: any) {
+  encoder
+    .align('center')
+    .bold(true)
+    .text(title)
+    .newline(1)
+    .bold(false)
+    .align('left')
+    .rule({ style: 'single' });
+}
+
+export function buildReportReceiptBytes(r: any): Uint8Array {
+  const encoder = new ReceiptPrinterEncoder({ newlineBeforeCut: 8, columns: 48 });
+  encoder.initialize();
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  encoder
+    .align('center').bold(true).size(2, 2).text(r.companyName || '').newline(1)
+    .bold(false).size(1, 1).rule({ style: 'single' })
+    .align('left').text(`Date: ${r.dateRange}`).newline(1)
+    .rule({ style: 'single' });
+
+  // ── Opening & Closing Balance ─────────────────────────────────────────────
+  const opening = r.balances?.opening || {};
+  const hasOpening = (opening.cash || 0) + (opening.bank || 0) > 0;
+  const hasClosing = (r.balances?.cashBalance || 0) + (r.balances?.bankBalance || 0) > 0;
+  if (hasOpening || hasClosing) {
+    sectionHeader('BALANCE', encoder);
+    if (hasOpening) {
+      reportRow('Opening Cash', opening.cash || 0, encoder);
+      reportRow('Opening Bank', opening.bank || 0, encoder);
+    }
+    if (hasClosing) {
+      reportRow('Closing Cash', r.balances?.cashBalance || 0, encoder);
+      reportRow('Closing Bank', r.balances?.bankBalance || 0, encoder);
+      reportRow('Total Balance', r.balances?.totalBalance || 0, encoder);
+    }
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Sales Breakdown ───────────────────────────────────────────────────────
+  const sales = r.salesByPaymentMethod || {};
+  const salesTotal = r.totalSales || 0;
+  if (salesTotal > 0) {
+    sectionHeader('SALES BREAKDOWN', encoder);
+    reportRow('Total Sales', salesTotal, encoder);
+    if (sales.Cash) reportRow('  Cash', sales.Cash, encoder);
+    if (sales.UPI) reportRow('  UPI', sales.UPI, encoder);
+    if (sales.Card) reportRow('  Card', sales.Card, encoder);
+    if (sales.Credit) reportRow('  Credit', sales.Credit, encoder);
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Expense Breakdown ─────────────────────────────────────────────────────
+  const exp = r.expensesByPaymentMethod || {};
+  const expTotal = r.totalExpenses || 0;
+  if (expTotal > 0) {
+    sectionHeader('EXPENSE BREAKDOWN', encoder);
+    reportRow('Total Expenses', expTotal, encoder);
+    if (exp.Cash) reportRow('  Cash', exp.Cash, encoder);
+    if (exp.UPI) reportRow('  UPI', exp.UPI, encoder);
+    if (exp.Card) reportRow('  Card', exp.Card, encoder);
+    if (exp.BankTransfer) reportRow('  Bank', exp.BankTransfer, encoder);
+    if (exp.Cheque) reportRow('  Cheque', exp.Cheque, encoder);
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Distributor Purchase ──────────────────────────────────────────────────
+  const pur = r.purchaseExpensesByPaymentMethod || {};
+  const purTotal = r.totalPurchaseExpense || 0;
+  if (purTotal > 0) {
+    sectionHeader('DISTRIBUTOR PURCHASE', encoder);
+    reportRow('Total Purchase', purTotal, encoder);
+    if (pur.Cash) reportRow('  Cash', pur.Cash, encoder);
+    if (pur.UPI) reportRow('  UPI', pur.UPI, encoder);
+    if (pur.Card) reportRow('  Card', pur.Card, encoder);
+    if (pur.BankTransfer) reportRow('  Bank', pur.BankTransfer, encoder);
+    if (pur.Cheque) reportRow('  Cheque', pur.Cheque, encoder);
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Account Transfers ─────────────────────────────────────────────────────
+  const transferRows: any[] = r.transfersDisplay || [];
+  const hasTransfers = transferRows.some(t => (t.debit || 0) + (t.credit || 0) > 0);
+  if (hasTransfers) {
+    sectionHeader('ACCOUNT TRANSFERS', encoder);
+    encoder
+      .text(textStart('ACCOUNT', 20) + textStart('DEBIT', 14) + textStart('CREDIT', 14))
+      .newline(1);
+    transferRows.forEach((t: any) => {
+      if ((t.debit || 0) + (t.credit || 0) === 0) return;
+      encoder
+        .text(textStart(t.name || '', 20) + textStart(fmtAmt(t.debit || 0), 14) + textStart(fmtAmt(t.credit || 0), 14))
+        .newline(1);
+    });
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Money Transactions ────────────────────────────────────────────────────
+  const tx = r.transactions || {};
+  const cashTx = tx.cash || {};
+  const bankTx = tx.bank || {};
+  const hasTx = (cashTx.debit || 0) + (cashTx.credit || 0) + (bankTx.debit || 0) + (bankTx.credit || 0) > 0;
+  if (hasTx) {
+    sectionHeader('MONEY TRANSACTIONS', encoder);
+    encoder
+      .text(textStart('', 14) + textStart('DEBIT', 12) + textStart('CREDIT', 12) + textStart('NET', 10))
+      .newline(1);
+    if ((cashTx.debit || 0) + (cashTx.credit || 0) > 0) {
+      encoder
+        .text(textStart('Cash', 14) + textStart(fmtAmt(cashTx.debit || 0), 12) + textStart(fmtAmt(cashTx.credit || 0), 12) + textStart(fmtAmt(cashTx.net || 0), 10))
+        .newline(1);
+    }
+    if ((bankTx.debit || 0) + (bankTx.credit || 0) > 0) {
+      encoder
+        .text(textStart('Bank', 14) + textStart(fmtAmt(bankTx.debit || 0), 12) + textStart(fmtAmt(bankTx.credit || 0), 12) + textStart(fmtAmt(bankTx.net || 0), 10))
+        .newline(1);
+    }
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Expense Details ───────────────────────────────────────────────────────
+  const expenses: any[] = r.expenses || [];
+  if (expenses.length > 0) {
+    sectionHeader('EXPENSE DETAILS', encoder);
+    encoder
+      .text(
+        textStart('DATE', REPORT_EXP.date) +
+        textStart('CATEGORY', REPORT_EXP.cat) +
+        textStart('NOTE', REPORT_EXP.note) +
+        textStart('AMT', REPORT_EXP.amt)
+      )
+      .newline(1)
+      .rule({ style: 'single' });
+    expenses.forEach((item: any) => {
+      encoder
+        .text(
+          textStart(moment(item.createdAt).format('DD-MM'), REPORT_EXP.date) +
+          textStart(item.expensecategory?.name || '', REPORT_EXP.cat) +
+          textStart(item.note || '', REPORT_EXP.note) +
+          textStart(fmtAmt(item.totalAmount || 0), REPORT_EXP.amt)
+        )
+        .newline(1);
+    });
+    encoder.rule({ style: 'single' });
+  }
+
+  encoder.newline(4);
+  return encoder.encode();
+}
+
 export function buildLabelPrintJobs(items: any[], printerLabelSize: string): Uint8Array[] {
   const labelSize = printerLabelSize?.toLowerCase().replace(/\s/g, '') || '50x25mm';
   const encoder = new TextEncoder();

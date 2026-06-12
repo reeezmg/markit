@@ -4,7 +4,7 @@ import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import moment from 'moment';
 import { BleClient } from '@capacitor-community/bluetooth-le';
 import { Capacitor } from '@capacitor/core';
-import { buildBillReceiptBytes, buildLabelPrintJobs } from '~/composables/printCommands';
+import { buildBillReceiptBytes, buildLabelPrintJobs, buildReportReceiptBytes } from '~/composables/printCommands';
 
 // BLE chunked data sender
 const chunkSize = 512;
@@ -143,91 +143,12 @@ export function useReceiptPrinter() {
     }
 
     try {
-      const encoder = new ReceiptPrinterEncoder({
-        newlineBeforeCut: 8,
-        columns: 48,
-      });
-
-      encoder.initialize();
-
-      // Company Name (centered, bold, big)
-      encoder
-        .align('center')
-        .bold(true)
-        .size(2, 2)
-        .text(report.companyName)
-        .newline(1)
-        .bold(false)
-        .size(1, 1)
-        .rule({ style: 'single' });
-
-      // Date Range
-      encoder
-        .align('left')
-        .text(`Date: ${formatDateRange(report.dateRange)}`)
-        .newline(1)
-        .rule({ style: 'single' });
-
-      // Revenue Section
-      encoder
-        .text(`Total Revenue: ${report.totalRevenue}`).newline(1)
-        .text(`In Cash: ${report.totalRevenueInCash}`).newline(1)
-        .text(`In UPI: ${report.totalRevenueInUPI}`).newline(1)
-        .rule({ style: 'single' });
-
-      // Expense Section
-      encoder
-        .text(`Total Expense: ${report.totalExpense}`).newline(1)
-        .text(`In Cash: ${report.totalExpensesInCash}`).newline(1)
-        .text(`In UPI: ${report.totalExpensesInUPI}`).newline(1)
-        .rule({ style: 'single' });
-
-      // Drawer + UPI balances
-      encoder
-        .text(`Amount in Drawer: ${report.amountInDrawer}`).newline(1)
-        .text(`Amount in UPI: ${report.amountInUPI}`).newline(1)
-        .rule({ style: 'single' });
-
-      // Expense Details Header
-      encoder
-        .align('center')
-        .bold(true)
-        .newline(2)
-        .text('EXPENSES')
-        .newline(2)
-        .bold(false)
-        .align('left');
-
-      // Column Headers
-      encoder
-        .text(
-          textStart("DATE", COLUMN_WIDTHS.date) +
-          textStart("CATEGORY", COLUMN_WIDTHS.category) +
-          textStart("NOTE", COLUMN_WIDTHS.note) +
-          textStart("AMOUNT", COLUMN_WIDTHS.amount)
-        )
-        .newline(1)
-        .rule({ style: 'single' });
-
-      // Expense Rows
-      report.expenses.forEach((item: any) => {
-        encoder.text(
-          textStart(moment(item.createdAty).format('DD-MM'), COLUMN_WIDTHS.date) +
-          textStart(item.expensecategory.name, COLUMN_WIDTHS.category) +
-          textStart(item.note || "", COLUMN_WIDTHS.note) +
-          textStart(item.totalAmount, COLUMN_WIDTHS.amount)
-        ).newline(2);
-      });
-
-      // Footer line + spacing
-      encoder.rule({ style: 'single' }).newline(6);
-
-      const data = encoder.encode();
+      const data = buildReportReceiptBytes(report);
       await sendDataInChunks(selectedDevice.value.deviceId, data);
       await BleClient.disconnect(selectedDevice.value.deviceId);
-      return { success: true, message: 'Receipt printed successfully' };
+      return { success: true, message: 'Report printed successfully' };
     } catch (err: any) {
-      return { success: false, message: 'Failed to print receipt: ' + err.message };
+      return { success: false, message: 'Failed to print report: ' + err.message };
     }
   };
 
