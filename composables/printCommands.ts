@@ -607,7 +607,7 @@ export function buildReportReceiptBytes(r: any): Uint8Array {
     encoder.rule({ style: 'single' });
   }
 
-  encoder.newline(4);
+  encoder.newline(4).cut();
   return encoder.encode();
 }
 
