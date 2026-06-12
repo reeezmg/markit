@@ -18,6 +18,7 @@ export const usePrint = () => {
     hasAssignedPrinter,
     printBillViaUsb,
     printLabelViaUsb,
+    printReportViaUsb,
   } = useWebUsbPrinter();
 
   const printViaLocalServer = async (path: string, body: any) =>
@@ -64,6 +65,13 @@ export const usePrint = () => {
           throw new Error(res.message);
         }
       } else {
+        if (isWebUsbSupported() && hasAssignedPrinter('receipt')) {
+          try {
+            return await printReportViaUsb(printData);
+          } catch (usbError) {
+            console.warn('WebUSB report print failed, falling back to localhost:3001', usbError);
+          }
+        }
         return await printViaLocalServer('/api/print-report', printData);
       }
     } catch (err: any) {
