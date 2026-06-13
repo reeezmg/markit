@@ -724,7 +724,7 @@ onMounted(async () => {
     await getCategories()
     await fetchBill()
 });
-const dataLoading = ref(false)
+const dataLoading = ref(true)
 watch(bill, async (newBill) => {
   if (!newBill || !newBill.entries) return
   dataLoading.value = true
