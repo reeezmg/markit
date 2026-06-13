@@ -2650,7 +2650,7 @@ const couponModel = computed({
               <UInput v-model="points"
               :disabled="clientFound || bill?.isMarkit" />
             </div>
-            <div>
+            <div class="mt-9">
             <div class="flex gap-2">
                <UButton v-if="!isRedeemPoint" color="green" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Redeem</UButton>
               <UButton v-else-if="isRedeemPoint" color="red" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Cancel Redeem</UButton>
