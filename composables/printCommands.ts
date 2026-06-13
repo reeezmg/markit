@@ -408,14 +408,16 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     encoder.rule({ style: 'double' }).newline(1);
   }
 
-  if (upiPayment) {
-    const qrLink = `upi://pay?pa=${bill.upiId}&am=${upiPayment.amount}&cu=INR`;
+  if (upiPayment && bill.upiId) {
+    const payeeName = encodeURIComponent(bill.companyName || 'Merchant');
+    const amount = Number(upiPayment.amount || 0).toFixed(2);
+    const qrLink = `upi://pay?pa=${encodeURIComponent(bill.upiId)}&pn=${payeeName}&am=${amount}&cu=INR`;
     encoder
       .align('center')
       .newline(1)
       .text('Scan to pay via UPI')
       .newline(2)
-      .qrcode(qrLink, { model: 1, size: 8, errorlevel: 'm' })
+      .qrcode(qrLink, { model: 2, size: 8, errorlevel: 'm' })
       .align('left')
       .newline(1);
   }
