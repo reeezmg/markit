@@ -22,7 +22,29 @@ function centerText(text: string, width: number): string {
   return ' '.repeat(leftPadding) + textStr + ' '.repeat(rightPadding);
 }
 
-function textStart(text: unknown, width: number): string {
+function wrapText(text: string, width: number): string[] {
+  const str = (text ?? '').toString();
+  if (str.length === 0) return [''];
+  const lines: string[] = [];
+  for (let i = 0; i < str.length; i += width) {
+    lines.push(str.slice(i, i + width));
+  }
+  return lines;
+}
+
+function renderExpenseRow(
+  encoder: any,
+  cols: Array<{ text: string; width: number }>,
+) {
+  const wrapped = cols.map(c => wrapText(c.text, c.width));
+  const lineCount = Math.max(...wrapped.map(w => w.length));
+  for (let i = 0; i < lineCount; i++) {
+    const line = wrapped.map((w, ci) => textStart(w[i] || '', cols[ci].width)).join('');
+    encoder.text(line).newline(1);
+  }
+}
+
+
   const textStr = (text ?? ' ').toString();
   if (textStr.length >= width) return textStr;
   return textStr + ' '.repeat(width - textStr.length);
@@ -613,14 +635,13 @@ export function buildReportReceiptBytes(r: any): Uint8Array {
       .newline(1)
       .rule({ style: 'single' });
     expenses.forEach((item: any) => {
-      encoder
-        .text(
-          textStart(item.expensecategory?.name || '', REPORT_EXP.cat) +
-          textStart(item.userName || '', REPORT_EXP.user) +
-          textStart(item.note || '', REPORT_EXP.note) +
-          textStart(fmtAmt(item.totalAmount || 0), REPORT_EXP.amt)
-        )
-        .newline(1);
+      renderExpenseRow(encoder, [
+        { text: item.expensecategory?.name || '', width: REPORT_EXP.cat },
+        { text: item.userName || '', width: REPORT_EXP.user },
+        { text: item.note || '', width: REPORT_EXP.note },
+        { text: fmtAmt(item.totalAmount || 0), width: REPORT_EXP.amt },
+      ]);
+      encoder.newline(1);
     });
     encoder.rule({ style: 'single' });
   }
