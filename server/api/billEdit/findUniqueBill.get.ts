@@ -17,6 +17,8 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
+    await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
+
     /* ----------------------------------------
        BILL + ADDRESS + CLIENT + POINTS
     ---------------------------------------- */

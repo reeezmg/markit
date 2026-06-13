@@ -41,6 +41,7 @@ export default defineEventHandler(async (event) => {
   async function runTransaction(attempt = 1) {
     const client = await pool.connect()
     try {
+      await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
       await client.query('BEGIN')
       let generatedCoupons: any[] = []
 
