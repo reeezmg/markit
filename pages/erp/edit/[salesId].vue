@@ -138,6 +138,18 @@ const pastBillPoints = ref(0);
 const originalRedeemedPoints = ref(0);
 const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
 const isDeleteModalOpen = ref(false)
+const isBillDeleteModalOpen = ref(false)
+const billDeleteConfirmRef = ref<any>(null)
+const billDeleteCancelRef = ref<any>(null)
+watch(isBillDeleteModalOpen, async (val) => {
+  if (val) {
+    await nextTick()
+    // Focus the Delete (Yes) button by default when the modal opens
+    billDeleteConfirmRef.value?.$el?.focus()
+  }
+})
+const focusBillDeleteConfirm = () => billDeleteConfirmRef.value?.$el?.focus()
+const focusBillDeleteCancel = () => billDeleteCancelRef.value?.$el?.focus()
 const deletingRowIdentity = ref({})
 
 const selectedAction = ref(null)
@@ -2797,7 +2809,7 @@ const couponModel = computed({
             </UDropdown>
           </div>
 
-          <UButton color="red" class="flex-1" block @click="handleDeleteBill" :disabled="bill?.isMarkit">Delete</UButton>
+          <UButton color="red" class="flex-1" block @click="isBillDeleteModalOpen = true" :disabled="bill?.isMarkit">Delete</UButton>
           <UButton class="flex-1" block :disabled="bill?.isMarkit">Barcode Search</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Sales Return</UButton>
           <UButton class="flex-1"  @click="isClientAddModelOpen = true" block :disabled="bill?.isMarkit">Add Client</UButton>
@@ -2972,6 +2984,45 @@ const couponModel = computed({
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" :disabled="bill?.isMarkit" />
         </template>
     </UDashboardModal>
+
+    <!-- ─── Bill Delete Confirm Modal ─── -->
+    <UModal v-model="isBillDeleteModalOpen" prevent-close @keydown.esc="isBillDeleteModalOpen = false">
+        <UCard>
+            <template #header>
+                <div class="flex items-center gap-2 text-red-600 dark:text-red-400">
+                    <UIcon name="i-heroicons-exclamation-triangle" class="text-xl" />
+                    <span class="font-semibold">Delete Bill</span>
+                </div>
+            </template>
+
+            <p class="text-sm text-gray-700 dark:text-gray-300">
+                Are you sure you want to delete this bill? This action cannot be undone.
+            </p>
+
+            <template #footer>
+                <div class="flex gap-2 justify-end">
+                    <UButton
+                        ref="billDeleteConfirmRef"
+                        color="red"
+                        label="Delete"
+                        @click="() => { isBillDeleteModalOpen = false; handleDeleteBill(); }"
+                        @keydown.enter.prevent="() => { isBillDeleteModalOpen = false; handleDeleteBill(); }"
+                        @keydown.right.prevent="focusBillDeleteCancel"
+                        @keydown.left.prevent="focusBillDeleteCancel"
+                    />
+                    <UButton
+                        ref="billDeleteCancelRef"
+                        color="white"
+                        label="Cancel"
+                        @click="isBillDeleteModalOpen = false"
+                        @keydown.enter.prevent="isBillDeleteModalOpen = false"
+                        @keydown.left.prevent="focusBillDeleteConfirm"
+                        @keydown.right.prevent="focusBillDeleteConfirm"
+                    />
+                </div>
+            </template>
+        </UCard>
+    </UModal>
 
 </template>
 
