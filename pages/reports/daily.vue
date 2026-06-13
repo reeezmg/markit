@@ -301,6 +301,8 @@ const printReportHandle = async () => {
       transactions: dashboard.value?.transactions || {},
 
       balances: dashboard.value?.balances || {},
+
+      creditBills: dashboard.value?.creditBills || [],
     }
 
     printReport(printData)

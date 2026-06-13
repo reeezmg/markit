@@ -513,6 +513,22 @@ export function buildReportReceiptBytes(r: any): Uint8Array {
     encoder.rule({ style: 'single' });
   }
 
+  // ── Credit Bills ─────────────────────────────────────────────────────────
+  const creditBills: any[] = r.creditBills || [];
+  if (creditBills.length > 0) {
+    sectionHeader('CREDIT BILLS', encoder);
+    encoder
+      .text(textStart('ACCOUNT', 22) + textStart('INV', 12) + textStart('AMT', 14))
+      .newline(1)
+      .rule({ style: 'single' });
+    creditBills.forEach((b: any) => {
+      encoder
+        .text(textStart(b.accountName || '', 22) + textStart(b.invoiceNumber || '', 12) + textStart(fmtAmt(b.amount || 0), 14))
+        .newline(1);
+    });
+    encoder.rule({ style: 'single' });
+  }
+
   // ── Expense Breakdown ─────────────────────────────────────────────────────
   const exp = r.expensesByPaymentMethod || {};
   const expTotal = r.totalExpenses || 0;

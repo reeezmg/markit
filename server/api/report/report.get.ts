@@ -537,6 +537,9 @@ if (!isZeroOpening) {
       /* ---------- CREDIT SALES ---------- */
       creditSalesRes,
 
+      /* ---------- CREDIT BILLS DETAIL ---------- */
+      creditBillsRes,
+
       /* ---------- EXPENSE ---------- */
       expenseRes,
 
@@ -691,7 +694,29 @@ if (!isZeroOpening) {
         [companyId, startDate, endDate, includeCleanupPrecedence]
       ),
 
+      /* =====================================================
+         CREDIT BILLS DETAIL (per account)
+      ===================================================== */
 
+      client.query(
+        `
+        SELECT
+          b.invoice_number AS "invoiceNumber",
+          ${billTotalExpr} AS amount,
+          a.name AS "accountName",
+          a.phone AS "accountPhone"
+        FROM bills b
+        LEFT JOIN accounts a ON a.id = b.account_id
+        WHERE b.company_id = $1
+          AND b.deleted = false
+          AND b.payment_method = 'Credit'
+          AND b.is_markit = false
+          AND b.created_at BETWEEN $2 AND $3
+          AND ($4 = true OR b.precedence IS NOT TRUE)
+        ORDER BY a.name ASC
+        `,
+        [companyId, startDate, endDate, includeCleanupPrecedence]
+      ),
 
       /* =====================================================
          EXPENSES
@@ -1007,6 +1032,13 @@ if (!isZeroOpening) {
       totalCreditSales: Number(
         creditRow.total_credit_sales || 0
       ),
+
+      creditBills: creditBillsRes.rows.map(r => ({
+        invoiceNumber: r.invoiceNumber,
+        accountName: r.accountName || 'Unknown',
+        accountPhone: r.accountPhone || '',
+        amount: Number(r.amount || 0),
+      })),
 
       salesByPaymentMethod: {
         Cash: Number(sales.cash_sales || 0),
