@@ -44,7 +44,7 @@ function renderExpenseRow(
   }
 }
 
-
+function textStart(text: unknown, width: number): string {
   const textStr = (text ?? ' ').toString();
   if (textStr.length >= width) return textStr;
   return textStr + ' '.repeat(width - textStr.length);
