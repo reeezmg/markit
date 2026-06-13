@@ -2083,7 +2083,7 @@ const couponModel = computed({
     </div>
      <div class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" @keydown.enter.prevent="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Return</UButton>
         </div>
     
@@ -2782,6 +2782,7 @@ const couponModel = computed({
               class="flex-1 rounded-r-none"
               block
               @click="handleEdit"
+              @keydown.enter.prevent="handleEdit"
               :disabled="bill?.isMarkit"
             >
               Save{{ selectedAction ? ' & ' + selectedAction : '' }}
@@ -2804,7 +2805,7 @@ const couponModel = computed({
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" @keydown.enter.prevent="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Return</UButton>
         </div>
         </template>
