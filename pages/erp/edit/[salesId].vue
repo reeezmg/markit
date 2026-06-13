@@ -139,8 +139,8 @@ const originalRedeemedPoints = ref(0);
 const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
 const isDeleteModalOpen = ref(false)
 const isBillDeleteModalOpen = ref(false)
-const billDeleteConfirmRef = ref<any>(null)
-const billDeleteCancelRef = ref<any>(null)
+const billDeleteConfirmRef = ref(null)
+const billDeleteCancelRef = ref(null)
 watch(isBillDeleteModalOpen, async (val) => {
   if (val) {
     await nextTick()
