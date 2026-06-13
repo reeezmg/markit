@@ -450,7 +450,7 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
 
 // ─── Column widths for report (48-char paper) ────────────────────────────────
 const REPORT_COL = { label: 28, value: 20 };
-const REPORT_EXP = { date: 7, cat: 14, note: 17, amt: 10 };
+const REPORT_EXP = { cat: 12, user: 12, note: 14, amt: 10 };
 
 function fmtAmt(val: number): string {
   return `Rs.${Number(val || 0).toFixed(2)}`;
@@ -605,8 +605,8 @@ export function buildReportReceiptBytes(r: any): Uint8Array {
     sectionHeader('EXPENSE DETAILS', encoder);
     encoder
       .text(
-        textStart('DATE', REPORT_EXP.date) +
         textStart('CATEGORY', REPORT_EXP.cat) +
+        textStart('USER', REPORT_EXP.user) +
         textStart('NOTE', REPORT_EXP.note) +
         textStart('AMT', REPORT_EXP.amt)
       )
@@ -615,8 +615,8 @@ export function buildReportReceiptBytes(r: any): Uint8Array {
     expenses.forEach((item: any) => {
       encoder
         .text(
-          textStart(moment(item.createdAt).format('DD-MM'), REPORT_EXP.date) +
           textStart(item.expensecategory?.name || '', REPORT_EXP.cat) +
+          textStart(item.userName || '', REPORT_EXP.user) +
           textStart(item.note || '', REPORT_EXP.note) +
           textStart(fmtAmt(item.totalAmount || 0), REPORT_EXP.amt)
         )
