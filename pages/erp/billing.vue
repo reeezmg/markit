@@ -688,9 +688,15 @@ function buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, 
     // invoiceNumber is assigned server-side inside the create transaction
     subtotal: Number(subtotal.value) || 0,
     discount: (() => {
-      const discStr = String(discount.value ?? '')
-      if (discStr.startsWith('+')) return -(Math.abs(parseFloat(discStr)) || 0)
-      return Number(discount.value) || 0
+      const discStr = String(discount.value ?? '').trim()
+      if (discStr.startsWith('+')) return Math.abs(parseFloat(discStr) || 0)  // surcharge: positive flat
+      return Number(discount.value) || 0  // negative = flat deduction, positive = percentage
+    })(),
+    discountType: (() => {
+      const discStr = String(discount.value ?? '').trim()
+      if (discStr.startsWith('+')) return 'surcharge'
+      if (Number(discount.value) < 0) return 'flat'
+      return 'percentage'
     })(),
     grandTotal: Number(grandTotal.value) || 0,
     returnAmt: Number(returnAmt.value) || 0,

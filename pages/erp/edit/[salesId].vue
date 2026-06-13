@@ -754,7 +754,14 @@ watch(bill, async (newBill) => {
   }
 
   /* ---------------- BASIC FIELDS ---------------- */
-  discount.value = newBill.discount
+  // Restore discount input based on discountType
+  if (newBill.discountType === 'surcharge') {
+    discount.value = `+${Math.abs(newBill.discount || 0)}`
+  } else if (newBill.discountType === 'flat') {
+    discount.value = -Math.abs(newBill.discount || 0)
+  } else {
+    discount.value = newBill.discount || 0
+  }
   selected.value = newBill.accountId
   clientId.value = newBill.client?.id || ''
   oldClientId.value = newBill.client?.id || ''
@@ -1123,9 +1130,15 @@ const handleEdit = async () => {
         id: route.params.salesId,
         subtotal: subtotal.value || 0,
         discount: (() => {
-          const discStr = String(discount.value ?? '')
-          if (discStr.startsWith('+')) return -(Math.abs(parseFloat(discStr)) || 0)
+          const discStr = String(discount.value ?? '').trim()
+          if (discStr.startsWith('+')) return Math.abs(parseFloat(discStr) || 0)
           return Number(discount.value) || 0
+        })(),
+        discountType: (() => {
+          const discStr = String(discount.value ?? '').trim()
+          if (discStr.startsWith('+')) return 'surcharge'
+          if (Number(discount.value) < 0) return 'flat'
+          return 'percentage'
         })(),
         grandTotal: grandTotal.value || 0,
         redeemedPoints: redeemedPoints.value || 0,

@@ -29,6 +29,7 @@ export default defineEventHandler(async (event) => {
         t.order_number         AS "orderNumber",
         b.subtotal,
         b.discount,
+        b.discount_type          AS "discountType",
         b.tax,
         b.grand_total          AS "grandTotal",
         b.redeemed_points      AS "redeemedPoints",
