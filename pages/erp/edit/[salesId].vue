@@ -754,8 +754,7 @@ watch(bill, async (newBill) => {
   }
 
   /* ---------------- BASIC FIELDS ---------------- */
-  // Negative stored discount = surcharge (was entered as +X); restore the + prefix display
-  discount.value = Number(newBill.discount) < 0 ? `+${Math.abs(newBill.discount)}` : newBill.discount
+  discount.value = newBill.discount
   selected.value = newBill.accountId
   clientId.value = newBill.client?.id || ''
   oldClientId.value = newBill.client?.id || ''
