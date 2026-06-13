@@ -687,7 +687,11 @@ function buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, 
   return {
     // invoiceNumber is assigned server-side inside the create transaction
     subtotal: Number(subtotal.value) || 0,
-    discount: String(discount.value ?? '').startsWith('+') ? 0 : (Number(discount.value) || 0),
+    discount: (() => {
+      const discStr = String(discount.value ?? '')
+      if (discStr.startsWith('+')) return -(Math.abs(parseFloat(discStr)) || 0)
+      return Number(discount.value) || 0
+    })(),
     grandTotal: Number(grandTotal.value) || 0,
     returnAmt: Number(returnAmt.value) || 0,
     couponValue: Number(couponValue.value) || 0,

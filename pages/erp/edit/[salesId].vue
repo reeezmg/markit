@@ -68,11 +68,13 @@ const grandTotal = computed(() => {
   const discStr = String(discount.value ?? '');
 
   if (discStr.startsWith('+')) {
-    afterDiscount = parseFloat((baseTotal + Math.abs(parseFloat(discStr))).toFixed(2));
+    const discNum = parseFloat(discStr);
+    afterDiscount = isNaN(discNum) ? baseTotal : parseFloat((baseTotal + Math.abs(discNum)).toFixed(2));
   } else if (Number(discount.value) < 0) {
     afterDiscount = parseFloat((baseTotal - Math.abs(Number(discount.value))).toFixed(2));
   } else {
-    afterDiscount = parseFloat((baseTotal - (baseTotal * Number(discount.value)) / 100).toFixed(2));
+    const pct = Number(discount.value);
+    afterDiscount = isNaN(pct) ? baseTotal : parseFloat((baseTotal - (baseTotal * pct) / 100).toFixed(2));
   }
 
   return afterDiscount - redeemedAmt.value;
@@ -752,7 +754,8 @@ watch(bill, async (newBill) => {
   }
 
   /* ---------------- BASIC FIELDS ---------------- */
-  discount.value = newBill.discount
+  // Negative stored discount = surcharge (was entered as +X); restore the + prefix display
+  discount.value = Number(newBill.discount) < 0 ? `+${Math.abs(newBill.discount)}` : newBill.discount
   selected.value = newBill.accountId
   clientId.value = newBill.client?.id || ''
   oldClientId.value = newBill.client?.id || ''
@@ -1120,7 +1123,11 @@ const handleEdit = async () => {
       billData: {
         id: route.params.salesId,
         subtotal: subtotal.value || 0,
-        discount: String(discount.value ?? '').startsWith('+') ? 0 : (Number(discount.value) || 0),
+        discount: (() => {
+          const discStr = String(discount.value ?? '')
+          if (discStr.startsWith('+')) return -(Math.abs(parseFloat(discStr)) || 0)
+          return Number(discount.value) || 0
+        })(),
         grandTotal: grandTotal.value || 0,
         redeemedPoints: redeemedPoints.value || 0,
         couponValue:Number(couponValue.value) || 0,

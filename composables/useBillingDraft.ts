@@ -93,11 +93,12 @@ export function useBillingDraft() {
     }, 0)
 
     const discStr = String(discount.value ?? '')
+    const discNum = parseFloat(discStr)
     const afterDiscount = discStr.startsWith('+')
-      ? parseFloat((baseTotal + Math.abs(parseFloat(discStr))).toFixed(2))
+      ? isNaN(discNum) ? baseTotal : parseFloat((baseTotal + Math.abs(discNum)).toFixed(2))
       : Number(discount.value) < 0
         ? parseFloat((baseTotal - Math.abs(Number(discount.value))).toFixed(2))
-        : parseFloat((baseTotal - (baseTotal * Number(discount.value)) / 100).toFixed(2))
+        : isNaN(Number(discount.value)) ? baseTotal : parseFloat((baseTotal - (baseTotal * Number(discount.value)) / 100).toFixed(2))
 
     return afterDiscount - redeemedAmt.value
   })
