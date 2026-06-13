@@ -305,7 +305,7 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
         textStart(formatDiscountCell(item.discount), COLUMN_WIDTHS.disc) +
         textStart(formatMoney(item.tvalue), COLUMN_WIDTHS.tvalue),
     );
-    encoder.newline(1);
+    encoder.newline(2);
   });
 
   encoder
