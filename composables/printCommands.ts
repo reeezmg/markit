@@ -295,8 +295,8 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
   encoder
     .text(
       '    ' +
-        textStart('QTY', COLUMN_WIDTHS.qty) +
         textStart('MRP', COLUMN_WIDTHS.mrp) +
+        textStart('QTY', COLUMN_WIDTHS.qty) +
         textStart('VALUE', COLUMN_WIDTHS.value) +
         textStart('DISC', COLUMN_WIDTHS.disc) +
         textStart('T.VALUE', COLUMN_WIDTHS.tvalue),
@@ -321,8 +321,8 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     // Second row: QTY + MRP + VALUE + DISC + T.VALUE
     encoder.text(
       '    ' +
-        textStart(item.qty || 0, COLUMN_WIDTHS.qty) +
         textStart(formatMoney(item.mrp), COLUMN_WIDTHS.mrp) +
+        textStart(item.qty || 0, COLUMN_WIDTHS.qty) +
         textStart(formatMoney(item.value), COLUMN_WIDTHS.value) +
         textStart(formatDiscountCell(item.discount), COLUMN_WIDTHS.disc) +
         textStart(formatMoney(item.tvalue), COLUMN_WIDTHS.tvalue),
@@ -335,8 +335,8 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .bold(true)
     .text(
       '    ' +
+        ' '.repeat(COLUMN_WIDTHS.mrp) +
         textStart(bill.tqty || 0, COLUMN_WIDTHS.qty) +
-        '          ' +
         textStart(formatMoney(bill.tvalue), COLUMN_WIDTHS.value) +
         textStart(formatMoney(bill.tdiscount), COLUMN_WIDTHS.disc) +
         textStart(formatMoney(bill.ttvalue), COLUMN_WIDTHS.tvalue),
