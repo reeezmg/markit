@@ -426,6 +426,34 @@ const sales = salesRes.rows[0]
 
     const expenses = expenseRes.rows[0]
 
+    const salaryPaymentsRes = await client.query(
+      `
+      SELECT
+        sp.payment_date AS date,
+        sp.amount,
+        sp.type,
+        sp.payment_mode AS "paymentMode",
+        COALESCE(cu.name, u.name, 'Staff') AS "userName",
+        sp.note
+      FROM salary_payments sp
+      LEFT JOIN company_users cu
+        ON cu.company_id = sp.company_id
+       AND cu.user_id = sp.user_id
+      LEFT JOIN users u
+        ON u.id = sp.user_id
+      WHERE sp.company_id = $1
+        AND sp.payment_date BETWEEN $2 AND $3
+      ORDER BY sp.payment_date ASC, sp.id ASC
+      `,
+      [companyId, startDate, endDate]
+    )
+
+    const salaryPayments = salaryPaymentsRes.rows.map(r => ({
+      ...r,
+      amount: Number(r.amount || 0)
+    }))
+    const salaryGiven = salaryPayments.reduce((sum, r) => sum + Number(r.amount || 0), 0)
+
 
 
     /* =====================================================
@@ -771,7 +799,8 @@ const billsRes = await client.query(
       startY: y,
       head: [['Type', 'Amount']],
       body: [
-        ['Total Expense', rs(expenses.total_expense)],
+        ['Total Expense', rs(Number(expenses.total_expense || 0) + salaryGiven)],
+        ['Salary Given', rs(salaryGiven)],
         ['Cash', rs(expenses.cash)],
         ['UPI', rs(expenses.upi)],
         ['Card', rs(expenses.card)],
@@ -803,6 +832,32 @@ const billsRes = await client.query(
         ['Bank', rs(purchase.bank)],
         ['Cheque', rs(purchase.cheque)]
       ],
+      theme: 'grid'
+    })
+
+    y = doc.lastAutoTable.finalY + 8
+
+
+
+    /* =====================================================
+       SALARY GIVEN
+    ===================================================== */
+
+    doc.text('Salary Given', MARGIN, y)
+    y += 4
+
+    autoTable(doc, {
+      startY: y,
+      head: [['Date', 'Staff', 'Mode', 'Amount', 'Note']],
+      body: salaryPayments.length
+        ? salaryPayments.map(s => [
+            new Date(s.date).toLocaleDateString(),
+            s.userName || 'Staff',
+            s.paymentMode || '-',
+            rs(s.amount),
+            s.note ?? '-'
+          ])
+        : [['-', '-', '-', '-', '-']],
       theme: 'grid'
     })
 

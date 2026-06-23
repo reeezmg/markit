@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
+import { accountLedgerBalancesForApi } from '~/server/utils/account-ledger'
 
 export default defineEventHandler(async (event) => {
 
@@ -140,468 +141,40 @@ export default defineEventHandler(async (event) => {
 let cashOpening = 0
 let bankOpening = 0
 let creditOpening = 0
+let cashBalance = 0
+let bankBalance = 0
+let creditBalance = 0
+
+const [cashLedgerResult, bankLedgerResult, creditLedgerResult] = await Promise.all([
+  accountLedgerBalancesForApi(client, {
+    companyId,
+    accountType: 'CASH',
+    accountId: null,
+    from: startDate,
+    to: endDate
+  }),
+  accountLedgerBalancesForApi(client, {
+    companyId,
+    accountType: 'PRIMARY_BANK',
+    accountId: null,
+    from: startDate,
+    to: endDate
+  }),
+  accountLedgerBalancesForApi(client, {
+    companyId,
+    accountType: 'CREDIT',
+    accountId: null,
+    from: startDate,
+    to: endDate
+  })
+])
+cashOpening = Number(cashLedgerResult.openingBalance || 0)
+bankOpening = Number(bankLedgerResult.openingBalance || 0)
+creditOpening = Number(creditLedgerResult.openingBalance || 0)
+cashBalance = Number(cashLedgerResult.closingBalance || 0)
+bankBalance = Number(bankLedgerResult.closingBalance || 0)
+creditBalance = Number(creditLedgerResult.closingBalance || 0)
 
-if (!isZeroOpening) {
-    /* =====================================================
-       PARALLEL — BEFORE PERIOD QUERIES
-    ===================================================== */
-
-    const [
-
-      /* ---------- CASH SALES ---------- */
-      cashSalesBeforeRes,
-
-      /* ---------- CASH EXPENSE ---------- */
-      cashExpensesBeforeRes,
-
-      /* ---------- CASH DISTRIBUTOR ---------- */
-      cashDistributorBeforeRes,
-
-      /* ---------- CASH MONEY ---------- */
-      cashMoneyBeforeRes,
-
-      /* ---------- CASH TRANSFER ---------- */
-      cashTransferBeforeRes,
-
-      /* ---------- BANK SALES ---------- */
-      bankSalesBeforeRes,
-
-      /* ---------- BANK EXPENSE ---------- */
-      bankExpensesBeforeRes,
-
-      /* ---------- BANK DISTRIBUTOR ---------- */
-      bankDistributorBeforeRes,
-
-      /* ---------- BANK MONEY ---------- */
-      bankMoneyBeforeRes,
-
-      /* ---------- BANK TRANSFER ---------- */
-      bankTransferBeforeRes,
-
-      /* ---------- CREDIT SALES ---------- */
-      creditSalesBeforeRes,
-
-      /* ---------- USER CREDIT ---------- */
-      userCreditBeforeRes
-
-    ] = await Promise.all([
-
-
-
-      /* =====================================================
-         CASH SALES BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        WITH split AS (
-          SELECT (elem->>'amount')::numeric AS amount
-          FROM bills b
-          JOIN LATERAL jsonb_array_elements(
-            CASE
-              WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-              THEN b.split_payments::jsonb
-              ELSE '[]'::jsonb
-            END
-          ) elem ON true
-          WHERE b.company_id = $1
-            AND b.payment_method = 'Split'
-            AND (elem->>'method') = 'Cash'
-            AND b.deleted = false
-            AND b.payment_status IN ('PAID','PENDING')
-            AND b.is_markit = false
-            AND b.created_at < $2
-            AND ($3 = true OR b.precedence IS NOT TRUE)
-        )
-
-        SELECT
-          COALESCE(SUM(
-            CASE
-              WHEN b.payment_method = 'Cash'
-              THEN ${billTotalExpr} ELSE 0 END
-          ),0)
-          +
-          COALESCE((SELECT SUM(amount) FROM split),0)
-          AS total
-
-        FROM bills b
-        WHERE b.company_id = $1
-          AND b.deleted = false
-          AND b.payment_status IN ('PAID','PENDING')
-          AND b.is_markit = false
-          AND b.created_at < $2
-          AND ($3 = true OR b.precedence IS NOT TRUE)
-        `,
-        [companyId, startDate, includeCleanupPrecedence]
-      ),
-
-
-
-      /* =====================================================
-         CASH EXPENSE BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        SELECT COALESCE(SUM(total_amount),0) AS total
-        FROM expenses
-        WHERE company_id = $1
-          AND payment_mode = 'CASH'
-          AND UPPER(status) = 'PAID'
-          AND expense_date < $2
-        `,
-        [companyId, startDate]
-      ),
-
-
-
-      /* =====================================================
-         CASH DISTRIBUTOR BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        SELECT COALESCE(SUM(amount),0) AS total
-        FROM distributor_payments
-        WHERE company_id = $1
-          AND payment_type = 'CASH'
-          AND created_at < $2
-        `,
-        [companyId, startDate]
-      ),
-
-
-
-      /* =====================================================
-         CASH MONEY BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        SELECT COALESCE(SUM(
-          CASE
-            WHEN direction = 'RECEIVED'
-            THEN amount
-            ELSE -amount
-          END
-        ),0) AS net
-        FROM money_transactions
-        WHERE company_id = $1
-          AND payment_mode = 'CASH'
-          AND status = 'PAID'
-          AND created_at < $2
-        `,
-        [companyId, startDate]
-      ),
-
-
-
-      /* =====================================================
-         CASH TRANSFER BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        SELECT
-          COALESCE(SUM(
-            CASE WHEN to_type = 'CASH'
-            THEN amount ELSE 0 END
-          ),0)
-          -
-          COALESCE(SUM(
-            CASE WHEN from_type = 'CASH'
-            THEN amount ELSE 0 END
-          ),0)
-          AS net
-        FROM account_transfers
-        WHERE company_id = $1
-          AND created_at < $2
-        `,
-        [companyId, startDate]
-      ),
-
-
-
-      /* =====================================================
-         BANK SALES BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        WITH split AS (
-          SELECT (elem->>'amount')::numeric AS amount
-          FROM bills b
-          JOIN LATERAL jsonb_array_elements(
-            CASE
-              WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-              THEN b.split_payments::jsonb
-              ELSE '[]'::jsonb
-            END
-          ) elem ON true
-          WHERE b.company_id = $1
-            AND b.payment_method = 'Split'
-            AND (elem->>'method') IN ('UPI','Card')
-            AND b.deleted = false
-            AND b.payment_status IN ('PAID','PENDING')
-            AND b.is_markit = false
-            AND b.created_at < $2
-            AND ($3 = true OR b.precedence IS NOT TRUE)
-        )
-
-        SELECT
-          COALESCE(SUM(
-            CASE
-              WHEN b.payment_method IN ('UPI','Card')
-              THEN ${billTotalExpr} ELSE 0 END
-          ),0)
-          +
-          COALESCE((SELECT SUM(amount) FROM split),0)
-          AS total
-
-        FROM bills b
-        WHERE b.company_id = $1
-          AND b.deleted = false
-          AND b.payment_status IN ('PAID','PENDING')
-          AND b.is_markit = false
-          AND b.created_at < $2
-          AND ($3 = true OR b.precedence IS NOT TRUE)
-        `,
-        [companyId, startDate, includeCleanupPrecedence]
-      ),
-
-
-
-      /* =====================================================
-         BANK EXPENSE BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        SELECT COALESCE(SUM(total_amount),0) AS total
-        FROM expenses
-        WHERE company_id = $1
-          AND payment_mode IN ('UPI','CARD','BANK','CHEQUE')
-          AND UPPER(status) = 'PAID'
-          AND expense_date < $2
-        `,
-        [companyId, startDate]
-      ),
-
-
-
-      /* =====================================================
-         BANK DISTRIBUTOR BEFORE
-         Must match the closing-balance formula which sums
-         purchase.upi + purchase.card + purchase.bank + purchase.cheque
-         from the period query — otherwise opening+period don't conserve
-         and the closing balance changes when the start date shifts.
-      ===================================================== */
-
-      client.query(
-        `
-        SELECT COALESCE(SUM(amount),0) AS total
-        FROM distributor_payments
-        WHERE company_id = $1
-          AND payment_type IN ('UPI','CARD','BANK','CHEQUE')
-          AND created_at < $2
-        `,
-        [companyId, startDate]
-      ),
-
-
-
-      /* =====================================================
-         BANK MONEY BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        SELECT COALESCE(SUM(
-          CASE
-            WHEN direction = 'RECEIVED'
-            THEN amount
-            ELSE -amount
-          END
-        ),0) AS net
-        FROM money_transactions
-        WHERE company_id = $1
-          AND payment_mode != 'CASH'
-          AND status = 'PAID'
-          AND (account_id IS NULL OR account_id = '')
-          AND created_at < $2
-        `,
-        [companyId, startDate]
-      ),
-
-
-
-      /* =====================================================
-         BANK TRANSFER BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        SELECT
-          COALESCE(SUM(
-            CASE
-              WHEN to_type != 'CASH'
-                AND (to_account_id IS NULL OR to_account_id = '')
-              THEN amount ELSE 0
-            END
-          ),0)
-          -
-          COALESCE(SUM(
-            CASE
-              WHEN from_type != 'CASH'
-                AND (from_account_id IS NULL OR from_account_id = '')
-              THEN amount ELSE 0
-            END
-          ),0)
-          AS net
-        FROM account_transfers
-        WHERE company_id = $1
-          AND created_at < $2
-        `,
-        [companyId, startDate]
-      ),
-
-
-
-      /* =====================================================
-         CREDIT SALES BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        WITH split AS (
-          SELECT (elem->>'amount')::numeric AS amount
-          FROM bills b
-          JOIN LATERAL jsonb_array_elements(
-            CASE
-              WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-              THEN b.split_payments::jsonb
-              ELSE '[]'::jsonb
-            END
-          ) elem ON true
-          WHERE b.company_id = $1
-            AND b.payment_method = 'Split'
-            AND (elem->>'method') = 'Credit'
-            AND b.deleted = false
-            AND b.payment_status IN ('PAID','PENDING')
-            AND b.is_markit = false
-            AND b.created_at < $2
-            AND ($3 = true OR b.precedence IS NOT TRUE)
-        )
-
-        SELECT
-          COALESCE(SUM(
-            CASE
-              WHEN b.payment_method = 'Credit'
-              THEN ${billTotalExpr} ELSE 0 END
-          ),0)
-          +
-          COALESCE((SELECT SUM(amount) FROM split),0)
-          AS total
-
-        FROM bills b
-        WHERE b.company_id = $1
-          AND b.deleted = false
-          AND b.payment_status IN ('PAID','PENDING')
-          AND b.is_markit = false
-          AND b.created_at < $2
-          AND ($3 = true OR b.precedence IS NOT TRUE)
-        `,
-        [companyId, startDate, includeCleanupPrecedence]
-      ),
-
-
-
-      /* =====================================================
-         USER CREDIT BEFORE
-      ===================================================== */
-
-      client.query(
-        `
-        SELECT COALESCE(SUM(
-          CASE
-            WHEN type = 'USER_CREDIT_BILL' THEN amount
-            WHEN type = 'CREDIT_BILL_PAYMENT' THEN -amount
-            ELSE 0
-          END
-        ),0) AS total
-        FROM user_ledger_entries
-        WHERE company_id = $1
-          AND source_type <> 'BILL'
-          AND type IN ('USER_CREDIT_BILL', 'CREDIT_BILL_PAYMENT')
-          AND created_at < $2
-        `,
-        [companyId, startDate]
-      ),
-    ])
-
-
-
-    /* =====================================================
-       NUMBERS
-    ===================================================== */
-
-    const cashSalesBefore =
-      Number(cashSalesBeforeRes.rows[0].total || 0)
-
-    const cashExpensesBefore =
-      Number(cashExpensesBeforeRes.rows[0].total || 0)
-
-    const cashDistributorBefore =
-      Number(cashDistributorBeforeRes.rows[0].total || 0)
-
-    const cashMoneyNetBefore =
-      Number(cashMoneyBeforeRes.rows[0].net || 0)
-
-    const cashTransferNetBefore =
-      Number(cashTransferBeforeRes.rows[0].net || 0)
-
-
-
-    const bankSalesBefore =
-      Number(bankSalesBeforeRes.rows[0].total || 0)
-
-    const bankExpensesBefore =
-      Number(bankExpensesBeforeRes.rows[0].total || 0)
-
-    const bankDistributorBefore =
-      Number(bankDistributorBeforeRes.rows[0].total || 0)
-
-    const bankMoneyNetBefore =
-      Number(bankMoneyBeforeRes.rows[0].net || 0)
-
-    const bankTransferNetBefore =
-      Number(bankTransferBeforeRes.rows[0].net || 0)
-
-    creditOpening =
-      Number(creditSalesBeforeRes.rows[0].total || 0) +
-      Number(userCreditBeforeRes.rows[0].total || 0)
-
-    /* =====================================================
-       OPENINGS
-    ===================================================== */
-
-   
-  cashOpening =
-    baseCash +
-    cashSalesBefore -
-    cashExpensesBefore -
-    cashDistributorBefore +
-    cashMoneyNetBefore +
-    cashTransferNetBefore
-
-  bankOpening =
-    baseBank +
-    bankSalesBefore -
-    bankExpensesBefore -
-    bankDistributorBefore +
-    bankMoneyNetBefore +
-    bankTransferNetBefore
-  }
 
         /* =====================================================
        PARALLEL — PERIOD QUERIES
@@ -627,6 +200,9 @@ if (!isZeroOpening) {
       /* ---------- SALARY EXPENSE ---------- */
       salaryExpenseRes,
 
+      /* ---------- SALARY GIVEN ---------- */
+      salaryPaymentsRes,
+
       /* ---------- PURCHASE ---------- */
       purchaseRes,
 
@@ -638,9 +214,6 @@ if (!isZeroOpening) {
 
       /* ---------- MONEY TRANSACTIONS ---------- */
       transactionRes,
-
-      /* ---------- USER CREDIT ---------- */
-      userCreditRes,
 
       /* ---------- TRANSFER DETAIL (per account) ---------- */
       transferDetailRes
@@ -855,6 +428,30 @@ if (!isZeroOpening) {
         [companyId, startDate, endDate]
       ),
 
+      client.query(
+        `
+        SELECT
+          sp.id,
+          sp.payment_date AS date,
+          sp.amount,
+          sp.type,
+          sp.payment_mode AS "paymentMode",
+          COALESCE(cu.name, u.name, 'Staff') AS "userName",
+          COALESCE(cu.phone, u.phone, '') AS "userPhone",
+          sp.note
+        FROM salary_payments sp
+        LEFT JOIN company_users cu
+          ON cu.company_id = sp.company_id
+         AND cu.user_id = sp.user_id
+        LEFT JOIN users u
+          ON u.id = sp.user_id
+        WHERE sp.company_id = $1
+          AND sp.payment_date BETWEEN $2 AND $3
+        ORDER BY sp.payment_date ASC, sp.id ASC
+        `,
+        [companyId, startDate, endDate]
+      ),
+
 
 
       /* =====================================================
@@ -1004,26 +601,6 @@ if (!isZeroOpening) {
 
       client.query(
         `
-        SELECT COALESCE(SUM(
-          CASE
-            WHEN type = 'USER_CREDIT_BILL' THEN amount
-            WHEN type = 'CREDIT_BILL_PAYMENT' THEN -amount
-            ELSE 0
-          END
-        ),0) AS total
-        FROM user_ledger_entries
-        WHERE company_id = $1
-          AND source_type <> 'BILL'
-          AND type IN ('USER_CREDIT_BILL', 'CREDIT_BILL_PAYMENT')
-          AND created_at BETWEEN $2 AND $3
-        `,
-        [companyId, startDate, endDate]
-      ),
-
-
-
-      client.query(
-        `
         WITH t AS (
           SELECT
             at.from_type,
@@ -1083,10 +660,10 @@ if (!isZeroOpening) {
     const creditRow = creditSalesRes.rows[0]
     const exp = expenseRes.rows[0]
     const salaryExpense = Number(salaryExpenseRes.rows[0]?.total_salary_expense || 0)
+    const salaryPayments = salaryPaymentsRes.rows
     const purchase = purchaseRes.rows[0]
     const transfers = transferRes.rows[0]
     const transactions = transactionRes.rows[0]
-    const userCredit = userCreditRes.rows[0]
     const categories = categoryRes.rows
     const brands = brandRes.rows
     const transferDetail = transferDetailRes.rows
@@ -1113,45 +690,9 @@ if (!isZeroOpening) {
       Number(transactions.bank_credit || 0) -
       Number(transactions.bank_debit || 0)
 
-    const creditBalance =
-      creditOpening +
-      Number(creditRow.total_credit_sales || 0) +
-      Number(userCredit.total || 0)
-
     /* =====================================================
        FINAL BALANCES
     ===================================================== */
-
-    const cashBalance =
-      cashOpening +
-      cashOpeningInjection +
-      Number(sales.cash_sales) -
-      (
-        Number(exp.cash || 0) +
-        Number(purchase.cash || 0)
-      ) +
-      transactionCashNet +
-      transferCashNet
-
-    const bankBalance =
-      bankOpening +
-      bankOpeningInjection +
-      (
-        Number(sales.upi_sales || 0) +
-        Number(sales.card_sales || 0)
-      ) -
-      (
-        Number(exp.upi || 0) +
-        Number(exp.card || 0) +
-        Number(exp.bank || 0) +
-        Number(exp.cheque || 0) +
-        Number(purchase.upi || 0) +
-        Number(purchase.card || 0) +
-        Number(purchase.bank || 0) +
-        Number(purchase.cheque || 0)
-      ) +
-      transactionBankNet +
-      transferBankNet
 
     const totalBalance =
       cashBalance + bankBalance + creditBalance
@@ -1194,6 +735,16 @@ if (!isZeroOpening) {
 
       totalExpenses: Number(exp.total_expense || 0) + salaryExpense,
       salaryExpense,
+      salaryPayments: salaryPayments.map(r => ({
+        id: r.id,
+        date: r.date,
+        amount: Number(r.amount || 0),
+        type: r.type || 'SALARY',
+        paymentMode: r.paymentMode || 'CASH',
+        userName: r.userName || 'Staff',
+        userPhone: r.userPhone || '',
+        note: r.note || ''
+      })),
 
       expensesByPaymentMethod: {
         Cash: Number(exp.cash || 0),

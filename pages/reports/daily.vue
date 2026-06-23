@@ -292,6 +292,8 @@ const printReportHandle = async () => {
       salesByPaymentMethod: dashboard.value?.salesByPaymentMethod || {},
 
       totalExpenses: dashboard.value?.totalExpenses || 0,
+      salaryExpense: dashboard.value?.salaryExpense || 0,
+      salaryPayments: dashboard.value?.salaryPayments || [],
       expensesByPaymentMethod: dashboard.value?.expensesByPaymentMethod || {},
 
       totalPurchaseExpense: dashboard.value?.totalPurchaseExpense || 0,
@@ -378,6 +380,10 @@ const transfersDisplay = computed(
 
 const transactions = computed(
   () => dashboard.value?.transactions || {}
+)
+
+const salaryPayments = computed(
+  () => dashboard.value?.salaryPayments || []
 )
 
 const categorySales = computed(
@@ -575,6 +581,34 @@ const revenueByCategory = computed(
 
       
           
+          <!-- ================= SALARY GIVEN ================= -->
+          <UCard>
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <h3 class="font-semibold">Salary Given</h3>
+              <div class="text-sm font-medium text-gray-600">
+                {{ formatCurrency(dashboard.salaryExpense || 0) }}
+              </div>
+            </div>
+
+            <UTable
+              :rows="salaryPayments"
+              :columns="[
+                { key:'date', label:'Date' },
+                { key:'userName', label:'Staff' },
+                { key:'paymentMode', label:'Mode' },
+                { key:'amount', label:'Amount' }
+              ]"
+            >
+              <template #date-data="{ row }">
+                {{ row.date ? format(new Date(row.date), 'dd MMM yyyy') : '-' }}
+              </template>
+
+              <template #amount-data="{ row }">
+                {{ formatCurrency(row.amount || 0) }}
+              </template>
+            </UTable>
+          </UCard>
+
            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
             
       

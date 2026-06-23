@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
         FROM company_users
         WHERE company_id = $1
           AND deleted = false
+          AND status = true
         ORDER BY name NULLS LAST, code NULLS LAST
         `,
         [companyId]

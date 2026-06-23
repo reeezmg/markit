@@ -586,7 +586,7 @@ const pageTo = computed(() =>
     Math.min(page.value * pageCount.value, pageTotal.value),
 );
 
-function toggleStatus(userId: string) {
+async function toggleStatus(userId: string) {
   if (!users.value) return
 
   const user = users.value.find(u => u.userId === userId)
@@ -606,6 +606,10 @@ function toggleStatus(userId: string) {
         status: !user.status,
       },
     })
+
+    // Keep the cached user list (used for billing/sales-edit code lookups) in sync,
+    // so a deactivated user can no longer be resolved by code.
+    await userStore.fetchUsers(companyId)
   } catch (error) {
     console.error('Error updating user status:', error)
   }

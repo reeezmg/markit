@@ -476,6 +476,91 @@ export async function deleteAccountLedgerForSource(
   await rebuildAccountLedgerForSource(client, { ...input, rows: [] })
 }
 
+export async function deleteAccountLedgerForBill(
+  client: any,
+  input: {
+    companyId: string
+    billId: string
+  },
+) {
+  await ensureAccountLedgerSchema(client)
+  const existing = await client.query(
+    `
+    SELECT company_id, account_type, account_id, entry_date
+    FROM account_ledger_entries
+    WHERE company_id = $1
+      AND source_type = 'BILL'
+      AND (
+        source_id = $2
+        OR source_id LIKE $3
+      )
+    FOR UPDATE
+    `,
+    [input.companyId, input.billId, `${input.billId}:payment-change:%`],
+  )
+
+  await client.query(
+    `
+    DELETE FROM account_ledger_entries
+    WHERE company_id = $1
+      AND source_type = 'BILL'
+      AND (
+        source_id = $2
+        OR source_id LIKE $3
+      )
+    `,
+    [input.companyId, input.billId, `${input.billId}:payment-change:%`],
+  )
+
+  const affected = new Map<string, Date | null>()
+  for (const row of existing.rows) {
+    const key = accountKey({ companyId: row.company_id, accountType: row.account_type, accountId: row.account_id })
+    const oldDate = row.entry_date ? new Date(row.entry_date) : null
+    const current = affected.get(key)
+    if (!current || (oldDate && oldDate < current)) affected.set(key, oldDate)
+  }
+
+  for (const [key, fromDate] of affected.entries()) {
+    await recalculateAccountLedgerBalances(client, parseAccountKey(key), fromDate)
+  }
+}
+
+export async function accountLedgerBalancesForApi(client: any, input: {
+  companyId: string
+  accountType: AccountLedgerAccountType
+  accountId?: string | null
+  from: Date
+  to: Date
+}) {
+  await ensureAccountLedgerSchema(client)
+  const openingRes = await client.query(
+    `
+    SELECT COALESCE(SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE -amount END), 0) AS opening
+    FROM account_ledger_entries
+    WHERE company_id = $1
+      AND account_type = $2::${enumCast.accountType}
+      AND account_id IS NOT DISTINCT FROM $3
+      AND entry_date < $4
+    `,
+    [input.companyId, input.accountType, input.accountId || null, input.from],
+  )
+  const periodRes = await client.query(
+    `
+    SELECT COALESCE(SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE -amount END), 0) AS period
+    FROM account_ledger_entries
+    WHERE company_id = $1
+      AND account_type = $2::${enumCast.accountType}
+      AND account_id IS NOT DISTINCT FROM $3
+      AND entry_date BETWEEN $4 AND $5
+    `,
+    [input.companyId, input.accountType, input.accountId || null, input.from, input.to],
+  )
+
+  const openingBalance = Number(openingRes.rows[0]?.opening || 0)
+  const closingBalance = openingBalance + Number(periodRes.rows[0]?.period || 0)
+  return { openingBalance, closingBalance }
+}
+
 export async function accountLedgerRowsForApi(client: any, input: {
   companyId: string
   accountType: AccountLedgerAccountType

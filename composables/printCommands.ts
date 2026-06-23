@@ -582,6 +582,20 @@ export function buildReportReceiptBytes(r: any): Uint8Array {
   }
 
   // ── Account Transfers ─────────────────────────────────────────────────────
+  const salaryRows: any[] = r.salaryPayments || [];
+  if (salaryRows.length > 0) {
+    sectionHeader('SALARY GIVEN', encoder);
+    encoder
+      .text(textStart('STAFF', 20) + textStart('MODE', 10) + textStart('AMT', 14))
+      .newline(1);
+    salaryRows.forEach((s: any) => {
+      encoder
+        .text(textStart(s.userName || 'Staff', 20) + textStart(s.paymentMode || '-', 10) + textStart(fmtAmt(s.amount || 0), 14))
+        .newline(1);
+    });
+    encoder.rule({ style: 'single' });
+  }
+
   const transferRows: any[] = r.transfersDisplay || [];
   const hasTransfers = transferRows.some(t => (t.debit || 0) + (t.credit || 0) > 0);
   if (hasTransfers) {

@@ -21,6 +21,7 @@ const endDate = query.endDate ? new Date(query.endDate as string) : undefined
     where: {
       companyId: session.data.companyId,
       deleted: false,
+      status: true,
     },
     select: {
       userId: true,

@@ -421,6 +421,34 @@ export default defineEventHandler(async (event) => {
 
     const expenses = expenseRes.rows[0]
 
+    const salaryPaymentsRes = await client.query(
+      `
+      SELECT
+        sp.payment_date AS date,
+        sp.amount,
+        sp.type,
+        sp.payment_mode AS "paymentMode",
+        COALESCE(cu.name, u.name, 'Staff') AS "userName",
+        sp.note
+      FROM salary_payments sp
+      LEFT JOIN company_users cu
+        ON cu.company_id = sp.company_id
+       AND cu.user_id = sp.user_id
+      LEFT JOIN users u
+        ON u.id = sp.user_id
+      WHERE sp.company_id = $1
+        AND sp.payment_date BETWEEN $2 AND $3
+      ORDER BY sp.payment_date ASC, sp.id ASC
+      `,
+      [companyId, startDate, endDate]
+    )
+
+    const salaryPayments = salaryPaymentsRes.rows.map(r => ({
+      ...r,
+      amount: Number(r.amount || 0)
+    }))
+    const salaryGiven = salaryPayments.reduce((sum, r) => sum + Number(r.amount || 0), 0)
+
 
 
     /* =====================================================
@@ -737,7 +765,8 @@ export default defineEventHandler(async (event) => {
 
     expenseSheet.addRow(['Type', 'Amount'])
 
-    expenseSheet.addRow(['Total Expense', expenses.total_expense])
+    expenseSheet.addRow(['Total Expense', Number(expenses.total_expense || 0) + salaryGiven])
+    expenseSheet.addRow(['Salary Given', salaryGiven])
     expenseSheet.addRow(['Cash', expenses.cash])
     expenseSheet.addRow(['UPI', expenses.upi])
     expenseSheet.addRow(['Card', expenses.card])
@@ -760,6 +789,32 @@ export default defineEventHandler(async (event) => {
     purchaseSheet.addRow(['Card', purchase.card])
     purchaseSheet.addRow(['Bank', purchase.bank])
     purchaseSheet.addRow(['Cheque', purchase.cheque])
+
+
+
+    /* =====================================================
+       SALARY GIVEN SHEET
+    ===================================================== */
+
+    const salarySheet = workbook.addWorksheet('Salary Given')
+
+    salarySheet.addRow([
+      'Date',
+      'Staff',
+      'Mode',
+      'Amount',
+      'Note'
+    ])
+
+    salaryPayments.forEach(s => {
+      salarySheet.addRow([
+        new Date(s.date).toLocaleDateString(),
+        s.userName || 'Staff',
+        s.paymentMode || '-',
+        s.amount,
+        s.note ?? '-'
+      ])
+    })
 
 
 

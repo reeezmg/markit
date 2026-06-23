@@ -14,6 +14,8 @@ console.log(companyId)
   const users = await prisma.companyUser.findMany({
     where: {
       companyId,
+      deleted: false,
+      status: true,
       user: {
         cleanup: false,
       },
