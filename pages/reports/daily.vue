@@ -386,6 +386,10 @@ const salaryPayments = computed(
   () => dashboard.value?.salaryPayments || []
 )
 
+const salaryExpense = computed(
+  () => dashboard.value?.salaryExpense || 0
+)
+
 const categorySales = computed(
   () => dashboard.value?.categorySales || []
 )
@@ -586,7 +590,7 @@ const revenueByCategory = computed(
             <div class="flex items-center justify-between gap-3 mb-3">
               <h3 class="font-semibold">Salary Given</h3>
               <div class="text-sm font-medium text-gray-600">
-                {{ formatCurrency(dashboard.salaryExpense || 0) }}
+                {{ formatCurrency(salaryExpense) }}
               </div>
             </div>
 
