@@ -482,26 +482,8 @@ const revenueByCategory = computed(
           <!-- ================= KPI ================= -->
           <div
             v-if="dashboard"
-            :class="dashboard.balances.opening.total ? 'grid grid-cols-1 md:grid-cols-5 gap-4' : 'grid grid-cols-1 md:grid-cols-4 gap-4'"
+            class="grid grid-cols-1 md:grid-cols-4 gap-4"
           >
-          <UCard v-if="dashboard.balances.opening.total" class="mb-4">
-              <div class="text-sm text-gray-500">Opening Balance</div>
-              <div class="text-xl font-semibold mb-3">
-                {{ formatCurrency(dashboard.balances.opening.total || 0) }}
-              </div>
-               <UTable
-              :rows="[
-                { mode:'Cash', amount:formatCurrency(dashboard.balances.opening.cash || 0) },
-                { mode:'Bank', amount:formatCurrency(dashboard.balances.opening.bank || 0) },
-                { mode:'Credit', amount:formatCurrency(dashboard.balances.opening.credit || 0) },
-              ]"
-              :columns="[
-                { key:'mode', label:'Mode' },
-                { key:'amount', label:'Amount' }
-              ]"
-            />
-            </UCard>
-
             <UCard>
               <div class="text-sm text-gray-500">Total Revenue</div>
               <div class="text-xl font-semibold mb-3">
@@ -565,7 +547,7 @@ const revenueByCategory = computed(
             </UCard>
 
             <UCard>
-              <div class="text-sm text-gray-500">Closing Balance</div>
+              <div class="text-sm text-gray-500">Selected Period Balance</div>
               <div class="text-xl font-semibold mb-3">
                 {{ formatCurrency(closingBalances.totalBalance) }}
               </div>

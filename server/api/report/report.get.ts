@@ -171,9 +171,16 @@ const [cashLedgerResult, bankLedgerResult, creditLedgerResult] = await Promise.a
 cashOpening = Number(cashLedgerResult.openingBalance || 0)
 bankOpening = Number(bankLedgerResult.openingBalance || 0)
 creditOpening = Number(creditLedgerResult.openingBalance || 0)
-cashBalance = Number(cashLedgerResult.closingBalance || 0)
-bankBalance = Number(bankLedgerResult.closingBalance || 0)
-creditBalance = Number(creditLedgerResult.closingBalance || 0)
+cashBalance =
+  Number(cashLedgerResult.closingBalance || 0) - cashOpening
+bankBalance =
+  Number(bankLedgerResult.closingBalance || 0) - bankOpening
+creditBalance =
+  Number(creditLedgerResult.closingBalance || 0) - creditOpening
+
+cashOpening = 0
+bankOpening = 0
+creditOpening = 0
 
 
         /* =====================================================

@@ -612,7 +612,9 @@ export default defineEventHandler(async (event) => {
       transactionBankNet +
       transferBankNet
 
-    const closingTotal = closingCash + closingBank
+    const selectedPeriodCash = closingCash - openingCash
+    const selectedPeriodBank = closingBank - openingBank
+    const selectedPeriodTotal = selectedPeriodCash + selectedPeriodBank
 
 
 
@@ -712,30 +714,26 @@ export default defineEventHandler(async (event) => {
 
 
 
-    /* ---------- OPENING / CLOSING ---------- */
+    /* ---------- SELECTED PERIOD BALANCE ---------- */
 
     summarySheet.addRow([
       'Type',
-      'Opening Balance',
-      'Closing Balance'
+      'Selected Period Balance'
     ])
 
     summarySheet.addRow([
       'Cash',
-      openingCash,
-      closingCash
+      selectedPeriodCash
     ])
 
     summarySheet.addRow([
       'Bank',
-      openingBank,
-      closingBank
+      selectedPeriodBank
     ])
 
     summarySheet.addRow([
       'Total',
-      openingCash + openingBank,
-      closingTotal
+      selectedPeriodTotal
     ])
 
 

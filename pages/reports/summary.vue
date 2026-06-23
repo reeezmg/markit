@@ -446,23 +446,23 @@ const chartOptions = computed(() => {
       </div>
 
       <template v-else-if="summary">
-        <div class="grid grid-cols-1 gap-4 md:grid-cols-2 2xl:grid-cols-6">
+        <div class="grid grid-cols-1 gap-2 md:grid-cols-3 lg:grid-cols-6">
           <UCard
             v-for="card in kpiCards"
             :key="card.label"
-            class="h-full border border-slate-200/80 dark:border-slate-800 shadow-sm"
-            :ui="{ body: { padding: 'p-4' } }"
+            class="h-full min-w-0 border border-slate-200/80 dark:border-slate-800 shadow-sm"
+            :ui="{ body: { padding: 'p-3' } }"
           >
-            <div class="flex h-full flex-col justify-between gap-4">
+            <div class="flex h-full min-w-0 flex-col justify-between gap-3">
               <div class="space-y-2">
-                <div class="text-[11px] uppercase tracking-[0.18em] text-slate-500 dark:text-slate-400">
+                <div class="text-[10px] uppercase tracking-[0.12em] text-slate-500 dark:text-slate-400">
                   {{ card.label }}
                 </div>
-                <div class="text-2xl font-semibold leading-none" :class="card.tone">
+                <div class="break-words text-lg font-semibold leading-tight xl:text-xl 2xl:text-2xl" :class="card.tone">
                   {{ card.value }}
                 </div>
               </div>
-              <div class="text-sm text-slate-500 dark:text-slate-400">
+              <div class="break-words text-xs leading-snug text-slate-500 dark:text-slate-400">
                 {{ card.meta }}
               </div>
             </div>

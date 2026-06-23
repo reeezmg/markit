@@ -617,7 +617,9 @@ const sales = salesRes.rows[0]
       transactionBankNet +
       transferBankNet
 
-    const closingTotal = closingCash + closingBank
+    const selectedPeriodCash = closingCash - openingCash
+    const selectedPeriodBank = closingBank - openingBank
+    const selectedPeriodTotal = selectedPeriodCash + selectedPeriodBank
 
 
 
@@ -736,24 +738,20 @@ const billsRes = await client.query(
 
 
     /* =====================================================
-       OPENING / CLOSING BALANCE
+       SELECTED PERIOD BALANCE
     ===================================================== */
 
     doc.setFontSize(13)
-    doc.text('Opening & Closing Balance', MARGIN, y)
+    doc.text('Selected Period Balance', MARGIN, y)
     y += 4
 
     autoTable(doc, {
       startY: y,
-      head: [['Type', 'Opening', 'Closing']],
+      head: [['Type', 'Amount']],
       body: [
-        ['Cash', rs(openingCash), rs(closingCash)],
-        ['Bank', rs(openingBank), rs(closingBank)],
-        [
-          'Total',
-          rs(openingCash + openingBank),
-          rs(closingTotal)
-        ]
+        ['Cash', rs(selectedPeriodCash)],
+        ['Bank', rs(selectedPeriodBank)],
+        ['Total', rs(selectedPeriodTotal)]
       ],
       theme: 'grid'
     })

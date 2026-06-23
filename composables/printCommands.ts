@@ -506,21 +506,13 @@ export function buildReportReceiptBytes(r: any): Uint8Array {
     .align('left').text(`Date: ${r.dateRange}`).newline(1)
     .rule({ style: 'single' });
 
-  // ── Opening & Closing Balance ─────────────────────────────────────────────
-  const opening = r.balances?.opening || {};
-  const hasOpening = (opening.cash || 0) + (opening.bank || 0) > 0;
+  // ── Selected Period Balance ──────────────────────────────────────────────
   const hasClosing = (r.balances?.cashBalance || 0) + (r.balances?.bankBalance || 0) > 0;
-  if (hasOpening || hasClosing) {
-    sectionHeader('BALANCE', encoder);
-    if (hasOpening) {
-      reportRow('Opening Cash', opening.cash || 0, encoder);
-      reportRow('Opening Bank', opening.bank || 0, encoder);
-    }
-    if (hasClosing) {
-      reportRow('Closing Cash', r.balances?.cashBalance || 0, encoder);
-      reportRow('Closing Bank', r.balances?.bankBalance || 0, encoder);
-      reportRow('Total Balance', r.balances?.totalBalance || 0, encoder);
-    }
+  if (hasClosing) {
+    sectionHeader('SELECTED PERIOD BALANCE', encoder);
+    reportRow('Cash', r.balances?.cashBalance || 0, encoder);
+    reportRow('Bank', r.balances?.bankBalance || 0, encoder);
+    reportRow('Total Balance', r.balances?.totalBalance || 0, encoder);
     encoder.rule({ style: 'single' });
   }
 
