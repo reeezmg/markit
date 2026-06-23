@@ -139,6 +139,7 @@ export default defineEventHandler(async (event) => {
   
 let cashOpening = 0
 let bankOpening = 0
+let creditOpening = 0
 
 if (!isZeroOpening) {
     /* =====================================================
@@ -576,7 +577,7 @@ if (!isZeroOpening) {
     const bankTransferNetBefore =
       Number(bankTransferBeforeRes.rows[0].net || 0)
 
-    const creditOpening =
+    creditOpening =
       Number(creditSalesBeforeRes.rows[0].total || 0) +
       Number(userCreditBeforeRes.rows[0].total || 0)
 
