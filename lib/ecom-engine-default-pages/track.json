@@ -1,0 +1,22 @@
+{
+  "sections": {
+    "hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "Track your order",
+        "title": "Where's my order?",
+        "lead": "Enter your order number to see live status and delivery estimate."
+      }
+    },
+    "tracker": {
+      "type": "track-form",
+      "settings": {
+        "placeholder_order": "Order number e.g. RV-10293",
+        "placeholder_email": "Email (optional)",
+        "submit_label": "Track",
+        "hint_text": "You'll find your order number in the confirmation email or SMS."
+      }
+    }
+  },
+  "order": ["hero", "tracker"]
+}

@@ -9,7 +9,6 @@ const props = defineProps<{
     entryGroups:any
   }
 }>()
-console.log(props.entries)
 const chartOptions = ref({})
 
 onMounted(() => useEChartsSetup())

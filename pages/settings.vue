@@ -24,6 +24,11 @@ const links = [
             label: 'Numbering',
             icon: 'i-heroicons-hashtag',
             to: '/settings/numbering',
+        },
+        {
+            label: 'Requests',
+            icon: 'i-heroicons-arrow-path-rounded-square',
+            to: '/settings/requests',
         }
     ],
 ];

@@ -57,6 +57,7 @@ export default defineEventHandler(async (event) => {
            brand_id = COALESCE($6, brand_id),
            category_id = COALESCE($7, category_id),
            subcategory_id = COALESCE($8, subcategory_id),
+           collection_id = COALESCE($9, collection_id),
            updated_at = now()
          WHERE id = $1 AND company_id = $2`,
         [
@@ -68,6 +69,7 @@ export default defineEventHandler(async (event) => {
           product.brandId || null,
           product.categoryId || null,
           product.subcategoryId || null,
+          product.collectionId || null,
         ],
       )
       if (!upd.rowCount) throw new Error('Product not found for this company')
@@ -84,7 +86,7 @@ export default defineEventHandler(async (event) => {
 
       // 3) upsert all variants in ONE multi-row statement
       if (variants.length) {
-        const VC = 12 // params per variant row
+        const VC = 13 // params per variant row
         const vVals: any[] = []
         const vRows = variants.map((v: any, i: number) => {
           const base = i * VC
@@ -95,25 +97,25 @@ export default defineEventHandler(async (event) => {
           vVals.push(
             v.id, v.name || '', v.code || null, v.unit || 'Nos',
             v.sprice || 0, v.pprice || 0, v.dprice || 0, v.discount || 0,
-            taxFor(v.sprice), updateImages ? images : [], companyId, productId,
+            taxFor(v.sprice), updateImages ? images : [], companyId, productId, v.weight || 0,
           )
           const p = Array.from({ length: VC }, (_, k) => `$${base + k + 1}`)
-          // id,name,code,unit,s_price,p_price,d_price,discount,status,tax,images,company_id,product_id,delivery_type
-          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6]},${p[7]},true,${p[8]},${p[9]},${p[10]},${p[11]},'trynbuy',now(),now())`
+          // id,name,code,unit,s_price,p_price,d_price,discount,status,tax,images,company_id,product_id,weight,delivery_type
+          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6]},${p[7]},true,${p[8]},${p[9]},${p[10]},${p[11]},${p[12]},'trynbuy',now(),now())`
         })
         const updImgParam = `$${variants.length * VC + 1}`
         const variantsRes = await client.query(
           `INSERT INTO variants (
              id, name, code, unit, s_price, p_price, d_price, discount, status, tax,
-             images, company_id, product_id, delivery_type, created_at, updated_at
+             images, company_id, product_id, weight, delivery_type, created_at, updated_at
            ) VALUES ${vRows.join(',')}
            ON CONFLICT (id) DO UPDATE SET
              name = EXCLUDED.name, code = EXCLUDED.code, unit = EXCLUDED.unit,
              s_price = EXCLUDED.s_price, p_price = EXCLUDED.p_price, d_price = EXCLUDED.d_price,
-             discount = EXCLUDED.discount, status = true, tax = EXCLUDED.tax,
+             discount = EXCLUDED.discount, status = true, tax = EXCLUDED.tax, weight = EXCLUDED.weight,
              images = CASE WHEN ${updImgParam}::boolean THEN EXCLUDED.images ELSE variants.images END,
              updated_at = now()
-           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, images, product_id`,
+           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, weight, images, product_id`,
           [...vVals, updateImages],
         )
         returnedVariants = variantsRes.rows
@@ -149,14 +151,16 @@ export default defineEventHandler(async (event) => {
 
       const productRes = await client.query(
         `SELECT p.id, p.updated_at, p.name, p.description, p.status,
-                p.category_id, p.subcategory_id, p.brand_id,
+                p.category_id, p.subcategory_id, p.brand_id, p.collection_id,
                 c.name AS category_name, c.target_audience AS category_target_audience,
                 b.name AS brand_name,
-                s.name AS subcategory_name
+                s.name AS subcategory_name,
+                col.name AS collection_name
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
          LEFT JOIN brands b ON b.id = p.brand_id
          LEFT JOIN subcategories s ON s.id = p.subcategory_id
+         LEFT JOIN collections col ON col.id = p.collection_id
          WHERE p.id = $1 AND p.company_id = $2`,
         [productId, companyId],
       )
@@ -201,9 +205,11 @@ export default defineEventHandler(async (event) => {
           categoryId: p.category_id,
           subcategoryId: p.subcategory_id,
           brandId: p.brand_id,
+          collectionId: p.collection_id,
           category: p.category_id ? { id: p.category_id, name: p.category_name, targetAudience: p.category_target_audience } : null,
           brand: p.brand_id ? { id: p.brand_id, name: p.brand_name } : null,
           subcategory: p.subcategory_id ? { id: p.subcategory_id, name: p.subcategory_name } : null,
+          collection: p.collection_id ? { id: p.collection_id, name: p.collection_name } : null,
           variants: resultVariants,
         },
       }

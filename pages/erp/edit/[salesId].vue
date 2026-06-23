@@ -420,6 +420,10 @@ let columnIndex = 0;
 
 
 watch(selected, (newSelected) => {
+  if (String(newSelected || '').startsWith('__')) {
+    selected.value = null
+    return
+  }
   if(newSelected && accountLoaded.value){
     paymentMethod.value = 'Credit'
   }
@@ -750,7 +754,9 @@ watch(bill, async (newBill) => {
 
   /* ---------------- BASIC FIELDS ---------------- */
   discount.value = newBill.discount
-  selected.value = newBill.accountId
+  selected.value = newBill.creditUserId
+    ? `user:${newBill.creditUserId}`
+    : (newBill.accountId ? `account:${newBill.accountId}` : null)
   clientId.value = newBill.client?.id || ''
   oldClientId.value = newBill.client?.id || ''
   clientName.value = newBill.client?.name
@@ -1110,7 +1116,8 @@ const handleEdit = async () => {
         paymentMethod: paymentMethod.value,
         paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
         splitPayments: paymentMethod.value === 'Split' ? splitPayments.value : null,
-        accountId: selected.value,
+        accountId: parseCreditParty(selected.value).kind === 'account' ? parseCreditParty(selected.value).id : null,
+        creditUserId: parseCreditParty(selected.value).kind === 'user' ? parseCreditParty(selected.value).id : null,
         clientId: clientId.value ? clientId.value : '',
         date: new Date(date.value).toISOString(),
         companyId: useAuth().session.value?.companyId
@@ -1158,6 +1165,19 @@ const handleEdit = async () => {
 
 const accounts = ref([])
 
+function parseCreditParty(value) {
+  if (!value || String(value).startsWith('__')) return { kind: null, id: null }
+  const raw = String(value)
+  if (raw.startsWith('account:')) return { kind: 'account', id: raw.slice('account:'.length) }
+  if (raw.startsWith('user:')) return { kind: 'user', id: raw.slice('user:'.length) }
+  return { kind: 'account', id: raw }
+}
+
+function formatCreditPartyOption(option) {
+  if (option?.kind === 'header') return option.name
+  return option?.name || ''
+}
+
 
 const getAccounts = async () => {
   try {
@@ -1169,7 +1189,7 @@ const getAccounts = async () => {
 
     const data = await $fetch('/api/bill/findManyAccount', {
       method: 'GET',
-      query: { companyId },
+      query: { companyId, includeUsers: true },
     })
 
     accounts.value = data ?? []
@@ -2502,7 +2522,18 @@ const couponModel = computed({
 
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
-              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit"/>
+              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit">
+                <template #option="{ option }">
+                  <div
+                    :class="option.kind === 'header'
+                      ? 'px-1 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500'
+                      : 'flex items-center justify-between gap-2'"
+                  >
+                    <span>{{ formatCreditPartyOption(option) }}</span>
+                    <UBadge v-if="option.kind === 'user' && option.code" color="gray" variant="subtle" size="xs">{{ option.code }}</UBadge>
+                  </div>
+                </template>
+              </UInputMenu>
             </div>    
           </div>
 
@@ -2717,7 +2748,18 @@ const couponModel = computed({
         <div class="">
           <label class="block text-gray-700 font-medium">Account Name</label>
           <div class="w-full flex flex-row gap-2">
-            <UInputMenu class="flex-1" v-model="selected" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit"/>
+            <UInputMenu class="flex-1" v-model="selected" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit">
+              <template #option="{ option }">
+                <div
+                  :class="option.kind === 'header'
+                    ? 'px-1 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500'
+                    : 'flex items-center justify-between gap-2'"
+                >
+                  <span>{{ formatCreditPartyOption(option) }}</span>
+                  <UBadge v-if="option.kind === 'user' && option.code" color="gray" variant="subtle" size="xs">{{ option.code }}</UBadge>
+                </div>
+              </template>
+            </UInputMenu>
             <UButton
             icon="i-heroicons-plus"
             size="sm"

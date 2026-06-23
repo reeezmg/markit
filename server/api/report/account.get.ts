@@ -1,5 +1,6 @@
 import { defineEventHandler, createError, getQuery } from 'h3'
 import { pool } from '~/server/db'
+import { ensureAccountLedgerSchema } from '~/server/utils/account-ledger'
 
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
@@ -24,6 +25,7 @@ const to = query.to
   const client = await pool.connect()
 
   try {
+    await ensureAccountLedgerSchema(client)
     /* =================================================
        OPENING BALANCES (DATE FILTERED)
     ================================================== */
@@ -178,6 +180,17 @@ const to = query.to
     const totalExpenses = Number(expenseRes.rows[0].total || 0)
     const cashExpenses = Number(expenseRes.rows[0].cash_expense || 0)
     const bankExpenses = Number(expenseRes.rows[0].bank_expense || 0)
+
+    const salaryExpenseRes = await client.query(
+      `
+      SELECT COALESCE(SUM(amount), 0) AS total
+      FROM salary_payments
+      WHERE company_id = $1
+        AND payment_date BETWEEN $2 AND $3
+      `,
+      [companyId, from, to],
+    )
+    const salaryExpense = Number(salaryExpenseRes.rows[0]?.total || 0)
 
     cash -= cashExpenses
     bank -= bankExpenses
@@ -364,7 +377,8 @@ const totalDistributorPayments =
        PROFIT & LOSS
     ================================================== */
 
-    const netProfit = totalSales - totalExpenses
+    const reportExpenses = totalExpenses + salaryExpense
+    const netProfit = totalSales - reportExpenses
 
     /* =================================================
        CHART DATA
@@ -391,9 +405,43 @@ const totalDistributorPayments =
     ]
 
     const pnlPieChart = [
-      { name: 'Expenses', value: totalExpenses },
+      { name: 'Expenses', value: reportExpenses },
       { name: 'Net Profit', value: netProfit }
     ]
+
+    const ledgerOpeningRes = await client.query(
+      `
+      SELECT account_type, COALESCE(SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE -amount END), 0) AS balance
+      FROM account_ledger_entries
+      WHERE company_id = $1
+        AND account_id IS NULL
+        AND account_type IN ('CASH', 'PRIMARY_BANK', 'INVESTMENT')
+        AND entry_date < $2
+      GROUP BY account_type
+      `,
+      [companyId, from],
+    )
+    const ledgerClosingRes = await client.query(
+      `
+      SELECT DISTINCT ON (account_type)
+        account_type,
+        balance_after
+      FROM account_ledger_entries
+      WHERE company_id = $1
+        AND account_id IS NULL
+        AND account_type IN ('CASH', 'PRIMARY_BANK', 'INVESTMENT')
+        AND entry_date <= $2
+      ORDER BY account_type, entry_date DESC, id DESC
+      `,
+      [companyId, to],
+    )
+    const openingByType = new Map(ledgerOpeningRes.rows.map((row: any) => [row.account_type, Number(row.balance || 0)]))
+    const closingByType = new Map(ledgerClosingRes.rows.map((row: any) => [row.account_type, Number(row.balance_after || 0)]))
+    const ledgerCashOpening = openingByType.get('CASH') || 0
+    const ledgerBankOpening = openingByType.get('PRIMARY_BANK') || 0
+    const ledgerCash = closingByType.get('CASH') ?? ledgerCashOpening
+    const ledgerBank = closingByType.get('PRIMARY_BANK') ?? ledgerBankOpening
+    const ledgerInvestment = closingByType.get('INVESTMENT') ?? (openingByType.get('INVESTMENT') || 0)
 
     /* =================================================
        FINAL RESPONSE
@@ -401,15 +449,15 @@ const totalDistributorPayments =
 
     return {
       balances: {
-        cash,
-        bank,
-        investment: investmentBalance,
+        cash: ledgerCash,
+        bank: ledgerBank,
+        investment: ledgerInvestment,
       },
 
 
       breakdown: {
         cash: {
-          openingBalance: cashOpening,
+          openingBalance: ledgerCashOpening,
           sales: cashSales,
           expenses: cashExpenses,
           distributorPayments: distributorCash,
@@ -417,11 +465,11 @@ const totalDistributorPayments =
           moneyGiven: cashGiven,
           transfersIn: cashTransfersIn,
           transfersOut: cashTransfersOut,
-          closingBalance: cash,
+          closingBalance: ledgerCash,
         },
 
         bank: {
-          openingBalance: bankOpening,
+          openingBalance: ledgerBankOpening,
           sales: bankSales,
           expenses: bankExpenses,
           distributorPayments: distributorBank,
@@ -429,13 +477,14 @@ const totalDistributorPayments =
           moneyGiven: bankGiven,
           transfersIn: bankTransfersIn,
           transfersOut: bankTransfersOut,
-          closingBalance: bank,
+          closingBalance: ledgerBank,
         },
       },
 
       pnl: {
         sales: totalSales,
-        expenses: totalExpenses,
+        expenses: reportExpenses,
+        salaryExpense,
         totalDistributorPayments,
         netProfit,
       },

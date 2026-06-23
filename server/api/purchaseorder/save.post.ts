@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { distributorPaymentLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
 
 // Raw-SQL atomic replacement for add.vue's handleSaveWithPO (create flow):
 // increment purchase_counter, create the PO (app-owned number = counter-1, matching
@@ -64,11 +65,25 @@ export default defineEventHandler(async (event) => {
             [crypto.randomUUID(), createdAtDate, totalAmount || 0, billNo || null, distributorId, companyId, poId],
           )
         } else {
+          const paymentId = crypto.randomUUID()
           await client.query(
             `INSERT INTO distributor_payments (id, created_at, amount, payment_type, distributor_id, company_id, purchase_order_id)
              VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [crypto.randomUUID(), createdAtDate, totalAmount || 0, paymentType, distributorId, companyId, poId],
+            [paymentId, createdAtDate, totalAmount || 0, paymentType, distributorId, companyId, poId],
           )
+          await rebuildAccountLedgerForSource(client, {
+            companyId,
+            sourceType: 'DISTRIBUTOR_PAYMENT',
+            sourceId: paymentId,
+            rows: distributorPaymentLedgerRows({
+              id: paymentId,
+              companyId,
+              amount: totalAmount || 0,
+              paymentType,
+              createdAt: createdAtDate,
+              remarks: `Purchase order ${purchaseOrderNo}`,
+            }),
+          })
         }
       }
 

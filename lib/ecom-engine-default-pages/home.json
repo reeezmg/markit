@@ -1,0 +1,59 @@
+{
+  "sections": {
+    "marquee": {
+      "type": "marquee-banner",
+      "settings": {
+        "messages": ["Free delivery over RS 200", "Genuine pro-grade formulas", "4.9★ rated by 1,000+ owners", "Coating-safe & pH balanced"],
+        "speed": "normal"
+      }
+    },
+    "hero": {
+      "type": "hero-banner",
+      "settings": {
+        "eyebrow": "Automobile Detailing & Customisation",
+        "heading": "Showroom finish,\nbuilt to last.",
+        "subtext": "Professional-grade car care, delivered to your door in Dubai.",
+        "image": "/photography/service-hero.jpg",
+        "cta_label": "Shop now",
+        "cta_url": "/shop",
+        "cta2_label": "Browse kits",
+        "cta2_url": "/shop"
+      }
+    },
+    "categories": { "type": "category-grid", "settings": { "title": "Shop by category", "view_all": true } },
+    "bestsellers": { "type": "product-grid", "settings": { "title": "Bestsellers", "section_id": "Bestsellers", "view_all_url": "/shop", "columns": 4 } },
+    "featured":    { "type": "product-grid", "settings": { "title": "Featured products", "section_id": "Featured products", "view_all_url": "/shop", "columns": 4 } },
+    "promo": {
+      "type": "promo-card",
+      "settings": { "eyebrow": "The Ceramic Pro Kit", "title": "Coat it like a pro, at home.", "subtitle": "Ceramic spray + shampoo + microfibre · save 20%", "cta_label": "Shop the kit", "cta_url": "/shop", "icon": "spray-can" }
+    },
+    "new_launches": { "type": "product-grid", "settings": { "title": "New launches", "section_id": "New launches", "view_all_url": "/shop", "columns": 4 } },
+    "features": {
+      "type": "feature-columns",
+      "settings": { "items": [
+        { "icon": "flask-conical", "title": "Precision formulated", "body": "pH balanced, coating-safe, dilution-tested." },
+        { "icon": "shield-check",  "title": "Genuine performance",  "body": "Real specs published — SiO₂ %, GSM, pH." },
+        { "icon": "truck",         "title": "Fast Dubai delivery",  "body": "Free on orders over RS 200, SMS tracking." },
+        { "icon": "badge-check",   "title": "Pro-grade results",    "body": "Detailer-tested on real customer cars." }
+      ]}
+    },
+    "reviews": {
+      "type": "review-carousel",
+      "settings": { "title": "Let customers speak for us", "items": [
+        { "name": "Rohan M.",  "stars": 5, "title": "Showroom shine at home", "body": "The ceramic spray is unreal — water just rolls off." },
+        { "name": "Aisha K.",  "stars": 5, "title": "Smells amazing",         "body": "High foam shampoo, gentle on my coating." },
+        { "name": "Vivek S.",  "stars": 5, "title": "Best microfibre set",    "body": "No swirl marks at all. The 500 GSM towels are super plush." }
+      ]}
+    },
+    "blog": {
+      "type": "blog-grid",
+      "settings": { "title": "From the garage", "cta_label": "Read blog", "cta_url": "/blogs", "posts": [
+        { "tag": "Guide",   "title": "How washing your car wrong ruins the paint", "read": "4 min read", "icon": "droplets" },
+        { "tag": "Science", "title": "What SiO₂ % actually means for protection", "read": "6 min read", "icon": "flask-conical" }
+      ]}
+    },
+    "faq":        { "type": "faq-accordion",   "settings": { "title": "Frequently asked", "use_api_faqs": true, "items": [] } },
+    "newsletter": { "type": "newsletter-form", "settings": { "title": "Subscribe for detailing tips & offers", "subtitle": "Be first to hear about new launches.", "btn_label": "Subscribe" } }
+  },
+  "order": ["marquee","hero","categories","bestsellers","featured","promo","new_launches","features","reviews","blog","faq","newsletter"]
+}

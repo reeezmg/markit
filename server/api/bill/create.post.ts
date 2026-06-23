@@ -1,6 +1,8 @@
 import { pool } from '~/server/db'
 import crypto from 'crypto'
 import { generateCouponsForBill } from '~/server/utils/generatedCoupons'
+import { creditAmountFromBill, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
+import { billLedgerRows, ensureAccountLedgerSchema, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -41,6 +43,7 @@ export default defineEventHandler(async (event) => {
   async function runTransaction(attempt = 1) {
     const client = await pool.connect()
     try {
+      await ensureAccountLedgerSchema(client)
       await client.query('BEGIN')
       let generatedCoupons: any[] = []
 
@@ -73,13 +76,13 @@ export default defineEventHandler(async (event) => {
           id, invoice_number, subtotal, discount, grand_total, return_amt,
           payment_method, redeemed_points, bill_points, created_at,
           payment_status, type, split_payments, company_id, account_id,
-          client_id, user_id, updated_at, coupon_value
+          credit_user_id, client_id, user_id, updated_at, coupon_value
         )
         VALUES (
           $1, $2, $3, $4, $5, $6,
           $7, $8, $9, $10,
           $11, $12, $13, $14, $15,
-          $16, $17, now(), $18
+          $16, $17, $18, now(), $19
         )
         RETURNING invoice_number
       `
@@ -100,13 +103,46 @@ export default defineEventHandler(async (event) => {
         payload.splitPayments ? JSON.stringify(payload.splitPayments) : null,
         billCompanyId,
         payload.account?.connect?.id || null,
+        payload.creditUserId || null,
         resolvedClientId,
         payload.companyUser?.connect?.companyId_userId?.userId || null,
         payload.couponValue
       ])
       const invoiceNumber = billInsertRes.rows[0]?.invoice_number ?? null
 
+      if (payload.creditUserId) {
+        await upsertUserLedgerEntry(client, {
+          companyId: billCompanyId,
+          userId: payload.creditUserId,
+          type: 'USER_CREDIT_BILL',
+          direction: 'DEBIT',
+          sourceType: 'BILL',
+          sourceId: billId,
+          amount: creditAmountFromBill(payload),
+          note: `Bill credit${invoiceNumber ? ` #${invoiceNumber}` : ''}`,
+          createdAt: new Date(payload.createdAt),
+        })
+      }
+
       // 2️⃣ Insert Entries — single multi-row INSERT (one round-trip)
+      await rebuildAccountLedgerForSource(client, {
+        companyId: billCompanyId,
+        sourceType: 'BILL',
+        sourceId: billId,
+        rows: billLedgerRows({
+          id: billId,
+          companyId: billCompanyId,
+          paymentMethod: payload.paymentMethod || 'Cash',
+          paymentStatus: payload.paymentStatus || 'PAID',
+          splitPayments: payload.splitPayments,
+          grandTotal: payload.grandTotal || 0,
+          createdAt: payload.createdAt,
+          deleted: false,
+          isMarkit: false,
+          invoiceNumber,
+        }),
+      })
+
       if (payload.entries?.create?.length) {
         const ENTRY_COLS = 17
         const entryValues: any[] = []

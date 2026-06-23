@@ -1,6 +1,15 @@
 import { GoogleGenAI } from '@google/genai'
 import { pool } from '~/server/db'
 import crypto from 'crypto'
+import {
+  deleteAccountLedgerForSource,
+  distributorPaymentLedgerRows,
+  expenseLedgerRows,
+  investmentLedgerRows,
+  moneyTransactionLedgerRows,
+  rebuildAccountLedgerForSource,
+  transferLedgerRows,
+} from '~/server/utils/account-ledger'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -224,6 +233,12 @@ export async function executeOperation(
          VALUES ($1, $2, $3, 'BANK', 'Paid', $4, $5, $6, $7, now(), now())`,
         [operationId, txDate, note, amount, categoryId, companyId, meta.userId || null]
       )
+      await rebuildAccountLedgerForSource(pool, {
+        companyId,
+        sourceType: 'EXPENSE',
+        sourceId: operationId,
+        rows: expenseLedgerRows({ id: operationId, companyId, totalAmount: amount, paymentMode: 'BANK', status: 'Paid', expenseDate: txDate, note }),
+      })
       return { operationId, insertedData: expenseData }
     }
 
@@ -238,6 +253,12 @@ export async function executeOperation(
          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
         [operationId, companyId, meta.fromType, meta.toType, fromAccountId, toAccountId, amount, transferNote, txDate]
       )
+      await rebuildAccountLedgerForSource(pool, {
+        companyId,
+        sourceType: 'ACCOUNT_TRANSFER',
+        sourceId: operationId,
+        rows: transferLedgerRows({ id: operationId, companyId, fromType: meta.fromType, toType: meta.toType, fromAccountId, toAccountId, amount, note: transferNote, createdAt: txDate }),
+      })
       return { operationId, insertedData: transferData }
     }
 
@@ -251,6 +272,12 @@ export async function executeOperation(
          VALUES ($1, $2, $3, $4, 'PAID', $5, 'BANK', $6, $7, $8, now())`,
         [operationId, companyId, meta.partyType || 'OTHER', meta.direction, amount, accountId, txNote, txDate]
       )
+      await rebuildAccountLedgerForSource(pool, {
+        companyId,
+        sourceType: 'MONEY_TRANSACTION',
+        sourceId: operationId,
+        rows: moneyTransactionLedgerRows({ id: operationId, companyId, amount, paymentMode: 'BANK', accountId, direction: meta.direction, status: 'PAID', createdAt: txDate, note: txNote }),
+      })
       return { operationId, insertedData: txData }
     }
 
@@ -288,6 +315,12 @@ export async function executeOperation(
          VALUES ($1, $2, $3, $4, 'BANK', $5, $6, $7, $8)`,
         [operationId, meta.distributorId, companyId, amount, dpRemarks, meta.billNo || null, purchaseOrderId, txDate]
       )
+      await rebuildAccountLedgerForSource(pool, {
+        companyId,
+        sourceType: 'DISTRIBUTOR_PAYMENT',
+        sourceId: operationId,
+        rows: distributorPaymentLedgerRows({ id: operationId, companyId, amount, paymentType: 'BANK', createdAt: txDate, remarks: dpRemarks }),
+      })
       return { operationId, insertedData: dpData }
     }
 
@@ -310,6 +343,12 @@ export async function executeOperation(
          VALUES ($1, $2, $3, $4, $5, 'BANK', 'COMPLETED', $6, $7, now())`,
         [operationId, companyId, userId, meta.direction || 'IN', amount, invNote, txDate]
       )
+      await rebuildAccountLedgerForSource(pool, {
+        companyId,
+        sourceType: 'INVESTMENT',
+        sourceId: operationId,
+        rows: investmentLedgerRows({ id: operationId, companyId, amount, direction: meta.direction || 'IN', status: 'COMPLETED', createdAt: txDate, note: invNote }),
+      })
       return { operationId, insertedData: invData }
     }
 
@@ -336,6 +375,17 @@ export async function deleteExecutedRecord(operation: string, executionResult: a
   }
   const table = tableMap[operation]
   if (table) {
+    const companyId = executionResult?.insertedData?.company_id
+    const sourceTypeMap: Record<string, any> = {
+      EXPENSE: 'EXPENSE',
+      TRANSFER: 'ACCOUNT_TRANSFER',
+      TRANSACTION: 'MONEY_TRANSACTION',
+      DISTRIBUTOR_PAYMENT: 'DISTRIBUTOR_PAYMENT',
+      INVESTMENT: 'INVESTMENT',
+    }
+    if (companyId && sourceTypeMap[operation]) {
+      await deleteAccountLedgerForSource(pool, { companyId, sourceType: sourceTypeMap[operation], sourceId: opId })
+    }
     await pool.query(`DELETE FROM ${table} WHERE id = $1`, [opId])
   }
 }

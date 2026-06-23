@@ -5,23 +5,24 @@ import { BillingAddClient } from '#components';
 
 import {
     useFindManyClient,
-    useUpdateClient,
-    useUpdateManyClient,
+    useUpdateCompanyClient,
+    useUpdateManyCompanyClient,
     useUpdatePipeline,
     useUpdateBill,
     useCountClient
 } from '~/lib/hooks';
 
 
-const UpdateClient = useUpdateClient({ optimisticUpdate: true });
+const UpdateCompanyClient = useUpdateCompanyClient({ optimisticUpdate: true });
 const UpdatePipeline = useUpdatePipeline({ optimisticUpdate: true });
-const UpdateManyClient = useUpdateManyClient({ optimisticUpdate: true });
+const UpdateManyCompanyClient = useUpdateManyCompanyClient({ optimisticUpdate: true });
 const UpdateBill = useUpdateBill({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
 const isClientAddModelOpen = ref(false);
 const phoneNo = ref('');
+const notes = ref<Record<string, string>>({});
 
 // Columns
 const columns = [
@@ -43,12 +44,12 @@ const columns = [
     {
         key: 'points',
         label: 'Points',
-        sortable: true,
+        sortable: false,
     },
     {
         key: 'status',
         label: 'Status',
-        sortable: true,
+        sortable: false,
     },
     {
         key: 'actions',
@@ -182,7 +183,7 @@ const pipelineStatus = (row) => [
         {
             label: 'new',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.pipelineStatus,'new',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'new',row.id),
         },
     ],
     
@@ -190,7 +191,7 @@ const pipelineStatus = (row) => [
         {
             label: 'prospect',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.pipelineStatus,'prospect',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'prospect',row.id),
         },
     ],
     
@@ -198,7 +199,7 @@ const pipelineStatus = (row) => [
         {
             label: 'viewing',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.pipelineStatus,'viewing',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'viewing',row.id),
         },
     ],
     
@@ -206,7 +207,7 @@ const pipelineStatus = (row) => [
         {
             label: 'reject',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.pipelineStatus,'reject',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'reject',row.id),
         },
     ],
     
@@ -214,7 +215,7 @@ const pipelineStatus = (row) => [
         {
             label: 'close',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.pipelineStatus,'close',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'close',row.id),
         },
     ],
     
@@ -234,30 +235,39 @@ const deleteBill = async (id:string) => {
 
 
 
-const changePipeline = async(pipelineId:string | undefined,fromPipeline:string,toPipeline:string,clientId:string) => {
-    const res = await UpdatePipeline.mutateAsync({
-      where: { id: pipelineId },
-      data: {
-        ['prospectClients']: {
-          disconnect: { id: clientId },
-        },
-      },
-    });
+const changePipeline = async(pipelineId:string | undefined,fromPipeline:string | undefined,toPipeline:string,clientId:string) => {
+    const companyId = useAuth().session.value?.companyId;
+    if (!companyId) return;
 
-    // Add the client to the specified category in the toPipeline
-    if(res){
-        await UpdatePipeline.mutateAsync({
-      where: { id: pipelineId },
-      data: {
-        [`${toPipeline}Clients`]: {
-          connect: { id: clientId },
+    if (pipelineId && fromPipeline) {
+      const res = await UpdatePipeline.mutateAsync({
+        where: { id: pipelineId },
+        data: {
+          [`${fromPipeline}Clients`]: {
+            disconnect: { id: clientId },
+          },
         },
-      },
-    });
+      });
+
+      if(res){
+        await UpdatePipeline.mutateAsync({
+          where: { id: pipelineId },
+          data: {
+            [`${toPipeline}Clients`]: {
+              connect: { id: clientId },
+            },
+          },
+        });
+      }
     }
 
-    await UpdateClient.mutateAsync({
-      where: { id: clientId },
+    await UpdateCompanyClient.mutateAsync({
+      where: {
+        companyId_clientId: {
+          companyId,
+          clientId,
+        },
+      },
       data: {
         pipelineStatus:toPipeline
       },
@@ -313,7 +323,12 @@ const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
     selectedStatus.value.length > 0
       ? {
           OR: selectedStatus.value.map(item => ({
-            status: item.value,
+            companies: {
+              some: {
+                companyId,
+                status: item.value,
+              },
+            },
           })),
         }
       : {}
@@ -360,7 +375,7 @@ const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
     },
 
     orderBy: {
-      [sort.value.column]: sort.value.direction,
+      [sort.value.column === 'status' || sort.value.column === 'points' ? 'name' : sort.value.column]: sort.value.direction,
     },
 
     skip: (page.value - 1) * Number(pageCount.value),
@@ -375,6 +390,8 @@ const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
         select: {
           clientNumber: true,
           points: true,
+          status: true,
+          pipelineStatus: true,
         },
       },
 
@@ -410,9 +427,15 @@ const handleClientAdded = (id,name) => {
 
 
 async function multiToggle(ids, status: boolean) {
+    const companyId = useAuth().session.value?.companyId;
+    if (!companyId) return;
+
     try {
-        await UpdateManyClient.mutateAsync({
-            where: { id: { in: ids } },
+        await UpdateManyCompanyClient.mutateAsync({
+            where: {
+                companyId,
+                clientId: { in: ids },
+            },
             data: { status: status },
         });
     } catch (error) {
@@ -421,15 +444,26 @@ async function multiToggle(ids, status: boolean) {
 }
 
 async function toggleStatus(id: string) {
+    const companyId = useAuth().session.value?.companyId;
+    if (!companyId) return;
+
     if (clients.value) {
         const clientToUpdate = clients.value.find((item) => item.id === id);
         if (!clientToUpdate) return;
 
-        const updatedStatus = !clientToUpdate.status;
+        const companyClient = clientToUpdate.companies?.[0];
+        if (!companyClient) return;
+
+        const updatedStatus = !companyClient.status;
 
         try {
-            await UpdateClient.mutateAsync({
-                where: { id },
+            await UpdateCompanyClient.mutateAsync({
+                where: {
+                    companyId_clientId: {
+                        companyId,
+                        clientId: id,
+                    },
+                },
                 data: { status: updatedStatus },
             });
         } catch (error) {
@@ -634,23 +668,23 @@ const downloadClientsAsVCF = () => {
 
                 <template #status-data="{ row }">
                     <Switch
-                        v-model="row.status"
+                        :model-value="row.companies?.[0]?.status"
                         @click="toggleStatus(row.id)"
                         :class="[
-                            row.status ? 'bg-orange-400' : 'bg-gray-200',
+                            row.companies?.[0]?.status ? 'bg-orange-400' : 'bg-gray-200',
                             'relative inline-flex h-6 w-11 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-2 focus:ring-orange-400 focus:ring-offset-2',
                         ]"
                     >
                         <span class="sr-only">Use setting</span>
                         <span
                             :class="[
-                                row.status ? 'translate-x-5' : 'translate-x-0',
+                                row.companies?.[0]?.status ? 'translate-x-5' : 'translate-x-0',
                                 'pointer-events-none relative inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out',
                             ]"
                         >
                             <span
                                 :class="[
-                                    row.status
+                                    row.companies?.[0]?.status
                                         ? 'opacity-0 duration-100 ease-out'
                                         : 'opacity-100 duration-200 ease-in',
                                     'absolute inset-0 flex h-full w-full items-center justify-center transition-opacity',
@@ -673,7 +707,7 @@ const downloadClientsAsVCF = () => {
                             </span>
                             <span
                                 :class="[
-                                    row.status
+                                    row.companies?.[0]?.status
                                         ? 'opacity-100 duration-200 ease-in'
                                         : 'opacity-0 duration-100 ease-out',
                                     'absolute inset-0 flex h-full w-full items-center justify-center transition-opacity',

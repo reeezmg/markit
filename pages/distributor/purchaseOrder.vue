@@ -19,9 +19,11 @@ const deletingRowIdentinty = ref<any>(null)
 
 const isAdd = ref(false)
 const isOpenPay = ref(false)
+const isDetailsOpen = ref(false)
 const isSaving = ref(false)
 
 const selectedRow = ref<any>(null)
+const selectedDetailsRow = ref<any>(null)
 
 // -------------------------------------
 // FORM STATE
@@ -44,6 +46,18 @@ const distributorId = computed(
   () => selectedRow.value?.distributorId
 )
 
+const companyName = computed(
+  () => useAuth().session.value?.companyName || 'Purchase Order'
+)
+
+const companyAddress = computed(
+  () => useAuth().session.value?.address || {}
+)
+
+const companyGstin = computed(
+  () => useAuth().session.value?.gstin || ''
+)
+
 // -------------------------------------
 // HELPERS
 // -------------------------------------
@@ -63,6 +77,32 @@ const showToast = (
 ) => {
   toast.add({ title, color, description })
 }
+
+const formatCurrency = (amount: any) =>
+  new Intl.NumberFormat('en-IN', {
+    style: 'currency',
+    currency: 'INR',
+  }).format(Number(amount || 0))
+
+const formatDate = (date: any) =>
+  date
+    ? new Date(date).toLocaleDateString('en-GB', {
+        day: '2-digit',
+        month: '2-digit',
+        year: 'numeric',
+      })
+    : '-'
+
+const formatAddress = (address: any) =>
+  [
+    address?.street,
+    address?.locality,
+    address?.city,
+    address?.state,
+    address?.pincode,
+  ]
+    .filter(Boolean)
+    .join(', ')
 
 // -------------------------------------
 // MUTATIONS
@@ -109,10 +149,30 @@ const queryArgs = computed(() => ({
     paymentType: true,
     totalAmount: true,
     purchaseOrderNo: true,
+    billNo: true,
+    subTotalAmount: true,
+    discount: true,
+    tax: true,
+    adjustment: true,
 
     distributorCompany: {
       select: {
         distributorId: true,
+        distributor: {
+          select: {
+            name: true,
+            gstin: true,
+            address: {
+              select: {
+                street: true,
+                locality: true,
+                city: true,
+                state: true,
+                pincode: true,
+              },
+            },
+          },
+        },
       },
     },
 
@@ -129,10 +189,25 @@ const queryArgs = computed(() => ({
 
     products: {
       select: {
+        id: true,
+        name: true,
+        category: { select: { name: true } },
+        brand: { select: { name: true } },
         variants: {
           select: {
+            id: true,
+            name: true,
+            code: true,
+            unit: true,
+            pprice: true,
+            sprice: true,
             items: {
-              select: { initialQty: true },
+              select: {
+                id: true,
+                size: true,
+                barcode: true,
+                initialQty: true,
+              },
             },
           },
         },
@@ -192,6 +267,53 @@ const getDueAmount = (po: any) => {
   return (po?.totalAmount ?? 0) - paid
 }
 
+const getPaidAmount = (po: any) =>
+  asArray(po?.distributorPayment).reduce(
+    (sum: number, p: any) => sum + Number(p.amount || 0),
+    0
+  )
+
+const purchaseOrderLineRows = (po: any) => {
+  const lines: any[] = []
+
+  asArray(po?.products).forEach((product: any) => {
+    asArray(product?.variants).forEach((variant: any) => {
+      asArray(variant?.items).forEach((item: any) => {
+        const qty = Number(item?.initialQty || 0)
+        const rate = Number(variant?.pprice || 0)
+
+        lines.push({
+          id: item?.id || `${product?.id}-${variant?.id}-${item?.size || lines.length}`,
+          productName: product?.name || '-',
+          categoryName: product?.category?.name || '-',
+          brandName: product?.brand?.name || '-',
+          variantName: variant?.name || '-',
+          size: item?.size || '-',
+          barcode: item?.barcode || '-',
+          qty,
+          unit: variant?.unit || 'Nos',
+          rate,
+          amount: qty * rate,
+        })
+      })
+    })
+  })
+
+  return lines
+}
+
+const detailsLines = computed(() =>
+  purchaseOrderLineRows(selectedDetailsRow.value)
+)
+
+const detailsQty = computed(() =>
+  detailsLines.value.reduce((sum: number, line: any) => sum + Number(line.qty || 0), 0)
+)
+
+const detailsItemsTotal = computed(() =>
+  detailsLines.value.reduce((sum: number, line: any) => sum + Number(line.amount || 0), 0)
+)
+
 // -------------------------------------
 // FINAL ROWS
 // -------------------------------------
@@ -201,12 +323,9 @@ const rows = computed(() =>
     qty: getPurchaseOrderQty(po),
     due: getDueAmount(po),
     distributorId: po.distributorCompany?.distributorId,
+    distributor: po.distributorCompany?.distributor,
   })) ?? []
 )
-
-watch(rows, val => {
- console.log('Purchase Orders Rows:', val)
-})
 
 // -------------------------------------
 // ACTION HANDLERS
@@ -232,6 +351,21 @@ const openPayModal = (row: any) => {
   selectedRow.value = row
   resetForm()
   isOpenPay.value = true
+}
+
+const openDetailsModal = (row: any) => {
+  selectedDetailsRow.value = row
+  isDetailsOpen.value = true
+}
+
+const printPurchaseOrder = async (row?: any) => {
+  if (row) {
+    selectedDetailsRow.value = row
+    isDetailsOpen.value = true
+  }
+
+  await nextTick()
+  window.print()
 }
 
 // -------------------------------------
@@ -341,6 +475,16 @@ const handleAdd = async () => {
 const action = (row: any) => {
   const items: any[] = [
     [
+      {
+        label: 'Details',
+        icon: 'i-heroicons-document-text-20-solid',
+        click: () => openDetailsModal(row),
+      },
+      {
+        label: 'Print',
+        icon: 'i-heroicons-printer-20-solid',
+        click: () => printPurchaseOrder(row),
+      },
       {
         label: 'Edit',
         icon: 'i-heroicons-pencil-square-20-solid',
@@ -561,6 +705,228 @@ const action = (row: any) => {
       </template>
     </UCard>
 
+    <!-- DETAILS MODAL -->
+    <UModal
+      v-model="isDetailsOpen"
+      :ui="{ width: 'sm:max-w-5xl' }"
+    >
+      <UCard
+        :ui="{
+          header: { padding: 'px-5 py-4' },
+          body: { padding: 'p-0' },
+          footer: { padding: 'px-5 py-4' },
+        }"
+      >
+        <template #header>
+          <div class="flex items-start justify-between gap-4">
+            <div>
+              <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                Purchase Order
+              </p>
+              <h2 class="mt-1 text-xl font-bold text-gray-900 dark:text-white">
+                PO #{{ selectedDetailsRow?.purchaseOrderNo || '-' }}
+              </h2>
+              <p v-if="selectedDetailsRow?.billNo" class="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                Supplier Bill: {{ selectedDetailsRow.billNo }}
+              </p>
+            </div>
+
+            <UButton
+              color="gray"
+              variant="ghost"
+              icon="i-heroicons-x-mark-20-solid"
+              class="po-no-print"
+              @click="isDetailsOpen = false"
+            />
+          </div>
+        </template>
+
+        <div
+          v-if="selectedDetailsRow"
+          class="po-print-area bg-white text-gray-900 dark:bg-gray-950 dark:text-gray-100"
+        >
+          <div class="border-b border-gray-200 p-5 text-center dark:border-gray-800">
+            <h1 class="text-2xl font-bold uppercase tracking-wide">
+              {{ companyName }}
+            </h1>
+            <p class="mt-1 text-sm text-gray-600 dark:text-gray-300">
+              {{ formatAddress(companyAddress) || '-' }}
+            </p>
+            <p v-if="companyGstin" class="mt-1 text-sm font-medium text-gray-700 dark:text-gray-200">
+              GSTIN: {{ companyGstin }}
+            </p>
+            <p class="mt-3 text-sm font-semibold uppercase tracking-wide">
+              Purchase Order
+            </p>
+          </div>
+
+          <div class="grid gap-4 border-b border-gray-200 p-5 dark:border-gray-800 md:grid-cols-3">
+            <div class="space-y-1">
+              <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">From</p>
+              <p class="font-semibold">{{ companyName }}</p>
+              <p class="text-sm text-gray-600 dark:text-gray-300">
+                {{ formatAddress(companyAddress) || '-' }}
+              </p>
+              <p v-if="companyGstin" class="text-sm text-gray-600 dark:text-gray-300">
+                GSTIN: {{ companyGstin }}
+              </p>
+            </div>
+
+            <div class="space-y-1">
+              <p class="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400">Supplier</p>
+              <p class="font-semibold">{{ selectedDetailsRow.distributor?.name || '-' }}</p>
+              <p class="text-sm text-gray-600 dark:text-gray-300">
+                {{ formatAddress(selectedDetailsRow.distributor?.address) || '-' }}
+              </p>
+              <p v-if="selectedDetailsRow.distributor?.gstin" class="text-sm text-gray-600 dark:text-gray-300">
+                GSTIN: {{ selectedDetailsRow.distributor.gstin }}
+              </p>
+            </div>
+
+            <div class="space-y-2 rounded-md border border-gray-200 p-3 text-sm dark:border-gray-800">
+              <div class="flex justify-between gap-3">
+                <span class="text-gray-500 dark:text-gray-400">Date</span>
+                <span class="font-medium">{{ formatDate(selectedDetailsRow.createdAt) }}</span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span class="text-gray-500 dark:text-gray-400">Payment</span>
+                <span class="font-medium">{{ selectedDetailsRow.paymentType || '-' }}</span>
+              </div>
+              <div class="flex justify-between gap-3">
+                <span class="text-gray-500 dark:text-gray-400">Qty</span>
+                <span class="font-medium">{{ detailsQty }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="overflow-x-auto p-5">
+            <table class="w-full min-w-[760px] text-sm">
+              <thead>
+                <tr class="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
+                  <th class="px-3 py-2">Item</th>
+                  <th class="px-3 py-2">Variant</th>
+                  <th class="px-3 py-2">Size</th>
+                  <th class="px-3 py-2 text-right">Qty</th>
+                  <th class="px-3 py-2 text-right">Rate</th>
+                  <th class="px-3 py-2 text-right">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="line in detailsLines"
+                  :key="line.id"
+                  class="border-b border-gray-100 dark:border-gray-800"
+                >
+                  <td class="px-3 py-3 align-top">
+                    <div class="font-medium">{{ line.productName }}</div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ line.categoryName }} / {{ line.brandName }}
+                    </div>
+                    <div class="text-xs text-gray-500 dark:text-gray-400">
+                      {{ line.barcode }}
+                    </div>
+                  </td>
+                  <td class="px-3 py-3 align-top">{{ line.variantName }}</td>
+                  <td class="px-3 py-3 align-top">{{ line.size }}</td>
+                  <td class="px-3 py-3 text-right align-top">{{ line.qty }} {{ line.unit }}</td>
+                  <td class="px-3 py-3 text-right align-top">{{ formatCurrency(line.rate) }}</td>
+                  <td class="px-3 py-3 text-right align-top font-medium">{{ formatCurrency(line.amount) }}</td>
+                </tr>
+                <tr v-if="!detailsLines.length">
+                  <td colspan="6" class="px-3 py-8 text-center text-gray-500 dark:text-gray-400">
+                    No items found for this purchase order.
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="grid gap-5 border-t border-gray-200 p-5 dark:border-gray-800 md:grid-cols-2">
+            <div>
+              <h3 class="text-sm font-semibold">Payments</h3>
+              <div v-if="selectedDetailsRow.distributorPayment?.length" class="mt-3 overflow-hidden rounded-md border border-gray-200 dark:border-gray-800">
+                <table class="w-full text-sm">
+                  <thead class="bg-gray-50 text-xs uppercase text-gray-500 dark:bg-gray-900 dark:text-gray-400">
+                    <tr>
+                      <th class="px-3 py-2 text-left">Date</th>
+                      <th class="px-3 py-2 text-left">Type</th>
+                      <th class="px-3 py-2 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr
+                      v-for="payment in selectedDetailsRow.distributorPayment"
+                      :key="payment.id"
+                      class="border-t border-gray-100 dark:border-gray-800"
+                    >
+                      <td class="px-3 py-2">{{ formatDate(payment.createdAt) }}</td>
+                      <td class="px-3 py-2">{{ payment.paymentType || '-' }}</td>
+                      <td class="px-3 py-2 text-right font-medium">{{ formatCurrency(payment.amount) }}</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+              <p v-else class="mt-3 text-sm text-gray-500 dark:text-gray-400">
+                No payments recorded.
+              </p>
+            </div>
+
+            <div class="ml-auto w-full max-w-sm space-y-2 text-sm">
+              <div class="flex justify-between">
+                <span class="text-gray-500 dark:text-gray-400">Items Total</span>
+                <span>{{ formatCurrency(detailsItemsTotal) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500 dark:text-gray-400">Subtotal</span>
+                <span>{{ formatCurrency(selectedDetailsRow.subTotalAmount || detailsItemsTotal) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500 dark:text-gray-400">Discount</span>
+                <span>{{ formatCurrency(selectedDetailsRow.discount) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500 dark:text-gray-400">Tax</span>
+                <span>{{ formatCurrency(selectedDetailsRow.tax) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500 dark:text-gray-400">Adjustment</span>
+                <span>{{ formatCurrency(selectedDetailsRow.adjustment) }}</span>
+              </div>
+              <div class="flex justify-between border-t border-gray-200 pt-2 text-base font-semibold dark:border-gray-800">
+                <span>Total</span>
+                <span>{{ formatCurrency(selectedDetailsRow.totalAmount) }}</span>
+              </div>
+              <div class="flex justify-between">
+                <span class="text-gray-500 dark:text-gray-400">Paid</span>
+                <span>{{ formatCurrency(getPaidAmount(selectedDetailsRow)) }}</span>
+              </div>
+              <div class="flex justify-between text-red-600 dark:text-red-400">
+                <span>Due</span>
+                <span>{{ formatCurrency(selectedDetailsRow.due || 0) }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="po-no-print flex justify-end gap-2">
+            <UButton
+              color="gray"
+              variant="soft"
+              label="Close"
+              @click="isDetailsOpen = false"
+            />
+            <UButton
+              color="primary"
+              icon="i-heroicons-printer-20-solid"
+              label="Print"
+              @click="printPurchaseOrder()"
+            />
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
     <!-- PAY MODAL -->
     <UModal v-model="isOpenPay">
       <UCard>
@@ -624,3 +990,38 @@ const action = (row: any) => {
     </UModal>
   </UDashboardPanelContent>
 </template>
+
+<style>
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+
+  .po-print-area,
+  .po-print-area * {
+    visibility: visible !important;
+  }
+
+  .po-print-area {
+    position: absolute !important;
+    inset: 0 auto auto 0 !important;
+    width: 100% !important;
+    background: #ffffff !important;
+    color: #111827 !important;
+  }
+
+  .po-no-print,
+  .po-no-print * {
+    display: none !important;
+  }
+
+  .po-print-area table {
+    break-inside: auto;
+  }
+
+  .po-print-area tr {
+    break-inside: avoid;
+    break-after: auto;
+  }
+}
+</style>

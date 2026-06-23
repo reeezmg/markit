@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { deleteUserLedgerEntryForSource } from '~/server/utils/user-ledger'
 
 export default defineEventHandler(async (event) => {
   const { billId, companyId } = await readBody(event)
@@ -18,7 +19,7 @@ export default defineEventHandler(async (event) => {
 
     const billRes = await client.query(
       `
-      SELECT id, client_id, bill_points, redeemed_points
+      SELECT id, client_id, bill_points, redeemed_points, credit_user_id
       FROM bills
       WHERE id = $1
         AND company_id = $2
@@ -125,6 +126,16 @@ export default defineEventHandler(async (event) => {
       `,
       [billId, companyId]
     )
+
+    if (bill.credit_user_id) {
+      await deleteUserLedgerEntryForSource(client, {
+        companyId,
+        sourceType: 'BILL',
+        sourceId: billId,
+        type: 'USER_CREDIT_BILL',
+        userId: bill.credit_user_id,
+      })
+    }
 
     await client.query('COMMIT')
 

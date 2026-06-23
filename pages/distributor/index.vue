@@ -3,17 +3,11 @@ import {
   useFindManyDistributorCompany,
   useDeleteDistributorCompany,
   useDeletePurchaseOrder,
-  useCreateDistributorPayment,
-  useUpdateDistributorPayment,
-  useDeleteDistributorPayment,
   useCreateDistributorCredit,
   useUpdateDistributorCredit,
   useDeleteDistributorCredit,
   useDeletePurchaseReturn,
   useFindManyBankAccount,
-  useCreateMoneyTransaction,
-  useUpdateMoneyTransaction,
-  useDeleteMoneyTransaction,
 } from '~/lib/hooks'
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
@@ -61,16 +55,10 @@ const tabs = [
 // ─── Mutations ───
 const DeleteDistributorCompany = useDeleteDistributorCompany({ optimisticUpdate: true })
 const DeletePurchaseOrder = useDeletePurchaseOrder({ optimisticUpdate: true })
-const CreateDistributorPayment = useCreateDistributorPayment()
-const UpdateDistributorPayment = useUpdateDistributorPayment()
-const DeleteDistributorPayment = useDeleteDistributorPayment()
 const CreateDistributorCredit = useCreateDistributorCredit()
 const UpdateDistributorCredit = useUpdateDistributorCredit()
 const DeleteDistributorCredit = useDeleteDistributorCredit()
 const DeletePurchaseReturn = useDeletePurchaseReturn({ optimisticUpdate: true })
-const CreateMoneyTransaction = useCreateMoneyTransaction()
-const UpdateMoneyTransaction = useUpdateMoneyTransaction()
-const DeleteMoneyTransaction = useDeleteMoneyTransaction()
 
 // ─── Modal state ───
 const isAdd = ref(false)
@@ -686,10 +674,10 @@ const handleDelete = async () => {
     } else if (deletingRowIdentity.value.type === 'credit') {
       await DeleteDistributorCredit.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
       if (deletingRowIdentity.value.moneyTransactionId) {
-        await DeleteMoneyTransaction.mutateAsync({ where: { id: deletingRowIdentity.value.moneyTransactionId } })
+        await $fetch(`/api/accounts/transactions/${deletingRowIdentity.value.moneyTransactionId}`, { method: 'DELETE' })
       }
     } else if (deletingRowIdentity.value.type === 'payment') {
-      await DeleteDistributorPayment.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
+      await $fetch(`/api/distributor/payments/${deletingRowIdentity.value.id}`, { method: 'DELETE' })
     } else if (deletingRowIdentity.value.type === 'purchase-return') {
       await DeletePurchaseReturn.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
     }
@@ -736,10 +724,16 @@ const handlePay = async () => {
     }
     const createdAt = payForm.value.date ? new Date(payForm.value.date) : new Date()
     if (payForm.value.id) {
-      await UpdateDistributorPayment.mutateAsync({
-        where: { id: payForm.value.id },
-        data: { amount: payForm.value.amount, remarks: payForm.value.remarks, billNo: payForm.value.billNo || undefined, paymentType: payForm.value.paymentType, createdAt },
-        select: { id: true },
+      await $fetch(`/api/distributor/payments/${payForm.value.id}`, {
+        method: 'PUT',
+        body: {
+          amount: payForm.value.amount,
+          remarks: payForm.value.remarks,
+          billNo: payForm.value.billNo || null,
+          paymentType: payForm.value.paymentType,
+          purchaseOrderId: payForm.value.purchaseOrderId || null,
+          createdAt,
+        },
       })
       toast.add({ title: 'Payment updated', color: 'green' })
     } else {
@@ -749,25 +743,18 @@ const handlePay = async () => {
         body: { entity: 'distributorPayment' },
       })
 
-      await CreateDistributorPayment.mutateAsync({
-        data: {
+      await $fetch('/api/distributor/payments', {
+        method: 'POST',
+        body: {
           paymentNo,
           amount: payForm.value.amount,
-          remarks: payForm.value.remarks || undefined,
-          billNo: payForm.value.billNo || undefined,
+          remarks: payForm.value.remarks || null,
+          billNo: payForm.value.billNo || null,
           paymentType: payForm.value.paymentType,
+          purchaseOrderId: payForm.value.purchaseOrderId || null,
           createdAt,
-          ...(payForm.value.purchaseOrderId ? { purchaseOrder: { connect: { id: payForm.value.purchaseOrderId } } } : {}),
-          distributorCompany: {
-            connect: {
-              distributorId_companyId: {
-                distributorId: selectedDistributor.value.distributorId,
-                companyId: companyId.value!,
-              },
-            },
-          },
+          distributorId: selectedDistributor.value.distributorId,
         },
-        select: { id: true },
       })
       toast.add({ title: 'Payment added', color: 'green' })
     }
@@ -805,17 +792,20 @@ const handleAddCredit = async () => {
       })
       // Sync linked MoneyTransaction for AMOUNT credits
       if (creditForm.value.moneyTransactionId) {
-        await UpdateMoneyTransaction.mutateAsync({
-          where: { id: creditForm.value.moneyTransactionId },
-          data: {
+        await $fetch(`/api/accounts/transactions/${creditForm.value.moneyTransactionId}`, {
+          method: 'PUT',
+          body: {
             amount: creditForm.value.amount,
+            partyType: 'SUPPLIER',
+            direction: 'RECEIVED',
+            status: 'PAID',
             paymentMode: creditForm.value.paymentMode,
             accountId: creditForm.value.paymentMode === 'BANK' && creditForm.value.bankAccountId !== '__PRIMARY__'
               ? creditForm.value.bankAccountId
               : null,
+            note: `Distributor credit from ${selectedDistributor.value.distributor?.name ?? ''}${creditForm.value.remarks ? ': ' + creditForm.value.remarks : ''}`,
             createdAt,
           },
-          select: { id: true },
         })
       }
       toast.add({ title: 'Credit updated', color: 'green' })
@@ -828,9 +818,9 @@ const handleAddCredit = async () => {
 
       let moneyTransactionId: string | null = null
       if (isAmountKind) {
-        const mt = await CreateMoneyTransaction.mutateAsync({
-          data: {
-            company: { connect: { id: companyId.value! } },
+        const mt = await $fetch<{ id: string }>('/api/accounts/transactions', {
+          method: 'POST',
+          body: {
             partyType: 'SUPPLIER',
             direction: 'RECEIVED',
             status: 'PAID',
@@ -842,7 +832,6 @@ const handleAddCredit = async () => {
             note: `Distributor credit from ${selectedDistributor.value.distributor?.name ?? ''}${creditForm.value.remarks ? ': ' + creditForm.value.remarks : ''}`,
             createdAt,
           },
-          select: { id: true },
         })
         moneyTransactionId = mt?.id ?? null
       }

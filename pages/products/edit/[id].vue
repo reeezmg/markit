@@ -36,6 +36,7 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
+  weight?: number;
   items: {id: string; size: string | null; qty: number | undefined}[]; // Assuming items are strings, adjust if needed
   images: string[];
 }
@@ -83,6 +84,7 @@ const description = ref('');
 const live = ref<boolean>();
 const category = ref({});
 const subcategory = ref('');
+const collection = ref('');
 
 const barcodes = ref<BarcodeItem[]>([]);
 
@@ -136,6 +138,7 @@ const createValue = (data: any) => {
     description.value = data.description;
     category.value = data.category;
     subcategory.value = data.subcategory;
+    collection.value = data.collection || '';
 };
 
 const updateVariant = (index,data: any) => {
@@ -256,6 +259,7 @@ const updateResult: any = await $fetch('/api/products/update', {
       status: live.value ?? null,
       categoryId: category.value?.id || null,
       subcategoryId: subcategory.value || null,
+      collectionId: collection.value || null,
     },
     variants: variants.value.map(v => ({
       id: v.id,
@@ -266,6 +270,7 @@ const updateResult: any = await $fetch('/api/products/update', {
       pprice: v.pprice || 0,
       dprice: v.dprice || 0,
       discount: v.discount || 0,
+      weight: v.weight || 0,
       images: v.images || [],
       items: v.items.map(item => ({ id: item.id, size: item.size || null, qty: item.qty || 0 })),
     })),
@@ -548,6 +553,7 @@ const confirmPrint = async () => {
           :editDescription="selectedProduct?.description"
           :editCategory="selectedProduct?.categoryId"
           :editSubcategory="selectedProduct?.subcategoryId"
+          :editCollection="selectedProduct?.collectionId"
           @update="createValue" />
       </UPageCard>
   
@@ -579,6 +585,7 @@ const confirmPrint = async () => {
             :editpPrice="selectedProduct?.variants[index]?.pprice"
             :editdPrice="selectedProduct?.variants[index]?.dprice"
             :editDiscount="selectedProduct?.variants[index]?.discount"
+            :editWeight="selectedProduct?.variants[index]?.weight"
             :editItems="selectedProduct?.variants[index]?.items"
             @update="updateVariant(index,$event)" />
           <AddProductMedia 
@@ -645,6 +652,7 @@ const confirmPrint = async () => {
                 :editDescription="selectedProduct?.description"
                 :editCategory="selectedProduct?.categoryId"
                 :editSubcategory="selectedProduct?.subcategoryId"
+                :editCollection="selectedProduct?.collectionId"
                 @update="createValue" />
             </UPageCard>
   
@@ -668,6 +676,7 @@ const confirmPrint = async () => {
                   :editUnit="selectedProduct?.variants[index].unit || variants[0]?.unit"
                   :editsPrice="selectedProduct?.variants[index].sprice"
                   :editpPrice="selectedProduct?.variants[index].pprice"
+                  :editWeight="selectedProduct?.variants[index].weight"
                   :editSizes="selectedProduct?.variants[index].sizes"
                   @update="updateVariant(index,$event)" />
                 <AddProductMedia

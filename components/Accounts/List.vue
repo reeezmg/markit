@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import {
   useFindManyMoneyTransaction,
-  useUpdateManyMoneyTransaction,
 } from '~/lib/hooks'
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
@@ -9,8 +8,6 @@ import { startOfDay, endOfDay } from 'date-fns'
 
 const emit = defineEmits(['edit', 'delete', 'open', 'values'])
 const useAuth = () => useNuxtApp().$auth
-
-const UpdateMany = useUpdateManyMoneyTransaction({ optimisticUpdate: true })
 
 /* ---------------------------------------------------
    STATE
@@ -177,10 +174,7 @@ const pageTo = computed(() =>
    BULK UPDATE
 --------------------------------------------------- */
 const multiUpdate = async (status: string, ids: string[]) => {
-  await UpdateMany.mutateAsync({
-    where: { id: { in: ids } },
-    data: { status },
-  })
+  await $fetch('/api/accounts/transactions/status', { method: 'POST', body: { ids, status } })
 }
 
 /* ---------------------------------------------------

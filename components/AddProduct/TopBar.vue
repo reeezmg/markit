@@ -25,7 +25,10 @@
       </UBadge>
     </div>
 
-    <div class="flex items-center gap-2">
+    <div
+      v-if="!forceOrderDeliveryType"
+      class="flex items-center gap-2"
+    >
       <span class="whitespace-nowrap">Delivery Type</span>
       <USelectMenu
         v-model="deliveryType"
@@ -222,6 +225,7 @@ const props = withDefaults(defineProps<{
   submitLoading?: boolean
   purchaseOrderNo?: number | string | null
   showPurchaseInfoButton?: boolean
+  forceOrderDeliveryType?: boolean
 }>(), {
   totalAmount: 0,
   distributorId: '',
@@ -233,7 +237,8 @@ const props = withDefaults(defineProps<{
   adjustment: 0,
   submitLoading: false,
   purchaseOrderNo: null,
-  showPurchaseInfoButton: true
+  showPurchaseInfoButton: true,
+  forceOrderDeliveryType: false
 })
 
 /* ------------------------------------
@@ -349,19 +354,33 @@ watch(
    DELIVERY TYPE
 ------------------------------------ */
 const DELIVERY_TYPE_KEY = 'lastDeliveryType'
-const deliveryTypeOptions = ref<string[]>(
-  useAuth().session.value?.deliveryType || []
+const deliveryTypeOptions = computed<string[]>(() =>
+  props.forceOrderDeliveryType
+    ? ['order', 'trynbuy']
+    : useAuth().session.value?.deliveryType || []
 )
 const deliveryType = ref<string>()
 
 if (process.client) {
   deliveryType.value =
-    localStorage.getItem(DELIVERY_TYPE_KEY) || deliveryTypeOptions.value[0]
+    props.forceOrderDeliveryType
+      ? 'order'
+      : localStorage.getItem(DELIVERY_TYPE_KEY) || deliveryTypeOptions.value[0]
 }
 
 watch(deliveryType, (val) => {
-  if (val) localStorage.setItem(DELIVERY_TYPE_KEY, val)
+  if (!val || props.forceOrderDeliveryType) return
+  localStorage.setItem(DELIVERY_TYPE_KEY, val)
 })
+
+watch(
+  () => props.forceOrderDeliveryType,
+  (forced) => {
+    if (forced) deliveryType.value = 'order'
+    else if (!deliveryType.value) deliveryType.value = deliveryTypeOptions.value[0] || ''
+  },
+  { immediate: true }
+)
 
 /* ------------------------------------
    PRICING INPUTS
@@ -530,7 +549,9 @@ const reset = () => {
   discount.value = 0
   taxPercent.value = 0
   adjustment.value = 0
-  deliveryType.value = deliveryTypeOptions.value[0] || ''
+  deliveryType.value = props.forceOrderDeliveryType
+    ? 'order'
+    : deliveryTypeOptions.value[0] || ''
 
   isDistributorInitialized.value = false
   isBillNoInitialized.value = false

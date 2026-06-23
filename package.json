@@ -3,20 +3,19 @@
     "private": true,
     "type": "module",
     "version": "0.0.1-prealpha.1",
-    "main": "electron/main.js",
     "scripts": {
         "dev": "nuxt dev",
         "dev:web": "nuxt dev --port 3000",
-        "dev:electron": "concurrently -k \"cross-env BASE_URL=http://127.0.0.1:3000 nuxt dev --port 3000\" \"wait-on http://127.0.0.1:3000 && cross-env ELECTRON_START_URL=http://127.0.0.1:3000 electron .\"",
         "build": "nuxt build",
         "generate": "nuxt generate",
         "prodgenerate": "nuxt generate --dotenv .env.production",
         "preview": "nuxt preview",
-        "electron:build": "cross-env NODE_OPTIONS=--max-old-space-size=8192 NITRO_PRESET=node-server nuxt build && electron-builder",
-        "electron:dist": "cross-env NODE_OPTIONS=--max-old-space-size=8192 NITRO_PRESET=node-server nuxt build && electron-builder --publish never",
         "postinstall": "nuxt prepare",
         "lint": "eslint .",
-        "typecheck": "nuxt typecheck"
+        "typecheck": "nuxt typecheck",
+        "test": "tsx tests/payroll-attendance-shift.test.ts",
+        "test:account-ledger": "tsx tests/account-ledger-reconciliation.test.ts",
+        "test:account-ledger:writeflow": "tsx tests/account-ledger-writeflow.test.ts"
     },
     "dependencies": {
         "@anthropic-ai/sdk": "^0.80.0",
@@ -73,7 +72,6 @@
         "chart.js": "^4.4.9",
         "cors": "^2.8.5",
         "cropperjs": "^2.0.1",
-        "cross-env": "^7.0.3",
         "crypto": "^1.0.1",
         "date-fns": "^3.6.0",
         "dayjs": "^1.11.13",
@@ -122,6 +120,7 @@
         "vuetable-2": "^2.0.0-beta.4",
         "web-push": "^3.6.7",
         "ws": "^8.17.1",
+        "xlsx": "^0.18.5",
         "yup": "^1.4.0",
         "zenstack": "^2.1.1",
         "zod": "^3.23.8"
@@ -137,46 +136,12 @@
         "@types/uuid": "^9.0.8",
         "@types/vue-tel-input": "^2.1.7",
         "@types/ws": "^8.5.10",
-        "concurrently": "^9.1.2",
         "cypress": "^14.3.0",
-        "electron": "^37.3.0",
-        "electron-builder": "^26.0.12",
         "eslint": "^9.2.0",
         "nuxt-headlessui": "^1.2.0",
         "nuxt-icon": "^0.6.10",
         "prisma": "^5.22.0",
-        "vue-tsc": "^2.0.19",
-        "wait-on": "^8.0.3"
-    },
-    "build": {
-        "appId": "in.co.markit.storetools",
-        "productName": "Storetools",
-        "directories": {
-            "output": "electron-dist"
-        },
-        "files": [
-            "electron/**",
-            ".zenstack/**",
-            "zenstack/**",
-            ".output/**",
-            "package.json"
-        ],
-        "asar": true,
-        "asarUnpack": [
-            ".output/server/**",
-            ".output/public/**"
-        ],
-        "win": {
-            "target": "nsis"
-        },
-        "mac": {
-            "target": "dmg"
-        },
-        "linux": {
-            "target": [
-                "AppImage",
-                "deb"
-            ]
-        }
+        "tsx": "^4.22.4",
+        "vue-tsc": "^2.0.19"
     }
 }

@@ -1,213 +1,82 @@
 <script setup lang="ts">
-import { ref } from 'vue';
-import ExpenseForm from '~/components/Expense/ExpenseForm.vue';
-import ExpenseList from '~/components/Expense/ExpenseList.vue';
+import { ref } from 'vue'
+import ExpenseForm from '~/components/Expense/ExpenseForm.vue'
+import ExpenseList from '~/components/Expense/ExpenseList.vue'
 
-import {
-    useCreateExpense,
-    useUpdateExpense,
-    useDeleteExpense,
-} from '~/lib/hooks';
+const toast = useToast()
 
-const createExpense = useCreateExpense({ optimisticUpdate: true });
-const updateExpense = useUpdateExpense({ optimisticUpdate: true });
-const deleteExpense = useDeleteExpense({ optimisticUpdate: true });
-const toast = useToast();
-const useAuth = () => useNuxtApp().$auth;
+const normalizeExpenseBody = (expense: any, expenseNumber?: number) => ({
+  ...(expenseNumber != null ? { expenseNumber } : {}),
+  expenseDate: expense.date,
+  expensecategoryId: expense.categoryId,
+  userId: expense.userId || null,
+  totalAmount: Number(expense.amount) || 0,
+  paymentMode: expense.paymentMode,
+  status: expense.status || 'Paid',
+  note: expense.note || null,
+  receipt: expense.receipt || null,
+  receiptName: expense.receiptName || null,
+  taxAmount: Number(expense.taxAmount || 0),
+})
 
-/* ---------------------------------------------------
-   CREATE EXPENSE
---------------------------------------------------- */
 const addExpense = async (expense: any) => {
-    try {
-        // Atomically get next expense number
-        const { number: expenseNumber } = await $fetch('/api/counter/increment', {
-            method: 'POST',
-            body: { entity: 'expense' },
-        });
+  try {
+    const { number: expenseNumber } = await $fetch<{ number: number }>('/api/counter/increment', {
+      method: 'POST',
+      body: { entity: 'expense' },
+    })
+    await $fetch('/api/accounts/expenses', {
+      method: 'POST',
+      body: normalizeExpenseBody(expense, expenseNumber),
+    })
+    toast.add({ title: 'Expense added', color: 'green' })
+  } catch (error: any) {
+    toast.add({ title: 'Failed to create expense', description: error.message, color: 'red' })
+  }
+}
 
-        createExpense.mutate({
-            data: {
-                expenseNumber,
-                ...(expense.date && {
-                    expenseDate: new Date(expense.date).toISOString(),
-                }),
-
-                // ⭐ CATEGORY
-                expensecategory: {
-                    connect: { id: expense.categoryId },
-                },
-
-                // ⭐ FROM (CompanyUser)
-                ...(expense.userId && {
-                    user: {
-                        connect: {
-                            companyId_userId: {
-                                companyId: useAuth().session.value?.companyId,
-                                userId: expense.userId,
-                            },
-                        },
-                    },
-                }),
-
-                totalAmount: Number(expense.amount) || 0,
-                paymentMode: expense.paymentMode,
-                status: expense.status || 'Paid',
-                ...(expense.note && { note: expense.note }),
-
-                company: {
-                    connect: {
-                        id: useAuth().session.value?.companyId,
-                    },
-                },
-            },
-        });
-
-        // OPTIONAL NOTIFICATION
-        // await $fetch('/api/notifications/notify', {
-        //     method: 'POST',
-        //     body: {
-        //         userId: useAuth().session.value?.id,
-        //         type: 'EXPENSE',
-        //         note: expense.note,
-        //         companyId: useAuth().session.value?.companyId,
-        //         amount: expense.amount,
-        //         category: expense.category?.name,
-        //     }
-        // });
-
-    // $fetch('/api/notifications/notify', {
-    //   method: 'POST',
-    //   body: {
-    //     userId:useAuth().session.value?.id,
-    //     type: 'EXPENSE',
-    //     Note: expense.note,
-    //     companyId: useAuth().session.value?.companyId,
-    //     id: expense.id,
-    //     // expenseCategory : expense.expensecategory.name,
-    //     amount: expense.totalAmount
-    //   }
-    // })
-
-    
-
-        toast.add({
-            title: 'Expense added',
-            color: 'green',
-        });
-
-    } catch (error: any) {
-        toast.add({
-            title: 'Failed to create expense',
-            description: error.message,
-            color: 'red',
-        });
-    }
-};
-
-/* ---------------------------------------------------
-   UPDATE EXPENSE
---------------------------------------------------- */
 const editExpense = async (id: string, data: any) => {
-    try {
-        await updateExpense.mutateAsync({
-            where: { id },
-            data: {
-                ...(data.date && {
-                    expenseDate: new Date(data.date).toISOString(),
-                }),
+  try {
+    await $fetch(`/api/accounts/expenses/${id}`, {
+      method: 'PUT',
+      body: normalizeExpenseBody(data),
+    })
+    toast.add({ title: 'Expense updated', color: 'green' })
+  } catch (error: any) {
+    toast.add({ title: 'Failed to update expense', description: error.message, color: 'red' })
+  }
+}
 
-                expensecategory: {
-                    connect: { id: data.categoryId },
-                },
-
-                // ⭐ UPDATE user USER with compound key
-                ...(data.userId && {
-                    user: {
-                        connect: {
-                            companyId_userId: {
-                                companyId: useAuth().session.value?.companyId,
-                                userId: data.userId,
-                            },
-                        },
-                    },
-                }),
-
-                totalAmount: Number(data.amount),
-                paymentMode: data.paymentMode,
-                status: data.status,
-                ...(data.note && { note: data.note }),
-            },
-        });
-
-        toast.add({
-            title: 'Expense updated',
-            color: 'green',
-        });
-
-    } catch (error: any) {
-        toast.add({
-            title: 'Failed to update expense',
-            description: error.message,
-            color: 'red',
-        });
-    }
-};
-
-/* ---------------------------------------------------
-   DELETE EXPENSE
---------------------------------------------------- */
 const deleteExpenseRow = async (id: string) => {
-    try {
-        await deleteExpense.mutateAsync({
-            where: { id }
-        });
+  try {
+    await $fetch(`/api/accounts/expenses/${id}`, { method: 'DELETE' })
+    toast.add({ title: 'Expense deleted successfully!', color: 'green' })
+  } catch (error: any) {
+    toast.add({ title: 'Error while deleting expense', description: error.message, color: 'red' })
+  }
+}
 
-        toast.add({
-            title: `Expense deleted successfully!`,
-            color: 'green',
-        });
-
-    } catch (error: any) {
-        toast.add({
-            title: 'Error while deleting expense',
-            description: error.message,
-            color: 'red',
-        });
-    }
-};
-
-/* ---------------------------------------------------
-   FORM TOGGLING
---------------------------------------------------- */
-const showForm = ref(false);
-const selectedExpense = ref<any | null>(null);
+const showForm = ref(false)
+const selectedExpense = ref<any | null>(null)
 
 const openForm = (expense = null) => {
-    selectedExpense.value = expense;
-    showForm.value = true;
-};
+  selectedExpense.value = expense
+  showForm.value = true
+}
 
 const closeForm = () => {
-    showForm.value = false;
-    selectedExpense.value = null;
-};
+  showForm.value = false
+  selectedExpense.value = null
+}
 
-/* ---------------------------------------------------
-   FORM SAVE HANDLER
---------------------------------------------------- */
 const saveExpense = async (form: any) => {
-    try {
-        if (selectedExpense.value) {
-            await editExpense(selectedExpense.value.id, form);
-        } else {
-            await addExpense(form);
-        }
-    } finally {
-        closeForm();
-    }
-};
-
+  try {
+    if (selectedExpense.value) await editExpense(selectedExpense.value.id, form)
+    else await addExpense(form)
+  } finally {
+    closeForm()
+  }
+}
 </script>
 
 <template>

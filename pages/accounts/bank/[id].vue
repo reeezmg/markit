@@ -149,9 +149,11 @@ const styledLedger = computed(() =>
 )
 
 const totalSales = computed(() =>
-  ledger.value
-    .filter(r => r.source === 'SALE')
-    .reduce((sum, r) => sum + Number(r.credit || 0), 0)
+  Number(data.value?.totalSales ??
+    ledger.value
+      .filter(r => r.source === 'BILL')
+      .reduce((sum, r) => sum + Number(r.credit || 0), 0)
+  )
 )
 
 const totalExpenses = computed(() =>

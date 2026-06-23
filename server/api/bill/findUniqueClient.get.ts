@@ -41,8 +41,8 @@ export default defineEventHandler(async (event) => {
         c.name,
         c.email,
         c.phone,
-        c.status,
-        c.pipeline_status AS "pipelineStatus",
+        cc.status,
+        cc.pipeline_status AS "pipelineStatus",
         cc.points
       FROM clients c
       INNER JOIN company_clients cc

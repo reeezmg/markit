@@ -87,10 +87,6 @@ export default eventHandler(async (event) => {
 
         closingDate: user.companies[0].company.closingDate ?? null,
         billPrefix: user.companies[0].company.billPrefix ?? '',
-        quotePrefix: user.companies[0].company.quotePrefix ?? 'QT',
-        salesOrderPrefix: user.companies[0].company.salesOrderPrefix ?? 'SO',
-        invoicePrefix: user.companies[0].company.invoicePrefix ?? 'INV',
-        paymentPrefix: user.companies[0].company.paymentPrefix ?? '',
         expensePrefix: user.companies[0].company.expensePrefix ?? 'EXP',
         distributorPrefix: user.companies[0].company.distributorPrefix ?? 'DIST',
         distributorPaymentPrefix: user.companies[0].company.distributorPaymentPrefix ?? 'DP',

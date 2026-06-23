@@ -337,6 +337,21 @@
 
     </UCard>
 
+    <UDashboardModal
+      v-model="isDeleteModalOpen"
+      title="Delete Brand"
+      :description="`Are you sure you want to delete brand ${deletingBrand.name}?`"
+      icon="i-heroicons-exclamation-circle"
+      prevent-close
+      :close-button="null"
+      :ui="{ icon: { base: 'text-red-500 dark:text-red-400' } as any, footer: { base: 'ml-16' } as any }"
+    >
+      <template #footer>
+        <UButton color="red" label="Delete" @click="() => removeBrand()" />
+        <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
+      </template>
+    </UDashboardModal>
+
   </UDashboardPanelContent>
 </template>
 <script setup lang="ts">
@@ -348,6 +363,7 @@ import {
   useFindManyBrand,
   useUpdateBrand,
   useUpdateManyBrand,
+  useDeleteBrand,
   useCountBrand
 } from '~/lib/hooks'
 
@@ -611,12 +627,45 @@ function multiToggle(ids: string[], status: boolean) {
    ACTIONS
 ------------------------------------------------- */
 
+const DeleteBrand = useDeleteBrand({ optimisticUpdate: true })
+const isDeleteModalOpen = ref(false)
+const deletingBrand = ref<{ name?: string; id?: string; productsLength?: number }>({})
+
+const removeBrand = () => {
+  if (deletingBrand.value.productsLength) {
+    useToast().add({
+      title: 'Brand deletion failed!',
+      description: `Please clear products of brand "${deletingBrand.value.name}" first.`,
+      color: 'red'
+    })
+    isDeleteModalOpen.value = false
+    return
+  }
+  try {
+    DeleteBrand.mutate({ where: { id: deletingBrand.value.id } })
+  } catch (err) {
+    console.log(err)
+  } finally {
+    isDeleteModalOpen.value = false
+  }
+}
+
 const action = (row: any) => [
   [
     {
       label: 'Edit',
       icon: 'i-heroicons-pencil-square-20-solid',
-      click: () => router.push(`/brands/edit/${row.id}`)
+      click: () => router.push(`/products/brands/edit/${row.id}`)
+    }
+  ],
+  [
+    {
+      label: 'Delete',
+      icon: 'i-heroicons-trash-20-solid',
+      click: () => {
+        deletingBrand.value = { name: row.name, id: row.id, productsLength: row.products?.length || 0 }
+        isDeleteModalOpen.value = true
+      }
     }
   ]
 ]

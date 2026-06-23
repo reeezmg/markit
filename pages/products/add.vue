@@ -45,6 +45,9 @@ const activePurchaseOrderId = computed(() =>
 const tableProductIds = computed(() =>
   isEditingPurchaseOrder.value ? undefined : draftProductIds.value
 )
+const effectiveDeliveryType = computed(() =>
+  isDistributorPurchaseOrderFlow.value ? 'order' : deliveryType.value || 'trynbuy'
+)
 
 const onDraftProductDeleted = (id: string) => {
   draft.productIds.value = draft.productIds.value.filter(productId => productId !== id)
@@ -99,6 +102,7 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
+  weight?: number;
   items: {id: string; size: string | null; qty: number | undefined}[]; // Assuming items are strings, adjust if needed
   images: string[];
 }
@@ -194,6 +198,7 @@ const live = ref<boolean>();
 let files = reactive<ImageData[]>([]);
 const category = ref<any>({});
 const subcategory = ref('');
+const collection = ref('');
 
 const barcodes = ref<BarcodeItem[]>([]);
 
@@ -254,8 +259,11 @@ const applyDraftToForm = () => {
   description.value = savedForm.description || '';
   category.value = savedForm.category || {};
   subcategory.value = savedForm.subcategoryId || '';
+  collection.value = savedForm.collectionId || '';
   live.value = savedForm.live ?? true;
-  deliveryType.value = savedForm.deliveryType || deliveryType.value;
+  deliveryType.value = isDistributorPurchaseOrderFlow.value
+    ? 'order'
+    : savedForm.deliveryType || deliveryType.value;
   variants.value = stripDraftImages(savedForm.variants || []);
 
   selectedProduct.value = {
@@ -269,6 +277,7 @@ const applyDraftToForm = () => {
     subcategory: {},
     categoryId: category.value?.id || '',
     subcategoryId: subcategory.value,
+    collectionId: collection.value,
     variants: variants.value,
   };
 
@@ -277,7 +286,9 @@ const applyDraftToForm = () => {
   paymentType.value = info.paymentType || '';
   oldPaymentType.value = info.oldPaymentType || '';
   billNo.value = info.billNo || '';
-  deliveryType.value = savedForm.deliveryType || deliveryType.value;
+  deliveryType.value = isDistributorPurchaseOrderFlow.value
+    ? 'order'
+    : savedForm.deliveryType || deliveryType.value;
   totalAmount.value = info.total || 0;
   discount.value = info.discount || 0;
   tax.value = info.taxPercent || 0;
@@ -328,8 +339,9 @@ const persistDraftForm = () => {
     description: description.value,
     category: category.value,
     subcategoryId: subcategory.value,
+    collectionId: collection.value,
     live: live.value,
-    deliveryType: deliveryType.value,
+    deliveryType: effectiveDeliveryType.value,
     variants: stripDraftImages(variants.value),
   };
   if (!sameJson(draft.form.value, nextForm)) {
@@ -354,6 +366,7 @@ const createValue = (data: any) => {
     description.value = data.description;
     category.value = data.category;
     subcategory.value = data.subcategory;
+    collection.value = data.collection || '';
     persistDraftForm();
 };
 
@@ -423,7 +436,9 @@ const handleDistributorValue = (data:any) => {
   paymentType.value = data.paymentType;
   oldPaymentType.value = data.oldPaymentType;
   billNo.value = data.billNo
-  deliveryType.value = data.deliveryType
+  deliveryType.value = isDistributorPurchaseOrderFlow.value
+    ? 'order'
+    : data.deliveryType
   totalAmount.value = data.total
   discount.value = data.discount
   tax.value = data.taxPercent
@@ -453,8 +468,9 @@ const snapshotProductForm = () => ({
   description: description.value || '',
   category: category.value ? { ...category.value } : {},
   subcategory: subcategory.value,
+  collection: collection.value,
   live: live.value,
-  deliveryType: deliveryType.value || 'trynbuy',
+    deliveryType: effectiveDeliveryType.value,
   variants: variants.value.map((variant) => ({
     ...variant,
     items: (variant.items || []).map((item) => ({ ...item })),
@@ -490,7 +506,10 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
   status: snap.live ?? true,
   categoryId: snap.category?.id || null,
   subcategoryId: snap.subcategory || null,
-  deliveryType: snap.deliveryType || 'trynbuy',
+  collectionId: snap.collection || null,
+  deliveryType: isDistributorPurchaseOrderFlow.value
+    ? 'order'
+    : snap.deliveryType || 'trynbuy',
   categoryTax: catTax,
   // display metadata for the left table + barcode labels
   category: snap.category ? { id: snap.category.id, name: snap.category.name, targetAudience: snap.category.targetAudience } : null,
@@ -503,6 +522,7 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
     pprice: variant.pprice || 0,
     dprice: variant.dprice || 0,
     discount: variant.discount || 0,
+    weight: variant.weight || 0,
     images: variantInputs?.value?.images ? (variant.images || []).map((f: any) => ({ uuid: f.uuid, view: f.view })) : [],
     items: (variant.items || []).map((size: any) => ({ id: size.id || uuidv4(), size: size.size || null, qty: size.qty || 0 })),
   })),
@@ -1386,6 +1406,7 @@ const onDeleteDraft = (no: string) => {
             :billDate="isEditingPurchaseOrder ? editPurchaseOrder?.createdAt : draftPurchaseInfo.billDate"
             :purchase-order-no="isEditingPurchaseOrder ? editPurchaseOrder?.purchaseOrderNo : null"
             :show-purchase-info-button="isEditingPurchaseOrder"
+            :force-order-delivery-type="isDistributorPurchaseOrderFlow"
             :submit-loading="isSave"
           >
             <template v-if="!isEditingPurchaseOrder" #draft>
@@ -1502,6 +1523,7 @@ const onDeleteDraft = (no: string) => {
                         :editDescription="selectedProduct?.description"
                         :editCategory="selectedProduct?.categoryId"
                         :editSubcategory="selectedProduct?.subcategoryId"
+                        :editCollection="selectedProduct?.collectionId"
                         @update="createValue" />
                 </UPageCard>
 
@@ -1535,8 +1557,9 @@ const onDeleteDraft = (no: string) => {
                       :editpPrice="variant.pprice"
                       :editdPrice="variant.dprice"
                       :editDiscount="variant.discount"
+                      :editWeight="variant.weight"
                       :editItems="variant.items"
-          
+
                       @update="updateVariant(index,$event)" />
                       <AddProductMedia
                       v-if="variantInputs?.images"

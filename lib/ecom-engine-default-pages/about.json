@@ -1,0 +1,43 @@
+{
+  "sections": {
+    "hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "Our story",
+        "title": "Pro-grade car care, made simple.",
+        "lead": "We started Revomotive because great detailing products were locked behind wholesale accounts and industry jargon. We built a range that works straight out of the bottle — no dilution charts, no wasted product."
+      }
+    },
+    "stats": {
+      "type": "stats-grid",
+      "styles": { "bg": "linear-gradient(135deg,#0f172a,#1e293b)", "py": 48 },
+      "settings": {
+        "items": [
+          { "num": "1,000+", "label": "cars detailed" },
+          { "num": "4.9★",   "label": "customer rating" },
+          { "num": "100%",   "label": "coating-safe" },
+          { "num": "6 mo",   "label": "protection" }
+        ]
+      }
+    },
+    "values": {
+      "type": "value-columns",
+      "settings": {
+        "title": "What we stand for",
+        "items": [
+          { "icon": "flask-conical", "title": "Real formulation",  "body": "Every product we sell is lab-tested with published specs — no marketing fluff, just numbers." },
+          { "icon": "shield-check",  "title": "Honest specs",      "body": "SiO₂ %, GSM, pH — all published so you can compare and choose with confidence." },
+          { "icon": "droplets",      "title": "Coating-safe",      "body": "Formulated to work with, not against, your existing ceramic or wax protection." }
+        ]
+      }
+    },
+    "newsletter": {
+      "type": "newsletter-form",
+      "settings": {
+        "title": "Stay in the loop",
+        "subtitle": "Product launches, tutorials, and exclusive offers — once a month, no spam."
+      }
+    }
+  },
+  "order": ["hero", "stats", "values", "newsletter"]
+}

@@ -5,9 +5,6 @@ import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'dat
 import AccountTransferForm from '~/components/AccountTransfer/Form.vue'
 
 import {
-  useCreateAccountTransfer,
-  useUpdateAccountTransfer,
-  useDeleteAccountTransfer,
   useFindManyAccountTransfer,
   useFindManyBankAccount,
   useFindUniqueCompany,
@@ -18,13 +15,6 @@ const useAuth = () => useNuxtApp().$auth
 
 const transferTableStore = useTransferTableStore()
 const isMobile = ref(false)
-
-/* ---------------------------------------------------
-   HOOKS
---------------------------------------------------- */
-const createTransfer = useCreateAccountTransfer({ optimisticUpdate: true })
-const updateTransfer = useUpdateAccountTransfer({ optimisticUpdate: true })
-const deleteTransfer = useDeleteAccountTransfer({ optimisticUpdate: true })
 
 /* ---------------------------------------------------
    MODAL STATE
@@ -53,42 +43,10 @@ const closeTransferForm = () => {
 const saveTransfer = async (transfer: any) => {
   try {
     if (selectedTransfer.value) {
-      await updateTransfer.mutateAsync({
-        where: { id: selectedTransfer.value.id },
-        data: {
-          ...(transfer.date && {
-            createdAt: new Date(transfer.date).toISOString(),
-          }),
-          fromType: transfer.fromType,
-          toType: transfer.toType,
-          amount: transfer.amount,
-          note: transfer.note ?? null,
-          fromAccountId: transfer.fromAccountId ?? null,
-          toAccountId: transfer.toAccountId ?? null,
-        },
-      })
+      await $fetch(`/api/accounts/transfers/${selectedTransfer.value.id}`, { method: 'PUT', body: transfer })
       toast.add({ title: 'Transfer updated', color: 'green' })
     } else {
-      await createTransfer.mutateAsync({
-        data: {
-          ...(transfer.date && {
-            createdAt: new Date(transfer.date).toISOString(),
-          }),
-          fromType: transfer.fromType,
-          toType: transfer.toType,
-          amount: transfer.amount,
-          note: transfer.note ?? null,
-          ...(transfer.fromAccountId && {
-            fromAccountId: transfer.fromAccountId,
-          }),
-          ...(transfer.toAccountId && {
-            toAccountId: transfer.toAccountId,
-          }),
-          company: {
-            connect: { id: useAuth().session.value!.companyId },
-          },
-        },
-      })
+      await $fetch('/api/accounts/transfers', { method: 'POST', body: transfer })
       toast.add({ title: 'Transfer created', color: 'green' })
     }
 
@@ -106,9 +64,7 @@ const saveTransfer = async (transfer: any) => {
    DELETE
 --------------------------------------------------- */
 const confirmDelete = async () => {
-  await deleteTransfer.mutateAsync({
-    where: { id: deletingRow.value.id },
-  })
+  await $fetch(`/api/accounts/transfers/${deletingRow.value.id}`, { method: 'DELETE' })
   toast.add({ title: 'Transfer deleted', color: 'green' })
   isDeleteModalOpen.value = false
 }
@@ -527,7 +483,6 @@ onMounted(() => {
     <UModal v-model="showTransferForm">
       <AccountTransferForm
         :transfer="selectedTransfer"
-        :loading="createTransfer.isPending.value || updateTransfer.isPending.value"
         @save="saveTransfer"
         @cancel="closeTransferForm"
       />

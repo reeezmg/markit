@@ -4,9 +4,6 @@ import { format } from 'date-fns'
 
 import InvestmentForm from '~/components/Investment/Form.vue'
 import {
-  useCreateInvestment,
-  useUpdateInvestment,
-  useDeleteInvestment,
   useFindManyInvestment,
 } from '~/lib/hooks'
 
@@ -17,13 +14,6 @@ const emit = defineEmits(['open'])
 
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
-
-/* ---------------------------------------------------
-   HOOKS
---------------------------------------------------- */
-const createInvestment = useCreateInvestment({ optimisticUpdate: true })
-const updateInvestment = useUpdateInvestment({ optimisticUpdate: true })
-const deleteInvestment = useDeleteInvestment({ optimisticUpdate: true })
 
 /* ---------------------------------------------------
    MODAL STATE
@@ -51,48 +41,10 @@ const closeInvestmentForm = () => {
 --------------------------------------------------- */
 const saveInvestment = async (form: any) => {
   if (selectedInvestment.value) {
-    await updateInvestment.mutateAsync({
-      where: { id: selectedInvestment.value.id },
-      data: {
-        ...(form.date && { createdAt: new Date(form.date).toISOString() }),
-        direction: form.direction,
-        amount: Number(form.amount),
-        paymentMode: form.paymentMode,
-        status: form.status,
-        note: form.note,
-        user: {
-          connect: {
-            companyId_userId: {
-              companyId: useAuth().session.value!.companyId,
-              userId: form.userId,
-            },
-          },
-        },
-      },
-    })
+    await $fetch(`/api/accounts/investments/${selectedInvestment.value.id}`, { method: 'PUT', body: form })
     toast.add({ title: 'Investment updated', color: 'green' })
   } else {
-    createInvestment.mutate({
-      data: {
-        ...(form.date && { createdAt: new Date(form.date).toISOString() }),
-        direction: form.direction,
-        amount: Number(form.amount),
-        paymentMode: form.paymentMode,
-        status: 'COMPLETED',
-        note: form.note,
-        company: {
-          connect: { id: useAuth().session.value!.companyId },
-        },
-        user: {
-          connect: {
-            companyId_userId: {
-              companyId: useAuth().session.value!.companyId,
-              userId: form.userId,
-            },
-          },
-        },
-      },
-    })
+    await $fetch('/api/accounts/investments', { method: 'POST', body: { ...form, status: form.status || 'COMPLETED' } })
     toast.add({ title: 'Investment added', color: 'green' })
   }
 
@@ -103,9 +55,7 @@ const saveInvestment = async (form: any) => {
    DELETE
 --------------------------------------------------- */
 const confirmDelete = async () => {
-  await deleteInvestment.mutateAsync({
-    where: { id: deletingRow.value.id },
-  })
+  await $fetch(`/api/accounts/investments/${deletingRow.value.id}`, { method: 'DELETE' })
   toast.add({ title: 'Investment deleted', color: 'green' })
   isDeleteModalOpen.value = false
 }

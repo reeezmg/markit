@@ -6,7 +6,8 @@ import { toTypedSchema } from '@vee-validate/zod'
 import {
   useFindManyCategory,
   useFindManySubcategory,
-  useFindManyBrand
+  useFindManyBrand,
+  useFindManyCollection
 } from '~/lib/hooks'
 
 const useAuth = () => useNuxtApp().$auth
@@ -20,6 +21,7 @@ const props = defineProps<{
   editDescription?: string | null
   editCategory?: any
   editSubcategory?: any
+  editCollection?: any
 }>()
 
 const emit = defineEmits(['update'])
@@ -48,6 +50,7 @@ STATE
 const selectedRow = ref<any>({})
 const subselectedRow = ref<any>({})
 const brandSelectedRow = ref<any>({})
+const collectionSelectedRow = ref<any>({})
 
 const productInputs = ref(
   useAuth().session.value?.productInputs
@@ -89,6 +92,13 @@ const { data: brands } =
   useFindManyBrand(brandArgs)
 
 /* -----------------------------
+FETCH COLLECTIONS
+------------------------------ */
+const { data: collections } = useFindManyCollection({
+  where: { companyId: useAuth().session.value?.companyId },
+})
+
+/* -----------------------------
 RESET FORM
 ------------------------------ */
 const resetForm = () => {
@@ -97,6 +107,7 @@ const resetForm = () => {
   selectedRow.value = {}
   subselectedRow.value = {}
   brandSelectedRow.value = {}
+  collectionSelectedRow.value = {}
   resetValidation()
 }
 
@@ -291,6 +302,22 @@ watch(
   { immediate: true }
 )
 
+/* Edit → Collection */
+watch(
+  [() => props.editCollection, collections],
+  ([newCollection, newCollections]) => {
+    if (newCollection && newCollections?.length) {
+      collectionSelectedRow.value =
+        newCollections.find(
+          (c) => c.id === newCollection
+        ) || {}
+    } else {
+      collectionSelectedRow.value = {}
+    }
+  },
+  { immediate: true }
+)
+
 /* Emit updates */
 watch(
   [
@@ -299,6 +326,7 @@ watch(
     selectedRow,
     subselectedRow,
     brandSelectedRow,
+    collectionSelectedRow,
   ],
   ([
     newName,
@@ -306,6 +334,7 @@ watch(
     newCat,
     newSub,
     newBrand,
+    newCollection,
   ]) => {
     emit('update', {
       name: newName,
@@ -313,6 +342,7 @@ watch(
       category: newCat,
       subcategory: newSub?.id,
       brand: newBrand?.id,
+      collection: newCollection?.id,
     })
   },
   { immediate: true }
@@ -472,6 +502,39 @@ watch(
         </template>
       </USelectMenu>
       </div>
+    </UFormGroup>
+
+    <!-- COLLECTION -->
+    <UFormGroup label="Collection">
+      <USelectMenu
+        v-model="collectionSelectedRow"
+        :options="collections"
+        option-key="id"
+        track-by="id"
+        searchable
+        option-attribute="name"
+      >
+        <template #label>
+          <span v-if="collectionSelectedRow?.name">
+            {{ collectionSelectedRow.name }}
+          </span>
+          <span v-else>Select</span>
+        </template>
+
+        <template #option="{ option: collection }">
+          <UIcon
+            v-if="!collection.image"
+            name="i-heroicons-squares-2x2"
+            class="w-5 h-5"
+          />
+          <UAvatar
+            v-else
+            :src="`https://images.markit.co.in/${collection.image}`"
+            size="2xs"
+          />
+          <span class="truncate">{{ collection.name }}</span>
+        </template>
+      </USelectMenu>
     </UFormGroup>
 
     <!-- DESCRIPTION -->

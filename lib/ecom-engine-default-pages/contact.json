@@ -1,0 +1,26 @@
+{
+  "sections": {
+    "hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "Get in touch",
+        "title": "We're here to help.",
+        "lead": "Whether you have a question about a product, need advice on your detailing setup, or want to report an issue with your order — we'll respond within one business day."
+      }
+    },
+    "contact": {
+      "type": "contact-layout",
+      "settings": {
+        "channels": [
+          { "icon": "mail",           "title": "Email us",  "body": "support@revomotive.ae" },
+          { "icon": "phone",          "title": "Call us",   "body": "+971 50 000 0000" },
+          { "icon": "message-circle", "title": "WhatsApp",  "body": "Mon–Sat, 9am–7pm" }
+        ],
+        "form_title": "Send a message",
+        "submit_label": "Send message",
+        "success_message": "Thanks! We'll get back to you within one business day."
+      }
+    }
+  },
+  "order": ["hero", "contact"]
+}

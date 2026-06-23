@@ -293,10 +293,6 @@ export const updateOpeningBalance = async (openingBalance: {
 
 export const updatePrefixes = async (prefixes: {
     billPrefix: string;
-    quotePrefix: string;
-    salesOrderPrefix: string;
-    invoicePrefix: string;
-    paymentPrefix: string;
     expensePrefix: string;
     distributorPrefix: string;
     distributorPaymentPrefix: string;

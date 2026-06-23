@@ -333,6 +333,7 @@ const columns = [
     { key: 'phone', label: 'Phone', sortable: true },
     { key: 'code', label: 'Code', sortable: true },
     { key: 'role', label: 'Role', sortable: true },
+    { key: 'salaryDue', label: 'Salary Due', sortable: false },
     { key: 'status', label: 'Status', sortable: true },
     { key: 'actions', label: 'Actions', sortable: false },
 ]
@@ -342,6 +343,7 @@ const formData = reactive({
     name: '',
     phone: '',
     role: { label: '', value: '' },
+    openingBalance: 0,
     id:''
 });
 
@@ -351,8 +353,20 @@ const resetForm = () => {
     formData.name = ''
     formData.phone = ''
     formData.role = { label: '', value: '' }
+    formData.openingBalance = 0
     formData.id = ''
 }
+
+// ─── Per-user salary dues (opening balance + accrued − paid) ───
+const dues = ref<Record<string, any>>({})
+const refreshDues = async () => {
+    try {
+        const res: any = await $fetch('/api/salary/dues')
+        dues.value = Object.fromEntries((res.dues ?? []).map((d: any) => [d.userId, d]))
+    } catch { /* non-critical */ }
+}
+onMounted(refreshDues)
+const money = (v: any) => `₹${Number(v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 
 const openCreate = () => {
     resetForm()
@@ -367,6 +381,7 @@ const openEdit = (row) => {
     formData.phone = row.phone || ''
     formData.role.label = row.role
     formData.role.value = row.role
+    formData.openingBalance = Number(row.openingBalance ?? 0)
     formData.id = row.userId
     }
 
@@ -673,7 +688,8 @@ const handleSubmit = async (e: Event) => {
             data: {
             name: formData.name,
             role: formData.role.value,
-            phone: formData.phone?.trim() || null
+            phone: formData.phone?.trim() || null,
+            openingBalance: Number(formData.openingBalance) || 0
             }
         }
         }
@@ -706,6 +722,7 @@ const handleSubmit = async (e: Event) => {
                         role: formData.role.value,
                         phone: formData.phone?.trim() || null,
                         code: userCode,
+                        openingBalance: Number(formData.openingBalance) || 0,
                     }],
                 },
             },
@@ -722,6 +739,7 @@ const handleSubmit = async (e: Event) => {
                         role: formData.role.value,
                         phone: formData.phone?.trim() || null,
                         code: userCode,
+                        openingBalance: Number(formData.openingBalance) || 0,
                         company: {
                             connect: {
                                 id: useAuth().session.value?.companyId!,
@@ -875,6 +893,18 @@ const handleSubmit = async (e: Event) => {
                                 >
                                     {{ row.role?.toUpperCase() }}
                                 </UBadge>
+                            </template>
+                            <template #salaryDue-data="{ row }">
+                                <span
+                                    v-if="dues[row.userId]"
+                                    class="text-xs font-medium"
+                                    :class="(dues[row.userId].due) > 0.009 ? 'text-amber-600' : (dues[row.userId].due) < -0.009 ? 'text-red-500' : 'text-green-600'"
+                                    :title="`Opening ${dues[row.userId].openingBalance} + accrued ${dues[row.userId].accrued} - paid ${dues[row.userId].paid} - credit bills ${dues[row.userId].creditBills || 0}`"
+                                >
+                                    {{ money(dues[row.userId].due) }}
+                                    <span v-if="(dues[row.userId].due) < -0.009" class="text-[10px] text-gray-400">(overpaid)</span>
+                                </span>
+                                <span v-else class="text-xs text-gray-300">—</span>
                             </template>
                             <template #status-data="{ row }">
                                 <UToggle
@@ -1368,6 +1398,13 @@ const handleSubmit = async (e: Event) => {
                         v-model="formData.role"
                         placeholder="Select user role"
                         :options="options"
+                    />
+                </UFormGroup>
+                <UFormGroup name="openingBalance" label="opening balance" hint="+ owed to user, − overpaid" class="mb-5">
+                    <UInput
+                        v-model.number="formData.openingBalance"
+                        type="number"
+                        placeholder="0"
                     />
                 </UFormGroup>
 

@@ -132,22 +132,33 @@ export default defineEventHandler(async (event) => {
        EXPENSES
     -------------------------------------------------- */
 
-    const expenseRes = await client.query(
-      `
-      SELECT COALESCE(SUM(e.total_amount), 0) AS total_expenses
-      FROM expenses e
-      JOIN expense_categories ec
-        ON ec.id = e.expense_category_id
-      WHERE e.company_id = $1
-        AND ec.name <> 'Purchase'
-        AND e.expense_date BETWEEN $2 AND $3
-      `,
-      [companyId, startDate, endDate]
-    )
+    const [expenseRes, salaryExpenseRes] = await Promise.all([
+      client.query(
+        `
+        SELECT COALESCE(SUM(e.total_amount), 0) AS total_expenses
+        FROM expenses e
+        JOIN expense_categories ec
+          ON ec.id = e.expense_category_id
+        WHERE e.company_id = $1
+          AND ec.name <> 'Purchase'
+          AND e.expense_date BETWEEN $2 AND $3
+        `,
+        [companyId, startDate, endDate]
+      ),
+      client.query(
+        `
+        SELECT COALESCE(SUM(amount), 0) AS total_salary_expense
+        FROM salary_payments
+        WHERE company_id = $1
+          AND payment_date BETWEEN $2 AND $3
+        `,
+        [companyId, startDate, endDate]
+      ),
+    ])
 
     const totalExpenses = Number(
       expenseRes.rows[0].total_expenses
-    )
+    ) + Number(salaryExpenseRes.rows[0].total_salary_expense || 0)
 
 
 

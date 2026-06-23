@@ -1,5 +1,6 @@
 import { createError } from 'h3'
 import { pool } from '~/server/db'
+import { ensureAccountLedgerSchema } from '~/server/utils/account-ledger'
 
 export type SummaryWindow = {
   from: string
@@ -590,13 +591,23 @@ async function fetchProfit(context: SummaryContext): Promise<SummaryResponse['pr
     ),
     pool.query(
       `
-      SELECT COALESCE(SUM(e.total_amount), 0) AS total_expenses
-      FROM expenses e
-      JOIN expense_categories ec ON ec.id = e.expense_category_id
-      WHERE e.company_id = $1
-        AND UPPER(e.status) = 'PAID'
-        AND ec.name <> 'Purchase'
-        AND e.expense_date BETWEEN $2 AND $3
+      WITH regular_expenses AS (
+        SELECT COALESCE(SUM(e.total_amount), 0) AS total
+        FROM expenses e
+        JOIN expense_categories ec ON ec.id = e.expense_category_id
+        WHERE e.company_id = $1
+          AND UPPER(e.status) = 'PAID'
+          AND ec.name <> 'Purchase'
+          AND e.expense_date BETWEEN $2 AND $3
+      ),
+      salary_expenses AS (
+        SELECT COALESCE(SUM(amount), 0) AS total
+        FROM salary_payments
+        WHERE company_id = $1
+          AND payment_date BETWEEN $2 AND $3
+      )
+      SELECT
+        (SELECT total FROM regular_expenses) + (SELECT total FROM salary_expenses) AS total_expenses
       `,
       [context.companyId, context.from, context.to]
     ),
@@ -731,6 +742,61 @@ async function fetchStock(context: SummaryContext): Promise<SummaryResponse['sto
 }
 
 async function fetchBalances(context: SummaryContext): Promise<SummaryResponse['balances']> {
+  await ensureAccountLedgerSchema(pool)
+  const [openingRes, closingRes] = await Promise.all([
+    pool.query(
+      `
+      SELECT account_type, COALESCE(SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE -amount END), 0) AS balance
+      FROM account_ledger_entries
+      WHERE company_id = $1
+        AND account_id IS NULL
+        AND account_type IN ('CASH', 'PRIMARY_BANK')
+        AND entry_date < $2
+      GROUP BY account_type
+      `,
+      [context.companyId, context.from],
+    ),
+    pool.query(
+      `
+      SELECT DISTINCT ON (account_type)
+        account_type,
+        balance_after
+      FROM account_ledger_entries
+      WHERE company_id = $1
+        AND account_id IS NULL
+        AND account_type IN ('CASH', 'PRIMARY_BANK')
+        AND entry_date <= $2
+      ORDER BY account_type, entry_date DESC, id DESC
+      `,
+      [context.companyId, context.to],
+    ),
+  ])
+  const openingByType = new Map(openingRes.rows.map((row: any) => [row.account_type, toNumber(row.balance)]))
+  const closingByType = new Map(closingRes.rows.map((row: any) => [row.account_type, toNumber(row.balance_after)]))
+  const cashOpening = openingByType.get('CASH') || 0
+  const bankOpening = openingByType.get('PRIMARY_BANK') || 0
+  const cashClosing = closingByType.get('CASH') ?? cashOpening
+  const bankClosing = closingByType.get('PRIMARY_BANK') ?? bankOpening
+
+  return {
+    cash: {
+      opening: cashOpening,
+      closing: cashClosing,
+      delta: cashClosing - cashOpening,
+    },
+    bank: {
+      opening: bankOpening,
+      closing: bankClosing,
+      delta: bankClosing - bankOpening,
+    },
+    total: {
+      opening: cashOpening + bankOpening,
+      closing: cashClosing + bankClosing,
+      delta: (cashClosing + bankClosing) - (cashOpening + bankOpening),
+    },
+  }
+
+  {
   const [companyRes, beforeRes, periodRes] = await Promise.all([
     pool.query(
       `
@@ -1095,6 +1161,7 @@ async function fetchBalances(context: SummaryContext): Promise<SummaryResponse['
       closing: cashClosing + bankClosing,
       delta: (cashClosing + bankClosing) - (cashOpening + bankOpening),
     },
+  }
   }
 }
 

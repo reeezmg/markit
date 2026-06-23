@@ -16,7 +16,6 @@ export default defineNuxtConfig({
   build: {
     transpile: [
       'trpc-nuxt',
-      '@electric-sql/pglite',
     ]
   },
 
@@ -30,11 +29,7 @@ export default defineNuxtConfig({
 
   vite: {
     optimizeDeps: {
-      exclude: ['@electric-sql/pglite','@point-of-sale/receipt-printer-encoder'],
-    },
-
-    ssr: {
-      noExternal: ['@electric-sql/pglite'],
+      exclude: ['@point-of-sale/receipt-printer-encoder'],
     },
 
     // ⭐ Eager load EVERYTHING → One bundle
@@ -53,17 +48,16 @@ export default defineNuxtConfig({
     '@vueuse/nuxt',
     '@nuxt/image',
     '@nuxtjs/sitemap',
-    'nuxt-icon',
     'nuxt-headlessui',
     '@nuxtjs/tailwindcss',
     '@nuxtjs/robots',
     [
-      'pinia-plugin-persistedstate/nuxt',
-      { autoImports:['piniaPluginPersistedstate'] }
-    ],
-    [
       '@pinia/nuxt',
       { autoImports: ['defineStore', 'acceptHMRUpdate'] }
+    ],
+    [
+      'pinia-plugin-persistedstate/nuxt',
+      { autoImports:['piniaPluginPersistedstate'] }
     ],
   ],
 
@@ -86,6 +80,9 @@ export default defineNuxtConfig({
     sessionSecret: process.env.SESSION_SECRET,
     sourceId: process.env.SOURCE_ID,
     secret: process.env.SECRET,
+    // custom-api (FastAPI) — server-only; seller shipping ops proxy through here.
+    customApiUrl: process.env.CUSTOM_API_URL || 'http://localhost:8000',
+    customApiServiceToken: process.env.CUSTOM_API_SERVICE_TOKEN || '',
 
     public: {
       r2Id: process.env.R2_ID,
@@ -94,11 +91,17 @@ export default defineNuxtConfig({
       r2AccountId: process.env.R2_ACCOUNT_ID,
       baseUrl: process.env.BASE_URL,
       serverUrl: process.env.SERVER_URL,
-      electricApiUrl: process.env.ELECTRIC_API_URL,
+      storefrontUrl: process.env.STOREFRONT_URL || 'http://localhost:5173',
+      // Edit-session container (Cloud Run) — the storefront chat sends prompts here.
+      storefrontEditorUrl: process.env.STOREFRONT_EDITOR_URL || 'https://storefront-sandbox-68712209533.us-central1.run.app',
     }
   },
 
   image: {},
+
+  icon: {
+    serverBundle: 'remote'
+  },
 
   compatibilityDate: '2025-02-28'
 })

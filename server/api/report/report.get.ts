@@ -175,7 +175,13 @@ if (!isZeroOpening) {
       bankMoneyBeforeRes,
 
       /* ---------- BANK TRANSFER ---------- */
-      bankTransferBeforeRes
+      bankTransferBeforeRes,
+
+      /* ---------- CREDIT SALES ---------- */
+      creditSalesBeforeRes,
+
+      /* ---------- USER CREDIT ---------- */
+      userCreditBeforeRes
 
     ] = await Promise.all([
 
@@ -456,8 +462,80 @@ if (!isZeroOpening) {
           AND created_at < $2
         `,
         [companyId, startDate]
-      )
+      ),
 
+
+
+      /* =====================================================
+         CREDIT SALES BEFORE
+      ===================================================== */
+
+      client.query(
+        `
+        WITH split AS (
+          SELECT (elem->>'amount')::numeric AS amount
+          FROM bills b
+          JOIN LATERAL jsonb_array_elements(
+            CASE
+              WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
+              THEN b.split_payments::jsonb
+              ELSE '[]'::jsonb
+            END
+          ) elem ON true
+          WHERE b.company_id = $1
+            AND b.payment_method = 'Split'
+            AND (elem->>'method') = 'Credit'
+            AND b.deleted = false
+            AND b.payment_status IN ('PAID','PENDING')
+            AND b.is_markit = false
+            AND b.created_at < $2
+            AND ($3 = true OR b.precedence IS NOT TRUE)
+        )
+
+        SELECT
+          COALESCE(SUM(
+            CASE
+              WHEN b.payment_method = 'Credit'
+              THEN ${billTotalExpr} ELSE 0 END
+          ),0)
+          +
+          COALESCE((SELECT SUM(amount) FROM split),0)
+          AS total
+
+        FROM bills b
+        WHERE b.company_id = $1
+          AND b.deleted = false
+          AND b.payment_status IN ('PAID','PENDING')
+          AND b.is_markit = false
+          AND b.created_at < $2
+          AND ($3 = true OR b.precedence IS NOT TRUE)
+        `,
+        [companyId, startDate, includeCleanupPrecedence]
+      ),
+
+
+
+      /* =====================================================
+         USER CREDIT BEFORE
+      ===================================================== */
+
+      client.query(
+        `
+        SELECT COALESCE(SUM(
+          CASE
+            WHEN type = 'USER_CREDIT_BILL' THEN amount
+            WHEN type = 'CREDIT_BILL_PAYMENT' THEN -amount
+            ELSE 0
+          END
+        ),0) AS total
+        FROM user_ledger_entries
+        WHERE company_id = $1
+          AND source_type <> 'BILL'
+          AND type IN ('USER_CREDIT_BILL', 'CREDIT_BILL_PAYMENT')
+          AND created_at < $2
+        `,
+        [companyId, startDate]
+      ),
     ])
 
 
@@ -498,7 +576,9 @@ if (!isZeroOpening) {
     const bankTransferNetBefore =
       Number(bankTransferBeforeRes.rows[0].net || 0)
 
-
+    const creditOpening =
+      Number(creditSalesBeforeRes.rows[0].total || 0) +
+      Number(userCreditBeforeRes.rows[0].total || 0)
 
     /* =====================================================
        OPENINGS
@@ -540,6 +620,9 @@ if (!isZeroOpening) {
       /* ---------- EXPENSE ---------- */
       expenseRes,
 
+      /* ---------- SALARY EXPENSE ---------- */
+      salaryExpenseRes,
+
       /* ---------- PURCHASE ---------- */
       purchaseRes,
 
@@ -551,6 +634,9 @@ if (!isZeroOpening) {
 
       /* ---------- MONEY TRANSACTIONS ---------- */
       transactionRes,
+
+      /* ---------- USER CREDIT ---------- */
+      userCreditRes,
 
       /* ---------- TRANSFER DETAIL (per account) ---------- */
       transferDetailRes
@@ -567,14 +653,11 @@ if (!isZeroOpening) {
         `
         SELECT
           COALESCE(SUM(
-            CASE WHEN b.payment_method NOT IN ('Split','Credit')
+            CASE WHEN b.payment_method != 'Split'
             THEN ${billTotalExpr} ELSE 0 END
           ),0)
           +
-          COALESCE(SUM(
-            CASE WHEN sp.method != 'Credit'
-            THEN sp.amount ELSE 0 END
-          ),0) AS total_sales,
+          COALESCE(SUM(sp.amount),0) AS total_sales,
 
           COALESCE(SUM(
             CASE WHEN b.payment_method = 'Cash'
@@ -676,11 +759,31 @@ if (!isZeroOpening) {
 
       client.query(
         `
-        SELECT COALESCE(SUM(
-          CASE WHEN b.payment_method = 'Credit'
-          THEN ${billTotalExpr} ELSE 0 END
-        ),0) AS total_credit_sales
+        SELECT
+          COALESCE(SUM(
+            CASE WHEN b.payment_method = 'Credit'
+            THEN ${billTotalExpr} ELSE 0 END
+          ),0)
+          +
+          COALESCE(SUM(
+            CASE WHEN sp.method = 'Credit'
+            THEN sp.amount ELSE 0 END
+          ),0) AS total_credit_sales
         FROM bills b
+
+        LEFT JOIN LATERAL (
+          SELECT
+            (elem->>'method') AS method,
+            (elem->>'amount')::numeric AS amount
+          FROM jsonb_array_elements(
+            CASE
+              WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
+              THEN b.split_payments::jsonb
+              ELSE '[]'::jsonb
+            END
+          ) elem
+        ) sp ON b.payment_method = 'Split'
+
         WHERE b.company_id = $1
           AND b.deleted = false
           AND b.payment_status IN ('PAID','PENDING')
@@ -712,6 +815,16 @@ if (!isZeroOpening) {
         WHERE company_id = $1
           AND UPPER(status) = 'PAID'
           AND expense_date BETWEEN $2 AND $3
+        `,
+        [companyId, startDate, endDate]
+      ),
+
+      client.query(
+        `
+        SELECT COALESCE(SUM(amount), 0) AS total_salary_expense
+        FROM salary_payments
+        WHERE company_id = $1
+          AND payment_date BETWEEN $2 AND $3
         `,
         [companyId, startDate, endDate]
       ),
@@ -865,6 +978,26 @@ if (!isZeroOpening) {
 
       client.query(
         `
+        SELECT COALESCE(SUM(
+          CASE
+            WHEN type = 'USER_CREDIT_BILL' THEN amount
+            WHEN type = 'CREDIT_BILL_PAYMENT' THEN -amount
+            ELSE 0
+          END
+        ),0) AS total
+        FROM user_ledger_entries
+        WHERE company_id = $1
+          AND source_type <> 'BILL'
+          AND type IN ('USER_CREDIT_BILL', 'CREDIT_BILL_PAYMENT')
+          AND created_at BETWEEN $2 AND $3
+        `,
+        [companyId, startDate, endDate]
+      ),
+
+
+
+      client.query(
+        `
         WITH t AS (
           SELECT
             at.from_type,
@@ -923,9 +1056,11 @@ if (!isZeroOpening) {
     const sales = salesRes.rows[0]
     const creditRow = creditSalesRes.rows[0]
     const exp = expenseRes.rows[0]
+    const salaryExpense = Number(salaryExpenseRes.rows[0]?.total_salary_expense || 0)
     const purchase = purchaseRes.rows[0]
     const transfers = transferRes.rows[0]
     const transactions = transactionRes.rows[0]
+    const userCredit = userCreditRes.rows[0]
     const categories = categoryRes.rows
     const brands = brandRes.rows
     const transferDetail = transferDetailRes.rows
@@ -952,7 +1087,10 @@ if (!isZeroOpening) {
       Number(transactions.bank_credit || 0) -
       Number(transactions.bank_debit || 0)
 
-
+    const creditBalance =
+      creditOpening +
+      Number(creditRow.total_credit_sales || 0) +
+      Number(userCredit.total || 0)
 
     /* =====================================================
        FINAL BALANCES
@@ -990,7 +1128,7 @@ if (!isZeroOpening) {
       transferBankNet
 
     const totalBalance =
-      cashBalance + bankBalance
+      cashBalance + bankBalance + creditBalance
 
 
 
@@ -1021,7 +1159,8 @@ if (!isZeroOpening) {
 
       /* ---------- EXPENSES ---------- */
 
-      totalExpenses: Number(exp.total_expense || 0),
+      totalExpenses: Number(exp.total_expense || 0) + salaryExpense,
+      salaryExpense,
 
       expensesByPaymentMethod: {
         Cash: Number(exp.cash || 0),
@@ -1096,10 +1235,12 @@ if (!isZeroOpening) {
         opening: {
           cash: cashOpening,
           bank: bankOpening,
-          total: cashOpening + bankOpening
+          credit: creditOpening,
+          total: cashOpening + bankOpening + creditOpening
         },
         cashBalance,
         bankBalance,
+        creditBalance,
         totalBalance
       },
 

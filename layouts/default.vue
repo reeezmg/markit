@@ -1,11 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
 import AiChatChatBox from '~/components/AiChat/ChatBox.vue';
-import {
-    useCountTrynbuy
-} from '~/lib/hooks';
-
-const checkoutStore = useCheckoutStore()
 
 const route = useRoute();
 const useAuth = () => useNuxtApp().$auth;
@@ -20,22 +15,6 @@ const { isHelpSlideoverOpen } = useDashboard();
 
 const auth = useAuth();
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
-
-const { data: orderCount, refetch } = useCountTrynbuy({
-  where: {
-    company: {
-      some: { id: useAuth().session.value?.companyId }, 
-    },
-    orderStatus: 'ORDER_RECEIVED',
-  },
-})
-
-
-watch(orderCount,(val) => {
-    console.log(val)
-})
-
-watch(() => checkoutStore.lastUpdate, async () => await refetch(), { immediate: true })
 
 onMounted(() => {
   const saved = localStorage.getItem('storetools_sidebar_collapsed')
@@ -126,6 +105,93 @@ const links = computed(() => {
       },
     },
     {
+      id: 'collections',
+      label: 'Collections',
+      to: `/products/collections`,
+      icon: 'i-heroicons-squares-2x2',
+      tooltip: {
+        text: 'Collections',
+        shortcuts: ['P', 'O'],
+      },
+    },
+    {
+      id: 'ecom',
+      label: 'Ecom',
+      icon: 'i-heroicons-globe-alt',
+      children: [
+        {
+          id: 'ecom-storefront',
+          label: 'Storefront Editor',
+          to: '/storefront/editor',
+          icon: 'i-heroicons-paint-brush',
+          tooltip: {
+            text: 'Storefront Editor',
+            shortcuts: ['C', 'E'],
+          },
+        },
+        {
+          id: 'ecom-faq',
+          label: 'FAQ',
+          to: '/ecommerce-cms/faq',
+          icon: 'i-heroicons-question-mark-circle',
+          tooltip: {
+            text: 'FAQ',
+            shortcuts: ['C', 'F'],
+          },
+        },
+        {
+          id: 'ecom-feedback',
+          label: 'Feedback',
+          to: '/ecommerce-cms/feedback',
+          icon: 'i-heroicons-chat-bubble-left-right',
+          tooltip: {
+            text: 'Feedback',
+            shortcuts: ['C', 'R'],
+          },
+        },
+        {
+          id: 'ecom-blogs',
+          label: 'Blogs',
+          to: '/ecommerce-cms/blogs',
+          icon: 'i-heroicons-newspaper',
+          tooltip: {
+            text: 'Blogs',
+            shortcuts: ['C', 'B'],
+          },
+        },
+        {
+          id: 'ecom-policies',
+          label: 'Policies',
+          to: '/ecommerce-cms/policies',
+          icon: 'i-heroicons-document-text',
+          tooltip: {
+            text: 'Policies',
+            shortcuts: ['C', 'P'],
+          },
+        },
+        {
+          id: 'ecom-payment',
+          label: 'Payment',
+          to: '/ecommerce-cms/payment',
+          icon: 'i-heroicons-credit-card',
+          tooltip: {
+            text: 'Payment Gateway',
+            shortcuts: ['C', 'G'],
+          },
+        },
+        {
+          id: 'ecom-shipping',
+          label: 'Shipping',
+          to: '/ecommerce-cms/shipping',
+          icon: 'i-heroicons-truck',
+          tooltip: {
+            text: 'Shipping Integrations',
+            shortcuts: ['C', 'H'],
+          },
+        },
+      ],
+    },
+    {
       id: 'stocks',
       label: 'Stocks',
       to: `/products/stocks`,
@@ -136,24 +202,41 @@ const links = computed(() => {
       },
     },
     {
-      id: 'trynbuy',
-      label: 'Try N Buy',
-      to: `/order/trynbuy`,
-      icon: 'i-heroicons-shopping-bag',
-      ...(orderCount.value ? { badge: `${orderCount.value}` } : {}),
+      id: 'bookings',
+      label: 'Orders',
+      to: `/order/ecomorders`,
+      icon: 'i-heroicons-bookmark',
       tooltip: {
-        text: 'trynbuy',
-        shortcuts: ['O', 'T'],
+        text: 'Orders',
+        shortcuts: ['O', 'B'],
       },
     },
     {
-      id: 'bookings',
-      label: 'Bookings',
-      to: `/order/bookings`,
-      icon: 'i-heroicons-bookmark',
+      id: 'ndr',
+      label: 'NDR',
+      to: `/order/ndr`,
+      icon: 'i-heroicons-exclamation-triangle',
       tooltip: {
-        text: 'Bookings',
-        shortcuts: ['O', 'B'],
+        text: 'Failed deliveries (NDR)',
+      },
+    },
+    {
+      id: 'pickup',
+      label: 'Pickup',
+      to: `/order/pickup`,
+      icon: 'i-heroicons-truck',
+      tooltip: {
+        text: 'Pickup requests & locations',
+      },
+    },
+    {
+      id: 'requests',
+      label: 'Requests',
+      to: `/order/requests`,
+      icon: 'i-heroicons-arrow-path-rounded-square',
+      tooltip: {
+        text: 'Requests',
+        shortcuts: ['O', 'R'],
       },
     },
     {
@@ -181,6 +264,49 @@ const links = computed(() => {
       label: 'Settings',
       to: `/settings`,
       icon: 'i-heroicons-cog-8-tooth',
+      children: [
+        {
+          label: 'General',
+          to: '/settings',
+          exact: true,
+          tooltip: {
+            text: 'Settings',
+            shortcuts: ['S', 'G'],
+          },
+        },
+        {
+          label: 'Store',
+          to: '/settings/store',
+          tooltip: {
+            text: 'Store Settings',
+            shortcuts: ['S', 'S'],
+          },
+        },
+        {
+          label: 'Printer',
+          to: '/settings/printer',
+          tooltip: {
+            text: 'Printer Settings',
+            shortcuts: ['S', 'P'],
+          },
+        },
+        {
+          label: 'Numbering',
+          to: '/settings/numbering',
+          tooltip: {
+            text: 'Numbering & Prefixes',
+            shortcuts: ['S', 'N'],
+          },
+        },
+        {
+          label: 'Requests',
+          to: '/settings/requests',
+          tooltip: {
+            text: 'Request Settings',
+            shortcuts: ['S', 'R'],
+          },
+        },
+      ],
       tooltip: {
         text: 'Settings',
         shortcuts: ['S', 'G'],
@@ -205,50 +331,22 @@ const links = computed(() => {
             to: '/erp',
             icon: 'i-heroicons-credit-card',
             children: [
-                ...(auth.session.value?.companyType === 'service'
-                    ? [
-                        {
-                            label: 'Quotes',
-                            to: `/quotes`,
-                            tooltip: { text: 'Quotes', shortcuts: ['E', 'Q'] },
-                            exact: true,
-                        },
-                        {
-                            label: 'Sales Orders',
-                            to: `/sales-orders`,
-                            tooltip: { text: 'Sales Orders', shortcuts: ['E', 'O'] },
-                        },
-                        {
-                            label: 'Invoices',
-                            to: `/invoices`,
-                            tooltip: { text: 'Invoices', shortcuts: ['E', 'I'] },
-                            exact: true,
-                        },
-                        {
-                            label: 'Payments Received',
-                            to: `/payments`,
-                            tooltip: { text: 'Payments Received', shortcuts: ['E', 'P'] },
-                            exact: true,
-                        },
-                    ]
-                    : [
-                        {
-                            label: 'Billing',
-                            to: `/erp/billing`,
-                            tooltip: { text: 'ERP', shortcuts: ['E', 'B'] },
-                            exact: true,
-                        },
-                        {
-                            label: 'Sales',
-                            to: `/erp/sales`,
-                            tooltip: { text: 'ERP', shortcuts: ['E', 'S'] },
-                        },
-                        {
-                            label: 'Online',
-                            to: `/erp/online`,
-                            tooltip: { text: 'Online Sales', shortcuts: ['E', 'O'] },
-                        },
-                    ]),
+                {
+                    label: 'Billing',
+                    to: `/erp/billing`,
+                    tooltip: { text: 'ERP', shortcuts: ['E', 'B'] },
+                    exact: true,
+                },
+                {
+                    label: 'Sales',
+                    to: `/erp/sales`,
+                    tooltip: { text: 'ERP', shortcuts: ['E', 'S'] },
+                },
+                {
+                    label: 'Online',
+                    to: `/erp/online`,
+                    tooltip: { text: 'Online Sales', shortcuts: ['E', 'O'] },
+                },
                 {
                     label: 'Expenses',
                     to: `/erp/expenses`,
@@ -267,15 +365,6 @@ const links = computed(() => {
                 },
             ],
         },
-        ...(auth.session.value?.companyType === 'service'
-            ? [{
-                id: 'projects',
-                label: 'Projects',
-                to: '/projects',
-                icon: 'i-heroicons-briefcase',
-                tooltip: { text: 'Projects', shortcuts: ['P'] },
-            }]
-            : []),
         {
         id: 'reports',
         label: 'Reports',
@@ -396,6 +485,14 @@ const links = computed(() => {
                     shortcuts: ['P', 'B'],
                     },
                 },
+                   {
+                    label: 'Collections',
+                    to: `/products/collections`,
+                    tooltip: {
+                    text: 'products',
+                    shortcuts: ['P', 'O'],
+                    },
+                },
                      {
                     label: 'Stocks',
                     to: `/products/stocks`,
@@ -461,23 +558,34 @@ const links = computed(() => {
             children: [
             ...(auth.session.value?.companyType === 'seller' || auth.session.value?.companyType === 'buyer'
                     ? [
-                       {
-                        id: 'trynbuy',
-                        label: 'Try N Buy',
-                        to: `/order/trynbuy`,
-                        ...(orderCount.value ? { badge: `${orderCount.value}` } : {}),
-                        tooltip: {
-                            text: 'trynbuy',
-                            shortcuts: ['O', 'T'],
-                        },
-                        },
-
                         {
-                        label: 'Bookings',
-                        to: `/order/bookings`, 
+                        label: 'Orders',
+                        to: `/order/ecomorders`,
                         tooltip: {
-                            text: 'Bookings',
+                            text: 'Orders',
                             shortcuts: ['O', 'B'],
+                        },
+                        },
+                        {
+                        label: 'Requests',
+                        to: `/order/requests`,
+                        tooltip: {
+                            text: 'Requests',
+                            shortcuts: ['O', 'R'],
+                        },
+                        },
+                        {
+                        label: 'NDR',
+                        to: `/order/ndr`,
+                        tooltip: {
+                            text: 'Failed deliveries (NDR)',
+                        },
+                        },
+                        {
+                        label: 'Pickup',
+                        to: `/order/pickup`,
+                        tooltip: {
+                            text: 'Pickup requests & locations',
                         },
                         },
                       ]
@@ -508,6 +616,24 @@ const links = computed(() => {
                     tooltip: {
                         text: 'Cash',
                         shortcuts: ['A', 'C'],
+                    },
+                },
+                {
+                    label: 'Tax',
+                    to: `/accounts/tax`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Tax Account',
+                        shortcuts: ['A', 'X'],
+                    },
+                },
+                {
+                    label: 'Credit',
+                    to: `/accounts/credit`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Credit Account',
+                        shortcuts: ['A', 'R'],
                     },
                 },
                                 {
@@ -544,10 +670,65 @@ const links = computed(() => {
                       label: 'Users',
                       icon: 'i-heroicons-user-group',
                       to: `/users`,
-                      tooltip: {
-                          text: 'Users',
-                          shortcuts: ['U', 'U'],
-                      },
+                      children: [
+                          {
+                              label: 'Users',
+                              to: `/users`,
+                              exact: true,
+                              tooltip: {
+                                  text: 'Users',
+                                  shortcuts: ['U', 'U'],
+                              },
+                          },
+                          {
+                              label: 'Salary',
+                              to: `/users/salary`,
+                              tooltip: {
+                                  text: 'Salary',
+                                  shortcuts: ['U', 'S'],
+                              },
+                          },
+                          {
+                              label: 'Credit Bills',
+                              to: `/users/credit-bills`,
+                              tooltip: {
+                                  text: 'Credit Bills',
+                                  shortcuts: ['U', 'C'],
+                              },
+                          },
+                          {
+                              label: 'User Ledger',
+                              to: `/users/ledger`,
+                              tooltip: {
+                                  text: 'User Ledger',
+                                  shortcuts: ['U', 'L'],
+                              },
+                          },
+                          {
+                              label: 'Attendance',
+                              to: `/users/attendance`,
+                              tooltip: {
+                                  text: 'Attendance',
+                                  shortcuts: ['U', 'A'],
+                              },
+                          },
+                          {
+                              label: 'Holiday',
+                              to: `/users/holidays`,
+                              tooltip: {
+                                  text: 'Holiday',
+                                  shortcuts: ['U', 'O'],
+                              },
+                          },
+                          {
+                              label: 'Shift',
+                              to: `/users/shift`,
+                              tooltip: {
+                                  text: 'Shift',
+                                  shortcuts: ['U', 'H'],
+                              },
+                          },
+                      ],
                   },
               
       
@@ -562,16 +743,77 @@ const links = computed(() => {
             },
         },
         {
-            id: 'Coupons',
-            label: 'Coupons',
-            icon: 'i-heroicons-ticket',
-            to: `/coupon`,
-            tooltip: {
-                text: 'Coupons',
-                shortcuts: ['C', 'P'],
-            },
+            id: 'ecom',
+            label: 'Ecom',
+            to: '/storefront/editor',
+            icon: 'i-heroicons-globe-alt',
+            children: [
+                {
+                    label: 'Storefront Editor',
+                    to: '/storefront/editor',
+                    exact: true,
+                    tooltip: {
+                        text: 'Storefront Editor',
+                        shortcuts: ['C', 'E'],
+                    },
+                },
+                {
+                    label: 'FAQ',
+                    to: '/ecommerce-cms/faq',
+                    exact: true,
+                    tooltip: {
+                        text: 'FAQ',
+                        shortcuts: ['C', 'F'],
+                    },
+                },
+                {
+                    label: 'Feedback',
+                    to: '/ecommerce-cms/feedback',
+                    exact: true,
+                    tooltip: {
+                        text: 'Feedback',
+                        shortcuts: ['C', 'R'],
+                    },
+                },
+                {
+                    label: 'Blogs',
+                    to: '/ecommerce-cms/blogs',
+                    exact: true,
+                    tooltip: {
+                        text: 'Blogs',
+                        shortcuts: ['C', 'B'],
+                    },
+                },
+                {
+                    label: 'Policies',
+                    to: '/ecommerce-cms/policies',
+                    exact: true,
+                    tooltip: {
+                        text: 'Policies',
+                        shortcuts: ['C', 'P'],
+                    },
+                },
+                {
+                    label: 'Payment',
+                    to: '/ecommerce-cms/payment',
+                    exact: true,
+                    tooltip: {
+                        text: 'Payment Gateway',
+                        shortcuts: ['C', 'G'],
+                    },
+                },
+                {
+                    label: 'Shipping',
+                    to: '/ecommerce-cms/shipping',
+                    exact: true,
+                    tooltip: {
+                        text: 'Shipping Integrations',
+                        shortcuts: ['C', 'H'],
+                    },
+                },
+            ],
         },
-        
+
         {
             id: 'settings',
             label: 'Settings',
@@ -615,11 +857,11 @@ const links = computed(() => {
                     },
                 },
                 {
-                    label: 'Preferences',
-                    to: `/settings/preferences`,
+                    label: 'Requests',
+                    to: `/settings/requests`,
                     exact: true,
                     tooltip: {
-                        text: 'Preferences',
+                        text: 'Request Settings',
                         shortcuts: ['S', 'R'],
                     },
                 },

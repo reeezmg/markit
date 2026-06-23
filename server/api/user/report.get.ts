@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { prisma } from '~/server/prisma'
+import { calculateNetSalesByKey } from '~/server/utils/user-sales'
 
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
@@ -15,6 +16,19 @@ export default defineEventHandler(async (event) => {
 
 const startDate = query.startDate ? new Date(query.startDate as string) : undefined
 const endDate = query.endDate ? new Date(query.endDate as string) : undefined
+
+  const companyUsers = await prisma.companyUser.findMany({
+    where: {
+      companyId: session.data.companyId,
+      deleted: false,
+    },
+    select: {
+      userId: true,
+      name: true,
+      code: true,
+    },
+    orderBy: [{ name: 'asc' }, { code: 'asc' }],
+  })
 
   const entries = await prisma.entry.findMany({
     where: {
@@ -51,72 +65,149 @@ const endDate = query.endDate ? new Date(query.endDate as string) : undefined
       },
       companyUser: {
         select: {
+          userId: true,
           name: true,
+          code: true,
         }
       }
     }
   })
 
-  const processed: Record<string, { count: number; total: number }> = {}
+  const payrollWhere =
+    startDate && endDate
+      ? {
+          cycle: {
+            periodStart: { gte: startDate },
+            periodEnd: { lte: endDate },
+          },
+        }
+      : {}
+
+  const [payrollLines, salaryPayments, attendances] = await Promise.all([
+    prisma.payrollCycleLine.findMany({
+      where: {
+        companyId: session.data.companyId,
+        ...payrollWhere,
+      },
+      select: {
+        userId: true,
+        baseSalary: true,
+        commissionAmount: true,
+        netPay: true,
+        presentDays: true,
+        absentDays: true,
+        halfDays: true,
+      },
+    }),
+    prisma.salaryPayment.findMany({
+      where: {
+        companyId: session.data.companyId,
+        ...(startDate && endDate && {
+          paymentDate: {
+            gte: startDate,
+            lte: endDate,
+          },
+        }),
+      },
+      select: {
+        userId: true,
+        amount: true,
+      },
+    }),
+    prisma.attendance.findMany({
+      where: {
+        companyId: session.data.companyId,
+        ...(startDate && endDate && {
+          date: {
+            gte: startDate,
+            lte: endDate,
+          },
+        }),
+      },
+      select: {
+        userId: true,
+        status: true,
+      },
+    }),
+  ])
+
   const entryGroups: Record<string, any[]> = {}
+  const processed = calculateNetSalesByKey(entries, (entry) => entry.companyUser?.userId || 'Unknown')
 
-  // Group by bill to distribute bill-level discount across non-return entries.
-  const entriesByBill: Record<string, typeof entries> = {}
-  for (const entry of entries) {
-    if (!entriesByBill[entry.billId]) entriesByBill[entry.billId] = []
-    entriesByBill[entry.billId].push(entry)
+  for (const userId of Object.keys(processed)) {
+    entryGroups[userId] = processed[userId].entries.map(({ entry, netValue }) => ({
+      ...entry,
+      value: netValue,
+    }))
   }
 
-  for (const billId of Object.keys(entriesByBill)) {
-    const billEntries = entriesByBill[billId]
-    const salesEntries = billEntries.filter((entry) => !entry.return)
-
-    const salesValueTotal = salesEntries.reduce(
-      (sum, entry) => sum + Number(entry.value || 0),
-      0
-    )
-
-    let cappedBillDiscount = 0
-    if (salesValueTotal > 0) {
-      const rawDiscount = Number(salesEntries[0]?.bill?.discount || 0)
-      const billDiscountAmount =
-        rawDiscount < 0
-          ? Math.abs(rawDiscount)
-          : (salesValueTotal * rawDiscount) / 100
-      cappedBillDiscount = Math.min(billDiscountAmount, salesValueTotal)
+  const payrollByUser = new Map<string, any>()
+  for (const line of payrollLines) {
+    const current = payrollByUser.get(line.userId) || {
+      salaryEarned: 0,
+      commissionEarned: 0,
+      netSalaryEarned: 0,
+      payrollPresentDays: 0,
+      payrollAbsentDays: 0,
+      payrollHalfDays: 0,
     }
-
-    for (const entry of billEntries) {
-      const name = entry.companyUser?.name || 'Unknown'
-      if (!processed[name]) {
-        processed[name] = { count: 0, total: 0 }
-        entryGroups[name] = []
-      }
-
-      const entryValue = Number(entry.value || 0)
-      let netValue = 0
-
-      if (entry.return) {
-        // Returns reduce sales; keep them visible as negative values.
-        netValue = -entryValue
-      } else if (salesValueTotal > 0) {
-        const discountShare = (entryValue / salesValueTotal) * cappedBillDiscount
-        netValue = entryValue - discountShare
-      } else {
-        netValue = entryValue
-      }
-
-      processed[name].count += 1
-      processed[name].total += netValue
-      entryGroups[name].push({
-        ...entry,
-        value: Number(netValue.toFixed(2))
-      })
-    }
+    current.salaryEarned += Number(line.baseSalary || 0)
+    current.commissionEarned += Number(line.commissionAmount || 0)
+    current.netSalaryEarned += Number(line.netPay || 0)
+    current.payrollPresentDays += Number(line.presentDays || 0)
+    current.payrollAbsentDays += Number(line.absentDays || 0)
+    current.payrollHalfDays += Number(line.halfDays || 0)
+    payrollByUser.set(line.userId, current)
   }
 
-  const labels = Object.keys(processed)
-  const countData = labels.map(name => processed[name].count)
-  const salesData = labels.map(name => Number(processed[name].total.toFixed(2)))
-  return { labels, countData, salesData, entryGroups }
+  const paidByUser = new Map<string, number>()
+  for (const payment of salaryPayments) {
+    paidByUser.set(payment.userId, (paidByUser.get(payment.userId) || 0) + Number(payment.amount || 0))
+  }
+
+  const attendanceByUser = new Map<string, any>()
+  for (const attendance of attendances) {
+    const current = attendanceByUser.get(attendance.userId) || {
+      presentDays: 0,
+      absentDays: 0,
+      halfDays: 0,
+      attendanceRows: 0,
+    }
+    current.attendanceRows += 1
+    if (attendance.status === 'PRESENT') current.presentDays += 1
+    else if (attendance.status === 'HALF_DAY') {
+      current.presentDays += 0.5
+      current.absentDays += 0.5
+      current.halfDays += 1
+    } else if (attendance.status === 'ABSENT' || attendance.status === 'LEAVE') {
+      current.absentDays += 1
+    }
+    attendanceByUser.set(attendance.userId, current)
+  }
+
+  const userSummaries = companyUsers.map((user) => {
+    const sales = processed[user.userId]
+    const payroll = payrollByUser.get(user.userId) || {}
+    const attendance = attendanceByUser.get(user.userId) || {}
+    return {
+      userId: user.userId,
+      name: user.name || 'Unknown',
+      code: user.code || '',
+      count: sales?.count || 0,
+      sales: Number((sales?.total || 0).toFixed(2)),
+      salaryEarned: Number((payroll.salaryEarned || 0).toFixed(2)),
+      netSalaryEarned: Number((payroll.netSalaryEarned || 0).toFixed(2)),
+      salaryPaid: Number((paidByUser.get(user.userId) || 0).toFixed(2)),
+      commissionEarned: Number((payroll.commissionEarned || 0).toFixed(2)),
+      presentDays: Number((payroll.payrollPresentDays ?? attendance.presentDays ?? 0).toFixed(2)),
+      absentDays: Number((payroll.payrollAbsentDays ?? attendance.absentDays ?? 0).toFixed(2)),
+      halfDays: Number((payroll.payrollHalfDays ?? attendance.halfDays ?? 0).toFixed(2)),
+      attendanceRows: attendance.attendanceRows || 0,
+    }
+  })
+
+  const labels = userSummaries.map(user => user.name)
+  const countData = userSummaries.map(user => user.count)
+  const salesData = userSummaries.map(user => user.sales)
+  return { labels, countData, salesData, entryGroups, userSummaries }
 })

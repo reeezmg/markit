@@ -2,6 +2,8 @@ import crypto from 'crypto'
 import { createError } from 'h3'
 import { pool } from '~/server/db'
 import { generateCouponsForBill } from '~/server/utils/generatedCoupons'
+import { creditAmountFromBill, deleteUserLedgerEntryForSource, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
+import { billLedgerRows, ensureAccountLedgerSchema, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
 
 function toNumber(value: unknown) {
   const numeric = Number(value ?? 0)
@@ -71,11 +73,12 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
+    await ensureAccountLedgerSchema(client)
     await client.query('BEGIN')
 
     const billResult = await client.query(
       `
-      SELECT id, client_id, redeemed_points, bill_points, company_id
+      SELECT id, client_id, redeemed_points, bill_points, company_id, invoice_number
       FROM bills
       WHERE id = $1
       FOR UPDATE
@@ -125,9 +128,10 @@ export default defineEventHandler(async (event) => {
         payment_status = $8,
         split_payments = $9::jsonb,
         account_id = $10,
-        client_id = $11,
-        created_at = $12,
-        company_id = $13,
+        credit_user_id = $11,
+        client_id = $12,
+        created_at = $13,
+        company_id = $14,
         updated_at = now()
       WHERE id = $1
       `,
@@ -142,11 +146,55 @@ export default defineEventHandler(async (event) => {
         billData.paymentStatus || 'PAID',
         toJson(billData.splitPayments),
         billData.accountId || null,
+        billData.creditUserId || null,
         resolvedClientId,
         billData.date,
         resolvedCompanyId,
       ],
     )
+
+    if (billData.creditUserId) {
+      await upsertUserLedgerEntry(client, {
+        companyId: resolvedCompanyId,
+        userId: billData.creditUserId,
+        type: 'USER_CREDIT_BILL',
+        direction: 'DEBIT',
+        sourceType: 'BILL',
+        sourceId: billData.id,
+        amount: creditAmountFromBill({
+          paymentMethod: billData.paymentMethod || 'Cash',
+          splitPayments: billData.splitPayments,
+          grandTotal: billData.grandTotal || 0,
+        }),
+        note: `Bill credit${existingBill.invoice_number ? ` #${existingBill.invoice_number}` : ''}`,
+        createdAt: billData.date,
+      })
+    } else {
+      await deleteUserLedgerEntryForSource(client, {
+        companyId: resolvedCompanyId,
+        sourceType: 'BILL',
+        sourceId: billData.id,
+        type: 'USER_CREDIT_BILL',
+      })
+    }
+
+    await rebuildAccountLedgerForSource(client, {
+      companyId: resolvedCompanyId,
+      sourceType: 'BILL',
+      sourceId: billData.id,
+      rows: billLedgerRows({
+        id: billData.id,
+        companyId: resolvedCompanyId,
+        paymentMethod: billData.paymentMethod || 'Cash',
+        paymentStatus: billData.paymentStatus || 'PAID',
+        splitPayments: billData.splitPayments,
+        grandTotal: billData.grandTotal || 0,
+        createdAt: billData.date,
+        deleted: false,
+        isMarkit: false,
+        invoiceNumber: existingBill.invoice_number,
+      }),
+    })
 
     // Snapshot the pre-edit state of every edited entry in ONE query
     // (was one SELECT per edited row). Entries are still pre-edit here, which

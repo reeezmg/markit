@@ -4,25 +4,13 @@ import { ref, computed } from 'vue'
 import BankForm from '~/components/Bank/Form.vue'
 
 import {
-  useCreateBankAccount,
-  useUpdateBankAccount,
-  useDeleteBankAccount,
   useFindManyBankAccount,
   useFindUniqueCompany,
-  useUpdateCompany,
 } from '~/lib/hooks'
 
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
 const PRIMARY_BANK_DETAILS_URL = '/accounts/bank/primary'
-
-/* ---------------------------------------------------
-   HOOKS
---------------------------------------------------- */
-const createBank = useCreateBankAccount({ optimisticUpdate: true })
-const updateBank = useUpdateBankAccount({ optimisticUpdate: true })
-const deleteBank = useDeleteBankAccount({ optimisticUpdate: true })
-const updateCompany = useUpdateCompany({ optimisticUpdate: true })
 
 /* ---------------------------------------------------
    MODAL STATE
@@ -48,56 +36,18 @@ const closeBankForm = () => {
 /* ---------------------------------------------------
    CREATE / UPDATE
 --------------------------------------------------- */
-const addBank = (bank: any) => {
-  createBank.mutate({
-    data: {
-      accHolderName: bank.accHolderName,
-      bankName: bank.bankName,
-      accountNo: bank.accountNo,
-      ifsc: bank.ifsc,
-      gstin: bank.gstin,
-      upiId: bank.upiId,
-      openingBalance: Number(bank.openingBalance),
-      company: {
-        connect: { id: useAuth().session.value!.companyId },
-      },
-    },
-  })
-
+const addBank = async (bank: any) => {
+  await $fetch('/api/accounts/banks', { method: 'POST', body: bank })
   toast.add({ title: 'Bank account added', color: 'green' })
 }
 
 const editSecondaryBank = async (id: string, bank: any) => {
-  await updateBank.mutateAsync({
-    where: { id },
-    data: {
-      accHolderName: bank.accHolderName,
-      bankName: bank.bankName,
-      accountNo: bank.accountNo,
-      ifsc: bank.ifsc,
-      gstin: bank.gstin,
-      upiId: bank.upiId,
-      openingBalance: Number(bank.openingBalance),
-    },
-  })
-
+  await $fetch(`/api/accounts/banks/${id}`, { method: 'PUT', body: bank })
   toast.add({ title: 'Bank account updated', color: 'green' })
 }
 
 const editPrimaryBank = async (bank: any) => {
-  await updateCompany.mutateAsync({
-    where: { id: useAuth().session.value!.companyId },
-    data: {
-      accHolderName: bank.accHolderName,
-      bankName: bank.bankName,
-      accountNo: bank.accountNo,
-      ifsc: bank.ifsc,
-      gstin: bank.gstin,
-      upiId: bank.upiId,
-      bank: Number(bank.openingBalance ?? 0),
-      openingBankDate: bank.openingBankDate ? new Date(bank.openingBankDate) : null,
-    },
-  })
+  await $fetch('/api/accounts/primary-bank', { method: 'PUT', body: bank })
 
   toast.add({ title: 'Primary bank updated', color: 'green' })
 }
@@ -118,9 +68,7 @@ const saveBank = async (form: any) => {
    DELETE
 --------------------------------------------------- */
 const confirmDelete = async () => {
-  await deleteBank.mutateAsync({
-    where: { id: deletingRow.value.id },
-  })
+  await $fetch(`/api/accounts/banks/${deletingRow.value.id}`, { method: 'DELETE' })
   toast.add({ title: 'Bank account deleted', color: 'green' })
   isDeleteModalOpen.value = false
 }
@@ -189,7 +137,10 @@ const rows = computed(() => {
       ifsc: b.ifsc,
       upiId: b.upiId,
       isPrimary: false,
-      raw: b,
+      raw: {
+        ...b,
+        openingBankDate: b.openingBalanceDate ?? b.createdAt ?? null,
+      },
     })) ?? []
 
   return [...primary, ...others]

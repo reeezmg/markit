@@ -87,7 +87,7 @@ export default defineEventHandler(async (event) => {
       const allItems: any[] = []
 
       if (variants.length) {
-        const VC = 12 // params per variant row (delivery_type shared param appended after)
+        const VC = 13 // params per variant row (delivery_type shared param appended after)
         const vVals: any[] = []
         const vRows = variants.map((variant: any, i: number) => {
           const variantId = crypto.randomUUID()
@@ -101,17 +101,17 @@ export default defineEventHandler(async (event) => {
           vVals.push(
             variantId, variant.name || '', variant.code || null, variant.unit || 'Nos',
             variant.sprice || 0, variant.pprice || 0, variant.dprice || 0, variant.discount || 0,
-            taxFor(variant.sprice), imageUUIDs, companyId, productId,
+            taxFor(variant.sprice), imageUUIDs, companyId, productId, variant.weight || 0,
           )
           const p = Array.from({ length: VC }, (_, k) => `$${base + k + 1}`)
-          // id,name,code,unit,s_price,p_price,d_price,discount,delivery_type,status,tax,images,company_id,product_id
-          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6]},${p[7]},$${variants.length * VC + 1},true,${p[8]},${p[9]},${p[10]},${p[11]},now(),now())`
+          // id,name,code,unit,s_price,p_price,d_price,discount,delivery_type,status,tax,images,company_id,product_id,weight
+          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6]},${p[7]},$${variants.length * VC + 1},true,${p[8]},${p[9]},${p[10]},${p[11]},${p[12]},now(),now())`
         })
         await client.query(
           `INSERT INTO variants(
              id, name, code, unit, s_price, p_price, d_price,
              discount, delivery_type, status, tax, images,
-             company_id, product_id, created_at, updated_at
+             company_id, product_id, weight, created_at, updated_at
            ) VALUES ${vRows.join(',')}`,
           [...vVals, dt],
         )

@@ -485,6 +485,7 @@ const revenueByCategory = computed(
               :rows="[
                 { mode:'Cash', amount:formatCurrency(dashboard.balances.opening.cash || 0) },
                 { mode:'Bank', amount:formatCurrency(dashboard.balances.opening.bank || 0) },
+                { mode:'Credit', amount:formatCurrency(dashboard.balances.opening.credit || 0) },
               ]"
               :columns="[
                 { key:'mode', label:'Mode' },
@@ -564,6 +565,7 @@ const revenueByCategory = computed(
               :rows="[
                 { mode:'Cash', amount:formatCurrency(closingBalances.cashBalance || 0) },
                 { mode:'Bank', amount:formatCurrency(closingBalances.bankBalance || 0) },
+                { mode:'Credit', amount:formatCurrency(closingBalances.creditBalance || 0) },
               ]"
               :columns="[
                 { key:'mode', label:'Mode' },

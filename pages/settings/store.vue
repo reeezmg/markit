@@ -957,7 +957,7 @@ const onDeliveryTypeChange = () => {
   }
 };
 
-const onOpeningBalanceChange = () => {
+const onOpeningBalanceChange = async () => {
   isUpdatingOpeningBalance.value = true;
   try {
       if (!navigator.onLine) {
@@ -966,13 +966,11 @@ const onOpeningBalanceChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-   UpdateCompany.mutate({
-      where: {
-        id: useAuth().session.value?.companyId,
-      },
-      data: {
-        bank:openingBalance.bank,
-        cash:openingBalance.cash,
+   await $fetch('/api/accounts/opening-balances', {
+      method: 'PUT',
+      body: {
+        bank: openingBalance.bank,
+        cash: openingBalance.cash,
         openingCashDate: toLocalMidnightDate(openingBalance.openingCashDate),
         openingBankDate: toLocalMidnightDate(openingBalance.openingBankDate),
       },

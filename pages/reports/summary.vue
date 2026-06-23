@@ -157,7 +157,7 @@ const kpiCards = computed(() => {
     },
     {
       label: 'Total Expense',
-      value: formatCurrency(summary.value.expenses.total),
+      value: formatCurrency(summary.value.profit.totalExpenses),
       tone: 'text-slate-900 dark:text-white',
       meta: expenseCategoryRows.value[0]?.name || 'No category split',
     },

@@ -1,0 +1,38 @@
+{
+  "sections": {
+    "hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "How to use",
+        "title": "A pro finish in 5 steps.",
+        "lead": "Follow this sequence every time for streak-free, long-lasting protection. Each step prepares the surface for the next."
+      }
+    },
+    "steps": {
+      "type": "steps-list",
+      "settings": {
+        "items": [
+          { "n": 1, "icon": "droplets",     "title": "Wash & dry",          "body": "Use our pH-neutral shampoo with a soft wash mitt. Two-bucket method recommended. Rinse thoroughly, then dry with a 500 GSM microfibre towel — top to bottom." },
+          { "n": 2, "icon": "package",      "title": "Decontaminate",       "body": "Run a clay bar or iron remover to pull out embedded fallout before any coating goes on. Spray an iron remover, wait 3–4 minutes, and rinse. Follow with a light clay bar pass over lubricated paint." },
+          { "n": 3, "icon": "spray-can",    "title": "Apply the coating",   "body": "Shake the ceramic spray for 10 seconds. Fold a suede applicator block in four, apply 4–6 sprays, and work panel-by-panel in cross-hatch strokes. Don't flood the surface." },
+          { "n": 4, "icon": "sparkles",     "title": "Level & buff",        "body": "After 1–2 minutes — watch for a light rainbow or 'high-spot' effect — flip to a clean, dry microfibre and buff off in straight lines. Work in the shade below 30°C." },
+          { "n": 5, "icon": "shield-check", "title": "Cure",                "body": "Keep the car dry and out of rain for 24 hours. Full hardness develops over 7 days. Avoid automatic car washes and high-pressure rinses for the first week." }
+        ]
+      }
+    },
+    "faq": {
+      "type": "faq-accordion",
+      "settings": {
+        "title": "Common questions",
+        "use_api_faqs": false,
+        "items": [
+          { "q": "Can I apply this over an existing ceramic coating?", "a": "Yes — the spray is formulated to bond on top of existing coatings as a maintenance layer. Wash and dry first, then apply as normal." },
+          { "q": "How often should I reapply?",                        "a": "Every 3–6 months depending on exposure and washing frequency. If water no longer beads into droplets, it's time." },
+          { "q": "What temperature range works?",                      "a": "Best between 10°C and 30°C in indirect light. Avoid direct sun — it causes the product to flash too quickly and leave high spots." },
+          { "q": "Can I use this on glass and wheels?",                "a": "Yes for both. For wheels, ensure they are cool to the touch before applying. For glass, use a separate glass-safe microfibre." }
+        ]
+      }
+    }
+  },
+  "order": ["hero", "steps", "faq"]
+}

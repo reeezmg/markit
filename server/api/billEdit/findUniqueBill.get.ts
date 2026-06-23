@@ -42,6 +42,7 @@ export default defineEventHandler(async (event) => {
         b.notes,
         b.return_deadline      AS "returnDeadline",
         b.account_id           AS "accountId",
+        b.credit_user_id       AS "creditUserId",
         b.company_id           AS "companyId",
         b.trynbuy_id           AS "trynbuyId",
         b.type,

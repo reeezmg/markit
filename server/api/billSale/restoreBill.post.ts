@@ -1,5 +1,7 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { creditAmountFromBill, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
+import { billLedgerRows, ensureAccountLedgerSchema, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
 
 export default defineEventHandler(async (event) => {
   const { billId, companyId } = await readBody(event)
@@ -14,11 +16,12 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
+    await ensureAccountLedgerSchema(client)
     await client.query('BEGIN')
 
     const billRes = await client.query(
       `
-      SELECT invoice_number, client_id, bill_points, redeemed_points
+      SELECT invoice_number, client_id, bill_points, redeemed_points, credit_user_id, payment_method, payment_status, split_payments, grand_total, created_at
       FROM bills
       WHERE id = $1
         AND company_id = $2
@@ -132,6 +135,42 @@ export default defineEventHandler(async (event) => {
       `,
       [billId, companyId]
     )
+
+    if (bill.credit_user_id) {
+      await upsertUserLedgerEntry(client, {
+        companyId,
+        userId: bill.credit_user_id,
+        type: 'USER_CREDIT_BILL',
+        direction: 'DEBIT',
+        sourceType: 'BILL',
+        sourceId: billId,
+        amount: creditAmountFromBill({
+          paymentMethod: bill.payment_method,
+          splitPayments: bill.split_payments,
+          grandTotal: bill.grand_total,
+        }),
+        note: `Bill credit${bill.invoice_number ? ` #${bill.invoice_number}` : ''}`,
+        createdAt: bill.created_at,
+      })
+    }
+
+    await rebuildAccountLedgerForSource(client, {
+      companyId,
+      sourceType: 'BILL',
+      sourceId: billId,
+      rows: billLedgerRows({
+        id: billId,
+        companyId,
+        paymentMethod: bill.payment_method,
+        paymentStatus: bill.payment_status,
+        splitPayments: bill.split_payments,
+        grandTotal: bill.grand_total,
+        createdAt: bill.created_at,
+        deleted: false,
+        isMarkit: false,
+        invoiceNumber: bill.invoice_number,
+      }),
+    })
 
     await client.query('COMMIT')
 

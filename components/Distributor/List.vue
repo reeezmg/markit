@@ -1,21 +1,15 @@
 <script setup lang="ts">
 import {
   useFindManyDistributorCompany,
-  useCreateDistributorPayment,
-  useUpdateDistributorPayment,
   useCreateDistributorCredit,
   useUpdateDistributorCredit,
   useDeleteDistributorCredit,
-  useDeleteDistributorPayment,
   useDeleteDistributorCompany,
 } from '~/lib/hooks';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
 const toast = useToast();
 const emit = defineEmits(['modal-open','edit']);
-const CreateDistributorPayment = useCreateDistributorPayment();
-const UpdateDistributorPayment = useUpdateDistributorPayment();
-const DeleteDistributorPayment = useDeleteDistributorPayment();
 const CreateDistributorCredit = useCreateDistributorCredit();
 const UpdateDistributorCredit = useUpdateDistributorCredit();
 const DeleteDistributorCredit = useDeleteDistributorCredit();
@@ -154,11 +148,7 @@ const formDelete = async(row:any) => {
           },
         })
       }else{
-         const res = await DeleteDistributorPayment.mutateAsync({
-          where:{
-            id:row.id
-          },
-        })
+        await $fetch(`/api/distributor/payments/${row.id}`, { method: 'DELETE' })
       }
 }
 
@@ -310,15 +300,14 @@ const handlePay = async () => {
     if (form.value.id) {
       /* ---------------- UPDATE ---------------- */
 
-      await UpdateDistributorPayment.mutateAsync({
-        where: { id: form.value.id },
-        data: {
+      await $fetch(`/api/distributor/payments/${form.value.id}`, {
+        method: 'PUT',
+        body: {
           amount: form.value.amount,
           remarks: form.value.remarks,
           paymentType: form.value.paymentType,
-            createdAt: form.value.date ? new Date(form.value.date) : new Date()
+          createdAt: form.value.date ? new Date(form.value.date) : new Date(),
         },
-        select: { id: true },
       });
 
       showToast('Payment edited successfully', 'green');
@@ -331,23 +320,16 @@ const handlePay = async () => {
         body: { entity: 'distributorPayment' },
       });
 
-      await CreateDistributorPayment.mutateAsync({
-        data: {
+      await $fetch('/api/distributor/payments', {
+        method: 'POST',
+        body: {
           paymentNo,
           amount: form.value.amount,
           remarks: form.value.remarks,
           paymentType: form.value.paymentType,
-            createdAt: form.value.date ? new Date(form.value.date) : new Date(),
-          distributorCompany: {
-            connect: {
-              distributorId_companyId: {
-                distributorId: distributorId.value,
-                companyId: companyId.value,
-              },
-            },
-          }
+          createdAt: form.value.date ? new Date(form.value.date) : new Date(),
+          distributorId: distributorId.value,
         },
-        select: { id: true },
       });
 
       showToast('Payment added successfully', 'green');

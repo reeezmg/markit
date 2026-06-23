@@ -20,7 +20,7 @@ const form = ref({
   gstin: props.bank?.gstin ?? '',
   upiId: props.bank?.upiId ?? '',
   openingBalance: props.bank?.openingBalance ?? props.bank?.bank ?? '0',
-  openingBankDate: toDateInputValue(props.bank?.openingBankDate),
+  openingBankDate: toDateInputValue(props.bank?.openingBankDate ?? props.bank?.openingBalanceDate ?? props.bank?.createdAt),
 })
 
 const submit = () => emit('save', form.value)
@@ -45,10 +45,9 @@ const submit = () => emit('save', form.value)
         placeholder="Opening Balance"
       />
       <UInput
-        v-if="props.bank?.isPrimary"
         v-model="form.openingBankDate"
         type="date"
-        placeholder="Opening Bank Date"
+        placeholder="Opening Date"
       />
     </div>
 

@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import { useCompanyEntries } from '~/composables/companyReports'
-
 const useAuth = () => useNuxtApp().$auth;
 const companyName = computed(() => useAuth().session.value?.companyName);
-const entries = ref([])
+const entries = ref<any>(null)
 const loading = ref(false)
 
 // ✅ Define selectedDate for v-model binding
@@ -19,10 +17,16 @@ const fetchEntries = async (start?: Date, end?: Date) => {
   const finalStart = start ?? todayStart
   const finalEnd = end ?? todayEnd
   loading.value = true
-  console.log(finalStart,finalEnd)
-  entries.value = await useCompanyEntries(finalStart, finalEnd)
-  console.log(entries.value)
-  loading.value = false
+  try {
+    entries.value = await $fetch('/api/user/report', {
+      query: {
+        startDate: finalStart.toISOString(),
+        endDate: finalEnd.toISOString(),
+      },
+    })
+  } finally {
+    loading.value = false
+  }
 }
 
 // ✅ Wait until session is ready before fetching

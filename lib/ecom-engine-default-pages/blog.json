@@ -1,0 +1,29 @@
+{
+  "sections": {
+    "hero": {
+      "type": "page-hero",
+      "settings": {
+        "eyebrow": "From the garage",
+        "title": "The Revomotive blog.",
+        "lead": "Guides, product deep-dives, and detailing science — written for owners who care about the finish."
+      }
+    },
+    "posts": {
+      "type": "blog-grid",
+      "settings": {
+        "title": "",
+        "cta_label": "",
+        "cta_url": "",
+        "posts": [
+          { "tag": "Guide",       "title": "How to clay bar your car without leaving scratches",              "read": "6 min",  "icon": "layers",       "excerpt": "Clay bar is the step most people skip. Here's why it matters and how to do it without marring your paint." },
+          { "tag": "Product",     "title": "Ceramic spray vs. ceramic coating: what's the real difference?", "read": "5 min",  "icon": "shield-check", "excerpt": "Short version: ceramic coating is a professional-grade multi-layer film. Ceramic spray is a monthly topcoat. Both have a place." },
+          { "tag": "Maintenance", "title": "The 30-minute weekend wash routine",                              "read": "4 min",  "icon": "droplets",     "excerpt": "Consistent maintenance beats one-off deep cleans. This routine takes 30 minutes and extends your coating life significantly." },
+          { "tag": "Science",     "title": "What pH actually means for your car's paint",                    "read": "7 min",  "icon": "flask-conical","excerpt": "Detailing brands love throwing 'pH-neutral' on labels. Here's what the number actually tells you about safety and effectiveness." },
+          { "tag": "DIY",         "title": "Interior detailing on a budget: what to buy first",              "read": "5 min",  "icon": "sparkles",     "excerpt": "You don't need a full kit to get a clean interior. Start with these three products and build from there." },
+          { "tag": "Product",     "title": "Iron remover: the invisible contamination you're missing",       "read": "4 min",  "icon": "zap",          "excerpt": "Brake dust embeds in clear coat and causes long-term paint damage. Iron remover is cheap, easy, and most people skip it." }
+        ]
+      }
+    }
+  },
+  "order": ["hero", "posts"]
+}

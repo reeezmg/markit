@@ -1,15 +1,12 @@
 <script setup lang="ts">
 import { sub, format, isSameDay, type Duration } from 'date-fns'
-import {
-    useFindManyCompanyUser,
-} from '~/lib/hooks';
-
 const props = defineProps<{
   users: {
     labels: string[]
     countData: number[]
     salesData: number[]
-    entryGroups: any[]
+    entryGroups: Record<string, any[]>
+    userSummaries?: any[]
   }
 }>()
 
@@ -21,7 +18,7 @@ const selectedDate = defineModel<{ start: Date; end: Date }>('selectedDate', {
 })
 
 
-const users = ref<{ label: string; sales: number; group: any }[]>([])
+const users = ref<any[]>([])
 const search = ref('')
 
 
@@ -31,13 +28,24 @@ const filteredUsers = computed(() => {
   
   const searchTerm = search.value.toLowerCase()
   return users.value.filter(user => 
-    user.label.toLowerCase().includes(searchTerm)
+    [user.label, user.code].some((value) => String(value || '').toLowerCase().includes(searchTerm))
   )
 })
 watch(
   () => props.users,
   (newUsers) => {
-    if (newUsers && newUsers.labels) {
+    if (newUsers?.userSummaries) {
+      users.value = newUsers.userSummaries.map((summary: any) => ({
+        ...summary,
+        label: summary.name,
+        group: Array.isArray(newUsers.entryGroups?.[summary.userId])
+          ? newUsers.entryGroups[summary.userId].map((entry: any) => ({
+              ...entry,
+              categoryName: entry?.category?.name || '-'
+            }))
+          : []
+      }))
+    } else if (newUsers && newUsers.labels) {
       users.value = newUsers.labels.map((label, index) => ({
         label,
         sales: newUsers.salesData?.[index] ?? 0,
@@ -60,6 +68,11 @@ watch(
 // Columns
 const columns = [
     {
+        key: 'code',
+        label: 'Code',
+        sortable: true,
+    },
+    {
         key: 'label',
         label: 'Name',
         sortable: true,
@@ -73,7 +86,37 @@ const columns = [
         key: 'sales',
         label: 'Sales',
         sortable: true,
-    }, 
+    },
+    {
+        key: 'commissionEarned',
+        label: 'Commission',
+        sortable: true,
+    },
+    {
+        key: 'salaryEarned',
+        label: 'Salary earned',
+        sortable: true,
+    },
+    {
+        key: 'salaryPaid',
+        label: 'Salary paid',
+        sortable: true,
+    },
+    {
+        key: 'presentDays',
+        label: 'Present',
+        sortable: true,
+    },
+    {
+        key: 'absentDays',
+        label: 'Absent',
+        sortable: true,
+    },
+    {
+        key: 'halfDays',
+        label: 'Half',
+        sortable: true,
+    },
 ];
 
 const entryColumns = [
@@ -120,6 +163,9 @@ const ranges = [
   { label: 'Last 6 months', duration: { months: 6 } },
   { label: 'Last year', duration: { years: 1 } }
 ]
+
+const money = (value: any) =>
+  `Rs ${Number(value || 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 
 function isRangeSelected(duration: Duration) {
   return isSameDay(selectedDate.value.start, sub(new Date(), duration)) && isSameDay(selectedDate.value.end, new Date())
@@ -261,6 +307,25 @@ const expand = ref({ openedRows: [], row: null });
                 </template>
 
                
+                <template #code-data="{ row }">
+                    <span class="font-mono text-xs">{{ row.code || '-' }}</span>
+                </template>
+
+                <template #sales-data="{ row }">
+                    <span>{{ money(row.sales) }}</span>
+                </template>
+
+                <template #commissionEarned-data="{ row }">
+                    <span>{{ money(row.commissionEarned) }}</span>
+                </template>
+
+                <template #salaryEarned-data="{ row }">
+                    <span>{{ money(row.salaryEarned) }}</span>
+                </template>
+
+                <template #salaryPaid-data="{ row }">
+                    <span>{{ money(row.salaryPaid) }}</span>
+                </template>
 
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">

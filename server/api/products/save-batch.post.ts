@@ -114,6 +114,7 @@ export default defineEventHandler(async (event) => {
           productId, p.name || '', p.brandId || null, p.description || '',
           typeof p.status === 'boolean' ? p.status : true, companyId, poId,
           p.categoryId || p.category?.id || null, p.subcategoryId || null,
+          p.collectionId || p.collection?.id || null,
         ])
         const dt = p.deliveryType || 'trynbuy'
         for (const v of (p.variants || [])) {
@@ -125,7 +126,7 @@ export default defineEventHandler(async (event) => {
           variantRows.push([
             variantId, v.name || '', v.code || null, v.unit || 'Nos',
             v.sprice || 0, v.pprice || 0, v.dprice || 0, v.discount || 0,
-            dt, taxFor(p.categoryTax, v.sprice), images, companyId, productId,
+            dt, taxFor(p.categoryTax, v.sprice), images, companyId, productId, v.weight || 0,
           ])
           for (const it of (v.items || [])) {
             itemRows.push([it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, variantId])
@@ -136,17 +137,17 @@ export default defineEventHandler(async (event) => {
       {
         const { sql, params } = multiRow(productRows, 'now(),now()')
         await client.query(
-          `INSERT INTO products (id, name, brand_id, description, status, company_id, purchaseorder_id, category_id, subcategory_id, created_at, updated_at) VALUES ${sql}`,
+          `INSERT INTO products (id, name, brand_id, description, status, company_id, purchaseorder_id, category_id, subcategory_id, collection_id, created_at, updated_at) VALUES ${sql}`,
           params,
         )
       }
       if (variantRows.length) {
         const { sql, params } = multiRow(variantRows, 'true,now(),now()')
-        // columns: id,name,code,unit,s_price,p_price,d_price,discount,delivery_type,tax,images,company_id,product_id,status,created_at,updated_at
+        // columns: id,name,code,unit,s_price,p_price,d_price,discount,delivery_type,tax,images,company_id,product_id,weight,status,created_at,updated_at
         const variantsRes = await client.query(
-          `INSERT INTO variants (id, name, code, unit, s_price, p_price, d_price, discount, delivery_type, tax, images, company_id, product_id, status, created_at, updated_at)
+          `INSERT INTO variants (id, name, code, unit, s_price, p_price, d_price, discount, delivery_type, tax, images, company_id, product_id, weight, status, created_at, updated_at)
            VALUES ${sql}
-           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, product_id`,
+           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, weight, product_id`,
           params,
         )
         returnedVariants = variantsRes.rows

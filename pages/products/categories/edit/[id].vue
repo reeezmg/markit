@@ -51,6 +51,7 @@ const margin = ref(0);
 const live = ref(true);
 const targetAudience = ref<string | null>(null);
 const files = reactive<ImageData[]>([]);
+const bannerFile = ref<ImageData | null>(null);
 const subcategories = ref<SubcategoryForm[]>([]);
 
 const isSubcategoryModalOpen = ref(false);
@@ -267,6 +268,7 @@ const saveCategory = async () => {
 
   try {
     await uploadImage(files[0]);
+    await uploadImage(bannerFile.value || undefined);
     await UpdateCategory.mutateAsync({
       where: { id: route.params.id as string },
       data: {
@@ -274,6 +276,7 @@ const saveCategory = async () => {
         description: description.value,
         status: live.value,
         image: files[0]?.uuid || category.value?.image,
+        banner: bannerFile.value?.uuid || category.value?.banner || undefined,
         hsn: hsn.value,
         ...(shortCut.value && { shortCut: shortCut.value }),
         taxType: taxType.value,
@@ -324,6 +327,9 @@ const saveCategory = async () => {
           :editLive="live"
           @update="createValue"
         />
+
+        <hr class="h-px my-6 bg-gray-200 border-0 dark:bg-gray-700" />
+        <BannerUpload label="Banner (shown on store/dark-store)" variant="wide" :editUuid="category?.banner" @update="bannerFile = $event" />
 
         <div class="mt-6 flex justify-end">
           <UButton

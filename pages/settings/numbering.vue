@@ -33,7 +33,7 @@ const onStartNewYear = async () => {
     await startNewYear(closingDateValue);
     closingDate.value = newClosingDate.value;
     isNewYearConfirmOpen.value = false;
-    toast.add({ title: 'New financial year started! All counters and numbers have been reset.', icon: 'i-heroicons-check-circle' });
+    toast.add({ title: 'New financial year started! Bill numbering has been reset.', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error starting new year', description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
@@ -43,10 +43,6 @@ const onStartNewYear = async () => {
 
 // ── Prefixes ──
 const billPrefix = ref(useAuth().session.value?.billPrefix ?? '');
-const quotePrefix = ref(useAuth().session.value?.quotePrefix ?? 'QT');
-const salesOrderPrefix = ref(useAuth().session.value?.salesOrderPrefix ?? 'SO');
-const invoicePrefix = ref(useAuth().session.value?.invoicePrefix ?? 'INV');
-const paymentPrefix = ref(useAuth().session.value?.paymentPrefix ?? '');
 const expensePrefix = ref(useAuth().session.value?.expensePrefix ?? 'EXP');
 const distributorPrefix = ref(useAuth().session.value?.distributorPrefix ?? 'DIST');
 const distributorPaymentPrefix = ref(useAuth().session.value?.distributorPaymentPrefix ?? 'DP');
@@ -58,10 +54,6 @@ const isUpdatingPrefixes = ref(false);
 
 const isPrefixChanged = computed(() =>
   billPrefix.value !== (useAuth().session.value?.billPrefix ?? '') ||
-  quotePrefix.value !== (useAuth().session.value?.quotePrefix ?? 'QT') ||
-  salesOrderPrefix.value !== (useAuth().session.value?.salesOrderPrefix ?? 'SO') ||
-  invoicePrefix.value !== (useAuth().session.value?.invoicePrefix ?? 'INV') ||
-  paymentPrefix.value !== (useAuth().session.value?.paymentPrefix ?? '') ||
   expensePrefix.value !== (useAuth().session.value?.expensePrefix ?? 'EXP') ||
   distributorPrefix.value !== (useAuth().session.value?.distributorPrefix ?? 'DIST') ||
   distributorPaymentPrefix.value !== (useAuth().session.value?.distributorPaymentPrefix ?? 'DP') ||
@@ -73,10 +65,6 @@ const isPrefixChanged = computed(() =>
 
 const prefixItems = computed(() => [
   { key: 'bill', label: 'Bill', model: billPrefix, example: billPrefix.value ? `${billPrefix.value}-00001` : '1' },
-  { key: 'quote', label: 'Quote', model: quotePrefix, example: quotePrefix.value ? `${quotePrefix.value}-000001` : '1' },
-  { key: 'salesOrder', label: 'Sales Order', model: salesOrderPrefix, example: salesOrderPrefix.value ? `${salesOrderPrefix.value}-00001` : '1' },
-  { key: 'invoice', label: 'Invoice', model: invoicePrefix, example: invoicePrefix.value ? `${invoicePrefix.value}-000001` : '1' },
-  { key: 'payment', label: 'Payment', model: paymentPrefix, example: paymentPrefix.value ? `${paymentPrefix.value}-00001` : '1' },
   { key: 'expense', label: 'Expense', model: expensePrefix, example: expensePrefix.value ? `${expensePrefix.value}-00001` : '1' },
   { key: 'distributor', label: 'Distributor', model: distributorPrefix, example: distributorPrefix.value ? `${distributorPrefix.value}-00001` : '1' },
   { key: 'distributorPayment', label: 'Distributor Payment', model: distributorPaymentPrefix, example: distributorPaymentPrefix.value ? `${distributorPaymentPrefix.value}-00001` : '1' },
@@ -95,10 +83,6 @@ const onPrefixSave = async () => {
     const companyId = useAuth().session.value?.companyId;
     const prefixData = {
       billPrefix: billPrefix.value,
-      quotePrefix: quotePrefix.value,
-      salesOrderPrefix: salesOrderPrefix.value,
-      invoicePrefix: invoicePrefix.value,
-      paymentPrefix: paymentPrefix.value,
       expensePrefix: expensePrefix.value,
       distributorPrefix: distributorPrefix.value,
       distributorPaymentPrefix: distributorPaymentPrefix.value,
@@ -173,7 +157,7 @@ const onPrefixSave = async () => {
     <!-- ========== FINANCIAL YEAR ========== -->
     <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Financial Year</h2>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Start a new financial year by setting a closing date. All counters (Bill, Quote, Sales Order, Invoice, Payment) will reset to 1. Existing documents after the closing date will be renumbered. Reports and searches will show data from after the closing date.</p>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Start a new financial year by setting a closing date. The bill counter will reset based on bills after the closing date. Reports and searches will show data from after the closing date.</p>
 
       <div v-if="closingDate" class="mb-4 flex items-center gap-2 px-4 py-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
         <UIcon name="i-heroicons-calendar-days" class="w-5 h-5 text-blue-500 shrink-0" />
@@ -185,7 +169,7 @@ const onPrefixSave = async () => {
       <UFormGroup
         name="closingDate"
         label="New Closing Date"
-        description="Bills, invoices, and reports after this date will start the new financial year."
+        description="Bills and reports after this date will start the new financial year."
         class="grid grid-cols-2 gap-2 mb-4"
         :ui="{ container: '' }"
       >
@@ -218,7 +202,7 @@ const onPrefixSave = async () => {
             <strong>Closing date:</strong> {{ new Date(newClosingDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' }) }}
           </p>
           <p class="text-sm text-red-600 dark:text-red-400 font-medium">
-            This will reset all counters (Bill, Quote, Sales Order, Invoice, Payment) to 1 and renumber existing documents after this date.
+            This will reset the bill counter based on bills after this date.
           </p>
           <template #footer>
             <div class="flex justify-end gap-2">

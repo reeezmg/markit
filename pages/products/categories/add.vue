@@ -42,6 +42,7 @@ const isLoading = ref(false);
 
 const live = ref<boolean>();
 let files = ref<ImageData | null>(null);
+const bannerFile = ref<ImageData | null>(null);
 const subcategory = ref<Category[]>([]);
 const subcategoryCounter = ref(1);
 
@@ -97,6 +98,7 @@ const handleSubmit = async (e: Event) => {
         status: live.value || undefined,
         ...(shortCut.value && { shortCut: shortCut.value }),
         image: files.value?.uuid,
+        banner: bannerFile.value?.uuid,
         taxType: taxType.value || undefined,
         fixedTax: fixedTax.value || undefined,
         thresholdAmount: thresholdAmount.value || undefined,
@@ -133,6 +135,12 @@ const handleSubmit = async (e: Event) => {
         awsService.uploadBase64File(base64file.base64, base64file.uuid),
         res,
       ]);
+    }
+
+    // ✅ Upload banner if exists
+    if (bannerFile.value?.file) {
+      const bannerBase64 = await prepareFileForApi(bannerFile.value.file);
+      await awsService.uploadBase64File(bannerBase64, bannerFile.value.uuid);
     }
 
     toast.add({
@@ -183,6 +191,8 @@ const scrollToSection = (sectionId: string) => {
         <UPageCard class="m-3" id="Create">
           <!-- ✅ Emits targetAudience too -->
           <AddCategoryCreate @update="createValue" />
+          <hr class="h-px my-6 bg-gray-200 border-0 dark:bg-gray-700" />
+          <BannerUpload label="Banner (shown on store/dark-store)" variant="wide" @update="bannerFile = $event" />
         </UPageCard>
 
         <UPageCard class="m-3" id="Subcategories">

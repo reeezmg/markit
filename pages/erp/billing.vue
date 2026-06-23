@@ -308,6 +308,10 @@ let startWidth = 0;
 let columnIndex = 0;
 
 watch(selected, (newSelected) => {
+  if (String(newSelected || '').startsWith('__')) {
+    selected.value = null
+    return
+  }
   if(newSelected){
     paymentMethod.value = 'Credit'
   }
@@ -673,6 +677,7 @@ function computeBillPoints(session, grandTotalVal) {
 function buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, refs }) {
   const { subtotal, discount, grandTotal, returnAmt, couponValue, paymentMethod,
           redeemedPoints, clientId, selected, splitPayments, date } = refs
+  const creditParty = parseCreditParty(selected.value)
   return {
     // invoiceNumber is assigned server-side inside the create transaction
     subtotal: Number(subtotal.value) || 0,
@@ -690,7 +695,8 @@ function buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, 
     company: { connect: { id: session.companyId } },
     companyUser: { connect: { companyId_userId: { companyId: session.companyId, userId: session.id } } },
     ...(clientId.value && { client: { connect: { id: clientId.value } } }),
-    ...(selected.value && { account: { connect: { id: selected.value } } }),
+    ...(creditParty.kind === 'account' && { account: { connect: { id: creditParty.id } } }),
+    ...(creditParty.kind === 'user' && { creditUserId: creditParty.id }),
     ...(paymentMethod.value === 'Split' && { splitPayments: splitPayments.value }),
   }
 }
@@ -862,6 +868,19 @@ const handleSave = async () => {
 
 const accounts = ref([])
 
+function parseCreditParty(value) {
+  if (!value || String(value).startsWith('__')) return { kind: null, id: null }
+  const raw = String(value)
+  if (raw.startsWith('account:')) return { kind: 'account', id: raw.slice('account:'.length) }
+  if (raw.startsWith('user:')) return { kind: 'user', id: raw.slice('user:'.length) }
+  return { kind: 'account', id: raw }
+}
+
+function formatCreditPartyOption(option) {
+  if (option?.kind === 'header') return option.name
+  return option?.name || ''
+}
+
 
 const getAccounts = async () => {
   try {
@@ -873,7 +892,7 @@ const getAccounts = async () => {
 
     const data = await $fetch('/api/bill/findManyAccount', {
       method: 'GET',
-      query: { companyId },
+      query: { companyId, includeUsers: true },
     })
 
     accounts.value = data ?? []
@@ -1650,7 +1669,18 @@ const handleDiscountEnter = (index) => {
 
             <div class="mb-4">
               <label class="block text-gray-700 font-medium">Account Name</label>
-              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
+              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name">
+                <template #option="{ option }">
+                  <div
+                    :class="option.kind === 'header'
+                      ? 'px-1 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500'
+                      : 'flex items-center justify-between gap-2'"
+                  >
+                    <span>{{ formatCreditPartyOption(option) }}</span>
+                    <UBadge v-if="option.kind === 'user' && option.code" color="gray" variant="subtle" size="xs">{{ option.code }}</UBadge>
+                  </div>
+                </template>
+              </UInputMenu>
             </div>    
           </div>
 
@@ -1838,7 +1868,18 @@ const handleDiscountEnter = (index) => {
         <div class="">
           <label class="block text-gray-700 font-medium">Account Name</label>
           <div class="w-full flex flex-row gap-2">
-            <UInputMenu class="flex-1" v-model="selected" :options="accounts" value-attribute="id" option-attribute="name"/>
+            <UInputMenu class="flex-1" v-model="selected" :options="accounts" value-attribute="id" option-attribute="name">
+              <template #option="{ option }">
+                <div
+                  :class="option.kind === 'header'
+                    ? 'px-1 py-1 text-xs font-semibold uppercase tracking-wide text-gray-500'
+                    : 'flex items-center justify-between gap-2'"
+                >
+                  <span>{{ formatCreditPartyOption(option) }}</span>
+                  <UBadge v-if="option.kind === 'user' && option.code" color="gray" variant="subtle" size="xs">{{ option.code }}</UBadge>
+                </div>
+              </template>
+            </UInputMenu>
             <UButton
             icon="i-heroicons-plus"
             size="sm"

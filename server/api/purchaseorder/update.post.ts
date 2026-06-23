@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { deleteAccountLedgerForSource, distributorPaymentLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
 
 // Raw-SQL atomic replacement for add.vue's saveEditedPurchaseInfo +
 // syncEditedPurchasePayment (PO edit flow). Mirrors the credit/payment transition
@@ -36,11 +37,63 @@ export default defineEventHandler(async (event) => {
      VALUES ($1,$2,$3,$4,$5,$6,$7)`,
     [crypto.randomUUID(), createdAtDate, totalAmount || 0, billNo || null, distributorId, companyId, poId],
   )
-  const insertPayment = (client: any) => client.query(
-    `INSERT INTO distributor_payments (id, created_at, amount, payment_type, distributor_id, company_id, purchase_order_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [crypto.randomUUID(), createdAtDate, totalAmount || 0, newType, distributorId, companyId, poId],
-  )
+  const insertPayment = async (client: any) => {
+    const paymentId = crypto.randomUUID()
+    await client.query(
+      `INSERT INTO distributor_payments (id, created_at, amount, payment_type, distributor_id, company_id, purchase_order_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+      [paymentId, createdAtDate, totalAmount || 0, newType, distributorId, companyId, poId],
+    )
+    await rebuildAccountLedgerForSource(client, {
+      companyId,
+      sourceType: 'DISTRIBUTOR_PAYMENT',
+      sourceId: paymentId,
+      rows: distributorPaymentLedgerRows({
+        id: paymentId,
+        companyId,
+        amount: totalAmount || 0,
+        paymentType: newType,
+        createdAt: createdAtDate,
+        remarks: `Purchase order ${poId}`,
+      }),
+    })
+  }
+
+  const deletePaymentsForPurchaseOrder = async (client: any) => {
+    const existing = await client.query(
+      `SELECT id FROM distributor_payments WHERE purchase_order_id = $1 AND company_id = $2`,
+      [poId, companyId],
+    )
+    for (const row of existing.rows) {
+      await deleteAccountLedgerForSource(client, { companyId, sourceType: 'DISTRIBUTOR_PAYMENT', sourceId: row.id })
+    }
+    await client.query(`DELETE FROM distributor_payments WHERE purchase_order_id = $1 AND company_id = $2`, [poId, companyId])
+  }
+
+  const updatePaymentsForPurchaseOrder = async (client: any) => {
+    const existing = await client.query(
+      `UPDATE distributor_payments
+       SET amount = $2, payment_type = $3, created_at = $4
+       WHERE purchase_order_id = $1 AND company_id = $5
+       RETURNING id`,
+      [poId, totalAmount || 0, newType, createdAtDate, companyId],
+    )
+    for (const row of existing.rows) {
+      await rebuildAccountLedgerForSource(client, {
+        companyId,
+        sourceType: 'DISTRIBUTOR_PAYMENT',
+        sourceId: row.id,
+        rows: distributorPaymentLedgerRows({
+          id: row.id,
+          companyId,
+          amount: totalAmount || 0,
+          paymentType: newType,
+          createdAt: createdAtDate,
+          remarks: `Purchase order ${poId}`,
+        }),
+      })
+    }
+  }
 
   async function runTransaction(attempt = 1): Promise<any> {
     const client = await pool.connect()
@@ -52,7 +105,7 @@ export default defineEventHandler(async (event) => {
         if (isNewCredit) await insertCredit(client); else await insertPayment(client)
       } else if (!hasNew && hasOld) {
         if (wasOldCredit) await client.query(`DELETE FROM distributor_credits WHERE purchase_order_id = $1`, [poId])
-        else await client.query(`DELETE FROM distributor_payments WHERE purchase_order_id = $1`, [poId])
+        else await deletePaymentsForPurchaseOrder(client)
       } else if (isNewCredit && wasOldCredit) {
         await client.query(
           `UPDATE distributor_credits SET amount = $2, "billNo" = $3, created_at = $4 WHERE purchase_order_id = $1`,
@@ -62,12 +115,9 @@ export default defineEventHandler(async (event) => {
         await client.query(`DELETE FROM distributor_credits WHERE purchase_order_id = $1`, [poId])
         if (hasNew) await insertPayment(client)
       } else if (!isNewCredit && !wasOldCredit && hasNew) {
-        await client.query(
-          `UPDATE distributor_payments SET amount = $2, payment_type = $3, created_at = $4 WHERE purchase_order_id = $1`,
-          [poId, totalAmount || 0, newType, createdAtDate],
-        )
+        await updatePaymentsForPurchaseOrder(client)
       } else if (isNewCredit && !wasOldCredit) {
-        await client.query(`DELETE FROM distributor_payments WHERE purchase_order_id = $1`, [poId])
+        await deletePaymentsForPurchaseOrder(client)
         await insertCredit(client)
       }
 
