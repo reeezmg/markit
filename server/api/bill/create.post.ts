@@ -44,6 +44,7 @@ export default defineEventHandler(async (event) => {
     const client = await pool.connect()
     try {
       await ensureAccountLedgerSchema(client)
+      await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
       await client.query('BEGIN')
       let generatedCoupons: any[] = []
 
@@ -73,16 +74,16 @@ export default defineEventHandler(async (event) => {
       // 1️⃣ Insert Bill
       const insertBillQuery = `
         INSERT INTO bills (
-          id, invoice_number, subtotal, discount, grand_total, return_amt,
+          id, invoice_number, subtotal, discount, discount_type, grand_total, return_amt,
           payment_method, redeemed_points, bill_points, created_at,
           payment_status, type, split_payments, company_id, account_id,
           credit_user_id, client_id, user_id, updated_at, coupon_value
         )
         VALUES (
-          $1, $2, $3, $4, $5, $6,
-          $7, $8, $9, $10,
-          $11, $12, $13, $14, $15,
-          $16, $17, $18, now(), $19
+          $1, $2, $3, $4, $5, $6, $7,
+          $8, $9, $10, $11,
+          $12, $13, $14, $15, $16,
+          $17, $18, $19, now(), $20
         )
         RETURNING invoice_number
       `
@@ -92,6 +93,7 @@ export default defineEventHandler(async (event) => {
         null,
         payload.subtotal || 0,
         payload.discount || 0,
+        payload.discountType || 'percentage',
         payload.grandTotal || 0,
         payload.returnAmt || 0,
         payload.paymentMethod || 'Cash',

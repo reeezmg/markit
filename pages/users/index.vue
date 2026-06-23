@@ -344,6 +344,7 @@ const formData = reactive({
     phone: '',
     role: { label: '', value: '' },
     openingBalance: 0,
+    code: '' as string | number,
     id:''
 });
 
@@ -354,6 +355,7 @@ const resetForm = () => {
     formData.phone = ''
     formData.role = { label: '', value: '' }
     formData.openingBalance = 0
+    formData.code = ''
     formData.id = ''
 }
 
@@ -382,6 +384,7 @@ const openEdit = (row) => {
     formData.role.label = row.role
     formData.role.value = row.role
     formData.openingBalance = Number(row.openingBalance ?? 0)
+    formData.code = row.code ?? ''
     formData.id = row.userId
     }
 
@@ -442,6 +445,20 @@ const resetFilters = () => {
 
 const { data: existingUser, refetch: refetchUser } = useFindUniqueUser(
   () => ({ where: { email: formData.email } }),
+  { enabled: false }
+);
+
+// Check whether the entered code is already taken by another non-deleted user
+const { refetch: refetchCodeCheck } = useFindManyCompanyUser(
+  () => ({
+    where: {
+      companyId: useAuth().session.value?.companyId,
+      code: Number(formData.code),
+      deleted: false,
+      NOT: { userId: formData.id },
+    },
+    take: 1,
+  }),
   { enabled: false }
 );
 
@@ -674,6 +691,21 @@ const handleSubmit = async (e: Event) => {
     isSaving.value = true
     try {
         if(formData.id){
+            // Validate the code is not already taken by another non-deleted user
+            const codeProvided = formData.code !== '' && formData.code !== null && formData.code !== undefined
+            if (codeProvided) {
+                const { data: codeTaken } = await refetchCodeCheck()
+                if (codeTaken && codeTaken.length > 0) {
+                    toast.add({
+                        title: 'Code already in use',
+                        description: `Code ${formData.code} is already assigned to another user.`,
+                        color: 'red',
+                    })
+                    isSaving.value = false
+                    return
+                }
+            }
+
             await UpdateUser.mutateAsync({
     where: { id: formData.id },
     data: {
@@ -689,7 +721,8 @@ const handleSubmit = async (e: Event) => {
             name: formData.name,
             role: formData.role.value,
             phone: formData.phone?.trim() || null,
-            openingBalance: Number(formData.openingBalance) || 0
+            openingBalance: Number(formData.openingBalance) || 0,
+            ...(codeProvided ? { code: Number(formData.code) } : {})
             }
         }
         }
@@ -1405,6 +1438,13 @@ const handleSubmit = async (e: Event) => {
                         v-model.number="formData.openingBalance"
                         type="number"
                         placeholder="0"
+                    />
+                </UFormGroup>
+                <UFormGroup v-if="formData.id" name="code" label="code" class="mb-5">
+                    <UInput
+                        v-model="formData.code"
+                        type="number"
+                        placeholder="Enter user code"
                     />
                 </UFormGroup>
 

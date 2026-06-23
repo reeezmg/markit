@@ -233,6 +233,21 @@ export const updateAddress = async (addstate: any) => {
     await useAuth().updateSession();
 };
 
+export const updateAccountDetails = async (accountDetails: {
+    accHolderName?: string;
+    ifsc?: string;
+    accountNo?: string;
+    bankName?: string;
+    gstin?: string;
+    upiId?: string;
+}) => {
+    await $fetch('/api/auth/changeAccountDetails', {
+        method: 'PUT',
+        body: accountDetails,
+    });
+    await useAuth().updateSession();
+};
+
 export const updateDeliveryConfig = async (deliveryConfig: any) => {
     await $fetch('/api/auth/changeDeliveryConfig', {
         method: 'PUT',

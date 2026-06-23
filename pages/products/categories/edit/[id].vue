@@ -27,10 +27,19 @@ interface ImageData {
 type SubcategoryForm = Partial<Subcategory & {
   isNew?: boolean;
   imageFile?: ImageData;
+  shortCut?: string;
+  hsn?: string;
+  taxType?: 'FIXED' | 'VARIABLE';
+  fixedTax?: number;
+  thresholdAmount?: number;
+  taxBelowThreshold?: number;
+  taxAboveThreshold?: number;
+  margin?: number;
 }>;
 
 const subcategoryColumns = [
   { key: 'name', label: 'Name' },
+  { key: 'shortCut', label: 'Code' },
   { key: 'description', label: 'Description' },
   { key: 'status', label: 'Status' },
   { key: 'actions', label: 'Actions' },
@@ -165,6 +174,14 @@ const getSubcategoryPayload = (subcat: SubcategoryForm, companyId: string) => ({
   description: subcat.description || '',
   status: subcat.status,
   image: subcat.image || undefined,
+  shortCut: subcat.shortCut || undefined,
+  hsn: subcat.hsn || undefined,
+  taxType: subcat.taxType || 'FIXED',
+  fixedTax: subcat.fixedTax ?? 0,
+  thresholdAmount: subcat.thresholdAmount ?? 0,
+  taxBelowThreshold: subcat.taxBelowThreshold ?? 0,
+  taxAboveThreshold: subcat.taxAboveThreshold ?? 0,
+  margin: subcat.margin ?? 0,
   company: {
     connect: { id: companyId },
   },
@@ -441,6 +458,14 @@ const saveCategory = async () => {
           :editDescription="subcategoryDraft.description ?? undefined"
           :editFile="subcategoryDraft.image ?? undefined"
           :editStatus="subcategoryDraft.status"
+          :editShortCut="subcategoryDraft.shortCut ?? undefined"
+          :editHsn="subcategoryDraft.hsn ?? undefined"
+          :editTaxType="subcategoryDraft.taxType ?? 'FIXED'"
+          :editFixedTax="subcategoryDraft.fixedTax ?? 0"
+          :editThresholdAmount="subcategoryDraft.thresholdAmount ?? 0"
+          :editTaxBelowThreshold="subcategoryDraft.taxBelowThreshold ?? 0"
+          :editTaxAboveThreshold="subcategoryDraft.taxAboveThreshold ?? 0"
+          :editMargin="subcategoryDraft.margin ?? 0"
           @update="updateSubcategoryDraft"
         />
 

@@ -17,6 +17,8 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
+    await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
+
     /* ----------------------------------------
        BILL + ADDRESS + CLIENT + POINTS
     ---------------------------------------- */
@@ -29,6 +31,7 @@ export default defineEventHandler(async (event) => {
         t.order_number         AS "orderNumber",
         b.subtotal,
         b.discount,
+        b.discount_type          AS "discountType",
         b.tax,
         b.grand_total          AS "grandTotal",
         b.redeemed_points      AS "redeemedPoints",
@@ -157,6 +160,8 @@ export default defineEventHandler(async (event) => {
         e.user_name         AS "userName",
         e.company_id        AS "companyUser",
         e.user_id           AS "userId",
+        cat.name            AS "categoryName",
+        cat.hsn             AS "categoryHsn",
 
         -- Item
         json_build_object(
@@ -174,6 +179,7 @@ export default defineEventHandler(async (event) => {
       FROM entries e
       LEFT JOIN items i ON i.id = e.item_id
       LEFT JOIN variants v ON v.id = e.variant_id
+      LEFT JOIN categories cat ON cat.id = e.category_id
       WHERE e.bill_id = $1
       `,
       [billId]

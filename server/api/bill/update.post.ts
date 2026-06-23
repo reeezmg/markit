@@ -74,6 +74,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     await ensureAccountLedgerSchema(client)
+    await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
     await client.query('BEGIN')
 
     const billResult = await client.query(
@@ -121,17 +122,18 @@ export default defineEventHandler(async (event) => {
       SET
         subtotal = $2,
         discount = $3,
-        grand_total = $4,
-        redeemed_points = $5,
-        coupon_value = $6,
-        payment_method = $7,
-        payment_status = $8,
-        split_payments = $9::jsonb,
-        account_id = $10,
-        credit_user_id = $11,
-        client_id = $12,
-        created_at = $13,
-        company_id = $14,
+        discount_type = $4,
+        grand_total = $5,
+        redeemed_points = $6,
+        coupon_value = $7,
+        payment_method = $8,
+        payment_status = $9,
+        split_payments = $10::jsonb,
+        account_id = $11,
+        credit_user_id = $12,
+        client_id = $13,
+        created_at = $14,
+        company_id = $15,
         updated_at = now()
       WHERE id = $1
       `,
@@ -139,6 +141,7 @@ export default defineEventHandler(async (event) => {
         billData.id,
         billData.subtotal || 0,
         billData.discount || 0,
+        billData.discountType || 'percentage',
         billData.grandTotal || 0,
         currentRedeemedPoints,
         billData.couponValue || 0,

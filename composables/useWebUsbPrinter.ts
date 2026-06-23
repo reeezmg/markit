@@ -1,5 +1,5 @@
 import { Capacitor } from '@capacitor/core';
-import { buildBillReceiptBytes, buildLabelPrintJobs } from '~/composables/printCommands';
+import { buildBillReceiptBytes, buildLabelPrintJobs, buildReportReceiptBytes } from '~/composables/printCommands';
 
 export type WebUsbPrinterRole = 'receipt' | 'barcode';
 
@@ -258,6 +258,13 @@ export function useWebUsbPrinter() {
     return { success: true };
   };
 
+  const printReportViaUsb = async (reportData: any) => {
+    const device = await getUsbPrinterByRole('receipt');
+    const bytes = buildReportReceiptBytes(reportData);
+    await writeToPrinter(device, [bytes]);
+    return { success: true };
+  };
+
   return {
     isWebUsbSupported: isSupported,
     getSavedWebUsbPrinters,
@@ -271,5 +278,6 @@ export function useWebUsbPrinter() {
     getUsbPrinterByRole,
     printBillViaUsb,
     printLabelViaUsb,
+    printReportViaUsb,
   };
 }

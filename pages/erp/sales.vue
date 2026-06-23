@@ -954,6 +954,7 @@ const buildPrintDataFromSale = (sale: any, session: any) => ({
   discount: Number(sale.discount || 0),
   grandTotal: Number(sale.grandTotal || 0),
   paymentMethod: sale.paymentMethod,
+  isTaxIncluded: session?.isTaxIncluded || false,
 
   companyName: session?.companyName || '',
   companyAddress: session?.address || {},

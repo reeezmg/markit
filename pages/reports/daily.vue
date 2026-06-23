@@ -278,7 +278,6 @@ const printReportHandle = async () => {
   try {
     const printData = {
       companyName: auth.session.value?.companyName || '',
-      companyAddress: auth.session.value?.address || {},
       expenses: expenses.value,
 
       dateRange:
@@ -289,22 +288,21 @@ const printReportHandle = async () => {
               'dd MMM yyyy'
             )}`,
 
-      totalRevenue: dashboard.value?.totalSales || 0,
-      totalRevenueInCash:
-        dashboard.value?.salesByPaymentMethod?.Cash || 0,
-      totalRevenueInUPI:
-        dashboard.value?.salesByPaymentMethod?.UPI || 0,
+      totalSales: dashboard.value?.totalSales || 0,
+      salesByPaymentMethod: dashboard.value?.salesByPaymentMethod || {},
 
-      totalExpense: dashboard.value?.totalExpenses || 0,
-      totalExpensesInCash:
-        dashboard.value?.expensesByPaymentMethod?.Cash || 0,
-      totalExpensesInUPI:
-        dashboard.value?.expensesByPaymentMethod?.UPI || 0,
+      totalExpenses: dashboard.value?.totalExpenses || 0,
+      expensesByPaymentMethod: dashboard.value?.expensesByPaymentMethod || {},
 
-      amountInDrawer:
-        dashboard.value?.balances?.cashBalance || 0,
-      amountInUPI:
-        dashboard.value?.balances?.bankBalance || 0
+      totalPurchaseExpense: dashboard.value?.totalPurchaseExpense || 0,
+      purchaseExpensesByPaymentMethod: dashboard.value?.purchaseExpensesByPaymentMethod || {},
+
+      transfersDisplay: dashboard.value?.transfersDisplay || [],
+      transactions: dashboard.value?.transactions || {},
+
+      balances: dashboard.value?.balances || {},
+
+      creditBills: dashboard.value?.creditBills || [],
     }
 
     printReport(printData)

@@ -7,10 +7,13 @@ import {
     useUpdateCategory,
     useUpdateManyCategory,
     useFindManyCategory,
+    useCountCategory,
     useDeleteCategory,
+    useDeleteManyCategory,
     useDeleteProduct
 } from '~/lib/hooks';
 const DeleteCategory = useDeleteCategory({ optimisticUpdate: true });
+const DeleteManyCategory = useDeleteManyCategory({ optimisticUpdate: true });
 const UpdateCategory = useUpdateCategory({ optimisticUpdate: true });
 const DeleteProduct = useDeleteProduct({ optimisticUpdate: true });
 const UpdateManyCategory = useUpdateManyCategory({ optimisticUpdate: true });
@@ -120,6 +123,7 @@ const active = (selectedRows) => [
             key: 'delete',
             label: 'Delete',
             icon: 'i-heroicons-trash',
+            click: () => multiDelete(selectedRows),
         },
     ],
 ];
@@ -185,17 +189,37 @@ const searchStatus = ref(undefined);
 const resetFilters = () => {
     search.value = '';
     selectedStatus.value = [];
+    page.value = 1;
 };
 
 // Pagination
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const expand = ref({ openedRows: [], row: null });
+
+const LS_PAGE_COUNT_KEY = 'categories_pageCount';
+const SS_PAGE_KEY = 'categories_page';
+
 const page = ref(1);
 const pageCount = ref(10);
-const pageTotal = ref(0); // This value should be dynamic coming from the API
+
+onMounted(() => {
+    pageCount.value = Number(localStorage.getItem(LS_PAGE_COUNT_KEY)) || 10;
+    const savedPage = Number(sessionStorage.getItem(SS_PAGE_KEY)) || 1;
+    page.value = savedPage;
+});
+
+watch(pageCount, (val) => {
+    if (process.client) localStorage.setItem(LS_PAGE_COUNT_KEY, String(val));
+    page.value = 1;
+});
+
+watch(page, (val) => {
+    if (process.client) sessionStorage.setItem(SS_PAGE_KEY, String(val));
+});
+
 const pageFrom = computed(() => (page.value - 1) * pageCount.value + 1);
 const pageTo = computed(() =>
-    Math.min(page.value * pageCount.value, pageTotal.value),
+    Math.min(page.value * pageCount.value, pageTotal.value || 0),
 );
 
 
@@ -204,7 +228,7 @@ const pageTo = computed(() =>
 const queryArgs = reactive({
     where: {
         AND: [
-            { name: { contains: search.value } },
+            { name: { contains: search.value, mode: 'insensitive' } },
             { companyId: useAuth().session.value?.companyId },
             {
                 OR: [{ status: true }, { status: false }],
@@ -276,13 +300,49 @@ const {
     refetch,
 } = useFindManyCategory(queryArgs);
 
-watch(products, () => {
-    pageTotal.value = products.value ? products.value.length : 0;
-    console.log(products);
+// Total count of matching categories (independent of the current page's `take`),
+// so pagination shows the correct number of pages.
+const countArgs = computed(() => ({ where: queryArgs.where }));
+const { data: pageTotal } = useCountCategory(countArgs);
+
+// If the restored page is beyond the last page (e.g. data was deleted), snap back to 1
+watch(pageTotal, (total) => {
+    if (!total) return;
+    const lastPage = Math.ceil(total / pageCount.value);
+    if (page.value > lastPage) page.value = 1;
 });
 
+// Precompute total quantity once per category/subcategory so the table cells
+// don't re-run the nested products->variants->items reduce on every render
+// (which made expanding a row noticeably slow).
+const computeQty = (productList) =>
+    productList?.reduce((productTotal, product) => {
+        const variantQty = product.variants?.reduce((variantTotal, variant) => {
+            const itemQty = variant.items?.reduce(
+                (itemTotal, item) => itemTotal + (item.qty || 0),
+                0,
+            ) || 0;
+            return variantTotal + itemQty;
+        }, 0) || 0;
+        return productTotal + variantQty;
+    }, 0) || 0;
+
+const tableRows = computed(() =>
+    (products.value || []).map((category) => ({
+        ...category,
+        totalQty: computeQty(category.products),
+        productsCount: category.products?.length || 0,
+        subcategories: category.subcategories?.map((sub) => ({
+            ...sub,
+            totalQty: computeQty(sub.products),
+            productsCount: sub.products?.length || 0,
+        })) || [],
+    })),
+);
+
+
 watchEffect(() => {
-    queryArgs.where.AND[0].name.contains = search.value;
+    queryArgs.where.AND[0].name = { contains: search.value, mode: 'insensitive' };
     queryArgs.where.AND[0].OR = selectedStatus.value?.map((item) => {
         return { status: item.value };
     });
@@ -293,6 +353,10 @@ watchEffect(() => {
     queryArgs.take = parseInt(pageCount.value);
 
     refetch();
+});
+
+watch([search, selectedStatus], () => {
+    page.value = 1;
 });
 
 const removeCategory = () => {
@@ -335,6 +399,30 @@ const removeProduct = () => {
     } catch (error) {
         // Handle error
         console.error('Error updating product status:', error);
+    }
+}
+
+ function multiDelete(rows) {
+    // Categories that still have products cannot be deleted
+    const withProducts = rows.filter((r) => r.products?.length);
+    const deletable = rows.filter((r) => !r.products?.length).map((r) => r.id);
+
+    if (withProducts.length) {
+        toast.add({
+            title: 'Some categories were not deleted',
+            description: `Clear products from: ${withProducts.map((r) => r.name).join(', ')}`,
+            color: 'red',
+        });
+    }
+
+    if (!deletable.length) return;
+
+    try {
+        DeleteManyCategory.mutate({ where: { id: { in: deletable } } });
+        selectedRows.value = [];
+        toast.add({ title: 'Categories deleted', color: 'green' });
+    } catch (error) {
+        console.error('Error deleting categories:', error);
     }
 }
 
@@ -514,7 +602,7 @@ const downloadReport = async () => {
                 v-model="selectedRows"
                 v-model:sort="sort"
                 v-model:expand="expand"
-                :rows="products"
+                :rows="tableRows"
                 :columns="columnsTable"
                 :loading="isLoading"
                 sort-asc-icon="i-heroicons-arrow-up"
@@ -612,23 +700,13 @@ const downloadReport = async () => {
                 </template>
 
                 <template #qty-data="{ row }">
-                    {{
-                        row.products?.reduce((productTotal, product) => {
-                        const variantQty = product.variants?.reduce((variantTotal, variant) => {
-                            const itemQty = variant.items?.reduce((itemTotal, item) => {
-                            return itemTotal + (item.qty || 0);
-                            }, 0) || 0;
-                            return variantTotal + itemQty;
-                        }, 0) || 0;
-                        return productTotal + variantQty;
-                        }, 0) || 0
-                    }}
+                    {{ row.totalQty }}
                     </template>
 
 
 
                 <template #products-data="{ row }">
-                    {{ row.products.length }}
+                    {{ row.productsCount }}
                 </template>
 
                 <template #expand="{ row }">
@@ -652,21 +730,11 @@ const downloadReport = async () => {
                 </template>
 
            <template #products-data="{ row }">
-                    {{ row.products.length }}
+                    {{ row.productsCount }}
                 </template>
 
                 <template #qty-data="{ row }">
-                    {{
-                        row.products?.reduce((productTotal, product) => {
-                        const variantQty = product.variants?.reduce((variantTotal, variant) => {
-                            const itemQty = variant.items?.reduce((itemTotal, item) => {
-                            return itemTotal + (item.qty || 0);
-                            }, 0) || 0;
-                            return variantTotal + itemQty;
-                        }, 0) || 0;
-                        return productTotal + variantQty;
-                        }, 0) || 0
-                    }}
+                    {{ row.totalQty }}
                     </template>
 
 

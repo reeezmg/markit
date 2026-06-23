@@ -421,8 +421,19 @@ const handleEnterBarcode = (barcode,index) => {
     input.select();
   }else{
     if(!pattern.test(barcode)){
-      const categorystore = categoryStore.getCategoryByShortCut(barcode)
-      items.value[index].category = categories.value.filter(category =>category.id === categorystore.id)
+      const resolved = categoryStore.resolveShortCut(barcode)
+      if (resolved?.category) {
+        items.value[index].category = categories.value.filter(c => c.id === resolved.category.id)
+        if (resolved.subcategory) {
+          items.value[index].name = resolved.subcategory.name
+          items.value[index].subcategoryId = resolved.subcategory.id
+          items.value[index]._subcategory = resolved.subcategory
+        } else {
+          items.value[index].name = ''
+          items.value[index].subcategoryId = null
+          items.value[index]._subcategory = null
+        }
+      }
       items.value[index].barcode = '';
       const component = rateInputs.value[index];
       const input = component.$el.querySelector("input");
@@ -681,7 +692,17 @@ function buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, 
   return {
     // invoiceNumber is assigned server-side inside the create transaction
     subtotal: Number(subtotal.value) || 0,
-    discount: String(discount.value ?? '').startsWith('+') ? 0 : (Number(discount.value) || 0),
+    discount: (() => {
+      const discStr = String(discount.value ?? '').trim()
+      if (discStr.startsWith('+')) return Math.abs(parseFloat(discStr) || 0)  // surcharge: positive flat
+      return Number(discount.value) || 0  // negative = flat deduction, positive = percentage
+    })(),
+    discountType: (() => {
+      const discStr = String(discount.value ?? '').trim()
+      if (discStr.startsWith('+')) return 'surcharge'
+      if (Number(discount.value) < 0) return 'flat'
+      return 'percentage'
+    })(),
     grandTotal: Number(grandTotal.value) || 0,
     returnAmt: Number(returnAmt.value) || 0,
     couponValue: Number(couponValue.value) || 0,
@@ -739,6 +760,7 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
     discount: String(discount.value ?? ''),
     grandTotal: Number(grandTotal.value) || 0,
     paymentMethod: paymentMethod.value,
+    isTaxIncluded: session?.isTaxIncluded || false,
     companyName: session?.companyName || '',
     companyAddress: session?.address || {},
     gstin: session?.gstin || '',

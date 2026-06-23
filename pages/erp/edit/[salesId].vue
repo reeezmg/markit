@@ -68,11 +68,13 @@ const grandTotal = computed(() => {
   const discStr = String(discount.value ?? '');
 
   if (discStr.startsWith('+')) {
-    afterDiscount = parseFloat((baseTotal + Math.abs(parseFloat(discStr))).toFixed(2));
+    const discNum = parseFloat(discStr);
+    afterDiscount = isNaN(discNum) ? baseTotal : parseFloat((baseTotal + Math.abs(discNum)).toFixed(2));
   } else if (Number(discount.value) < 0) {
     afterDiscount = parseFloat((baseTotal - Math.abs(Number(discount.value))).toFixed(2));
   } else {
-    afterDiscount = parseFloat((baseTotal - (baseTotal * Number(discount.value)) / 100).toFixed(2));
+    const pct = Number(discount.value);
+    afterDiscount = isNaN(pct) ? baseTotal : parseFloat((baseTotal - (baseTotal * pct) / 100).toFixed(2));
   }
 
   return afterDiscount - redeemedAmt.value;
@@ -136,6 +138,18 @@ const pastBillPoints = ref(0);
 const originalRedeemedPoints = ref(0);
 const pointsValue = Number(useAuth().session.value?.pointsValue || 0);
 const isDeleteModalOpen = ref(false)
+const isBillDeleteModalOpen = ref(false)
+const billDeleteConfirmRef = ref(null)
+const billDeleteCancelRef = ref(null)
+watch(isBillDeleteModalOpen, async (val) => {
+  if (val) {
+    await nextTick()
+    // Focus the Delete (Yes) button by default when the modal opens
+    billDeleteConfirmRef.value?.$el?.focus()
+  }
+})
+const focusBillDeleteConfirm = () => billDeleteConfirmRef.value?.$el?.focus()
+const focusBillDeleteCancel = () => billDeleteCancelRef.value?.$el?.focus()
 const deletingRowIdentity = ref({})
 
 const selectedAction = ref(null)
@@ -455,9 +469,12 @@ watch(items, async () => {
 
     if (item.category[0]?.id) {
       const category = categoryStore.getCategoryById(item.category[0].id)
-     
-      if( category){
-        const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = category;
+      // Subcategory tax takes priority over category tax when configured
+      const sub = item._subcategory || null
+      const taxSource = (sub && (sub.fixedTax != null || sub.taxBelowThreshold != null)) ? sub : category
+
+      if( taxSource){
+        const { taxType, fixedTax, thresholdAmount, taxBelowThreshold, taxAboveThreshold } = taxSource;
       if (taxType === 'FIXED') {
         item.tax = fixedTax ?? 0;
       } else {
@@ -723,7 +740,7 @@ onMounted(async () => {
     await getCategories()
     await fetchBill()
 });
-const dataLoading = ref(false)
+const dataLoading = ref(true)
 watch(bill, async (newBill) => {
   if (!newBill || !newBill.entries) return
   dataLoading.value = true
@@ -753,7 +770,14 @@ watch(bill, async (newBill) => {
   }
 
   /* ---------------- BASIC FIELDS ---------------- */
-  discount.value = newBill.discount
+  // Restore discount input based on discountType
+  if (newBill.discountType === 'surcharge') {
+    discount.value = `+${Math.abs(newBill.discount || 0)}`
+  } else if (newBill.discountType === 'flat') {
+    discount.value = -Math.abs(newBill.discount || 0)
+  } else {
+    discount.value = newBill.discount || 0
+  }
   selected.value = newBill.creditUserId
     ? `user:${newBill.creditUserId}`
     : (newBill.accountId ? `account:${newBill.accountId}` : null)
@@ -787,6 +811,8 @@ watch(bill, async (newBill) => {
     name: entry.name || '',
     barcode: entry.barcode || '',
     category: categories.value.filter(c => c.id === entry.categoryId),
+    categoryName: entry.categoryName || '',
+    categoryHsn: entry.categoryHsn || '',
     size: entry.item?.size || '',
     unit: entry.variant?.unit || '',
     sizes: entry.sizes || null,
@@ -863,8 +889,19 @@ const handleEnterBarcode = (barcode,index) => {
     
   }else{
     if(!pattern.test(barcode)){
-      const categorystore = categoryStore.getCategoryByShortCut(barcode)
-      items.value[index].category = categories.value.filter(category =>category.id === categorystore.id)
+      const resolved = categoryStore.resolveShortCut(barcode)
+      if (resolved?.category) {
+        items.value[index].category = categories.value.filter(c => c.id === resolved.category.id)
+        if (resolved.subcategory) {
+          items.value[index].name = resolved.subcategory.name
+          items.value[index].subcategoryId = resolved.subcategory.id
+          items.value[index]._subcategory = resolved.subcategory
+        } else {
+          items.value[index].name = ''
+          items.value[index].subcategoryId = null
+          items.value[index]._subcategory = null
+        }
+      }
       items.value[index].barcode = '';
       const component = rateInputs.value[index];
       const input = component.$el.querySelector("input");
@@ -1053,8 +1090,8 @@ const handleEdit = async () => {
         }
 
         return {
-          description: entry.barcode ? entry.name : entry.category[0].name,
-          hsn: entry.category[0].hsn,
+          description: entry.barcode ? entry.name : (entry.category[0]?.name || entry.categoryName || ''),
+          hsn: entry.category[0]?.hsn || entry.categoryHsn || '',
           qty: entry.qty,
           mrp: entry.rate,
           discount: calculatedDiscount,
@@ -1070,6 +1107,7 @@ const handleEdit = async () => {
       discount: String(discount.value ?? ''),
       grandTotal: grandTotal.value,
       paymentMethod: paymentMethod.value,
+      isTaxIncluded: useAuth().session.value?.isTaxIncluded || false,
       companyName: useAuth().session.value?.companyName || '',
       companyAddress: useAuth().session.value?.address || {},
       gstin: useAuth().session.value?.gstin || '',
@@ -1109,7 +1147,17 @@ const handleEdit = async () => {
       billData: {
         id: route.params.salesId,
         subtotal: subtotal.value || 0,
-        discount: String(discount.value ?? '').startsWith('+') ? 0 : (Number(discount.value) || 0),
+        discount: (() => {
+          const discStr = String(discount.value ?? '').trim()
+          if (discStr.startsWith('+')) return Math.abs(parseFloat(discStr) || 0)
+          return Number(discount.value) || 0
+        })(),
+        discountType: (() => {
+          const discStr = String(discount.value ?? '').trim()
+          if (discStr.startsWith('+')) return 'surcharge'
+          if (Number(discount.value) < 0) return 'flat'
+          return 'percentage'
+        })(),
         grandTotal: grandTotal.value || 0,
         redeemedPoints: redeemedPoints.value || 0,
         couponValue:Number(couponValue.value) || 0,
@@ -2067,7 +2115,7 @@ const couponModel = computed({
     </div>
      <div class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" @keydown.enter.prevent="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Return</UButton>
         </div>
     
@@ -2633,7 +2681,7 @@ const couponModel = computed({
               <UInput v-model="points"
               :disabled="clientFound || bill?.isMarkit" />
             </div>
-            <div>
+            <div class="mt-9">
             <div class="flex gap-2">
                <UButton v-if="!isRedeemPoint" color="green" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Redeem</UButton>
               <UButton v-else-if="isRedeemPoint" color="red" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Cancel Redeem</UButton>
@@ -2788,6 +2836,7 @@ const couponModel = computed({
               class="flex-1 rounded-r-none"
               block
               @click="handleEdit"
+              @keydown.enter.prevent="handleEdit"
               :disabled="bill?.isMarkit"
             >
               Save{{ selectedAction ? ' & ' + selectedAction : '' }}
@@ -2802,7 +2851,7 @@ const couponModel = computed({
             </UDropdown>
           </div>
 
-          <UButton color="red" class="flex-1" block @click="handleDeleteBill" :disabled="bill?.isMarkit">Delete</UButton>
+          <UButton color="red" class="flex-1" block @click="isBillDeleteModalOpen = true" :disabled="bill?.isMarkit">Delete</UButton>
           <UButton class="flex-1" block :disabled="bill?.isMarkit">Barcode Search</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Sales Return</UButton>
           <UButton class="flex-1"  @click="isClientAddModelOpen = true" block :disabled="bill?.isMarkit">Add Client</UButton>
@@ -2810,7 +2859,7 @@ const couponModel = computed({
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
+          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleEdit" @keydown.enter.prevent="handleEdit" :disabled="bill?.isMarkit">Save</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Return</UButton>
         </div>
         </template>
@@ -2977,6 +3026,45 @@ const couponModel = computed({
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" :disabled="bill?.isMarkit" />
         </template>
     </UDashboardModal>
+
+    <!-- ─── Bill Delete Confirm Modal ─── -->
+    <UModal v-model="isBillDeleteModalOpen" prevent-close @keydown.esc="isBillDeleteModalOpen = false">
+        <UCard>
+            <template #header>
+                <div class="flex items-center gap-2 text-red-600 dark:text-red-400">
+                    <UIcon name="i-heroicons-exclamation-triangle" class="text-xl" />
+                    <span class="font-semibold">Delete Bill</span>
+                </div>
+            </template>
+
+            <p class="text-sm text-gray-700 dark:text-gray-300">
+                Are you sure you want to delete this bill? This action cannot be undone.
+            </p>
+
+            <template #footer>
+                <div class="flex gap-2 justify-end">
+                    <UButton
+                        ref="billDeleteConfirmRef"
+                        color="red"
+                        label="Delete"
+                        @click="() => { isBillDeleteModalOpen = false; handleDeleteBill(); }"
+                        @keydown.enter.prevent="() => { isBillDeleteModalOpen = false; handleDeleteBill(); }"
+                        @keydown.right.prevent="focusBillDeleteCancel"
+                        @keydown.left.prevent="focusBillDeleteCancel"
+                    />
+                    <UButton
+                        ref="billDeleteCancelRef"
+                        color="white"
+                        label="Cancel"
+                        @click="isBillDeleteModalOpen = false"
+                        @keydown.enter.prevent="isBillDeleteModalOpen = false"
+                        @keydown.left.prevent="focusBillDeleteConfirm"
+                        @keydown.right.prevent="focusBillDeleteConfirm"
+                    />
+                </div>
+            </template>
+        </UCard>
+    </UModal>
 
 </template>
 

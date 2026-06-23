@@ -50,16 +50,6 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
   const footerHeight = 90 + generatedCoupons.length * 48;
   const finalHeight = headerHeight + itemHeight + footerHeight;
 
-  function cleanJoin(a?: string, b?: string) {
-  const left = a?.trim() || "";
-  const right = b?.trim() || "";
-
-  if (left && right) return `${left}, ${right}`;
-  if (left) return left;
-  if (right) return right;
-  return "";
-}
-
    const discStr = String(data.discount ?? '')
    const calculatedDiscount = discStr.startsWith('+')
       ? 0
@@ -99,21 +89,25 @@ export async function generateThermalReceiptPDF(data: any, filename = "receipt.p
 
   // ---------------------- HEADER ----------------------
   center(data.companyName, 14, true);
-center(
-  cleanJoin(data.companyAddress?.name, data.companyAddress?.street),
-  10
-)
 
+  const addressLine = [
+    data.companyAddress?.street,
+    data.companyAddress?.locality,
+    data.companyAddress?.city,
+    data.companyAddress?.state,
+    data.companyAddress?.pincode,
+  ]
+    .map((v: any) => (v ?? "").toString().trim())
+    .filter(Boolean)
+    .join(", ");
 
-center(
-  cleanJoin(data.companyAddress?.locality, data.companyAddress?.city),
-  10
-)
-
-center(
-  cleanJoin(data.companyAddress?.state, data.companyAddress?.pincode),
-  10
-)
+  if (addressLine) {
+    doc.setFontSize(10);
+    doc.setFont("courier", "normal");
+    // splitTextToSize wraps on word boundaries (won't break a word mid-way)
+    const addressLines = doc.splitTextToSize(addressLine, pageWidth - 10);
+    addressLines.forEach((l: string) => center(l, 10));
+  }
 
   if (data.gstin) center(`GSTIN: ${data.gstin}`);
 
@@ -144,8 +138,8 @@ center(
   doc.text("QTY", 50, y);
   doc.text("MRP", 65, y);
 
-  doc.text("TAX", 85, y);
-    doc.text("DISC", 102, y);
+  doc.text("DISC", 85, y);
+    doc.text("TAX", 102, y);
 
 
   y += 5;
@@ -157,37 +151,33 @@ center(
 
   // ---------------------- ITEM ROWS WITH WRAPPED DESCRIPTION ----------------------
   data.entries.forEach((item: any, i: number) => {
-    // Wrap description (fits 30mm width)
+    const rowStartY = y;
+
+    // Wrap description to fit its column width
     const descLines = doc.splitTextToSize(item.description || "", 30);
 
-    // SL number on first line
+    // Line 1: SL, first desc line, QTY, MRP, DISC, TAX
     doc.text(String(i + 1), 5, y);
-
-    // First line of description
     doc.text(descLines[0], 15, y);
-
-    // Right-side columns SAME LINE
     doc.text(String(item.qty), 50, y);
     doc.text(String(item.mrp), 65, y);
-    doc.text(`${item.tax}%`, 85, y);
-     doc.text(String(item.discount || 0), 102, y);
- 
+    doc.text(String(item.discount || 0), 85, y);
+    doc.text(`${item.tax}%`, 102, y);
+    y += 5;
 
-    // Remaining description lines (if any)
+    // Remaining description lines — each on its own line
     for (let j = 1; j < descLines.length; j++) {
-      y += 5;
       doc.text(descLines[j], 15, y);
+      y += 5;
     }
 
-    // TAX + VALUE next line
-    y += 5;
-   
-     doc.text(String(item.hsn || ""), 85, y);
+    // HSN + VALUE row
+    doc.text(String(item.hsn || ""), 85, y);
     doc.text(String(item.value || 0), 102, y);
-  
+    y += 5;
 
-    // Extra spacing between items
-    y += 6;
+    // Always add a blank gap between items so next item never shares a line
+    y += 3;
   });
 
   y += 2;
@@ -250,9 +240,49 @@ const saving = Number(
 doc.text(`YOUR SAVING: ${saving}`, pageWidth / 2, y + 7, {
   align: "center",
 });
+  y += 15;
 
-
-  y += 20;
+  // ---------------------- TAX SUMMARY TABLE (boxed, below savings) ----------------------
+  const taxGroups: Record<number, number> = {};
+  data.entries.forEach((item: any) => {
+    const rate = Number(item.tax || 0);
+    if (!rate) return;
+    taxGroups[rate] = (taxGroups[rate] || 0) + Number(item.tvalue || 0);
+  });
+  const taxRates = Object.keys(taxGroups).map(Number).sort((a, b) => a - b);
+  if (taxRates.length > 0) {
+    const col = { tax: 8, sgst: 38, cgst: 73, total: 105 };
+    const rowH = 6;
+    const tableRows = taxRates.length;
+    const tableH = rowH * (1 + tableRows) + 8; // header row + data rows + padding
+    doc.setLineWidth(0.9);
+    doc.rect(5, y, pageWidth - 10, tableH);
+    y += 5;
+    doc.setFont("courier", "bold");
+    doc.setFontSize(9);
+    doc.text("TAX%", col.tax, y);
+    doc.text("SGST", col.sgst, y);
+    doc.text("CGST", col.cgst, y);
+    doc.text("TOTAL", col.total, y);
+    y += 3;
+    doc.setLineWidth(0.2);
+    doc.line(5, y, pageWidth - 5, y);
+    y += rowH - 1;
+    doc.setFont("courier", "normal");
+    taxRates.forEach((rate) => {
+      const lineVal = taxGroups[rate];
+      const taxAmt = data.isTaxIncluded
+        ? lineVal - lineVal / (1 + rate / 100)
+        : lineVal * (rate / 100);
+      const half = taxAmt / 2;
+      doc.text(`${rate}%`, col.tax, y);
+      doc.text(half.toFixed(2), col.sgst, y);
+      doc.text(half.toFixed(2), col.cgst, y);
+      doc.text(taxAmt.toFixed(2), col.total, y);
+      y += rowH;
+    });
+    y += 5;
+  }
 
   // ---------------------- FOOTER ----------------------
   doc.setFont("courier", "normal");

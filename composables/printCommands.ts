@@ -22,10 +22,50 @@ function centerText(text: string, width: number): string {
   return ' '.repeat(leftPadding) + textStr + ' '.repeat(rightPadding);
 }
 
+function wrapText(text: string, width: number): string[] {
+  const str = (text ?? '').toString();
+  if (str.length === 0) return [''];
+  const lines: string[] = [];
+  for (let i = 0; i < str.length; i += width) {
+    lines.push(str.slice(i, i + width));
+  }
+  return lines;
+}
+
+function renderExpenseRow(
+  encoder: any,
+  cols: Array<{ text: string; width: number }>,
+) {
+  const wrapped = cols.map(c => wrapText(c.text, c.width));
+  const lineCount = Math.max(...wrapped.map(w => w.length));
+  for (let i = 0; i < lineCount; i++) {
+    const line = wrapped.map((w, ci) => textStart(w[i] || '', cols[ci].width)).join('');
+    encoder.text(line).newline(1);
+  }
+}
+
 function textStart(text: unknown, width: number): string {
   const textStr = (text ?? ' ').toString();
   if (textStr.length >= width) return textStr;
   return textStr + ' '.repeat(width - textStr.length);
+}
+
+function wordWrap(text: string, width: number): string[] {
+  const words = text.split(' ');
+  const lines: string[] = [];
+  let current = '';
+  for (const word of words) {
+    if (!current) {
+      current = word.slice(0, width);
+    } else if (current.length + 1 + word.length <= width) {
+      current += ' ' + word;
+    } else {
+      lines.push(current);
+      current = word.slice(0, width);
+    }
+  }
+  if (current) lines.push(current);
+  return lines.length ? lines : [''];
 }
 
 function parseMoneyInput(value: unknown): number {
@@ -95,6 +135,8 @@ function formatBillDiscountDisplay(discount: unknown, calculatedDiscount: unknow
 function formatDiscountCell(discount: unknown): string {
   if (discount === null || discount === undefined || discount === '') return '0';
   const rawDiscount = String(discount);
+  // Negative discounts (flat amounts) should not get a % symbol
+  if (rawDiscount.includes('-') || Number(rawDiscount) < 0) return rawDiscount;
   return rawDiscount.endsWith('%') ? rawDiscount : `${rawDiscount}%`;
 }
 
@@ -201,10 +243,24 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .text(bill.companyName || '')
     .newline(1)
     .bold(false)
-    .size(1, 1)
-    .text(`${companyAddress.name || ''}, ${companyAddress.street || ''}`)
-    .text(`${companyAddress.locality || ''}, ${companyAddress.city || ''}`)
-    .text(`${companyAddress.state || ''}- ${companyAddress.pincode || ''}`)
+    .size(1, 1);
+
+  const addressLine = [
+    companyAddress.street,
+    companyAddress.locality,
+    companyAddress.city,
+    companyAddress.state,
+    companyAddress.pincode,
+  ]
+    .map((v: any) => (v ?? '').toString().trim())
+    .filter(Boolean)
+    .join(', ');
+
+  if (addressLine) {
+    encoder.text(addressLine).newline(1);
+  }
+
+  encoder
     .newline(1)
     .text(`GSTIN:${bill.gstin || ''}`)
     .newline(1)
@@ -239,8 +295,8 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
   encoder
     .text(
       '    ' +
-        textStart('QTY', COLUMN_WIDTHS.qty) +
         textStart('MRP', COLUMN_WIDTHS.mrp) +
+        textStart('QTY', COLUMN_WIDTHS.qty) +
         textStart('VALUE', COLUMN_WIDTHS.value) +
         textStart('DISC', COLUMN_WIDTHS.disc) +
         textStart('T.VALUE', COLUMN_WIDTHS.tvalue),
@@ -248,20 +304,30 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .rule({ style: 'single' });
 
   (bill.entries || []).forEach((item: any, index: number) => {
+    const descLines = wordWrap(item.description || '', COLUMN_WIDTHS.description);
+    // First line: SL + first desc chunk + HSN + TAX
     encoder.text(
       textStart((index + 1).toString(), COLUMN_WIDTHS.sl) +
-        textStart(item.description || '', COLUMN_WIDTHS.description) +
+        textStart(descLines[0], COLUMN_WIDTHS.description) +
         textStart(item.hsn || '', COLUMN_WIDTHS.hsn) +
-        textStart(item.tax || '', COLUMN_WIDTHS.tax),
+        textStart(`${item.tax || 0}%`, COLUMN_WIDTHS.tax),
     );
+    // Extra description lines on their own rows
+    for (let j = 1; j < descLines.length; j++) {
+      encoder.text(
+        ' '.repeat(COLUMN_WIDTHS.sl) + descLines[j],
+      );
+    }
+    // Second row: QTY + MRP + VALUE + DISC + T.VALUE
     encoder.text(
       '    ' +
-        textStart(item.qty || 0, COLUMN_WIDTHS.qty) +
         textStart(formatMoney(item.mrp), COLUMN_WIDTHS.mrp) +
+        textStart(item.qty || 0, COLUMN_WIDTHS.qty) +
         textStart(formatMoney(item.value), COLUMN_WIDTHS.value) +
         textStart(formatDiscountCell(item.discount), COLUMN_WIDTHS.disc) +
         textStart(formatMoney(item.tvalue), COLUMN_WIDTHS.tvalue),
     );
+    encoder.newline(2);
   });
 
   encoder
@@ -269,8 +335,8 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .bold(true)
     .text(
       '    ' +
+        ' '.repeat(COLUMN_WIDTHS.mrp) +
         textStart(bill.tqty || 0, COLUMN_WIDTHS.qty) +
-        '          ' +
         textStart(formatMoney(bill.tvalue), COLUMN_WIDTHS.value) +
         textStart(formatMoney(bill.tdiscount), COLUMN_WIDTHS.disc) +
         textStart(formatMoney(bill.ttvalue), COLUMN_WIDTHS.tvalue),
@@ -320,13 +386,61 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .rule({ style: 'single' })
     .newline(1);
 
-  if (upiPayment) {
-    const qrLink = `upi://pay?pa=${bill.upiId}&am=${upiPayment.amount}&cu=INR`;
+  // ── Tax summary table (boxed, below savings) ─────────────────────────────
+  const taxGroups: Record<number, number> = {};
+  (bill.entries || []).forEach((item: any) => {
+    const rate = Number(item.tax || 0);
+    if (!rate) return;
+    taxGroups[rate] = (taxGroups[rate] || 0) + Number(item.tvalue || 0);
+  });
+  const taxRates = Object.keys(taxGroups).map(Number).sort((a, b) => a - b);
+  if (taxRates.length > 0) {
+    const C = { tax: 6, sgst: 14, cgst: 14, total: 14 };
     encoder
+      .rule({ style: 'double' })
+      .bold(true)
+      .invert(true)
+      .align('center')
+      .text('TAX SUMMARY')
+      .invert(false)
+      .bold(false)
+      .newline(1)
+      .align('left')
+      .text(
+        textStart('TAX', C.tax) +
+        textStart('SGST', C.sgst) +
+        textStart('CGST', C.cgst) +
+        textStart('TOTAL', C.total),
+      )
+      .rule({ style: 'single' });
+
+    taxRates.forEach((rate) => {
+      const lineVal = taxGroups[rate];
+      const taxAmt = bill.isTaxIncluded
+        ? lineVal - lineVal / (1 + rate / 100)
+        : lineVal * (rate / 100);
+      const half = taxAmt / 2;
+      encoder.text(
+        textStart(`${rate}%`, C.tax) +
+        textStart(formatMoney(half), C.sgst) +
+        textStart(formatMoney(half), C.cgst) +
+        textStart(formatMoney(taxAmt), C.total),
+      );
+    });
+    encoder.rule({ style: 'double' }).newline(1);
+  }
+
+  if (upiPayment && bill.upiId) {
+    const payeeName = encodeURIComponent(bill.companyName || 'Merchant');
+    const amount = Number(upiPayment.amount || 0).toFixed(2);
+    const qrLink = `upi://pay?pa=${encodeURIComponent(bill.upiId)}&pn=${payeeName}&am=${amount}&cu=INR`;
+    encoder
+      .align('center')
       .newline(1)
       .text('Scan to pay via UPI')
       .newline(2)
-      .qrcode(qrLink, { model: 1, size: 8, errorlevel: 'h' })
+      .qrcode(qrLink, { model: 2, size: 8, errorlevel: 'm' })
+      .align('left')
       .newline(1);
   }
 
@@ -353,6 +467,186 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
       .cut();
   }
 
+  return encoder.encode();
+}
+
+// ─── Column widths for report (48-char paper) ────────────────────────────────
+const REPORT_COL = { label: 28, value: 20 };
+const REPORT_EXP = { cat: 12, user: 12, note: 14, amt: 10 };
+
+function fmtAmt(val: number): string {
+  return `Rs.${Number(val || 0).toFixed(2)}`;
+}
+
+function reportRow(label: string, value: number, encoder: any) {
+  encoder
+    .text(textStart(label, REPORT_COL.label) + textStart(fmtAmt(value), REPORT_COL.value))
+    .newline(1);
+}
+
+function sectionHeader(title: string, encoder: any) {
+  encoder
+    .align('center')
+    .bold(true)
+    .text(title)
+    .newline(1)
+    .bold(false)
+    .align('left')
+    .rule({ style: 'single' });
+}
+
+export function buildReportReceiptBytes(r: any): Uint8Array {
+  const encoder = new ReceiptPrinterEncoder({ newlineBeforeCut: 8, columns: 48 });
+  encoder.initialize();
+
+  // ── Header ────────────────────────────────────────────────────────────────
+  encoder
+    .align('center').bold(true).size(2, 2).text(r.companyName || '').newline(1)
+    .bold(false).size(1, 1).rule({ style: 'single' })
+    .align('left').text(`Date: ${r.dateRange}`).newline(1)
+    .rule({ style: 'single' });
+
+  // ── Opening & Closing Balance ─────────────────────────────────────────────
+  const opening = r.balances?.opening || {};
+  const hasOpening = (opening.cash || 0) + (opening.bank || 0) > 0;
+  const hasClosing = (r.balances?.cashBalance || 0) + (r.balances?.bankBalance || 0) > 0;
+  if (hasOpening || hasClosing) {
+    sectionHeader('BALANCE', encoder);
+    if (hasOpening) {
+      reportRow('Opening Cash', opening.cash || 0, encoder);
+      reportRow('Opening Bank', opening.bank || 0, encoder);
+    }
+    if (hasClosing) {
+      reportRow('Closing Cash', r.balances?.cashBalance || 0, encoder);
+      reportRow('Closing Bank', r.balances?.bankBalance || 0, encoder);
+      reportRow('Total Balance', r.balances?.totalBalance || 0, encoder);
+    }
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Sales Breakdown ───────────────────────────────────────────────────────
+  const sales = r.salesByPaymentMethod || {};
+  const salesTotal = r.totalSales || 0;
+  if (salesTotal > 0) {
+    sectionHeader('SALES BREAKDOWN', encoder);
+    reportRow('Total Sales', salesTotal, encoder);
+    if (sales.Cash) reportRow('  Cash', sales.Cash, encoder);
+    if (sales.UPI) reportRow('  UPI', sales.UPI, encoder);
+    if (sales.Card) reportRow('  Card', sales.Card, encoder);
+    if (sales.Credit) reportRow('  Credit', sales.Credit, encoder);
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Credit Bills ─────────────────────────────────────────────────────────
+  const creditBills: any[] = r.creditBills || [];
+  if (creditBills.length > 0) {
+    sectionHeader('CREDIT BILLS', encoder);
+    encoder
+      .text(textStart('ACCOUNT', 22) + textStart('INV', 12) + textStart('AMT', 14))
+      .newline(1)
+      .rule({ style: 'single' });
+    creditBills.forEach((b: any) => {
+      encoder
+        .text(textStart(b.accountName || '', 22) + textStart(b.invoiceNumber || '', 12) + textStart(fmtAmt(b.amount || 0), 14))
+        .newline(1);
+    });
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Expense Breakdown ─────────────────────────────────────────────────────
+  const exp = r.expensesByPaymentMethod || {};
+  const expTotal = r.totalExpenses || 0;
+  if (expTotal > 0) {
+    sectionHeader('EXPENSE BREAKDOWN', encoder);
+    reportRow('Total Expenses', expTotal, encoder);
+    if (exp.Cash) reportRow('  Cash', exp.Cash, encoder);
+    if (exp.UPI) reportRow('  UPI', exp.UPI, encoder);
+    if (exp.Card) reportRow('  Card', exp.Card, encoder);
+    if (exp.BankTransfer) reportRow('  Bank', exp.BankTransfer, encoder);
+    if (exp.Cheque) reportRow('  Cheque', exp.Cheque, encoder);
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Distributor Purchase ──────────────────────────────────────────────────
+  const pur = r.purchaseExpensesByPaymentMethod || {};
+  const purTotal = r.totalPurchaseExpense || 0;
+  if (purTotal > 0) {
+    sectionHeader('DISTRIBUTOR PURCHASE', encoder);
+    reportRow('Total Purchase', purTotal, encoder);
+    if (pur.Cash) reportRow('  Cash', pur.Cash, encoder);
+    if (pur.UPI) reportRow('  UPI', pur.UPI, encoder);
+    if (pur.Card) reportRow('  Card', pur.Card, encoder);
+    if (pur.BankTransfer) reportRow('  Bank', pur.BankTransfer, encoder);
+    if (pur.Cheque) reportRow('  Cheque', pur.Cheque, encoder);
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Account Transfers ─────────────────────────────────────────────────────
+  const transferRows: any[] = r.transfersDisplay || [];
+  const hasTransfers = transferRows.some(t => (t.debit || 0) + (t.credit || 0) > 0);
+  if (hasTransfers) {
+    sectionHeader('ACCOUNT TRANSFERS', encoder);
+    encoder
+      .text(textStart('ACCOUNT', 20) + textStart('DEBIT', 14) + textStart('CREDIT', 14))
+      .newline(1);
+    transferRows.forEach((t: any) => {
+      if ((t.debit || 0) + (t.credit || 0) === 0) return;
+      encoder
+        .text(textStart(t.name || '', 20) + textStart(fmtAmt(t.debit || 0), 14) + textStart(fmtAmt(t.credit || 0), 14))
+        .newline(1);
+    });
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Money Transactions ────────────────────────────────────────────────────
+  const tx = r.transactions || {};
+  const cashTx = tx.cash || {};
+  const bankTx = tx.bank || {};
+  const hasTx = (cashTx.debit || 0) + (cashTx.credit || 0) + (bankTx.debit || 0) + (bankTx.credit || 0) > 0;
+  if (hasTx) {
+    sectionHeader('MONEY TRANSACTIONS', encoder);
+    encoder
+      .text(textStart('', 14) + textStart('DEBIT', 12) + textStart('CREDIT', 12) + textStart('NET', 10))
+      .newline(1);
+    if ((cashTx.debit || 0) + (cashTx.credit || 0) > 0) {
+      encoder
+        .text(textStart('Cash', 14) + textStart(fmtAmt(cashTx.debit || 0), 12) + textStart(fmtAmt(cashTx.credit || 0), 12) + textStart(fmtAmt(cashTx.net || 0), 10))
+        .newline(1);
+    }
+    if ((bankTx.debit || 0) + (bankTx.credit || 0) > 0) {
+      encoder
+        .text(textStart('Bank', 14) + textStart(fmtAmt(bankTx.debit || 0), 12) + textStart(fmtAmt(bankTx.credit || 0), 12) + textStart(fmtAmt(bankTx.net || 0), 10))
+        .newline(1);
+    }
+    encoder.rule({ style: 'single' });
+  }
+
+  // ── Expense Details ───────────────────────────────────────────────────────
+  const expenses: any[] = r.expenses || [];
+  if (expenses.length > 0) {
+    sectionHeader('EXPENSE DETAILS', encoder);
+    encoder
+      .text(
+        textStart('CATEGORY', REPORT_EXP.cat) +
+        textStart('USER', REPORT_EXP.user) +
+        textStart('NOTE', REPORT_EXP.note) +
+        textStart('AMT', REPORT_EXP.amt)
+      )
+      .newline(1)
+      .rule({ style: 'single' });
+    expenses.forEach((item: any) => {
+      renderExpenseRow(encoder, [
+        { text: item.expensecategory?.name || '', width: REPORT_EXP.cat },
+        { text: item.userName || '', width: REPORT_EXP.user },
+        { text: item.note || '', width: REPORT_EXP.note },
+        { text: fmtAmt(item.totalAmount || 0), width: REPORT_EXP.amt },
+      ]);
+      encoder.newline(1);
+    });
+    encoder.rule({ style: 'single' });
+  }
+
+  encoder.newline(4).cut();
   return encoder.encode();
 }
 

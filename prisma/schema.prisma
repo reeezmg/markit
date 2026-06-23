@@ -1105,19 +1105,27 @@ model Category {
 }
 
 model Subcategory {
-  id          String    @id() @default(uuid())
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt() @map("updated_at")
-  name        String
-  description String?
-  status      Boolean   @default(true)
-  image       String?
-  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId   String    @map("company_id")
-  products    Product[]
-  category    Category? @relation(fields: [categoryId], references: [id])
-  categoryId  String?   @map("category_id")
-  writeId     String?   @default(uuid()) @map("write_id")
+  id                String    @id() @default(uuid())
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt() @map("updated_at")
+  name              String
+  description       String?
+  status            Boolean   @default(true)
+  image             String?
+  shortCut          String?   @map("short_cut")
+  hsn               String?
+  taxType           TaxType   @default(FIXED)
+  fixedTax          Float?    @map("fixed_tax")
+  thresholdAmount   Float?    @map("threshold_amount")
+  taxBelowThreshold Float?    @map("tax_below_threshold")
+  taxAboveThreshold Float?    @map("tax_above_threshold")
+  margin            Float?
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId         String    @map("company_id")
+  products          Product[]
+  category          Category? @relation(fields: [categoryId], references: [id])
+  categoryId        String?   @map("category_id")
+  writeId           String?   @default(uuid()) @map("write_id")
 
   @@map("subcategories")
 }

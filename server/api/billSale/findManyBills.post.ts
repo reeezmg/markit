@@ -253,6 +253,7 @@ export default defineEventHandler(async (event) => {
             json_build_object(
               'barcode', e.barcode,
               'category', cat.name,
+              'hsn', cat.hsn,
               'name', e.name,
               'rate', ${entryRateExpr},
               ${cleanupEntrySelect}
