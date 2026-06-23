@@ -870,11 +870,15 @@ const links = computed(() => {
         },
     ];
 
+    // Parent items with children render as accordion groups; start them collapsed by default.
+    const collapseGroups = (arr: any[]) =>
+      arr.map((link) => (link.children?.length ? { ...link, defaultOpen: false } : link));
+
       if (plan.value === "free" || plan.value === "lite" ) {
-    return simplifiedLinks;
+    return collapseGroups(simplifiedLinks);
   }
 
-  return baseLinks;
+  return collapseGroups(baseLinks);
 
 });
 

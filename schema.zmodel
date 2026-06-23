@@ -267,6 +267,11 @@ model Company extends Base {
     ecommBlogs EcommBlog[]
     ecommCheckouts EcommCheckout[]
     ecommOrders EcommOrder[]
+    ecommCarts EcommCart[]
+    ecommWishlists EcommWishlist[]
+    ecommOrderRequests EcommOrderRequest[]
+    ecommPickupRequests EcommPickupRequest[]
+    ecommOrderStatusHistory EcommOrderStatusHistory[]
 
     shifts Shift[]
     shiftAssignments ShiftAssignment[]
@@ -528,6 +533,9 @@ model Client extends Base {
     payments  Payment[]
     ecommCheckouts EcommCheckout[]
     ecommOrders EcommOrder[]
+    ecommCarts EcommCart[]
+    ecommWishlists EcommWishlist[]
+    ecommOrderRequests EcommOrderRequest[]
     ecommFeedback EcommFeedback[]
     clientCredits ClientCredit[]
     deleted       Boolean   @default(false)
@@ -1077,7 +1085,7 @@ model Subcategory {
     image               String?
     shortCut            String?            @map('short_cut')
     hsn                 String?
-    taxType             TaxType            @default(FIXED)
+    taxType             TaxType            @default(FIXED) @map('tax_type')
     fixedTax            Float?             @map('fixed_tax')
     thresholdAmount     Float?             @map('threshold_amount')
     taxBelowThreshold   Float?             @map('tax_below_threshold')
@@ -1437,11 +1445,114 @@ model EcommOrder extends Base {
     checkoutId String? @unique @map("checkout_id")
     bill Bill? @relation(fields: [billId], references: [id])
     billId String? @unique @map("bill_id")
+    statusHistory EcommOrderStatusHistory[]
+    requests EcommOrderRequest[]
 
     @@index([companyId, clientId, createdAt])
     @@index([companyId, orderNumber])
     @@allow('read, create, update, delete', true)
     @@map("ecomm_orders")
+}
+
+
+// Customer shopping cart for the storefront. custom-api owns CRUD (raw SQL);
+// one cart per (company, client). Modelled here so Prisma/ZenStack keeps the
+// table instead of dropping it.
+model EcommCart extends Base {
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    items Json @default("[]")
+    meta Json @default("{}")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId String @map("company_id")
+    client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+    clientId String @map("client_id")
+
+    @@unique([companyId, clientId])
+    @@allow('read, create, update, delete', true)
+    @@map("ecomm_carts")
+}
+
+
+// Per-order status timeline. custom-api owns writes (raw SQL).
+model EcommOrderStatusHistory extends Base {
+    createdAt DateTime @default(now()) @map("created_at")
+    status String
+    rawStatus String? @map("raw_status")
+    source String
+    note String?
+    awb String?
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId String @map("company_id")
+    order EcommOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+    orderId String @map("order_id")
+
+    @@index([orderId])
+    @@allow('read, create, update, delete', true)
+    @@map("ecomm_order_status_history")
+}
+
+
+// Carrier pickup requests raised per warehouse/day. custom-api owns writes.
+model EcommPickupRequest extends Base {
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    location String
+    carrier String
+    pickupDate String? @map("pickup_date")
+    pickupTime String? @map("pickup_time")
+    packageCount Int @default(0) @map("package_count")
+    status String @default("REQUESTED")
+    carrierPickupId String? @map("carrier_pickup_id")
+    orderIds Json @default("[]") @map("order_ids")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId String @map("company_id")
+
+    @@index([companyId, status])
+    @@allow('read, create, update, delete', true)
+    @@map("ecomm_pickup_requests")
+}
+
+
+// Customer wishlist; one per (company, client). custom-api owns CRUD.
+model EcommWishlist extends Base {
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    variantIds String[] @default([]) @map("variant_ids")
+    items Json @default("[]")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId String @map("company_id")
+    client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+    clientId String @map("client_id")
+
+    @@unique([companyId, clientId])
+    @@allow('read, create, update, delete', true)
+    @@map("ecomm_wishlists")
+}
+
+
+// Post-order requests: cancellation / return / exchange / refund. custom-api owns writes.
+model EcommOrderRequest extends Base {
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    type String
+    status String @default("PENDING")
+    reason String?
+    images Json @default("[]")
+    items Json @default("[]")
+    fee Float @default(0)
+    meta Json?
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId String @map("company_id")
+    client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+    clientId String @map("client_id")
+    order EcommOrder @relation(fields: [orderId], references: [id], onDelete: Cascade)
+    orderId String @map("order_id")
+
+    @@index([orderId])
+    @@index([companyId, status])
+    @@allow('read, create, update, delete', true)
+    @@map("ecomm_order_requests")
 }
 
 

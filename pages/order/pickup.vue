@@ -62,13 +62,19 @@ function save() {
   if (!isValid.value) return;
   const { id, ...data } = form.value;
   const payload = { ...data, companyId: companyId.value, carrier: 'delhivery' };
-  const onDone = (msg: string) => { modalOpen.value = false; toast.add({ title: msg, color: 'green' }); refetch(); };
+  // After the local row is saved, push it straight to Delhivery (create on add,
+  // edit on update) so the warehouse always mirrors what's in storetools.
+  const onDone = async (savedId: string, msg: string) => {
+    modalOpen.value = false;
+    toast.add({ title: msg, color: 'green' });
+    await syncToCarrier(savedId, data.name);
+  };
   if (id) {
     updateLocation({ where: { id }, data },
-      { onSuccess: () => onDone('Location updated'), onError: (e: any) => toast.add({ title: 'Update failed', description: e.message, color: 'red' }) });
+      { onSuccess: () => onDone(id, 'Location updated'), onError: (e: any) => toast.add({ title: 'Update failed', description: e.message, color: 'red' }) });
   } else {
     createLocation({ data: payload },
-      { onSuccess: () => onDone('Location added'), onError: (e: any) => toast.add({ title: 'Create failed', description: e.message, color: 'red' }) });
+      { onSuccess: (created: any) => onDone(created?.id, 'Location added'), onError: (e: any) => toast.add({ title: 'Create failed', description: e.message, color: 'red' }) });
   }
 }
 
@@ -82,18 +88,40 @@ function setDefault(loc: any) {
 
 function remove(loc: any) {
   deleteLocation({ where: { id: loc.id } },
-    { onSuccess: () => { toast.add({ title: `${loc.name} removed`, color: 'green' }); refetch(); }, onError: (e: any) => toast.add({ title: 'Delete failed', description: e.message, color: 'red' }) });
+    { onSuccess: () => {
+        // Delhivery exposes no warehouse-delete API, so this only removes the
+        // local record — the warehouse still exists on Delhivery's side.
+        toast.add({
+          title: `${loc.name} removed from storetools`,
+          description: 'Delhivery has no delete API — this warehouse still exists on Delhivery and must be removed from their portal manually.',
+          icon: 'i-heroicons-exclamation-triangle',
+          color: 'amber',
+          timeout: 8000,
+        });
+        refetch();
+      },
+      onError: (e: any) => toast.add({ title: 'Delete failed', description: e.message, color: 'red' }) });
 }
 
-async function registerWithCarrier(loc: any) {
-  registeringId.value = loc.id;
+// Push a location to the carrier. The register endpoint creates the warehouse on
+// Delhivery if it isn't registered yet, or edits it if it already is — so this is
+// safe to call after both create and edit.
+async function syncToCarrier(id: string, name: string) {
+  if (!id) return;
+  registeringId.value = id;
   try {
-    await $fetch(`/api/ecommerce-cms/shipping/pickup-locations/${loc.id}/register`, { method: 'POST' });
-    toast.add({ title: `${loc.name} registered with Delhivery`, color: 'green' });
-    refetch();
+    await $fetch(`/api/ecommerce-cms/shipping/pickup-locations/${id}/register`, { method: 'POST' });
+    toast.add({ title: `${name} synced with Delhivery`, color: 'green' });
   } catch (e: any) {
-    toast.add({ title: 'Registration failed', description: e.data?.statusMessage || e.message, color: 'red' });
-  } finally { registeringId.value = null; }
+    toast.add({ title: 'Delhivery sync failed', description: e.data?.statusMessage || e.message, color: 'red' });
+  } finally {
+    registeringId.value = null;
+    refetch();
+  }
+}
+
+function registerWithCarrier(loc: any) {
+  return syncToCarrier(loc.id, loc.name);
 }
 
 // ─── Raise pickup request ───────────────────────────────────────────────────
