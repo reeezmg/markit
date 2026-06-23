@@ -428,14 +428,12 @@ export default defineEventHandler(async (event) => {
         sp.amount,
         sp.type,
         sp.payment_mode AS "paymentMode",
-        COALESCE(cu.name, u.name, 'Staff') AS "userName",
+        COALESCE(cu.name, 'Staff') AS "userName",
         sp.note
       FROM salary_payments sp
       LEFT JOIN company_users cu
         ON cu.company_id = sp.company_id
        AND cu.user_id = sp.user_id
-      LEFT JOIN users u
-        ON u.id = sp.user_id
       WHERE sp.company_id = $1
         AND sp.payment_date BETWEEN $2 AND $3
       ORDER BY sp.payment_date ASC, sp.id ASC
