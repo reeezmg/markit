@@ -65,7 +65,7 @@ watch(error, e => {
    COMPUTED
 --------------------------------------------------- */
 const useAuth = () => useNuxtApp().$auth
-const account = computed(() => data.value?.account)
+const account = computed(() => data.value?.cash)
 const ledger = computed(() => data.value?.ledger ?? [])
 const closingBalance = computed(() => data.value?.closingBalance ?? 0)
 
@@ -76,9 +76,9 @@ const styledLedger = computed(() =>
   }))
 )
 
-const totalSales = computed(() =>
+const totalCashIn = computed(() =>
   ledger.value
-    .filter(r => r.source === 'SALE')
+    .filter(r => r.source !== 'OPENING')
     .reduce((sum, r) => sum + Number(r.credit || 0), 0)
 )
 
@@ -155,7 +155,7 @@ const formatCurrency = (v: number) =>
       <UCard>
         <div class="text-sm text-gray-500">Total Cash In</div>
         <div class="text-xl font-semibold text-green-600">
-          {{ formatCurrency(totalSales) }}
+          {{ formatCurrency(totalCashIn) }}
         </div>
       </UCard>
 
