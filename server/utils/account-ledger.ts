@@ -1,4 +1,5 @@
 import crypto from 'crypto'
+import { pool } from '~/server/db'
 
 export type AccountLedgerAccountType = 'CASH' | 'PRIMARY_BANK' | 'BANK' | 'INVESTMENT' | 'CREDIT'
 export type AccountLedgerDirection = 'DEBIT' | 'CREDIT'
@@ -308,7 +309,35 @@ export function investmentLedgerRows(investment: {
   }]
 }
 
-export async function ensureAccountLedgerSchema(client: any) {
+// Idempotent setup DDL, now run ONCE per process instead of on every ledger
+// write (it used to cost ~11 no-op round-trips per call). `schemaReady`
+// short-circuits after the first success; `schemaPromise` serializes concurrent
+// first calls and resets on failure. It runs on its own pooled connection
+// (autocommit) so the schema is durably committed and visible to every caller,
+// independent of any caller transaction (and so it can't be rolled back while
+// the flag stays set). The passed client is ignored.
+let schemaReady = false
+let schemaPromise: Promise<void> | null = null
+export async function ensureAccountLedgerSchema(_client?: any) {
+  if (schemaReady) return
+  if (!schemaPromise) {
+    schemaPromise = (async () => {
+      const client = await pool.connect()
+      try {
+        await applyAccountLedgerSchema(client)
+      } finally {
+        client.release()
+      }
+      schemaReady = true
+    })().catch((e) => {
+      schemaPromise = null
+      throw e
+    })
+  }
+  await schemaPromise
+}
+
+async function applyAccountLedgerSchema(client: any) {
   await client.query(`
     DO $$ BEGIN
       CREATE TYPE "AccountLedgerAccountType" AS ENUM ('CASH', 'PRIMARY_BANK', 'BANK', 'INVESTMENT', 'CREDIT');
@@ -391,24 +420,17 @@ export async function rebuildAccountLedgerForSource(
   },
 ) {
   await ensureAccountLedgerSchema(client)
+  // Delete the source's existing rows AND capture them in one round-trip — the
+  // returned rows tell us which accounts need a balance recalc. DELETE already
+  // locks the rows it removes, so the old separate SELECT … FOR UPDATE was
+  // redundant.
   const existing = await client.query(
-    `
-    SELECT company_id, account_type, account_id, entry_date
-    FROM account_ledger_entries
-    WHERE company_id = $1
-      AND source_type = $2::${enumCast.sourceType}
-      AND source_id = $3
-    FOR UPDATE
-    `,
-    [input.companyId, input.sourceType, input.sourceId],
-  )
-
-  await client.query(
     `
     DELETE FROM account_ledger_entries
     WHERE company_id = $1
       AND source_type = $2::${enumCast.sourceType}
       AND source_id = $3
+    RETURNING company_id, account_type, account_id, entry_date
     `,
     [input.companyId, input.sourceType, input.sourceId],
   )
@@ -431,17 +453,15 @@ export async function rebuildAccountLedgerForSource(
     else grouped.set(key, { ...row, amount, entryDate: normalizeDate(row.entryDate) })
   }
 
-  for (const row of grouped.values()) {
-    await client.query(
-      `
-      INSERT INTO account_ledger_entries (
-        id, company_id, account_type, account_id, direction, amount,
-        source_type, source_id, entry_date, note, created_at, updated_at
-      )
-      VALUES ($1, $2, $3::${enumCast.accountType}, $4, $5::${enumCast.direction}, $6,
-        $7::${enumCast.sourceType}, $8, $9, $10, now(), now())
-      `,
-      [
+  // Insert all grouped rows in a single multi-row INSERT (one round-trip) rather
+  // than one query per row — matters for split-payment / multi-account sources.
+  const groupedRows = [...grouped.values()]
+  if (groupedRows.length) {
+    const COLS = 10
+    const values: any[] = []
+    const tuples = groupedRows.map((row, i) => {
+      const b = i * COLS
+      values.push(
         crypto.randomUUID(),
         row.companyId,
         row.accountType,
@@ -452,12 +472,25 @@ export async function rebuildAccountLedgerForSource(
         row.sourceId,
         normalizeDate(row.entryDate),
         row.note || null,
-      ],
+      )
+      return `($${b + 1}, $${b + 2}, $${b + 3}::${enumCast.accountType}, $${b + 4}, $${b + 5}::${enumCast.direction}, $${b + 6}, $${b + 7}::${enumCast.sourceType}, $${b + 8}, $${b + 9}, $${b + 10}, now(), now())`
+    })
+    await client.query(
+      `
+      INSERT INTO account_ledger_entries (
+        id, company_id, account_type, account_id, direction, amount,
+        source_type, source_id, entry_date, note, created_at, updated_at
+      )
+      VALUES ${tuples.join(', ')}
+      `,
+      values,
     )
-    const key = accountKey(row)
-    const rowDate = normalizeDate(row.entryDate)
-    const current = affected.get(key)
-    if (!current || rowDate < current) affected.set(key, rowDate)
+    for (const row of groupedRows) {
+      const key = accountKey(row)
+      const rowDate = normalizeDate(row.entryDate)
+      const current = affected.get(key)
+      if (!current || rowDate < current) affected.set(key, rowDate)
+    }
   }
 
   for (const [key, fromDate] of affected.entries()) {

@@ -1,61 +1,28 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import ExpenseForm from '~/components/Expense/ExpenseForm.vue'
+import ExpenseQuickAdd from '~/components/Expense/ExpenseQuickAdd.vue'
 import ExpenseList from '~/components/Expense/ExpenseList.vue'
 
-const toast = useToast()
+const quickAddRef = ref<{ reset: () => void | Promise<void> } | null>(null)
 
-const normalizeExpenseBody = (expense: any, expenseNumber?: number) => ({
-  ...(expenseNumber != null ? { expenseNumber } : {}),
-  expenseDate: expense.date,
-  expensecategoryId: expense.categoryId,
-  userId: expense.userId || null,
-  totalAmount: Number(expense.amount) || 0,
-  paymentMode: expense.paymentMode,
-  status: expense.status || 'Paid',
-  note: expense.note || null,
-  receipt: expense.receipt || null,
-  receiptName: expense.receiptName || null,
-  taxAmount: Number(expense.taxAmount || 0),
-})
+// Optimistic, cached mutations (TanStack Query). They patch the list cache
+// immediately, roll back on DB failure, and block when offline.
+const { creating, updating, createExpense, updateExpense, deleteExpense } = useExpenseMutations()
 
+// Inline quick-add (above the table). Optimistic, so the row appears instantly
+// (no spinner). The form is cleared only after the create succeeds — on failure
+// (validation/DB error or offline) the inputs are kept so the user can fix and
+// retry.
 const addExpense = async (expense: any) => {
-  try {
-    const { number: expenseNumber } = await $fetch<{ number: number }>('/api/counter/increment', {
-      method: 'POST',
-      body: { entity: 'expense' },
-    })
-    await $fetch('/api/accounts/expenses', {
-      method: 'POST',
-      body: normalizeExpenseBody(expense, expenseNumber),
-    })
-    toast.add({ title: 'Expense added', color: 'green' })
-  } catch (error: any) {
-    toast.add({ title: 'Failed to create expense', description: error.message, color: 'red' })
-  }
+  if (await createExpense(expense)) quickAddRef.value?.reset()
 }
 
-const editExpense = async (id: string, data: any) => {
-  try {
-    await $fetch(`/api/accounts/expenses/${id}`, {
-      method: 'PUT',
-      body: normalizeExpenseBody(data),
-    })
-    toast.add({ title: 'Expense updated', color: 'green' })
-  } catch (error: any) {
-    toast.add({ title: 'Failed to update expense', description: error.message, color: 'red' })
-  }
+const deleteExpenseRow = (id: string) => {
+  deleteExpense(id)
 }
 
-const deleteExpenseRow = async (id: string) => {
-  try {
-    await $fetch(`/api/accounts/expenses/${id}`, { method: 'DELETE' })
-    toast.add({ title: 'Expense deleted successfully!', color: 'green' })
-  } catch (error: any) {
-    toast.add({ title: 'Error while deleting expense', description: error.message, color: 'red' })
-  }
-}
-
+// Edit modal (opened from a row's Edit action)
 const showForm = ref(false)
 const selectedExpense = ref<any | null>(null)
 
@@ -70,12 +37,8 @@ const closeForm = () => {
 }
 
 const saveExpense = async (form: any) => {
-  try {
-    if (selectedExpense.value) await editExpense(selectedExpense.value.id, form)
-    else await addExpense(form)
-  } finally {
-    closeForm()
-  }
+  if (!selectedExpense.value) return
+  if (await updateExpense(selectedExpense.value.id, form)) closeForm()
 }
 </script>
 
@@ -85,12 +48,22 @@ const saveExpense = async (form: any) => {
       <ExpenseList
         @edit="openForm"
         @delete="deleteExpenseRow"
-        @open="openForm"
-      />
+      >
+        <!-- Inline quick-add bar renders below the KPI summary cards -->
+        <template #quick-add>
+          <ExpenseQuickAdd
+            ref="quickAddRef"
+            :loading="creating"
+            @create="addExpense"
+          />
+        </template>
+      </ExpenseList>
 
       <UModal v-model="showForm">
         <ExpenseForm
           :expense="selectedExpense"
+          :loading="updating"
+          submit-label="Update"
           @save="saveExpense"
           @cancel="closeForm"
         />

@@ -32,6 +32,12 @@ const MS_DAY = 86400000
 const dKey = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const dateOnly = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
+const weekDays = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+const defaultWorkDays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+const isShiftWorkDay = (shift: { workDays?: string[] | null } | null | undefined, day: Date) => {
+    const workDays = Array.isArray(shift?.workDays) && shift.workDays.length ? shift.workDays : defaultWorkDays
+    return workDays.includes(weekDays[day.getDay()])
+}
 
 function monthlySalarySegments(start: Date, end: Date): { days: number; daysInMonth: number }[] {
     const segments: { days: number; daysInMonth: number }[] = []
@@ -167,6 +173,7 @@ export default defineEventHandler(async (event) => {
                 (a) => new Date(a.effectiveFrom) <= day && (!a.effectiveTo || new Date(a.effectiveTo) >= day),
             )
             if (!cover) continue
+            if (!isShiftWorkDay(cover.shift as any, day)) continue
             const att = attByDay.get(dKey(day))
             days.push({
                 shift: (att?.shift ?? cover.shift) as any,

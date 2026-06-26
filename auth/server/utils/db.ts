@@ -55,7 +55,7 @@ export async function updateUser(
   companyId: string,
   name: string,
   role: 'admin' | 'user',
-  code: string
+  code: number
 ) {
   return prisma.user.update({
     where: { id: userId },

@@ -1,24 +1,31 @@
 <script setup lang="ts">
-import {
-    useFindManyExpenseCategory,
-    useCreateExpenseCategory,
-    useDeleteExpenseCategory,
-    useFindManyCompanyUser
-} from '~/lib/hooks';
-import type { Prisma } from '@prisma/client';
-
 const props = defineProps({
     expense: {
         type: Object,
         required: false
-    }
+    },
+    loading: {
+        type: Boolean,
+        default: false,
+    },
+    submitLabel: {
+        type: String,
+        default: 'Save',
+    },
 });
 
 const emit = defineEmits(['save', 'cancel']);
 const toast = useToast();
-const createExpenseCategory = useCreateExpenseCategory({ optimisticUpdate: true });
-const deleteExpenseCategory = useDeleteExpenseCategory({ optimisticUpdate: true });
-const useAuth = () => useNuxtApp().$auth;
+
+const {
+    categories,
+    companyUsers,
+    categoriesLoading: isLoading,
+    loadCategories,
+    loadCompanyUsers,
+    createCategory,
+    deleteCategory,
+} = useExpenseFormOptions();
 
 /* ---------------------------------------------------
    FORM INITIALIZATION
@@ -40,7 +47,7 @@ const expenseData = computed(() => ({
         props.expense.status.slice(1).toLowerCase(),
       value: props.expense.status,
     }
-  : { label: 'Paid', value: 'PAID' },
+  : { label: 'Paid', value: 'Paid' },
   paymentMode: props.expense?.paymentMode ?
   {
       label:
@@ -54,37 +61,10 @@ const expenseData = computed(() => ({
 
 const form = ref({ ...expenseData.value });
 
-/* ---------------------------------------------------
-   FETCH EXPENSE CATEGORIES
---------------------------------------------------- */
-const queryArgs = computed<Prisma.ExpenseCategoryFindManyArgs>(() => ({
-    where: {
-        companyId: useAuth().session.value?.companyId,
-    },
-    select: {
-        id: true,
-        name: true
-    }
-}));
-
-const { data: categories, isLoading, refetch } = useFindManyExpenseCategory(queryArgs);
-
-/* ---------------------------------------------------
-   FETCH COMPANY USERS (user)
---------------------------------------------------- */
-const userQueryArgs = computed(() => ({
-  where: {
-    companyId: useAuth().session.value?.companyId,
-    deleted: false,
-  },
-  select: {
-    userId: true,
-    name: true,
-    phone: true,
-  }
-}));
-
-const { data: companyUsers } = useFindManyCompanyUser(userQueryArgs);
+onMounted(() => {
+    loadCategories();
+    loadCompanyUsers();
+});
 
 /* ---------------------------------------------------
    CATEGORY CHANGE (CREATABLE)
@@ -101,19 +81,7 @@ const handleCategoryChange = async (category) => {
     }
 
     try {
-        const newCategory = await createExpenseCategory.mutateAsync({
-            data: {
-                name: category.name,
-                company: {
-                    connect: {
-                        id: useAuth().session.value?.companyId,
-                    }
-                }
-            }
-        });
-
-        form.value.category = newCategory;
-        await refetch();
+        form.value.category = await createCategory(category.name);
     } catch (error: any) {
         toast.add({
             title: 'Failed to create category',
@@ -126,33 +94,10 @@ const handleCategoryChange = async (category) => {
 /* ---------------------------------------------------
    DELETE CATEGORY
 --------------------------------------------------- */
-const removeCategory = async(category) => {
-    try {
-        await deleteExpenseCategory.mutateAsync({
-            where: { id: category.id }
-        });
-
-        if (form.value.category?.id === category.id) {
-            form.value.category = null;
-        }
-
-        await refetch();
-    } catch (error: any) {
-        const prismaCode = error?.info?.code;
-
-        if (prismaCode === 'P2003') {
-            toast.add({
-                title: 'Cannot delete category',
-                description: 'This category is used in one or more expenses.',
-                color: 'red',
-            });
-        } else {
-            toast.add({
-                title: 'Error',
-                description: 'Failed to delete category. Please try again.',
-                color: 'red',
-            });
-        }
+const removeCategory = async (category) => {
+    const ok = await deleteCategory(category.id);
+    if (ok && form.value.category?.id === category.id) {
+        form.value.category = null;
     }
 };
 
@@ -269,7 +214,12 @@ const saveForm = () => {
         <UFormGroup label="Status">
           <USelectMenu
             v-model="form.status"
-            :options="['Paid', 'Pending', 'Approved', 'Rejected']"
+            :options="[
+              { label: 'Paid', value: 'Paid' },
+              { label: 'Pending', value: 'Pending' },
+              { label: 'Approved', value: 'Approved' },
+              { label: 'Rejected', value: 'Rejected' },
+            ]"
           />
         </UFormGroup>
       </div>
@@ -280,8 +230,8 @@ const saveForm = () => {
       </UFormGroup>
 
       <div class="flex justify-end mt-4">
-        <UButton color="gray" @click="emit('cancel')">Cancel</UButton>
-        <UButton color="primary" class="ml-3" type="submit">Save</UButton>
+        <UButton color="gray" :disabled="loading" @click="emit('cancel')">Cancel</UButton>
+        <UButton color="primary" class="ml-3" type="submit" :loading="loading">{{ submitLabel }}</UButton>
       </div>
     </UForm>
   </UCard>

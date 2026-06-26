@@ -218,6 +218,26 @@ enum AdjustmentStatus {
   CANCELLED
 }
 
+enum LeaveType {
+  CASUAL
+  SICK
+  EARNED
+  OTHER
+}
+
+enum LeaveStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+enum LeaveAllowancePeriod {
+  WEEKLY
+  MONTHLY
+  YEARLY
+}
+
 enum SalaryPeriod {
   MONTHLY
   WEEKLY
@@ -446,6 +466,7 @@ model Company {
   attendances               Attendance[]
   attendanceLogs            AttendanceLog[]
   attendanceAdjustments     AttendanceAdjustment[]
+  leaveApplications         LeaveApplication[]
   salaryConfigs             SalaryConfig[]
   payrollAdjustments        PayrollAdjustment[]
   payrollCycles             PayrollCycle[]
@@ -1815,6 +1836,7 @@ model CompanyUser {
   attendances            Attendance[]
   attendanceLogs         AttendanceLog[]
   attendanceAdjustments  AttendanceAdjustment[]
+  leaveApplications      LeaveApplication[]
   openingBalance         Decimal?                @default(0) @map("opening_balance")
   salaryConfig           SalaryConfig?
   payrollAdjustments     PayrollAdjustment[]
@@ -2376,30 +2398,39 @@ model SalesOrderItem {
 }
 
 model Shift {
-  id                      String            @id() @unique() @default(uuid())
-  createdAt               DateTime          @default(now()) @map("created_at")
-  updatedAt               DateTime          @updatedAt() @map("updated_at")
-  companyId               String            @map("company_id")
-  company                 Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id                      String               @id() @unique() @default(uuid())
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @updatedAt() @map("updated_at")
+  companyId               String               @map("company_id")
+  company                 Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name                    String
-  startTime               String            @map("start_time")
-  endTime                 String            @map("end_time")
-  breakMinutes            Int?              @map("break_minutes")
-  overtimeMode            OvertimeMode      @default(NONE) @map("overtime_mode")
-  overtimeRate            Decimal           @default(0) @map("overtime_rate") @db.Decimal(12, 2)
-  otDailyThresholdMinutes Int               @default(0) @map("ot_daily_threshold_minutes")
-  otHourlyRoundMinutes    Int               @default(0) @map("ot_hourly_round_minutes")
-  leaveCutFullDay         Decimal           @default(0) @map("leave_cut_full_day") @db.Decimal(12, 2)
-  leaveCutHalfDay         Decimal           @default(0) @map("leave_cut_half_day") @db.Decimal(12, 2)
-  leaveCutPerHour         Decimal           @default(0) @map("leave_cut_per_hour") @db.Decimal(12, 2)
-  paidLeaveDays           Int               @default(0) @map("paid_leave_days")
-  holidayPaid             Boolean           @default(true) @map("holiday_paid")
-  lateEntryGraceMinutes   Int               @default(0) @map("late_entry_grace_minutes")
-  lateEntryFine           Decimal           @default(0) @map("late_entry_fine") @db.Decimal(12, 2)
-  earlyExitGraceMinutes   Int               @default(0) @map("early_exit_grace_minutes")
-  earlyExitFine           Decimal           @default(0) @map("early_exit_fine") @db.Decimal(12, 2)
-  status                  Boolean           @default(true)
-  deleted                 Boolean           @default(false)
+  startTime               String               @map("start_time")
+  endTime                 String               @map("end_time")
+  workDays                String[]             @default(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]) @map("work_days")
+  breakMinutes            Int?                 @map("break_minutes")
+  overtimeMode            OvertimeMode         @default(NONE) @map("overtime_mode")
+  overtimeRate            Decimal              @default(0) @map("overtime_rate") @db.Decimal(12, 2)
+  otDailyThresholdMinutes Int                  @default(0) @map("ot_daily_threshold_minutes")
+  otHourlyRoundMinutes    Int                  @default(0) @map("ot_hourly_round_minutes")
+  leaveCutFullDay         Decimal              @default(0) @map("leave_cut_full_day") @db.Decimal(12, 2)
+  leaveCutHalfDay         Decimal              @default(0) @map("leave_cut_half_day") @db.Decimal(12, 2)
+  leaveCutPerHour         Decimal              @default(0) @map("leave_cut_per_hour") @db.Decimal(12, 2)
+  paidLeaveDays           Int                  @default(0) @map("paid_leave_days")
+  casualLeaveDays         Int                  @default(0) @map("casual_leave_days")
+  casualLeavePeriod       LeaveAllowancePeriod @default(MONTHLY) @map("casual_leave_period")
+  sickLeaveDays           Int                  @default(0) @map("sick_leave_days")
+  sickLeavePeriod         LeaveAllowancePeriod @default(MONTHLY) @map("sick_leave_period")
+  earnedLeaveDays         Int                  @default(0) @map("earned_leave_days")
+  earnedLeavePeriod       LeaveAllowancePeriod @default(YEARLY) @map("earned_leave_period")
+  otherLeaveDays          Int                  @default(0) @map("other_leave_days")
+  otherLeavePeriod        LeaveAllowancePeriod @default(MONTHLY) @map("other_leave_period")
+  holidayPaid             Boolean              @default(true) @map("holiday_paid")
+  lateEntryGraceMinutes   Int                  @default(0) @map("late_entry_grace_minutes")
+  lateEntryFine           Decimal              @default(0) @map("late_entry_fine") @db.Decimal(12, 2)
+  earlyExitGraceMinutes   Int                  @default(0) @map("early_exit_grace_minutes")
+  earlyExitFine           Decimal              @default(0) @map("early_exit_fine") @db.Decimal(12, 2)
+  status                  Boolean              @default(true)
+  deleted                 Boolean              @default(false)
   assignments             ShiftAssignment[]
   attendances             Attendance[]
 
@@ -2502,6 +2533,31 @@ model AttendanceAdjustment {
   @@index([companyId])
   @@index([companyId, status])
   @@map("attendance_adjustments")
+}
+
+model LeaveApplication {
+  id              String      @id() @unique() @default(uuid())
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt() @map("updated_at")
+  companyId       String      @map("company_id")
+  company         Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId          String      @map("user_id")
+  user            CompanyUser @relation(fields: [companyId, userId], references: [companyId, userId], onDelete: Cascade)
+  type            LeaveType
+  customType      String?     @map("custom_type")
+  startDate       DateTime    @map("start_date")
+  endDate         DateTime    @map("end_date")
+  days            Float
+  reason          String
+  status          LeaveStatus @default(APPROVED)
+  decisionNote    String?     @map("decision_note")
+  decidedByUserId String?     @map("decided_by_user_id")
+
+  @@index([companyId])
+  @@index([companyId, userId])
+  @@index([companyId, status])
+  @@index([companyId, startDate, endDate])
+  @@map("leave_applications")
 }
 
 model SalaryConfig {

@@ -14,7 +14,7 @@ export default eventHandler(async (event) => {
     });
 
     if (existingUser) {
-     await updateUser(existingUser.id, company.id, name, 'admin','1');
+     await updateUser(existingUser.id, company.id, name, 'admin', 1);
     } else {
       await createUser({
         email,

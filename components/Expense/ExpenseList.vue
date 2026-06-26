@@ -1,21 +1,12 @@
 <script setup lang="ts">
-import {
-    useFindManyExpense,
-    useCountExpense,
-    useFindManyExpenseCategory,
-    useUpdateManyExpense,
-    useFindManyCompanyUser
-} from '~/lib/hooks';
-import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 // import { saveAs } from 'file-saver';
 import { startOfDay, endOfDay } from 'date-fns'
 
-const emit = defineEmits(['edit','delete','open','values']);
+const emit = defineEmits(['edit','delete','values']);
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast()
 const expenseTableStore = useExpenseTableStore()
-const UpdateManyExpense = useUpdateManyExpense({ optimisticUpdate: true });
 const selectedRows = ref([]);
 const selectedStatus = ref([]);
 const selectedCategory = ref([]);
@@ -47,7 +38,7 @@ const selectedDate = ref({
     end: new Date(new Date().setHours(23, 59, 59, 999)) 
 });
 
-const sort = ref({ column: 'id', direction: 'asc' as const });
+const sort = ref({ column: 'expenseNumber', direction: 'desc' as const });
 const page = ref(1);
 const pageCount = ref('10');
 
@@ -133,19 +124,19 @@ const active = (selectedRows) => [
     [
         {
             label: 'Paid',
-            click: () => multiUpdate('Paid',selectedRows.id),
+            click: () => multiUpdate('Paid',selectedRows.map((r: any) => r.id)),
         },
         {
             label: 'Pending',
-            click: () => multiUpdate('Pending',selectedRows.id),
+            click: () => multiUpdate('Pending',selectedRows.map((r: any) => r.id)),
         },
         {
             label: 'Approved',
-            click: () => multiUpdate('Approved',selectedRows.id),
+            click: () => multiUpdate('Approved',selectedRows.map((r: any) => r.id)),
         },
         {
             label: 'Rejected',
-            click: () => multiUpdate('Rejected',selectedRows.id),
+            click: () => multiUpdate('Rejected',selectedRows.map((r: any) => r.id)),
         },
     ],
 ];
@@ -159,29 +150,18 @@ const ranges = [
   { label: 'Last year', duration: { years: 1 } }
 ]
 
-const categoryQueryArgs = computed<Prisma.ExpenseCategoryFindManyArgs>(() => ({
-    where: {
-        companyId: useAuth().session.value?.companyId,
-    },
-    select: {
-        id: true,
-        name: true
-    }
-}));
+const categories = ref<any[]>([])
+const companyUsers = ref<any[]>([])
 
-const { data: categories, isLoading:categoryIsLoading,} = useFindManyExpenseCategory(categoryQueryArgs);
-const userQueryArgs = computed(() => ({
-    where: {
-        companyId: useAuth().session.value?.companyId,
-        deleted: false,
-        status: true,
-    },
-    select: {
-        userId: true,
-        name: true,
-    },
-}))
-const { data: companyUsers } = useFindManyCompanyUser(userQueryArgs)
+const loadCategories = async () => {
+    if (!useAuth().session.value?.companyId) return
+    categories.value = await $fetch<any[]>('/api/accounts/expense-categories')
+}
+const loadCompanyUsers = async () => {
+    if (!useAuth().session.value?.companyId) return
+    companyUsers.value = await $fetch<any[]>('/api/accounts/company-users', { query: { activeOnly: 1 } })
+}
+
 const userFilterOptions = computed(() =>
     (companyUsers.value || []).map((u: any) => ({
         label: u.name || 'Unknown',
@@ -189,98 +169,37 @@ const userFilterOptions = computed(() =>
     }))
 )
 
-const expenseWhere = computed<Prisma.ExpenseWhereInput>(() => {
+const selectedUserIds = computed<string[]>(() =>
+    (selectedUsers.value || [])
+        .map((u: any) => (typeof u === 'string' ? u : u?.value))
+        .filter((id: any) => typeof id === 'string' && id.length > 0)
+)
+
+const expenseQueryParams = computed(() => {
     const hasMinAmount = minAmount.value !== null && Number.isFinite(Number(minAmount.value))
     const hasMaxAmount = maxAmount.value !== null && Number.isFinite(Number(maxAmount.value))
-    const selectedUserIds = (selectedUsers.value || [])
-      .map((u: any) => (typeof u === 'string' ? u : u?.value))
-      .filter((id: any) => typeof id === 'string' && id.length > 0)
     return {
-        companyId: useAuth().session.value?.companyId,
-        ...(search.value?.trim() && {
-            OR: [
-                {
-                    note: {
-                        contains: search.value.trim(),
-                        mode: 'insensitive'
-                    }
-                },
-                {
-                    expensecategory: {
-                        name: {
-                            contains: search.value.trim(),
-                            mode: 'insensitive'
-                        }
-                    }
-                },
-                {
-                    user: {
-                        name: {
-                            contains: search.value.trim(),
-                            mode: 'insensitive'
-                        }
-                    }
-                }
-            ]
-        }),
-
-        ...(selectedStatus.value.length && {
-            status: { in: selectedStatus.value }
-        }),
-
-        ...(selectedPaymentMode.value.length && {
-            paymentMode: { in: selectedPaymentMode.value }
-        }),
-
-        ...(selectedDate.value && {
-            expenseDate: {
-                gte: startOfDay(selectedDate.value.start),
-                lte: endOfDay(selectedDate.value.end),
-            }
-        }),
-
-        ...(selectedCategory.value.length && {
-            expensecategoryId: { in: selectedCategory.value }
-        }),
-
-        ...(selectedUserIds.length && {
-            userId: { in: selectedUserIds }
-        }),
-
-        ...((hasMinAmount || hasMaxAmount) && {
-            totalAmount: {
-                ...(hasMinAmount ? { gte: Number(minAmount.value) } : {}),
-                ...(hasMaxAmount ? { lte: Number(maxAmount.value) } : {}),
-            }
-        })
+        search: search.value?.trim() || undefined,
+        status: selectedStatus.value.length ? selectedStatus.value : undefined,
+        paymentMode: selectedPaymentMode.value.length ? selectedPaymentMode.value : undefined,
+        categoryIds: selectedCategory.value.length ? selectedCategory.value : undefined,
+        userIds: selectedUserIds.value.length ? selectedUserIds.value : undefined,
+        from: selectedDate.value ? startOfDay(selectedDate.value.start).toISOString() : undefined,
+        to: selectedDate.value ? endOfDay(selectedDate.value.end).toISOString() : undefined,
+        minAmount: hasMinAmount ? Number(minAmount.value) : undefined,
+        maxAmount: hasMaxAmount ? Number(maxAmount.value) : undefined,
+        sortColumn: sort.value.column,
+        sortDirection: sort.value.direction,
+        page: page.value,
+        pageCount: parseInt(pageCount.value),
     }
 })
 
-// Data
-const queryArgs = computed<Prisma.ExpenseFindManyArgs>(() => {
-    return {
-        where: expenseWhere.value,
+// Data — cached TanStack Query keyed by the current filter/sort/page params.
+const { rows: sales, total: totalCount, isLoading, refresh } = useExpenseList(expenseQueryParams)
+const { updateStatus } = useExpenseMutations()
 
-        include:{
-            expensecategory:true,
-            user:true
-        },
-        orderBy: {
-            [sort.value.column]: sort.value.direction,
-        },
-        skip: (page.value - 1) * parseInt(pageCount.value),
-        take: parseInt(pageCount.value),
-    };
-},{ enabled: !!useAuth().session.value?.companyId });
-
-const { data: sales, isLoading, error, refetch } = useFindManyExpense(queryArgs);
-const countQueryArgs = computed(() =>
-    useAuth().session.value?.companyId
-        ? { where: expenseWhere.value }
-        : undefined
-)
-const { data: totalCount } = useCountExpense(countQueryArgs);
-const  pageTotal = computed(() => sales.value?.length) ;
+const pageTotal = computed(() => sales.value?.length)
 const totalAmount = computed(() => {
   if (!sales.value) return 0;
 
@@ -346,6 +265,23 @@ const formatPdfExpenseCurrency = (val: number) =>
 
 const formatExpenseCurrency = (val: number) =>
   '₹' + Number(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// Legacy rows were stored with uppercase status (e.g. "PAID"); newer ones use
+// title-case ("Paid"). Normalize display + badge colour so casing in the DB
+// doesn't matter.
+const formatStatus = (status: string) => {
+  if (!status) return ''
+  const s = String(status).toLowerCase()
+  return s.charAt(0).toUpperCase() + s.slice(1)
+}
+const statusColor = (status: string) => {
+  switch (formatStatus(status)) {
+    case 'Paid': return 'green'
+    case 'Pending': return 'orange'
+    case 'Approved': return 'blue'
+    default: return 'red'
+  }
+}
 
 const getExpenseExportFilename = (extension: 'xlsx' | 'pdf') =>
   `Expense (${format(selectedDate.value.start, 'dd-MM-yyyy')} to ${format(selectedDate.value.end, 'dd-MM-yyyy')}).${extension}`
@@ -464,6 +400,8 @@ watch(
 )
 
 onMounted(() => {
+  loadCategories()
+  loadCompanyUsers()
   const s = expenseTableStore
   search.value = s.search ?? ''
   selectedStatus.value = s.selectedStatus ?? []
@@ -480,8 +418,12 @@ onMounted(() => {
   }
   page.value = Number(s.page || 1)
   pageCount.value = String(s.pageCount || '10')
-  if (s.sort?.column && s.sort?.direction) {
-    sort.value = s.sort
+  // Ignore legacy defaults so existing users get newest expense numbers first.
+  if (s.sort?.column && s.sort?.direction && s.sort.column !== 'id') {
+    sort.value = {
+      ...s.sort,
+      direction: s.sort.column === 'expenseNumber' ? 'desc' : s.sort.direction,
+    }
   }
   if (Array.isArray(s.selectedColumnKeys) && s.selectedColumnKeys.length > 0) {
     selectedColumns.value = columns.filter((c: any) =>
@@ -498,16 +440,8 @@ function selectRange(duration: Duration) {
   selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
 }
 
-const multiUpdate = async(status:string,ids:any) => {
-    await UpdateManyExpense.mutateAsync({
-        where: {
-            id: { in: ids },        
-        },
-        data: {
-            status: status        
-        }
-
-    })
+const multiUpdate = async (status: string, ids: string[]) => {
+    if (await updateStatus(ids, status)) selectedRows.value = []
 }
 
 const buildExpenseExportData = (rows: any[]) => {
@@ -528,7 +462,7 @@ const buildExpenseExportData = (rows: any[]) => {
     note: row.note || '',
     paymentMode: row.paymentMode || '',
     amount: Number(row.totalAmount || 0),
-    status: row.status || '',
+    status: formatStatus(row.status),
   }))
 
   return { summaryRows, billRows }
@@ -806,6 +740,10 @@ const downloadItems = [[
 //     }
 // };
 
+// Exposed for any caller that wants to force a reload (mutations already
+// invalidate the cache automatically, so this is rarely needed).
+defineExpose({ refresh })
+
 </script>
 
 <template>
@@ -832,6 +770,9 @@ const downloadItems = [[
         </div>
       </button>
     </div>
+
+    <!-- Inline quick-add bar (injected by the parent page) sits below the KPI cards -->
+    <slot name="quick-add" />
 
     <UCard
             class="w-full"
@@ -882,11 +823,6 @@ const downloadItems = [[
                           placeholder="Search note / category / user"
                           class="w-full sm:w-56"
                         />
-                    </div>
-                    <div class="flex items-center gap-2">
-                      <UButton color="primary" @click=" emit('open')" block class="w-full sm:w-40" >
-                          Add Expense
-                      </UButton>
                     </div>
                 </div>
             </template>
@@ -973,15 +909,13 @@ const downloadItems = [[
                 :loading="isLoading"
             >
             <template #status-data="{row}">
-                <UBadge 
-                    size="sm" 
-                    :color="row.status === 'Paid' ? 'green' 
-                        : row.status === 'Pending' ? 'orange' 
-                        : row.status === 'Approved' ? 'blue' 
-                        : 'red'" 
+                <UBadge
+                    size="sm"
+                    class="uppercase"
+                    :color="statusColor(row.status)"
                     variant="subtle"
                 >
-                    {{ row.status }}
+                    {{ formatStatus(row.status) }}
                 </UBadge>
             </template>
 

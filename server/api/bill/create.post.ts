@@ -2,7 +2,11 @@ import { pool } from '~/server/db'
 import crypto from 'crypto'
 import { generateCouponsForBill } from '~/server/utils/generatedCoupons'
 import { creditAmountFromBill, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
-import { billLedgerRows, ensureAccountLedgerSchema, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+import { billLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+
+// One-time `bills.discount_type` column add — gated to run once per process
+// instead of on every bill create.
+let billDiscountTypeReady = false
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
@@ -43,8 +47,12 @@ export default defineEventHandler(async (event) => {
   async function runTransaction(attempt = 1) {
     const client = await pool.connect()
     try {
-      await ensureAccountLedgerSchema(client)
-      await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
+      // Gated one-time column add (used to run on every bill). The account-ledger
+      // schema is ensured lazily inside rebuildAccountLedgerForSource below.
+      if (!billDiscountTypeReady) {
+        await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
+        billDiscountTypeReady = true
+      }
       await client.query('BEGIN')
       let generatedCoupons: any[] = []
 
@@ -281,17 +289,18 @@ export default defineEventHandler(async (event) => {
             throw new Error('No remaining uses for this generated coupon')
           }
         }
+        // Record usage + bump the coupon counter in a single statement (one
+        // round-trip) via a data-modifying CTE.
         updatePromises.push(
           client.query(
-            `INSERT INTO coupon_usages (id, coupon_id, client_id, bill_id, used_at)
-             VALUES ($1, $2, $3, $4, now())`,
+            `
+            WITH u AS (
+              INSERT INTO coupon_usages (id, coupon_id, client_id, bill_id, used_at)
+              VALUES ($1, $2, $3, $4, now())
+            )
+            UPDATE coupons SET times_used = times_used + 1 WHERE id = $2
+            `,
             [usageId, resolvedCouponId, resolvedClientId, billId]
-          )
-        )
-        updatePromises.push(
-          client.query(
-            `UPDATE coupons SET times_used = times_used + 1 WHERE id = $1`,
-            [resolvedCouponId]
           )
         )
       }

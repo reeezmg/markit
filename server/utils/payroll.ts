@@ -15,6 +15,7 @@ export interface SalaryCfgLike {
 export interface ShiftLike {
     startTime: string // "HH:mm"
     endTime: string // "HH:mm"
+    workDays?: string[] | null
     breakMinutes?: number | null
     overtimeMode?: OvertimeModeT | null
     overtimeRate?: number | null

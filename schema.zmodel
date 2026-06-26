@@ -279,6 +279,7 @@ model Company extends Base {
     attendances Attendance[]
     attendanceLogs AttendanceLog[]
     attendanceAdjustments AttendanceAdjustment[]
+    leaveApplications LeaveApplication[]
     salaryConfigs SalaryConfig[]
     payrollAdjustments PayrollAdjustment[]
     payrollCycles PayrollCycle[]
@@ -1838,6 +1839,7 @@ model CompanyUser {
     attendances Attendance[]
     attendanceLogs AttendanceLog[]
     attendanceAdjustments AttendanceAdjustment[]
+    leaveApplications LeaveApplication[]
     openingBalance Decimal? @default(0) @map("opening_balance")
     salaryConfig SalaryConfig?
     payrollAdjustments PayrollAdjustment[]
@@ -2558,6 +2560,26 @@ enum AdjustmentStatus {
     CANCELLED
 }
 
+enum LeaveType {
+    CASUAL
+    SICK
+    EARNED
+    OTHER
+}
+
+enum LeaveStatus {
+    PENDING
+    APPROVED
+    REJECTED
+    CANCELLED
+}
+
+enum LeaveAllowancePeriod {
+    WEEKLY
+    MONTHLY
+    YEARLY
+}
+
 model Shift extends Base {
     createdAt     DateTime @default(now()) @map("created_at")
     updatedAt     DateTime @updatedAt @map("updated_at")
@@ -2568,6 +2590,7 @@ model Shift extends Base {
     name          String
     startTime     String  @map("start_time")   // "HH:mm"
     endTime       String  @map("end_time")     // "HH:mm"
+    workDays      String[] @default(["MONDAY", "TUESDAY", "WEDNESDAY", "THURSDAY", "FRIDAY", "SATURDAY"]) @map("work_days")
     breakMinutes  Int?    @map("break_minutes")
     overtimeMode  OvertimeMode @default(NONE) @map("overtime_mode")
     overtimeRate  Decimal @db.Decimal(12, 2) @default(0) @map("overtime_rate")  // per-hour (HOURLY) / flat per-day (DAILY)
@@ -2577,6 +2600,14 @@ model Shift extends Base {
     leaveCutHalfDay Decimal @db.Decimal(12, 2) @default(0) @map("leave_cut_half_day")
     leaveCutPerHour Decimal @db.Decimal(12, 2) @default(0) @map("leave_cut_per_hour")
     paidLeaveDays Int @default(0) @map("paid_leave_days")
+    casualLeaveDays Int @default(0) @map("casual_leave_days")
+    casualLeavePeriod LeaveAllowancePeriod @default(MONTHLY) @map("casual_leave_period")
+    sickLeaveDays Int @default(0) @map("sick_leave_days")
+    sickLeavePeriod LeaveAllowancePeriod @default(MONTHLY) @map("sick_leave_period")
+    earnedLeaveDays Int @default(0) @map("earned_leave_days")
+    earnedLeavePeriod LeaveAllowancePeriod @default(YEARLY) @map("earned_leave_period")
+    otherLeaveDays Int @default(0) @map("other_leave_days")
+    otherLeavePeriod LeaveAllowancePeriod @default(MONTHLY) @map("other_leave_period")
     holidayPaid Boolean @default(true) @map("holiday_paid")
     lateEntryGraceMinutes Int @default(0) @map("late_entry_grace_minutes")
     lateEntryFine Decimal @db.Decimal(12, 2) @default(0) @map("late_entry_fine")
@@ -2706,6 +2737,34 @@ model AttendanceAdjustment extends Base {
     @@index([companyId, status])
     @@allow('read, create, update, delete', auth() != null)
     @@map("attendance_adjustments")
+}
+
+model LeaveApplication extends Base {
+    createdAt           DateTime @default(now()) @map("created_at")
+    updatedAt           DateTime @updatedAt @map("updated_at")
+
+    companyId           String  @map("company_id")
+    company             Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+    userId              String  @map("user_id")
+    user                CompanyUser @relation(fields: [companyId, userId], references: [companyId, userId], onDelete: Cascade)
+
+    type                LeaveType
+    customType          String? @map("custom_type")
+    startDate           DateTime @map("start_date")
+    endDate             DateTime @map("end_date")
+    days                Float
+    reason              String
+    status              LeaveStatus @default(APPROVED)
+    decisionNote        String? @map("decision_note")
+    decidedByUserId     String? @map("decided_by_user_id")
+
+    @@index([companyId])
+    @@index([companyId, userId])
+    @@index([companyId, status])
+    @@index([companyId, startDate, endDate])
+    @@allow('read, create, update, delete', auth() != null)
+    @@map("leave_applications")
 }
 
 

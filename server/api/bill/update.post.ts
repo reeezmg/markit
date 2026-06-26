@@ -3,7 +3,10 @@ import { createError } from 'h3'
 import { pool } from '~/server/db'
 import { generateCouponsForBill } from '~/server/utils/generatedCoupons'
 import { creditAmountFromBill, deleteUserLedgerEntryForSource, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
-import { billLedgerRows, ensureAccountLedgerSchema, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+import { billLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+
+// One-time `bills.discount_type` column add — gated to run once per process.
+let billDiscountTypeReady = false
 
 function toNumber(value: unknown) {
   const numeric = Number(value ?? 0)
@@ -73,8 +76,12 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
-    await ensureAccountLedgerSchema(client)
-    await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
+    // Gated one-time column add (used to run on every update). The account-ledger
+    // schema is ensured lazily inside rebuildAccountLedgerForSource below.
+    if (!billDiscountTypeReady) {
+      await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
+      billDiscountTypeReady = true
+    }
     await client.query('BEGIN')
 
     const billResult = await client.query(
@@ -461,14 +468,15 @@ export default defineEventHandler(async (event) => {
         }
       }
 
+      // Remove the usage row + decrement the counter in one statement.
       await client.query(
-        `DELETE FROM coupon_usages WHERE id = $1`,
-        [existingCouponUsage.id],
-      )
-
-      await client.query(
-        `UPDATE coupons SET times_used = times_used - 1 WHERE id = $1`,
-        [existingCouponUsage.coupon_id],
+        `
+        WITH d AS (
+          DELETE FROM coupon_usages WHERE id = $1
+        )
+        UPDATE coupons SET times_used = times_used - 1 WHERE id = $2
+        `,
+        [existingCouponUsage.id, existingCouponUsage.coupon_id],
       )
     }
 
@@ -509,17 +517,16 @@ export default defineEventHandler(async (event) => {
         }
       }
 
+      // Record usage + bump the counter in one statement.
       await client.query(
         `
-        INSERT INTO coupon_usages (id, coupon_id, client_id, bill_id, used_at)
-        VALUES ($1, $2, $3, $4, now())
+        WITH u AS (
+          INSERT INTO coupon_usages (id, coupon_id, client_id, bill_id, used_at)
+          VALUES ($1, $2, $3, $4, now())
+        )
+        UPDATE coupons SET times_used = times_used + 1 WHERE id = $2
         `,
         [crypto.randomUUID(), nextCouponId, resolvedClientId, billData.id],
-      )
-
-      await client.query(
-        `UPDATE coupons SET times_used = times_used + 1 WHERE id = $1`,
-        [nextCouponId],
       )
     }
 

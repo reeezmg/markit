@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import {
     useFindManyShift,
-    useCreateShift,
-    useUpdateShift,
     useDeleteShift,
     useFindManyShiftAssignment,
     useCreateShiftAssignment,
@@ -49,6 +47,7 @@ const shiftForm = reactive({
     name: '',
     startTime: '09:30',
     endTime: '18:00',
+    workDays: ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'] as string[],
     breakMinutes: null as number | null,
     overtimeMode: 'NONE',
     overtimeRate: 0 as number,
@@ -58,6 +57,14 @@ const shiftForm = reactive({
     leaveCutHalfDay: 0 as number,
     leaveCutPerHour: 0 as number,
     paidLeaveDays: 0 as number,
+    casualLeaveDays: 0 as number,
+    casualLeavePeriod: 'MONTHLY',
+    sickLeaveDays: 0 as number,
+    sickLeavePeriod: 'MONTHLY',
+    earnedLeaveDays: 0 as number,
+    earnedLeavePeriod: 'YEARLY',
+    otherLeaveDays: 0 as number,
+    otherLeavePeriod: 'MONTHLY',
     holidayPaid: true as boolean,
     lateEntryGraceMinutes: 0 as number,
     lateEntryFine: 0 as number,
@@ -65,9 +72,31 @@ const shiftForm = reactive({
     earlyExitFine: 0 as number,
 })
 const overtimeModeOptions = ['NONE', 'HOURLY', 'DAILY']
+const leavePeriodOptions = ['WEEKLY', 'MONTHLY', 'YEARLY']
+const leavePolicyRows = [
+    { key: 'casual', label: 'Casual Leave (CL)', days: 'casualLeaveDays', period: 'casualLeavePeriod' },
+    { key: 'sick', label: 'Sick Leave (SL)', days: 'sickLeaveDays', period: 'sickLeavePeriod' },
+    { key: 'earned', label: 'Earned Leave (EL)', days: 'earnedLeaveDays', period: 'earnedLeavePeriod' },
+    { key: 'other', label: 'Other leaves', days: 'otherLeaveDays', period: 'otherLeavePeriod' },
+]
+const defaultWorkDays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
+const workDayOptions = [
+    { label: 'Sun', value: 'SUNDAY' },
+    { label: 'Mon', value: 'MONDAY' },
+    { label: 'Tue', value: 'TUESDAY' },
+    { label: 'Wed', value: 'WEDNESDAY' },
+    { label: 'Thu', value: 'THURSDAY' },
+    { label: 'Fri', value: 'FRIDAY' },
+    { label: 'Sat', value: 'SATURDAY' },
+]
+const getShiftWorkDays = (shift: any) => Array.isArray(shift?.workDays) && shift.workDays.length ? shift.workDays : defaultWorkDays
+const normalizeWorkDays = (days: string[]) => workDayOptions.map((day) => day.value).filter((day) => days.includes(day))
+const toggleWorkDay = (day: string, checked: boolean) => {
+    shiftForm.workDays = checked
+        ? Array.from(new Set([...shiftForm.workDays, day]))
+        : shiftForm.workDays.filter((d) => d !== day)
+}
 
-const CreateShift = useCreateShift()
-const UpdateShift = useUpdateShift()
 const DeleteShift = useDeleteShift()
 
 const openCreateShift = () => {
@@ -75,6 +104,7 @@ const openCreateShift = () => {
     shiftForm.name = ''
     shiftForm.startTime = '09:30'
     shiftForm.endTime = '18:00'
+    shiftForm.workDays = [...defaultWorkDays]
     shiftForm.breakMinutes = null
     shiftForm.overtimeMode = 'NONE'
     shiftForm.overtimeRate = 0
@@ -84,6 +114,14 @@ const openCreateShift = () => {
     shiftForm.leaveCutHalfDay = 0
     shiftForm.leaveCutPerHour = 0
     shiftForm.paidLeaveDays = 0
+    shiftForm.casualLeaveDays = 0
+    shiftForm.casualLeavePeriod = 'MONTHLY'
+    shiftForm.sickLeaveDays = 0
+    shiftForm.sickLeavePeriod = 'MONTHLY'
+    shiftForm.earnedLeaveDays = 0
+    shiftForm.earnedLeavePeriod = 'YEARLY'
+    shiftForm.otherLeaveDays = 0
+    shiftForm.otherLeavePeriod = 'MONTHLY'
     shiftForm.holidayPaid = true
     shiftForm.lateEntryGraceMinutes = 0
     shiftForm.lateEntryFine = 0
@@ -97,6 +135,7 @@ const openEditShift = (shift: any) => {
     shiftForm.name = shift.name
     shiftForm.startTime = shift.startTime
     shiftForm.endTime = shift.endTime
+    shiftForm.workDays = [...getShiftWorkDays(shift)]
     shiftForm.breakMinutes = shift.breakMinutes ?? null
     shiftForm.overtimeMode = shift.overtimeMode ?? 'NONE'
     shiftForm.overtimeRate = Number(shift.overtimeRate ?? 0)
@@ -106,6 +145,14 @@ const openEditShift = (shift: any) => {
     shiftForm.leaveCutHalfDay = Number(shift.leaveCutHalfDay ?? 0)
     shiftForm.leaveCutPerHour = Number(shift.leaveCutPerHour ?? 0)
     shiftForm.paidLeaveDays = Number(shift.paidLeaveDays ?? 0)
+    shiftForm.casualLeaveDays = Number(shift.casualLeaveDays ?? 0)
+    shiftForm.casualLeavePeriod = shift.casualLeavePeriod ?? 'MONTHLY'
+    shiftForm.sickLeaveDays = Number(shift.sickLeaveDays ?? 0)
+    shiftForm.sickLeavePeriod = shift.sickLeavePeriod ?? 'MONTHLY'
+    shiftForm.earnedLeaveDays = Number(shift.earnedLeaveDays ?? 0)
+    shiftForm.earnedLeavePeriod = shift.earnedLeavePeriod ?? 'YEARLY'
+    shiftForm.otherLeaveDays = Number(shift.otherLeaveDays ?? 0)
+    shiftForm.otherLeavePeriod = shift.otherLeavePeriod ?? 'MONTHLY'
     shiftForm.holidayPaid = shift.holidayPaid ?? true
     shiftForm.lateEntryGraceMinutes = shift.lateEntryGraceMinutes ?? 0
     shiftForm.lateEntryFine = Number(shift.lateEntryFine ?? 0)
@@ -119,6 +166,11 @@ const submitShift = async () => {
         toast.add({ title: 'Shift name is required', color: 'red' })
         return
     }
+    const workDays = normalizeWorkDays(shiftForm.workDays)
+    if (!workDays.length) {
+        toast.add({ title: 'Select at least one work day', color: 'red' })
+        return
+    }
     if (!companyId.value) return
     isSaving.value = true
     try {
@@ -126,6 +178,7 @@ const submitShift = async () => {
             name: shiftForm.name.trim(),
             startTime: shiftForm.startTime,
             endTime: shiftForm.endTime,
+            workDays,
             breakMinutes: shiftForm.breakMinutes ? Number(shiftForm.breakMinutes) : null,
             overtimeMode: shiftForm.overtimeMode,
             overtimeRate: Number(shiftForm.overtimeRate) || 0,
@@ -135,6 +188,14 @@ const submitShift = async () => {
             leaveCutHalfDay: Number(shiftForm.leaveCutHalfDay) || 0,
             leaveCutPerHour: Number(shiftForm.leaveCutPerHour) || 0,
             paidLeaveDays: Number(shiftForm.paidLeaveDays) || 0,
+            casualLeaveDays: Number(shiftForm.casualLeaveDays) || 0,
+            casualLeavePeriod: shiftForm.casualLeavePeriod,
+            sickLeaveDays: Number(shiftForm.sickLeaveDays) || 0,
+            sickLeavePeriod: shiftForm.sickLeavePeriod,
+            earnedLeaveDays: Number(shiftForm.earnedLeaveDays) || 0,
+            earnedLeavePeriod: shiftForm.earnedLeavePeriod,
+            otherLeaveDays: Number(shiftForm.otherLeaveDays) || 0,
+            otherLeavePeriod: shiftForm.otherLeavePeriod,
             holidayPaid: Boolean(shiftForm.holidayPaid),
             lateEntryGraceMinutes: Number(shiftForm.lateEntryGraceMinutes) || 0,
             lateEntryFine: Number(shiftForm.lateEntryFine) || 0,
@@ -142,15 +203,13 @@ const submitShift = async () => {
             earlyExitFine: Number(shiftForm.earlyExitFine) || 0,
         }
         if (editingShift.value) {
-            await UpdateShift.mutateAsync({ where: { id: editingShift.value.id }, data })
+            await $fetch(`/api/users/shifts/${editingShift.value.id}`, { method: 'PUT', body: data })
             if (selectedShift.value?.id === editingShift.value.id) {
                 selectedShift.value = { ...selectedShift.value, ...data }
             }
             toast.add({ title: 'Shift updated', color: 'green' })
         } else {
-            await CreateShift.mutateAsync({
-                data: { ...data, company: { connect: { id: companyId.value } } },
-            })
+            await $fetch('/api/users/shifts', { method: 'POST', body: data })
             toast.add({ title: 'Shift created', color: 'green' })
         }
         shiftModalOpen.value = false
@@ -361,6 +420,12 @@ const fmtDate = (value?: string | Date | null) =>
                                 <div v-if="Number(row.paidLeaveDays) || row.holidayPaid" class="text-gray-500">
                                     Leave {{ Number(row.paidLeaveDays || 0) }} · Holiday {{ row.holidayPaid ? 'paid' : 'unpaid' }}
                                 </div>
+                                <div
+                                    v-if="Number(row.casualLeaveDays) || Number(row.sickLeaveDays) || Number(row.earnedLeaveDays) || Number(row.otherLeaveDays)"
+                                    class="text-gray-500"
+                                >
+                                    CL {{ Number(row.casualLeaveDays || 0) }} · SL {{ Number(row.sickLeaveDays || 0) }} · EL {{ Number(row.earnedLeaveDays || 0) }}
+                                </div>
                                 <span v-if="row.overtimeMode === 'NONE' && !Number(row.leaveCutFullDay) && !Number(row.leaveCutHalfDay) && !Number(row.leaveCutPerHour) && !Number(row.paidLeaveDays) && !row.holidayPaid" class="text-gray-400">-</span>
                             </div>
                         </template>
@@ -403,6 +468,7 @@ const fmtDate = (value?: string | Date | null) =>
                                     <span v-if="selectedShift.breakMinutes">
                                         · {{ selectedShift.breakMinutes }}m break
                                     </span>
+                                    · {{ getShiftWorkDays(selectedShift).map((day) => day.slice(0, 3)).join(', ') }}
                                 </p>
                             </div>
                             <div class="flex items-center gap-2">
@@ -443,6 +509,10 @@ const fmtDate = (value?: string | Date | null) =>
                         <div>
                             <div class="font-semibold text-gray-500 uppercase">Paid leave / holiday</div>
                             <div>{{ Number(selectedShift.paidLeaveDays || 0) }} paid leaves</div>
+                            <div>CL {{ Number(selectedShift.casualLeaveDays || 0) }}/{{ selectedShift.casualLeavePeriod || 'MONTHLY' }}</div>
+                            <div>SL {{ Number(selectedShift.sickLeaveDays || 0) }}/{{ selectedShift.sickLeavePeriod || 'MONTHLY' }}</div>
+                            <div>EL {{ Number(selectedShift.earnedLeaveDays || 0) }}/{{ selectedShift.earnedLeavePeriod || 'YEARLY' }}</div>
+                            <div>Other {{ Number(selectedShift.otherLeaveDays || 0) }}/{{ selectedShift.otherLeavePeriod || 'MONTHLY' }}</div>
                             <div>Holiday {{ selectedShift.holidayPaid ? 'paid' : 'unpaid' }}</div>
                         </div>
                         <div>
@@ -510,6 +580,17 @@ const fmtDate = (value?: string | Date | null) =>
                     </div>
                     <UFormGroup label="Break (minutes)">
                         <UInput v-model.number="shiftForm.breakMinutes" type="number" min="0" placeholder="Optional" />
+                    </UFormGroup>
+                    <UFormGroup label="Work days">
+                        <div class="flex flex-wrap gap-x-4 gap-y-2">
+                            <UCheckbox
+                                v-for="day in workDayOptions"
+                                :key="day.value"
+                                :model-value="shiftForm.workDays.includes(day.value)"
+                                :label="day.label"
+                                @update:model-value="toggleWorkDay(day.value, Boolean($event))"
+                            />
+                        </div>
                     </UFormGroup>
                     <div class="border-t border-gray-100 dark:border-gray-800 pt-3 space-y-3">
                         <div class="text-xs font-semibold uppercase text-gray-500">Overtime</div>
