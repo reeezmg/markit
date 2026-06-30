@@ -465,7 +465,7 @@ const { refetch: refetchCodeCheck } = useFindManyCompanyUser(
 
 
 // Pagination
-const sort = ref({ column: 'name', direction: 'asc' as const });
+const sort = ref({ column: 'code', direction: 'asc' as const });
 const page = ref(1);
 const pageCount = ref(10);
 
