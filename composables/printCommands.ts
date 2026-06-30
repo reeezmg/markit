@@ -4,8 +4,8 @@ import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 const COLUMN_WIDTHS = {
   sl: 4,
   description: 24,
-  hsn: 10,
-  tax: 10,
+  hsn: 14,
+  tax: 6,
   qty: 4,
   mrp: 10,
   value: 10,
