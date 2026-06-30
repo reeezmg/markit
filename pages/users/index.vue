@@ -469,6 +469,11 @@ const sort = ref({ column: 'name', direction: 'asc' as const });
 const page = ref(1);
 const pageCount = ref(10);
 
+// Clear bulk selection when the visible page/rows change
+watch([page, pageCount, search, selectedStatus, sort], () => {
+  selectedRows.value = []
+}, { deep: true });
+
 
 const deleteUser = async (id: string) => {
   isDeleting.value = true
@@ -531,6 +536,82 @@ const deleteUser = async (id: string) => {
   }
 }
 
+
+// ─── Bulk row selection & delete ───
+const selectedRows = ref<any[]>([])
+const isBulkDeleteModalOpen = ref(false)
+const isBulkDeleting = ref(false)
+
+const deleteSelectedUsers = async () => {
+  if (!selectedRows.value.length) return
+
+  isBulkDeleting.value = true
+  const companyId = useAuth().session.value?.companyId!
+  const currentUserId = useAuth().session.value?.id
+
+  try {
+    if (!users.value || users.value.length === 0) {
+      throw new Error('User list not loaded')
+    }
+
+    // Guard: at least one admin must remain in the company.
+    const selectedAdminIds = selectedRows.value
+      .filter(r => r.role === 'admin')
+      .map(r => r.userId)
+    if (selectedAdminIds.length) {
+      const totalAdmins = users.value.filter(u => u.role === 'admin' && !u.deleted).length
+      if (totalAdmins - selectedAdminIds.length < 1) {
+        toast.add({
+          title: 'At least one admin must remain in the company!',
+          description: 'You cannot delete all admin users.',
+          color: 'red',
+          id: 'modal-success',
+        })
+        isBulkDeleting.value = false
+        isBulkDeleteModalOpen.value = false
+        return
+      }
+    }
+
+    let deletedSelf = false
+    for (const row of selectedRows.value) {
+      UpdateCompanyUser.mutate({
+        where: {
+          companyId_userId: {
+            companyId,
+            userId: row.userId,
+          },
+        },
+        data: {
+          deleted: true,
+          status: false,
+        },
+      })
+
+      if (row.userId === currentUserId) deletedSelf = true
+
+      // Close detail panel if the selected (open) user is being deleted
+      if (selectedUser.value?.userId === row.userId) {
+        selectedUser.value = null
+      }
+    }
+
+    toast.add({
+      title: `${selectedRows.value.length} user(s) deleted!`,
+      id: 'modal-success',
+    })
+
+    selectedRows.value = []
+    await userStore.fetchUsers(companyId)
+
+    if (deletedSelf) await authLogout()
+  } catch (error) {
+    console.error('Failed to delete users:', error)
+  } finally {
+    isBulkDeleting.value = false
+    isBulkDeleteModalOpen.value = false
+  }
+}
 
 const queryArgs = computed(() => {
   const selectedStatusCondition =
@@ -878,19 +959,32 @@ const handleSubmit = async (e: Event) => {
                                 size="xs"
                             />
                         </div>
-                        <UButton
-                            icon="i-heroicons-funnel"
-                            color="gray"
-                            size="xs"
-                            :disabled="search === '' && selectedStatus.length === 0"
-                            @click="resetFilters"
-                        >
-                            Reset
-                        </UButton>
+                        <div class="flex items-center gap-2">
+                            <UButton
+                                v-if="selectedRows.length"
+                                icon="i-heroicons-trash"
+                                color="red"
+                                variant="solid"
+                                size="xs"
+                                @click="isBulkDeleteModalOpen = true"
+                            >
+                                Delete ({{ selectedRows.length }})
+                            </UButton>
+                            <UButton
+                                icon="i-heroicons-funnel"
+                                color="gray"
+                                size="xs"
+                                :disabled="search === '' && selectedStatus.length === 0"
+                                @click="resetFilters"
+                            >
+                                Reset
+                            </UButton>
+                        </div>
                     </div>
 
                     <div v-if="!selectedUser">
                         <UTable
+                            v-model="selectedRows"
                             v-model:sort="sort"
                             :rows="users"
                             :columns="columns"
@@ -1490,6 +1584,33 @@ const handleSubmit = async (e: Event) => {
                 @click="() => deleteUser(deletingRowIdentinty.id)"
             />
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
+        </template>
+    </UDashboardModal>
+
+    <UDashboardModal
+        v-model="isBulkDeleteModalOpen"
+        title="Delete Users"
+        :description="`Are you sure you want to delete ${selectedRows.length} selected user(s)?`"
+        icon="i-heroicons-exclamation-circle"
+        prevent-close
+        :close-button="null"
+        :ui="{
+            icon: {
+                base: 'text-red-500 dark:text-red-400',
+            } as any,
+            footer: {
+                base: 'ml-16',
+            } as any,
+        }"
+    >
+        <template #footer>
+            <UButton
+                color="red"
+                label="Delete"
+                :loading="isBulkDeleting"
+                @click="deleteSelectedUsers"
+            />
+            <UButton color="white" label="Cancel" @click="isBulkDeleteModalOpen = false" />
         </template>
     </UDashboardModal>
     </UDashboardPanelContent>
