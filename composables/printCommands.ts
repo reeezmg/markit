@@ -330,12 +330,17 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     encoder.newline(2);
   });
 
+  const totalMrp = (bill.entries || []).reduce(
+    (sum: number, item: any) => sum + toFiniteNumber(item.mrp),
+    0,
+  );
+
   encoder
     .rule({ style: 'single' })
     .bold(true)
     .text(
       '    ' +
-        ' '.repeat(COLUMN_WIDTHS.mrp) +
+        textStart(formatMoney(totalMrp), COLUMN_WIDTHS.mrp) +
         textStart(bill.tqty || 0, COLUMN_WIDTHS.qty) +
         textStart(formatMoney(bill.tvalue), COLUMN_WIDTHS.value) +
         textStart(formatMoney(bill.tdiscount), COLUMN_WIDTHS.disc) +
