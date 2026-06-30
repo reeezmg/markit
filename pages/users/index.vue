@@ -504,7 +504,7 @@ const deleteUser = async (id: string) => {
       }
     }
 
-     UpdateCompanyUser.mutate({
+    await UpdateCompanyUser.mutateAsync({
       where: {
         companyId_userId: {
           companyId,
@@ -575,7 +575,7 @@ const deleteSelectedUsers = async () => {
 
     let deletedSelf = false
     for (const row of selectedRows.value) {
-      UpdateCompanyUser.mutate({
+      await UpdateCompanyUser.mutateAsync({
         where: {
           companyId_userId: {
             companyId,
