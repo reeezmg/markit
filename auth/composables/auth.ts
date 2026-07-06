@@ -37,7 +37,6 @@ export const authForgetPassword = async (current_password: string, password: str
         body: {
             current_password,
             password,
-            id: useAuth().session.value?.id,
         },
 
     });

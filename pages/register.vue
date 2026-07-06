@@ -7,6 +7,7 @@ import { reactive, ref } from 'vue';
 const reject = ref(true);
 const emailExist = ref(false);
 const isEmailVerified = ref(false);
+const registerError = ref('');
 const toast = useToast();
 const isSendingOtp = ref(false);
 const isVerifyingOtp = ref(false);
@@ -34,7 +35,8 @@ const companyTypes = [
 ]
 
 onMounted(() => {
-    state.plan = route.query.plan as string
+    const requestedPlan = Array.isArray(route.query.plan) ? route.query.plan[0] : route.query.plan
+    state.plan = plans.includes(requestedPlan || '') ? requestedPlan as string : 'free'
 })
 
 const otp = ref('');
@@ -46,6 +48,12 @@ const formSchema = z.object({
   password: z.string().min(6, 'Password must be at least 6 characters long'),
   confirmPassword: z.string(),
   companyname: z.string().min(1, 'Company name is required'),
+  plan: z.enum(['free', 'lite', 'pro'], {
+    errorMap: () => ({ message: 'Please select a valid plan' }),
+  }),
+  companyType: z.enum(['retail', 'service'], {
+    errorMap: () => ({ message: 'Please select a valid company type' }),
+  }),
   agree: z.literal(true, {
     errorMap: () => ({ message: 'You must agree to the Terms and Conditions' }),
   }),
@@ -54,14 +62,11 @@ const formSchema = z.object({
 // Validate function
 const validate = (state: any) => {
   try {
-    if(!emailExist){
     const validated = formSchema.parse(state);
-    if (validated.password !== validated.confirmPassword) {
+    if (!emailExist.value && validated.password !== validated.confirmPassword) {
       return [{ path: 'confirmPassword', message: 'Passwords do not match' }];
     }
     return [];
-  }
-  return []
   } catch (error: any) {
     if (error.errors) {
       return error.errors.map((err: any) => ({
@@ -76,6 +81,8 @@ const validate = (state: any) => {
 // Form submission
 async function onSubmit() {
   registerLoading.value = true
+  registerError.value = ''
+  reject.value = true
   try {
     const res = await authRegister(
       state.email.trim().toLowerCase(),
@@ -87,9 +94,10 @@ async function onSubmit() {
     );
     console.log(res);
     // Success logic here
-  } catch (error) {
+  } catch (error: any) {
     registerLoading.value = false
     reject.value = false;
+    registerError.value = error?.data?.message || error?.data?.statusMessage || error?.message || 'Error registering';
     console.error(error);
   }
 }
@@ -114,14 +122,15 @@ const checkEmail = async (email: string) => {
 
 const onVerifyEmail = async () => {
    
-    const { email } = state;
+    const email = state.email.trim().toLowerCase();
     if (!email) {
         toast.add({ title: 'Please enter your email', icon: 'i-heroicons-exclamation-circle', color: 'red' });
         return;
     }
+    state.email = email;
 
     isSendingOtp.value = true;
-    checkEmail(state.email);
+    await checkEmail(email);
     try {
         const res = await $fetch('/api/send-otp', {
             method: 'POST',
@@ -229,7 +238,7 @@ const onVerifyOtp = async () => {
             <UInput
               v-model="state.password"
               type="password"
-              placeholder="Enter your password"
+              :placeholder="emailExist ? 'Enter existing account password' : 'Enter your password'"
             />
           </UFormGroup>
 
@@ -279,7 +288,7 @@ const onVerifyOtp = async () => {
           <UAlert
             color="red"
             icon="i-heroicons-information-circle-20-solid"
-            title="Error registering"
+            :title="registerError || 'Error registering'"
           />
         </template>
       </UForm>

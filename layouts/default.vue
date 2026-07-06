@@ -556,8 +556,6 @@ const links = computed(() => {
             to: `/order`,
             icon: 'i-heroicons-shopping-bag',
             children: [
-            ...(auth.session.value?.companyType === 'seller' || auth.session.value?.companyType === 'buyer'
-                    ? [
                         {
                         label: 'Orders',
                         to: `/order/ecomorders`,
@@ -588,8 +586,6 @@ const links = computed(() => {
                             text: 'Pickup requests & locations',
                         },
                         },
-                      ]
-                    : []),
             ],
            
         },

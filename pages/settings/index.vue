@@ -182,9 +182,6 @@ const onPasswordUpdate = async () => {
         return;
     }
 
-    isUpdatingPassword.value = true;
-
-
     if (state.password_new !== state.confirm_password) {
         toast.add({
             title: 'Passwords do not match',
@@ -203,6 +200,8 @@ const onPasswordUpdate = async () => {
         return;
     }
 
+    isUpdatingPassword.value = true;
+
     try {
        const res = await authForgetPassword(state.password_current,state.password_new);
 
@@ -216,18 +215,18 @@ const onPasswordUpdate = async () => {
         state.password_current = '';
         state.password_new = '';
         state.confirm_password = '';
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
-        if (error.statusCode === 401) {
+        if (error?.statusCode === 401 || error?.status === 401) {
             toast.add({
-                title:'Incorrect passworde',
+                title:'Incorrect password',
                 icon: 'i-heroicons-exclamation-circle',
                 color: 'red',
             });
             return;
         }
         toast.add({
-            title: 'Error updating password',
+            title: error?.data?.message || error?.data?.statusMessage || error?.message || 'Error updating password',
             icon: 'i-heroicons-exclamation-circle',
             color: 'red',
         });
