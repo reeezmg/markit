@@ -3,9 +3,9 @@ import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 
 const COLUMN_WIDTHS = {
   sl: 4,
-  description: 24,
-  hsn: 10,
-  tax: 10,
+  description: 26,
+  hsn: 12,
+  tax: 6,
   qty: 4,
   mrp: 10,
   value: 10,
@@ -44,28 +44,17 @@ function renderExpenseRow(
   }
 }
 
+function truncateText(text: unknown, width: number): string {
+  const str = (text ?? '').toString();
+  if (str.length <= width) return str;
+  if (width <= 3) return str.slice(0, width);
+  return str.slice(0, width - 3) + '...';
+}
+
 function textStart(text: unknown, width: number): string {
   const textStr = (text ?? ' ').toString();
   if (textStr.length >= width) return textStr;
   return textStr + ' '.repeat(width - textStr.length);
-}
-
-function wordWrap(text: string, width: number): string[] {
-  const words = text.split(' ');
-  const lines: string[] = [];
-  let current = '';
-  for (const word of words) {
-    if (!current) {
-      current = word.slice(0, width);
-    } else if (current.length + 1 + word.length <= width) {
-      current += ' ' + word;
-    } else {
-      lines.push(current);
-      current = word.slice(0, width);
-    }
-  }
-  if (current) lines.push(current);
-  return lines.length ? lines : [''];
 }
 
 function parseMoneyInput(value: unknown): number {
@@ -304,20 +293,13 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .rule({ style: 'single' });
 
   (bill.entries || []).forEach((item: any, index: number) => {
-    const descLines = wordWrap(item.description || '', COLUMN_WIDTHS.description);
-    // First line: SL + first desc chunk + HSN + TAX
+    // First line: SL + description (truncated with … if too long) + HSN + TAX
     encoder.text(
       textStart((index + 1).toString(), COLUMN_WIDTHS.sl) +
-        textStart(descLines[0], COLUMN_WIDTHS.description) +
+        textStart(truncateText(item.description, COLUMN_WIDTHS.description), COLUMN_WIDTHS.description) +
         textStart(item.hsn || '', COLUMN_WIDTHS.hsn) +
         textStart(`${item.tax || 0}%`, COLUMN_WIDTHS.tax),
     );
-    // Extra description lines on their own rows
-    for (let j = 1; j < descLines.length; j++) {
-      encoder.text(
-        ' '.repeat(COLUMN_WIDTHS.sl) + descLines[j],
-      );
-    }
     // Second row: QTY + MRP + VALUE + DISC + T.VALUE
     encoder.text(
       '    ' +
@@ -330,12 +312,17 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     encoder.newline(2);
   });
 
+  const totalMrp = (bill.entries || []).reduce(
+    (sum: number, item: any) => sum + toFiniteNumber(item.mrp),
+    0,
+  );
+
   encoder
     .rule({ style: 'single' })
     .bold(true)
     .text(
       '    ' +
-        ' '.repeat(COLUMN_WIDTHS.mrp) +
+        textStart(formatMoney(totalMrp), COLUMN_WIDTHS.mrp) +
         textStart(bill.tqty || 0, COLUMN_WIDTHS.qty) +
         textStart(formatMoney(bill.tvalue), COLUMN_WIDTHS.value) +
         textStart(formatMoney(bill.tdiscount), COLUMN_WIDTHS.disc) +
