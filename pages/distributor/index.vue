@@ -1081,7 +1081,19 @@ const poAction = (row: any) => {
     [
       { label: 'Details', icon: 'i-heroicons-document-text-20-solid', click: () => openDetailsModal(row) },
       { label: 'Print', icon: 'i-heroicons-printer-20-solid', click: () => printPurchaseOrder(row) },
-      { label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => router.push(`/products/purchase?poId=${row.id}&isEdit=true`) },
+      {
+        label: 'Edit',
+        icon: 'i-heroicons-pencil-square-20-solid',
+        click: () => router.push({
+          path: '/products/add',
+          query: {
+            poId: row.id,
+            isEdit: 'true',
+            from: 'distributor-purchase-order',
+            returnTo: '/distributor',
+          },
+        }),
+      },
     ],
   ]
   if (row.paymentType === 'CREDIT') {
