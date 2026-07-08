@@ -141,7 +141,7 @@ const handleSubmit = async (e: Event) => {
       const base64file = { base64, uuid: files.value.uuid };
 
       const [awsres, dbres] = await Promise.all([
-        awsService.uploadBase64File(base64file.base64, base64file.uuid),
+        awsService.uploadBase64File(base64file.base64, base64file.uuid, undefined, undefined, undefined, false),
         res,
       ]);
     }
@@ -149,7 +149,7 @@ const handleSubmit = async (e: Event) => {
     // ✅ Upload banner if exists
     if (bannerFile.value?.file) {
       const bannerBase64 = await prepareFileForApi(bannerFile.value.file);
-      await awsService.uploadBase64File(bannerBase64, bannerFile.value.uuid);
+      await awsService.uploadBase64File(bannerBase64, bannerFile.value.uuid, undefined, undefined, undefined, false);
     }
 
     toast.add({

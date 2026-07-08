@@ -277,7 +277,9 @@ const subcategoryActions = (row: SubcategoryForm) => [
 const uploadImage = async (image?: ImageData) => {
   if (!image?.file) return;
   const base64 = await prepareFileForApi(image.file);
-  await awsService.uploadBase64File(base64, image.uuid);
+  // Category/subcategory/banner images are stored as-is; they must NOT go
+  // through AI model generation (which is only meant for product photos).
+  await awsService.uploadBase64File(base64, image.uuid, undefined, undefined, undefined, false);
 };
 
 const saveCategory = async () => {
