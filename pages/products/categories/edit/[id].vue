@@ -76,7 +76,11 @@ const { data: category, refetch: refetchCategory } = useFindUniqueCategory({
   include: { subcategories: true },
 });
 
-watchEffect(() => {
+// Explicit-source watch (not watchEffect): the body reads and rewrites `files`,
+// which createValue also mutates on every child emit. With watchEffect both
+// effects track `files` and re-trigger each other forever — dev builds abort the
+// loop ("Maximum recursive updates exceeded") but production builds freeze.
+watch(category, () => {
   if (category.value) {
     name.value = category.value.name;
     hsn.value = category.value.hsn || '';
@@ -101,7 +105,7 @@ watchEffect(() => {
       isNew: false,
     }));
   }
-});
+}, { immediate: true });
 
 const createValue = (data: any) => {
   name.value = data.name;
