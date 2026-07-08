@@ -5,6 +5,7 @@ import {
   useDeletePurchaseOrder,
   useCreateDistributorPayment,
 } from '~/lib/hooks'
+import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
 const toast = useToast()
 const router = useRouter()
@@ -135,13 +136,115 @@ const expand = ref({ openedRows: [], row: null })
 const page = ref(1)
 const pageCount = ref(10)
 
+const ranges = [
+  { label: 'Last 7 days', duration: { days: 7 } },
+  { label: 'Last 14 days', duration: { days: 14 } },
+  { label: 'Last 30 days', duration: { days: 30 } },
+  { label: 'Last 3 months', duration: { months: 3 } },
+  { label: 'Last 6 months', duration: { months: 6 } },
+  { label: 'Last year', duration: { years: 1 } },
+]
+
+const selectedDate = ref({
+  start: sub(new Date(), { days: 7 }),
+  end: new Date(),
+})
+
+function isRangeSelected(duration: Duration) {
+  return isSameDay(selectedDate.value.start, sub(new Date(), duration)) && isSameDay(selectedDate.value.end, new Date())
+}
+
+function selectRange(duration: Duration) {
+  selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
+}
+
+const paymentTypeFilter = ref('')
+const minTotalFilter = ref<number | null>(null)
+const maxTotalFilter = ref<number | null>(null)
+
+const isFilterModalOpen = ref(false)
+const draftPaymentTypeFilter = ref('')
+const draftMinTotalFilter = ref<number | null>(null)
+const draftMaxTotalFilter = ref<number | null>(null)
+
+const paymentTypeFilterOptions = [
+  { label: 'All', value: '' },
+  { label: 'Cash', value: 'CASH' },
+  { label: 'Bank', value: 'BANK' },
+  { label: 'UPI', value: 'UPI' },
+  { label: 'Card', value: 'CARD' },
+  { label: 'Cheque', value: 'CHEQUE' },
+  { label: 'Credit', value: 'CREDIT' },
+]
+
+const openFilterModal = () => {
+  draftPaymentTypeFilter.value = paymentTypeFilter.value
+  draftMinTotalFilter.value = minTotalFilter.value
+  draftMaxTotalFilter.value = maxTotalFilter.value
+  isFilterModalOpen.value = true
+}
+
+const applyFilters = () => {
+  paymentTypeFilter.value = draftPaymentTypeFilter.value
+  minTotalFilter.value = draftMinTotalFilter.value
+  maxTotalFilter.value = draftMaxTotalFilter.value
+  page.value = 1
+  isFilterModalOpen.value = false
+}
+
+const resetFilters = () => {
+  search.value = ''
+  selectedDate.value = { start: sub(new Date(), { days: 7 }), end: new Date() }
+  paymentTypeFilter.value = ''
+  minTotalFilter.value = null
+  maxTotalFilter.value = null
+  page.value = 1
+}
+
+watch([search, selectedDate, paymentTypeFilter, minTotalFilter, maxTotalFilter], () => {
+  page.value = 1
+}, { deep: true })
+
 // -------------------------------------
 // QUERY
 // -------------------------------------
+const searchWhere = computed(() => {
+  const q = search.value.trim()
+  if (!q) return {}
+
+  const num = Number(q)
+  const numericMatch = q !== '' && !Number.isNaN(num) ? { purchaseOrderNo: num } : null
+
+  return {
+    OR: [
+      ...(numericMatch ? [numericMatch] : []),
+      { billNo: { contains: q, mode: 'insensitive' } },
+    ],
+  }
+})
+
+const totalAmountWhere = computed(() => {
+  if (minTotalFilter.value === null && maxTotalFilter.value === null) return {}
+
+  return {
+    totalAmount: {
+      ...(minTotalFilter.value !== null ? { gte: minTotalFilter.value } : {}),
+      ...(maxTotalFilter.value !== null ? { lte: maxTotalFilter.value } : {}),
+    },
+  }
+})
+
 const queryArgs = computed(() => ({
   where: {
     companyId: companyId.value,
     products: { some: {} },
+    createdAt: {
+      gte: startOfDay(selectedDate.value.start),
+      lte: endOfDay(selectedDate.value.end),
+    },
+    ...(paymentTypeFilter.value ? { paymentType: paymentTypeFilter.value } : {}),
+    ...totalAmountWhere.value,
+    ...searchWhere.value,
   },
   select: {
     id: true,
@@ -230,9 +333,11 @@ const {
   refetch,
 } = useFindManyPurchaseOrder(queryArgs)
 
-const { data: pageTotal } = useCountPurchaseOrder({
+const countArgs = computed(() => ({
   where: queryArgs.value.where,
-})
+}))
+
+const { data: pageTotal } = useCountPurchaseOrder(countArgs)
 
 // -------------------------------------
 // CALCULATIONS
@@ -330,6 +435,52 @@ const rows = computed(() =>
 // -------------------------------------
 // ACTION HANDLERS
 // -------------------------------------
+const isDownloading = ref(false)
+
+async function triggerDownload(url: string, filename: string, blob: Blob) {
+  const objectUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.URL.revokeObjectURL(objectUrl)
+}
+
+const downloadPurchaseOrders = async (format: 'excel' | 'pdf') => {
+  isDownloading.value = true
+  try {
+    const res = await $fetch.raw(`/api/downloads/purchase-orders.${format}`, {
+      method: 'GET',
+      params: {
+        startDate: startOfDay(selectedDate.value.start).toISOString(),
+        endDate: endOfDay(selectedDate.value.end).toISOString(),
+        search: search.value || undefined,
+        paymentType: paymentTypeFilter.value || undefined,
+        minTotal: minTotalFilter.value ?? undefined,
+        maxTotal: maxTotalFilter.value ?? undefined,
+      },
+    })
+
+    const ext = format === 'excel' ? 'xlsx' : 'pdf'
+    const mime = format === 'excel'
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'application/pdf'
+
+    await triggerDownload('', `purchase-orders.${ext}`, new Blob([res._data as ArrayBuffer], { type: mime }))
+  } catch (err: any) {
+    showToast('Download failed', 'red', err.message)
+  } finally {
+    isDownloading.value = false
+  }
+}
+
+const downloadItems = [[
+  { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells', click: () => downloadPurchaseOrders('excel') },
+  { label: 'PDF', icon: 'i-heroicons-document-text', click: () => downloadPurchaseOrders('pdf') },
+]]
+
 const openEdit = (row: any) => {
   router.push({
     path: '/products/add',
@@ -530,12 +681,41 @@ const action = (row: any) => {
       <!-- HEADER -->
       <template #header>
         <div class="flex flex-col sm:flex-row justify-between gap-3 w-full">
-          <UInput
-            v-model="search"
-            icon="i-heroicons-magnifying-glass-20-solid"
-            placeholder="Search Purchase Orders..."
-            class="w-full sm:w-60"
-          />
+          <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+              <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
+                {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
+              </UButton>
+
+              <template #panel="{ close }">
+                <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                  <div class="hidden sm:flex flex-col py-4">
+                    <UButton
+                      v-for="(range, index) in ranges"
+                      :key="index"
+                      :label="range.label"
+                      color="gray"
+                      variant="ghost"
+                      class="rounded-none px-6 hidden sm:block"
+                      :class="[isRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50']"
+                      truncate
+                      @click="selectRange(range.duration)"
+                    />
+                  </div>
+
+                  <DatePicker v-model="selectedDate" @close="close" />
+                </div>
+              </template>
+            </UPopover>
+
+            <UInput
+              v-model="search"
+              icon="i-heroicons-magnifying-glass-20-solid"
+              placeholder="Search Purchase Orders..."
+              class="w-full sm:w-60"
+            />
+          </div>
+
           <UButton
             icon="i-heroicons-plus"
             size="sm"
@@ -557,6 +737,39 @@ const action = (row: any) => {
             class="me-2 w-20"
             size="xs"
           />
+        </div>
+
+        <div class="flex gap-1.5 items-center">
+          <UDropdown :items="downloadItems" :ui="{ width: 'w-36' }">
+            <UButton
+              icon="i-heroicons-arrow-down-tray"
+              color="gray"
+              size="xs"
+              trailing
+              :loading="isDownloading"
+              :disabled="isDownloading"
+            >
+              Download
+            </UButton>
+          </UDropdown>
+
+          <UButton
+            icon="i-heroicons-funnel"
+            color="gray"
+            size="xs"
+            @click="openFilterModal"
+          >
+            Filters
+          </UButton>
+
+          <UButton
+            icon="i-heroicons-arrow-path"
+            color="gray"
+            size="xs"
+            @click="resetFilters"
+          >
+            Reset
+          </UButton>
         </div>
       </div>
 
@@ -986,6 +1199,44 @@ const action = (row: any) => {
             </UButton>
           </div>
         </div>
+      </UCard>
+    </UModal>
+
+    <!-- FILTER MODAL -->
+    <UModal v-model="isFilterModalOpen">
+      <UCard>
+        <template #header>
+          <div class="text-base font-semibold">Purchase Order Filters</div>
+        </template>
+
+        <div class="space-y-3">
+          <USelect
+            v-model="draftPaymentTypeFilter"
+            :options="paymentTypeFilterOptions"
+            option-attribute="label"
+            value-attribute="value"
+            placeholder="Payment Type"
+          />
+          <div class="grid grid-cols-2 gap-3">
+            <UInput
+              v-model.number="draftMinTotalFilter"
+              type="number"
+              placeholder="Min Total"
+            />
+            <UInput
+              v-model.number="draftMaxTotalFilter"
+              type="number"
+              placeholder="Max Total"
+            />
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="w-full flex justify-end gap-2">
+            <UButton color="gray" variant="ghost" @click="isFilterModalOpen = false">Cancel</UButton>
+            <UButton color="primary" @click="applyFilters">Apply Filter</UButton>
+          </div>
+        </template>
       </UCard>
     </UModal>
   </UDashboardPanelContent>
