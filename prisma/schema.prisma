@@ -347,6 +347,12 @@ model Company {
   refundPolicy              String?                   @default("") @map("refund_policy")
   returnPolicy              String?                   @default("") @map("return_policy")
   phone                     String?
+  email                     String?                   @default("")
+  instagramUrl              String?                   @default("") @map("instagram_url")
+  facebookUrl               String?                   @default("") @map("facebook_url")
+  youtubeUrl                String?                   @default("") @map("youtube_url")
+  xUrl                      String?                   @default("") @map("x_url")
+  linkedinUrl               String?                   @default("") @map("linkedin_url")
   currency                  String                    @default("INR")
   images                    String?
   pointsValue               Int                       @default(0) @map("points_value")
@@ -401,6 +407,7 @@ model Company {
   categories                Category[]
   subcategories             Subcategory[]
   brands                    Brand[]
+  shippingBoxes             ShippingBox[]
   collections               Collection[]
   bills                     Bill[]
   carts                     CartCompanyClient[]
@@ -488,6 +495,7 @@ model Productinput {
   category    Boolean @default(true)
   subcategory Boolean @default(true)
   description Boolean @default(true)
+  dimension   Boolean @default(false)
   company     Company @relation(fields: [companyId], references: [id])
   companyId   String  @unique() @map("company_id")
 
@@ -495,20 +503,21 @@ model Productinput {
 }
 
 model Variantinput {
-  id        String   @id() @unique() @default(uuid())
-  name      Boolean  @default(true)
-  code      Boolean  @default(true)
-  sprice    Boolean  @default(true)
-  pprice    Boolean  @default(true)
-  dprice    Boolean  @default(true)
-  discount  Boolean  @default(true)
-  qty       Boolean  @default(true)
-  unit      String[] @default(["Nos"])
-  sizes     Boolean  @default(true)
-  images    Boolean  @default(true)
-  button    Boolean  @default(true)
-  company   Company  @relation(fields: [companyId], references: [id])
-  companyId String   @unique() @map("company_id")
+  id            String   @id() @unique() @default(uuid())
+  name          Boolean  @default(true)
+  code          Boolean  @default(true)
+  sprice        Boolean  @default(true)
+  pprice        Boolean  @default(true)
+  dprice        Boolean  @default(true)
+  discount      Boolean  @default(true)
+  qty           Boolean  @default(true)
+  unit          String[] @default(["Nos"])
+  sizes         Boolean  @default(true)
+  sizeDimension Boolean  @default(false)
+  images        Boolean  @default(true)
+  button        Boolean  @default(true)
+  company       Company  @relation(fields: [companyId], references: [id])
+  companyId     String   @unique() @map("company_id")
 
   @@map("variant_inputs")
 }
@@ -1205,6 +1214,12 @@ model Product {
   status          Boolean        @default(true)
   rating          Float?
   description     String?
+  weight          Float?
+  length          Float?
+  width           Float?
+  height          Float?
+  dimension       ShippingBox?   @relation("ProductDimension", fields: [dimensionId], references: [id])
+  dimensionId     String?        @map("dimension_id")
   company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId       String         @map("company_id")
   category        Category?      @relation(fields: [categoryId], references: [id])
@@ -1241,7 +1256,10 @@ model Variant {
   dprice             Float?                @map("d_price")
   images             String[]
   tax                Float                 @default(0.0)
-  weight             Float?                @default(0)
+  weight             Float?
+  length             Float?
+  width              Float?
+  height             Float?
   product            Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId          String                @map("product_id")
   brand              Brand?                @relation(fields: [brandId], references: [id])
@@ -1275,6 +1293,12 @@ model Item {
   qty           Int?                  @default(0)
   initialQty    Int?                  @default(0) @map("initial_qty")
   soldQty       Int?                  @default(0) @map("sold_qty")
+  weight        Float?
+  length        Float?
+  width         Float?
+  height        Float?
+  dimension     ShippingBox?          @relation("ItemDimension", fields: [dimensionId], references: [id])
+  dimensionId   String?               @map("dimension_id")
   entry         Entry[]
   company       Company               @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId     String                @map("company_id")
@@ -1284,6 +1308,27 @@ model Item {
 
   @@index([barcode, companyId])
   @@map("items")
+}
+
+model ShippingBox {
+  id                String    @id() @default(uuid())
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt() @map("updated_at")
+  name              String
+  type              String    @default("box")
+  weight            Float?
+  length            Float?
+  width             Float?
+  height            Float?
+  status            Boolean   @default(true)
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId         String    @map("company_id")
+  writeId           String?   @default(uuid()) @map("write_id")
+  dimensionProducts Product[] @relation("ProductDimension")
+  dimensionItems    Item[]    @relation("ItemDimension")
+
+  @@index([companyId])
+  @@map("shipping_boxes")
 }
 
 model Bill {

@@ -17,7 +17,7 @@ const props = defineProps<{
     editdPrice?: number | null;
     editWeight?: number | null;
     editItems?: {id:string; size: string; qty: number }[] | null;
-   
+
 }>();
 
 
@@ -58,8 +58,22 @@ const schema = z.object({
 const { errors, defineField,resetForm: resetValidation } = useForm({
     validationSchema: toTypedSchema(schema),
 });
-const items = ref<{ id: string; size: string | null; qty: number | undefined }[]>([]);
+const items = ref<{ id: string; size: string | null; qty: number | undefined; dimensionId?: string | null }[]>([]);
 const id = ref(props.id);
+
+// Product dimension presets (ShippingBox, type='product') for per-size linking.
+const productDimensions = ref<any[]>([]);
+const showSizeDimension = ref(false);   // gated by the store-settings toggle
+onMounted(async () => {
+    try {
+        const res: any = await $fetch('/api/dimensions', { query: { type: 'product' } });
+        productDimensions.value = res.dimensions || [];
+    } catch { /* presets are optional */ }
+    try {
+        const flags: any = await $fetch('/api/product-inputs');
+        showSizeDimension.value = !!flags.sizeDimension;
+    } catch { /* default hidden */ }
+});
 const [name, nameAttrs] = defineField('name');
 const [code, codeAttrs] = defineField('code');
 const [qty, qtyAttrs] = defineField('qty');
@@ -396,9 +410,23 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
   <div class="w-full" v-if="variantInputs?.sizes">
     <template v-if="items[0]?.size !== null">
       <label class="block text-sm font-medium leading-6 dark:text-white mt-4">Items & Quantities</label>
-      <div v-for="(item, index) in items" :key="index" :data-size-index="index" class="grid grid-cols-1 md:grid-cols-3 gap-2 mt-2">
+      <div v-for="(item, index) in items" :key="index" :data-size-index="index" class="grid grid-cols-1 gap-2 mt-2" :class="showSizeDimension ? 'md:grid-cols-4' : 'md:grid-cols-3'">
         <UInput v-model="item.size" :data-size-field="'size'" type="text" placeholder="Size" class="w-full" />
         <UInput v-model.number="item.qty" :data-size-field="'qty'" type="text" inputmode="numeric" placeholder="Quantity" class="w-full" />
+        <USelectMenu
+          v-if="showSizeDimension"
+          v-model="item.dimensionId"
+          :options="productDimensions"
+          value-attribute="id"
+          option-attribute="name"
+          searchable
+          placeholder="Dimension"
+          class="w-full"
+        >
+          <template #option-empty>
+            <span class="text-xs text-gray-400">No product dimensions yet</span>
+          </template>
+        </USelectMenu>
         <button type="button" @click="removeItem(index)" class="w-full text-red-500 border border-red-500 rounded-md">
           Delete
         </button>

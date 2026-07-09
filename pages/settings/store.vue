@@ -179,6 +179,28 @@ const variantInputs = reactive([
   { key: 'button', label: 'Button', value: useAuth().session.value?.variantInputs?.button  },
 ])
 
+// Dimension input toggles (product-level + size-level). Persisted via the raw
+// /api/product-inputs endpoint (product_inputs.dimension / variant_inputs.sizeDimension),
+// independent of the ZenStack company update above.
+const productDimensionFlag = ref(false)
+const sizeDimensionFlag = ref(false)
+const savedProductDimensionFlag = ref(false)
+const savedSizeDimensionFlag = ref(false)
+async function loadDimensionFlags() {
+  try {
+    const res: any = await $fetch('/api/product-inputs')
+    productDimensionFlag.value = savedProductDimensionFlag.value = !!res.productDimension
+    sizeDimensionFlag.value = savedSizeDimensionFlag.value = !!res.sizeDimension
+  } catch { /* ignore */ }
+}
+onMounted(loadDimensionFlags)
+watch([productDimensionFlag, sizeDimensionFlag], () => {
+  if (productDimensionFlag.value !== savedProductDimensionFlag.value ||
+      sizeDimensionFlag.value !== savedSizeDimensionFlag.value) {
+    isInputsChanged.value = true
+  }
+})
+
 const selectedBillingUnits = ref<string[]>(
   normalizeBillingUnits(useAuth().session.value?.variantInputs?.unit)
 )
@@ -716,6 +738,13 @@ const onInputChange = async () => {
       },
     });
     await updateSession(productinputData, variantinputData);
+    // Dimension toggles are stored separately (raw endpoint) to avoid a ZenStack regen.
+    await $fetch('/api/product-inputs', {
+      method: 'POST',
+      body: { productDimension: productDimensionFlag.value, sizeDimension: sizeDimensionFlag.value },
+    });
+    savedProductDimensionFlag.value = productDimensionFlag.value;
+    savedSizeDimensionFlag.value = sizeDimensionFlag.value;
     toast.add({ title: 'Product and Variant inputs updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating Product and Variant inputs',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
@@ -1681,6 +1710,10 @@ const onAllDeliverySave = () => {
             <label class="text-sm font-medium">{{ input.label }}</label>
             <UCheckbox v-model="input.value" />
           </div>
+          <div class="flex items-center justify-between border px-3 py-2 rounded-md">
+            <label class="text-sm font-medium">Product Dimension</label>
+            <UCheckbox v-model="productDimensionFlag" />
+          </div>
         </div>
       </div>
 
@@ -1695,6 +1728,10 @@ const onAllDeliverySave = () => {
           >
             <label class="text-sm font-medium">{{ input.label }}</label>
             <UCheckbox v-model="input.value" />
+          </div>
+          <div class="flex items-center justify-between border px-3 py-2 rounded-md">
+            <label class="text-sm font-medium">Size Dimension</label>
+            <UCheckbox v-model="sizeDimensionFlag" />
           </div>
         </div>
       </div>

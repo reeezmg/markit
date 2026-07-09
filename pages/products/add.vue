@@ -194,6 +194,8 @@ const linkList = ['Create', 'Media', 'Live'];
 const name = ref('');
 const brand = ref('');
 const description = ref('');
+// Linked product-dimension ShippingBox (products.dimension_id).
+const productDimensionId = ref<string | null>(null);
 const live = ref<boolean>();
 let files = reactive<ImageData[]>([]);
 const category = ref<any>({});
@@ -367,6 +369,7 @@ const createValue = (data: any) => {
     category.value = data.category;
     subcategory.value = data.subcategory;
     collection.value = data.collection || '';
+    productDimensionId.value = data.dimensionId ?? null;
     persistDraftForm();
 };
 
@@ -471,6 +474,7 @@ const snapshotProductForm = () => ({
   collection: collection.value,
   live: live.value,
     deliveryType: effectiveDeliveryType.value,
+  dimensionId: productDimensionId.value ?? null,
   variants: variants.value.map((variant) => ({
     ...variant,
     items: (variant.items || []).map((item) => ({ ...item })),
@@ -511,6 +515,7 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
     ? 'order'
     : snap.deliveryType || 'trynbuy',
   categoryTax: catTax,
+  dimensionId: snap.dimensionId ?? null,
   // display metadata for the left table + barcode labels
   category: snap.category ? { id: snap.category.id, name: snap.category.name, targetAudience: snap.category.targetAudience } : null,
   variants: (snap.variants || []).map((variant: any) => ({
@@ -524,7 +529,9 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
     discount: variant.discount || 0,
     weight: variant.weight || 0,
     images: variantInputs?.value?.images ? (variant.images || []).map((f: any) => ({ uuid: f.uuid, view: f.view })) : [],
-    items: (variant.items || []).map((size: any) => ({ id: size.id || uuidv4(), size: size.size || null, qty: size.qty || 0 })),
+    items: (variant.items || []).map((size: any) => ({
+      id: size.id || uuidv4(), size: size.size || null, qty: size.qty || 0, dimensionId: size.dimensionId ?? null,
+    })),
   })),
 })
 
@@ -1524,6 +1531,7 @@ const onDeleteDraft = (no: string) => {
                         :editCategory="selectedProduct?.categoryId"
                         :editSubcategory="selectedProduct?.subcategoryId"
                         :editCollection="selectedProduct?.collectionId"
+                        :editDimensionId="selectedProduct?.dimensionId"
                         @update="createValue" />
                 </UPageCard>
 

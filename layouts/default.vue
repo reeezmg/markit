@@ -115,6 +115,16 @@ const links = computed(() => {
       },
     },
     {
+      id: 'boxes',
+      label: 'Boxes',
+      to: `/products/dimensions`,
+      icon: 'i-heroicons-cube',
+      tooltip: {
+        text: 'Packaging Boxes',
+        shortcuts: ['P', 'X'],
+      },
+    },
+    {
       id: 'ecom',
       label: 'Ecom',
       icon: 'i-heroicons-globe-alt',
@@ -491,6 +501,14 @@ const links = computed(() => {
                     tooltip: {
                     text: 'products',
                     shortcuts: ['P', 'O'],
+                    },
+                },
+                   {
+                    label: 'Boxes',
+                    to: `/products/dimensions`,
+                    tooltip: {
+                    text: 'Packaging Boxes',
+                    shortcuts: ['P', 'X'],
                     },
                 },
                      {

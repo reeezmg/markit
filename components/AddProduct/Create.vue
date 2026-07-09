@@ -22,6 +22,7 @@ const props = defineProps<{
   editCategory?: any
   editSubcategory?: any
   editCollection?: any
+  editDimensionId?: string | null
 }>()
 
 const emit = defineEmits(['update'])
@@ -43,6 +44,27 @@ const { errors, defineField, resetForm: resetValidation } = useForm({
 
 const [name, nameAttrs] = defineField('name')
 const [description, descriptionAttrs] = defineField('description')
+
+// Product dimension: a ShippingBox (type='product') linked via products.dimension_id.
+const productDimensions = ref<any[]>([])
+const selectedProductDimension = ref<any>(null)
+const showProductDimension = ref(false)   // gated by the store-settings toggle
+onMounted(async () => {
+  try {
+    const res: any = await $fetch('/api/dimensions', { query: { type: 'product' } })
+    productDimensions.value = res.dimensions || []
+  } catch { /* presets are optional */ }
+  try {
+    const flags: any = await $fetch('/api/product-inputs')
+    showProductDimension.value = !!flags.productDimension
+  } catch { /* default hidden */ }
+})
+// Hydrate selection on edit from the product's stored dimensionId.
+watch([() => props.editDimensionId, productDimensions], ([id, list]) => {
+  if (id && (list as any[])?.length) {
+    selectedProductDimension.value = (list as any[]).find((d: any) => d.id === id) || null
+  }
+}, { immediate: true })
 
 /* -----------------------------
 STATE
@@ -108,6 +130,7 @@ const resetForm = () => {
   subselectedRow.value = {}
   brandSelectedRow.value = {}
   collectionSelectedRow.value = {}
+  selectedProductDimension.value = null
   resetValidation()
 }
 
@@ -327,6 +350,7 @@ watch(
     subselectedRow,
     brandSelectedRow,
     collectionSelectedRow,
+    selectedProductDimension,
   ],
   ([
     newName,
@@ -335,6 +359,7 @@ watch(
     newSub,
     newBrand,
     newCollection,
+    newDimension,
   ]) => {
     emit('update', {
       name: newName,
@@ -343,6 +368,7 @@ watch(
       subcategory: newSub?.id,
       brand: newBrand?.id,
       collection: newCollection?.id,
+      dimensionId: (newDimension as any)?.id ?? null,
     })
   },
   { immediate: true }
@@ -533,6 +559,32 @@ watch(
             size="2xs"
           />
           <span class="truncate">{{ collection.name }}</span>
+        </template>
+      </USelectMenu>
+    </UFormGroup>
+
+    <!-- PRODUCT DIMENSION (ShippingBox, type=product) -->
+    <UFormGroup label="Product Dimension" v-if="showProductDimension">
+      <USelectMenu
+        v-model="selectedProductDimension"
+        :options="productDimensions"
+        option-key="id"
+        track-by="id"
+        searchable
+        option-attribute="name"
+        placeholder="Select a dimension"
+      >
+        <template #label>
+          <span v-if="selectedProductDimension?.name">{{ selectedProductDimension.name }}</span>
+          <span v-else>Select</span>
+        </template>
+        <template #option="{ option }">
+          <UIcon name="i-heroicons-tag" class="w-4 h-4" />
+          <span class="truncate">{{ option.name }}</span>
+          <span class="text-xs text-gray-400 ml-auto">{{ option.weight != null ? option.weight + ' kg' : '' }}</span>
+        </template>
+        <template #option-empty>
+          <span class="text-xs text-gray-400">No product dimensions — add them in Products → Dimensions</span>
         </template>
       </USelectMenu>
     </UFormGroup>

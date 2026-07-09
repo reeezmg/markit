@@ -15,6 +15,31 @@ const selectedPrinterLabelSize = ref(useAuth().session.value?.printerLabelSize);
 const isPrinterLabelSizeChanged = ref(false);
 const isUpdatingPrinterLabelSize = ref(false);
 
+// Shipping label size (Delhivery pdf_size) — separate from the local barcode label.
+const shippingLabelSizes = [
+  { label: 'A4 (8×11)', value: 'A4' },
+  { label: '4R (4×6, thermal)', value: '4R' },
+];
+const shippingLabelSize = ref('A4');
+const savingShippingLabelSize = ref(false);
+onMounted(async () => {
+  try {
+    const r: any = await $fetch('/api/ecommerce-cms/shipping/label-size');
+    shippingLabelSize.value = r?.size || 'A4';
+  } catch { /* shipping not configured yet */ }
+});
+const saveShippingLabelSize = async () => {
+  savingShippingLabelSize.value = true;
+  try {
+    await $fetch('/api/ecommerce-cms/shipping/label-size', { method: 'POST', body: { size: shippingLabelSize.value } });
+    toast.add({ title: 'Shipping label size saved', icon: 'i-heroicons-check-circle' });
+  } catch (error: any) {
+    toast.add({ title: 'Could not save shipping label size', description: error?.data?.statusMessage || error?.message, color: 'red' });
+  } finally {
+    savingShippingLabelSize.value = false;
+  }
+};
+
 watch(
   () => selectedPrinterLabelSize.value,
   (newSize) => {
@@ -362,6 +387,32 @@ onMounted(async () => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+    <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Shipping Label Settings</h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Size for courier (Delhivery) shipping labels</p>
+
+      <UFormGroup
+        name="ShippingLabelSize"
+        label="Shipping Label Size"
+        description="A4 for a laser/inkjet printer, 4R for a 4×6 thermal label printer"
+        class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4"
+        :ui="{ container: '' }"
+      >
+        <USelectMenu
+          v-model="shippingLabelSize"
+          :options="shippingLabelSizes"
+          value-attribute="value"
+          option-attribute="label"
+        />
+        <UButton
+          class="my-2"
+          label="Save Shipping Label Size"
+          :loading="savingShippingLabelSize"
+          @click="saveShippingLabelSize"
+        />
+      </UFormGroup>
+    </div>
+
     <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">
       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Label Settings</h2>
       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Configure label size for barcode printing</p>

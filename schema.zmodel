@@ -146,7 +146,13 @@ model Company extends Base {
     thankYouNote String? @default("") @map("thank_you_note")
     refundPolicy String? @default("") @map("refund_policy")
     returnPolicy String? @default("") @map("return_policy")
-    phone     String?   
+    phone     String?
+    email       String?   @default("")
+    instagramUrl String? @default("") @map("instagram_url")
+    facebookUrl  String? @default("") @map("facebook_url")
+    youtubeUrl   String? @default("") @map("youtube_url")
+    xUrl         String? @default("") @map("x_url")
+    linkedinUrl  String? @default("") @map("linkedin_url")
     currency    String @default("INR")
     images      String?
     pointsValue Int @default(0) @map("points_value")
@@ -210,6 +216,7 @@ model Company extends Base {
     categories  Category[]
     subcategories  Subcategory[]
     brands      Brand[]
+    shippingBoxes ShippingBox[]
     collections Collection[]
     bills       Bill[]
     carts       CartCompanyClient[]
@@ -305,6 +312,7 @@ model Productinput extends Base {
   category    Boolean @default(true)
   subcategory Boolean @default(true)
   description Boolean @default(true)
+  dimension   Boolean @default(false)
 
   company     Company @relation(fields: [companyId], references: [id])
   companyId   String @unique @map("company_id")
@@ -322,6 +330,7 @@ model Variantinput extends Base {
   qty         Boolean @default(true)
   unit        String[] @default(["Nos"])
   sizes       Boolean @default(true)
+  sizeDimension Boolean @default(false)
   images      Boolean @default(true)
   button      Boolean @default(true)
 
@@ -1153,10 +1162,16 @@ model Product {
     id          String            @id @default(uuid())
     createdAt   DateTime          @default(now()) @map("created_at")
     updatedAt   DateTime          @updatedAt @map("updated_at")
-    name        String                      
+    name        String
     status      Boolean           @default(true)
     rating      Float?
     description String?
+    weight      Float?                              // shipping weight in kg (product-level)
+    length      Float?                              // cm (product-level)
+    width       Float?                              // cm (product-level)
+    height      Float?                              // cm (product-level)
+    dimension   ShippingBox?      @relation("ProductDimension", fields: [dimensionId], references: [id])
+    dimensionId String?           @map("dimension_id")
     company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
     companyId   String            @map('company_id')
     category     Category?           @relation(fields: [categoryId], references: [id])
@@ -1197,7 +1212,10 @@ model Variant {
     dprice      Float? @map("d_price")
     images      String[]
     tax         Float       @default(0.0)
-    weight      Float?      @default(0)        // shipping weight in kg (per variant)
+    weight      Float?                         // shipping weight in kg (per variant)
+    length      Float?                         // cm (per variant)
+    width       Float?                         // cm (per variant)
+    height      Float?                         // cm (per variant)
     product     Product @relation(fields: [productId], references: [id], onDelete: Cascade)
     productId   String @map("product_id")
     brand        Brand?           @relation(fields: [brandId], references: [id])
@@ -1235,6 +1253,12 @@ model Item {
     qty         Int? @default(0)
     initialQty  Int?  @default(0)  @map("initial_qty")
     soldQty     Int?  @default(0) @map("sold_qty")
+    weight      Float?                          // shipping weight in kg (per size)
+    length      Float?                          // cm (per size)
+    width       Float?                          // cm (per size)
+    height      Float?                          // cm (per size)
+    dimension   ShippingBox? @relation("ItemDimension", fields: [dimensionId], references: [id])
+    dimensionId String?      @map("dimension_id")
     entry        Entry[]
     company     Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
     companyId   String @map("company_id")
@@ -1245,6 +1269,33 @@ model Item {
     @@allow('read, create, update, delete', true)
     @@index([barcode, companyId])
     @@map("items")
+}
+
+
+// Dimension presets managed on /products/dimensions. `type` discriminates a
+// packaging "box" (empty-box tare weight + carton size) from a reusable
+// "product" dimension preset. Used later by the shipping flow. storetools owns CRUD.
+model ShippingBox {
+    id          String   @id @default(uuid())
+    createdAt   DateTime @default(now()) @map("created_at")
+    updatedAt   DateTime @updatedAt @map("updated_at")
+    name        String   @length(1, 256)
+    type        String   @default("box")         // "box" | "product"
+    weight      Float?                          // kg (box tare weight, or product weight)
+    length      Float?                          // cm
+    width       Float?                          // cm
+    height      Float?                          // cm
+    status      Boolean  @default(true)
+    company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId   String   @map("company_id")
+    writeId     String?  @default(uuid()) @map("write_id")
+    dimensionProducts Product[] @relation("ProductDimension")
+    dimensionItems    Item[]    @relation("ItemDimension")
+
+    @@index([companyId])
+    @@allow('read', true)
+    @@allow('create, update, delete', company.users?[userId == auth().id])
+    @@map("shipping_boxes")
 }
 
 

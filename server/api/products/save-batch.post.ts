@@ -115,6 +115,8 @@ export default defineEventHandler(async (event) => {
           typeof p.status === 'boolean' ? p.status : true, companyId, poId,
           p.categoryId || p.category?.id || null, p.subcategoryId || null,
           p.collectionId || p.collection?.id || null,
+          p.weight ?? null, p.length ?? null, p.width ?? null, p.height ?? null,
+          p.dimensionId ?? null,
         ])
         const dt = p.deliveryType || 'trynbuy'
         for (const v of (p.variants || [])) {
@@ -126,10 +128,15 @@ export default defineEventHandler(async (event) => {
           variantRows.push([
             variantId, v.name || '', v.code || null, v.unit || 'Nos',
             v.sprice || 0, v.pprice || 0, v.dprice || 0, v.discount || 0,
-            dt, taxFor(p.categoryTax, v.sprice), images, companyId, productId, v.weight || 0,
+            dt, taxFor(p.categoryTax, v.sprice), images, companyId, productId,
+            v.weight ?? null, v.length ?? null, v.width ?? null, v.height ?? null,
           ])
           for (const it of (v.items || [])) {
-            itemRows.push([it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, variantId])
+            itemRows.push([
+              it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, variantId,
+              it.weight ?? null, it.length ?? null, it.width ?? null, it.height ?? null,
+              it.dimensionId ?? null,
+            ])
           }
         }
       }
@@ -137,7 +144,7 @@ export default defineEventHandler(async (event) => {
       {
         const { sql, params } = multiRow(productRows, 'now(),now()')
         await client.query(
-          `INSERT INTO products (id, name, brand_id, description, status, company_id, purchaseorder_id, category_id, subcategory_id, collection_id, created_at, updated_at) VALUES ${sql}`,
+          `INSERT INTO products (id, name, brand_id, description, status, company_id, purchaseorder_id, category_id, subcategory_id, collection_id, weight, length, width, height, dimension_id, created_at, updated_at) VALUES ${sql}`,
           params,
         )
       }
@@ -145,7 +152,7 @@ export default defineEventHandler(async (event) => {
         const { sql, params } = multiRow(variantRows, 'true,now(),now()')
         // columns: id,name,code,unit,s_price,p_price,d_price,discount,delivery_type,tax,images,company_id,product_id,weight,status,created_at,updated_at
         const variantsRes = await client.query(
-          `INSERT INTO variants (id, name, code, unit, s_price, p_price, d_price, discount, delivery_type, tax, images, company_id, product_id, weight, status, created_at, updated_at)
+          `INSERT INTO variants (id, name, code, unit, s_price, p_price, d_price, discount, delivery_type, tax, images, company_id, product_id, weight, length, width, height, status, created_at, updated_at)
            VALUES ${sql}
            RETURNING id, name, code, unit, s_price, p_price, d_price, discount, weight, product_id`,
           params,
@@ -155,7 +162,7 @@ export default defineEventHandler(async (event) => {
       if (itemRows.length) {
         const { sql, params } = multiRow(itemRows, 'now(),now()')
         const itemsRes = await client.query(
-          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, created_at, updated_at)
+          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, weight, length, width, height, dimension_id, created_at, updated_at)
            VALUES ${sql}
            RETURNING id, barcode, size, qty, variant_id`,
           params,

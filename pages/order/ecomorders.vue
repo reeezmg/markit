@@ -46,9 +46,13 @@ const columns = [
   { key: 'items', label: 'Items' },
   { key: 'payment', label: 'Payment' },
   { key: 'status', label: 'Status' },
+  { key: 'shipment', label: 'Shipment' },
   { key: 'grandTotal', label: 'Total' },
   { key: 'actions', label: 'Actions' },
 ];
+
+// Box / weight info stored on the order after (bulk) shipment creation.
+const shipInfo = (row: any) => row?.meta?.shipping || null;
 
 const money = (value?: number | null) =>
   new Intl.NumberFormat('en-IN', {
@@ -88,6 +92,44 @@ const badgeColor = (status: string) => {
   return 'gray';
 };
 
+// ─── Live status from the carrier (Delhivery) ────────────────────────────────
+// Status is driven purely by the carrier: for every order that has an AWB we
+// bulk-fetch its current status from the track API (one request per 50 waybills)
+// and show that instead of any locally-stored status.
+const liveStatus = ref<Record<string, { status: string | null; rawStatus: string | null }>>({});
+
+const orderAwb = (order: any) => order?.meta?.shipping?.awb || order?.meta?.shipping?.trackingId || null;
+
+// What the table shows: carrier status when we have it, else the stored status.
+const displayStatus = (order: any) => {
+  const awb = orderAwb(order);
+  return (awb && liveStatus.value[awb]?.status) || order.status;
+};
+const rawStatus = (order: any) => {
+  const awb = orderAwb(order);
+  return awb ? (liveStatus.value[awb]?.rawStatus || null) : null;
+};
+
+async function refreshLiveStatuses() {
+  const awbs = [...new Set((orders.value || []).map(orderAwb).filter(Boolean))] as string[];
+  if (!awbs.length) return;
+  try {
+    const merged: Record<string, any> = {};
+    for (let i = 0; i < awbs.length; i += 50) {
+      const res: any = await $fetch('/api/ecommerce-cms/shipping/track-bulk', {
+        query: { waybills: awbs.slice(i, i + 50).join(',') },
+      });
+      Object.assign(merged, res.statuses || {});
+    }
+    liveStatus.value = merged;
+  } catch {
+    /* leave stored status as the fallback */
+  }
+}
+
+// Re-pull carrier status whenever the order set changes (initial load + refetch).
+watch(orders, () => refreshLiveStatuses(), { immediate: true });
+
 const shipOpen = ref(false);
 const shipOrder = ref<any>(null);
 function openShip(order: any) {
@@ -95,10 +137,95 @@ function openShip(order: any) {
   shipOpen.value = true;
 }
 
+// ─── Bulk shipment creation ──────────────────────────────────────────────────
+const toast = useToast();
+const bulkOpen = ref(false);
+const bulkLoading = ref(false);
+const bulkCreating = ref(false);
+const bulkData = ref<any>(null);
+
+async function openBulk() {
+  bulkOpen.value = true;
+  bulkLoading.value = true;
+  bulkData.value = null;
+  try {
+    bulkData.value = await $fetch('/api/ecommerce-cms/shipping/bulk-preview', { method: 'POST', body: {} });
+  } catch (e: any) {
+    toast.add({ title: 'Preview failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    bulkOpen.value = false;
+  } finally {
+    bulkLoading.value = false;
+  }
+}
+
+// After bulk create + label generation, prompt to print the generated labels.
+const printPromptOpen = ref(false);
+const pendingLabels = ref<string[]>([]);
+const labelBusy = ref<string | null>(null);
+
+// Open the label PDFs in one window and print them all at once.
+function printLabels(urls: string[]) {
+  const valid = urls.filter(Boolean);
+  if (!valid.length) { toast.add({ title: 'No labels to print', color: 'orange' }); return; }
+  if (valid.length === 1) { window.open(valid[0], '_blank'); return; }
+  const w = window.open('', '_blank');
+  if (!w) { toast.add({ title: 'Allow pop-ups to print labels', color: 'orange' }); return; }
+  const frames = valid.map((u) =>
+    `<iframe src="${u}" style="width:100%;height:100vh;border:0;page-break-after:always"></iframe>`).join('');
+  w.document.write(
+    `<!doctype html><html><head><title>Shipping labels</title></head>` +
+    `<body style="margin:0">${frames}` +
+    `<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},1500)}<\/script>` +
+    `</body></html>`,
+  );
+  w.document.close();
+}
+
+async function runBulkCreate() {
+  bulkCreating.value = true;
+  try {
+    const res: any = await $fetch('/api/ecommerce-cms/shipping/bulk-create', { method: 'POST', body: {} });
+    toast.add({
+      title: `Created ${res.created} shipment(s)`,
+      description: res.failed ? `${res.failed} could not be created` : undefined,
+      color: res.created ? 'green' : 'orange',
+    });
+    bulkOpen.value = false;
+    await refetch();
+    // Labels were generated (not printed) — offer to print them now.
+    pendingLabels.value = (res.labels || []).map((l: any) => l.labelUrl).filter(Boolean);
+    if (pendingLabels.value.length) printPromptOpen.value = true;
+  } catch (e: any) {
+    toast.add({ title: 'Bulk create failed', description: e.data?.statusMessage || e.message, color: 'red' });
+  } finally {
+    bulkCreating.value = false;
+  }
+}
+
+// Per-row: generate (if needed) + print a single label.
+async function generateAndPrintLabel(row: any) {
+  const awb = shipInfo(row)?.awb || row?.meta?.awb;
+  if (!awb) { toast.add({ title: 'Create the shipment first', color: 'orange' }); return; }
+  labelBusy.value = row.id;
+  try {
+    let url = shipInfo(row)?.labelUrl;
+    if (!url) {
+      const res: any = await $fetch('/api/ecommerce-cms/shipping/label', { query: { trackingId: awb } });
+      url = res?.labelUrl;
+    }
+    if (url) { printLabels([url]); await refetch(); }
+    else toast.add({ title: 'Label not available yet', color: 'orange' });
+  } catch (e: any) {
+    toast.add({ title: 'Label failed', description: e.data?.statusMessage || e.message, color: 'red' });
+  } finally {
+    labelBusy.value = null;
+  }
+}
+
 const filteredOrders = computed(() => {
   const query = search.value.trim().toLowerCase();
   return (orders.value || []).filter((order: any) => {
-    const matchesStatus = statusFilter.value === 'All' || order.status === statusFilter.value;
+    const matchesStatus = statusFilter.value === 'All' || displayStatus(order) === statusFilter.value;
     const matchesPayment = paymentFilter.value === 'All' || order.paymentStatus === paymentFilter.value;
     const searchable = [
       order.orderNumber,
@@ -122,15 +249,20 @@ const filteredOrders = computed(() => {
           Ecommerce orders placed from the custom storefront.
         </p>
       </div>
-      <UButton
-        icon="i-heroicons-arrow-path"
-        color="gray"
-        variant="soft"
-        :loading="isLoading"
-        @click="() => refetch()"
-      >
-        Refresh
-      </UButton>
+      <div class="flex items-center gap-2">
+        <UButton icon="i-heroicons-cube" color="primary" @click="openBulk">
+          Create Shipments
+        </UButton>
+        <UButton
+          icon="i-heroicons-arrow-path"
+          color="gray"
+          variant="soft"
+          :loading="isLoading"
+          @click="() => refetch()"
+        >
+          Refresh
+        </UButton>
+      </div>
     </div>
 
     <UCard>
@@ -160,6 +292,19 @@ const filteredOrders = computed(() => {
           </span>
         </template>
 
+        <template #shipment-data="{ row }">
+          <div v-if="shipInfo(row)" class="text-xs">
+            <p class="text-gray-900 dark:text-white">
+              {{ shipInfo(row).boxCount || 1 }} box{{ (shipInfo(row).boxCount || 1) === 1 ? '' : 'es' }}
+              <span v-if="shipInfo(row).totalWeight != null" class="text-gray-500">· {{ shipInfo(row).totalWeight }} kg</span>
+            </p>
+            <p v-if="shipInfo(row).boxes?.length" class="text-gray-400 truncate max-w-[140px]">
+              {{ shipInfo(row).boxes.join(', ') }}
+            </p>
+          </div>
+          <span v-else class="text-xs text-gray-400">—</span>
+        </template>
+
         <template #customer-data="{ row }">
           <div>
             <p class="font-medium text-gray-900 dark:text-white">{{ row.client?.name || 'Customer' }}</p>
@@ -184,9 +329,12 @@ const filteredOrders = computed(() => {
         </template>
 
         <template #status-data="{ row }">
-          <UBadge :color="badgeColor(row.status)" variant="subtle">
-            {{ row.status }}
+          <UBadge :color="badgeColor(displayStatus(row))" variant="subtle" :title="rawStatus(row) || ''">
+            {{ displayStatus(row) }}
           </UBadge>
+          <p v-if="rawStatus(row)" class="mt-0.5 text-[10px] text-gray-400 truncate max-w-[120px]">
+            {{ rawStatus(row) }}
+          </p>
         </template>
 
         <template #grandTotal-data="{ row }">
@@ -201,6 +349,15 @@ const filteredOrders = computed(() => {
             variant="ghost"
             :title="row.meta?.shipping?.awb ? `AWB ${row.meta.shipping.awb}` : 'Create shipment'"
             @click="openShip(row)"
+          />
+          <UButton
+            v-if="row.meta?.shipping?.awb"
+            icon="i-heroicons-printer"
+            :color="row.meta?.shipping?.labelUrl ? 'primary' : 'gray'"
+            variant="ghost"
+            :loading="labelBusy === row.id"
+            :title="row.meta?.shipping?.labelUrl ? 'Print label' : 'Generate & print label'"
+            @click="generateAndPrintLabel(row)"
           />
           <UPopover>
             <UButton icon="i-heroicons-eye" color="gray" variant="ghost" />
@@ -264,5 +421,91 @@ const filteredOrders = computed(() => {
     </UCard>
 
     <ShipOrderModal v-model="shipOpen" :order="shipOrder" @updated="() => { refetch(); }" />
+
+    <!-- Bulk create shipments -->
+    <UModal v-model="bulkOpen" :ui="{ width: 'sm:max-w-3xl' }">
+      <UCard>
+        <template #header>
+          <div class="flex items-center justify-between">
+            <h2 class="text-lg font-semibold">Create Shipments</h2>
+            <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="bulkOpen = false" />
+          </div>
+        </template>
+
+        <div v-if="bulkLoading" class="flex items-center justify-center py-12 text-gray-400">
+          <UIcon name="i-heroicons-arrow-path" class="animate-spin text-2xl" />
+        </div>
+
+        <div v-else-if="bulkData" class="space-y-4">
+          <div class="flex flex-wrap gap-4 text-sm">
+            <span><strong>{{ bulkData.shippable }}</strong> of {{ bulkData.total }} unshipped orders ready</span>
+            <span class="text-gray-500">Pickup: {{ bulkData.pickupLocation || '— none registered' }}</span>
+            <span class="text-gray-500">{{ bulkData.boxesConfigured }} box preset(s)</span>
+          </div>
+
+          <div v-if="!bulkData.total" class="py-8 text-center text-sm text-gray-500">
+            No unshipped orders.
+          </div>
+
+          <div v-else class="max-h-96 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-800">
+            <table class="w-full text-sm">
+              <thead class="sticky top-0 bg-gray-50 dark:bg-gray-900 text-left text-xs uppercase text-gray-400">
+                <tr>
+                  <th class="p-2">Order</th>
+                  <th>Weight</th>
+                  <th>Boxes</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="o in bulkData.orders" :key="o.orderId" class="border-t border-gray-100 dark:border-gray-800">
+                  <td class="p-2 font-medium text-gray-900 dark:text-white">#{{ o.orderNumber }}</td>
+                  <td>{{ o.canShip ? `${o.totalWeight} kg` : '—' }}</td>
+                  <td>{{ o.canShip ? (o.boxCount ? `${o.boxCount} (${o.boxes.join(', ')})` : 'single') : '—' }}</td>
+                  <td>
+                    <UBadge v-if="o.canShip" color="green" variant="subtle" size="xs">Ready</UBadge>
+                    <span v-else class="text-xs text-red-500">{{ o.reason || 'Not able to generate shipment' }}</span>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton variant="ghost" color="gray" @click="bulkOpen = false">Cancel</UButton>
+            <UButton
+              icon="i-heroicons-truck"
+              :loading="bulkCreating"
+              :disabled="!bulkData || !bulkData.shippable"
+              @click="runBulkCreate"
+            >
+              Create {{ bulkData?.shippable || 0 }} shipment(s)
+            </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
+    <!-- Print labels prompt (after bulk create + label generation) -->
+    <UModal v-model="printPromptOpen" :ui="{ width: 'sm:max-w-md' }">
+      <UCard>
+        <template #header>
+          <h2 class="text-lg font-semibold">Print shipping labels?</h2>
+        </template>
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+          {{ pendingLabels.length }} label(s) were generated for the new shipments. Print them now?
+        </p>
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton variant="ghost" color="gray" @click="printPromptOpen = false">Not now</UButton>
+            <UButton icon="i-heroicons-printer" @click="printLabels(pendingLabels); printPromptOpen = false">
+              Print {{ pendingLabels.length }} label(s)
+            </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
   </div>
 </template>
