@@ -78,11 +78,36 @@ interface openBalanceState {
 
 const storePhone = ref(useAuth().session.value?.companyPhone || '');
 const isPhoneChanged = ref(false);
-const isUpdatingPhone = ref(false);
 
 watch(() => storePhone.value, (newPhone) => {
   isPhoneChanged.value = newPhone !== useAuth().session.value?.companyPhone;
 }, { immediate: true });
+
+interface ContactState {
+  email: string;
+  instagramUrl: string;
+  facebookUrl: string;
+  youtubeUrl: string;
+  xUrl: string;
+  linkedinUrl: string;
+}
+
+const contactState = reactive<ContactState>({
+  email: '',
+  instagramUrl: '',
+  facebookUrl: '',
+  youtubeUrl: '',
+  xUrl: '',
+  linkedinUrl: '',
+});
+const savedContact = ref<ContactState>({ ...contactState });
+const isContactChanged = ref(false);
+const isUpdatingContact = ref(false);
+
+watch(contactState, (newState) => {
+  isContactChanged.value = (Object.keys(newState) as (keyof ContactState)[])
+    .some((key) => newState[key] !== savedContact.value[key]);
+}, { deep: true, immediate: true });
 
 
 
@@ -383,6 +408,12 @@ const { data: info, isLoading, error, refetch } = useFindUniqueCompany({
     upiId:true,
     bank:true,
     cash:true,
+    email: true,
+    instagramUrl: true,
+    facebookUrl: true,
+    youtubeUrl: true,
+    xUrl: true,
+    linkedinUrl: true,
     openingCashDate:true,
     openingBankDate:true,
     address: {
@@ -409,7 +440,14 @@ watch(info, (newInfo) => {
     accstate.accountNo = newInfo.accountNo || '';
     accstate.bankName = newInfo.bankName || '';
     accstate.upiId = newInfo.upiId || '';
-    accstate.gstin = newInfo.gstin || ''; 
+    accstate.gstin = newInfo.gstin || '';
+    contactState.email = newInfo.email || '';
+    contactState.instagramUrl = newInfo.instagramUrl || '';
+    contactState.facebookUrl = newInfo.facebookUrl || '';
+    contactState.youtubeUrl = newInfo.youtubeUrl || '';
+    contactState.xUrl = newInfo.xUrl || '';
+    contactState.linkedinUrl = newInfo.linkedinUrl || '';
+    savedContact.value = { ...contactState };
     openingBalance.cash = newInfo.cash || 0.00;
     openingBalance.bank = newInfo.bank || 0.00;
     openingBalance.openingCashDate = toDateInputValue(newInfo.openingCashDate);
@@ -461,8 +499,10 @@ function onNameUpdate() {
   }
 }
 
-function onPhoneUpdate() {
-  isUpdatingPhone.value = true;
+const isContactDetailsChanged = computed(() => isPhoneChanged.value || isContactChanged.value);
+
+function onContactDetailsSave() {
+  isUpdatingContact.value = true;
   try {
   if (!navigator.onLine) {
     throw createError({
@@ -470,21 +510,26 @@ function onPhoneUpdate() {
       statusMessage: 'No internet connection',
     })
   }
-    UpdateCompany.mutate({
-      where: {
-        id: useAuth().session.value?.companyId,
-      },
-      data: {
-        phone: storePhone.value,
-      },
-    });
-    toast.add({ title: 'Store phone updated', icon: 'i-heroicons-check-circle' });
-    isPhoneChanged.value = false;
-    updateStorePhone(storePhone.value)
+    const data: Record<string, any> = {};
+    if (isPhoneChanged.value) data.phone = storePhone.value;
+    if (isContactChanged.value) Object.assign(data, { ...contactState });
+
+    if (Object.keys(data).length) {
+      UpdateCompany.mutate({
+        where: {
+          id: useAuth().session.value?.companyId,
+        },
+        data,
+      });
+    }
+
+    if (isPhoneChanged.value) { updateStorePhone(storePhone.value); isPhoneChanged.value = false; }
+    if (isContactChanged.value) { savedContact.value = { ...contactState }; isContactChanged.value = false; }
+    toast.add({ title: 'Contact details updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
-    toast.add({ title: 'Error updating store phone',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
+    toast.add({ title: 'Error updating contact details',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
   } finally {
-    isUpdatingPhone.value = false;
+    isUpdatingContact.value = false;
   }
 }
 
@@ -556,7 +601,7 @@ function onaccSubmit(event: FormSubmitEvent<AccountState>) {
       gstin: accstate.gstin,
       upiId: accstate.upiId,
     });
-    toast.add({ title: 'Account details updated',description: error.statusMessage, color: 'green', icon: 'i-heroicons-check-circle' });
+    toast.add({ title: 'Account details updated', color: 'green', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.log(error);
     toast.add({ title: 'Error updating account details', color: 'red', icon: 'i-heroicons-x-circle' });
@@ -630,7 +675,7 @@ const onTaxIncludeChange = () => {
       },
     });
     updateIsTaxIncluded(isTaxInclude.value);
-    toast.add({ title: 'Tax include updated', description: error.statusMessage, icon: 'i-heroicons-check-circle' });
+    toast.add({ title: 'Tax include updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating tax setting', color: 'red', icon: 'i-heroicons-x-circle' });
   }
@@ -655,7 +700,7 @@ const onAiImageChange = () => {
       },
     });
     updateIsAiImage(isAiImage.value);
-    toast.add({ title: 'AI Image setting updated', description: error.statusMessage, icon: 'i-heroicons-check-circle' });
+    toast.add({ title: 'AI Image setting updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating AI Image setting', color: 'red', icon: 'i-heroicons-x-circle' });
   }
@@ -679,7 +724,7 @@ const onUserTrackIncludeChange = () => {
       },
     });
     updateIsUserTrackIncluded(isUserTrackInclude.value);
-    toast.add({ title: 'UserTrack include updated',description: error.statusMessage, icon: 'i-heroicons-check-circle' });
+    toast.add({ title: 'UserTrack include updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating UserTrack setting', color: 'red', icon: 'i-heroicons-x-circle' });
   }
@@ -703,7 +748,7 @@ const onCostIncludeChange = () => {
       },
     });
     updateIsCostIncluded(isCostInclude.value);
-    toast.add({ title: 'Cost include updated',description: error.statusMessage, icon: 'i-heroicons-check-circle' });
+    toast.add({ title: 'Cost include updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating Cost setting', color: 'red', icon: 'i-heroicons-x-circle' });
   }
@@ -1023,7 +1068,7 @@ const onOpeningBalanceChange = async () => {
   }
 };
 
-const isStoreIdentityChanged = computed(() => isNameChanged.value || isPhoneChanged.value || isImageChanged.value || isCategoryChanged.value);
+const isStoreIdentityChanged = computed(() => isNameChanged.value || isImageChanged.value || isCategoryChanged.value);
 const isUpdatingStoreIdentity = ref(false);
 
 const onStoreIdentitySave = async () => {
@@ -1036,7 +1081,6 @@ const onStoreIdentitySave = async () => {
     const data: Record<string, any> = {};
 
     if (isNameChanged.value) data.storeUniqueName = storeUniqueName.value;
-    if (isPhoneChanged.value) data.phone = storePhone.value;
     if (isCategoryChanged.value) data.category = selectedCategory.value;
 
     if (Object.keys(data).length) {
@@ -1044,7 +1088,6 @@ const onStoreIdentitySave = async () => {
     }
 
     if (isNameChanged.value) { updateStoreUniqueName(storeUniqueName.value); isNameChanged.value = false; }
-    if (isPhoneChanged.value) { updateStorePhone(storePhone.value); isPhoneChanged.value = false; }
     if (isCategoryChanged.value) { updateCategoryValue(selectedCategory.value); isCategoryChanged.value = false; }
     if (isImageChanged.value) await onLogoUpdate();
 
@@ -1135,24 +1178,6 @@ const onAllDeliverySave = () => {
 
         <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
           <div class="mb-3">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Store Phone</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Phone number for your store</p>
-          </div>
-          <UInput
-            v-model="storePhone"
-            type="tel"
-            autocomplete="tel"
-            size="md"
-            placeholder="Enter store phone number"
-          >
-            <template #leading>
-              <span class="text-gray-500 dark:text-gray-400 text-sm">+91</span>
-            </template>
-          </UInput>
-        </div>
-
-        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
-          <div class="mb-3">
             <h3 class="text-base font-semibold text-gray-900 dark:text-white">Logo</h3>
             <p class="text-sm text-gray-500 dark:text-gray-400">JPG, GIF or PNG. 1MB Max.</p>
           </div>
@@ -1193,6 +1218,126 @@ const onAllDeliverySave = () => {
             :loading="isUpdatingStoreIdentity"
             :disabled="!isStoreIdentityChanged"
             @click="onStoreIdentitySave"
+          />
+      </div>
+    </div>
+
+    <!-- ========== CONTACT DETAILS ========== -->
+    <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">
+      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Contact Details</h2>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Phone, email, and social media links for your store</p>
+
+      <div class="grid gap-4 md:grid-cols-2">
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Store Phone</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Phone number for your store</p>
+          </div>
+          <UInput
+            v-model="storePhone"
+            type="tel"
+            autocomplete="tel"
+            size="md"
+            placeholder="Enter store phone number"
+          >
+            <template #leading>
+              <span class="text-gray-500 dark:text-gray-400 text-sm">+91</span>
+            </template>
+          </UInput>
+        </div>
+
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Store Email</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Contact email shown to your customers</p>
+          </div>
+          <UInput
+            v-model="contactState.email"
+            type="email"
+            autocomplete="off"
+            size="md"
+            placeholder="Enter store email"
+          />
+        </div>
+
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Instagram URL</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Link to your Instagram profile</p>
+          </div>
+          <UInput
+            v-model="contactState.instagramUrl"
+            type="url"
+            autocomplete="off"
+            size="md"
+            placeholder="https://instagram.com/yourstore"
+          />
+        </div>
+
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Facebook URL</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Link to your Facebook page</p>
+          </div>
+          <UInput
+            v-model="contactState.facebookUrl"
+            type="url"
+            autocomplete="off"
+            size="md"
+            placeholder="https://facebook.com/yourstore"
+          />
+        </div>
+
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">YouTube URL</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Link to your YouTube channel</p>
+          </div>
+          <UInput
+            v-model="contactState.youtubeUrl"
+            type="url"
+            autocomplete="off"
+            size="md"
+            placeholder="https://youtube.com/@yourstore"
+          />
+        </div>
+
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">X (Twitter) URL</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Link to your X profile</p>
+          </div>
+          <UInput
+            v-model="contactState.xUrl"
+            type="url"
+            autocomplete="off"
+            size="md"
+            placeholder="https://x.com/yourstore"
+          />
+        </div>
+
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">LinkedIn URL</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Link to your LinkedIn page</p>
+          </div>
+          <UInput
+            v-model="contactState.linkedinUrl"
+            type="url"
+            autocomplete="off"
+            size="md"
+            placeholder="https://linkedin.com/company/yourstore"
+          />
+        </div>
+      </div>
+
+      <div class="my-4 flex w-full justify-end">
+        <UButton
+            label="Save Contact Details"
+            size="md"
+            :loading="isUpdatingContact"
+            :disabled="!isContactDetailsChanged"
+            @click="onContactDetailsSave"
           />
       </div>
     </div>
