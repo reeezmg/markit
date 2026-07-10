@@ -102,7 +102,6 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  weight?: number;
   items: {id: string; size: string | null; qty: number | undefined}[]; // Assuming items are strings, adjust if needed
   images: string[];
 }
@@ -527,7 +526,6 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
     pprice: variant.pprice || 0,
     dprice: variant.dprice || 0,
     discount: variant.discount || 0,
-    weight: variant.weight || 0,
     images: variantInputs?.value?.images ? (variant.images || []).map((f: any) => ({ uuid: f.uuid, view: f.view })) : [],
     items: (variant.items || []).map((size: any) => ({
       id: size.id || uuidv4(), size: size.size || null, qty: size.qty || 0, dimensionId: size.dimensionId ?? null,
@@ -1565,7 +1563,6 @@ const onDeleteDraft = (no: string) => {
                       :editpPrice="variant.pprice"
                       :editdPrice="variant.dprice"
                       :editDiscount="variant.discount"
-                      :editWeight="variant.weight"
                       :editItems="variant.items"
 
                       @update="updateVariant(index,$event)" />

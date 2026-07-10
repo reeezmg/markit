@@ -197,7 +197,7 @@ model Company extends Base {
     deliveryMode String[] @map("delivery_mode")
 
     deliveryRadius Float? @map("delivery_radius")
-    deliveryDiscount Float? @default(100) @map("delivery_discount")
+    deliveryDiscount Float? @default(0) @map("delivery_discount")
     operationFeesShare Float? @default(0) @map("operation_fees_share")
 
     cash      Float? @default(0)
@@ -272,6 +272,7 @@ model Company extends Base {
     ecommFaqs EcommFaq[]
     ecommFeedback EcommFeedback[]
     ecommBlogs EcommBlog[]
+    ecommGallery EcommGallery[]
     ecommCheckouts EcommCheckout[]
     ecommOrders EcommOrder[]
     ecommCarts EcommCart[]
@@ -1443,6 +1444,33 @@ model EcommBlog {
     @@map("ecomm_blogs")
 }
 
+// Gallery is strictly YouTube-only. `type`/`mediaKey` are retained for backwards
+// compatibility but are always 'YOUTUBE'/null.
+enum EcommGalleryType {
+    YOUTUBE
+}
+
+// Table provisioned at runtime via server/utils/ecommGallery.ts (CREATE TABLE IF NOT EXISTS).
+// Mirrored here so `prisma migrate` never drops it. Keep the two definitions in sync.
+model EcommGallery {
+    id String @id @unique @default(dbgenerated("gen_random_uuid()"))
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+    name String
+    type EcommGalleryType @default(YOUTUBE)
+    mediaKey String? @map("media_key")
+    url String?
+    sortOrder Int @default(0) @map("sort_order")
+    status Boolean @default(true)
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId String @map("company_id")
+
+    @@index([companyId, status, sortOrder])
+    @@allow('read', true)
+    @@allow('create, update, delete', company.users?[userId == auth().id])
+    @@map("ecomm_gallery")
+}
+
 model EcommCheckout extends Base {
     createdAt DateTime @default(now()) @map("created_at")
     updatedAt DateTime @updatedAt @map("updated_at")
@@ -1521,6 +1549,7 @@ model EcommCart extends Base {
     clientId String @map("client_id")
 
     @@unique([companyId, clientId])
+    @@index([companyId, clientId], map: "ecomm_carts_company_client_idx")
     @@allow('read, create, update, delete', true)
     @@map("ecomm_carts")
 }
@@ -1540,6 +1569,7 @@ model EcommOrderStatusHistory extends Base {
     orderId String @map("order_id")
 
     @@index([orderId])
+    @@index([orderId, createdAt], map: "ecomm_order_status_history_order_idx")
     @@allow('read, create, update, delete', true)
     @@map("ecomm_order_status_history")
 }
@@ -1561,6 +1591,7 @@ model EcommPickupRequest extends Base {
     companyId String @map("company_id")
 
     @@index([companyId, status])
+    @@index([companyId, createdAt], map: "ecomm_pickup_requests_company_idx")
     @@allow('read, create, update, delete', true)
     @@map("ecomm_pickup_requests")
 }
@@ -1578,6 +1609,7 @@ model EcommWishlist extends Base {
     clientId String @map("client_id")
 
     @@unique([companyId, clientId])
+    @@index([companyId, clientId], map: "ecomm_wishlists_company_client_idx")
     @@allow('read, create, update, delete', true)
     @@map("ecomm_wishlists")
 }
@@ -2174,7 +2206,8 @@ model MoneyTransaction {
 model AccountLedgerEntry {
   id            String @id @default(uuid())
   createdAt     DateTime @default(now()) @map("created_at")
-  updatedAt     DateTime @updatedAt @map("updated_at")
+  // @default(now()) mirrors the live DB default that raw-SQL inserts depend on
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at")
   companyId     String @map("company_id")
   company       Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -3124,6 +3157,7 @@ model StorefrontPage {
 
     @@unique([companyId, slug])
     @@index([companyId])
+    @@index([companyId, slug], map: "storefront_pages_co_slug_idx")
     @@allow('read, create, update, delete', auth() != null)
     @@map("storefront_pages")
 }

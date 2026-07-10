@@ -170,6 +170,16 @@ const links = computed(() => {
           },
         },
         {
+          id: 'ecom-gallery',
+          label: 'Gallery',
+          to: '/ecommerce-cms/gallery',
+          icon: 'i-heroicons-photo',
+          tooltip: {
+            text: 'Gallery',
+            shortcuts: ['C', 'Y'],
+          },
+        },
+        {
           id: 'ecom-policies',
           label: 'Policies',
           to: '/ecommerce-cms/policies',
@@ -222,12 +232,21 @@ const links = computed(() => {
       },
     },
     {
-      id: 'ndr',
-      label: 'NDR',
-      to: `/order/ndr`,
-      icon: 'i-heroicons-exclamation-triangle',
+      id: 'returns',
+      label: 'Returns',
+      to: `/order/returns`,
+      icon: 'i-heroicons-arrow-uturn-left',
       tooltip: {
-        text: 'Failed deliveries (NDR)',
+        text: 'Return requests & reverse pickups',
+      },
+    },
+    {
+      id: 'exchange',
+      label: 'Exchange',
+      to: `/order/exchange`,
+      icon: 'i-heroicons-arrows-right-left',
+      tooltip: {
+        text: 'Exchange requests & REPL shipments',
       },
     },
     {
@@ -591,10 +610,17 @@ const links = computed(() => {
                         },
                         },
                         {
-                        label: 'NDR',
-                        to: `/order/ndr`,
+                        label: 'Returns',
+                        to: `/order/returns`,
                         tooltip: {
-                            text: 'Failed deliveries (NDR)',
+                            text: 'Return requests & reverse pickups',
+                        },
+                        },
+                        {
+                        label: 'Exchange',
+                        to: `/order/exchange`,
+                        tooltip: {
+                            text: 'Exchange requests & REPL shipments',
                         },
                         },
                         {
@@ -796,6 +822,15 @@ const links = computed(() => {
                     tooltip: {
                         text: 'Blogs',
                         shortcuts: ['C', 'B'],
+                    },
+                },
+                {
+                    label: 'Gallery',
+                    to: '/ecommerce-cms/gallery',
+                    exact: true,
+                    tooltip: {
+                        text: 'Gallery',
+                        shortcuts: ['C', 'Y'],
                     },
                 },
                 {

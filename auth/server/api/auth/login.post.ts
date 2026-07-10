@@ -41,7 +41,7 @@ export default eventHandler(async (event) => {
         code: user.companies[0].code ?? undefined,
         storeUniqueName: user.companies[0].company.storeUniqueName ?? undefined,
         isTaxIncluded: user.companies[0].company.isTaxIncluded,
-        isAiImage: user.companies[0].company.isAiImage || true,
+        isAiImage: user.companies[0].company.isAiImage ?? true,
         deliveryType: user.companies[0].company.deliveryType || [],
         deliveryMode: user.companies[0].company.deliveryMode || [],
         deliveryRadius: user.companies[0].company.deliveryRadius || 0,

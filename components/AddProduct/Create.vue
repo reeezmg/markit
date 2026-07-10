@@ -140,6 +140,8 @@ SELECT MENU REFS (for parent keyboard navigation)
 const brandSelectRef = ref<any>(null)
 const categorySelectRef = ref<any>(null)
 const subcategorySelectRef = ref<any>(null)
+const collectionSelectRef = ref<any>(null)
+const dimensionSelectRef = ref<any>(null)
 
 const showBrandModal = ref(false)
 const showCategoryModal = ref(false)
@@ -153,8 +155,13 @@ const activeQuickCreateSelect = ref<'brand' | 'category' | 'subcategory' | null>
 // menu via wrapper.querySelector('button').focus()/click() — see
 // pages/erp/billing.vue:movecatgeory.
 const getAllSelectWrappers = (): HTMLElement[] =>
-  [brandSelectRef.value, categorySelectRef.value, subcategorySelectRef.value]
-    .filter((w): w is HTMLElement => !!w)
+  [
+    brandSelectRef.value,
+    categorySelectRef.value,
+    subcategorySelectRef.value,
+    collectionSelectRef.value,
+    dimensionSelectRef.value,
+  ].filter((w): w is HTMLElement => !!w)
 
 // After a user picks an option from any select, return focus to the trigger
 // button so they can keep tabbing/arrowing. Guarded by an
@@ -172,6 +179,31 @@ const focusBackOnSelect = (wrapper: any, val: any) => {
 watch(brandSelectedRow, (val) => focusBackOnSelect(brandSelectRef, val))
 watch(selectedRow, (val) => focusBackOnSelect(categorySelectRef, val))
 watch(subselectedRow, (val) => focusBackOnSelect(subcategorySelectRef, val))
+watch(collectionSelectedRow, (val) => focusBackOnSelect(collectionSelectRef, val))
+watch(selectedProductDimension, (val) => focusBackOnSelect(dimensionSelectRef, val))
+
+// The watchers above only fire when the model CHANGES. Enter on the
+// already-selected option, or Enter when the search matched nothing, still
+// closes the panel — focus then drops to <body>. Catch Enter/clicks inside
+// the open panel and restore focus to the trigger button, but only when focus
+// was actually dropped (activeElement === body), so we never fight the
+// watcher above or a quick-create modal's focus trap.
+// MUST be bound with .capture: Headless UI's combobox input calls
+// stopPropagation() on Enter, so the event never reaches bubble listeners.
+const restoreSelectFocus = (e: Event) => {
+  const wrapper = e.currentTarget as HTMLElement | null
+  if (!(e.target as HTMLElement | null)?.closest('[role="listbox"]')) return
+  // Headless UI drops focus to <body> AFTER this handler and after nextTick,
+  // so we must wait for that to settle (double rAF) before checking. If focus
+  // landed somewhere real (model changed → watcher refocused the trigger, or a
+  // quick-create modal opened and trapped focus) we leave it alone; only when
+  // it was dropped to <body> do we restore it to this select's trigger.
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const active = document.activeElement as HTMLElement | null
+    if (active && active !== document.body) return
+    ;(wrapper?.querySelector('button') as HTMLElement | null)?.focus()
+  }))
+}
 
 defineExpose({ resetForm, getAllSelectWrappers })
 
@@ -394,7 +426,7 @@ watch(
 
     <!-- BRAND (SELECT MENU now) -->
     <UFormGroup label="Brand" v-if="productInputs?.brand">
-      <div ref="brandSelectRef">
+      <div ref="brandSelectRef" @keydown.capture.enter="restoreSelectFocus" @click.capture="restoreSelectFocus">
       <USelectMenu
         v-model="brandSelectedRow"
         :options="brands"
@@ -462,7 +494,7 @@ watch(
 
     <!-- CATEGORY -->
     <UFormGroup label="Category" v-if="productInputs?.category">
-      <div ref="categorySelectRef">
+      <div ref="categorySelectRef" @keydown.capture.enter="restoreSelectFocus" @click.capture="restoreSelectFocus">
       <USelectMenu
         v-model="selectedRow"
         :options="categories"
@@ -497,7 +529,7 @@ watch(
 
     <!-- SUBCATEGORY -->
     <UFormGroup label="Sub-Category" v-if="productInputs?.subcategory">
-      <div ref="subcategorySelectRef">
+      <div ref="subcategorySelectRef" @keydown.capture.enter="restoreSelectFocus" @click.capture="restoreSelectFocus">
       <USelectMenu
         v-model="subselectedRow"
         :options="subcategories"
@@ -532,6 +564,7 @@ watch(
 
     <!-- COLLECTION -->
     <UFormGroup label="Collection">
+      <div ref="collectionSelectRef" @keydown.capture.enter="restoreSelectFocus" @click.capture="restoreSelectFocus">
       <USelectMenu
         v-model="collectionSelectedRow"
         :options="collections"
@@ -561,10 +594,12 @@ watch(
           <span class="truncate">{{ collection.name }}</span>
         </template>
       </USelectMenu>
+      </div>
     </UFormGroup>
 
     <!-- PRODUCT DIMENSION (ShippingBox, type=product) -->
     <UFormGroup label="Product Dimension" v-if="showProductDimension">
+      <div ref="dimensionSelectRef" @keydown.capture.enter="restoreSelectFocus" @click.capture="restoreSelectFocus">
       <USelectMenu
         v-model="selectedProductDimension"
         :options="productDimensions"
@@ -587,6 +622,7 @@ watch(
           <span class="text-xs text-gray-400">No product dimensions — add them in Products → Dimensions</span>
         </template>
       </USelectMenu>
+      </div>
     </UFormGroup>
 
     <!-- DESCRIPTION -->

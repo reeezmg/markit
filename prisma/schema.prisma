@@ -129,6 +129,10 @@ enum CouponAudience {
   SPECIFIC
 }
 
+enum EcommGalleryType {
+  YOUTUBE
+}
+
 enum NotificationType {
   ORDER_RECEIVED
   BILL_CREATED
@@ -390,7 +394,7 @@ model Company {
   deliveryType              String[]                  @map("delivery_type")
   deliveryMode              String[]                  @map("delivery_mode")
   deliveryRadius            Float?                    @map("delivery_radius")
-  deliveryDiscount          Float?                    @default(100) @map("delivery_discount")
+  deliveryDiscount          Float?                    @default(0) @map("delivery_discount")
   operationFeesShare        Float?                    @default(0) @map("operation_fees_share")
   cash                      Float?                    @default(0)
   openingCashDate           DateTime?                 @map("opening_cash_date")
@@ -460,6 +464,7 @@ model Company {
   ecommFaqs                 EcommFaq[]
   ecommFeedback             EcommFeedback[]
   ecommBlogs                EcommBlog[]
+  ecommGallery              EcommGallery[]
   ecommCheckouts            EcommCheckout[]
   ecommOrders               EcommOrder[]
   ecommCarts                EcommCart[]
@@ -1461,6 +1466,23 @@ model EcommBlog {
   @@map("ecomm_blogs")
 }
 
+model EcommGallery {
+  id        String           @id() @unique() @default(dbgenerated("gen_random_uuid()"))
+  createdAt DateTime         @default(now()) @map("created_at")
+  updatedAt DateTime         @default(now()) @updatedAt() @map("updated_at")
+  name      String
+  type      EcommGalleryType @default(YOUTUBE)
+  mediaKey  String?          @map("media_key")
+  url       String?
+  sortOrder Int              @default(0) @map("sort_order")
+  status    Boolean          @default(true)
+  company   Company          @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String           @map("company_id")
+
+  @@index([companyId, status, sortOrder])
+  @@map("ecomm_gallery")
+}
+
 model EcommCheckout {
   id              String      @id() @unique() @default(uuid())
   createdAt       DateTime    @default(now()) @map("created_at")
@@ -1536,6 +1558,7 @@ model EcommCart {
   clientId  String   @map("client_id")
 
   @@unique([companyId, clientId])
+  @@index([companyId, clientId], map: "ecomm_carts_company_client_idx")
   @@map("ecomm_carts")
 }
 
@@ -1553,6 +1576,7 @@ model EcommOrderStatusHistory {
   orderId   String     @map("order_id")
 
   @@index([orderId])
+  @@index([orderId, createdAt], map: "ecomm_order_status_history_order_idx")
   @@map("ecomm_order_status_history")
 }
 
@@ -1572,6 +1596,7 @@ model EcommPickupRequest {
   companyId       String   @map("company_id")
 
   @@index([companyId, status])
+  @@index([companyId, createdAt], map: "ecomm_pickup_requests_company_idx")
   @@map("ecomm_pickup_requests")
 }
 
@@ -1587,6 +1612,7 @@ model EcommWishlist {
   clientId   String   @map("client_id")
 
   @@unique([companyId, clientId])
+  @@index([companyId, clientId], map: "ecomm_wishlists_company_client_idx")
   @@map("ecomm_wishlists")
 }
 
@@ -2084,7 +2110,7 @@ model MoneyTransaction {
 model AccountLedgerEntry {
   id           String                   @id() @default(uuid())
   createdAt    DateTime                 @default(now()) @map("created_at")
-  updatedAt    DateTime                 @updatedAt() @map("updated_at")
+  updatedAt    DateTime                 @default(now()) @updatedAt() @map("updated_at")
   companyId    String                   @map("company_id")
   company      Company                  @relation(fields: [companyId], references: [id], onDelete: Cascade)
   accountType  AccountLedgerAccountType @map("account_type")
@@ -2796,6 +2822,7 @@ model StorefrontPage {
 
   @@unique([companyId, slug])
   @@index([companyId])
+  @@index([companyId, slug], map: "storefront_pages_co_slug_idx")
   @@map("storefront_pages")
 }
 

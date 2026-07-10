@@ -57,7 +57,7 @@ const teams = (items) =>
           code: item.code ?? undefined,
           storeUniqueName: item.company.storeUniqueName ?? undefined,
           isTaxIncluded: item.company.isTaxIncluded,
-          isAiImage: item.company.isAiImage || true,
+          isAiImage: item.company.isAiImage ?? true,
           deliveryType: item.company.deliveryType || [],
           deliveryMode: item.company.deliveryMode || [],
           fundDeliveryFees: item.company.fundDeliveryFees || false,

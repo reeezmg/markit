@@ -36,7 +36,6 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  weight?: number;
   items: {id: string; size: string | null; qty: number | undefined}[]; // Assuming items are strings, adjust if needed
   images: string[];
 }
@@ -270,7 +269,6 @@ const updateResult: any = await $fetch('/api/products/update', {
       pprice: v.pprice || 0,
       dprice: v.dprice || 0,
       discount: v.discount || 0,
-      weight: v.weight || 0,
       images: v.images || [],
       items: v.items.map(item => ({ id: item.id, size: item.size || null, qty: item.qty || 0 })),
     })),
@@ -585,7 +583,6 @@ const confirmPrint = async () => {
             :editpPrice="selectedProduct?.variants[index]?.pprice"
             :editdPrice="selectedProduct?.variants[index]?.dprice"
             :editDiscount="selectedProduct?.variants[index]?.discount"
-            :editWeight="selectedProduct?.variants[index]?.weight"
             :editItems="selectedProduct?.variants[index]?.items"
             @update="updateVariant(index,$event)" />
           <AddProductMedia 
@@ -676,7 +673,6 @@ const confirmPrint = async () => {
                   :editUnit="selectedProduct?.variants[index].unit || variants[0]?.unit"
                   :editsPrice="selectedProduct?.variants[index].sprice"
                   :editpPrice="selectedProduct?.variants[index].pprice"
-                  :editWeight="selectedProduct?.variants[index].weight"
                   :editSizes="selectedProduct?.variants[index].sizes"
                   @update="updateVariant(index,$event)" />
                 <AddProductMedia

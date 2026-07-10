@@ -15,7 +15,6 @@ const props = defineProps<{
     editpPrice?: number | null;
     editDiscount?: number | null;
     editdPrice?: number | null;
-    editWeight?: number | null;
     editItems?: {id:string; size: string; qty: number }[] | null;
 
 }>();
@@ -36,7 +35,6 @@ const schema = z.object({
   pprice: z.number().optional(),
   dprice: z.number().optional(),
   discount: z.number().optional(),
-  weight: z.number().optional(),
   items: z.array(
     z.object({
       size: z.string().min(1, 'Size is required'),
@@ -81,7 +79,6 @@ const [sprice, spriceAttrs] = defineField('sprice');
 const [pprice, ppriceAttrs] = defineField('pprice');
 const [dprice, dpriceAttrs] = defineField('dprice');
 const [discount, discountAttrs] = defineField('discount');
-const [weight, weightAttrs] = defineField('weight');
 const unit = ref('Nos');
 
 const variantInputs = ref(useAuth().session.value?.variantInputs)
@@ -157,7 +154,6 @@ const resetForm = () => {
     pprice.value = 0;
     dprice.value = 0;
     discount.value = 0;
-    weight.value = 0;
     items.value = [];
     resetValidation();
 };
@@ -221,10 +217,6 @@ watch(() => props.editDiscount, (newDiscount) => {
     discount.value = newDiscount ?? 0;
 }, { immediate: true });
 
-watch(() => props.editWeight, (newWeight) => {
-    weight.value = newWeight ?? 0;
-}, { immediate: true });
-
 
 
 watch(sprice, (newSPrice)=> {
@@ -261,8 +253,8 @@ watch(items, (newItems) => {
 
 
 watch(
-  [id, items, name, code, qty, sprice, pprice, dprice, discount, weight],
-  ([newId, newItems, newName, newCode, newQty, newSPrice, newPPrice, newDPrice, newDiscount, newWeight]) => {
+  [id, items, name, code, qty, sprice, pprice, dprice, discount],
+  ([newId, newItems, newName, newCode, newQty, newSPrice, newPPrice, newDPrice, newDiscount]) => {
     console.log('watching items',newId);
 
     // If newItems is empty, populate it with default value.
@@ -285,7 +277,6 @@ watch(
       pprice: newPPrice,
       dprice: newDPrice,
       discount: newDiscount,
-      weight: newWeight,
       items: updatedItems,
     };
 
@@ -370,13 +361,6 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
     </UFormGroup>
 
 
-
-    
-
-    <!-- Weight (for shipping) -->
-    <UFormGroup label="Weight (kg)" hint="Used for shipping rates">
-      <UInput v-model.number="weight" v-bind="weightAttrs" type="text" inputmode="decimal" placeholder="e.g. 0.5" />
-    </UFormGroup>
 
     <!-- Quantity (Full Width) -->
     <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2" v-if="variantInputs?.qty">

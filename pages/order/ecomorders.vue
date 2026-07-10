@@ -11,7 +11,7 @@ const search = ref('');
 const statusFilter = ref('All');
 const paymentFilter = ref('All');
 
-const statusOptions = ['All', 'PLACED', 'PACKED', 'PICKED', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'CANCELLED'];
+const statusOptions = ['All', 'PLACED', 'PACKED', 'PICKED', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RTO', 'RTO_DELIVERED', 'CANCELLED'];
 const paymentOptions = ['All', 'PENDING', 'PAID', 'FAILED', 'REFUNDED'];
 
 const { data: orders, isLoading, refetch } = useFindManyEcommOrder(
@@ -88,6 +88,8 @@ const addressLine = (order: any) => {
 const badgeColor = (status: string) => {
   if (['PAID', 'DELIVERED', 'PLACED'].includes(status)) return 'green';
   if (['PENDING', 'PACKED', 'PICKED', 'SHIPPED', 'OUT_FOR_DELIVERY'].includes(status)) return 'yellow';
+  // Return-to-origin: the shipment is coming back (RTO) / arrived back (RTO_DELIVERED).
+  if (status?.startsWith('RTO')) return 'orange';
   if (['CANCELLED', 'FAILED', 'REFUNDED'].includes(status)) return 'red';
   return 'gray';
 };
@@ -96,7 +98,14 @@ const badgeColor = (status: string) => {
 // Status is driven purely by the carrier: for every order that has an AWB we
 // bulk-fetch its current status from the track API (one request per 50 waybills)
 // and show that instead of any locally-stored status.
-const liveStatus = ref<Record<string, { status: string | null; rawStatus: string | null }>>({});
+const liveStatus = ref<Record<string, {
+  status: string | null;
+  rawStatus: string | null;
+  statusType?: string | null;
+  nslCode?: string | null;
+  instructions?: string | null;
+  ndrAttempts?: number;
+}>>({});
 
 const orderAwb = (order: any) => order?.meta?.shipping?.awb || order?.meta?.shipping?.trackingId || null;
 
@@ -129,6 +138,93 @@ async function refreshLiveStatuses() {
 
 // Re-pull carrier status whenever the order set changes (initial load + refetch).
 watch(orders, () => refreshLiveStatuses(), { immediate: true });
+
+// ─── NDR (failed delivery / cancelled pickup) ────────────────────────────────
+// Detected live from the track API: the Status.StatusCode (NSL code) tells us
+// whether the shipment is actionable. StatusType 'UD' alone is NOT an NDR
+// signal (a freshly manifested shipment is also 'UD') — only these NSL codes:
+//   RE-ATTEMPT        — failed delivery attempt
+//   PICKUP_RESCHEDULE — cancelled (non-OTP) shipment
+// Both require attempt count 1-2 and are best applied after 9 PM. The NDR API
+// is async: it returns a UPL ID which we persist on the order and poll.
+const REATTEMPT_NSL = ['EOD-74', 'EOD-15', 'EOD-104', 'EOD-43', 'EOD-86', 'EOD-11', 'EOD-69', 'EOD-6'];
+const RESCHEDULE_NSL = ['EOD-777', 'EOD-21'];
+
+const ndrInfo = (row: any) => {
+  const awb = orderAwb(row);
+  const live = awb ? liveStatus.value[awb] : null;
+  const nsl = (live?.nslCode || '').toUpperCase();
+  if (!nsl) return null;
+  const action = REATTEMPT_NSL.includes(nsl) ? 'RE-ATTEMPT'
+    : RESCHEDULE_NSL.includes(nsl) ? 'PICKUP_RESCHEDULE' : null;
+  if (!action) return null;
+  return {
+    awb,
+    nsl,
+    action,
+    label: action === 'RE-ATTEMPT' ? 'Re-attempt delivery' : 'Reschedule pickup',
+    reason: live?.instructions || live?.rawStatus || 'Delivery attempt failed',
+    attempts: live?.ndrAttempts || 0,
+  };
+};
+
+const ndrUpl = (row: any) => row?.meta?.shipping?.ndr?.upl || null;
+
+const ndrModalOpen = ref(false);
+const ndrRow = ref<any>(null);
+const ndrBusy = ref(false);
+const ndrTarget = computed(() => (ndrRow.value ? ndrInfo(ndrRow.value) : null));
+
+function openNdr(row: any) {
+  ndrRow.value = row;
+  ndrModalOpen.value = true;
+}
+
+async function submitNdr() {
+  const target = ndrTarget.value;
+  if (!target?.awb) return;
+  ndrBusy.value = true;
+  try {
+    const res: any = await $fetch('/api/ecommerce-cms/shipping/ndr', {
+      method: 'POST',
+      body: { awb: target.awb, action: target.action },
+    });
+    toast.add({
+      title: `NDR action queued (${target.action})`,
+      description: res?.uplId ? `Request ID ${res.uplId} — check its status from the order row.` : 'Request submitted to the carrier.',
+      color: 'green',
+    });
+    ndrModalOpen.value = false;
+    await refetch(); // pick up the persisted UPL id on the order meta
+  } catch (e: any) {
+    toast.add({ title: 'NDR action failed', description: e.data?.statusMessage || e.message, color: 'red' });
+  } finally {
+    ndrBusy.value = false;
+  }
+}
+
+// Poll the async NDR request (UPL) status.
+const uplModalOpen = ref(false);
+const uplLoading = ref(false);
+const uplRow = ref<any>(null);
+const uplResult = ref<any>(null);
+
+async function checkUplStatus(row: any) {
+  const uplId = ndrUpl(row)?.id;
+  if (!uplId) return;
+  uplRow.value = row;
+  uplResult.value = null;
+  uplModalOpen.value = true;
+  uplLoading.value = true;
+  try {
+    uplResult.value = await $fetch('/api/ecommerce-cms/shipping/ndr-status', { query: { uplId } });
+  } catch (e: any) {
+    toast.add({ title: 'Status check failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    uplModalOpen.value = false;
+  } finally {
+    uplLoading.value = false;
+  }
+}
 
 const shipOpen = ref(false);
 const shipOrder = ref<any>(null);
@@ -329,10 +425,21 @@ const filteredOrders = computed(() => {
         </template>
 
         <template #status-data="{ row }">
-          <UBadge :color="badgeColor(displayStatus(row))" variant="subtle" :title="rawStatus(row) || ''">
-            {{ displayStatus(row) }}
-          </UBadge>
-          <p v-if="rawStatus(row)" class="mt-0.5 text-[10px] text-gray-400 truncate max-w-[120px]">
+          <div class="flex flex-wrap items-center gap-1">
+            <UBadge :color="badgeColor(displayStatus(row))" variant="subtle" :title="rawStatus(row) || ''">
+              {{ displayStatus(row) }}
+            </UBadge>
+            <UBadge v-if="ndrInfo(row)" color="amber" variant="subtle" size="xs" :title="ndrInfo(row)!.reason">
+              NDR · {{ ndrInfo(row)!.nsl }}
+            </UBadge>
+            <UBadge v-if="ndrUpl(row)" color="blue" variant="subtle" size="xs" :title="`UPL ${ndrUpl(row).id}`">
+              {{ ndrUpl(row).action }} queued
+            </UBadge>
+          </div>
+          <p v-if="ndrInfo(row)" class="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[140px]">
+            {{ ndrInfo(row)!.reason }}
+          </p>
+          <p v-else-if="rawStatus(row)" class="mt-0.5 text-[10px] text-gray-400 truncate max-w-[120px]">
             {{ rawStatus(row) }}
           </p>
         </template>
@@ -358,6 +465,22 @@ const filteredOrders = computed(() => {
             :loading="labelBusy === row.id"
             :title="row.meta?.shipping?.labelUrl ? 'Print label' : 'Generate & print label'"
             @click="generateAndPrintLabel(row)"
+          />
+          <UButton
+            v-if="ndrInfo(row)"
+            icon="i-heroicons-exclamation-triangle"
+            color="amber"
+            variant="ghost"
+            :title="ndrInfo(row)!.label"
+            @click="openNdr(row)"
+          />
+          <UButton
+            v-if="ndrUpl(row)"
+            icon="i-heroicons-magnifying-glass"
+            color="blue"
+            variant="ghost"
+            :title="`Check NDR request status (UPL ${ndrUpl(row).id})`"
+            @click="checkUplStatus(row)"
           />
           <UPopover>
             <UButton icon="i-heroicons-eye" color="gray" variant="ghost" />
@@ -483,6 +606,73 @@ const filteredOrders = computed(() => {
             >
               Create {{ bulkData?.shippable || 0 }} shipment(s)
             </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
+    <!-- NDR action (re-attempt / pickup reschedule) -->
+    <UModal v-model="ndrModalOpen" :ui="{ width: 'sm:max-w-lg' }">
+      <UCard v-if="ndrRow && ndrTarget">
+        <template #header>
+          <h2 class="text-lg font-semibold">{{ ndrTarget.label }} · {{ orderLabel(ndrRow) }}</h2>
+          <p class="text-xs text-gray-500">AWB {{ ndrTarget.awb }} · NSL {{ ndrTarget.nsl }}</p>
+        </template>
+
+        <div class="space-y-3">
+          <p class="text-sm text-amber-700 dark:text-amber-300 font-medium">{{ ndrTarget.reason }}</p>
+          <p class="text-xs text-gray-500">
+            Failed attempts so far: <span class="font-medium text-gray-700 dark:text-gray-300">{{ ndrTarget.attempts || '—' }}</span>
+          </p>
+
+          <UAlert
+            v-if="ndrTarget.attempts > 2"
+            color="amber"
+            variant="subtle"
+            icon="i-heroicons-exclamation-triangle"
+            :description="`Attempt count is ${ndrTarget.attempts} — the carrier allows this action only when it is 1 or 2, so it may be rejected.`"
+          />
+
+          <UAlert
+            color="blue"
+            variant="subtle"
+            icon="i-heroicons-clock"
+            :description="`This queues a ${ndrTarget.action} request with the carrier (processed asynchronously — you get a request ID to track). Best applied after 9 PM, once the day's dispatches are closed.`"
+          />
+        </div>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton variant="ghost" color="gray" @click="ndrModalOpen = false">Cancel</UButton>
+            <UButton :loading="ndrBusy" icon="i-heroicons-paper-airplane" @click="submitNdr">
+              Queue {{ ndrTarget.action }}
+            </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
+    <!-- NDR request (UPL) status -->
+    <UModal v-model="uplModalOpen" :ui="{ width: 'sm:max-w-lg' }">
+      <UCard v-if="uplRow">
+        <template #header>
+          <h2 class="text-lg font-semibold">NDR request status · {{ orderLabel(uplRow) }}</h2>
+          <p class="text-xs text-gray-500">
+            {{ ndrUpl(uplRow)?.action }} · UPL {{ ndrUpl(uplRow)?.id }}
+            <template v-if="ndrUpl(uplRow)?.at">
+              · queued {{ format(new Date(ndrUpl(uplRow).at), 'dd MMM, hh:mm a') }}
+            </template>
+          </p>
+        </template>
+
+        <div v-if="uplLoading" class="flex items-center justify-center py-10 text-gray-400">
+          <UIcon name="i-heroicons-arrow-path" class="animate-spin text-2xl" />
+        </div>
+        <pre v-else class="max-h-80 overflow-auto rounded-lg bg-gray-50 dark:bg-gray-900 p-3 text-xs text-gray-700 dark:text-gray-300">{{ JSON.stringify(uplResult?.response ?? uplResult, null, 2) }}</pre>
+
+        <template #footer>
+          <div class="flex justify-end">
+            <UButton variant="ghost" color="gray" @click="uplModalOpen = false">Close</UButton>
           </div>
         </template>
       </UCard>

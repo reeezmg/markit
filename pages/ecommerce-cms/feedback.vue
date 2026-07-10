@@ -41,6 +41,7 @@ const form = reactive({
 })
 
 const isSaving = ref(false)
+const showForm = ref(false)
 const editing = computed(() => !!form.id)
 
 function resetForm() {
@@ -54,6 +55,11 @@ function resetForm() {
   form.status = true
 }
 
+function openNew() {
+  resetForm()
+  showForm.value = true
+}
+
 function edit(row: FeedbackRow) {
   form.id = row.id
   form.clientId = row.clientId || ''
@@ -63,6 +69,12 @@ function edit(row: FeedbackRow) {
   form.rating = row.rating
   form.sortOrder = row.sortOrder
   form.status = row.status
+  showForm.value = true
+}
+
+function closeForm() {
+  showForm.value = false
+  resetForm()
 }
 
 function clientLabel(client: ClientOption) {
@@ -99,6 +111,7 @@ async function save() {
       toast.add({ title: 'Feedback added' })
     }
 
+    showForm.value = false
     resetForm()
     await refresh()
   } catch (error: any) {
@@ -132,7 +145,7 @@ onMounted(resetForm)
 
 <template>
   <UDashboardPanelContent class="pb-24">
-    <div class="grid gap-4 p-3 lg:grid-cols-[minmax(0,1fr)_400px]">
+    <div class="p-3">
       <UCard>
         <template #header>
           <div class="flex items-center justify-between gap-3">
@@ -142,7 +155,7 @@ onMounted(resetForm)
                 Customer testimonials shown on the custom ecommerce homepage.
               </p>
             </div>
-            <UButton icon="i-heroicons-plus" label="New feedback" @click="resetForm" />
+            <UButton icon="i-heroicons-plus" label="New feedback" @click="openNew" />
           </div>
         </template>
 
@@ -184,7 +197,9 @@ onMounted(resetForm)
           </div>
         </div>
       </UCard>
+    </div>
 
+    <UModal v-model="showForm">
       <UCard>
         <template #header>
           <div class="font-semibold text-gray-900 dark:text-white">
@@ -231,11 +246,11 @@ onMounted(resetForm)
 
         <template #footer>
           <div class="flex justify-end gap-2">
-            <UButton color="gray" variant="ghost" label="Cancel" @click="resetForm" />
+            <UButton color="gray" variant="ghost" label="Cancel" @click="closeForm" />
             <UButton :loading="isSaving" icon="i-heroicons-check" :label="editing ? 'Save changes' : 'Create feedback'" @click="save" />
           </div>
         </template>
       </UCard>
-    </div>
+    </UModal>
   </UDashboardPanelContent>
 </template>

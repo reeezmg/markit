@@ -253,14 +253,16 @@ const onBillingUnitsChange = (units: string[] | string | null | undefined) => {
 
 
 const deliveryType = ref<string[]>(useAuth().session.value?.deliveryType || [])
-const deliveryMode = ref<string[]>(useAuth().session.value?.deliveryMode || [])
+// Delivery mode is hidden in the UI for now — always 'self'.
+const deliveryMode = ref<string[]>(['self'])
 
 const deliveryRadius = ref<number | null>(useAuth().session.value?.deliveryRadius || null)
-const deliveryDiscount = ref<number>(useAuth().session.value?.deliveryDiscount ?? 100)
+// % discount to give on the delivery cost (0 = no discount). Applied at storefront checkout.
+const deliveryDiscount = ref<number>(useAuth().session.value?.deliveryDiscount ?? 0)
 
 // Dropdown options
 const deliveryModeOptions = ['markit','self']
-const deliveryTypeOptions = ['trynbuy','booking','delivery']
+const deliveryTypeOptions = ['trynbuy','delivery']
 
 const isSelf = computed(() => deliveryMode.value.includes('self'))
 
@@ -313,7 +315,7 @@ watch(() => deliveryRadius.value, (newConfig) => {
   isDeliveryConfigChanged.value = newConfig !== useAuth().session.value?.deliveryRadius;
 }, { immediate: true });
 watch(() => deliveryDiscount.value, (newConfig) => {
-  isDeliveryConfigChanged.value = newConfig !== (useAuth().session.value?.deliveryDiscount ?? 100);
+  isDeliveryConfigChanged.value = newConfig !== (useAuth().session.value?.deliveryDiscount ?? 0);
 }, { immediate: true });
 watch(() => deliveryType.value, (newType) => {
   isDeliveryTypeChanged.value = newType.sort().toString() !== (useAuth().session.value?.deliveryType || []).sort().toString();
@@ -973,7 +975,8 @@ const previewUrl = computed(() => {
 });
 
 const normalizeDeliveryDiscount = () => {
-  deliveryDiscount.value = Math.max(50, Number(deliveryDiscount.value) || 100);
+  // % off the delivery cost — clamp to 0–100 (0 = no discount).
+  deliveryDiscount.value = Math.min(100, Math.max(0, Number(deliveryDiscount.value) || 0));
   return deliveryDiscount.value;
 };
 
@@ -1519,20 +1522,9 @@ const onAllDeliverySave = () => {
           <USelectMenu v-model="deliveryType" :options="deliveryTypeOptions" multiple placeholder="Select Delivery Type" />
         </div>
 
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-          <div class="mb-3">
-            <div class="text-sm font-semibold text-gray-900 dark:text-white">Delivery Mode</div>
-            <div class="text-sm text-gray-500 dark:text-gray-400">Choose your delivery mode</div>
-          </div>
-          <USelectMenu
-            v-model="deliveryMode"
-            :options="deliveryModeOptions"
-            multiple
-            placeholder="Select delivery mode"
-          />
-        </div>
+        <!-- Delivery Mode hidden for now — always 'self' (see script). -->
 
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+        <div v-if="deliveryType.includes('trynbuy')" class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
           <div class="mb-3">
             <div class="text-sm font-semibold text-gray-900 dark:text-white">Delivery Radius (km)</div>
             <div class="text-sm text-gray-500 dark:text-gray-400">Set the delivery reach for self delivery.</div>
@@ -1540,15 +1532,16 @@ const onAllDeliverySave = () => {
           <UInput v-model.number="deliveryRadius" type="number" placeholder="Enter radius in km" />
         </div>
 
-        <div v-if="isSelf" class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
           <div class="mb-3">
             <div class="text-sm font-semibold text-gray-900 dark:text-white">Delivery Discount (%)</div>
-            <div class="text-sm text-gray-500 dark:text-gray-400">Minimum 50%, default 100%</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Discount you want to give on delivery cost</div>
           </div>
           <UInput
             v-model.number="deliveryDiscount"
             type="number"
-            min="50"
+            min="0"
+            max="100"
             placeholder="Enter delivery discount percentage"
             @blur="normalizeDeliveryDiscount"
           />
