@@ -574,6 +574,15 @@ const links = computed(() => {
                         shortcuts: ['D', 'R'],
                     },
                 },
+                {
+                    label: 'Payments',
+                    to: `/distributor/payments`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Payments',
+                        shortcuts: ['D', 'P'],
+                    },
+                },
                 // {
                 //     label: 'Credit',
                 //     to: `/distributor/credit`,
