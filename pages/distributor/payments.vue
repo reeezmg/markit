@@ -2,9 +2,12 @@
 import {
   useFindManyDistributorPayment,
   useCountDistributorPayment,
+  useFindManyDistributorCompany,
+  useCreateDistributorPayment,
 } from '~/lib/hooks'
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
+const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
 
 // -------------------------------------
@@ -22,6 +25,14 @@ const formatCurrency = (amount: any) =>
     style: 'currency',
     currency: 'INR',
   }).format(Number(amount || 0))
+
+const showToast = (
+  title: string,
+  color: 'green' | 'red' | 'yellow' = 'green',
+  description = ''
+) => {
+  toast.add({ title, color, description })
+}
 
 // -------------------------------------
 // TABLE COLUMNS
@@ -175,6 +186,7 @@ const queryArgs = computed(() => ({
 const {
   data: payments,
   isLoading,
+  refetch,
 } = useFindManyDistributorPayment(queryArgs)
 
 const countArgs = computed(() => ({
@@ -193,6 +205,169 @@ const rows = computed(() =>
     purchaseOrderNo: p.purchaseOrder?.purchaseOrderNo ?? '-',
   })) ?? []
 )
+
+// -------------------------------------
+// DOWNLOAD
+// -------------------------------------
+const isDownloading = ref(false)
+
+async function triggerDownload(filename: string, blob: Blob) {
+  const objectUrl = window.URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = objectUrl
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.URL.revokeObjectURL(objectUrl)
+}
+
+const downloadPayments = async (fileFormat: 'excel' | 'pdf') => {
+  isDownloading.value = true
+  try {
+    const res = await $fetch.raw(`/api/downloads/distributor-payments.${fileFormat}`, {
+      method: 'GET',
+      params: {
+        startDate: startOfDay(selectedDate.value.start).toISOString(),
+        endDate: endOfDay(selectedDate.value.end).toISOString(),
+        search: search.value || undefined,
+        paymentType: paymentTypeFilter.value || undefined,
+      },
+    })
+
+    const ext = fileFormat === 'excel' ? 'xlsx' : 'pdf'
+    const mime = fileFormat === 'excel'
+      ? 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+      : 'application/pdf'
+
+    await triggerDownload(`distributor-payments.${ext}`, new Blob([res._data as ArrayBuffer], { type: mime }))
+  } catch (err: any) {
+    showToast('Download failed', 'red', err.message)
+  } finally {
+    isDownloading.value = false
+  }
+}
+
+const downloadItems = [[
+  { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells', click: () => downloadPayments('excel') },
+  { label: 'PDF', icon: 'i-heroicons-document-text', click: () => downloadPayments('pdf') },
+]]
+
+// -------------------------------------
+// ADD PAYMENT
+// -------------------------------------
+const isAddOpen = ref(false)
+const isSaving = ref(false)
+
+const addForm = ref({
+  distributorId: '' as string,
+  amount: null as number | null,
+  paymentType: 'CASH',
+  remarks: '',
+  date: new Date().toISOString().split('T')[0], // yyyy-mm-dd
+})
+
+const resetAddForm = () => {
+  addForm.value = {
+    distributorId: '',
+    amount: null,
+    paymentType: 'CASH',
+    remarks: '',
+    date: new Date().toISOString().split('T')[0],
+  }
+}
+
+// distributor options for the Add Payment modal
+const distributorQueryArgs = computed(() => ({
+  where: { companyId: companyId.value },
+  select: {
+    distributorId: true,
+    distributor: { select: { name: true } },
+  },
+  orderBy: { distributor: { name: 'asc' } },
+}))
+
+const { data: distributorCompanies } = useFindManyDistributorCompany(distributorQueryArgs)
+
+const distributorOptions = computed(() =>
+  (distributorCompanies.value ?? []).map((dc: any) => ({
+    label: dc.distributor?.name || '-',
+    value: dc.distributorId,
+  }))
+)
+
+const openAddModal = () => {
+  resetAddForm()
+  isAddOpen.value = true
+}
+
+const CreateDistributorPayment = useCreateDistributorPayment()
+
+const handleAddPayment = async () => {
+  isSaving.value = true
+
+  try {
+    if (!addForm.value.distributorId) {
+      showToast('Please select a distributor', 'red')
+      return
+    }
+
+    if (!addForm.value.amount || addForm.value.amount <= 0) {
+      showToast('Please enter valid Amount', 'red')
+      return
+    }
+
+    const createdAtDate = addForm.value.date
+      ? new Date(addForm.value.date)
+      : new Date()
+
+    const expenseData = {
+      totalAmount: addForm.value.amount,
+      note: addForm.value.remarks || null,
+      paymentMode: addForm.value.paymentType,
+      status: 'Paid',
+      companyId: companyId.value,
+      userId: useAuth().session.value?.userId,
+      expensecategoryId: useAuth().session.value?.purchaseExpenseCategoryId,
+      createdAt: createdAtDate,
+    }
+
+    await CreateDistributorPayment.mutateAsync({
+      data: {
+        amount: addForm.value.amount,
+        paymentType: addForm.value.paymentType,
+        createdAt: createdAtDate,
+
+        ...(addForm.value.remarks
+          ? { remarks: addForm.value.remarks }
+          : {}),
+
+        distributorCompany: {
+          connect: {
+            distributorId_companyId: {
+              distributorId: addForm.value.distributorId,
+              companyId: companyId.value,
+            },
+          },
+        },
+
+        expense: {
+          create: expenseData,
+        },
+      },
+      select: { id: true },
+    })
+
+    showToast('Payment added successfully', 'green')
+    isAddOpen.value = false
+    resetAddForm()
+    refetch()
+  } catch (err: any) {
+    showToast('Error', 'red', err.message)
+  } finally {
+    isSaving.value = false
+  }
+}
 </script>
 
 <template>
@@ -244,6 +419,14 @@ const rows = computed(() =>
               class="w-full sm:w-72"
             />
           </div>
+
+          <UButton
+            icon="i-heroicons-plus"
+            size="sm"
+            color="primary"
+            label="New Payment"
+            @click="openAddModal"
+          />
         </div>
       </template>
 
@@ -260,6 +443,19 @@ const rows = computed(() =>
         </div>
 
         <div class="flex gap-1.5 items-center">
+          <UDropdown :items="downloadItems" :ui="{ width: 'w-36' }">
+            <UButton
+              icon="i-heroicons-arrow-down-tray"
+              color="gray"
+              size="xs"
+              trailing
+              :loading="isDownloading"
+              :disabled="isDownloading"
+            >
+              Download
+            </UButton>
+          </UDropdown>
+
           <UButton
             icon="i-heroicons-funnel"
             color="gray"
@@ -362,6 +558,76 @@ const rows = computed(() =>
         </div>
       </template>
     </UCard>
+
+    <!-- ADD PAYMENT MODAL -->
+    <UModal v-model="isAddOpen">
+      <UCard>
+        <template #header>
+          <div class="text-base font-semibold">New Payment</div>
+        </template>
+
+        <div class="space-y-4">
+          <!-- DISTRIBUTOR -->
+          <UFormGroup label="Distributor" required>
+            <USelectMenu
+              v-model="addForm.distributorId"
+              :options="distributorOptions"
+              option-attribute="label"
+              value-attribute="value"
+              placeholder="Select distributor"
+              searchable
+              searchable-placeholder="Search distributor..."
+            />
+          </UFormGroup>
+
+          <!-- PAYMENT DATE -->
+          <UFormGroup label="Payment Date">
+            <UInput type="date" v-model="addForm.date" />
+          </UFormGroup>
+
+          <!-- AMOUNT -->
+          <UFormGroup label="Amount" required>
+            <UInput
+              v-model.number="addForm.amount"
+              type="number"
+              placeholder="Enter amount"
+            />
+          </UFormGroup>
+
+          <!-- PAYMENT TYPE -->
+          <UFormGroup label="Payment Type">
+            <USelect
+              v-model="addForm.paymentType"
+              :options="[
+                { label: 'Cash', value: 'CASH' },
+                { label: 'Bank', value: 'BANK' },
+                { label: 'UPI', value: 'UPI' },
+                { label: 'Card', value: 'CARD' },
+                { label: 'Cheque', value: 'CHEQUE' },
+              ]"
+              option-attribute="label"
+              value-attribute="value"
+              placeholder="Payment Type"
+            />
+          </UFormGroup>
+
+          <!-- REMARKS -->
+          <UFormGroup label="Remarks">
+            <UInput
+              v-model="addForm.remarks"
+              placeholder="Optional remarks"
+            />
+          </UFormGroup>
+        </div>
+
+        <template #footer>
+          <div class="w-full flex justify-end gap-2">
+            <UButton color="gray" variant="ghost" @click="isAddOpen = false">Cancel</UButton>
+            <UButton color="primary" :loading="isSaving" @click="handleAddPayment">Submit</UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
 
     <!-- FILTER MODAL -->
     <UModal v-model="isFilterModalOpen">
