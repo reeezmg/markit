@@ -119,6 +119,7 @@ const CreateDistributorPayment = useCreateDistributorPayment()
 // -------------------------------------
 const columns = [
   { key: 'purchaseOrderNo', label: 'PO No.', sortable: true },
+  { key: 'distributorName', label: 'Distributor' },
   { key: 'createdAt', label: 'Date', sortable: true },
   { key: 'paymentType', label: 'Payment', sortable: true },
   { key: 'totalAmount', label: 'Total Amount', sortable: true },
@@ -786,6 +787,11 @@ const action = (row: any) => {
         :multiple-expand="false"
         class="w-full"
       >
+        <!-- DISTRIBUTOR -->
+        <template #distributorName-data="{ row }">
+          {{ row.distributor?.name || '-' }}
+        </template>
+
         <!-- DATE -->
         <template #createdAt-data="{ row }">
           {{
@@ -1013,10 +1019,11 @@ const action = (row: any) => {
           </div>
 
           <div class="overflow-x-auto p-5">
-            <table class="w-full min-w-[760px] text-sm">
+            <table class="w-full min-w-[900px] text-sm">
               <thead>
                 <tr class="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
                   <th class="px-3 py-2">Item</th>
+                  <th class="px-3 py-2">Info</th>
                   <th class="px-3 py-2">Variant</th>
                   <th class="px-3 py-2">Size</th>
                   <th class="px-3 py-2 text-right">Qty</th>
@@ -1033,12 +1040,10 @@ const action = (row: any) => {
                   <td class="px-3 py-3 align-top">
                     <div class="font-medium">{{ line.productName }}</div>
                     <div class="text-xs text-gray-500 dark:text-gray-400">
-                      {{ line.categoryName }} / {{ line.brandName }}
-                    </div>
-                    <div class="text-xs text-gray-500 dark:text-gray-400">
                       {{ line.barcode }}
                     </div>
                   </td>
+                  <td class="px-3 py-3 align-top">{{ line.categoryName }} / {{ line.brandName }}</td>
                   <td class="px-3 py-3 align-top">{{ line.variantName }}</td>
                   <td class="px-3 py-3 align-top">{{ line.size }}</td>
                   <td class="px-3 py-3 text-right align-top">{{ line.qty }} {{ line.unit }}</td>
@@ -1046,7 +1051,7 @@ const action = (row: any) => {
                   <td class="px-3 py-3 text-right align-top font-medium">{{ formatCurrency(line.amount) }}</td>
                 </tr>
                 <tr v-if="!detailsLines.length">
-                  <td colspan="6" class="px-3 py-8 text-center text-gray-500 dark:text-gray-400">
+                  <td colspan="7" class="px-3 py-8 text-center text-gray-500 dark:text-gray-400">
                     No items found for this purchase order.
                   </td>
                 </tr>
