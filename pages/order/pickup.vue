@@ -126,6 +126,7 @@ function registerWithCarrier(loc: any) {
 
 // ─── Raise pickup request ───────────────────────────────────────────────────
 const pickupProviders = ref<any[]>([]);
+const loadingProviders = ref(true);
 const raising = ref(false);
 const remainingCount = ref(0);
 const today = new Date().toISOString().slice(0, 10);
@@ -199,12 +200,19 @@ async function updateStatus(req: any, status: string) {
   }
 }
 
-onMounted(async () => {
-  loadRequests();
+async function loadProviders() {
+  loadingProviders.value = true;
   try {
     const res: any = await $fetch('/api/ecommerce-cms/shipping/providers');
     pickupProviders.value = (res.providers || []).filter((p: any) => p.supportsPickup);
   } catch { /* no shipping config yet */ }
+  finally { loadingProviders.value = false; }
+}
+
+// Fire both fetches in parallel and don't block one card behind the other.
+onMounted(() => {
+  loadRequests();
+  loadProviders();
 });
 </script>
 
@@ -222,7 +230,7 @@ onMounted(async () => {
     </div>
 
     <!-- Raise pickup -->
-    <UCard v-if="pickupProviders.length">
+    <UCard v-if="loadingProviders || pickupProviders.length">
       <template #header>
         <div>
           <h2 class="text-base font-semibold text-gray-900 dark:text-white">Raise Pickup Request</h2>
@@ -248,7 +256,8 @@ onMounted(async () => {
             value-attribute="value"
             option-attribute="label"
             multiple
-            placeholder="Select carriers"
+            :loading="loadingProviders"
+            :placeholder="loadingProviders ? 'Loading carriers…' : 'Select carriers'"
           />
         </UFormGroup>
       </div>
