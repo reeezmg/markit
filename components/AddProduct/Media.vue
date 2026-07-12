@@ -35,7 +35,11 @@ const imagePreviewUrls = ref<string[]>([])
 
 const emit = defineEmits(['update', 'refetch'])
 
-// 🧩 Watch for initial edit files
+// 🧩 Watch for initial edit files.
+// `editFile` can arrive as either uuid strings (loading an existing product)
+// or as full ImageData objects — the parent round-trips whatever we emit back
+// into `variant.images`. Handle both, and skip echoes of our own state so we
+// don't re-initialize (and re-emit) in an infinite loop.
 watch(
   () => props.editFile,
   (newVal) => {
@@ -44,12 +48,38 @@ watch(
       imagePreviewUrls.value = []
       return
     }
-    selectedFiles.value = newVal.map((file, i) => ({
-      uuid: file,
-      view: i === 0 ? 'front' : i === 1 ? 'back' : 'extra',
-      isLoading: false,
-    }))
-    imagePreviewUrls.value = new Array(newVal.length).fill('')
+
+    const incomingUuids = newVal.map((f: any) =>
+      typeof f === 'string' ? f : f?.uuid
+    )
+    const currentUuids = selectedFiles.value.map((f) => f.uuid)
+
+    // Echo of what we already hold → nothing to do (breaks the update loop and
+    // preserves in-memory File objects + blob previews).
+    if (
+      incomingUuids.length === currentUuids.length &&
+      incomingUuids.every((u, i) => u === currentUuids[i])
+    ) {
+      return
+    }
+
+    selectedFiles.value = newVal.map((file: any, i: number) => {
+      const defaultView = i === 0 ? 'front' : i === 1 ? 'back' : 'extra'
+      if (typeof file === 'string') {
+        return { uuid: file, view: defaultView, isLoading: false }
+      }
+      return {
+        file: file.file,
+        uuid: file.uuid,
+        view: file.view ?? defaultView,
+        isLoading: false,
+      }
+    })
+    imagePreviewUrls.value = newVal.map((file: any) =>
+      typeof file !== 'string' && file.file
+        ? URL.createObjectURL(file.file)
+        : ''
+    )
   },
   { deep: true, immediate: true }
 )
