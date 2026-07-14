@@ -3,15 +3,6 @@ import crypto from 'crypto'
 export type UserCreditTxnType = 'CREDIT' | 'PAYMENT'
 export type UserCreditSourceType = 'MANUAL' | 'BILL' | 'PAYROLL'
 
-export function creditAmountFromBill(payload: any) {
-  if (payload?.paymentMethod === 'Split' && Array.isArray(payload?.splitPayments)) {
-    return payload.splitPayments
-      .filter((payment: any) => payment?.method === 'Credit')
-      .reduce((sum: number, payment: any) => sum + Number(payment?.amount || 0), 0)
-  }
-  return Number(payload?.grandTotal || 0)
-}
-
 export async function upsertUserCreditTransaction(
   client: any,
   input: {

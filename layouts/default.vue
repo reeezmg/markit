@@ -140,6 +140,16 @@ const links = computed(() => {
           },
         },
         {
+          id: 'ecom-messages',
+          label: 'Messages',
+          to: '/ecommerce-cms/messages',
+          icon: 'i-heroicons-inbox',
+          tooltip: {
+            text: 'Messages',
+            shortcuts: ['C', 'M'],
+          },
+        },
+        {
           id: 'ecom-faq',
           label: 'FAQ',
           to: '/ecommerce-cms/faq',
@@ -815,6 +825,15 @@ const links = computed(() => {
                     tooltip: {
                         text: 'Storefront Editor',
                         shortcuts: ['C', 'E'],
+                    },
+                },
+                {
+                    label: 'Messages',
+                    to: '/ecommerce-cms/messages',
+                    exact: true,
+                    tooltip: {
+                        text: 'Messages',
+                        shortcuts: ['C', 'M'],
                     },
                 },
                 {

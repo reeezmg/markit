@@ -104,66 +104,133 @@ async function remove(row: FaqRow) {
   if (form.id === row.id) resetForm()
 }
 
+const rowActions = (row: FaqRow) => [
+  [{ label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => edit(row) }],
+  [{ label: row.status ? 'Hide' : 'Show', icon: row.status ? 'i-heroicons-eye-slash-20-solid' : 'i-heroicons-eye-20-solid', click: () => toggle(row) }],
+  [{ label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => remove(row) }],
+]
+
+// ── Table: search + sort + client-side pagination ─────────────────────────────
+const columns = [
+  { key: 'sortOrder', label: '#', sortable: true },
+  { key: 'question', label: 'Question', sortable: true },
+  { key: 'answer', label: 'Answer', sortable: false },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'actions', label: 'Actions', sortable: false },
+]
+
+const search = ref('')
+const sort = ref({ column: 'sortOrder', direction: 'asc' as 'asc' | 'desc' })
+const page = ref(1)
+const pageCount = ref('10')
+
+const filtered = computed(() => {
+  const q = search.value.trim().toLowerCase()
+  let rows = [...(faqs.value || [])]
+  if (q) rows = rows.filter((r) => `${r.question} ${r.answer}`.toLowerCase().includes(q))
+  const { column, direction } = sort.value
+  rows.sort((a: any, b: any) => {
+    const av = a[column], bv = b[column]
+    const cmp = typeof av === 'number' && typeof bv === 'number'
+      ? av - bv
+      : String(av ?? '').localeCompare(String(bv ?? ''))
+    return direction === 'asc' ? cmp : -cmp
+  })
+  return rows
+})
+
+const pageTotal = computed(() => filtered.value.length)
+const rows = computed(() => {
+  const n = parseInt(pageCount.value)
+  const start = (page.value - 1) * n
+  return filtered.value.slice(start, start + n)
+})
+const pageFrom = computed(() => (pageTotal.value ? (page.value - 1) * parseInt(pageCount.value) + 1 : 0))
+const pageTo = computed(() => Math.min(page.value * parseInt(pageCount.value), pageTotal.value))
+
+watch([search, pageCount], () => { page.value = 1 })
+
 onMounted(resetForm)
 </script>
 
 <template>
   <UDashboardPanelContent class="pb-24">
-    <div class="p-3">
-      <UCard>
-        <template #header>
-          <div class="flex items-center justify-between gap-3">
-            <div>
-              <h1 class="text-xl font-semibold text-gray-900 dark:text-white">FAQ</h1>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Questions shown on custom ecommerce apps for this company.
-              </p>
-            </div>
-            <UButton icon="i-heroicons-plus" label="New FAQ" @click="openNew" />
+    <UCard
+      class="w-full"
+      :ui="{
+        base: '',
+        divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+        header: { padding: 'px-4 py-5' },
+        body: { padding: '', base: 'divide-y divide-gray-200 dark:divide-gray-700' },
+        footer: { padding: 'p-4' },
+      }"
+    >
+      <template #header>
+        <div class="flex items-center justify-between gap-3 w-full flex-wrap">
+          <div>
+            <h1 class="text-xl font-semibold text-gray-900 dark:text-white">FAQ</h1>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Questions shown on your storefront.</p>
           </div>
+          <div class="flex items-center gap-3 flex-wrap">
+            <UInput v-model="search" icon="i-heroicons-magnifying-glass-20-solid" placeholder="Search..." size="sm" class="w-full sm:w-48" />
+            <UButton icon="i-heroicons-plus" size="sm" color="primary" label="New FAQ" @click="openNew" />
+          </div>
+        </div>
+      </template>
+
+      <div class="flex justify-between items-center w-full px-4 py-3">
+        <div class="flex items-center gap-1.5">
+          <span class="text-sm leading-5 hidden sm:block">Rows per page:</span>
+          <USelect v-model="pageCount" :options="[5, 10, 20, 30, 50].map(n => ({ label: n, value: n }))" class="me-2 w-20" size="xs" />
+        </div>
+      </div>
+
+      <UTable
+        v-model:sort="sort"
+        :rows="rows"
+        :columns="columns"
+        :loading="pending"
+        sort-mode="manual"
+        class="w-full"
+        :empty-state="{ icon: 'i-heroicons-question-mark-circle', label: 'No FAQs yet' }"
+      >
+        <template #question-data="{ row }">
+          <span class="font-medium text-gray-900 dark:text-white">{{ row.question }}</span>
         </template>
+        <template #answer-data="{ row }">
+          <span class="line-clamp-2 text-sm text-gray-500 dark:text-gray-400 max-w-md">{{ row.answer }}</span>
+        </template>
+        <template #status-data="{ row }">
+          <UBadge :color="row.status ? 'green' : 'gray'" variant="subtle">{{ row.status ? 'Live' : 'Hidden' }}</UBadge>
+        </template>
+        <template #actions-data="{ row }">
+          <UDropdown :items="rowActions(row)">
+            <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
+          </UDropdown>
+        </template>
+      </UTable>
 
-        <div v-if="pending" class="space-y-3">
-          <USkeleton v-for="i in 4" :key="i" class="h-20 w-full" />
+      <template #footer>
+        <div class="flex flex-wrap justify-between items-center">
+          <span class="text-sm leading-5 hidden sm:block">
+            Showing <span class="font-medium">{{ pageFrom }}</span> to
+            <span class="font-medium">{{ pageTo }}</span> of
+            <span class="font-medium">{{ pageTotal }}</span> results
+          </span>
+          <UPagination
+            v-model="page"
+            :page-count="parseInt(pageCount)"
+            :total="pageTotal"
+            :ui="{ wrapper: 'flex items-center gap-1', rounded: '!rounded-full min-w-[32px] justify-center', default: { activeButton: { variant: 'outline' } } }"
+          />
         </div>
-
-        <div v-else-if="!faqs?.length" class="py-16 text-center">
-          <div class="text-sm font-medium text-gray-900 dark:text-white">No FAQs yet</div>
-          <p class="mt-1 text-sm text-gray-500">Create the first FAQ from the form.</p>
-        </div>
-
-        <div v-else class="divide-y divide-gray-200 dark:divide-gray-800">
-          <div v-for="row in faqs" :key="row.id" class="flex gap-4 py-4">
-            <div class="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-md bg-gray-100 text-sm font-semibold text-gray-700 dark:bg-gray-800 dark:text-gray-200">
-              {{ row.sortOrder }}
-            </div>
-            <div class="min-w-0 flex-1">
-              <div class="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 class="font-medium text-gray-900 dark:text-white">{{ row.question }}</h2>
-                  <p class="mt-1 line-clamp-2 text-sm text-gray-500 dark:text-gray-400">{{ row.answer }}</p>
-                </div>
-                <UBadge :color="row.status ? 'green' : 'gray'" variant="subtle">
-                  {{ row.status ? 'Live' : 'Hidden' }}
-                </UBadge>
-              </div>
-            </div>
-            <div class="flex shrink-0 items-center gap-1">
-              <UButton color="gray" variant="ghost" icon="i-heroicons-pencil-square" @click="edit(row)" />
-              <UButton color="gray" variant="ghost" :icon="row.status ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'" @click="toggle(row)" />
-              <UButton color="red" variant="ghost" icon="i-heroicons-trash" @click="remove(row)" />
-            </div>
-          </div>
-        </div>
-      </UCard>
-    </div>
+      </template>
+    </UCard>
 
     <UModal v-model="showForm">
       <UCard>
         <template #header>
-          <div class="font-semibold text-gray-900 dark:text-white">
-            {{ editing ? 'Edit FAQ' : 'Add FAQ' }}
-          </div>
+          <div class="font-semibold text-gray-900 dark:text-white">{{ editing ? 'Edit FAQ' : 'Add FAQ' }}</div>
         </template>
 
         <div class="space-y-4">

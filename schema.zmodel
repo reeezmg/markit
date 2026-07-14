@@ -271,6 +271,7 @@ model Company extends Base {
     generalPreferences GeneralPreference[]
     ecommFaqs EcommFaq[]
     ecommFeedback EcommFeedback[]
+    ecommContactMessages EcommContactMessage[]
     ecommBlogs EcommBlog[]
     ecommGallery EcommGallery[]
     ecommCheckouts EcommCheckout[]
@@ -1418,6 +1419,29 @@ model EcommFeedback {
     @@allow('read', true)
     @@allow('create, update, delete', company.users?[userId == auth().id])
     @@map("ecomm_feedback")
+}
+
+// Storefront contact-form submissions. Table provisioned by custom-api
+// (tables.py ensure_tables) and storetools (server/utils/ecommContactMessages.ts).
+// Mirrored here so `prisma migrate` never drops it. Keep the definitions in sync.
+model EcommContactMessage {
+    id String @id @unique @default(dbgenerated("gen_random_uuid()"))
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+    name String
+    email String?   // either email or phone is set, never both
+    phone String?
+    message String
+    status String @default("new")   // new | opened | replied | closed
+    repliedAt DateTime? @map("replied_at")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    companyId String @map("company_id")
+
+    @@index([companyId, status, createdAt])
+    @@allow('read', true)
+    @@allow('create', true)
+    @@allow('update, delete', company.users?[userId == auth().id])
+    @@map("ecomm_contact_messages")
 }
 
 model EcommBlog {
