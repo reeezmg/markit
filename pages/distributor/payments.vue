@@ -45,6 +45,7 @@ const columns = [
   { key: 'paymentType', label: 'Payment', sortable: true },
   { key: 'amount', label: 'Amount', sortable: true },
   { key: 'remarks', label: 'Remarks' },
+  { key: 'actions', label: 'Actions' },
 ]
 
 // -------------------------------------
@@ -159,6 +160,7 @@ const queryArgs = computed(() => ({
 
     purchaseOrder: {
       select: {
+        id: true,
         purchaseOrderNo: true,
       },
     },
@@ -202,6 +204,7 @@ const rows = computed(() =>
   payments.value?.map(p => ({
     ...p,
     distributorName: p.distributorCompany?.distributor?.name || '-',
+    purchaseOrderId: p.purchaseOrder?.id ?? null,
     purchaseOrderNo: p.purchaseOrder?.purchaseOrderNo ?? '-',
   })) ?? []
 )
@@ -258,6 +261,11 @@ const downloadItems = [[
 // -------------------------------------
 const isAddOpen = ref(false)
 const isSaving = ref(false)
+const editingPaymentId = ref<string | null>(null)
+const paymentToEdit = ref<any>(null)
+const isDeleteOpen = ref(false)
+const isDeleting = ref(false)
+const paymentToDelete = ref<any>(null)
 
 const addForm = ref({
   distributorId: '' as string,
@@ -298,8 +306,50 @@ const distributorOptions = computed(() =>
 
 const openAddModal = () => {
   resetAddForm()
+  editingPaymentId.value = null
+  paymentToEdit.value = null
   isAddOpen.value = true
 }
+
+const openEditModal = (row: any) => {
+  editingPaymentId.value = row.id
+  paymentToEdit.value = row
+  addForm.value = {
+    distributorId: '',
+    amount: Number(row.amount),
+    paymentType: row.paymentType || 'CASH',
+    remarks: row.remarks || '',
+    date: new Date(row.createdAt).toISOString().split('T')[0],
+  }
+  isAddOpen.value = true
+}
+
+const confirmDeletePayment = (row: any) => {
+  paymentToDelete.value = row
+  isDeleteOpen.value = true
+}
+
+const deletePayment = async () => {
+  if (!paymentToDelete.value?.id) return
+  isDeleting.value = true
+  try {
+    await $fetch(`/api/distributor/payments/${paymentToDelete.value.id}`, { method: 'DELETE' })
+    showToast('Payment deleted successfully')
+    isDeleteOpen.value = false
+    paymentToDelete.value = null
+    await refetch()
+  } catch (err: any) {
+    showToast('Delete failed', 'red', err.message)
+  } finally {
+    isDeleting.value = false
+  }
+}
+
+const paymentActions = (row: any) => [[
+  { label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => openEditModal(row) },
+], [
+  { label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDeletePayment(row) },
+]]
 
 const CreateDistributorPayment = useCreateDistributorPayment()
 
@@ -307,7 +357,7 @@ const handleAddPayment = async () => {
   isSaving.value = true
 
   try {
-    if (!addForm.value.distributorId) {
+    if (!editingPaymentId.value && !addForm.value.distributorId) {
       showToast('Please select a distributor', 'red')
       return
     }
@@ -320,6 +370,27 @@ const handleAddPayment = async () => {
     const createdAtDate = addForm.value.date
       ? new Date(addForm.value.date)
       : new Date()
+
+    if (editingPaymentId.value) {
+      await $fetch(`/api/distributor/payments/${editingPaymentId.value}`, {
+        method: 'PUT',
+        body: {
+          amount: addForm.value.amount,
+          paymentType: addForm.value.paymentType,
+          remarks: addForm.value.remarks || null,
+          billNo: paymentToEdit.value?.billNo || null,
+          purchaseOrderId: paymentToEdit.value?.purchaseOrderId || null,
+          createdAt: createdAtDate,
+        },
+      })
+      showToast('Payment updated successfully')
+      isAddOpen.value = false
+      editingPaymentId.value = null
+      paymentToEdit.value = null
+      resetAddForm()
+      await refetch()
+      return
+    }
 
     const expenseData = {
       totalAmount: addForm.value.amount,
@@ -529,6 +600,16 @@ const handleAddPayment = async () => {
         <template #remarks-data="{ row }">
           {{ row.remarks || '-' }}
         </template>
+
+        <template #actions-data="{ row }">
+          <UDropdown :items="paymentActions(row)">
+            <UButton
+              color="gray"
+              variant="ghost"
+              icon="i-heroicons-ellipsis-horizontal-20-solid"
+            />
+          </UDropdown>
+        </template>
       </UTable>
 
       <!-- FOOTER -->
@@ -563,12 +644,12 @@ const handleAddPayment = async () => {
     <UModal v-model="isAddOpen">
       <UCard>
         <template #header>
-          <div class="text-base font-semibold">New Payment</div>
+          <div class="text-base font-semibold">{{ editingPaymentId ? 'Edit Payment' : 'New Payment' }}</div>
         </template>
 
         <div class="space-y-4">
           <!-- DISTRIBUTOR -->
-          <UFormGroup label="Distributor" required>
+          <UFormGroup v-if="!editingPaymentId" label="Distributor" required>
             <USelectMenu
               v-model="addForm.distributorId"
               :options="distributorOptions"
@@ -623,7 +704,29 @@ const handleAddPayment = async () => {
         <template #footer>
           <div class="w-full flex justify-end gap-2">
             <UButton color="gray" variant="ghost" @click="isAddOpen = false">Cancel</UButton>
-            <UButton color="primary" :loading="isSaving" @click="handleAddPayment">Submit</UButton>
+            <UButton color="primary" :loading="isSaving" @click="handleAddPayment">
+              {{ editingPaymentId ? 'Save' : 'Submit' }}
+            </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
+    <UModal v-model="isDeleteOpen">
+      <UCard>
+        <template #header>
+          <div class="text-base font-semibold">Delete Payment</div>
+        </template>
+
+        <p class="text-sm text-gray-600 dark:text-gray-300">
+          Delete payment {{ paymentToDelete?.paymentNo ? `#${paymentToDelete.paymentNo}` : '' }} for
+          {{ formatCurrency(paymentToDelete?.amount) }}? This action cannot be undone.
+        </p>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton color="gray" variant="ghost" @click="isDeleteOpen = false">Cancel</UButton>
+            <UButton color="red" :loading="isDeleting" @click="deletePayment">Delete</UButton>
           </div>
         </template>
       </UCard>
