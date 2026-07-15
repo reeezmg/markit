@@ -50,6 +50,7 @@ const tabs = [
   { label: 'Transactions', icon: 'i-heroicons-credit-card' },
   { label: 'Purchase Orders', icon: 'i-heroicons-shopping-bag' },
   { label: 'Purchase Returns', icon: 'i-heroicons-arrow-uturn-left' },
+  { label: 'Payments', icon: 'i-heroicons-banknotes' },
 ]
 
 // ─── Mutations ───
@@ -194,6 +195,16 @@ const creditColumns = [
   { key: 'remarks', label: 'Remarks' },
   { key: 'debit', label: 'Debit' },
   { key: 'credit', label: 'Credit' },
+  { key: 'actions', label: '' },
+]
+
+const paymentColumns = [
+  { key: 'paymentNo', label: 'Payment No.' },
+  { key: 'createdAt', label: 'Date' },
+  { key: 'pono', label: 'PO No.' },
+  { key: 'paymentType', label: 'Payment' },
+  { key: 'amount', label: 'Amount' },
+  { key: 'remarks', label: 'Remarks' },
   { key: 'actions', label: '' },
 ]
 
@@ -534,6 +545,9 @@ const downloadDistributorList = () => {
 // ─── Tab data ───
 const selectedPOs = computed(() => selectedDistributor.value?.purchaseOrders ?? [])
 const selectedTransactions = computed(() => selectedDistributor.value?.transactions ?? [])
+const selectedPayments = computed(() =>
+  selectedTransactions.value.filter((row: any) => row.type === 'PAYMENT')
+)
 
 // ─── Shared date range helpers ───
 const ranges = [
@@ -578,6 +592,23 @@ const creditSelectedDate = useLocalStorage(
 )
 const creditPage = useLocalStorage('dist:credit:page', 1)
 const creditPageCount = useLocalStorage('dist:credit:pageCount', 5)
+
+// Payments Tab filters & pagination
+const paymentSelectedDate = useLocalStorage(
+  'dist:payment:date',
+  { start: sub(new Date(), { days: 7 }), end: new Date() },
+  { serializer: dateSerializer }
+)
+const paymentTypeFilter = useLocalStorage('dist:payment:type', '')
+const paymentPage = useLocalStorage('dist:payment:page', 1)
+const paymentPageCount = useLocalStorage('dist:payment:pageCount', 5)
+
+function isPaymentRangeSelected(duration: Duration) {
+  return isSameDay(paymentSelectedDate.value.start, sub(new Date(), duration)) && isSameDay(paymentSelectedDate.value.end, new Date())
+}
+function selectPaymentRange(duration: Duration) {
+  paymentSelectedDate.value = { start: sub(new Date(), duration), end: new Date() }
+}
 
 function isCreditRangeSelected(duration: Duration) {
   return isSameDay(creditSelectedDate.value.start, sub(new Date(), duration)) && isSameDay(creditSelectedDate.value.end, new Date())
@@ -658,6 +689,19 @@ const paginatedTransactions = computed(() =>
   filteredTransactions.value.slice((creditPage.value - 1) * creditPageCount.value, creditPage.value * creditPageCount.value)
 )
 
+const filteredPayments = computed(() => {
+  const from = startOfDay(paymentSelectedDate.value.start)
+  const to = endOfDay(paymentSelectedDate.value.end)
+  return selectedPayments.value.filter((row: any) => {
+    const date = new Date(row.createdAt)
+    return date >= from && date <= to && (!paymentTypeFilter.value || row.paymentType === paymentTypeFilter.value)
+  })
+})
+
+const paginatedPayments = computed(() =>
+  filteredPayments.value.slice((paymentPage.value - 1) * paymentPageCount.value, paymentPage.value * paymentPageCount.value)
+)
+
 const selectedReturns = computed(() => selectedDistributor.value?.purchaseReturns ?? [])
 
 const filteredReturns = computed(() => {
@@ -686,6 +730,7 @@ watch(selectedDistributor, () => {
   poPage.value = 1
   creditPage.value = 1
   returnPage.value = 1
+  paymentPage.value = 1
   poSearch.value = ''
   resetPoFilters()
   resetCreditFilters()
@@ -694,6 +739,7 @@ watch(selectedDistributor, () => {
 watch([poSearch, poSelectedDate, poPaymentTypeFilter, poDueOnly], () => { poPage.value = 1 }, { deep: true })
 watch([creditSelectedDate, creditTypeFilter], () => { creditPage.value = 1 }, { deep: true })
 watch([returnSelectedDate], () => { returnPage.value = 1 }, { deep: true })
+watch([paymentSelectedDate, paymentTypeFilter], () => { paymentPage.value = 1 }, { deep: true })
 
 // ─── Action handlers ───
 const confirmDeleteDistributor = (row: any) => {
@@ -1808,6 +1854,124 @@ const transactionAction = (row: any) => {
                           v-model="returnPage"
                           :page-count="returnPageCount"
                           :total="filteredReturns.length"
+                          size="xs"
+                          :ui="{
+                            wrapper: 'flex items-center gap-1',
+                            rounded: '!rounded-full min-w-[28px] justify-center',
+                          }"
+                        />
+                      </div>
+                    </template>
+                  </UCard>
+                </template>
+
+                <!-- Payments -->
+                <template v-if="index === 3">
+                  <UCard
+                    class="w-full"
+                    :ui="{
+                      base: '',
+                      ring: 'ring-1 ring-primary-200 dark:ring-primary-800',
+                      divide: 'divide-y divide-primary-100 dark:divide-primary-900/40',
+                      header: { padding: 'px-4 py-3' },
+                      body: { padding: '' },
+                      footer: { padding: 'px-4 py-3' },
+                    }"
+                  >
+                    <template #header>
+                      <div class="flex items-center justify-between flex-wrap gap-2">
+                        <div class="flex items-center gap-2">
+                          <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+                            <UButton icon="i-heroicons-calendar-days-20-solid" size="xs" color="gray" variant="outline" truncate class="max-w-[200px]">
+                              {{ format(paymentSelectedDate.start, 'd MMM yy') }} – {{ format(paymentSelectedDate.end, 'd MMM yy') }}
+                            </UButton>
+                            <template #panel="{ close }">
+                              <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
+                                <div class="hidden sm:flex flex-col py-4">
+                                  <UButton
+                                    v-for="(range, i) in ranges"
+                                    :key="i"
+                                    :label="range.label"
+                                    color="gray"
+                                    variant="ghost"
+                                    class="rounded-none px-6"
+                                    :class="isPaymentRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'"
+                                    truncate
+                                    @click="selectPaymentRange(range.duration)"
+                                  />
+                                </div>
+                                <DatePicker v-model="paymentSelectedDate" @close="close" />
+                              </div>
+                            </template>
+                          </UPopover>
+
+                          <USelect
+                            v-model="paymentTypeFilter"
+                            :options="[
+                              { label: 'All', value: '' },
+                              { label: 'Cash', value: 'CASH' },
+                              { label: 'Bank', value: 'BANK' },
+                              { label: 'UPI', value: 'UPI' },
+                              { label: 'Card', value: 'CARD' },
+                              { label: 'Cheque', value: 'CHEQUE' },
+                            ]"
+                            option-attribute="label"
+                            value-attribute="value"
+                            size="xs"
+                            class="w-28"
+                          />
+                        </div>
+
+                        <UButton
+                          icon="i-heroicons-plus"
+                          size="xs"
+                          color="primary"
+                          label="New Payment"
+                          @click="openPayModal(null)"
+                        />
+                      </div>
+                    </template>
+
+                    <div class="flex items-center gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                      <span class="text-xs text-gray-500">Rows:</span>
+                      <USelect v-model="paymentPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
+                    </div>
+
+                    <UTable :rows="paginatedPayments" :columns="paymentColumns" class="w-full">
+                      <template #paymentNo-data="{ row }">
+                        <span class="font-mono text-xs">{{ row.paymentNo ?? '-' }}</span>
+                      </template>
+                      <template #createdAt-data="{ row }">
+                        {{ new Date(row.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) }}
+                      </template>
+                      <template #pono-data="{ row }">
+                        <span class="font-mono text-xs">{{ row.pono ?? '-' }}</span>
+                      </template>
+                      <template #paymentType-data="{ row }">
+                        <UBadge color="green" variant="subtle" size="xs">{{ row.paymentType || '-' }}</UBadge>
+                      </template>
+                      <template #amount-data="{ row }">
+                        <span class="font-semibold">{{ formatCurrency(row.amount) }}</span>
+                      </template>
+                      <template #remarks-data="{ row }">
+                        <span class="text-xs text-gray-500">{{ row.remarks || '-' }}</span>
+                      </template>
+                      <template #actions-data="{ row }">
+                        <UDropdown :items="transactionAction(row)">
+                          <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
+                        </UDropdown>
+                      </template>
+                    </UTable>
+
+                    <template #footer>
+                      <div class="flex flex-wrap justify-between items-center gap-2">
+                        <span class="text-xs text-gray-500">
+                          {{ filteredPayments.length ? (paymentPage - 1) * paymentPageCount + 1 : 0 }}–{{ Math.min(paymentPage * paymentPageCount, filteredPayments.length) }} of {{ filteredPayments.length }}
+                        </span>
+                        <UPagination
+                          v-model="paymentPage"
+                          :page-count="paymentPageCount"
+                          :total="filteredPayments.length"
                           size="xs"
                           :ui="{
                             wrapper: 'flex items-center gap-1',
