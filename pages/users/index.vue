@@ -1029,7 +1029,7 @@ const handleSubmit = async (e: Event) => {
                                 <span
                                     v-if="dues[row.userId]"
                                     class="text-xs font-medium"
-                                    :class="(dues[row.userId].due) > 0.009 ? 'text-amber-600' : (dues[row.userId].due) < -0.009 ? 'text-red-500' : 'text-green-600'"
+                                    :class="(dues[row.userId].due) > 0.009 ? 'text-amber-600' : (dues[row.userId].due) < -0.009 ? 'text-green-600' : 'text-gray-500'"
                                     :title="`Opening ${dues[row.userId].openingBalance} + accrued ${dues[row.userId].accrued} - paid ${dues[row.userId].paid} - credit bills ${dues[row.userId].creditBills || 0}`"
                                 >
                                     {{ money(dues[row.userId].due) }}

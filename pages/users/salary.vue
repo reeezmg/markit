@@ -659,7 +659,7 @@ const cycleActions = (row: any) => [
 ]
 
 const cycleStatusColor = (s: string) => (s === 'PAID' ? 'green' : s === 'CALCULATED' ? 'blue' : 'gray')
-const dueColor = (due: number) => (due > 0.009 ? 'amber' : due < -0.009 ? 'red' : 'green')
+const dueColor = (due: number) => (due > 0.009 ? 'amber' : due < -0.009 ? 'green' : 'gray')
 </script>
 
 <template>

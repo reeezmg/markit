@@ -275,7 +275,7 @@ const billAction = (row: any) => [
           <span class="text-green-600">{{ money(row.totalPayment) }}</span>
         </template>
         <template #due-data="{ row }">
-          <span :class="row.due > 0 ? 'font-semibold text-orange-600' : 'text-gray-500'">{{ money(row.due) }}</span>
+          <span :class="row.due > 0 ? 'font-semibold text-orange-600' : row.due < 0 ? 'font-semibold text-green-600' : 'text-gray-500'">{{ money(row.due) }}</span>
         </template>
         <template #expand="{ row: userRow }">
           <UTable :rows="userRow.transactions" :columns="txnColumns">

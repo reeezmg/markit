@@ -405,6 +405,7 @@ model PurchaseOrder {
     discount       Float?         @default(0)
     adjustment     Float?         @default(0)
     tax           Float?         @default(0)
+    dueCleared    Boolean        @default(false) @map("due_cleared")
     @@allow('read, create, update,delete', true)
     @@map("purchase_orders")
 }

@@ -11,7 +11,7 @@ type Row = {
   no: string | null
   debit: number
   credit: number
-  balance?: number
+  due?: number
   remarks: string | null
 }
 
@@ -160,10 +160,10 @@ export default defineEventHandler(async (event) => {
     const totalDebit  = rows.reduce((s, r) => s + r.debit,  0)
     const totalCredit = rows.reduce((s, r) => s + r.credit, 0)
     const closingBalance = openingBalance + totalCredit - totalDebit
-    let runningBalance = openingBalance
+    let runningDue = openingBalance
     rows = rows.map(row => ({
       ...row,
-      balance: runningBalance += row.credit - row.debit,
+      due: runningDue += row.credit - row.debit,
     }))
 
     /* ── PDF ── */
@@ -249,7 +249,7 @@ export default defineEventHandler(async (event) => {
     /* main table */
     autoTable(doc, {
       startY: y,
-      head: [['Date', 'No', 'Type', 'Remarks', 'Debit (Rs)', 'Credit (Rs)', 'Balance (Rs)']],
+      head: [['Date', 'No', 'Type', 'Remarks', 'Debit (Rs)', 'Credit (Rs)', 'Due (Rs)']],
       body: rows.length
         ? rows.map(r => [
             new Date(r.created_at).toLocaleDateString('en-GB'),
@@ -258,7 +258,7 @@ export default defineEventHandler(async (event) => {
             r.remarks ?? '-',
             r.debit > 0 ? r.debit.toFixed(2) : '-',
             r.credit > 0 ? r.credit.toFixed(2) : '-',
-            Number(r.balance || 0).toFixed(2),
+            Number(r.due || 0).toFixed(2),
           ])
         : [['No data', '', '', '', '', '', '']],
       theme: 'grid',

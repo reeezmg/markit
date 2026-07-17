@@ -198,7 +198,7 @@ const creditColumns = [
   { key: 'remarks', label: 'Remarks' },
   { key: 'debit', label: 'Debit' },
   { key: 'credit', label: 'Credit' },
-  { key: 'balance', label: 'Balance' },
+  { key: 'due', label: 'Due' },
   { key: 'actions', label: '' },
 ]
 
@@ -274,6 +274,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
         discount: true,
         tax: true,
         adjustment: true,
+        dueCleared: true,
         distributorPayment: {
           select: { id: true, amount: true, paymentType: true, billNo: true, createdAt: true, remarks: true },
           orderBy: { createdAt: 'desc' },
@@ -328,6 +329,7 @@ const getPOQty = (po: any) =>
 
 const getDue = (po: any) => {
   if (po.paymentType !== 'CREDIT') return null
+  if (po.dueCleared) return 0
   const paid = po.distributorPayment?.reduce((s: number, p: any) => s + (p.amount ?? 0), 0) ?? 0
   return po.totalAmount - paid
 }
@@ -419,14 +421,13 @@ const distributors = computed(() =>
         class: 'bg-red-50 dark:bg-red-900/20',
       }
     })
-    let runningBalance = Number(d.openingDue || 0)
+    let runningDue = Number(d.openingDue || 0)
     const transactions = [...credits, ...payments]
       .sort((a: any, b: any) => a.createdAt.getTime() - b.createdAt.getTime())
       .map((transaction: any) => {
-        runningBalance += Number(transaction.credit || 0) - Number(transaction.debit || 0)
-        return { ...transaction, balance: runningBalance }
+        runningDue += Number(transaction.credit || 0) - Number(transaction.debit || 0)
+        return { ...transaction, due: runningDue }
       })
-      .reverse()
 
     const totalAmount = rawCredits.reduce((s: number, c: any) => s + (c.amount || 0), 0)
     const paidAmount = rawPayments.reduce((s: number, p: any) => s + (p.amount || 0), 0)
@@ -1382,12 +1383,12 @@ const transactionAction = (row: any) => {
                 <span class="text-orange-600">₹{{ (row.returnAmount || 0).toFixed(2) }}</span>
               </template>
               <template #openingDue-data="{ row }">
-                <span :class="(row.openingDue ?? 0) !== 0 ? 'text-purple-600' : ''">
+                <span :class="(row.openingDue ?? 0) < 0 ? 'text-green-600' : (row.openingDue ?? 0) > 0 ? 'text-purple-600' : ''">
                   ₹{{ (row.openingDue ?? 0).toFixed(2) }}
                 </span>
               </template>
               <template #totalDue-data="{ row }">
-                <span :class="(row.totalDue || 0) > 0 ? 'font-semibold text-red-600' : ''">
+                <span :class="(row.totalDue || 0) > 0 ? 'font-semibold text-red-600' : (row.totalDue || 0) < 0 ? 'font-semibold text-green-600' : ''">
                   ₹{{ (row.totalDue || 0).toFixed(2) }}
                 </span>
               </template>
@@ -1425,7 +1426,7 @@ const transactionAction = (row: any) => {
                     >
                       {{ row.distributor?.name }}
                     </p>
-                    <p class="mt-0.5 truncate text-xs text-gray-500">
+                    <p class="mt-0.5 truncate text-xs" :class="(row.totalDue || 0) < 0 ? 'text-green-600' : 'text-gray-500'">
                       Due: ₹{{ (row.totalDue || 0).toFixed(2) }}
                     </p>
                   </div>
@@ -1612,7 +1613,7 @@ const transactionAction = (row: any) => {
                         ₹{{ (row.totalAmount || 0).toFixed(2) }}
                       </template>
                       <template #due-data="{ row }">
-                        <span v-if="row.due !== null" class="font-semibold text-red-600">₹{{ row.due.toFixed(2) }}</span>
+                        <span v-if="row.due !== null" class="font-semibold" :class="row.due < 0 ? 'text-green-600' : row.due > 0 ? 'text-red-600' : 'text-gray-600'">₹{{ row.due.toFixed(2) }}</span>
                         <span v-else>-</span>
                       </template>
                       <template #actions-data="{ row }">
@@ -1804,10 +1805,9 @@ const transactionAction = (row: any) => {
                         <span v-if="row.credit > 0" class="font-semibold text-green-600">₹{{ row.credit.toFixed(2) }}</span>
                         <span v-else class="text-xs text-gray-400">-</span>
                       </template>
-                      <template #balance-data="{ row }">
-                        <span class="font-semibold" :class="row.balance > 0 ? 'text-red-600' : row.balance < 0 ? 'text-green-600' : 'text-gray-600'">
-                          ₹{{ Math.abs(Number(row.balance || 0)).toFixed(2) }}
-                          <span v-if="row.balance !== 0" class="text-[10px]">{{ row.balance > 0 ? 'Dr' : 'Cr' }}</span>
+                      <template #due-data="{ row }">
+                        <span class="font-semibold" :class="row.due > 0 ? 'text-red-600' : row.due < 0 ? 'text-green-600' : 'text-gray-600'">
+                          {{ formatCurrency(row.due) }}
                         </span>
                       </template>
                       <template #actions-data="{ row }">

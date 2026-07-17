@@ -352,7 +352,9 @@ const selectedDistributor = computed(() => {
                     </template>
 
                     <template #totalDue-data="{ row }">
-                    {{ row.totalAmount - row.paidAmount }}
+                    <span :class="(row.totalAmount - row.paidAmount) < 0 ? 'text-green-600' : ''">
+                      {{ row.totalAmount - row.paidAmount }}
+                    </span>
                     </template>
 
                   <template #expand="{row}">

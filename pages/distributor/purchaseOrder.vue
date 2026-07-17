@@ -276,6 +276,7 @@ const queryArgs = computed(() => ({
     discount: true,
     tax: true,
     adjustment: true,
+    dueCleared: true,
 
     distributorCompany: {
       select: {
@@ -391,6 +392,7 @@ const getPurchaseOrderQty = (po: any) =>
 
 const getDueAmount = (po: any) => {
   if (po?.paymentType !== 'CREDIT') return null
+  if (po?.dueCleared) return 0
 
   const paid =
     asArray(po?.distributorPayment).reduce(
@@ -462,7 +464,9 @@ const detailsGrandTotal = computed(() =>
     + detailsTaxAmount.value
     + Number(selectedDetailsRow.value?.adjustment || 0)
 )
-const detailsDue = computed(() => Math.max(0, detailsGrandTotal.value - getPaidAmount(selectedDetailsRow.value)))
+const detailsDue = computed(() => selectedDetailsRow.value?.dueCleared
+  ? 0
+  : Math.max(0, detailsGrandTotal.value - getPaidAmount(selectedDetailsRow.value)))
 
 // -------------------------------------
 // FINAL ROWS
@@ -547,6 +551,22 @@ const openPayModal = (row: any) => {
   selectedRow.value = row
   resetForm()
   isOpenPay.value = true
+}
+
+const setDueCleared = async (row: any, dueCleared: boolean) => {
+  const actionLabel = dueCleared ? 'clear' : 'restore'
+  if (!window.confirm(`Are you sure you want to ${actionLabel} the due for PO-${row.purchaseOrderNo ?? ''}?`)) return
+
+  try {
+    await $fetch('/api/purchaseorder/due-cleared', {
+      method: 'PATCH',
+      body: { poId: row.id, dueCleared },
+    })
+    showToast(dueCleared ? 'Due cleared' : 'Due restored', 'green')
+    await refetch()
+  } catch (error: any) {
+    showToast('Unable to update due', 'red', error?.data?.statusMessage || error?.message || '')
+  }
 }
 
 const openDetailsModal = (row: any) => {
@@ -690,13 +710,26 @@ const action = (row: any) => {
   ]
 
   if (row.paymentType === 'CREDIT') {
-    items.push([
-      {
+    const dueActions: any[] = []
+    if (!row.dueCleared && row.due > 0) {
+      dueActions.push({
         label: 'Pay',
         icon: 'i-heroicons-banknotes-20-solid',
         click: () => openPayModal(row),
-      },
-    ])
+      })
+      dueActions.push({
+        label: 'Clear Due',
+        icon: 'i-heroicons-check-circle-20-solid',
+        click: () => setDueCleared(row, true),
+      })
+    } else if (row.dueCleared) {
+      dueActions.push({
+        label: 'Restore Due',
+        icon: 'i-heroicons-arrow-path-20-solid',
+        click: () => setDueCleared(row, false),
+      })
+    }
+    if (dueActions.length) items.push(dueActions)
   }
 
   items.push([
@@ -864,7 +897,8 @@ const action = (row: any) => {
         <template #due-data="{ row }">
           <span
             v-if="row.due !== null"
-            class="font-semibold text-red-600"
+            class="font-semibold"
+            :class="row.due < 0 ? 'text-green-600' : row.due > 0 ? 'text-red-600' : 'text-gray-600'"
           >
             ₹{{ row.due.toFixed(2) }}
           </span>

@@ -744,7 +744,7 @@ const chartOptions = computed(() => {
                 </div>
                 <UTable :rows="distributorRows.owe" :columns="[{ key: 'name', label: 'Distributor' }, { key: 'due', label: 'Due' }]">
                   <template #due-data="{ row }">
-                    {{ formatCurrency(row.due) }}
+                    <span :class="row.due < 0 ? 'text-green-600' : ''">{{ formatCurrency(row.due) }}</span>
                   </template>
                 </UTable>
               </div>
@@ -756,7 +756,7 @@ const chartOptions = computed(() => {
                 </div>
                 <UTable :rows="distributorRows.receive" :columns="[{ key: 'name', label: 'Distributor' }, { key: 'due', label: 'Due' }]">
                   <template #due-data="{ row }">
-                    {{ formatCurrency(row.due) }}
+                    <span :class="row.due < 0 ? 'text-green-600' : ''">{{ formatCurrency(row.due) }}</span>
                   </template>
                 </UTable>
               </div>

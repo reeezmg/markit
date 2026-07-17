@@ -10,7 +10,7 @@ type Row = {
   no: string | null
   debit: number
   credit: number
-  balance?: number
+  due?: number
   remarks: string | null
 }
 
@@ -135,10 +135,10 @@ export default defineEventHandler(async (event) => {
     const totalDebit  = rows.reduce((s, r) => s + r.debit,  0)
     const totalCredit = rows.reduce((s, r) => s + r.credit, 0)
     const closingBalance = openingBalance + totalCredit - totalDebit
-    let runningBalance = openingBalance
+    let runningDue = openingBalance
     rows = rows.map(row => ({
       ...row,
-      balance: runningBalance += row.credit - row.debit,
+      due: runningDue += row.credit - row.debit,
     }))
 
     /* ── EXCEL ── */
@@ -161,7 +161,7 @@ export default defineEventHandler(async (event) => {
     sheet.addRow([])
 
     /* header */
-    const headerRow = sheet.addRow(['Date', 'No', 'Type', 'Remarks', 'Debit (Rs)', 'Credit (Rs)', 'Balance (Rs)'])
+    const headerRow = sheet.addRow(['Date', 'No', 'Type', 'Remarks', 'Debit (Rs)', 'Credit (Rs)', 'Due (Rs)'])
     headerRow.font = { bold: true }
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDAE3F3' } }
     headerRow.eachCell(cell => { cell.border = { bottom: { style: 'thin' } } })
@@ -175,7 +175,7 @@ export default defineEventHandler(async (event) => {
         r.remarks ?? '-',
         r.debit > 0 ? r.debit.toFixed(2) : '',
         r.credit > 0 ? r.credit.toFixed(2) : '',
-        Number(r.balance || 0).toFixed(2),
+        Number(r.due || 0).toFixed(2),
       ])
       // row background: green for credit rows, red for debit rows
       if (r.credit > 0) {
