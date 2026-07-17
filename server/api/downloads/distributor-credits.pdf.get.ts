@@ -280,6 +280,8 @@ export default defineEventHandler(async (event) => {
         // color amount text
         if (data.column.index === 4 && r.debit > 0)  data.cell.styles.textColor = [192, 57, 43]
         if (data.column.index === 5 && r.credit > 0) data.cell.styles.textColor = [39, 174, 96]
+        if (data.column.index === 6 && Number(r.due || 0) < 0) data.cell.styles.textColor = [39, 174, 96]
+        if (data.column.index === 6 && Number(r.due || 0) > 0) data.cell.styles.textColor = [192, 57, 43]
       },
       columnStyles: {
         0: { cellWidth: 19 },
@@ -308,6 +310,11 @@ export default defineEventHandler(async (event) => {
       headStyles: { fillColor: [41, 128, 185], textColor: 255, fontStyle: 'bold' },
       bodyStyles: { fontStyle: 'bold', halign: 'center' },
       styles: { fontSize: 9 },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 3 && closingBalance < 0) {
+          data.cell.styles.textColor = [39, 174, 96]
+        }
+      },
     })
 
     const pdf = Buffer.from(doc.output('arraybuffer'))
