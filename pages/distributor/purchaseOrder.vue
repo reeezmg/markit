@@ -131,11 +131,28 @@ const columns = [
 // -------------------------------------
 // FILTERS & PAGINATION
 // -------------------------------------
-const search = ref('')
-const sort = ref({ column: 'purchaseOrderNo', direction: 'desc' as const })
+const dateSerializer = {
+  read: (value: string) => {
+    const parsed = JSON.parse(value)
+    return { start: new Date(parsed.start), end: new Date(parsed.end) }
+  },
+  write: (value: { start: Date; end: Date }) => JSON.stringify({
+    start: value.start.toISOString(),
+    end: value.end.toISOString(),
+  }),
+}
+
+const search = useLocalStorage('dist:purchase-orders-page:search', '')
+const sort = useLocalStorage('dist:purchase-orders-page:sort', { column: 'purchaseOrderNo', direction: 'desc' as const })
 const expand = ref({ openedRows: [], row: null })
-const page = ref(1)
-const pageCount = ref(10)
+const page = useLocalStorage('dist:purchase-orders-page:page', 1)
+const pageCount = useLocalStorage('dist:purchase-orders-page:pageCount', 10)
+const normalizedPageCount = computed(() => Number(pageCount.value) || 10)
+
+const changePageCount = (value: number | string) => {
+  page.value = 1
+  pageCount.value = Number(value) || 10
+}
 
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
@@ -146,10 +163,11 @@ const ranges = [
   { label: 'Last year', duration: { years: 1 } },
 ]
 
-const selectedDate = ref({
-  start: sub(new Date(), { days: 7 }),
-  end: new Date(),
-})
+const selectedDate = useLocalStorage(
+  'dist:purchase-orders-page:date',
+  { start: sub(new Date(), { days: 7 }), end: new Date() },
+  { serializer: dateSerializer },
+)
 
 function isRangeSelected(duration: Duration) {
   return isSameDay(selectedDate.value.start, sub(new Date(), duration)) && isSameDay(selectedDate.value.end, new Date())
@@ -159,9 +177,9 @@ function selectRange(duration: Duration) {
   selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
 }
 
-const paymentTypeFilter = ref('')
-const minTotalFilter = ref<number | null>(null)
-const maxTotalFilter = ref<number | null>(null)
+const paymentTypeFilter = useLocalStorage('dist:purchase-orders-page:paymentType', '')
+const minTotalFilter = useLocalStorage('dist:purchase-orders-page:minTotal', null as number | null)
+const maxTotalFilter = useLocalStorage('dist:purchase-orders-page:maxTotal', null as number | null)
 
 const isFilterModalOpen = ref(false)
 const draftPaymentTypeFilter = ref('')
@@ -321,8 +339,8 @@ const queryArgs = computed(() => ({
   orderBy: {
     [sort.value.column]: sort.value.direction,
   },
-  skip: (page.value - 1) * pageCount.value,
-  take: pageCount.value,
+  skip: (page.value - 1) * normalizedPageCount.value,
+  take: normalizedPageCount.value,
 }))
 
 // -------------------------------------
@@ -338,7 +356,17 @@ const countArgs = computed(() => ({
   where: queryArgs.value.where,
 }))
 
-const { data: pageTotal } = useCountPurchaseOrder(countArgs)
+const { data: pageTotal, refetch: refetchCount } = useCountPurchaseOrder(countArgs)
+
+onMounted(() => {
+  refetch()
+  refetchCount()
+})
+
+onActivated(() => {
+  refetch()
+  refetchCount()
+})
 
 // -------------------------------------
 // CALCULATIONS
@@ -419,6 +447,22 @@ const detailsQty = computed(() =>
 const detailsItemsTotal = computed(() =>
   detailsLines.value.reduce((sum: number, line: any) => sum + Number(line.amount || 0), 0)
 )
+
+const detailsDiscountAmount = computed(() => {
+  const discount = Number(selectedDetailsRow.value?.discount || 0)
+  return discount > 0
+    ? detailsItemsTotal.value * discount / 100
+    : Math.min(Math.abs(discount), detailsItemsTotal.value)
+})
+const detailsTaxAmount = computed(() =>
+  (detailsItemsTotal.value - detailsDiscountAmount.value) * Number(selectedDetailsRow.value?.tax || 0) / 100
+)
+const detailsGrandTotal = computed(() =>
+  detailsItemsTotal.value - detailsDiscountAmount.value
+    + detailsTaxAmount.value
+    + Number(selectedDetailsRow.value?.adjustment || 0)
+)
+const detailsDue = computed(() => Math.max(0, detailsGrandTotal.value - getPaidAmount(selectedDetailsRow.value)))
 
 // -------------------------------------
 // FINAL ROWS
@@ -733,10 +777,11 @@ const action = (row: any) => {
         <div class="flex items-center gap-1.5">
           <span class="text-sm hidden sm:block">Rows per page:</span>
           <USelect
-            v-model="pageCount"
+            :model-value="pageCount"
             :options="[5, 10, 20, 30]"
             class="me-2 w-20"
             size="xs"
+            @update:model-value="changePageCount"
           />
         </div>
 
@@ -901,10 +946,10 @@ const action = (row: any) => {
         <div class="flex flex-wrap justify-between items-center">
           <span class="text-sm hidden sm:block">
             Showing
-            <span class="font-medium">{{ (page - 1) * pageCount + 1 }}</span>
+            <span class="font-medium">{{ pageTotal ? (page - 1) * normalizedPageCount + 1 : 0 }}</span>
             to
             <span class="font-medium">
-              {{ Math.min(page * pageCount, pageTotal) }}
+              {{ Math.min(page * normalizedPageCount, pageTotal) }}
             </span>
             of
             <span class="font-medium">{{ pageTotal }}</span>
@@ -913,7 +958,7 @@ const action = (row: any) => {
 
           <UPagination
             v-model="page"
-            :page-count="pageCount"
+            :page-count="normalizedPageCount"
             :total="pageTotal"
             :ui="{
               wrapper: 'flex items-center gap-1',
@@ -1096,15 +1141,15 @@ const action = (row: any) => {
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Subtotal</span>
-                <span>{{ formatCurrency(selectedDetailsRow.subTotalAmount || detailsItemsTotal) }}</span>
+                <span>{{ formatCurrency(detailsItemsTotal) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Discount</span>
-                <span>{{ formatCurrency(selectedDetailsRow.discount) }}</span>
+                <span>{{ formatCurrency(detailsDiscountAmount) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Tax</span>
-                <span>{{ formatCurrency(selectedDetailsRow.tax) }}</span>
+                <span>{{ formatCurrency(detailsTaxAmount) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Adjustment</span>
@@ -1112,7 +1157,7 @@ const action = (row: any) => {
               </div>
               <div class="flex justify-between border-t border-gray-200 pt-2 text-base font-semibold dark:border-gray-800">
                 <span>Total</span>
-                <span>{{ formatCurrency(selectedDetailsRow.totalAmount) }}</span>
+                <span>{{ formatCurrency(detailsGrandTotal) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Paid</span>
@@ -1120,7 +1165,7 @@ const action = (row: any) => {
               </div>
               <div class="flex justify-between text-red-600 dark:text-red-400">
                 <span>Due</span>
-                <span>{{ formatCurrency(selectedDetailsRow.due || 0) }}</span>
+                <span>{{ formatCurrency(detailsDue) }}</span>
               </div>
             </div>
           </div>

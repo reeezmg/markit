@@ -18,6 +18,8 @@ export default defineEventHandler(async (event) => {
 
   const search            = (query.search as string || '').trim().toLowerCase()
   const paymentTypeFilter = (query.paymentType as string || '').trim()
+  const distributorId     = (query.distributorId as string || '').trim() || null
+  const excludeReturns    = query.excludeReturns === 'true'
 
   const client = await pool.connect()
   try {
@@ -38,8 +40,10 @@ export default defineEventHandler(async (event) => {
        LEFT JOIN purchase_orders po ON po.id = dp.purchase_order_id
        WHERE dp.company_id = $1
          AND dp.created_at BETWEEN $2 AND $3
+         AND ($4::text IS NULL OR dp.distributor_id = $4)
+         AND (NOT $5::boolean OR dp.payment_type IS DISTINCT FROM 'RETURN')
        ORDER BY dp.created_at DESC`,
-      [companyId, startDate, endDate]
+      [companyId, startDate, endDate, distributorId, excludeReturns]
     )
 
     let rows = paymentsRes.rows.map(r => ({

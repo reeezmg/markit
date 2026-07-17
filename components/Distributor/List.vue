@@ -18,9 +18,9 @@ const DeleteDistributorCompany = useDeleteDistributorCompany()
 const useAuth = () => useNuxtApp().$auth;
 const isSaving = ref(false)
 const router = useRouter();
-const sort = ref({ column: 'distributor.name', direction: 'asc' as const });
-const page = ref(1);
-const pageCount = ref('10');
+const sort = useLocalStorage('dist:credit-page:sort', { column: 'distributor.name', direction: 'asc' as const });
+const page = useLocalStorage('dist:credit-page:page', 1);
+const pageCount = useLocalStorage('dist:credit-page:pageCount', '10');
 const isOpenPay = ref(false)
 const isOpenCredit = ref(false)
 const distributorId = ref<string | null>(null)
@@ -214,7 +214,11 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
 });
 
 
-const { data, isLoading, error } = useFindManyDistributorCompany(queryArgs);
+const { data, isLoading, error, refetch } = useFindManyDistributorCompany(queryArgs);
+
+onMounted(() => {
+  refetch();
+});
 
 const distributors = computed(() => {
   return data.value?.map(distributor => {

@@ -21,7 +21,22 @@ const ranges = [
   { label: 'Last year',     duration: { years: 1 } },
 ]
 
-const selectedDate = ref({ start: new Date(), end: new Date() })
+const dateSerializer = {
+  read: (value: string) => {
+    const parsed = JSON.parse(value)
+    return { start: new Date(parsed.start), end: new Date(parsed.end) }
+  },
+  write: (value: { start: Date; end: Date }) => JSON.stringify({
+    start: value.start.toISOString(),
+    end: value.end.toISOString(),
+  }),
+}
+
+const selectedDate = useLocalStorage(
+  'dist:purchase-returns-page:date',
+  { start: new Date(), end: new Date() },
+  { serializer: dateSerializer },
+)
 
 const isRangeSelected = (d: Duration) =>
   isSameDay(selectedDate.value.start, sub(new Date(), d)) &&
@@ -32,15 +47,15 @@ const selectRange = (d: Duration) => {
 }
 
 // ─── Filters ─────────────────────────────────────────────────────────────────
-const search        = ref('')
-const page          = ref(1)
-const pageCount     = ref('10')
-const sort          = ref({ column: 'returnNo', direction: 'desc' as const })
+const search        = useLocalStorage('dist:purchase-returns-page:search', '')
+const page          = useLocalStorage('dist:purchase-returns-page:page', 1)
+const pageCount     = useLocalStorage('dist:purchase-returns-page:pageCount', '10')
+const sort          = useLocalStorage('dist:purchase-returns-page:sort', { column: 'returnNo', direction: 'desc' as const })
 
 // Filter modal
 const isFilterOpen          = ref(false)
-const minTotal              = ref<number | null>(null)
-const maxTotal              = ref<number | null>(null)
+const minTotal              = useLocalStorage('dist:purchase-returns-page:minTotal', null as number | null)
+const maxTotal              = useLocalStorage('dist:purchase-returns-page:maxTotal', null as number | null)
 const draftMinTotal         = ref<number | null>(null)
 const draftMaxTotal         = ref<number | null>(null)
 
@@ -126,7 +141,11 @@ const queryArgs = computed<Prisma.PurchaseReturnFindManyArgs>(() => ({
   orderBy: { createdAt: 'desc' },
 }))
 
-const { data, isLoading } = useFindManyPurchaseReturn(queryArgs)
+const { data, isLoading, refetch } = useFindManyPurchaseReturn(queryArgs)
+
+onMounted(() => {
+  refetch()
+})
 
 // ─── Filter + paginate client-side ───────────────────────────────────────────
 const filtered = computed(() => {

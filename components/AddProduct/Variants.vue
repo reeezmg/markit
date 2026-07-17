@@ -74,12 +74,32 @@ onMounted(async () => {
 });
 const [name, nameAttrs] = defineField('name');
 const [code, codeAttrs] = defineField('code');
-const [qty, qtyAttrs] = defineField('qty');
+const [qty] = defineField('qty');
 const [sprice, spriceAttrs] = defineField('sprice');
 const [pprice, ppriceAttrs] = defineField('pprice');
 const [dprice, dpriceAttrs] = defineField('dprice');
 const [discount, discountAttrs] = defineField('discount');
 const unit = ref('Nos');
+
+const editableQty = computed({
+  get: () => qty.value,
+  set: (value: number | string | undefined) => {
+    const parsed = value === '' || value === undefined ? 0 : Number(value)
+    const nextQty = Number.isFinite(parsed) ? parsed : 0
+    qty.value = nextQty
+
+    if (
+      items.value.length <= 1
+      && (items.value[0]?.size === null || items.value[0]?.size === undefined)
+    ) {
+      if (!items.value.length) {
+        items.value = [{ id: uuidv4(), size: null, qty: nextQty }]
+      } else {
+        items.value[0].qty = nextQty
+      }
+    }
+  },
+})
 
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 const availableUnits = computed(() => {
@@ -378,8 +398,7 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
         />
         </div>
         <UInput
-          v-model.number="qty"
-          v-bind="qtyAttrs"
+          v-model.number="editableQty"
           type="text"
           inputmode="numeric"
           placeholder="Enter quantity"

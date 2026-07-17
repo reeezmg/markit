@@ -51,10 +51,27 @@ const columns = [
 // -------------------------------------
 // FILTERS & PAGINATION
 // -------------------------------------
-const search = ref('')
-const sort = ref({ column: 'createdAt', direction: 'desc' as const })
-const page = ref(1)
-const pageCount = ref(10)
+const dateSerializer = {
+  read: (value: string) => {
+    const parsed = JSON.parse(value)
+    return { start: new Date(parsed.start), end: new Date(parsed.end) }
+  },
+  write: (value: { start: Date; end: Date }) => JSON.stringify({
+    start: value.start.toISOString(),
+    end: value.end.toISOString(),
+  }),
+}
+
+const search = useLocalStorage('dist:payments-page:search', '')
+const sort = useLocalStorage('dist:payments-page:sort', { column: 'createdAt', direction: 'desc' as const })
+const page = useLocalStorage('dist:payments-page:page', 1)
+const pageCount = useLocalStorage('dist:payments-page:pageCount', 10)
+const normalizedPageCount = computed(() => Number(pageCount.value) || 10)
+
+const changePageCount = (value: number | string) => {
+  page.value = 1
+  pageCount.value = Number(value) || 10
+}
 
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
@@ -65,10 +82,11 @@ const ranges = [
   { label: 'Last year', duration: { years: 1 } },
 ]
 
-const selectedDate = ref({
-  start: sub(new Date(), { days: 7 }),
-  end: new Date(),
-})
+const selectedDate = useLocalStorage(
+  'dist:payments-page:date',
+  { start: sub(new Date(), { days: 7 }), end: new Date() },
+  { serializer: dateSerializer },
+)
 
 function isRangeSelected(duration: Duration) {
   return isSameDay(selectedDate.value.start, sub(new Date(), duration)) && isSameDay(selectedDate.value.end, new Date())
@@ -78,7 +96,7 @@ function selectRange(duration: Duration) {
   selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
 }
 
-const paymentTypeFilter = ref('')
+const paymentTypeFilter = useLocalStorage('dist:payments-page:paymentType', '')
 
 const isFilterModalOpen = ref(false)
 const draftPaymentTypeFilter = ref('')
@@ -157,6 +175,7 @@ const queryArgs = computed(() => ({
     remarks: true,
     billNo: true,
     paymentType: true,
+    distributorId: true,
 
     purchaseOrder: {
       select: {
@@ -178,8 +197,8 @@ const queryArgs = computed(() => ({
   orderBy: {
     [sort.value.column]: sort.value.direction,
   },
-  skip: (page.value - 1) * pageCount.value,
-  take: pageCount.value,
+  skip: (page.value - 1) * normalizedPageCount.value,
+  take: normalizedPageCount.value,
 }))
 
 // -------------------------------------
@@ -195,7 +214,7 @@ const countArgs = computed(() => ({
   where: queryArgs.value.where,
 }))
 
-const { data: pageTotal } = useCountDistributorPayment(countArgs)
+const { data: pageTotal, refetch: refetchCount } = useCountDistributorPayment(countArgs)
 
 // -------------------------------------
 // FINAL ROWS
@@ -269,6 +288,7 @@ const paymentToDelete = ref<any>(null)
 
 const addForm = ref({
   distributorId: '' as string,
+  purchaseOrderId: '' as string,
   amount: null as number | null,
   paymentType: 'CASH',
   remarks: '',
@@ -278,6 +298,7 @@ const addForm = ref({
 const resetAddForm = () => {
   addForm.value = {
     distributorId: '',
+    purchaseOrderId: '',
     amount: null,
     paymentType: 'CASH',
     remarks: '',
@@ -291,11 +312,29 @@ const distributorQueryArgs = computed(() => ({
   select: {
     distributorId: true,
     distributor: { select: { name: true } },
+    purchaseOrders: {
+      select: {
+        id: true,
+        purchaseOrderNo: true,
+        billNo: true,
+        totalAmount: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    },
   },
   orderBy: { distributor: { name: 'asc' } },
 }))
 
-const { data: distributorCompanies } = useFindManyDistributorCompany(distributorQueryArgs)
+const {
+  data: distributorCompanies,
+  refetch: refetchDistributorCompanies,
+} = useFindManyDistributorCompany(distributorQueryArgs)
+
+onMounted(() => {
+  refetch()
+  refetchCount()
+  refetchDistributorCompanies()
+})
 
 const distributorOptions = computed(() =>
   (distributorCompanies.value ?? []).map((dc: any) => ({
@@ -303,6 +342,22 @@ const distributorOptions = computed(() =>
     value: dc.distributorId,
   }))
 )
+
+const purchaseOrderOptions = computed(() => {
+  const distributorCompany = (distributorCompanies.value ?? []).find(
+    (dc: any) => dc.distributorId === addForm.value.distributorId
+  )
+
+  return (distributorCompany?.purchaseOrders ?? []).map((po: any) => ({
+    label: `PO#${po.purchaseOrderNo ?? '-'}${po.billNo ? ` / ${po.billNo}` : ''} — ${formatCurrency(po.totalAmount)}`,
+    value: po.id,
+  }))
+})
+
+const selectDistributor = (distributorId: string) => {
+  addForm.value.distributorId = distributorId
+  addForm.value.purchaseOrderId = ''
+}
 
 const openAddModal = () => {
   resetAddForm()
@@ -315,7 +370,8 @@ const openEditModal = (row: any) => {
   editingPaymentId.value = row.id
   paymentToEdit.value = row
   addForm.value = {
-    distributorId: '',
+    distributorId: row.distributorId,
+    purchaseOrderId: row.purchaseOrderId || '',
     amount: Number(row.amount),
     paymentType: row.paymentType || 'CASH',
     remarks: row.remarks || '',
@@ -379,7 +435,7 @@ const handleAddPayment = async () => {
           paymentType: addForm.value.paymentType,
           remarks: addForm.value.remarks || null,
           billNo: paymentToEdit.value?.billNo || null,
-          purchaseOrderId: paymentToEdit.value?.purchaseOrderId || null,
+          purchaseOrderId: addForm.value.purchaseOrderId || null,
           createdAt: createdAtDate,
         },
       })
@@ -421,6 +477,14 @@ const handleAddPayment = async () => {
             },
           },
         },
+
+        ...(addForm.value.purchaseOrderId
+          ? {
+              purchaseOrder: {
+                connect: { id: addForm.value.purchaseOrderId },
+              },
+            }
+          : {}),
 
         expense: {
           create: expenseData,
@@ -506,10 +570,11 @@ const handleAddPayment = async () => {
         <div class="flex items-center gap-1.5">
           <span class="text-sm hidden sm:block">Rows per page:</span>
           <USelect
-            v-model="pageCount"
+            :model-value="pageCount"
             :options="[5, 10, 20, 30]"
             class="me-2 w-20"
             size="xs"
+            @update:model-value="changePageCount"
           />
         </div>
 
@@ -617,10 +682,10 @@ const handleAddPayment = async () => {
         <div class="flex flex-wrap justify-between items-center">
           <span class="text-sm hidden sm:block">
             Showing
-            <span class="font-medium">{{ pageTotal ? (page - 1) * pageCount + 1 : 0 }}</span>
+            <span class="font-medium">{{ pageTotal ? (page - 1) * normalizedPageCount + 1 : 0 }}</span>
             to
             <span class="font-medium">
-              {{ Math.min(page * pageCount, pageTotal) }}
+              {{ Math.min(page * normalizedPageCount, pageTotal) }}
             </span>
             of
             <span class="font-medium">{{ pageTotal }}</span>
@@ -629,7 +694,7 @@ const handleAddPayment = async () => {
 
           <UPagination
             v-model="page"
-            :page-count="pageCount"
+            :page-count="normalizedPageCount"
             :total="pageTotal"
             :ui="{
               wrapper: 'flex items-center gap-1',
@@ -649,15 +714,30 @@ const handleAddPayment = async () => {
 
         <div class="space-y-4">
           <!-- DISTRIBUTOR -->
-          <UFormGroup v-if="!editingPaymentId" label="Distributor" required>
+          <UFormGroup label="Distributor" required>
             <USelectMenu
-              v-model="addForm.distributorId"
+              :model-value="addForm.distributorId"
               :options="distributorOptions"
               option-attribute="label"
               value-attribute="value"
               placeholder="Select distributor"
               searchable
               searchable-placeholder="Search distributor..."
+              :disabled="!!editingPaymentId"
+              @update:model-value="selectDistributor"
+            />
+          </UFormGroup>
+
+          <UFormGroup label="Purchase Order">
+            <USelectMenu
+              v-model="addForm.purchaseOrderId"
+              :options="purchaseOrderOptions"
+              option-attribute="label"
+              value-attribute="value"
+              :placeholder="addForm.distributorId ? 'Select purchase order (optional)' : 'Select distributor first'"
+              searchable
+              searchable-placeholder="Search purchase order..."
+              :disabled="!addForm.distributorId"
             />
           </UFormGroup>
 

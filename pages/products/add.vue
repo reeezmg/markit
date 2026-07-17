@@ -49,9 +49,10 @@ const effectiveDeliveryType = computed(() =>
   isDistributorPurchaseOrderFlow.value ? 'order' : deliveryType.value || 'trynbuy'
 )
 
-const onDraftProductDeleted = (id: string) => {
+const onDraftProductDeleted = async (id: string) => {
   draft.productIds.value = draft.productIds.value.filter(productId => productId !== id)
   draft.stagedProducts.value = draft.stagedProducts.value.filter((p: any) => p.id !== id)
+  if (isEditingPurchaseOrder.value) await refetchEditPurchaseOrder()
 }
 
 const sameJson = (a: any, b: any) => JSON.stringify(a) === JSON.stringify(b)
@@ -576,11 +577,23 @@ const handleAdd = async (e: Event) => {
       );
     }
 
-    // Stage locally (no DB write). Persisted to localStorage via the draft watcher.
-    draft.stagedProducts.value = [
-      ...draft.stagedProducts.value,
-      buildStagedProduct(productId, productSnapshot, snapshotCategoryTax),
-    ];
+    const stagedProduct = buildStagedProduct(productId, productSnapshot, snapshotCategoryTax)
+
+    if (isEditingPurchaseOrder.value) {
+      // An existing PO already has a database row, so Add Product can commit
+      // immediately and keep its stored totals/payment amount synchronized.
+      await $fetch('/api/products/save-batch', {
+        method: 'POST',
+        body: { products: [stagedProduct], poId: editPurchaseOrderId.value },
+      })
+      await refetchEditPurchaseOrder()
+    } else {
+      // A new PO does not exist yet; retain the normal staged draft flow.
+      draft.stagedProducts.value = [
+        ...draft.stagedProducts.value,
+        stagedProduct,
+      ]
+    }
 
     handleReset();
     isOpenAdd.value = false;
@@ -637,9 +650,39 @@ const handleEdit = async (e: Event) => {
       );
     }
 
-    // Replace the staged product in place — still no DB write.
     const updated = buildStagedProduct(productId, snap, snapshotCategoryTax);
-    draft.stagedProducts.value = draft.stagedProducts.value.map((p: any) => (p.id === productId ? updated : p));
+
+    const isPersistedPurchaseOrderProduct = isEditingPurchaseOrder.value
+      && (editPurchaseOrder.value?.products || []).some((product: any) => product.id === productId)
+
+    if (isPersistedPurchaseOrderProduct) {
+      await $fetch('/api/products/update', {
+        method: 'POST',
+        body: {
+          productId,
+          product: {
+            name: updated.name,
+            brandId: updated.brandId,
+            description: updated.description,
+            status: updated.status,
+            categoryId: updated.categoryId,
+            subcategoryId: updated.subcategoryId,
+            collectionId: updated.collectionId,
+          },
+          variants: updated.variants,
+          categoryTax: snapshotCategoryTax,
+          // Existing images were intentionally not loaded into this edit form.
+          // Preserve them unless the user attached replacement images.
+          updateImages: base64files.length > 0,
+          syncPurchaseOrder: true,
+          updateInitialQty: true,
+        },
+      })
+      await refetchEditPurchaseOrder()
+    } else {
+      // Unsaved products remain local until the purchase order is saved.
+      draft.stagedProducts.value = draft.stagedProducts.value.map((p: any) => (p.id === productId ? updated : p));
+    }
 
     handleReset();
     toast.add({ title: 'Product Edited!', id: 'modal-success' });
@@ -1154,6 +1197,10 @@ const handleSaveEditedPurchaseOrder = async () => {
       })
       draft.stagedProducts.value = []
     }
+    await $fetch('/api/purchaseorder/recalculate', {
+      method: 'POST',
+      body: { poId: editPurchaseOrderId.value },
+    })
     const result = await refetchEditPurchaseOrder()
     generateBarcodes(result.data?.products || editPurchaseOrder.value?.products || [])
     isOpen.value = true

@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { recalculatePurchaseOrderTotals } from '~/server/utils/purchase-order-totals'
 
 // Raw-SQL replacement for the nested useUpdateProduct (upsert + deleteMany) used
 // by the product edit page. One transaction: update product, prune removed
@@ -12,7 +13,10 @@ export default defineEventHandler(async (event) => {
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'No company in session' })
 
   const body = await readBody(event)
-  const { productId, product = {}, variants = [], categoryTax = null, updateImages = false } = body || {}
+  const {
+    productId, product = {}, variants = [], categoryTax = null, updateImages = false,
+    syncPurchaseOrder = false, updateInitialQty = false,
+  } = body || {}
   if (!productId) throw createError({ statusCode: 400, statusMessage: 'Missing productId' })
 
   const TRANSIENT_ERROR_CODES = ['40001', '40P01', '53300', '57P01', '55006', '08006', '08003', 'P1001']
@@ -46,6 +50,12 @@ export default defineEventHandler(async (event) => {
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
+
+      const purchaseOrderRes = await client.query(
+        `SELECT purchaseorder_id FROM products WHERE id = $1 AND company_id = $2`,
+        [productId, companyId],
+      )
+      const purchaseOrderId = purchaseOrderRes.rows[0]?.purchaseorder_id || null
 
       // 1) product row (COALESCE keeps existing when a field isn't supplied — mirrors
       //    the page only connecting brand/category/subcategory when chosen)
@@ -133,18 +143,23 @@ export default defineEventHandler(async (event) => {
         const iVals: any[] = []
         const iRows = allItems.map((it: any, i: number) => {
           const base = i * IC
-          // initial_qty seeded to qty for NEW items; on conflict it is NOT touched,
-          // so an existing item's initial_qty (its original purchase stock) is preserved.
+          // initial_qty is seeded for new items. Existing items only change it
+          // when the caller explicitly identifies this as a purchase-order edit.
           iVals.push(it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, it.variantId)
           const p = Array.from({ length: IC }, (_, k) => `$${base + k + 1}`)
           return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},now(),now())`
         })
+        const updateInitialQtyParam = `$${allItems.length * IC + 1}`
         const itemsRes = await client.query(
           `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, created_at, updated_at)
            VALUES ${iRows.join(',')}
-           ON CONFLICT (id) DO UPDATE SET size = EXCLUDED.size, qty = EXCLUDED.qty, updated_at = now()
+           ON CONFLICT (id) DO UPDATE SET
+             size = EXCLUDED.size,
+             qty = EXCLUDED.qty,
+             initial_qty = CASE WHEN ${updateInitialQtyParam}::boolean THEN EXCLUDED.initial_qty ELSE items.initial_qty END,
+             updated_at = now()
            RETURNING id, barcode, size, qty, variant_id`,
-          iVals,
+          [...iVals, updateInitialQty],
         )
         returnedItems = itemsRes.rows
       }
@@ -164,6 +179,10 @@ export default defineEventHandler(async (event) => {
          WHERE p.id = $1 AND p.company_id = $2`,
         [productId, companyId],
       )
+
+      if (syncPurchaseOrder && purchaseOrderId) {
+        await recalculatePurchaseOrderTotals(client, { companyId, poId: purchaseOrderId })
+      }
 
       await client.query('COMMIT')
       client.release()

@@ -35,15 +35,18 @@ const openForm = (supplier: any = null, dcRow: any = null) => {
 
 // ─── Split panel ───
 const selectedDistributor = ref<any>(null)
-const activeTab = ref(0)
+const selectedDistributorId = useLocalStorage('dist:selectedDistributorId', '')
+const activeTab = useLocalStorage('dist:activeTab', 0)
 
 const selectDistributor = (row: any) => {
   selectedDistributor.value = row
+  selectedDistributorId.value = row.distributorId
   poExpand.value = { openedRows: [], row: null }
 }
 
 const closeDetail = () => {
   selectedDistributor.value = null
+  selectedDistributorId.value = ''
 }
 
 const tabs = [
@@ -307,6 +310,10 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
 
 const { data, isLoading, refetch } = useFindManyDistributorCompany(queryArgs)
 
+onMounted(() => {
+  refetch()
+})
+
 // ─── Helpers ───
 const getPOQty = (po: any) =>
   po.products.reduce(
@@ -485,6 +492,9 @@ watch(distributors, val => {
   if (selectedDistributor.value) {
     const fresh = val?.find(d => d.distributorId === selectedDistributor.value.distributorId)
     if (fresh) selectedDistributor.value = fresh
+  } else if (selectedDistributorId.value) {
+    const saved = val?.find(d => d.distributorId === selectedDistributorId.value)
+    if (saved) selectedDistributor.value = saved
   }
 })
 
@@ -602,6 +612,20 @@ const paymentSelectedDate = useLocalStorage(
 const paymentTypeFilter = useLocalStorage('dist:payment:type', '')
 const paymentPage = useLocalStorage('dist:payment:page', 1)
 const paymentPageCount = useLocalStorage('dist:payment:pageCount', 5)
+const paymentFilterOpen = ref(false)
+const draftPaymentTypeFilter = ref('')
+const hasPaymentFilter = computed(() => !!paymentTypeFilter.value)
+
+const openPaymentFilter = () => {
+  draftPaymentTypeFilter.value = paymentTypeFilter.value
+  paymentFilterOpen.value = true
+}
+
+const applyPaymentFilter = () => {
+  paymentTypeFilter.value = draftPaymentTypeFilter.value
+  paymentPage.value = 1
+  paymentFilterOpen.value = false
+}
 
 function isPaymentRangeSelected(duration: Duration) {
   return isSameDay(paymentSelectedDate.value.start, sub(new Date(), duration)) && isSameDay(paymentSelectedDate.value.end, new Date())
@@ -739,7 +763,7 @@ watch(selectedDistributor, () => {
 watch([poSearch, poSelectedDate, poPaymentTypeFilter, poDueOnly], () => { poPage.value = 1 }, { deep: true })
 watch([creditSelectedDate, creditTypeFilter], () => { creditPage.value = 1 }, { deep: true })
 watch([returnSelectedDate], () => { returnPage.value = 1 }, { deep: true })
-watch([paymentSelectedDate, paymentTypeFilter], () => { paymentPage.value = 1 }, { deep: true })
+watch([paymentSelectedDate, paymentTypeFilter, paymentPageCount], () => { paymentPage.value = 1 }, { deep: true })
 
 // ─── Action handlers ───
 const confirmDeleteDistributor = (row: any) => {
@@ -980,6 +1004,7 @@ const handleAddCredit = async () => {
 // ─── Download ───
 const isDownloadingPo      = ref(false)
 const isDownloadingCredits = ref(false)
+const isDownloadingPayments = ref(false)
 
 async function triggerDownload(url: string, filename: string, blob: Blob) {
   const objectUrl = URL.createObjectURL(blob)
@@ -1040,6 +1065,31 @@ const downloadCredits = async (format: 'excel' | 'pdf') => {
   }
 }
 
+const downloadPayments = async (format: 'excel' | 'pdf') => {
+  isDownloadingPayments.value = true
+  try {
+    const res = await $fetch.raw(`/api/downloads/distributor-payments.${format}`, {
+      method: 'GET',
+      params: {
+        distributorId: selectedDistributor.value.distributorId,
+        startDate: startOfDay(paymentSelectedDate.value.start).toISOString(),
+        endDate: endOfDay(paymentSelectedDate.value.end).toISOString(),
+        paymentType: paymentTypeFilter.value || undefined,
+        excludeReturns: true,
+      },
+    })
+    const mime = format === 'pdf'
+      ? 'application/pdf'
+      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    const ext = format === 'pdf' ? 'pdf' : 'xlsx'
+    await triggerDownload('', `payments-${selectedDistributor.value.distributor?.name ?? 'distributor'}.${ext}`, new Blob([res._data as ArrayBuffer], { type: mime }))
+  } catch (err: any) {
+    toast.add({ title: 'Download failed', color: 'red', description: err.message })
+  } finally {
+    isDownloadingPayments.value = false
+  }
+}
+
 const downloadAllTransactions = async (row: any) => {
   try {
     const res = await $fetch.raw('/api/downloads/distributor-credits.pdf', {
@@ -1082,6 +1132,13 @@ const creditsDownloadItems = [
   ],
 ]
 
+const paymentsDownloadItems = [
+  [
+    { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells', click: () => downloadPayments('excel') },
+    { label: 'PDF', icon: 'i-heroicons-document-text', click: () => downloadPayments('pdf') },
+  ],
+]
+
 // ─── Dropdown menus ───
 const mainAction = (row: any) => [
   [
@@ -1107,6 +1164,22 @@ const detailsQty = computed(() =>
 const detailsItemsTotal = computed(() =>
   detailsLines.value.reduce((sum: number, line: any) => sum + Number(line.amount || 0), 0)
 )
+
+const detailsDiscountAmount = computed(() => {
+  const discount = Number(selectedDetailsRow.value?.discount || 0)
+  return discount > 0
+    ? detailsItemsTotal.value * discount / 100
+    : Math.min(Math.abs(discount), detailsItemsTotal.value)
+})
+const detailsTaxAmount = computed(() =>
+  (detailsItemsTotal.value - detailsDiscountAmount.value) * Number(selectedDetailsRow.value?.tax || 0) / 100
+)
+const detailsGrandTotal = computed(() =>
+  detailsItemsTotal.value - detailsDiscountAmount.value
+    + detailsTaxAmount.value
+    + Number(selectedDetailsRow.value?.adjustment || 0)
+)
+const detailsDue = computed(() => Math.max(0, detailsGrandTotal.value - getPaidAmount(selectedDetailsRow.value)))
 
 const openDetailsModal = (row: any) => {
   selectedDetailsRow.value = row
@@ -1905,21 +1978,6 @@ const transactionAction = (row: any) => {
                             </template>
                           </UPopover>
 
-                          <USelect
-                            v-model="paymentTypeFilter"
-                            :options="[
-                              { label: 'All', value: '' },
-                              { label: 'Cash', value: 'CASH' },
-                              { label: 'Bank', value: 'BANK' },
-                              { label: 'UPI', value: 'UPI' },
-                              { label: 'Card', value: 'CARD' },
-                              { label: 'Cheque', value: 'CHEQUE' },
-                            ]"
-                            option-attribute="label"
-                            value-attribute="value"
-                            size="xs"
-                            class="w-28"
-                          />
                         </div>
 
                         <UButton
@@ -1932,9 +1990,29 @@ const transactionAction = (row: any) => {
                       </div>
                     </template>
 
-                    <div class="flex items-center gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                      <span class="text-xs text-gray-500">Rows:</span>
-                      <USelect v-model="paymentPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
+                    <div class="flex items-center justify-between gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
+                      <div class="flex items-center gap-1.5">
+                        <span class="text-xs text-gray-500">Rows:</span>
+                        <USelect v-model="paymentPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
+                      </div>
+                      <div class="flex items-center gap-1">
+                        <UButton
+                          icon="i-heroicons-funnel"
+                          size="xs"
+                          :color="hasPaymentFilter ? 'primary' : 'gray'"
+                          variant="outline"
+                          @click="openPaymentFilter"
+                        />
+                        <UDropdown :items="paymentsDownloadItems">
+                          <UButton
+                            icon="i-heroicons-arrow-down-tray"
+                            size="xs"
+                            color="gray"
+                            variant="outline"
+                            :loading="isDownloadingPayments"
+                          />
+                        </UDropdown>
+                      </div>
                     </div>
 
                     <UTable :rows="paginatedPayments" :columns="paymentColumns" class="w-full">
@@ -2034,6 +2112,40 @@ const transactionAction = (row: any) => {
             <UButton color="primary" @click="applyMainFilters">
               Apply
             </UButton>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
+
+    <UModal v-model="paymentFilterOpen">
+      <UCard>
+        <template #header>
+          <div class="flex items-center justify-between gap-3">
+            <h3 class="text-base font-semibold">Payment Filters</h3>
+            <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark" @click="paymentFilterOpen = false" />
+          </div>
+        </template>
+
+        <UFormGroup label="Payment Type">
+          <USelect
+            v-model="draftPaymentTypeFilter"
+            :options="[
+              { label: 'All', value: '' },
+              { label: 'Cash', value: 'CASH' },
+              { label: 'Bank', value: 'BANK' },
+              { label: 'UPI', value: 'UPI' },
+              { label: 'Card', value: 'CARD' },
+              { label: 'Cheque', value: 'CHEQUE' },
+            ]"
+            option-attribute="label"
+            value-attribute="value"
+          />
+        </UFormGroup>
+
+        <template #footer>
+          <div class="flex justify-end gap-2">
+            <UButton color="gray" variant="soft" @click="draftPaymentTypeFilter = ''">Clear</UButton>
+            <UButton color="primary" @click="applyPaymentFilter">Apply</UButton>
           </div>
         </template>
       </UCard>
@@ -2286,15 +2398,15 @@ const transactionAction = (row: any) => {
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Subtotal</span>
-                <span>{{ formatCurrency(selectedDetailsRow.subTotalAmount || detailsItemsTotal) }}</span>
+                <span>{{ formatCurrency(detailsItemsTotal) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Discount</span>
-                <span>{{ formatCurrency(selectedDetailsRow.discount) }}</span>
+                <span>{{ formatCurrency(detailsDiscountAmount) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Tax</span>
-                <span>{{ formatCurrency(selectedDetailsRow.tax) }}</span>
+                <span>{{ formatCurrency(detailsTaxAmount) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Adjustment</span>
@@ -2302,7 +2414,7 @@ const transactionAction = (row: any) => {
               </div>
               <div class="flex justify-between border-t border-gray-200 pt-2 text-base font-semibold dark:border-gray-800">
                 <span>Total</span>
-                <span>{{ formatCurrency(selectedDetailsRow.totalAmount) }}</span>
+                <span>{{ formatCurrency(detailsGrandTotal) }}</span>
               </div>
               <div class="flex justify-between">
                 <span class="text-gray-500 dark:text-gray-400">Paid</span>
@@ -2310,7 +2422,7 @@ const transactionAction = (row: any) => {
               </div>
               <div class="flex justify-between text-red-600 dark:text-red-400">
                 <span>Due</span>
-                <span>{{ formatCurrency(selectedDetailsRow.due || 0) }}</span>
+                <span>{{ formatCurrency(detailsDue) }}</span>
               </div>
             </div>
           </div>

@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { recalculatePurchaseOrderTotals } from '~/server/utils/purchase-order-totals'
 
 // Atomic batch save for the deferred add-products flow: the client stages N
 // products locally (variable + localStorage) and calls this once on Save.
@@ -185,6 +186,10 @@ export default defineEventHandler(async (event) => {
             [crypto.randomUUID(), createdAtDate, po.totalAmount || 0, po.paymentType, po.distributorId, companyId, poId],
           )
         }
+      }
+
+      if (poId) {
+        await recalculatePurchaseOrderTotals(client, { companyId, poId })
       }
 
       // 4) read back product names; variant/item rows already came from INSERT ... RETURNING.
