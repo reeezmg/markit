@@ -198,6 +198,7 @@ const creditColumns = [
   { key: 'remarks', label: 'Remarks' },
   { key: 'debit', label: 'Debit' },
   { key: 'credit', label: 'Credit' },
+  { key: 'balance', label: 'Balance' },
   { key: 'actions', label: '' },
 ]
 
@@ -418,9 +419,14 @@ const distributors = computed(() =>
         class: 'bg-red-50 dark:bg-red-900/20',
       }
     })
-    const transactions = [...credits, ...payments].sort(
-      (a: any, b: any) => b.createdAt.getTime() - a.createdAt.getTime()
-    )
+    let runningBalance = Number(d.openingDue || 0)
+    const transactions = [...credits, ...payments]
+      .sort((a: any, b: any) => a.createdAt.getTime() - b.createdAt.getTime())
+      .map((transaction: any) => {
+        runningBalance += Number(transaction.credit || 0) - Number(transaction.debit || 0)
+        return { ...transaction, balance: runningBalance }
+      })
+      .reverse()
 
     const totalAmount = rawCredits.reduce((s: number, c: any) => s + (c.amount || 0), 0)
     const paidAmount = rawPayments.reduce((s: number, p: any) => s + (p.amount || 0), 0)
@@ -1797,6 +1803,12 @@ const transactionAction = (row: any) => {
                       <template #credit-data="{ row }">
                         <span v-if="row.credit > 0" class="font-semibold text-green-600">₹{{ row.credit.toFixed(2) }}</span>
                         <span v-else class="text-xs text-gray-400">-</span>
+                      </template>
+                      <template #balance-data="{ row }">
+                        <span class="font-semibold" :class="row.balance > 0 ? 'text-red-600' : row.balance < 0 ? 'text-green-600' : 'text-gray-600'">
+                          ₹{{ Math.abs(Number(row.balance || 0)).toFixed(2) }}
+                          <span v-if="row.balance !== 0" class="text-[10px]">{{ row.balance > 0 ? 'Dr' : 'Cr' }}</span>
+                        </span>
                       </template>
                       <template #actions-data="{ row }">
                         <UDropdown :items="transactionAction(row)">

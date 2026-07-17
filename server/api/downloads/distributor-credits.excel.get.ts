@@ -10,6 +10,7 @@ type Row = {
   no: string | null
   debit: number
   credit: number
+  balance?: number
   remarks: string | null
 }
 
@@ -134,6 +135,11 @@ export default defineEventHandler(async (event) => {
     const totalDebit  = rows.reduce((s, r) => s + r.debit,  0)
     const totalCredit = rows.reduce((s, r) => s + r.credit, 0)
     const closingBalance = openingBalance + totalCredit - totalDebit
+    let runningBalance = openingBalance
+    rows = rows.map(row => ({
+      ...row,
+      balance: runningBalance += row.credit - row.debit,
+    }))
 
     /* ── EXCEL ── */
     const workbook = new ExcelJS.Workbook()
@@ -145,17 +151,17 @@ export default defineEventHandler(async (event) => {
     /* title */
     const titleRow = sheet.addRow([`Transactions — ${distName}`])
     titleRow.font = { bold: true, size: 14 }
-    sheet.mergeCells('A1:F1')
+    sheet.mergeCells('A1:G1')
 
     const periodLabel = hasStart || hasEnd
       ? `${startDate.toLocaleDateString('en-GB')} – ${endDate.toLocaleDateString('en-GB')}`
       : 'All time'
     sheet.addRow([periodLabel])
-    sheet.mergeCells('A2:F2')
+    sheet.mergeCells('A2:G2')
     sheet.addRow([])
 
     /* header */
-    const headerRow = sheet.addRow(['Date', 'No', 'Type', 'Remarks', 'Debit (Rs)', 'Credit (Rs)'])
+    const headerRow = sheet.addRow(['Date', 'No', 'Type', 'Remarks', 'Debit (Rs)', 'Credit (Rs)', 'Balance (Rs)'])
     headerRow.font = { bold: true }
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFDAE3F3' } }
     headerRow.eachCell(cell => { cell.border = { bottom: { style: 'thin' } } })
@@ -169,6 +175,7 @@ export default defineEventHandler(async (event) => {
         r.remarks ?? '-',
         r.debit > 0 ? r.debit.toFixed(2) : '',
         r.credit > 0 ? r.credit.toFixed(2) : '',
+        Number(r.balance || 0).toFixed(2),
       ])
       // row background: green for credit rows, red for debit rows
       if (r.credit > 0) {

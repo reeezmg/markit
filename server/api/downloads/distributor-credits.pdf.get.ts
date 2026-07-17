@@ -11,6 +11,7 @@ type Row = {
   no: string | null
   debit: number
   credit: number
+  balance?: number
   remarks: string | null
 }
 
@@ -159,6 +160,11 @@ export default defineEventHandler(async (event) => {
     const totalDebit  = rows.reduce((s, r) => s + r.debit,  0)
     const totalCredit = rows.reduce((s, r) => s + r.credit, 0)
     const closingBalance = openingBalance + totalCredit - totalDebit
+    let runningBalance = openingBalance
+    rows = rows.map(row => ({
+      ...row,
+      balance: runningBalance += row.credit - row.debit,
+    }))
 
     /* ── PDF ── */
     const doc    = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' })
@@ -243,7 +249,7 @@ export default defineEventHandler(async (event) => {
     /* main table */
     autoTable(doc, {
       startY: y,
-      head: [['Date', 'No', 'Type', 'Remarks', 'Debit (Rs)', 'Credit (Rs)']],
+      head: [['Date', 'No', 'Type', 'Remarks', 'Debit (Rs)', 'Credit (Rs)', 'Balance (Rs)']],
       body: rows.length
         ? rows.map(r => [
             new Date(r.created_at).toLocaleDateString('en-GB'),
@@ -252,8 +258,9 @@ export default defineEventHandler(async (event) => {
             r.remarks ?? '-',
             r.debit > 0 ? r.debit.toFixed(2) : '-',
             r.credit > 0 ? r.credit.toFixed(2) : '-',
+            Number(r.balance || 0).toFixed(2),
           ])
-        : [['No data', '', '', '', '', '']],
+        : [['No data', '', '', '', '', '', '']],
       theme: 'grid',
       headStyles: { fillColor: [52, 73, 94], textColor: 255, fontStyle: 'bold' },
       styles: { fontSize: 8 },
@@ -269,17 +276,19 @@ export default defineEventHandler(async (event) => {
         // column-specific alignment
         if (data.column.index === 4) data.cell.styles.halign = 'right'
         if (data.column.index === 5) data.cell.styles.halign = 'right'
+        if (data.column.index === 6) data.cell.styles.halign = 'right'
         // color amount text
         if (data.column.index === 4 && r.debit > 0)  data.cell.styles.textColor = [192, 57, 43]
         if (data.column.index === 5 && r.credit > 0) data.cell.styles.textColor = [39, 174, 96]
       },
       columnStyles: {
-        0: { cellWidth: 22 },
-        1: { cellWidth: 22 },
-        2: { cellWidth: 28 },
-        3: { cellWidth: 50 },
-        4: { cellWidth: 30, halign: 'right' },
-        5: { cellWidth: 30, halign: 'right' },
+        0: { cellWidth: 19 },
+        1: { cellWidth: 19 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 43 },
+        4: { cellWidth: 24, halign: 'right' },
+        5: { cellWidth: 24, halign: 'right' },
+        6: { cellWidth: 28, halign: 'right' },
       },
     })
 
