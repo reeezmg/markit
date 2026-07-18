@@ -21,6 +21,9 @@ const showUnitColumn = computed(() => {
   const units = useAuth().session.value?.variantInputs?.unit
   return Array.isArray(units) && units.length > 1
 })
+const showCostColumn = computed(() =>
+  useAuth().session.value?.role === 'admin' && useAuth().session.value?.isCostIncluded === true
+)
 const isSavingAcc = ref(false);
 const issalesReturnModelOpen = ref(false);
 const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
@@ -207,7 +210,7 @@ const revertRedeemedPointsForCurrentClient = async () => {
 }
 
 const items = ref([
-  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'', unit:'', item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
+  { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'', unit:'', item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, cost: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
 ]);
 
 
@@ -419,6 +422,7 @@ const columns = computed(() => [
   { key: 'discount', label: 'DISC %' },
   ...(isUserTrackIncluded.value ? [{ key: 'user', label: 'User' }] : []),
   { key: 'tax', label: 'TAX%' },
+  ...(showCostColumn.value ? [{ key: 'cost', label: 'COST' }] : []),
   { key: 'value', label: 'VALUE' },
   { key: 'actions', label: '' },
 ]);
@@ -566,6 +570,7 @@ const addNewRow = async (index,moveTonNextRow = true) => {
     discount: null,
     tax: null,
     value: 0,
+    cost: 0,
     sizes: {},
     totalQty: 0,
     return:false,
@@ -821,6 +826,7 @@ watch(bill, async (newBill) => {
     discount: entry.discount || 0,
     tax: entry.tax || 0,
     value: entry.value || 0,
+    cost: Number(entry.variant?.pprice || 0),
     return: entry.return || false,
     user: entry.userName || null,
     userId: entry.userId || null
@@ -841,6 +847,7 @@ watch(bill, async (newBill) => {
     discount: 0,
     tax: 0,
     value: 0,
+    cost: 0,
     sizes: {},
     totalQty: 0,
     return: false
@@ -999,6 +1006,7 @@ const processItemResponse = (itemData, index) => {
 
   items.value[index].id = itemData.id ?? ''
   items.value[index].size = itemData.size ?? ''
+  items.value[index].cost = itemData.variant?.pprice ?? 0
 
   items.value[index].name =
     `${itemData.variant.product.subcategory?.name ?? ''} ` +
@@ -2203,6 +2211,7 @@ const couponModel = computed({
             <div class="flex justify-between text-gray-800 dark:text-gray-200 font-medium">
               <span  :class="{ 'text-red-600': row.return }">SN: {{ row.sn }}</span>
               <span  :class="{ 'text-red-600': row.return }">{{ row.name }}</span>
+              <span v-if="showCostColumn" :class="{ 'text-red-600': row.return }">₹{{ row.cost }}</span>
               <span  :class="{ 'text-red-600': row.return }">₹{{ row.value }}</span>
             </div>
 
@@ -2458,6 +2467,9 @@ const couponModel = computed({
                     @keydown.right.prevent="moveFocus(index, 'tax', 'right')"
                     :disabled="bill?.isMarkit"
                   />
+                </td>
+                <td v-if="showCostColumn" class="py-1 ps-2 whitespace-nowrap" :class="{ 'text-red-600': row.return }">
+                  {{ row.cost }}
                 </td>
                 <td class="py-1 ps-2 whitespace-nowrap"   :class="{ 'text-red-600': row.return }">
                   {{ row.value }}

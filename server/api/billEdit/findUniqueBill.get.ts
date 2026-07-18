@@ -173,6 +173,7 @@ export default defineEventHandler(async (event) => {
         json_build_object(
           'id', v.id,
           'unit', v.unit,
+          'pprice', v.p_price,
           'images', v.images
         ) AS variant
 
