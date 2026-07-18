@@ -222,11 +222,11 @@ const submitClearAll = async () => {
         </div>
 
         <div class="mb-4 grid grid-cols-5 gap-3">
-            <UCard :ui="{ body: { padding: 'p-3' } }"><div class="text-xs uppercase text-gray-500">Previous due</div><div class="mt-1 text-lg font-bold" :class="totals.carryForward >= 0 ? 'text-amber-600' : 'text-green-600'">{{ money(totals.carryForward) }}</div></UCard>
+            <UCard :ui="{ body: { padding: 'p-3' } }"><div class="text-xs uppercase text-gray-500">Previous due</div><div class="mt-1 text-lg font-bold" :class="totals.carryForward > 0 ? 'text-red-600' : totals.carryForward < 0 ? 'text-green-600' : 'text-gray-500'">{{ money(totals.carryForward) }}</div></UCard>
             <UCard :ui="{ body: { padding: 'p-3' } }"><div class="text-xs uppercase text-gray-500">Accrued (owed)</div><div class="mt-1 text-lg font-bold">{{ money(totals.accrued) }}</div></UCard>
             <UCard :ui="{ body: { padding: 'p-3' } }"><div class="text-xs uppercase text-gray-500">Paid</div><div class="mt-1 text-lg font-bold text-green-600">{{ money(totals.paid) }}</div></UCard>
             <UCard :ui="{ body: { padding: 'p-3' } }"><div class="text-xs uppercase text-gray-500">Credit cut</div><div class="mt-1 text-lg font-bold text-sky-600">{{ money(totals.creditCut) }}</div></UCard>
-            <UCard :ui="{ body: { padding: 'p-3' } }"><div class="text-xs uppercase text-gray-500">Outstanding</div><div class="mt-1 text-lg font-bold text-amber-600">{{ money(totals.outstanding) }}</div></UCard>
+            <UCard :ui="{ body: { padding: 'p-3' } }"><div class="text-xs uppercase text-gray-500">Outstanding</div><div class="mt-1 text-lg font-bold" :class="totals.outstanding > 0 ? 'text-red-600' : totals.outstanding < 0 ? 'text-green-600' : 'text-gray-500'">{{ money(totals.outstanding) }}</div></UCard>
         </div>
 
         <UCard :ui="{ body: { padding: '' } }">
@@ -267,9 +267,9 @@ const submitClearAll = async () => {
                 <template #paid-data="{ row }"><span class="text-green-600">{{ money(row.paid) }}</span></template>
                 <template #credit-data="{ row }">
                     <span :class="row.creditCut > 0 ? 'text-sky-600' : 'text-gray-400'">{{ row.creditCut > 0 ? '−' + money(row.creditCut) : '—' }}</span>
-                    <div v-if="row.creditDue > 0" class="text-[9px] text-gray-400">due {{ money(row.creditDue) }}</div>
+                    <div v-if="row.creditDue > 0" class="text-[9px] text-red-600">due {{ money(row.creditDue) }}</div>
                 </template>
-                <template #outstanding-data="{ row }"><span class="font-medium" :class="row.outstanding > 0 ? 'text-amber-600' : row.outstanding < 0 ? 'text-green-600' : 'text-gray-400'">{{ money(row.outstanding) }}</span></template>
+                <template #outstanding-data="{ row }"><span class="font-medium" :class="row.outstanding > 0 ? 'text-red-600' : row.outstanding < 0 ? 'text-green-600' : 'text-gray-400'">{{ money(row.outstanding) }}</span></template>
                 <template #actions-data="{ row }">
                     <UButton v-if="row.outstanding > 0" color="green" variant="soft" size="2xs" icon="i-heroicons-banknotes" label="Pay" class="text-[10px]" @click="openPay(row)" />
                     <UBadge v-else color="green" variant="subtle" size="2xs">Paid</UBadge>

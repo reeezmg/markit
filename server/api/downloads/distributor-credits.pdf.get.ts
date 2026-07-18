@@ -314,6 +314,9 @@ export default defineEventHandler(async (event) => {
         if (data.section === 'body' && data.column.index === 3 && closingBalance < 0) {
           data.cell.styles.textColor = [39, 174, 96]
         }
+        if (data.section === 'body' && data.column.index === 3 && closingBalance > 0) {
+          data.cell.styles.textColor = [192, 57, 43]
+        }
       },
     })
 

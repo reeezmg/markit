@@ -189,6 +189,8 @@ export default defineEventHandler(async (event) => {
         })
         row.getCell(5).font = { color: { argb: 'FFC0392B' }, bold: true }
       }
+      if (Number(r.due || 0) > 0) row.getCell(7).font = { color: { argb: 'FFC0392B' }, bold: true }
+      if (Number(r.due || 0) < 0) row.getCell(7).font = { color: { argb: 'FF27AE60' }, bold: true }
     })
 
     /* footer: opening balance, totals, closing balance */
@@ -208,6 +210,8 @@ export default defineEventHandler(async (event) => {
     ])
     footerBody.font = { bold: true }
     footerBody.eachCell(cell => { cell.alignment = { horizontal: 'center' } })
+    if (closingBalance > 0) footerBody.getCell(4).font = { color: { argb: 'FFC0392B' }, bold: true }
+    if (closingBalance < 0) footerBody.getCell(4).font = { color: { argb: 'FF27AE60' }, bold: true }
 
     sheet.columns.forEach(col => { col.width = 22 })
 

@@ -421,9 +421,26 @@ const distributors = computed(() =>
         class: 'bg-red-50 dark:bg-red-900/20',
       }
     })
-    let runningDue = Number(d.openingDue || 0)
-    const transactions = [...credits, ...payments]
-      .sort((a: any, b: any) => a.createdAt.getTime() - b.createdAt.getTime())
+    const openingAmount = Number(d.openingDue || 0)
+    const earliestTxTime = Math.min(...[...credits, ...payments].map((t: any) => t.createdAt.getTime()), Date.now())
+    const openingRows = (d.openingDueDate || openingAmount !== 0)
+      ? [{
+          id: `__opening-${d.distributorId}__`,
+          isOpening: true,
+          type: 'OPENING DUE',
+          createdAt: d.openingDueDate ? new Date(d.openingDueDate) : new Date(earliestTxTime),
+          no: null,
+          remarks: null,
+          debit: openingAmount < 0 ? -openingAmount : 0,
+          credit: openingAmount > 0 ? openingAmount : 0,
+          class: 'bg-gray-50 dark:bg-gray-800/40',
+        }]
+      : []
+    let runningDue = 0
+    const transactions = [...openingRows, ...credits, ...payments]
+      .sort((a: any, b: any) =>
+        a.createdAt.getTime() - b.createdAt.getTime() || (a.isOpening ? -1 : b.isOpening ? 1 : 0)
+      )
       .map((transaction: any) => {
         runningDue += Number(transaction.credit || 0) - Number(transaction.debit || 0)
         return { ...transaction, due: runningDue }
@@ -1383,7 +1400,7 @@ const transactionAction = (row: any) => {
                 <span class="text-orange-600">₹{{ (row.returnAmount || 0).toFixed(2) }}</span>
               </template>
               <template #openingDue-data="{ row }">
-                <span :class="(row.openingDue ?? 0) < 0 ? 'text-green-600' : (row.openingDue ?? 0) > 0 ? 'text-purple-600' : ''">
+                <span :class="(row.openingDue ?? 0) < 0 ? 'text-green-600' : (row.openingDue ?? 0) > 0 ? 'text-red-600' : ''">
                   ₹{{ (row.openingDue ?? 0).toFixed(2) }}
                 </span>
               </template>
@@ -1426,7 +1443,7 @@ const transactionAction = (row: any) => {
                     >
                       {{ row.distributor?.name }}
                     </p>
-                    <p class="mt-0.5 truncate text-xs" :class="(row.totalDue || 0) < 0 ? 'text-green-600' : 'text-gray-500'">
+                    <p class="mt-0.5 truncate text-xs" :class="(row.totalDue || 0) > 0 ? 'text-red-600' : (row.totalDue || 0) < 0 ? 'text-green-600' : 'text-gray-500'">
                       Due: ₹{{ (row.totalDue || 0).toFixed(2) }}
                     </p>
                   </div>
@@ -1779,7 +1796,8 @@ const transactionAction = (row: any) => {
                       class="w-full"
                     >
                       <template #createdAt-data="{ row }">
-                        {{ new Date(row.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) }}
+                        <span v-if="row.createdAt">{{ new Date(row.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) }}</span>
+                        <span v-else class="text-xs text-gray-400">-</span>
                       </template>
                       <template #no-data="{ row }">
                         <span v-if="row.no" class="font-mono text-xs">{{ row.no }}</span>
@@ -1787,7 +1805,7 @@ const transactionAction = (row: any) => {
                       </template>
                       <template #type-data="{ row }">
                         <UBadge
-                          :color="row.type === 'PURCHASE' ? 'blue' : row.type === 'CREDIT' ? 'red' : row.type === 'PURCHASE RETURN' ? 'orange' : 'green'"
+                          :color="row.isOpening ? 'gray' : row.type === 'PURCHASE' ? 'blue' : row.type === 'CREDIT' ? 'red' : row.type === 'PURCHASE RETURN' ? 'orange' : 'green'"
                           variant="subtle"
                           size="xs"
                         >
@@ -1811,7 +1829,7 @@ const transactionAction = (row: any) => {
                         </span>
                       </template>
                       <template #actions-data="{ row }">
-                        <UDropdown :items="transactionAction(row)">
+                        <UDropdown v-if="!row.isOpening" :items="transactionAction(row)">
                           <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
                         </UDropdown>
                       </template>
