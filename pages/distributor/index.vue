@@ -1813,7 +1813,7 @@ const transactionAction = (row: any) => {
                         </UBadge>
                       </template>
                       <template #remarks-data="{ row }">
-                        <span class="text-xs text-gray-500">{{ row.remarks || '-' }}</span>
+                        <span class="block w-36 truncate text-xs text-gray-500" :title="row.remarks || ''">{{ row.remarks || '-' }}</span>
                       </template>
                       <template #debit-data="{ row }">
                         <span v-if="row.debit > 0" class="font-semibold text-red-600">₹{{ row.debit.toFixed(2) }}</span>
