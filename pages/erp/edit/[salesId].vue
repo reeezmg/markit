@@ -1357,7 +1357,7 @@ const send = async() => {
           billName: printData.companyName,
           amount: printData.grandTotal,
           paymentDate: printData.date,
-          receiptId: bill.value?.invoiceNumber || uuidv4(),
+          receiptId: bill.value?.id || route.params.salesId,
         },
       })
       if (Array.isArray(printData.generatedCoupons) && printData.generatedCoupons.length) {

@@ -6,7 +6,7 @@
   >
     <!-- RECEIPT BOX -->
     <div
-      class="w-[90mm] font-mono text-[11px] leading-snug text-black
+      class="w-[90mm] font-mono text-[11px] leading-snug text-black bg-white
              border border-dashed border-black p-2 receipt-border"
     >
       <!-- HEADER -->
