@@ -332,6 +332,7 @@ model Variantinput extends Base {
   qty         Boolean @default(true)
   unit        String[] @default(["Nos"])
   sizes       Boolean @default(true)
+  shades      Boolean @default(false)
   sizeDimension Boolean @default(false)
   images      Boolean @default(true)
   button      Boolean @default(true)
@@ -1253,6 +1254,7 @@ model Item {
     variant     Variant @relation(fields: [variantId], references: [id], onDelete: Cascade)
     variantId   String @map("variant_id")
     size        String?
+    shade       String?
     qty         Int? @default(0)
     initialQty  Int?  @default(0)  @map("initial_qty")
     soldQty     Int?  @default(0) @map("sold_qty")
@@ -1712,6 +1714,7 @@ model Entry extends Base {
     value       Float?
     originalValue Float? @map("original_value")
     size        String?
+    shade       String?
     userName    String? @map("user_name")
     companyId       String? @map("company_id")
     company   Company? @relation(fields: [companyId], references: [id])

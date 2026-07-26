@@ -88,6 +88,7 @@ interface BarcodeItem {
   variantName: string;
   sprice: number;
   size?: string | null;
+  shade?: string | null;
 }
 
 
@@ -103,7 +104,7 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  items: {id: string; size: string | null; qty: number | undefined}[]; // Assuming items are strings, adjust if needed
+  items: {id: string; size: string | null; shade?: string | null; qty: number | undefined}[];
   images: string[];
 }
 
@@ -170,7 +171,7 @@ const selectedProduct: Ref<Product> = ref({
     pprice: 0,
     dprice: 0,
     discount: 0,
-    items: [{ id: uuidv4(), size: null, qty: undefined }],
+    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
     images: []
   }]
 });
@@ -224,7 +225,7 @@ const variants = ref<{
     pprice: number; 
     dprice: number; 
     discount: number; 
-    items: { id: string; size: string | null; qty: number | undefined }[];
+    items: { id: string; size: string | null; shade?: string | null; qty: number | undefined }[];
     images: ImageData[];
 }[]>([{ 
     id: uuidv4(),
@@ -237,7 +238,7 @@ const variants = ref<{
     pprice: 0, 
     dprice: 0, 
     discount: 0, 
-    items: [{ id: uuidv4(), size: null, qty: undefined }], 
+    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }], 
     images: [] 
 }]);
 
@@ -249,7 +250,7 @@ const stripDraftImages = (variantList: any[]) =>
     images: [],
     items: Array.isArray(variant.items) && variant.items.length
       ? variant.items
-      : [{ id: uuidv4(), size: null, qty: undefined }],
+      : [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
   }));
 
 const applyDraftToForm = () => {
@@ -529,7 +530,7 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
     discount: variant.discount || 0,
     images: variantInputs?.value?.images ? (variant.images || []).map((f: any) => ({ uuid: f.uuid, view: f.view })) : [],
     items: (variant.items || []).map((size: any) => ({
-      id: size.id || uuidv4(), size: size.size || null, qty: size.qty || 0, dimensionId: size.dimensionId ?? null,
+      id: size.id || uuidv4(), size: size.size || null, shade: size.shade || null, qty: size.qty || 0, dimensionId: size.dimensionId ?? null,
     })),
   })),
 })
@@ -706,7 +707,7 @@ const addVariant = () => {
   const last = newVariants[newVariants.length - 1];
   const copiedItems = (last?.items?.length)
     ? last.items.map((item: any) => ({ ...item, id: uuidv4() }))
-    : [{ id: uuidv4(), size: null, qty: undefined }];
+    : [{ id: uuidv4(), size: null, shade: null, qty: undefined }];
 
   newVariants.push({
     id: uuidv4(),
@@ -1156,7 +1157,8 @@ const generateBarcodes = (products: any[]) => {
               ...(variant.sprice !== variant.dprice && {
                 dprice: variant.dprice
               }),
-              size: item.size
+              size: item.size,
+              shade: item.shade
             }))
       )
     )
@@ -1376,7 +1378,7 @@ const handleReset = () => {
     pprice: 0, 
     dprice: 0, 
     discount: 0, 
-    items: [{ id: uuidv4(), size: null, qty: undefined }], 
+    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }], 
     images: []
   }];
   selectedProduct.value = {
@@ -1401,7 +1403,7 @@ const handleReset = () => {
         pprice: 0, 
         dprice: 0, 
         discount: 0, 
-        items: [{ id: uuidv4(), size: null, qty: undefined }], 
+        items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }], 
         images: [] 
     }]
 }

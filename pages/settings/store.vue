@@ -200,6 +200,7 @@ const variantInputs = reactive([
   { key: 'discount', label: 'Discount', value: useAuth().session.value?.variantInputs?.discount  },
   { key: 'qty', label: 'Quantity', value: useAuth().session.value?.variantInputs?.qty  },
   { key: 'sizes', label: 'Sizes', value: useAuth().session.value?.variantInputs?.sizes  },
+  { key: 'shades', label: 'Shades', value: useAuth().session.value?.variantInputs?.shades ?? false },
   { key: 'images', label: 'Images', value: useAuth().session.value?.variantInputs?.images  },
   { key: 'button', label: 'Button', value: useAuth().session.value?.variantInputs?.button  },
 ])

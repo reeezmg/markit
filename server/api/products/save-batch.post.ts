@@ -134,7 +134,7 @@ export default defineEventHandler(async (event) => {
           ])
           for (const it of (v.items || [])) {
             itemRows.push([
-              it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, variantId,
+              it.id || crypto.randomUUID(), it.size || null, it.shade || null, it.qty || 0, it.qty || 0, companyId, variantId,
               it.weight ?? null, it.length ?? null, it.width ?? null, it.height ?? null,
               it.dimensionId ?? null,
             ])
@@ -163,9 +163,9 @@ export default defineEventHandler(async (event) => {
       if (itemRows.length) {
         const { sql, params } = multiRow(itemRows, 'now(),now()')
         const itemsRes = await client.query(
-          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, weight, length, width, height, dimension_id, created_at, updated_at)
+          `INSERT INTO items (id, size, shade, qty, initial_qty, company_id, variant_id, weight, length, width, height, dimension_id, created_at, updated_at)
            VALUES ${sql}
-           RETURNING id, barcode, size, qty, variant_id`,
+           RETURNING id, barcode, size, shade, qty, variant_id`,
           params,
         )
         returnedItems = itemsRes.rows
@@ -209,7 +209,7 @@ export default defineEventHandler(async (event) => {
       const itemsByVariant = new Map<string, any[]>()
       for (const it of returnedItems) {
         const list = itemsByVariant.get(it.variant_id) || []
-        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty })
+        list.push({ id: it.id, barcode: it.barcode, size: it.size, shade: it.shade, qty: it.qty })
         itemsByVariant.set(it.variant_id, list)
       }
       const variantsByProduct = new Map<string, any[]>()

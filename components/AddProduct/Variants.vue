@@ -15,7 +15,7 @@ const props = defineProps<{
     editpPrice?: number | null;
     editDiscount?: number | null;
     editdPrice?: number | null;
-    editItems?: {id:string; size: string; qty: number }[] | null;
+    editItems?: {id:string; size: string | null; shade?: string | null; qty: number }[] | null;
 
 }>();
 
@@ -56,7 +56,7 @@ const schema = z.object({
 const { errors, defineField,resetForm: resetValidation } = useForm({
     validationSchema: toTypedSchema(schema),
 });
-const items = ref<{ id: string; size: string | null; qty: number | undefined; dimensionId?: string | null }[]>([]);
+const items = ref<{ id: string; size: string | null; shade?: string | null; qty: number | undefined; dimensionId?: string | null }[]>([]);
 const id = ref(props.id);
 
 // Product dimension presets (ShippingBox, type='product') for per-size linking.
@@ -91,9 +91,10 @@ const editableQty = computed({
     if (
       items.value.length <= 1
       && (items.value[0]?.size === null || items.value[0]?.size === undefined)
+      && (items.value[0]?.shade === null || items.value[0]?.shade === undefined)
     ) {
       if (!items.value.length) {
-        items.value = [{ id: uuidv4(), size: null, qty: nextQty }]
+        items.value = [{ id: uuidv4(), size: null, shade: null, qty: nextQty }]
       } else {
         items.value[0].qty = nextQty
       }
@@ -132,16 +133,22 @@ const lastEmittedPayload = ref('')
 
 const addItem = () => {
     // If we're adding the first size item and there's a null size item, remove it first
-    if (items.value.length === 1 && items.value[0].size === null) {
+    if (items.value.length === 1 && items.value[0].size === null && items.value[0].shade == null) {
         items.value = [];
     }
-    items.value.push({ id: uuidv4(), size: '', qty: undefined });
+    items.value.push({
+      id: uuidv4(),
+      size: variantInputs.value?.sizes ? '' : null,
+      shade: variantInputs.value?.shades ? '' : null,
+      qty: undefined,
+    });
 };
 
 const removeItem = (index: number) => {
     if (items.value.length === 1) {
         // Instead of removing, reset the single item's size
         items.value[0].size = null;
+        items.value[0].shade = null;
     } else {
         items.value.splice(index, 1);
     }
@@ -157,8 +164,10 @@ const focusFirst = () => {
 const focusSizeAt = (index: number, field: 'size' | 'qty' = 'size') => {
     const row = rootEl.value?.querySelector(`[data-size-index="${index}"]`) as HTMLElement | null;
     if (!row) return;
-    const inputs = row.querySelectorAll('input');
-    const input = (field === 'size' ? inputs[0] : inputs[1]) as HTMLInputElement | undefined;
+    const selector = field === 'size'
+      ? '[data-size-field="size"], [data-shade-field="shade"]'
+      : '[data-qty-field="qty"]';
+    const input = row.querySelector(selector) as HTMLInputElement | null;
     input?.focus();
     input?.select?.();
 };
@@ -264,6 +273,7 @@ watch(items, (newItems) => {
   if (
     newItems.length === 1 &&
     (newItems[0].size === null || newItems[0].size === undefined)
+    && (newItems[0].shade === null || newItems[0].shade === undefined)
   ) {
     qty.value = newItems[0].qty || 0;
   }else{
@@ -283,8 +293,8 @@ watch(
     // size value yet — we must preserve it so the row stays rendered.
         const updatedItems =
         newItems.length === 0 ||
-        (newItems.length === 1 && newItems[0].size === null)
-            ? [{id: newItems[0]?.id , size: null, qty: newQty }]
+        (newItems.length === 1 && newItems[0].size === null && newItems[0].shade == null)
+            ? [{id: newItems[0]?.id , size: null, shade: newItems[0]?.shade ?? null, qty: newQty }]
             : newItems;
 
     const payload = {
@@ -410,12 +420,13 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
   </div>
 
   <!-- Units / Sizes (Full Width) -->
-  <div class="w-full" v-if="variantInputs?.sizes">
-    <template v-if="items[0]?.size !== null">
+  <div class="w-full" v-if="variantInputs?.sizes || variantInputs?.shades">
+    <template v-if="items[0]?.size !== null || items[0]?.shade !== null">
       <label class="block text-sm font-medium leading-6 dark:text-white mt-4">Items & Quantities</label>
-      <div v-for="(item, index) in items" :key="index" :data-size-index="index" class="grid grid-cols-1 gap-2 mt-2" :class="showSizeDimension ? 'md:grid-cols-4' : 'md:grid-cols-3'">
-        <UInput v-model="item.size" :data-size-field="'size'" type="text" placeholder="Size" class="w-full" />
-        <UInput v-model.number="item.qty" :data-size-field="'qty'" type="text" inputmode="numeric" placeholder="Quantity" class="w-full" />
+      <div v-for="(item, index) in items" :key="index" :data-size-index="index" class="grid grid-cols-1 gap-2 mt-2" :class="showSizeDimension ? 'md:grid-cols-5' : 'md:grid-cols-4'">
+        <UInput v-if="variantInputs?.sizes" v-model="item.size" :data-size-field="'size'" type="text" placeholder="Size" class="w-full" />
+        <UInput v-if="variantInputs?.shades" v-model="item.shade" data-shade-field="shade" type="text" placeholder="Shade" class="w-full" />
+        <UInput v-model.number="item.qty" data-qty-field="qty" type="text" inputmode="numeric" placeholder="Quantity" class="w-full" />
         <USelectMenu
           v-if="showSizeDimension"
           v-model="item.dimensionId"
@@ -442,7 +453,7 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
       @click="addItem"
       class="mt-2 w-full text-blue-500 py-2 border border-blue-500 rounded-md"
     >
-      Add Sizes
+      {{ variantInputs?.sizes && variantInputs?.shades ? 'Add Size / Shade' : variantInputs?.shades ? 'Add Shades' : 'Add Sizes' }}
     </button>
   </div>
   </div>

@@ -504,7 +504,13 @@ const filteredOrders = computed(() => {
                     >
                       <div>
                         <p class="font-medium text-gray-900 dark:text-white">{{ item.name || item.variantName || 'Item' }}</p>
-                        <p class="text-xs text-gray-500">{{ item.variantName || item.size || '' }}</p>
+                        <p class="text-xs text-gray-500">
+                          <span v-if="item.variantName">{{ item.variantName }}</span>
+                          <span v-if="item.variantName && (item.size || item.shade)"> · </span>
+                          <span v-if="item.size">Size: {{ item.size }}</span>
+                          <span v-if="item.size && item.shade"> · </span>
+                          <span v-if="item.shade">Shade: {{ item.shade }}</span>
+                        </p>
                       </div>
                       <div class="text-right">
                         <p>Qty {{ item.quantity || item.qty || 1 }}</p>

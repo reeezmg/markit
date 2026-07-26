@@ -139,26 +139,27 @@ export default defineEventHandler(async (event) => {
         [keepVariantIds, keepItemIds],
       )
       if (allItems.length) {
-        const IC = 6 // params per item row
+        const IC = 7 // params per item row
         const iVals: any[] = []
         const iRows = allItems.map((it: any, i: number) => {
           const base = i * IC
           // initial_qty is seeded for new items. Existing items only change it
           // when the caller explicitly identifies this as a purchase-order edit.
-          iVals.push(it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, it.variantId)
+          iVals.push(it.id || crypto.randomUUID(), it.size || null, it.shade || null, it.qty || 0, it.qty || 0, companyId, it.variantId)
           const p = Array.from({ length: IC }, (_, k) => `$${base + k + 1}`)
           return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},now(),now())`
         })
         const updateInitialQtyParam = `$${allItems.length * IC + 1}`
         const itemsRes = await client.query(
-          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, created_at, updated_at)
+          `INSERT INTO items (id, size, shade, qty, initial_qty, company_id, variant_id, created_at, updated_at)
            VALUES ${iRows.join(',')}
            ON CONFLICT (id) DO UPDATE SET
              size = EXCLUDED.size,
+             shade = EXCLUDED.shade,
              qty = EXCLUDED.qty,
              initial_qty = CASE WHEN ${updateInitialQtyParam}::boolean THEN EXCLUDED.initial_qty ELSE items.initial_qty END,
              updated_at = now()
-           RETURNING id, barcode, size, qty, variant_id`,
+           RETURNING id, barcode, size, shade, qty, variant_id`,
           [...iVals, updateInitialQty],
         )
         returnedItems = itemsRes.rows
@@ -190,7 +191,7 @@ export default defineEventHandler(async (event) => {
       const itemsByVariant = new Map<string, any[]>()
       for (const it of returnedItems) {
         const list = itemsByVariant.get(it.variant_id) || []
-        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty })
+        list.push({ id: it.id, barcode: it.barcode, size: it.size, shade: it.shade, qty: it.qty })
         itemsByVariant.set(it.variant_id, list)
       }
 

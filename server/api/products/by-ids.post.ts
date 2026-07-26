@@ -45,13 +45,13 @@ export default defineEventHandler(async (event) => {
       }
       if (variantIds.length) {
         const iRes = await client.query(
-          `SELECT id, barcode, size, qty, initial_qty, variant_id
+          `SELECT id, barcode, size, shade, qty, initial_qty, variant_id
            FROM items WHERE variant_id = ANY($1::text[]) ORDER BY created_at ASC`,
           [variantIds],
         )
         for (const it of iRes.rows) {
           const list = itemsByVariant.get(it.variant_id) || []
-          list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty, initialQty: it.initial_qty })
+          list.push({ id: it.id, barcode: it.barcode, size: it.size, shade: it.shade, qty: it.qty, initialQty: it.initial_qty })
           itemsByVariant.set(it.variant_id, list)
         }
       }

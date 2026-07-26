@@ -1213,6 +1213,7 @@ const handleAddPhoto = async () => {
                             >
                                 <span class="font-medium">{{ item.barcode }}</span>
                                 <span class="text-gray-500" v-if="item.size"> - {{ item.size }}</span>
+                                <span class="text-gray-500" v-if="item.shade"> · {{ item.shade }}</span>
                             </li>
                             </ul>
                         </div>

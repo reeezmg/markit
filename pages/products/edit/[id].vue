@@ -21,6 +21,7 @@ interface BarcodeItem {
   name: string;
   sprice: number;
   size?: string | null;
+  shade?: string | null;
 }
 
 
@@ -36,7 +37,7 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  items: {id: string; size: string | null; qty: number | undefined}[]; // Assuming items are strings, adjust if needed
+  items: {id: string; size: string | null; shade?: string | null; qty: number | undefined}[];
   images: string[];
 }
 
@@ -101,7 +102,7 @@ const variants = ref<{
     pprice: number; 
     dprice: number; 
     discount: number; 
-    items: { id: string; size: string | null; qty: number | undefined }[];
+    items: { id: string; size: string | null; shade?: string | null; qty: number | undefined }[];
     images: ImageData[];
 }[]>([{ 
     id: uuidv4(),
@@ -114,7 +115,7 @@ const variants = ref<{
     pprice: 0, 
     dprice: 0, 
     discount: 0, 
-    items: [{ id: uuidv4(), size: null, qty: undefined }], 
+    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }], 
     images: [] 
 }]);
 
@@ -270,7 +271,7 @@ const updateResult: any = await $fetch('/api/products/update', {
       dprice: v.dprice || 0,
       discount: v.discount || 0,
       images: v.images || [],
-      items: v.items.map(item => ({ id: item.id, size: item.size || null, qty: item.qty || 0 })),
+      items: v.items.map(item => ({ id: item.id, size: item.size || null, shade: item.shade || null, qty: item.qty || 0 })),
     })),
     categoryTax: categoryTax.value,
     updateImages: !!variantInputs?.value?.images,
@@ -312,7 +313,7 @@ const addVariant = () => {
     pprice: 0,
     dprice: 0,
     discount: 0,
-    items: [{ id: uuidv4(), size: null, qty: undefined }],
+    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
     images: [],
   });
 
@@ -395,6 +396,7 @@ const printBarcodesVariant = async (variant: any) => {
       sprice: variant.sprice,
       ...(variant.sprice !== variant.dprice && { dprice: variant.dprice }),
       size: item.size,
+      shade: item.shade,
     };
 
     // Duplicate barcode entries based on qty
@@ -462,6 +464,7 @@ const confirmPrint = async () => {
           dprice: selectedVariant.value.dprice,
         }),
         size: item.size,
+        shade: item.shade,
       }
 
       return Array.from({ length: qty }, () => ({ ...base }))
@@ -725,7 +728,8 @@ const confirmPrint = async () => {
     <div
       v-if="
         selectedVariant?.items?.length === 1 &&
-        selectedVariant.items[0].size === null
+        selectedVariant.items[0].size === null &&
+        selectedVariant.items[0].shade == null
       "
       class="space-y-2"
     >
@@ -748,7 +752,7 @@ const confirmPrint = async () => {
         class="flex items-center justify-between gap-3"
       >
         <span class="text-sm font-medium">
-          Size: {{ item.size }}
+          <span v-if="item.size">Size: {{ item.size }}</span><span v-if="item.size && item.shade"> · </span><span v-if="item.shade">Shade: {{ item.shade }}</span>
         </span>
 
         <UInput

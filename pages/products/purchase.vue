@@ -54,7 +54,7 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  items: {id: string; size: string | null; qty: number | undefined}[]; // Assuming items are strings, adjust if needed
+  items: {id: string; size: string | null; shade?: string | null; qty: number | undefined}[];
   images: string[];
 }
 
@@ -128,6 +128,7 @@ const cacheKey = [
       items: v.items?.create?.map(i => ({
         id: i.id,
         size: i.size,
+        shade: i.shade,
         qty: i.qty,
         companyId: i.company?.connect?.id ?? null,
         variantId: v.id
@@ -262,6 +263,7 @@ const UpdateProduct = useUpdateProduct({
               updatedItems[existingItemIndex] = {
                 ...updatedItems[existingItemIndex],
                 size: itemData?.size ?? updatedItems[existingItemIndex].size,
+                shade: itemData?.shade ?? updatedItems[existingItemIndex].shade ?? null,
                 qty: itemData?.qty ?? updatedItems[existingItemIndex].qty,
               };
             } else {
@@ -269,6 +271,7 @@ const UpdateProduct = useUpdateProduct({
               updatedItems.push({
                 id: itemInput.where?.id ?? null,
                 size: itemData?.size ?? null,
+                shade: itemData?.shade ?? null,
                 qty: itemData?.qty ?? 0,
                 companyId: useAuth().session.value?.companyId ?? null,
                 variantId: variantInput.where.id,
@@ -296,6 +299,7 @@ const UpdateProduct = useUpdateProduct({
           items: (variantData?.items?.upsert ?? []).map(itemInput => ({
             id: itemInput.where?.id ?? null,
             size: (itemInput.update ?? itemInput.create)?.size ?? null,
+            shade: (itemInput.update ?? itemInput.create)?.shade ?? null,
             qty: (itemInput.update ?? itemInput.create)?.qty ?? 0,
             companyId: useAuth().session.value?.companyId ?? null,
             variantId: variantInput.where.id,
@@ -372,7 +376,7 @@ const selectedProduct: Ref<Product> = ref({
     pprice: 0,
     dprice: 0,
     discount: 0,
-    items: [{ id: uuidv4(), size: null, qty: undefined }],
+    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
     images: []
   }]
 });
@@ -423,7 +427,7 @@ const variants = ref<{
     pprice: number; 
     dprice: number; 
     discount: number; 
-    items: { id: string; size: string | null; qty: number | undefined }[];
+    items: { id: string; size: string | null; shade?: string | null; qty: number | undefined }[];
     images: ImageData[];
 }[]>([{ 
     id: uuidv4(),
@@ -436,7 +440,7 @@ const variants = ref<{
     pprice: 0, 
     dprice: 0, 
     discount: 0, 
-    items: [{ id: uuidv4(), size: null, qty: undefined }], 
+    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }], 
     images: [] 
 }]);
 
@@ -611,6 +615,7 @@ const handleAdd = async (e: Event) => {
               ? variant.items.map((size) => ({
                 id: uuidv4(),
                   size: size.size || null,
+                  shade: size.shade || null,
                   qty: size.qty || 0,
                   initialQty: size.qty || 0,
                   company: {
@@ -810,12 +815,14 @@ const updatedProduct =  UpdateProduct.mutate({
               where: { id: item.id },
               update: {
                 size: item.size || null,
+                shade: item.shade || null,
                 qty: item.qty || 0,
                 initialQty: item.qty || 0,
               },
               create: {
                 id:item.id,
                 size: item.size || null,
+                shade: item.shade || null,
                 qty: item.qty || 0,
                 initialQty: item.qty || 0,
                 company: {
@@ -850,6 +857,7 @@ const updatedProduct =  UpdateProduct.mutate({
             create: v.items.map(item => ({
               id: item.id,
               size: item.size || null,
+              shade: item.shade || null,
               qty: item.qty || 0,
               initialQty: item.qty || 0,
               company: {
@@ -899,7 +907,7 @@ const addVariant = () => {
     pprice: 0,
     dprice: 0,
     discount: 0,
-    items: [{ id: uuidv4(), size: null, qty: undefined }],
+    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
     images: [],
   });
 
@@ -1028,7 +1036,8 @@ const handleSave = async () => {
                 ...(variant.sprice !== variant.dprice && {
                   dprice: variant.dprice
                 }),
-                size: item.size
+                size: item.size,
+                shade: item.shade
               }))
         )
       )
