@@ -174,10 +174,10 @@ const saveForm = () => {
   emit('save', {
     date: form.value.date,
     userId: form.value.user.userId,
-    direction: form.value.direction,
+    direction: form.value.direction?.value || form.value.direction,
     amount: Number(form.value.amount),
-    paymentMode: form.value.paymentMode.value || form.value.paymentMode,
-    status: form.value.status,
+    paymentMode: form.value.paymentMode?.value || form.value.paymentMode,
+    status: form.value.status?.value || form.value.status,
     note: form.value.note,
   })
 }
