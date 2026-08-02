@@ -36,6 +36,8 @@
         <UFormGroup label="Investment Type" required>
           <USelectMenu
             v-model="form.direction"
+            value-attribute="value"
+            option-attribute="label"
             :options="[
               { label: 'Capital Invested', value: 'IN' },
               { label: 'Capital Withdrawn', value: 'OUT' },
@@ -56,6 +58,8 @@
         <UFormGroup label="Payment Mode" required>
           <USelectMenu
             v-model="form.paymentMode"
+            value-attribute="value"
+            option-attribute="label"
             :options="[
               { label: 'Cash', value: 'CASH' },
               { label: 'Bank', value: 'BANK' },
@@ -70,6 +74,8 @@
         <UFormGroup label="Status">
           <USelectMenu
             v-model="form.status"
+            value-attribute="value"
+            option-attribute="label"
             :options="[
               { label: 'Completed', value: 'COMPLETED' },
               { label: 'Pending', value: 'PENDING' },
