@@ -36,6 +36,8 @@
         <UFormGroup label="Investment Type" required>
           <USelectMenu
             v-model="form.direction"
+            value-attribute="value"
+            option-attribute="label"
             :options="[
               { label: 'Capital Invested', value: 'IN' },
               { label: 'Capital Withdrawn', value: 'OUT' },
@@ -56,6 +58,8 @@
         <UFormGroup label="Payment Mode" required>
           <USelectMenu
             v-model="form.paymentMode"
+            value-attribute="value"
+            option-attribute="label"
             :options="[
               { label: 'Cash', value: 'CASH' },
               { label: 'Bank', value: 'BANK' },
@@ -70,6 +74,8 @@
         <UFormGroup label="Status">
           <USelectMenu
             v-model="form.status"
+            value-attribute="value"
+            option-attribute="label"
             :options="[
               { label: 'Completed', value: 'COMPLETED' },
               { label: 'Pending', value: 'PENDING' },
@@ -174,10 +180,10 @@ const saveForm = () => {
   emit('save', {
     date: form.value.date,
     userId: form.value.user.userId,
-    direction: form.value.direction,
+    direction: form.value.direction?.value || form.value.direction,
     amount: Number(form.value.amount),
-    paymentMode: form.value.paymentMode.value || form.value.paymentMode,
-    status: form.value.status,
+    paymentMode: form.value.paymentMode?.value || form.value.paymentMode,
+    status: form.value.status?.value || form.value.status,
     note: form.value.note,
   })
 }

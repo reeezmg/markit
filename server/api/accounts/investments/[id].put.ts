@@ -13,7 +13,12 @@ export default defineEventHandler(async (event) => {
   if (!body.userId) throw createError({ statusCode: 400, statusMessage: 'User is required' })
   if (!amount || amount <= 0) throw createError({ statusCode: 400, statusMessage: 'Amount must be positive' })
   const createdAt = body.createdAt || body.date ? new Date(body.createdAt || body.date) : new Date()
+
+  const direction = body.direction || 'IN'
+  if (direction !== 'IN' && direction !== 'OUT') throw createError({ statusCode: 400, statusMessage: 'Invalid investment direction' })
   const status = body.status || 'COMPLETED'
+  if (status !== 'COMPLETED' && status !== 'PENDING') throw createError({ statusCode: 400, statusMessage: 'Invalid status' })
+  const paymentMode = body.paymentMode || 'CASH'
 
   const client = await pool.connect()
   try {
@@ -32,14 +37,14 @@ export default defineEventHandler(async (event) => {
       WHERE id = $1 AND company_id = $2
       RETURNING id
       `,
-      [id, companyId, body.userId, body.direction || 'IN', amount, body.paymentMode || 'CASH', status, body.note || null, createdAt],
+      [id, companyId, body.userId, direction, amount, paymentMode, status, body.note || null, createdAt],
     )
     if (!res.rowCount) throw createError({ statusCode: 404, statusMessage: 'Investment not found' })
     await rebuildAccountLedgerForSource(client, {
       companyId,
       sourceType: 'INVESTMENT',
       sourceId: id,
-      rows: investmentLedgerRows({ id, companyId, amount, direction: body.direction || 'IN', status, createdAt, note: body.note }),
+      rows: investmentLedgerRows({ id, companyId, amount, direction, status, createdAt, note: body.note }),
     })
     await client.query('COMMIT')
     return { success: true }
