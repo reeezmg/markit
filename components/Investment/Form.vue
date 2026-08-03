@@ -94,10 +94,10 @@
       </UFormGroup>
 
       <div class="flex justify-end mt-4">
-        <UButton color="gray" @click="emit('cancel')">
+        <UButton color="gray" :disabled="loading" @click="emit('cancel')">
           Cancel
         </UButton>
-        <UButton color="primary" class="ml-3" type="submit">
+        <UButton color="primary" class="ml-3" type="submit" :loading="loading">
           Save
         </UButton>
       </div>
@@ -112,6 +112,10 @@ const props = defineProps({
   investment: {
     type: Object,
     required: false,
+  },
+  loading: {
+    type: Boolean,
+    default: false,
   },
 })
 
