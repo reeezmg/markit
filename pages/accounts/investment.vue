@@ -2,6 +2,7 @@
 import { ref, computed } from 'vue'
 import { format } from 'date-fns'
 
+import { useQueryClient } from '@tanstack/vue-query'
 import InvestmentForm from '~/components/Investment/Form.vue'
 import {
   useFindManyInvestment,
@@ -14,6 +15,10 @@ const emit = defineEmits(['open'])
 
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
+const queryClient = useQueryClient()
+
+const refreshInvestments = () =>
+  queryClient.invalidateQueries({ queryKey: ['zenstack', 'Investment'] })
 
 /* ---------------------------------------------------
    MODAL STATE
@@ -22,6 +27,8 @@ const showInvestmentForm = ref(false)
 const selectedInvestment = ref<any | null>(null)
 const isDeleteModalOpen = ref(false)
 const deletingRow = ref<any>(null)
+const isSaving = ref(false)
+const isDeleting = ref(false)
 
 /* ---------------------------------------------------
    OPEN / CLOSE
@@ -40,24 +47,42 @@ const closeInvestmentForm = () => {
    SAVE
 --------------------------------------------------- */
 const saveInvestment = async (form: any) => {
-  if (selectedInvestment.value) {
-    await $fetch(`/api/accounts/investments/${selectedInvestment.value.id}`, { method: 'PUT', body: form })
-    toast.add({ title: 'Investment updated', color: 'green' })
-  } else {
-    await $fetch('/api/accounts/investments', { method: 'POST', body: { ...form, status: form.status || 'COMPLETED' } })
-    toast.add({ title: 'Investment added', color: 'green' })
-  }
+  if (isSaving.value) return
+  isSaving.value = true
+  try {
+    if (selectedInvestment.value) {
+      await $fetch(`/api/accounts/investments/${selectedInvestment.value.id}`, { method: 'PUT', body: form })
+      toast.add({ title: 'Investment updated', color: 'green' })
+    } else {
+      await $fetch('/api/accounts/investments', { method: 'POST', body: { ...form, status: form.status || 'COMPLETED' } })
+      toast.add({ title: 'Investment added', color: 'green' })
+    }
 
-  closeInvestmentForm()
+    await refreshInvestments()
+    closeInvestmentForm()
+  } catch (err: any) {
+    toast.add({ title: err?.statusMessage || err?.data?.statusMessage || 'Failed to save investment', color: 'red' })
+  } finally {
+    isSaving.value = false
+  }
 }
 
 /* ---------------------------------------------------
    DELETE
 --------------------------------------------------- */
 const confirmDelete = async () => {
-  await $fetch(`/api/accounts/investments/${deletingRow.value.id}`, { method: 'DELETE' })
-  toast.add({ title: 'Investment deleted', color: 'green' })
-  isDeleteModalOpen.value = false
+  if (isDeleting.value) return
+  isDeleting.value = true
+  try {
+    await $fetch(`/api/accounts/investments/${deletingRow.value.id}`, { method: 'DELETE' })
+    toast.add({ title: 'Investment deleted', color: 'green' })
+    await refreshInvestments()
+    isDeleteModalOpen.value = false
+  } catch (err: any) {
+    toast.add({ title: err?.statusMessage || err?.data?.statusMessage || 'Failed to delete investment', color: 'red' })
+  } finally {
+    isDeleting.value = false
+  }
 }
 
 /* ---------------------------------------------------
@@ -271,8 +296,8 @@ const actionItems = (row: any) => [
       :close-button="null"
     >
       <template #footer>
-        <UButton color="red" label="Delete" @click="confirmDelete" />
-        <UButton color="gray" label="Cancel" @click="isDeleteModalOpen = false" />
+        <UButton color="red" label="Delete" :loading="isDeleting" @click="confirmDelete" />
+        <UButton color="gray" label="Cancel" :disabled="isDeleting" @click="isDeleteModalOpen = false" />
       </template>
     </UDashboardModal>
 
@@ -280,6 +305,7 @@ const actionItems = (row: any) => [
     <UModal v-model="showInvestmentForm">
       <InvestmentForm
         :investment="selectedInvestment"
+        :loading="isSaving"
         @save="saveInvestment"
         @cancel="closeInvestmentForm"
       />
