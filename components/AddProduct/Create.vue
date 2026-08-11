@@ -23,6 +23,10 @@ const props = defineProps<{
   editSubcategory?: any
   editCollection?: any
   editDimensionId?: string | null
+  editCustomFields?: Record<string, any> | null
+  // products/purchase.vue still writes products through ZenStack and has no
+  // custom-field plumbing, so it opts out of rendering them.
+  hideCustomFields?: boolean
 }>()
 
 const emit = defineEmits(['update'])
@@ -79,6 +83,32 @@ const productInputs = ref(
 )
 
 /* -----------------------------
+CUSTOM FIELDS (Settings → Products, scope = PRODUCT)
+------------------------------ */
+const {
+  productFields: customFieldDefs,
+  load: loadCustomFields,
+  seedValues,
+} = useProductCustomFields()
+
+const customValues = ref<Record<string, any>>({})
+const visibleCustomFields = computed(() =>
+  props.hideCustomFields ? [] : customFieldDefs.value
+)
+
+onMounted(() => { loadCustomFields() })
+
+// Re-seed whenever the definitions arrive or a different product is loaded for
+// edit. Typing only mutates customValues, so this never clobbers user input.
+watch(
+  [customFieldDefs, () => props.editCustomFields],
+  ([defs, saved]) => {
+    customValues.value = seedValues(defs, saved as Record<string, any> | null)
+  },
+  { immediate: true, deep: true }
+)
+
+/* -----------------------------
 FETCH CATEGORIES
 ------------------------------ */
 const { data: categories } = useFindManyCategory({
@@ -131,6 +161,7 @@ const resetForm = () => {
   brandSelectedRow.value = {}
   collectionSelectedRow.value = {}
   selectedProductDimension.value = null
+  customValues.value = seedValues(customFieldDefs.value, null)
   resetValidation()
 }
 
@@ -142,6 +173,8 @@ const categorySelectRef = ref<any>(null)
 const subcategorySelectRef = ref<any>(null)
 const collectionSelectRef = ref<any>(null)
 const dimensionSelectRef = ref<any>(null)
+// One wrapper per SELECT-type custom field (v-for template ref → array).
+const customSelectRefs = ref<HTMLElement[]>([])
 
 const showBrandModal = ref(false)
 const showCategoryModal = ref(false)
@@ -161,6 +194,7 @@ const getAllSelectWrappers = (): HTMLElement[] =>
     subcategorySelectRef.value,
     collectionSelectRef.value,
     dimensionSelectRef.value,
+    ...(customSelectRefs.value || []),
   ].filter((w): w is HTMLElement => !!w)
 
 // After a user picks an option from any select, return focus to the trigger
@@ -374,6 +408,19 @@ watch(
 )
 
 /* Emit updates */
+const emitUpdate = () => {
+  emit('update', {
+    name: name.value,
+    description: description.value,
+    category: selectedRow.value,
+    subcategory: subselectedRow.value?.id,
+    brand: brandSelectedRow.value?.id,
+    collection: collectionSelectedRow.value?.id,
+    dimensionId: (selectedProductDimension.value as any)?.id ?? null,
+    customFields: { ...customValues.value },
+  })
+}
+
 watch(
   [
     name,
@@ -384,27 +431,13 @@ watch(
     collectionSelectedRow,
     selectedProductDimension,
   ],
-  ([
-    newName,
-    newDesc,
-    newCat,
-    newSub,
-    newBrand,
-    newCollection,
-    newDimension,
-  ]) => {
-    emit('update', {
-      name: newName,
-      description: newDesc,
-      category: newCat,
-      subcategory: newSub?.id,
-      brand: newBrand?.id,
-      collection: newCollection?.id,
-      dimensionId: (newDimension as any)?.id ?? null,
-    })
-  },
+  emitUpdate,
   { immediate: true }
 )
+
+// Separate watcher: customValues is a ref to a plain object, so it needs a deep
+// watch to catch per-key edits.
+watch(customValues, emitUpdate, { deep: true })
 </script>
 
 <!-- ================= TEMPLATE ================= -->
@@ -635,6 +668,54 @@ watch(
         v-model="description"
         v-bind="descriptionAttrs"
         :rows="4"
+        class="w-full"
+      />
+    </UFormGroup>
+
+    <!-- CUSTOM FIELDS (Settings → Products → Create fields) -->
+    <UFormGroup
+      v-for="field in visibleCustomFields"
+      :key="field.id"
+      :label="field.label"
+      :required="field.required"
+    >
+      <div v-if="field.type === 'SELECT'" class="flex items-center gap-1">
+        <div
+          ref="customSelectRefs"
+          class="flex-1"
+          @keydown.capture.enter="restoreSelectFocus"
+          @click.capture="restoreSelectFocus"
+        >
+          <USelectMenu
+            v-model="customValues[field.key]"
+            :options="field.options"
+            searchable
+            :searchable-placeholder="`Search ${field.label}...`"
+            class="w-full"
+          >
+            <template #label>
+              <span v-if="customValues[field.key]" class="truncate">
+                {{ customValues[field.key] }}
+              </span>
+              <span v-else>Select</span>
+            </template>
+          </USelectMenu>
+        </div>
+        <UButton
+          v-if="!field.required && customValues[field.key]"
+          icon="i-heroicons-x-mark-20-solid"
+          color="gray"
+          variant="ghost"
+          square
+          :aria-label="`Clear ${field.label}`"
+          @click="customValues[field.key] = ''"
+        />
+      </div>
+
+      <UInput
+        v-else
+        v-model="customValues[field.key]"
+        :placeholder="`Enter ${field.label.toLowerCase()}`"
         class="w-full"
       />
     </UFormGroup>

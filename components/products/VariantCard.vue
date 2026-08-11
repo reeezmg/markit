@@ -16,6 +16,9 @@ const removeItem = (e: Event) => {
 
 const cartStore = useCartStore()
 const toast = useToast()
+// What this variant's size values are called ("Size" / "Shade" / ...).
+const { labelFor } = useSizeLabel()
+const sizeLabel = computed(() => labelFor(props.variant))
 const router = useRouter()
 const auth = useClientAuth()
 const route = useRoute()
@@ -87,12 +90,12 @@ const addToCart = async (e?: Event) => {
   if (sizes.length > 0) {
     if (selectedSize.value === null) {
       toast.add({
-        title: 'Size Missing',
-        description: 'Please select a size before adding to cart.',
+        title: `${sizeLabel.value} Missing`,
+        description: `Please select a ${sizeLabel.value.toLowerCase()} before adding to cart.`,
         color: 'red',
         icon: 'i-heroicons-exclamation-triangle',
         actions: availableSizes.value.map((size, index) => ({
-          label: `Size: ${size.size}`,
+          label: `${sizeLabel.value}: ${size.size}`,
           click: () => {
             selectedSize.value = index
             addToCart()
@@ -206,7 +209,7 @@ const showSuccessToast = (description: string) => {
 
         <!-- Size Selection -->
         <div v-if="availableSizes.length > 0" class="mb-3">
-          <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Select Size</div>
+          <div class="text-xs text-gray-500 dark:text-gray-400 mb-1">Select {{ sizeLabel }}</div>
           <div class="flex flex-wrap gap-1">
             <UButton
               v-for="(size, index) in availableSizes"

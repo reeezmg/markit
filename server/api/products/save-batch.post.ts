@@ -32,6 +32,13 @@ export default defineEventHandler(async (event) => {
 
   const TRANSIENT_ERROR_CODES = ['40001', '40P01', '53300', '57P01', '55006', '08006', '08003', 'P1001']
 
+  // Custom field values (Settings → Products) are a { key: value } map stored
+  // in the jsonb custom_fields column. Always send a JSON string so pg binds it
+  // as jsonb rather than a record/array.
+  function customFieldsJson(value: any) {
+    return JSON.stringify(value && typeof value === 'object' && !Array.isArray(value) ? value : {})
+  }
+
   function taxFor(categoryTax: any, sprice: number) {
     if (!categoryTax) return 0
     if (categoryTax.taxType === 'FIXED') return categoryTax.fixedTax || 0
@@ -117,7 +124,7 @@ export default defineEventHandler(async (event) => {
           p.categoryId || p.category?.id || null, p.subcategoryId || null,
           p.collectionId || p.collection?.id || null,
           p.weight ?? null, p.length ?? null, p.width ?? null, p.height ?? null,
-          p.dimensionId ?? null,
+          p.dimensionId ?? null, customFieldsJson(p.customFields),
         ])
         const dt = p.deliveryType || 'trynbuy'
         for (const v of (p.variants || [])) {
@@ -131,10 +138,11 @@ export default defineEventHandler(async (event) => {
             v.sprice || 0, v.pprice || 0, v.dprice || 0, v.discount || 0,
             dt, taxFor(p.categoryTax, v.sprice), images, companyId, productId,
             v.weight ?? null, v.length ?? null, v.width ?? null, v.height ?? null,
+            customFieldsJson(v.customFields), v.sizeLabel || 'Size',
           ])
           for (const it of (v.items || [])) {
             itemRows.push([
-              it.id || crypto.randomUUID(), it.size || null, it.shade || null, it.qty || 0, it.qty || 0, companyId, variantId,
+              it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, variantId,
               it.weight ?? null, it.length ?? null, it.width ?? null, it.height ?? null,
               it.dimensionId ?? null,
             ])
@@ -145,17 +153,17 @@ export default defineEventHandler(async (event) => {
       {
         const { sql, params } = multiRow(productRows, 'now(),now()')
         await client.query(
-          `INSERT INTO products (id, name, brand_id, description, status, company_id, purchaseorder_id, category_id, subcategory_id, collection_id, weight, length, width, height, dimension_id, created_at, updated_at) VALUES ${sql}`,
+          `INSERT INTO products (id, name, brand_id, description, status, company_id, purchaseorder_id, category_id, subcategory_id, collection_id, weight, length, width, height, dimension_id, custom_fields, created_at, updated_at) VALUES ${sql}`,
           params,
         )
       }
       if (variantRows.length) {
         const { sql, params } = multiRow(variantRows, 'true,now(),now()')
-        // columns: id,name,code,unit,s_price,p_price,d_price,discount,delivery_type,tax,images,company_id,product_id,weight,status,created_at,updated_at
+        // columns: id,name,code,unit,s_price,p_price,d_price,discount,delivery_type,tax,images,company_id,product_id,weight,length,width,height,custom_fields,size_label,status,created_at,updated_at
         const variantsRes = await client.query(
-          `INSERT INTO variants (id, name, code, unit, s_price, p_price, d_price, discount, delivery_type, tax, images, company_id, product_id, weight, length, width, height, status, created_at, updated_at)
+          `INSERT INTO variants (id, name, code, unit, s_price, p_price, d_price, discount, delivery_type, tax, images, company_id, product_id, weight, length, width, height, custom_fields, size_label, status, created_at, updated_at)
            VALUES ${sql}
-           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, weight, product_id`,
+           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, weight, size_label, product_id`,
           params,
         )
         returnedVariants = variantsRes.rows
@@ -163,9 +171,9 @@ export default defineEventHandler(async (event) => {
       if (itemRows.length) {
         const { sql, params } = multiRow(itemRows, 'now(),now()')
         const itemsRes = await client.query(
-          `INSERT INTO items (id, size, shade, qty, initial_qty, company_id, variant_id, weight, length, width, height, dimension_id, created_at, updated_at)
+          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, weight, length, width, height, dimension_id, created_at, updated_at)
            VALUES ${sql}
-           RETURNING id, barcode, size, shade, qty, variant_id`,
+           RETURNING id, barcode, size, qty, variant_id`,
           params,
         )
         returnedItems = itemsRes.rows
@@ -209,7 +217,7 @@ export default defineEventHandler(async (event) => {
       const itemsByVariant = new Map<string, any[]>()
       for (const it of returnedItems) {
         const list = itemsByVariant.get(it.variant_id) || []
-        list.push({ id: it.id, barcode: it.barcode, size: it.size, shade: it.shade, qty: it.qty })
+        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty })
         itemsByVariant.set(it.variant_id, list)
       }
       const variantsByProduct = new Map<string, any[]>()
@@ -217,6 +225,7 @@ export default defineEventHandler(async (event) => {
         const list = variantsByProduct.get(v.product_id) || []
         list.push({
           id: v.id, name: v.name, code: v.code, sprice: v.s_price, dprice: v.d_price,
+          sizeLabel: v.size_label || 'Size',
           items: itemsByVariant.get(v.id) || [],
         })
         variantsByProduct.set(v.product_id, list)

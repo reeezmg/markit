@@ -1,19 +1,13 @@
 // upload.ts
 import { defineEventHandler, readBody, createError } from 'h3'
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
+import { uploadBufferToR2 } from '~/server/utils/r2'
 
 /* ---------------------------------------------------------
    BACKGROUND PROCESSOR
 ----------------------------------------------------------*/
 async function processUpload(body: any) {
   console.log("🔥 Background processing started for:", body.key)
-
-  const { R2_ID, R2_SECRET, R2_BUCKET, R2_ACCOUNT_ID } = process.env
-  if (!R2_ID || !R2_SECRET || !R2_BUCKET || !R2_ACCOUNT_ID) {
-    console.error("❌ Missing Cloudflare R2 credentials")
-    return
-  }
 
   try {
     const base64Regex = /^data:(.+);base64,/
@@ -156,20 +150,7 @@ If transparent areas exist, fill with #ffffff.
     // =====================================================================
     console.log(`🟡 Uploading to R2: ${body.key}`)
 
-    const s3Client = new S3Client({
-      region: 'auto',
-      endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-      credentials: { accessKeyId: R2_ID, secretAccessKey: R2_SECRET },
-    })
-
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: R2_BUCKET,
-        Key: body.key,
-        Body: finalBuffer,
-        ContentType: 'image/webp',
-      })
-    )
+    await uploadBufferToR2(finalBuffer, body.key, 'image/webp')
 
     console.log(`✅ Upload complete: ${body.key}`)
 

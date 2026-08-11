@@ -3,7 +3,6 @@ import type { FormError, FormSubmitEvent } from '#ui/types';
 import { useUpdateCompany, useFindUniqueCompany, useUpsertAddress } from '~/lib/hooks';
 import { v4 as uuidv4 } from 'uuid';
 import AwsService from '~/composables/aws';
-import { billingUnitOptions, billingUnitSelectOptions, normalizeBillingUnits } from '~/utils/billing-units';
 
 interface ImageData {
     file: File;
@@ -29,7 +28,6 @@ const isPointChanged = ref(false);
 const isTimeChanged = ref(false);
 const isAccountStateChanged = ref(false);
 const isAddressStateChanged = ref(false);
-const isInputsChanged = ref(false);
 const isDeliveryTypeChanged =ref(false)
 const isOpeningBalanceChanged = ref(false);
 
@@ -38,7 +36,6 @@ const selectedFile = ref<ImageData | null>(null);
 const isUpdatingName = ref(false);
 const isUpdatingAddress = ref(false);
 const isUpdatingAccount = ref(false);
-const isUpdatingInputs = ref(false);
 const isUpdatingPointsValue = ref(false);
 const isUpdatingtiming = ref(false);
 const isUpdatingDescription = ref(false);
@@ -183,75 +180,8 @@ const isUserTrackInclude = ref(useAuth().session.value?.isUserTrackIncluded);
 const isCostInclude = ref(useAuth().session.value?.isCostIncluded);
 const pointsValue = ref(useAuth().session.value?.pointsValue || 0);
 
-const productInputs = reactive([
-  { key: 'name', label: 'Name', value: useAuth().session.value?.productInputs?.name  },
-  { key: 'brand', label: 'Brand', value: useAuth().session.value?.productInputs?.brand  },
-  { key: 'category', label: 'Category', value: useAuth().session.value?.productInputs?.category  },
-  { key: 'subcategory', label: 'Subcategory', value: useAuth().session.value?.productInputs?.subcategory  },
-  { key: 'description', label: 'Description', value: useAuth().session.value?.productInputs?.description },
-])
-
-const variantInputs = reactive([
-  { key: 'name', label: 'Variant Name', value: useAuth().session.value?.variantInputs?.name  },
-  { key: 'code', label: 'Code', value: useAuth().session.value?.variantInputs?.code  },
-  { key: 'sprice', label: 'Selling Price', value: useAuth().session.value?.variantInputs?.sprice  },
-  { key: 'pprice', label: 'Purchase Price', value: useAuth().session.value?.variantInputs?.pprice  },
-  { key: 'dprice', label: 'Discount Price', value: useAuth().session.value?.variantInputs?.dprice  },
-  { key: 'discount', label: 'Discount', value: useAuth().session.value?.variantInputs?.discount  },
-  { key: 'qty', label: 'Quantity', value: useAuth().session.value?.variantInputs?.qty  },
-  { key: 'sizes', label: 'Sizes', value: useAuth().session.value?.variantInputs?.sizes  },
-  { key: 'shades', label: 'Shades', value: useAuth().session.value?.variantInputs?.shades ?? false },
-  { key: 'images', label: 'Images', value: useAuth().session.value?.variantInputs?.images  },
-  { key: 'button', label: 'Button', value: useAuth().session.value?.variantInputs?.button  },
-])
-
-// Dimension input toggles (product-level + size-level). Persisted via the raw
-// /api/product-inputs endpoint (product_inputs.dimension / variant_inputs.sizeDimension),
-// independent of the ZenStack company update above.
-const productDimensionFlag = ref(false)
-const sizeDimensionFlag = ref(false)
-const savedProductDimensionFlag = ref(false)
-const savedSizeDimensionFlag = ref(false)
-async function loadDimensionFlags() {
-  try {
-    const res: any = await $fetch('/api/product-inputs')
-    productDimensionFlag.value = savedProductDimensionFlag.value = !!res.productDimension
-    sizeDimensionFlag.value = savedSizeDimensionFlag.value = !!res.sizeDimension
-  } catch { /* ignore */ }
-}
-onMounted(loadDimensionFlags)
-watch([productDimensionFlag, sizeDimensionFlag], () => {
-  if (productDimensionFlag.value !== savedProductDimensionFlag.value ||
-      sizeDimensionFlag.value !== savedSizeDimensionFlag.value) {
-    isInputsChanged.value = true
-  }
-})
-
-const selectedBillingUnits = ref<string[]>(
-  normalizeBillingUnits(useAuth().session.value?.variantInputs?.unit)
-)
-
-const savedBillingUnits = computed(() =>
-  billingUnitOptions.filter((unit) => selectedBillingUnits.value.includes(unit))
-)
-
-const onBillingUnitsChange = (units: string[] | string | null | undefined) => {
-  if (!units) {
-    selectedBillingUnits.value = ['Nos']
-    return
-  }
-
-  const next = Array.isArray(units) ? units : [units]
-  if (next.includes('All')) {
-    selectedBillingUnits.value = [...billingUnitOptions]
-    return
-  }
-
-  const normalized = billingUnitOptions.filter((unit) => next.includes(unit))
-  selectedBillingUnits.value = normalized.length ? normalized : ['Nos']
-}
-
-
+// Product/variant input visibility, billing units and size labels now live on
+// Settings → Products (pages/settings/products.vue).
 
 const deliveryType = ref<string[]>(useAuth().session.value?.deliveryType || [])
 // Delivery mode is hidden in the UI for now — always 'self'.
@@ -362,21 +292,6 @@ watch(addstate, (newState) => {
 }, { deep: true, immediate: true });
 
 
-
-watch(productInputs, (newInputs) => {
-  isInputsChanged.value = newInputs.some(input => input.value !== useAuth().session.value?.productInputs?.[input.key]);
-}, { deep: true, immediate: true });
-watch(variantInputs, (newInputs) => {
-  isInputsChanged.value = isInputsChanged.value || newInputs.some(input => input.value !== useAuth().session.value?.variantInputs?.[input.key]);
-}, { deep: true, immediate: true });
-
-watch(selectedBillingUnits, (newUnits) => {
-  const currentUnits = normalizeBillingUnits(useAuth().session.value?.variantInputs?.unit)
-  isInputsChanged.value =
-    isInputsChanged.value ||
-    newUnits.length !== currentUnits.length ||
-    newUnits.some((unit) => !currentUnits.includes(unit))
-}, { deep: true, immediate: true })
 
 const { data: taken } = useFindUniqueCompany({
   where: computed(() => ({
@@ -754,50 +669,6 @@ const onCostIncludeChange = () => {
     toast.add({ title: 'Cost include updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating Cost setting', color: 'red', icon: 'i-heroicons-x-circle' });
-  }
-};
-
-const onInputChange = async () => {
-  isUpdatingInputs.value = true;
-  try {
-      if (!navigator.onLine) {
-    throw createError({
-      statusCode: 0,
-      statusMessage: 'No internet connection',
-    })
-  }
-    const productinputData = Object.fromEntries(productInputs.map(input => [input.key, input.value]));
-    const variantinputData = {
-      ...Object.fromEntries(variantInputs.map(input => [input.key, input.value])),
-      unit: savedBillingUnits.value,
-    };
-
-    await UpdateCompany.mutateAsync({
-      where: {
-        id: useAuth().session.value?.companyId,
-      },
-      data: {
-        productinput: {
-          update: productinputData,
-        },
-        variantinput: {
-          update: variantinputData,
-        },
-      },
-    });
-    await updateSession(productinputData, variantinputData);
-    // Dimension toggles are stored separately (raw endpoint) to avoid a ZenStack regen.
-    await $fetch('/api/product-inputs', {
-      method: 'POST',
-      body: { productDimension: productDimensionFlag.value, sizeDimension: sizeDimensionFlag.value },
-    });
-    savedProductDimensionFlag.value = productDimensionFlag.value;
-    savedSizeDimensionFlag.value = sizeDimensionFlag.value;
-    toast.add({ title: 'Product and Variant inputs updated', icon: 'i-heroicons-check-circle' });
-  } catch (error) {
-    toast.add({ title: 'Error updating Product and Variant inputs',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
-  } finally {
-    isUpdatingInputs.value = false;
   }
 };
 
@@ -1450,47 +1321,6 @@ const onAllDeliverySave = () => {
       <div class="mt-4 grid gap-4 md:grid-cols-2">
         <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
           <div class="mb-3">
-            <div class="text-sm font-semibold text-gray-900 dark:text-white">Units used in software</div>
-            <div class="text-sm text-gray-500 dark:text-gray-400">
-              Select the units that should be available while billing and editing products. `Nos` stays as the default when only one unit is chosen.
-            </div>
-          </div>
-
-          <div class="space-y-3">
-            <div class="grid w-full grid-cols-[minmax(0,1fr)_auto] items-start gap-3">
-              <USelectMenu
-                class="min-w-0"
-                :model-value="selectedBillingUnits"
-                @update:modelValue="onBillingUnitsChange"
-                :options="billingUnitSelectOptions"
-                multiple
-                searchable
-                placeholder="Select units"
-              >
-                <template #label>
-                  <span v-if="selectedBillingUnits.length">{{ selectedBillingUnits.join(', ') }}</span>
-                  <span v-else class="text-gray-400">Select units</span>
-                </template>
-              </USelectMenu>
-
-              <UButton
-                label="Save Units"
-                color="primary"
-                class="self-start whitespace-nowrap"
-                :loading="isUpdatingInputs"
-                :disabled="!isInputsChanged"
-                @click="onInputChange"
-              />
-            </div>
-
-            <div class="text-xs text-gray-500 dark:text-gray-400">
-              Use <span class="font-medium text-gray-700 dark:text-gray-200">All</span> to enable every unit, or select just <span class="font-medium text-gray-700 dark:text-gray-200">Nos</span> if you want a single unit everywhere.
-            </div>
-          </div>
-        </div>
-
-        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
-          <div class="mb-3">
             <div class="text-sm font-semibold text-gray-900 dark:text-white">Points Value</div>
             <div class="text-sm text-gray-500 dark:text-gray-400">What is the value of 1 point in your currency?</div>
           </div>
@@ -1830,58 +1660,6 @@ const onAllDeliverySave = () => {
           </div>
           <UCheckbox v-model="isUserTrackInclude" @change="onUserTrackIncludeChange" />
         </div>
-      </div>
-    </div>
-
-    <!-- ========== PRODUCT & VARIANT INPUTS ========== -->
-    <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Product & Variant Inputs</h2>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Choose which fields are visible when adding products and variants</p>
-
-      <div class="mb-6">
-        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Product Inputs</h3>
-        <div class="grid grid-cols-2 gap-4">
-          <div
-            v-for="(input, index) in productInputs"
-            :key="input.key"
-            class="flex items-center justify-between border px-3 py-2 rounded-md"
-          >
-            <label class="text-sm font-medium">{{ input.label }}</label>
-            <UCheckbox v-model="input.value" />
-          </div>
-          <div class="flex items-center justify-between border px-3 py-2 rounded-md">
-            <label class="text-sm font-medium">Product Dimension</label>
-            <UCheckbox v-model="productDimensionFlag" />
-          </div>
-        </div>
-      </div>
-
-
-      <div class="mb-6">
-        <h3 class="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Variant Inputs</h3>
-        <div class="grid grid-cols-2 gap-4">
-          <div
-            v-for="(input, index) in variantInputs"
-            :key="input.key"
-            class="flex items-center justify-between border px-3 py-2 rounded-md"
-          >
-            <label class="text-sm font-medium">{{ input.label }}</label>
-            <UCheckbox v-model="input.value" />
-          </div>
-          <div class="flex items-center justify-between border px-3 py-2 rounded-md">
-            <label class="text-sm font-medium">Size Dimension</label>
-            <UCheckbox v-model="sizeDimensionFlag" />
-          </div>
-        </div>
-      </div>
-
-      <div class="mt-4 flex w-full justify-end">
-        <UButton
-          @click="onInputChange"
-          label="Save Inputs"
-          :loading="isUpdatingInputs"
-          :disabled="!isInputsChanged"
-        />
       </div>
     </div>
 

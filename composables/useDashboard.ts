@@ -21,6 +21,7 @@ const _useDashboard = () => {
         'c-c': () => router.push(`/client`),
         's-g': () => router.push(`/settings`),
         's-s': () => router.push(`/settings/store`),
+        's-i': () => router.push(`/settings/products`),
         
    
 

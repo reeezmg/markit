@@ -17,6 +17,9 @@ watch(() => props.open, v => (isOpen.value = v))
 
 // Auth → companyId
 const auth = useAuth()
+// One table can list variants with different labels, so the header uses the
+// company default rather than any single row's label.
+const { defaultSizeLabel } = useSizeLabel()
 const companyId = computed(() => auth.session.value?.companyId)
 
 // Dropdowns
@@ -258,7 +261,7 @@ const done = () => {
               <th class="p-2">Barcode</th>
               <th class="p-2">Product</th>
               <th class="p-2">Variant</th>
-              <th class="p-2">Size</th>
+              <th class="p-2">{{ defaultSizeLabel }}</th>
               <th class="p-2">MRP</th>
               <th class="p-2">Brand</th>
               <th class="p-2">Stock</th>

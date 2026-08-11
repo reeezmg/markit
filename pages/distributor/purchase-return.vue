@@ -175,7 +175,7 @@ const expand = ref({ openedRows: [] as any[], row: null as any })
 const entryColumns = [
   { key: 'productName', label: 'Product' },
   { key: 'barcode',     label: 'Barcode' },
-  { key: 'size',        label: 'Size' },
+  { key: 'size',        label: useSizeLabel().defaultSizeLabel.value },
   { key: 'qty',         label: 'Qty' },
   { key: 'rate',        label: 'Rate' },
   { key: 'tax',         label: 'Tax%' },

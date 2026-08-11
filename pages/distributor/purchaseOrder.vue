@@ -8,6 +8,7 @@ import {
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
 const toast = useToast()
+const { defaultSizeLabel } = useSizeLabel()
 const router = useRouter()
 const useAuth = () => useNuxtApp().$auth
 
@@ -1104,7 +1105,7 @@ const action = (row: any) => {
                   <th class="px-3 py-2">Item</th>
                   <th class="px-3 py-2">Info</th>
                   <th class="px-3 py-2">Variant</th>
-                  <th class="px-3 py-2">Size</th>
+                  <th class="px-3 py-2">{{ defaultSizeLabel }}</th>
                   <th class="px-3 py-2 text-right">Qty</th>
                   <th class="px-3 py-2 text-right">Rate</th>
                   <th class="px-3 py-2 text-right">Amount</th>

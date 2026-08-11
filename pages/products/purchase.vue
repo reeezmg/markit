@@ -54,7 +54,7 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  items: {id: string; size: string | null; shade?: string | null; qty: number | undefined}[];
+  items: {id: string; size: string | null; qty: number | undefined}[];
   images: string[];
 }
 
@@ -128,7 +128,6 @@ const cacheKey = [
       items: v.items?.create?.map(i => ({
         id: i.id,
         size: i.size,
-        shade: i.shade,
         qty: i.qty,
         companyId: i.company?.connect?.id ?? null,
         variantId: v.id
@@ -263,7 +262,6 @@ const UpdateProduct = useUpdateProduct({
               updatedItems[existingItemIndex] = {
                 ...updatedItems[existingItemIndex],
                 size: itemData?.size ?? updatedItems[existingItemIndex].size,
-                shade: itemData?.shade ?? updatedItems[existingItemIndex].shade ?? null,
                 qty: itemData?.qty ?? updatedItems[existingItemIndex].qty,
               };
             } else {
@@ -271,7 +269,6 @@ const UpdateProduct = useUpdateProduct({
               updatedItems.push({
                 id: itemInput.where?.id ?? null,
                 size: itemData?.size ?? null,
-                shade: itemData?.shade ?? null,
                 qty: itemData?.qty ?? 0,
                 companyId: useAuth().session.value?.companyId ?? null,
                 variantId: variantInput.where.id,
@@ -299,7 +296,6 @@ const UpdateProduct = useUpdateProduct({
           items: (variantData?.items?.upsert ?? []).map(itemInput => ({
             id: itemInput.where?.id ?? null,
             size: (itemInput.update ?? itemInput.create)?.size ?? null,
-            shade: (itemInput.update ?? itemInput.create)?.shade ?? null,
             qty: (itemInput.update ?? itemInput.create)?.qty ?? 0,
             companyId: useAuth().session.value?.companyId ?? null,
             variantId: variantInput.where.id,
@@ -376,7 +372,7 @@ const selectedProduct: Ref<Product> = ref({
     pprice: 0,
     dprice: 0,
     discount: 0,
-    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: []
   }]
 });
@@ -427,7 +423,7 @@ const variants = ref<{
     pprice: number; 
     dprice: number; 
     discount: number; 
-    items: { id: string; size: string | null; shade?: string | null; qty: number | undefined }[];
+    items: { id: string; size: string | null; qty: number | undefined }[];
     images: ImageData[];
 }[]>([{ 
     id: uuidv4(),
@@ -440,7 +436,7 @@ const variants = ref<{
     pprice: 0, 
     dprice: 0, 
     discount: 0, 
-    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }], 
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: [] 
 }]);
 
@@ -615,7 +611,6 @@ const handleAdd = async (e: Event) => {
               ? variant.items.map((size) => ({
                 id: uuidv4(),
                   size: size.size || null,
-                  shade: size.shade || null,
                   qty: size.qty || 0,
                   initialQty: size.qty || 0,
                   company: {
@@ -635,6 +630,7 @@ const handleAdd = async (e: Event) => {
               discount: variant.discount || 0,
               deliveryType: deliveryType.value || 'trynbuy',
               status: true,
+              sizeLabel: variant.sizeLabel || 'Size',
               tax,
               ...(variantInputs?.value.images && { images: (variant.images || [])
                 .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
@@ -798,6 +794,7 @@ const updatedProduct =  UpdateProduct.mutate({
           deliveryType: deliveryType.value || 'trynbuy',
           discount: v.discount || 0,
           status: true,
+          sizeLabel: v.sizeLabel || 'Size',
           images: v.images?.map(file => file.uuid) || [],
           tax: calculateTax(v),
           company: {
@@ -815,14 +812,12 @@ const updatedProduct =  UpdateProduct.mutate({
               where: { id: item.id },
               update: {
                 size: item.size || null,
-                shade: item.shade || null,
                 qty: item.qty || 0,
                 initialQty: item.qty || 0,
               },
               create: {
                 id:item.id,
                 size: item.size || null,
-                shade: item.shade || null,
                 qty: item.qty || 0,
                 initialQty: item.qty || 0,
                 company: {
@@ -843,6 +838,7 @@ const updatedProduct =  UpdateProduct.mutate({
           discount: v.discount || 0,
           deliveryType: deliveryType.value || 'trynbuy',
           status: true,
+          sizeLabel: v.sizeLabel || 'Size',
              ...(variantInputs?.value.images && { images: (v.images || [])
                 .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
                 .map((file) => file.uuid),}),
@@ -857,7 +853,6 @@ const updatedProduct =  UpdateProduct.mutate({
             create: v.items.map(item => ({
               id: item.id,
               size: item.size || null,
-              shade: item.shade || null,
               qty: item.qty || 0,
               initialQty: item.qty || 0,
               company: {
@@ -907,7 +902,7 @@ const addVariant = () => {
     pprice: 0,
     dprice: 0,
     discount: 0,
-    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: [],
   });
 
@@ -1037,7 +1032,6 @@ const handleSave = async () => {
                   dprice: variant.dprice
                 }),
                 size: item.size,
-                shade: item.shade
               }))
         )
       )
@@ -1388,6 +1382,7 @@ const handleNewProduct = () => {
                         :editDescription="selectedProduct?.description"
                         :editCategory="selectedProduct?.categoryId"
                         :editSubcategory="selectedProduct?.subcategoryId"
+                        hide-custom-fields
                         @update="createValue" />
                 </UPageCard>
 
@@ -1422,7 +1417,9 @@ const handleNewProduct = () => {
                       :editdPrice="selectedProduct?.variants[index]?.dprice || variants[0]?.dprice"
                       :editDiscount="selectedProduct?.variants[index]?.discount || variants[0]?.discount"
                       :editItems="selectedProduct?.variants[index]?.items"
-          
+                      :editSizeLabel="selectedProduct?.variants[index]?.sizeLabel"
+                      hide-custom-fields
+
                       @update="updateVariant(index,$event)" />
                       <AddProductMedia
                       v-if="variantInputs?.images"

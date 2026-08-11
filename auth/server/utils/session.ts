@@ -3,7 +3,6 @@ import crypto from 'uncrypto';
 import { normalizeBillingUnits } from '~/utils/billing-units';
 
 const runtimeAuth = useRuntimeConfig().auth;
-console.log('Auth Config:', runtimeAuth);
 const isProd = process.env.NODE_ENV === 'production'
 
 const sessionConfig: SessionConfig = {
@@ -84,7 +83,9 @@ export type AuthSession = {
         qty: boolean;
         unit?: string[];
         sizes: boolean;
-        shades: boolean;
+        // Allowed "Size"/"Shade"/"Thickness"… labels; a variant picks one into
+        // Variant.sizeLabel. One entry ⇒ the product form applies it silently.
+        sizeLabels?: string[];
         images: boolean;
         button: boolean;
     };

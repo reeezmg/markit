@@ -9,6 +9,9 @@ const selectedVariant = ref();
 const cartStore = useCartStore();
 const likeStore = useLikeStore();
 const toast = useToast();
+const { labelFor } = useSizeLabel();
+// The label belongs to the variant the shopper is currently looking at.
+const currentSizeLabel = () => labelFor(product.value?.variants?.[selectedVariant.value]);
 const auth = useClientAuth();
 
 const selectedSizes = ref(new Set()); 
@@ -46,7 +49,7 @@ const actions = computed(() => {
     if ( !product.value.variants[selectedVariant.value]?.items) return [];
     console.log("Company item:",product.value.companyId)
     return product.value.variants[selectedVariant.value]?.items?.map((size, index) => ({
-        label: `Size: ${size.size}`,
+        label: `${labelFor(product.value.variants[selectedVariant.value])}: ${size.size}`,
         click: () => {
             if (size.qty > 0) {
                 selectedSizes.value.add(index)
@@ -69,8 +72,8 @@ const addToCart = () => {
     if (currentVariant.items && currentVariant.items.length > 0) {
         if (selectedSizes.value.size === 0) {
             toast.add({ 
-                title: 'Size Missing',
-                description: 'Please select at least one size before adding to cart.',
+                title: `${currentSizeLabel()} Missing`,
+                description: `Please select at least one ${currentSizeLabel().toLowerCase()} before adding to cart.`,
                 color: 'red',
                 icon: 'i-heroicons-exclamation-triangle',
                 actions: actions.value,
@@ -94,7 +97,7 @@ const addToCart = () => {
 
         toast.add({
             title: 'Added to Cart',
-            description: `Size(s): ${sizeDescription} added to cart.`,
+            description: `${currentSizeLabel()}(s): ${sizeDescription} added to cart.`,
             color: 'green',
             icon: 'i-heroicons-check-circle',
         });

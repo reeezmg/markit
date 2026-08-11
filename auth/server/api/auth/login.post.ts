@@ -1,4 +1,5 @@
 import { normalizeBillingUnits } from '~/utils/billing-units';
+import { normalizeSizeLabels } from '~/utils/size-labels';
 
 export default eventHandler(async (event) => {
 
@@ -71,7 +72,7 @@ export default eventHandler(async (event) => {
         productInputs: (({ name, brand, category, subcategory, description }) =>
         ({ name, brand, category, subcategory, description }))(user.companies[0].company.productinput || {}),
 
-        variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, unit, sizes, shades, images, button }) => ({
+        variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, unit, sizes, sizeLabels, images, button }) => ({
         name,
         code,
         sprice,
@@ -81,7 +82,7 @@ export default eventHandler(async (event) => {
         qty,
         unit: normalizeBillingUnits(unit),
         sizes,
-        shades: shades ?? false,
+        sizeLabels: normalizeSizeLabels(sizeLabels),
         images,
         button,
         }))(user.companies[0].company.variantinput || {}),

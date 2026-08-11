@@ -22,6 +22,9 @@ const route = useRoute()
 const router = useRouter()
 
 const toast = useToast()
+// "Size" / "Shade" / … for whichever variant the quick-view modal is showing.
+const { labelFor } = useSizeLabel()
+const quickViewSizeLabel = () => labelFor(quickViewProduct.value?.variant)
 
 // State
 const search = ref('')
@@ -456,8 +459,8 @@ const addToCartFromQuickView = async () => {
   // Size validation
   if (quickViewProduct.value.availableSizes.length > 0 && !quickViewProduct.value.selectedSize) {
     toast.add({
-      title: 'Size Required',
-      description: 'Please select a size before adding to cart',
+      title: `${quickViewSizeLabel()} Required`,
+      description: `Please select a ${quickViewSizeLabel().toLowerCase()} before adding to cart`,
       color: 'orange',
       icon: 'i-heroicons-exclamation-triangle'
     })
@@ -1134,7 +1137,7 @@ const cartItemCount =computed(() => cartStore.cartItemCount);
           <!-- Size Selection -->
           <div v-if="quickViewProduct.availableSizes.length > 0">
             <h4 class="text-sm font-medium text-gray-500 dark:text-gray-400 mb-2">
-              Sizes
+              {{ labelFor(quickViewProduct.variant) }}
               <span v-if="!quickViewProduct.selectedSize" class="text-red-500 text-xs ml-1">* Required</span>
             </h4>
             <div class="flex flex-wrap gap-2">

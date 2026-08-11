@@ -73,7 +73,7 @@
               {{ line }}
             </div>
             <div v-if="item.size" class="text-[10px]">
-              Size: {{ item.size }}
+              {{ labelFor(item) }}: {{ item.size }}
             </div>
           </span>
 
@@ -148,6 +148,9 @@ const props = defineProps<{ data: any }>()
 console.log('Receipt data:', props.data)
 
 const showUnit = computed(() => Boolean(props.data?.showUnit))
+// Entries carry their variant's sizeLabel when available; otherwise this falls
+// back to the company's first configured label.
+const { labelFor } = useSizeLabel()
 const columnsClass = computed(() =>
   showUnit.value
     ? 'grid grid-cols-[6mm_23mm_8mm_6mm_11mm_11mm_11mm]'

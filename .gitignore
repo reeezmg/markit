@@ -36,3 +36,5 @@ zenstack/
 .zenstack/
 electron-dist/
 electron/
+.vercel
+.env*

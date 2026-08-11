@@ -5,6 +5,7 @@ import { useFindManyEcommOrder } from '~/lib/hooks';
 definePageMeta({ auth: true });
 
 const useAuth = () => useNuxtApp().$auth;
+const { labelFor } = useSizeLabel();
 const companyId = computed(() => useAuth().session.value?.companyId || '');
 
 const search = ref('');
@@ -506,10 +507,8 @@ const filteredOrders = computed(() => {
                         <p class="font-medium text-gray-900 dark:text-white">{{ item.name || item.variantName || 'Item' }}</p>
                         <p class="text-xs text-gray-500">
                           <span v-if="item.variantName">{{ item.variantName }}</span>
-                          <span v-if="item.variantName && (item.size || item.shade)"> · </span>
-                          <span v-if="item.size">Size: {{ item.size }}</span>
-                          <span v-if="item.size && item.shade"> · </span>
-                          <span v-if="item.shade">Shade: {{ item.shade }}</span>
+                          <span v-if="item.variantName && item.size"> · </span>
+                          <span v-if="item.size">{{ labelFor(item) }}: {{ item.size }}</span>
                         </p>
                       </div>
                       <div class="text-right">

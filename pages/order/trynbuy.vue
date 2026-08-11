@@ -45,7 +45,7 @@ const columns = [
 const itemColumns = [
   { key: 'item.barcode', label: 'Barcode' },
   { key: 'variant.name', label: 'Variant' },
-  { key: 'item.size', label: 'Size' },
+  { key: 'item.size', label: useSizeLabel().defaultSizeLabel.value },
   { key: 'quantity', label: 'Qty' },
   { key: 'variant.dprice', label: 'Rate' },
   { key: 'variant.tax', label: 'Tax' },

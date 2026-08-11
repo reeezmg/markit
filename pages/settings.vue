@@ -16,6 +16,11 @@ const links = [
             to: '/settings/store',
         },
         {
+            label: 'Products',
+            icon: 'i-heroicons-squares-2x2',
+            to: '/settings/products',
+        },
+        {
             label: 'Printer',
             icon: 'i-heroicons-printer',
             to: '/settings/printer',

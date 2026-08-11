@@ -14,7 +14,7 @@
           <p class="barcode-info">
             <span v-if="item.color">Color: {{ item.color }}</span>
             <span v-if="item.color && item.size"> | </span>
-            <span v-if="item.size">Size: {{ item.size }}</span>
+            <span v-if="item.size">{{ labelFor(item) }}: {{ item.size }}</span>
           </p>
           <p class="price">Price: ${{ item.price.toFixed(2) }}</p>
         </div>
@@ -35,9 +35,13 @@
     price: number;
     color?: string | null;
     size?: string | null;
+    // What the size value is called for this variant ("Size" / "Shade" / …).
+    sizeLabel?: string | null;
   }
-  
+
   const props = defineProps<{ barcodes: BarcodeItem[] }>();
+
+  const { labelFor } = useSizeLabel();
   
   // Function to Generate Barcode
   const setBarcode = (el: SVGElement | null, barcodeValue: string) => {

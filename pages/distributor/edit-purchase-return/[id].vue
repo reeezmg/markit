@@ -9,6 +9,7 @@ const route   = useRoute()
 const useAuth = () => useNuxtApp().$auth
 
 const companyId = computed(() => useAuth().session.value?.companyId)
+const { defaultSizeLabel } = useSizeLabel()
 const returnId  = route.params.id as string
 
 // ─── Loading state ────────────────────────────────────────────────────────────
@@ -416,7 +417,7 @@ const handleSubmit = async () => {
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-28">Barcode</th>
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500">Product</th>
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-32">Category</th>
-              <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-16">Size</th>
+              <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-16">{{ defaultSizeLabel }}</th>
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-16">Qty</th>
               <th class="px-2 py-2 text-left text-xs font-medium text-gray-500 w-20">Rate</th>
               <th class="px-2 py-2 text-right text-xs font-medium text-gray-500 w-22">Subtotal</th>

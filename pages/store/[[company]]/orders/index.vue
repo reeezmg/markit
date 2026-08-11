@@ -6,6 +6,7 @@ import { useToast } from '#imports'
 
 const toast = useToast()
 const { session } = useAuth()
+const { labelFor } = useSizeLabel()
 const isLoginModalOpen = ref(false)
 
 // Show login modal if not authenticated
@@ -109,7 +110,7 @@ function statusColor(status: string) {
               <p class="font-semibold dark:text-white">{{ entry.name }}</p>
               <p class="text-sm text-gray-600 dark:text-gray-300">Category: {{ entry.category?.name || '-' }}</p>
               <p class="text-sm dark:text-gray-200">Qty: {{ entry.qty }} | Rate: ₹{{ entry.rate }}</p>
-              <p class="text-sm text-gray-500 dark:text-gray-400">Size: {{ entry.size }}</p>
+              <p class="text-sm text-gray-500 dark:text-gray-400">{{ labelFor(entry) }}: {{ entry.size }}</p>
             </div>
           </div>
 

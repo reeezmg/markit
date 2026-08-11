@@ -14,6 +14,7 @@ import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'dat
 import { exportToCSV } from '~/utils/export-csv'
 
 const toast = useToast()
+const { defaultSizeLabel } = useSizeLabel()
 const router = useRouter()
 const useAuth = () => useNuxtApp().$auth
 
@@ -2355,7 +2356,7 @@ const transactionAction = (row: any) => {
                 <tr class="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400">
                   <th class="px-3 py-2">Item</th>
                   <th class="px-3 py-2">Variant</th>
-                  <th class="px-3 py-2">Size</th>
+                  <th class="px-3 py-2">{{ defaultSizeLabel }}</th>
                   <th class="px-3 py-2 text-right">Qty</th>
                   <th class="px-3 py-2 text-right">Rate</th>
                   <th class="px-3 py-2 text-right">Amount</th>

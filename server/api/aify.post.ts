@@ -1,6 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3'
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 import sharp from 'sharp'
+import { uploadBufferToR2 } from '~/server/utils/r2'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody<{
@@ -13,12 +13,6 @@ export default defineEventHandler(async (event) => {
 
   if (!body?.url || !body?.key) {
     throw createError({ statusCode: 400, statusMessage: 'Missing image URL or key' })
-  }
-
-  // 🔹 Cloudflare R2 credentials
-  const { R2_ID, R2_SECRET, R2_BUCKET, R2_ACCOUNT_ID } = process.env
-  if (!R2_ID || !R2_SECRET || !R2_BUCKET || !R2_ACCOUNT_ID) {
-    throw createError({ statusCode: 500, statusMessage: 'Missing Cloudflare R2 credentials' })
   }
 
   // 🔹 Fetch image from URL
@@ -138,27 +132,13 @@ If the input image has transparent areas, ensure they are filled with #ffffff no
   // 🔹 Upload to Cloudflare R2
   console.log('🟡 Uploading to Cloudflare R2...')
 
-  const s3Client = new S3Client({
-    region: 'auto',
-    endpoint: `https://${R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
-    credentials: { accessKeyId: R2_ID, secretAccessKey: R2_SECRET },
-  })
-
+  let finalUrl: string
   try {
-    await s3Client.send(
-      new PutObjectCommand({
-        Bucket: R2_BUCKET,
-        Key: body.key,
-        Body: finalBuffer,
-        ContentType: 'image/webp',
-      })
-    )
+    finalUrl = await uploadBufferToR2(finalBuffer, body.key, 'image/webp')
     console.log(`✅ Uploaded successfully: ${body.key}`)
   } catch (error: any) {
     throw createError({ statusCode: 500, statusMessage: `Cloudflare upload failed: ${error.message}` })
   }
-
-  const finalUrl = `https://${R2_BUCKET}.${R2_ACCOUNT_ID}.r2.cloudflarestorage.com/${body.key}`
 
   return {
     success: true,

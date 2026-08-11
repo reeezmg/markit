@@ -15,6 +15,9 @@ const router = useRouter();
 const cartStore = useCartStore();
 const likeStore = useLikeStore();
 const toast = useToast();
+// What this variant's size values are called ("Size" / "Shade" / ...).
+const { labelFor } = useSizeLabel()
+const sizeLabel = computed(() => labelFor(props.variant))
 
 // Current product data
 const product = computed(() => props.variant.product);
@@ -138,12 +141,12 @@ const addToCart = async (e?: Event) => {
   if (sizes.length > 0) {
     if (selectedSize.value === null) {
       toast.add({
-        title: 'Size Missing',
-        description: 'Please select a size before adding to cart.',
+        title: `${sizeLabel.value} Missing`,
+        description: `Please select a ${sizeLabel.value.toLowerCase()} before adding to cart.`,
         color: 'red',
         icon: 'i-heroicons-exclamation-triangle',
         actions: availableSizes.value.map((size, index) => ({
-          label: `Size: ${size.size}`,
+          label: `${sizeLabel.value}: ${size.size}`,
           click: () => {
             selectedSize.value = index;
             addToCart();

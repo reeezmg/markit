@@ -7,7 +7,7 @@ const useAuth = () => useNuxtApp().$auth;
 const cleanupUnlocked = useState('cleanup-unlocked', () => false)
 const showSidebar = computed(() =>
   route.path !== '/cleanup' || cleanupUnlocked.value
-)
+)   
 const isSidebarCollapsed = ref(false)
 const plan = ref(useAuth().session.value?.plan || 'free');
 
@@ -299,6 +299,30 @@ const links = computed(() => {
       },
     },
     {
+      id: 'ai',
+      label: 'AI',
+      icon: 'i-heroicons-sparkles',
+      children: [
+        {
+          id: 'ai-usage',
+          label: 'Usage',
+          to: '/ai/usage',
+          icon: 'i-heroicons-chart-bar',
+          tooltip: {
+            text: 'AI Usage & Cost',
+            shortcuts: ['A', 'U'],
+          },
+        },
+        {
+          id: 'ai-models',
+          label: 'Models',
+          to: '/ai/models',
+          icon: 'i-heroicons-cpu-chip',
+          tooltip: { text: 'AI Models & API Keys', shortcuts: ['A', 'M'] },
+        },
+      ],
+    },
+    {
       id: 'settings',
       label: 'Settings',
       to: `/settings`,
@@ -319,6 +343,14 @@ const links = computed(() => {
           tooltip: {
             text: 'Store Settings',
             shortcuts: ['S', 'S'],
+          },
+        },
+        {
+          label: 'Products',
+          to: '/settings/products',
+          tooltip: {
+            text: 'Product Inputs',
+            shortcuts: ['S', 'I'],
           },
         },
         {
@@ -903,6 +935,31 @@ const links = computed(() => {
         },
 
         {
+            id: 'ai',
+            label: 'AI',
+            icon: 'i-heroicons-sparkles',
+            children: [
+                {
+                    id: 'ai-usage',
+                    label: 'Usage',
+                    to: `/ai/usage`,
+                    exact: true,
+                    tooltip: {
+                        text: 'AI Usage & Cost',
+                        shortcuts: ['A', 'U'],
+                    },
+                },
+                {
+                    id: 'ai-models',
+                    label: 'Models',
+                    to: `/ai/models`,
+                    exact: true,
+                    tooltip: { text: 'AI Models & API Keys', shortcuts: ['A', 'M'] },
+                },
+            ],
+        },
+
+        {
             id: 'settings',
             label: 'Settings',
             to: `/settings`,
@@ -924,6 +981,15 @@ const links = computed(() => {
                     tooltip: {
                         text: 'Settings',
                         shortcuts: ['S', 'S'],
+                    },
+                },
+                {
+                    label: 'Products',
+                    to: `/settings/products`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Product Inputs',
+                        shortcuts: ['S', 'I'],
                     },
                 },
                 {

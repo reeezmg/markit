@@ -15,7 +15,12 @@ const props = defineProps<{
     editpPrice?: number | null;
     editDiscount?: number | null;
     editdPrice?: number | null;
-    editItems?: {id:string; size: string | null; shade?: string | null; qty: number }[] | null;
+    editItems?: {id:string; size: string | null; qty: number }[] | null;
+    editSizeLabel?: string | null;
+    editCustomFields?: Record<string, any> | null;
+    // products/purchase.vue still writes variants through ZenStack and has no
+    // custom-field plumbing, so it opts out of rendering them.
+    hideCustomFields?: boolean;
 
 }>();
 
@@ -56,7 +61,7 @@ const schema = z.object({
 const { errors, defineField,resetForm: resetValidation } = useForm({
     validationSchema: toTypedSchema(schema),
 });
-const items = ref<{ id: string; size: string | null; shade?: string | null; qty: number | undefined; dimensionId?: string | null }[]>([]);
+const items = ref<{ id: string; size: string | null; qty: number | undefined; dimensionId?: string | null }[]>([]);
 const id = ref(props.id);
 
 // Product dimension presets (ShippingBox, type='product') for per-size linking.
@@ -91,16 +96,67 @@ const editableQty = computed({
     if (
       items.value.length <= 1
       && (items.value[0]?.size === null || items.value[0]?.size === undefined)
-      && (items.value[0]?.shade === null || items.value[0]?.shade === undefined)
     ) {
       if (!items.value.length) {
-        items.value = [{ id: uuidv4(), size: null, shade: null, qty: nextQty }]
+        items.value = [{ id: uuidv4(), size: null, qty: nextQty }]
       } else {
         items.value[0].qty = nextQty
       }
     }
   },
 })
+
+/* -----------------------------
+CUSTOM FIELDS (Settings → Products, scope = VARIANT)
+------------------------------ */
+const {
+  variantFields: customFieldDefs,
+  load: loadCustomFields,
+  seedValues,
+} = useProductCustomFields();
+
+const customValues = ref<Record<string, any>>({});
+const visibleCustomFields = computed(() =>
+  props.hideCustomFields ? [] : customFieldDefs.value
+);
+
+onMounted(() => { loadCustomFields(); });
+
+// Re-seed when the definitions arrive or a different variant is hydrated.
+watch(
+  [customFieldDefs, () => props.editCustomFields],
+  ([defs, saved]) => {
+    customValues.value = seedValues(defs, saved as Record<string, any> | null);
+  },
+  { immediate: true, deep: true }
+);
+
+/* -----------------------------
+SIZE LABEL — what this variant's per-size field is called ("Size" / "Shade" /
+"Thickness"). Same shape as `unit` is for qty: the company configures the
+allowed labels in Settings → Store, and the picker below only appears when
+there is more than one to choose from.
+------------------------------ */
+const { sizeLabels, defaultSizeLabel, showSizeLabelSelect } = useSizeLabel();
+const sizeLabel = ref<string>(defaultSizeLabel.value);
+
+const sizeLabelOptions = computed(() => {
+  // Keep a variant's saved label selectable even if it was later removed from
+  // the company list, otherwise editing that variant would silently reassign it.
+  const options = [...sizeLabels.value];
+  if (sizeLabel.value && !options.includes(sizeLabel.value)) options.push(sizeLabel.value);
+  return options;
+});
+
+watch(() => props.editSizeLabel, (newSizeLabel) => {
+    sizeLabel.value = (newSizeLabel || '').trim() || defaultSizeLabel.value;
+}, { immediate: true });
+
+// When only one label is configured it is applied silently — follow settings
+// changes so a variant that was never explicitly set stays in sync.
+watch(defaultSizeLabel, (newDefault) => {
+  if (!props.editSizeLabel) sizeLabel.value = newDefault;
+});
 
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 const availableUnits = computed(() => {
@@ -133,13 +189,12 @@ const lastEmittedPayload = ref('')
 
 const addItem = () => {
     // If we're adding the first size item and there's a null size item, remove it first
-    if (items.value.length === 1 && items.value[0].size === null && items.value[0].shade == null) {
+    if (items.value.length === 1 && items.value[0].size === null) {
         items.value = [];
     }
     items.value.push({
       id: uuidv4(),
-      size: variantInputs.value?.sizes ? '' : null,
-      shade: variantInputs.value?.shades ? '' : null,
+      size: '',
       qty: undefined,
     });
 };
@@ -148,7 +203,6 @@ const removeItem = (index: number) => {
     if (items.value.length === 1) {
         // Instead of removing, reset the single item's size
         items.value[0].size = null;
-        items.value[0].shade = null;
     } else {
         items.value.splice(index, 1);
     }
@@ -165,7 +219,7 @@ const focusSizeAt = (index: number, field: 'size' | 'qty' = 'size') => {
     const row = rootEl.value?.querySelector(`[data-size-index="${index}"]`) as HTMLElement | null;
     if (!row) return;
     const selector = field === 'size'
-      ? '[data-size-field="size"], [data-shade-field="shade"]'
+      ? '[data-size-field="size"]'
       : '[data-qty-field="qty"]';
     const input = row.querySelector(selector) as HTMLInputElement | null;
     input?.focus();
@@ -184,6 +238,8 @@ const resetForm = () => {
     dprice.value = 0;
     discount.value = 0;
     items.value = [];
+    sizeLabel.value = defaultSizeLabel.value;
+    customValues.value = seedValues(customFieldDefs.value, null);
     resetValidation();
 };
 
@@ -273,7 +329,6 @@ watch(items, (newItems) => {
   if (
     newItems.length === 1 &&
     (newItems[0].size === null || newItems[0].size === undefined)
-    && (newItems[0].shade === null || newItems[0].shade === undefined)
   ) {
     qty.value = newItems[0].qty || 0;
   }else{
@@ -283,9 +338,8 @@ watch(items, (newItems) => {
 
 
 watch(
-  [id, items, name, code, qty, sprice, pprice, dprice, discount],
+  [id, items, name, code, qty, sprice, pprice, dprice, discount, sizeLabel, customValues],
   ([newId, newItems, newName, newCode, newQty, newSPrice, newPPrice, newDPrice, newDiscount]) => {
-    console.log('watching items',newId);
 
     // If newItems is empty, populate it with default value.
     // NOTE: only treat an explicit `null` size as "no-sizes mode". An empty
@@ -293,8 +347,8 @@ watch(
     // size value yet — we must preserve it so the row stays rendered.
         const updatedItems =
         newItems.length === 0 ||
-        (newItems.length === 1 && newItems[0].size === null && newItems[0].shade == null)
-            ? [{id: newItems[0]?.id , size: null, shade: newItems[0]?.shade ?? null, qty: newQty }]
+        (newItems.length === 1 && newItems[0].size === null)
+            ? [{id: newItems[0]?.id , size: null, qty: newQty }]
             : newItems;
 
     const payload = {
@@ -308,6 +362,8 @@ watch(
       dprice: newDPrice,
       discount: newDiscount,
       items: updatedItems,
+      sizeLabel: sizeLabel.value,
+      customFields: { ...customValues.value },
     };
 
     const payloadKey = JSON.stringify(payload);
@@ -324,7 +380,27 @@ watch(
 // `wrapper.querySelector('button').focus()/click()` to close the menu —
 // mirrors the pattern in pages/erp/billing.vue (movecatgeory).
 const unitSelectRef = ref<HTMLElement | null>(null);
+// One wrapper per SELECT-type custom field (v-for template ref → array).
+const customSelectRefs = ref<HTMLElement[]>([]);
+const sizeLabelSelectRef = ref<HTMLElement | null>(null);
 const getSelectWrapper = (): HTMLElement | null => unitSelectRef.value ?? null;
+const getSelectWrappers = (): HTMLElement[] =>
+  [unitSelectRef.value, sizeLabelSelectRef.value, ...(customSelectRefs.value || [])].filter(
+    (wrapper): wrapper is HTMLElement => !!wrapper
+  );
+
+// Mirrors Create.vue: after picking an option, put focus back on the trigger
+// button so arrow/tab navigation keeps working. Only acts when focus was
+// dropped, so it never fights a prop-driven hydration.
+const restoreSelectFocus = (e: Event) => {
+  const wrapper = e.currentTarget as HTMLElement | null;
+  if (!(e.target as HTMLElement | null)?.closest('[role="listbox"]')) return;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    const active = document.activeElement as HTMLElement | null;
+    if (active && active !== document.body) return;
+    (wrapper?.querySelector('button') as HTMLElement | null)?.focus();
+  }));
+};
 
 // After a user picks a unit, return focus to the trigger button. Guarded by
 // an activeElement-inside-listbox check so programmatic unit changes (e.g.
@@ -337,7 +413,7 @@ watch(unit, (val) => {
   });
 });
 
-defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLastSize, items, getSelectWrapper });
+defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLastSize, items, getSelectWrapper, getSelectWrappers });
 </script>
 <template>
   <div ref="rootEl" data-variant-root>
@@ -417,15 +493,82 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
         />
       </div>
     </UFormGroup>
+
+    <!-- CUSTOM FIELDS (Settings → Products → Variant fields) -->
+    <UFormGroup
+      v-for="field in visibleCustomFields"
+      :key="field.id"
+      :label="field.label"
+      :required="field.required"
+    >
+      <div v-if="field.type === 'SELECT'" class="flex items-center gap-1">
+        <div
+          ref="customSelectRefs"
+          class="flex-1"
+          @keydown.capture.enter="restoreSelectFocus"
+          @click.capture="restoreSelectFocus"
+        >
+          <USelectMenu
+            v-model="customValues[field.key]"
+            :options="field.options"
+            searchable
+            :searchable-placeholder="`Search ${field.label}...`"
+            class="w-full"
+          >
+            <template #label>
+              <span v-if="customValues[field.key]" class="truncate">
+                {{ customValues[field.key] }}
+              </span>
+              <span v-else>Select</span>
+            </template>
+          </USelectMenu>
+        </div>
+        <UButton
+          v-if="!field.required && customValues[field.key]"
+          icon="i-heroicons-x-mark-20-solid"
+          color="gray"
+          variant="ghost"
+          square
+          :aria-label="`Clear ${field.label}`"
+          @click="customValues[field.key] = ''"
+        />
+      </div>
+
+      <UInput
+        v-else
+        v-model="customValues[field.key]"
+        type="text"
+        :placeholder="`Enter ${field.label.toLowerCase()}`"
+        class="w-full"
+      />
+    </UFormGroup>
   </div>
 
   <!-- Units / Sizes (Full Width) -->
-  <div class="w-full" v-if="variantInputs?.sizes || variantInputs?.shades">
-    <template v-if="items[0]?.size !== null || items[0]?.shade !== null">
-      <label class="block text-sm font-medium leading-6 dark:text-white mt-4">Items & Quantities</label>
+  <div class="w-full" v-if="variantInputs?.sizes">
+    <!-- Size-label picker. Only rendered when the company configured more than
+         one label; with a single label it is applied silently in script. -->
+    <UFormGroup
+      v-if="showSizeLabelSelect"
+      label="This variant is sized by"
+      class="mt-4"
+    >
+      <div ref="sizeLabelSelectRef" class="w-full sm:w-56">
+        <USelectMenu
+          v-model="sizeLabel"
+          :options="sizeLabelOptions"
+          searchable
+          creatable
+          placeholder="Size label"
+          class="w-full"
+        />
+      </div>
+    </UFormGroup>
+
+    <template v-if="items[0]?.size !== null">
+      <label class="block text-sm font-medium leading-6 dark:text-white mt-4">{{ sizeLabel }} &amp; Quantities</label>
       <div v-for="(item, index) in items" :key="index" :data-size-index="index" class="grid grid-cols-1 gap-2 mt-2" :class="showSizeDimension ? 'md:grid-cols-5' : 'md:grid-cols-4'">
-        <UInput v-if="variantInputs?.sizes" v-model="item.size" :data-size-field="'size'" type="text" placeholder="Size" class="w-full" />
-        <UInput v-if="variantInputs?.shades" v-model="item.shade" data-shade-field="shade" type="text" placeholder="Shade" class="w-full" />
+        <UInput v-model="item.size" :data-size-field="'size'" type="text" :placeholder="sizeLabel" class="w-full" />
         <UInput v-model.number="item.qty" data-qty-field="qty" type="text" inputmode="numeric" placeholder="Quantity" class="w-full" />
         <USelectMenu
           v-if="showSizeDimension"
@@ -453,7 +596,7 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
       @click="addItem"
       class="mt-2 w-full text-blue-500 py-2 border border-blue-500 rounded-md"
     >
-      {{ variantInputs?.sizes && variantInputs?.shades ? 'Add Size / Shade' : variantInputs?.shades ? 'Add Shades' : 'Add Sizes' }}
+      Add {{ sizeLabel }}
     </button>
   </div>
   </div>

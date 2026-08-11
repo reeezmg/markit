@@ -61,6 +61,7 @@ const isAdd = ref(false);
 const settledMap = ref(new Map());
 const pendingDraftProducts = ref<any[]>([]);
 const variantInputs = ref(useAuth().session.value?.variantInputs)
+const { defaultSizeLabel } = useSizeLabel()
 const deliveryType = ref<string>('')
 const billDate = ref<string>('');
 const isSaveDisable = computed(() => {
@@ -88,7 +89,7 @@ interface BarcodeItem {
   variantName: string;
   sprice: number;
   size?: string | null;
-  shade?: string | null;
+  sizeLabel?: string;
 }
 
 
@@ -104,8 +105,10 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  items: {id: string; size: string | null; shade?: string | null; qty: number | undefined}[];
+  items: {id: string; size: string | null; qty: number | undefined}[];
   images: string[];
+  sizeLabel?: string;
+  customFields?: Record<string, any>;
 }
 
 interface Product {
@@ -119,6 +122,7 @@ interface Product {
   subcategory:  Record<string, any>;
   categoryId:  string;
   subcategoryId:  string;
+  customFields?: Record<string, any>;
   variants: Variant[];
 }
 
@@ -171,7 +175,7 @@ const selectedProduct: Ref<Product> = ref({
     pprice: 0,
     dprice: 0,
     discount: 0,
-    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: []
   }]
 });
@@ -195,6 +199,9 @@ const linkList = ['Create', 'Media', 'Live'];
 const name = ref('');
 const brand = ref('');
 const description = ref('');
+// Custom product-level inputs (Settings → Products → Create fields) as a
+// { fieldKey: value } map — stored on products.custom_fields.
+const productCustomFields = ref<Record<string, any>>({});
 // Linked product-dimension ShippingBox (products.dimension_id).
 const productDimensionId = ref<string | null>(null);
 const live = ref<boolean>();
@@ -225,9 +232,11 @@ const variants = ref<{
     pprice: number; 
     dprice: number; 
     discount: number; 
-    items: { id: string; size: string | null; shade?: string | null; qty: number | undefined }[];
+    items: { id: string; size: string | null; qty: number | undefined }[];
     images: ImageData[];
-}[]>([{ 
+    sizeLabel?: string;
+    customFields?: Record<string, any>;
+}[]>([{
     id: uuidv4(),
     key:String(idCounter.value++),
     name: '', 
@@ -238,7 +247,7 @@ const variants = ref<{
     pprice: 0, 
     dprice: 0, 
     discount: 0, 
-    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }], 
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: [] 
 }]);
 
@@ -250,7 +259,7 @@ const stripDraftImages = (variantList: any[]) =>
     images: [],
     items: Array.isArray(variant.items) && variant.items.length
       ? variant.items
-      : [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
+      : [{ id: uuidv4(), size: null, qty: undefined }],
   }));
 
 const applyDraftToForm = () => {
@@ -263,6 +272,7 @@ const applyDraftToForm = () => {
   category.value = savedForm.category || {};
   subcategory.value = savedForm.subcategoryId || '';
   collection.value = savedForm.collectionId || '';
+  productCustomFields.value = savedForm.customFields || {};
   live.value = savedForm.live ?? true;
   deliveryType.value = isDistributorPurchaseOrderFlow.value
     ? 'order'
@@ -281,6 +291,7 @@ const applyDraftToForm = () => {
     categoryId: category.value?.id || '',
     subcategoryId: subcategory.value,
     collectionId: collection.value,
+    customFields: productCustomFields.value,
     variants: variants.value,
   };
 
@@ -343,6 +354,7 @@ const persistDraftForm = () => {
     category: category.value,
     subcategoryId: subcategory.value,
     collectionId: collection.value,
+    customFields: productCustomFields.value,
     live: live.value,
     deliveryType: effectiveDeliveryType.value,
     variants: stripDraftImages(variants.value),
@@ -371,6 +383,7 @@ const createValue = (data: any) => {
     subcategory.value = data.subcategory;
     collection.value = data.collection || '';
     productDimensionId.value = data.dimensionId ?? null;
+    productCustomFields.value = data.customFields || {};
     persistDraftForm();
 };
 
@@ -424,6 +437,7 @@ const handleProductSelected = (product:any) => {
   description.value = product.description || '';
   category.value = product.category || {};
   subcategory.value = product.subcategoryId || '';
+  productCustomFields.value = product.customFields || {};
   variants.value = stripDraftImages(product.variants || []);
   selectedProduct.value = {
     ...selectedProduct.value,
@@ -476,6 +490,7 @@ const snapshotProductForm = () => ({
   live: live.value,
     deliveryType: effectiveDeliveryType.value,
   dimensionId: productDimensionId.value ?? null,
+  customFields: { ...productCustomFields.value },
   variants: variants.value.map((variant) => ({
     ...variant,
     items: (variant.items || []).map((item) => ({ ...item })),
@@ -517,6 +532,7 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
     : snap.deliveryType || 'trynbuy',
   categoryTax: catTax,
   dimensionId: snap.dimensionId ?? null,
+  customFields: snap.customFields || {},
   // display metadata for the left table + barcode labels
   category: snap.category ? { id: snap.category.id, name: snap.category.name, targetAudience: snap.category.targetAudience } : null,
   variants: (snap.variants || []).map((variant: any) => ({
@@ -528,9 +544,11 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
     pprice: variant.pprice || 0,
     dprice: variant.dprice || 0,
     discount: variant.discount || 0,
+    sizeLabel: variant.sizeLabel || defaultSizeLabel.value,
+    customFields: variant.customFields || {},
     images: variantInputs?.value?.images ? (variant.images || []).map((f: any) => ({ uuid: f.uuid, view: f.view })) : [],
     items: (variant.items || []).map((size: any) => ({
-      id: size.id || uuidv4(), size: size.size || null, shade: size.shade || null, qty: size.qty || 0, dimensionId: size.dimensionId ?? null,
+      id: size.id || uuidv4(), size: size.size || null, qty: size.qty || 0, dimensionId: size.dimensionId ?? null,
     })),
   })),
 })
@@ -669,6 +687,7 @@ const handleEdit = async (e: Event) => {
             categoryId: updated.categoryId,
             subcategoryId: updated.subcategoryId,
             collectionId: updated.collectionId,
+            customFields: updated.customFields,
           },
           variants: updated.variants,
           categoryTax: snapshotCategoryTax,
@@ -707,7 +726,7 @@ const addVariant = () => {
   const last = newVariants[newVariants.length - 1];
   const copiedItems = (last?.items?.length)
     ? last.items.map((item: any) => ({ ...item, id: uuidv4() }))
-    : [{ id: uuidv4(), size: null, shade: null, qty: undefined }];
+    : [{ id: uuidv4(), size: null, qty: undefined }];
 
   newVariants.push({
     id: uuidv4(),
@@ -720,6 +739,7 @@ const addVariant = () => {
     pprice: last?.pprice ?? 0,
     dprice: last?.dprice ?? 0,
     discount: last?.discount ?? 0,
+    sizeLabel: last?.sizeLabel ?? defaultSizeLabel.value,
     items: copiedItems,
     images: [...(last?.images ?? [])],
   });
@@ -775,7 +795,7 @@ const resolveSelectWrapper = (el: HTMLElement | null): HTMLElement | null => {
   const candidates: HTMLElement[] = [
     ...(createRef.value?.getAllSelectWrappers?.() ?? []),
     ...((variantRef.value ?? [])
-      .map((v: any) => v?.getSelectWrapper?.())
+      .flatMap((v: any) => v?.getSelectWrappers?.() ?? [v?.getSelectWrapper?.()])
       .filter((w: any): w is HTMLElement => !!w)),
   ];
   return candidates.find(w => w === el || w.contains(el)) ?? null;
@@ -1158,7 +1178,7 @@ const generateBarcodes = (products: any[]) => {
                 dprice: variant.dprice
               }),
               size: item.size,
-              shade: item.shade
+              sizeLabel: variant.sizeLabel || defaultSizeLabel.value,
             }))
       )
     )
@@ -1362,6 +1382,7 @@ const clearCurrentDraftForNextProducts = () => {
 const handleReset = () => {
 
   clearInputs.value = true
+  productCustomFields.value = {}
   createRef.value?.resetForm()
   variantRef.value.forEach((refInstance:any) => {
     refInstance?.resetForm();
@@ -1377,8 +1398,9 @@ const handleReset = () => {
     sprice: 0, 
     pprice: 0, 
     dprice: 0, 
-    discount: 0, 
-    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }], 
+    discount: 0,
+    sizeLabel: defaultSizeLabel.value,
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: []
   }];
   selectedProduct.value = {
@@ -1403,7 +1425,7 @@ const handleReset = () => {
         pprice: 0, 
         dprice: 0, 
         discount: 0, 
-        items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }], 
+        items: [{ id: uuidv4(), size: null, qty: undefined }],
         images: [] 
     }]
 }
@@ -1579,6 +1601,7 @@ const onDeleteDraft = (no: string) => {
                         :editSubcategory="selectedProduct?.subcategoryId"
                         :editCollection="selectedProduct?.collectionId"
                         :editDimensionId="selectedProduct?.dimensionId"
+                        :editCustomFields="selectedProduct?.customFields"
                         @update="createValue" />
                 </UPageCard>
 
@@ -1613,6 +1636,8 @@ const onDeleteDraft = (no: string) => {
                       :editdPrice="variant.dprice"
                       :editDiscount="variant.discount"
                       :editItems="variant.items"
+                      :editSizeLabel="variant.sizeLabel"
+                      :editCustomFields="variant.customFields"
 
                       @update="updateVariant(index,$event)" />
                       <AddProductMedia

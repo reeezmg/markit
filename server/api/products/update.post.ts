@@ -21,6 +21,14 @@ export default defineEventHandler(async (event) => {
 
   const TRANSIENT_ERROR_CODES = ['40001', '40P01', '53300', '57P01', '55006', '08006', '08003', 'P1001']
 
+  // Custom field values (Settings → Products) are a { key: value } map stored in
+  // the jsonb custom_fields column. `undefined` means "caller didn't send them"
+  // → keep whatever is already stored.
+  function customFieldsJson(value: any) {
+    if (value === undefined || value === null) return null
+    return JSON.stringify(typeof value === 'object' && !Array.isArray(value) ? value : {})
+  }
+
   function taxFor(sprice: number) {
     if (!categoryTax) return 0
     if (categoryTax.taxType === 'FIXED') return categoryTax.fixedTax || 0
@@ -68,6 +76,7 @@ export default defineEventHandler(async (event) => {
            category_id = COALESCE($7, category_id),
            subcategory_id = COALESCE($8, subcategory_id),
            collection_id = COALESCE($9, collection_id),
+           custom_fields = COALESCE($10::jsonb, custom_fields),
            updated_at = now()
          WHERE id = $1 AND company_id = $2`,
         [
@@ -80,6 +89,7 @@ export default defineEventHandler(async (event) => {
           product.categoryId || null,
           product.subcategoryId || null,
           product.collectionId || null,
+          customFieldsJson(product.customFields),
         ],
       )
       if (!upd.rowCount) throw new Error('Product not found for this company')
@@ -96,7 +106,7 @@ export default defineEventHandler(async (event) => {
 
       // 3) upsert all variants in ONE multi-row statement
       if (variants.length) {
-        const VC = 13 // params per variant row
+        const VC = 15 // params per variant row
         const vVals: any[] = []
         const vRows = variants.map((v: any, i: number) => {
           const base = i * VC
@@ -108,24 +118,27 @@ export default defineEventHandler(async (event) => {
             v.id, v.name || '', v.code || null, v.unit || 'Nos',
             v.sprice || 0, v.pprice || 0, v.dprice || 0, v.discount || 0,
             taxFor(v.sprice), updateImages ? images : [], companyId, productId, v.weight || 0,
+            customFieldsJson(v.customFields), v.sizeLabel || 'Size',
           )
           const p = Array.from({ length: VC }, (_, k) => `$${base + k + 1}`)
-          // id,name,code,unit,s_price,p_price,d_price,discount,status,tax,images,company_id,product_id,weight,delivery_type
-          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6]},${p[7]},true,${p[8]},${p[9]},${p[10]},${p[11]},${p[12]},'trynbuy',now(),now())`
+          // id,name,code,unit,s_price,p_price,d_price,discount,status,tax,images,company_id,product_id,weight,custom_fields,size_label,delivery_type
+          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6]},${p[7]},true,${p[8]},${p[9]},${p[10]},${p[11]},${p[12]},${p[13]},${p[14]},'trynbuy',now(),now())`
         })
         const updImgParam = `$${variants.length * VC + 1}`
         const variantsRes = await client.query(
           `INSERT INTO variants (
              id, name, code, unit, s_price, p_price, d_price, discount, status, tax,
-             images, company_id, product_id, weight, delivery_type, created_at, updated_at
+             images, company_id, product_id, weight, custom_fields, size_label, delivery_type, created_at, updated_at
            ) VALUES ${vRows.join(',')}
            ON CONFLICT (id) DO UPDATE SET
              name = EXCLUDED.name, code = EXCLUDED.code, unit = EXCLUDED.unit,
              s_price = EXCLUDED.s_price, p_price = EXCLUDED.p_price, d_price = EXCLUDED.d_price,
              discount = EXCLUDED.discount, status = true, tax = EXCLUDED.tax, weight = EXCLUDED.weight,
              images = CASE WHEN ${updImgParam}::boolean THEN EXCLUDED.images ELSE variants.images END,
+             custom_fields = COALESCE(EXCLUDED.custom_fields, variants.custom_fields),
+             size_label = COALESCE(EXCLUDED.size_label, variants.size_label),
              updated_at = now()
-           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, weight, images, product_id`,
+           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, weight, images, custom_fields, size_label, product_id`,
           [...vVals, updateImages],
         )
         returnedVariants = variantsRes.rows
@@ -139,27 +152,26 @@ export default defineEventHandler(async (event) => {
         [keepVariantIds, keepItemIds],
       )
       if (allItems.length) {
-        const IC = 7 // params per item row
+        const IC = 6 // params per item row
         const iVals: any[] = []
         const iRows = allItems.map((it: any, i: number) => {
           const base = i * IC
           // initial_qty is seeded for new items. Existing items only change it
           // when the caller explicitly identifies this as a purchase-order edit.
-          iVals.push(it.id || crypto.randomUUID(), it.size || null, it.shade || null, it.qty || 0, it.qty || 0, companyId, it.variantId)
+          iVals.push(it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, it.variantId)
           const p = Array.from({ length: IC }, (_, k) => `$${base + k + 1}`)
           return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},now(),now())`
         })
         const updateInitialQtyParam = `$${allItems.length * IC + 1}`
         const itemsRes = await client.query(
-          `INSERT INTO items (id, size, shade, qty, initial_qty, company_id, variant_id, created_at, updated_at)
+          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, created_at, updated_at)
            VALUES ${iRows.join(',')}
            ON CONFLICT (id) DO UPDATE SET
              size = EXCLUDED.size,
-             shade = EXCLUDED.shade,
              qty = EXCLUDED.qty,
              initial_qty = CASE WHEN ${updateInitialQtyParam}::boolean THEN EXCLUDED.initial_qty ELSE items.initial_qty END,
              updated_at = now()
-           RETURNING id, barcode, size, shade, qty, variant_id`,
+           RETURNING id, barcode, size, qty, variant_id`,
           [...iVals, updateInitialQty],
         )
         returnedItems = itemsRes.rows
@@ -167,7 +179,7 @@ export default defineEventHandler(async (event) => {
 
       const productRes = await client.query(
         `SELECT p.id, p.updated_at, p.name, p.description, p.status,
-                p.category_id, p.subcategory_id, p.brand_id, p.collection_id,
+                p.category_id, p.subcategory_id, p.brand_id, p.collection_id, p.custom_fields,
                 c.name AS category_name, c.target_audience AS category_target_audience,
                 b.name AS brand_name,
                 s.name AS subcategory_name,
@@ -191,7 +203,7 @@ export default defineEventHandler(async (event) => {
       const itemsByVariant = new Map<string, any[]>()
       for (const it of returnedItems) {
         const list = itemsByVariant.get(it.variant_id) || []
-        list.push({ id: it.id, barcode: it.barcode, size: it.size, shade: it.shade, qty: it.qty })
+        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty })
         itemsByVariant.set(it.variant_id, list)
       }
 
@@ -209,6 +221,8 @@ export default defineEventHandler(async (event) => {
           dprice: v.d_price,
           discount: v.discount,
           images: v.images || [],
+          sizeLabel: v.size_label || 'Size',
+          customFields: v.custom_fields || {},
           items: itemsByVariant.get(v.id) || [],
         }))
 
@@ -226,6 +240,7 @@ export default defineEventHandler(async (event) => {
           subcategoryId: p.subcategory_id,
           brandId: p.brand_id,
           collectionId: p.collection_id,
+          customFields: p.custom_fields || {},
           category: p.category_id ? { id: p.category_id, name: p.category_name, targetAudience: p.category_target_audience } : null,
           brand: p.brand_id ? { id: p.brand_id, name: p.brand_name } : null,
           subcategory: p.subcategory_id ? { id: p.subcategory_id, name: p.subcategory_name } : null,

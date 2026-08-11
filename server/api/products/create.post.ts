@@ -95,7 +95,7 @@ export default defineEventHandler(async (event) => {
             .sort((a: any, b: any) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
             .map((file: any) => (typeof file === 'string' ? file : file.uuid))
           for (const size of (variant.items || [])) {
-            allItems.push({ id: crypto.randomUUID(), size: size.size || null, shade: size.shade || null, qty: size.qty || 0, variantId })
+            allItems.push({ id: crypto.randomUUID(), size: size.size || null, qty: size.qty || 0, variantId })
           }
           const base = i * VC
           vVals.push(
@@ -118,17 +118,17 @@ export default defineEventHandler(async (event) => {
       }
 
       if (allItems.length) {
-        const IC = 7
+        const IC = 6
         const iVals: any[] = []
         const iRows = allItems.map((it, i) => {
           const base = i * IC
           // initial_qty seeded to qty on create (captures purchase stock)
-          iVals.push(it.id, it.size, it.shade, it.qty, it.qty, companyId, it.variantId)
+          iVals.push(it.id, it.size, it.qty, it.qty, companyId, it.variantId)
           const p = Array.from({ length: IC }, (_, k) => `$${base + k + 1}`)
-          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6]},now(),now())`
+          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},now(),now())`
         })
         await client.query(
-          `INSERT INTO items(id, size, shade, qty, initial_qty, company_id, variant_id, created_at, updated_at)
+          `INSERT INTO items(id, size, qty, initial_qty, company_id, variant_id, created_at, updated_at)
            VALUES ${iRows.join(',')}`,
           iVals,
         )

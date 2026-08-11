@@ -340,69 +340,69 @@ model DistributorCompany {
 }
 
 model Company {
-  id                        String                    @id() @unique() @default(uuid())
+  id                        String                     @id() @unique() @default(uuid())
   name                      String
-  storecode                 Int                       @unique() @default(autoincrement())
-  storeUniqueName           String?                   @unique() @map("store_unique_name")
+  storecode                 Int                        @unique() @default(autoincrement())
+  storeUniqueName           String?                    @unique() @map("store_unique_name")
   logo                      String?
-  darkstore                 Boolean                   @default(false) @map("darkstore")
-  description               String?                   @default("")
-  thankYouNote              String?                   @default("") @map("thank_you_note")
-  refundPolicy              String?                   @default("") @map("refund_policy")
-  returnPolicy              String?                   @default("") @map("return_policy")
+  darkstore                 Boolean                    @default(false) @map("darkstore")
+  description               String?                    @default("")
+  thankYouNote              String?                    @default("") @map("thank_you_note")
+  refundPolicy              String?                    @default("") @map("refund_policy")
+  returnPolicy              String?                    @default("") @map("return_policy")
   phone                     String?
-  email                     String?                   @default("")
-  instagramUrl              String?                   @default("") @map("instagram_url")
-  facebookUrl               String?                   @default("") @map("facebook_url")
-  youtubeUrl                String?                   @default("") @map("youtube_url")
-  xUrl                      String?                   @default("") @map("x_url")
-  linkedinUrl               String?                   @default("") @map("linkedin_url")
-  currency                  String                    @default("INR")
+  email                     String?                    @default("")
+  instagramUrl              String?                    @default("") @map("instagram_url")
+  facebookUrl               String?                    @default("") @map("facebook_url")
+  youtubeUrl                String?                    @default("") @map("youtube_url")
+  xUrl                      String?                    @default("") @map("x_url")
+  linkedinUrl               String?                    @default("") @map("linkedin_url")
+  currency                  String                     @default("INR")
   images                    String?
-  pointsValue               Int                       @default(0) @map("points_value")
-  billCounter               Int                       @default(1) @map("bill_counter")
-  purchaseCounter           Int                       @default(1) @map("purchase_counter")
-  returnCounter             Int                       @default(1) @map("return_counter")
-  quoteCounter              Int                       @default(1) @map("quote_counter")
-  salesOrderCounter         Int                       @default(1) @map("sales_order_counter")
-  invoiceCounter            Int                       @default(1) @map("invoice_counter")
-  paymentCounter            Int                       @default(1) @map("payment_counter")
-  userCodeCounter           Int                       @default(1) @map("user_code_counter")
-  closingDate               DateTime?                 @map("closing_date")
-  billPrefix                String?                   @default("") @map("bill_prefix")
-  quotePrefix               String?                   @default("QT") @map("quote_prefix")
-  salesOrderPrefix          String?                   @default("SO") @map("sales_order_prefix")
-  invoicePrefix             String?                   @default("INV") @map("invoice_prefix")
-  paymentPrefix             String?                   @default("") @map("payment_prefix")
-  expenseCounter            Int                       @default(1) @map("expense_counter")
-  expensePrefix             String?                   @default("EXP") @map("expense_prefix")
-  distributorCounter        Int                       @default(1) @map("distributor_counter")
-  distributorPrefix         String?                   @default("DIST") @map("distributor_prefix")
-  distributorPaymentCounter Int                       @default(1) @map("distributor_payment_counter")
-  distributorPaymentPrefix  String?                   @default("DP") @map("distributor_payment_prefix")
-  distributorCreditCounter  Int                       @default(1) @map("distributor_credit_counter")
-  distributorCreditPrefix   String?                   @default("DC") @map("distributor_credit_prefix")
-  clientCounter             Int                       @default(1) @map("client_counter")
-  clientPrefix              String?                   @default("CL") @map("client_prefix")
-  userPrefix                String?                   @default("") @map("user_prefix")
-  accountCounter            Int                       @default(1) @map("account_counter")
-  accountPrefix             String?                   @default("ACC") @map("account_prefix")
-  isTaxIncluded             Boolean                   @default(true) @map("is_tax_included")
-  isCostIncluded            Boolean                   @default(true) @map("is_cost_included")
-  isUserTrackIncluded       Boolean                   @default(true) @map("is_usertrack_included")
-  isAiImage                 Boolean                   @default(true) @map("is_ai_image")
-  deliveryType              String[]                  @map("delivery_type")
-  deliveryMode              String[]                  @map("delivery_mode")
-  deliveryRadius            Float?                    @map("delivery_radius")
-  deliveryDiscount          Float?                    @default(0) @map("delivery_discount")
-  operationFeesShare        Float?                    @default(0) @map("operation_fees_share")
-  cash                      Float?                    @default(0)
-  openingCashDate           DateTime?                 @map("opening_cash_date")
-  bank                      Float?                    @default(0)
-  openingBankDate           DateTime?                 @map("opening_bank_date")
-  plan                      String                    @default("free") @map("plan")
-  openTime                  String                    @default("9:30") @map("open_time")
-  closeTime                 String                    @default("9:30") @map("close_time")
+  pointsValue               Int                        @default(0) @map("points_value")
+  billCounter               Int                        @default(1) @map("bill_counter")
+  purchaseCounter           Int                        @default(1) @map("purchase_counter")
+  returnCounter             Int                        @default(1) @map("return_counter")
+  quoteCounter              Int                        @default(1) @map("quote_counter")
+  salesOrderCounter         Int                        @default(1) @map("sales_order_counter")
+  invoiceCounter            Int                        @default(1) @map("invoice_counter")
+  paymentCounter            Int                        @default(1) @map("payment_counter")
+  userCodeCounter           Int                        @default(1) @map("user_code_counter")
+  closingDate               DateTime?                  @map("closing_date")
+  billPrefix                String?                    @default("") @map("bill_prefix")
+  quotePrefix               String?                    @default("QT") @map("quote_prefix")
+  salesOrderPrefix          String?                    @default("SO") @map("sales_order_prefix")
+  invoicePrefix             String?                    @default("INV") @map("invoice_prefix")
+  paymentPrefix             String?                    @default("") @map("payment_prefix")
+  expenseCounter            Int                        @default(1) @map("expense_counter")
+  expensePrefix             String?                    @default("EXP") @map("expense_prefix")
+  distributorCounter        Int                        @default(1) @map("distributor_counter")
+  distributorPrefix         String?                    @default("DIST") @map("distributor_prefix")
+  distributorPaymentCounter Int                        @default(1) @map("distributor_payment_counter")
+  distributorPaymentPrefix  String?                    @default("DP") @map("distributor_payment_prefix")
+  distributorCreditCounter  Int                        @default(1) @map("distributor_credit_counter")
+  distributorCreditPrefix   String?                    @default("DC") @map("distributor_credit_prefix")
+  clientCounter             Int                        @default(1) @map("client_counter")
+  clientPrefix              String?                    @default("CL") @map("client_prefix")
+  userPrefix                String?                    @default("") @map("user_prefix")
+  accountCounter            Int                        @default(1) @map("account_counter")
+  accountPrefix             String?                    @default("ACC") @map("account_prefix")
+  isTaxIncluded             Boolean                    @default(true) @map("is_tax_included")
+  isCostIncluded            Boolean                    @default(true) @map("is_cost_included")
+  isUserTrackIncluded       Boolean                    @default(true) @map("is_usertrack_included")
+  isAiImage                 Boolean                    @default(true) @map("is_ai_image")
+  deliveryType              String[]                   @map("delivery_type")
+  deliveryMode              String[]                   @map("delivery_mode")
+  deliveryRadius            Float?                     @map("delivery_radius")
+  deliveryDiscount          Float?                     @default(0) @map("delivery_discount")
+  operationFeesShare        Float?                     @default(0) @map("operation_fees_share")
+  cash                      Float?                     @default(0)
+  openingCashDate           DateTime?                  @map("opening_cash_date")
+  bank                      Float?                     @default(0)
+  openingBankDate           DateTime?                  @map("opening_bank_date")
+  plan                      String                     @default("free") @map("plan")
+  openTime                  String                     @default("9:30") @map("open_time")
+  closeTime                 String                     @default("9:30") @map("close_time")
   users                     CompanyUser[]
   entries                   Entry[]
   category                  String[]
@@ -423,26 +423,26 @@ model Company {
   variants                  Variant[]
   purchaseOrders            PurchaseOrder[]
   items                     Item[]
-  trybuys                   Trynbuy[]                 @relation("try_n_buy_company")
+  trybuys                   Trynbuy[]                  @relation("try_n_buy_company")
   quotes                    Quote[]
   quoteCustomFieldValues    QuoteCustomFieldValue[]
   projects                  Project[]
   salesOrders               SalesOrder[]
-  status                    Boolean                   @default(true)
+  status                    Boolean                    @default(true)
   type                      CompanyType
   pipeline                  Pipeline?
   coupon                    Coupon[]
-  accHolderName             String?                   @map("acc_holder_name")
+  accHolderName             String?                    @map("acc_holder_name")
   ifsc                      String?
-  accountNo                 String?                   @map("account_no")
-  bankName                  String?                   @map("bank_name")
+  accountNo                 String?                    @map("account_no")
+  bankName                  String?                    @map("bank_name")
   gstin                     String?
-  upiId                     String?                   @map("upi_id")
-  printerLabelSize          String?                   @map("printer_label_size")
+  upiId                     String?                    @map("upi_id")
+  printerLabelSize          String?                    @map("printer_label_size")
   notifications             Notification[]
   address                   Address?
   distributor               DistributorCompany[]
-  barcodeCounter            Int                       @default(1) @map("barcode_counter")
+  barcodeCounter            Int                        @default(1) @map("barcode_counter")
   likeCompanies             LikeCompanyClient[]
   productinput              Productinput?
   variantinput              Variantinput?
@@ -453,7 +453,7 @@ model Company {
   BankAccounts              BankAccount[]
   AccountTransfers          AccountTransfer[]
   accountLedgerEntries      AccountLedgerEntry[]
-  commissionRate            Float?                    @map("commission_rate")
+  commissionRate            Float?                     @map("commission_rate")
   orderStatusEvents         OrderStatusEvent[]
   companyPenalties          CompanyPenalty[]
   aiChats                   AiChat[]
@@ -473,6 +473,7 @@ model Company {
   ecommOrderRequests        EcommOrderRequest[]
   ecommPickupRequests       EcommPickupRequest[]
   ecommOrderStatusHistory   EcommOrderStatusHistory[]
+  ecommPaymentVerifications EcommPaymentVerification[]
   shifts                    Shift[]
   shiftAssignments          ShiftAssignment[]
   holidays                  CompanyHoliday[]
@@ -490,6 +491,10 @@ model Company {
   clientCredits             ClientCredit[]
   storefrontPages           StorefrontPage[]
   storefrontMemory          StorefrontMemory?
+  aiUsageEvents             AiUsageEvent[]
+  storefrontAgentSessions   StorefrontAgentSession[]
+  storefrontSource          StorefrontSource?
+  productCustomFields       ProductCustomField[]
 
   @@map("companies")
 }
@@ -519,7 +524,7 @@ model Variantinput {
   qty           Boolean  @default(true)
   unit          String[] @default(["Nos"])
   sizes         Boolean  @default(true)
-  shades        Boolean  @default(false)
+  sizeLabels    String[] @default(["Size"]) @map("size_labels")
   sizeDimension Boolean  @default(false)
   images        Boolean  @default(true)
   button        Boolean  @default(true)
@@ -527,6 +532,26 @@ model Variantinput {
   companyId     String   @unique() @map("company_id")
 
   @@map("variant_inputs")
+}
+
+model ProductCustomField {
+  id        String   @id() @unique() @default(uuid())
+  scope     String   @default("PRODUCT")
+  key       String
+  label     String
+  type      String   @default("TEXT")
+  options   String[] @default([])
+  required  Boolean  @default(false)
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt() @map("updated_at")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId String   @map("company_id")
+
+  @@unique([companyId, scope, key])
+  @@index([companyId, scope])
+  @@map("product_custom_fields")
 }
 
 model GeneralPreference {
@@ -685,40 +710,41 @@ model User {
 }
 
 model Client {
-  id                 String               @id() @unique() @default(uuid())
-  email              String?              @unique()
-  name               String
-  gender             String?
-  dob                String?
-  phone              String               @unique()
-  companies          CompanyClient[]
-  cart               CartCompanyClient[]
-  address            Address[]
-  bills              Bill[]
-  conversations      ClientConversation[]
-  users              UserClient[]
-  notifications      Notification[]
-  likeCompanies      LikeCompanyClient[]
-  otp                String?
-  otpExpiry          DateTime?            @map("otp_expiry")
-  cancellationFees   Float                @default(0) @map("cancellation_fees")
-  cancellationCount  Int                  @default(0) @map("cancellation_count")
-  ban                Boolean              @default(false)
-  trynbuys           Trynbuy[]
-  coupons            CouponClient[]
-  couponUsage        CouponUsage[]
-  quotes             Quote[]
-  projects           Project[]
-  salesOrders        SalesOrder[]
-  payments           Payment[]
-  ecommCheckouts     EcommCheckout[]
-  ecommOrders        EcommOrder[]
-  ecommCarts         EcommCart[]
-  ecommWishlists     EcommWishlist[]
-  ecommOrderRequests EcommOrderRequest[]
-  ecommFeedback      EcommFeedback[]
-  clientCredits      ClientCredit[]
-  deleted            Boolean              @default(false)
+  id                        String                     @id() @unique() @default(uuid())
+  email                     String?                    @unique()
+  name                      String
+  gender                    String?
+  dob                       String?
+  phone                     String                     @unique()
+  companies                 CompanyClient[]
+  cart                      CartCompanyClient[]
+  address                   Address[]
+  bills                     Bill[]
+  conversations             ClientConversation[]
+  users                     UserClient[]
+  notifications             Notification[]
+  likeCompanies             LikeCompanyClient[]
+  otp                       String?
+  otpExpiry                 DateTime?                  @map("otp_expiry")
+  cancellationFees          Float                      @default(0) @map("cancellation_fees")
+  cancellationCount         Int                        @default(0) @map("cancellation_count")
+  ban                       Boolean                    @default(false)
+  trynbuys                  Trynbuy[]
+  coupons                   CouponClient[]
+  couponUsage               CouponUsage[]
+  quotes                    Quote[]
+  projects                  Project[]
+  salesOrders               SalesOrder[]
+  payments                  Payment[]
+  ecommCheckouts            EcommCheckout[]
+  ecommOrders               EcommOrder[]
+  ecommCarts                EcommCart[]
+  ecommWishlists            EcommWishlist[]
+  ecommOrderRequests        EcommOrderRequest[]
+  ecommFeedback             EcommFeedback[]
+  ecommPaymentVerifications EcommPaymentVerification[]
+  clientCredits             ClientCredit[]
+  deleted                   Boolean                    @default(false)
 
   @@map("clients")
 }
@@ -1228,6 +1254,7 @@ model Product {
   height          Float?
   dimension       ShippingBox?   @relation("ProductDimension", fields: [dimensionId], references: [id])
   dimensionId     String?        @map("dimension_id")
+  customFields    Json?          @map("custom_fields")
   company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId       String         @map("company_id")
   category        Category?      @relation(fields: [categoryId], references: [id])
@@ -1257,6 +1284,7 @@ model Variant {
   name               String
   code               String?
   unit               String?               @default("Nos")
+  sizeLabel          String?               @default("Size") @map("size_label")
   status             Boolean               @default(true)
   sprice             Float                 @map("s_price")
   pprice             Float?                @map("p_price")
@@ -1268,6 +1296,7 @@ model Variant {
   length             Float?
   width              Float?
   height             Float?
+  customFields       Json?                 @map("custom_fields")
   product            Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
   productId          String                @map("product_id")
   brand              Brand?                @relation(fields: [brandId], references: [id])
@@ -1298,7 +1327,6 @@ model Item {
   variant       Variant               @relation(fields: [variantId], references: [id], onDelete: Cascade)
   variantId     String                @map("variant_id")
   size          String?
-  shade         String?
   qty           Int?                  @default(0)
   initialQty    Int?                  @default(0) @map("initial_qty")
   soldQty       Int?                  @default(0) @map("sold_qty")
@@ -1637,6 +1665,24 @@ model EcommWishlist {
   @@map("ecomm_wishlists")
 }
 
+model EcommPaymentVerification {
+  id         String    @id() @unique() @default(uuid())
+  createdAt  DateTime  @default(now()) @map("created_at")
+  gateway    String
+  refs       String[]  @default([])
+  payload    Json?
+  consumedAt DateTime? @map("consumed_at")
+  checkoutId String?   @map("checkout_id")
+  company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId  String    @map("company_id")
+  client     Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId   String?   @map("client_id")
+
+  @@index([refs], type: Gin, map: "ecomm_payment_verifications_refs_idx")
+  @@index([companyId, consumedAt], map: "ecomm_payment_verifications_company_idx")
+  @@map("ecomm_payment_verifications")
+}
+
 model EcommOrderRequest {
   id        String     @id() @unique() @default(uuid())
   createdAt DateTime   @default(now()) @map("created_at")
@@ -1703,7 +1749,6 @@ model Entry {
   value            Float?
   originalValue    Float?       @map("original_value")
   size             String?
-  shade            String?
   userName         String?      @map("user_name")
   companyId        String?      @map("company_id")
   company          Company?     @relation(fields: [companyId], references: [id])
@@ -2848,6 +2893,28 @@ model StorefrontPage {
   @@map("storefront_pages")
 }
 
+model AiUsageEvent {
+  id             String   @id() @default(dbgenerated("gen_random_uuid()::text"))
+  source         String   @default("storefront_agent")
+  conversationId String?  @map("conversation_id")
+  interactionId  String   @map("interaction_id")
+  model          String?
+  status         String?
+  inputTokens    BigInt   @default(0) @map("input_tokens")
+  outputTokens   BigInt   @default(0) @map("output_tokens")
+  thoughtsTokens BigInt   @default(0) @map("thoughts_tokens")
+  cachedTokens   BigInt   @default(0) @map("cached_tokens")
+  totalTokens    BigInt   @default(0) @map("total_tokens")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(6)
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId      String   @map("company_id")
+
+  @@unique([source, interactionId])
+  @@index([companyId, createdAt(sort: Desc)], map: "ai_usage_events_company_created_idx")
+  @@map("ai_usage_events")
+}
+
 model StorefrontMemory {
   id        String   @id() @default(uuid())
   createdAt DateTime @default(now()) @map("created_at")
@@ -2857,4 +2924,171 @@ model StorefrontMemory {
   companyId String   @unique() @map("company_id")
 
   @@map("storefront_memory")
+}
+
+model StorefrontAgentSession {
+  id                    String    @id() @default(dbgenerated("gen_random_uuid()::text"))
+  conversationId        String    @map("conversation_id")
+  userId                String?   @map("user_id")
+  interactionId         String?   @map("interaction_id")
+  environmentId         String?   @map("environment_id")
+  status                String    @default("IDLE")
+  stage                 String    @default("idle")
+  title                 String?
+  messages              Json      @default("[]")
+  timingReport          Json      @default("{}") @map("timing_report")
+  planState             Json?     @map("plan_state")
+  savedInteractionId    String?   @map("saved_interaction_id")
+  initialPreviewSha     String?   @map("initial_preview_sha")
+  initialMainSha        String?   @map("initial_main_sha")
+  deploymentTriggered   Boolean   @default(false) @map("deployment_triggered")
+  storageUri            String?   @map("storage_uri")
+  piSessionId           String?   @map("pi_session_id")
+  pendingPrompt         String?   @map("pending_prompt")
+  pendingModel          String?   @map("pending_model")
+  pendingRuntimePayload String?   @map("pending_runtime_payload")
+  dispatchState         String?   @map("dispatch_state")
+  queuedAt              DateTime? @map("queued_at") @db.Timestamptz(6)
+  opencodeSessionId     String?   @map("opencode_session_id")
+  model                 String?
+  reply                 String?
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt             DateTime  @default(now()) @map("updated_at") @db.Timestamptz(6)
+  company               Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId             String    @map("company_id")
+
+  @@unique([companyId, conversationId])
+  @@map("storefront_agent_sessions")
+}
+
+model StorefrontSource {
+  id                         String   @id() @default(dbgenerated("gen_random_uuid()::text"))
+  repositoryId               BigInt?  @map("repository_id")
+  repositoryFullName         String?  @map("repository_full_name")
+  previewBranch              String   @default("preview") @map("preview_branch")
+  status                     String
+  errorMessage               String?  @map("error_message")
+  vercelProjectId            String?  @map("vercel_project_id")
+  previewDeploymentId        String?  @map("preview_deployment_id")
+  previewDeploymentUrl       String?  @map("preview_deployment_url")
+  previewBranchUrl           String?  @map("preview_branch_url")
+  previewDeploymentStatus    String?  @map("preview_deployment_status")
+  productionDeploymentId     String?  @map("production_deployment_id")
+  productionDeploymentUrl    String?  @map("production_deployment_url")
+  productionUrl              String?  @map("production_url")
+  productionDeploymentStatus String?  @map("production_deployment_status")
+  createdAt                  DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt                  DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  company                    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId                  String   @unique() @map("company_id")
+
+  @@map("storefront_sources")
+}
+
+model AiProviderCredential {
+  id              String   @id() @default(dbgenerated("gen_random_uuid()::text"))
+  companyId       String   @map("company_id")
+  name            String
+  provider        String
+  baseUrl         String   @map("base_url")
+  modelId         String   @map("model_id")
+  encryptedApiKey String   @map("encrypted_api_key")
+  supportsImages  Boolean  @default(false) @map("supports_images")
+  enabled         Boolean  @default(true)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt       DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@unique([companyId, name])
+  @@index([companyId, updatedAt], map: "ai_provider_credentials_company_idx")
+  @@map("ai_provider_credentials")
+}
+
+model StorefrontDesignProfile {
+  id                 String   @id() @default(dbgenerated("gen_random_uuid()::text"))
+  companyId          String   @unique() @map("company_id")
+  status             String   @default("NOT_CONFIGURED")
+  companyDescription String?  @map("company_description")
+  designDirection    String?  @map("design_direction")
+  figmaUrl           String?  @map("figma_url")
+  assetNotes         String?  @map("asset_notes")
+  notes              String?
+  model              String?
+  conversationId     String?  @map("conversation_id")
+  errorMessage       String?  @map("error_message")
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt          DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+
+  @@map("storefront_design_profiles")
+}
+
+model EditSession {
+  id                String               @id() @default(dbgenerated("gen_random_uuid()")) @db.Uuid()
+  sellerId          String               @map("seller_id")
+  repoUrl           String               @map("repo_url")
+  baseBranch        String               @default("main") @map("base_branch")
+  piSessionId       String?              @map("pi_session_id")
+  opencodeSessionId String?              @map("opencode_session_id")
+  gitBranch         String               @map("git_branch")
+  storageUri        String?              @map("storage_uri")
+  state             String               @default("active")
+  lastActiveAt      DateTime             @default(now()) @map("last_active_at") @db.Timestamptz(6)
+  createdAt         DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  environments      EditEnvironment[]
+  turns             EditTurn[]
+  messages          EditSessionMessage[]
+
+  @@index([sellerId], map: "edit_session_seller_idx")
+  @@index([state, lastActiveAt], map: "edit_session_reap_idx")
+  @@map("edit_session")
+}
+
+model EditEnvironment {
+  id                  String       @id()
+  url                 String
+  state               String       @default("idle")
+  session             EditSession? @relation(fields: [sessionId], references: [id], onDelete: SetNull)
+  sessionId           String?      @map("session_id") @db.Uuid()
+  assignedAt          DateTime?    @map("assigned_at") @db.Timestamptz(6)
+  heartbeatAt         DateTime?    @map("heartbeat_at") @db.Timestamptz(6)
+  leaseOwner          String?      @map("lease_owner")
+  leaseUntil          DateTime?    @map("lease_until") @db.Timestamptz(6)
+  ownerConversationId String?      @map("owner_conversation_id")
+  ownerUserId         String?      @map("owner_user_id")
+  lastActivityAt      DateTime?    @map("last_activity_at") @db.Timestamptz(6)
+  processingStartedAt DateTime?    @map("processing_started_at") @db.Timestamptz(6)
+
+  @@map("edit_environment")
+}
+
+model EditTurn {
+  id            String               @id() @default(dbgenerated("gen_random_uuid()")) @db.Uuid()
+  session       EditSession          @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId     String               @map("session_id") @db.Uuid()
+  environmentId String?              @map("environment_id")
+  interactionId String               @map("interaction_id") @db.Uuid()
+  model         String?
+  gitSha        String?              @map("git_sha")
+  inputTokens   Int?                 @default(0) @map("input_tokens")
+  outputTokens  Int?                 @default(0) @map("output_tokens")
+  status        String               @default("running")
+  createdAt     DateTime             @default(now()) @map("created_at") @db.Timestamptz(6)
+  messages      EditSessionMessage[]
+
+  @@unique([sessionId, interactionId], map: "edit_turn_idem_uniq")
+  @@map("edit_turn")
+}
+
+model EditSessionMessage {
+  id        String      @id() @default(dbgenerated("gen_random_uuid()")) @db.Uuid()
+  session   EditSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  sessionId String      @map("session_id") @db.Uuid()
+  turn      EditTurn?   @relation(fields: [turnId], references: [id], onDelete: SetNull)
+  turnId    String?     @map("turn_id") @db.Uuid()
+  messageId String      @map("message_id")
+  role      String
+  payload   Json
+  createdAt DateTime    @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  @@unique([sessionId, messageId], map: "edit_session_message_uniq")
+  @@map("edit_session_message")
 }

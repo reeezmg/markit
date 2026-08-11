@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   try {
     const productRes = await client.query(
       `SELECT p.id, p.updated_at, p.name, p.description, p.status,
-              p.category_id, p.subcategory_id, p.brand_id, p.collection_id,
+              p.category_id, p.subcategory_id, p.brand_id, p.collection_id, p.custom_fields,
               c.name AS category_name, c.target_audience AS category_target_audience,
               b.name AS brand_name,
               s.name AS subcategory_name,
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
     const p = productRes.rows[0]
 
     const variantsRes = await client.query(
-      `SELECT id, name, code, unit, s_price, p_price, d_price, discount, weight, images
+      `SELECT id, name, code, unit, s_price, p_price, d_price, discount, weight, images, custom_fields, size_label
        FROM variants WHERE product_id = $1 ORDER BY created_at ASC`,
       [id],
     )
@@ -42,13 +42,13 @@ export default defineEventHandler(async (event) => {
     const itemsByVariant = new Map<string, any[]>()
     if (variantIds.length) {
       const itemsRes = await client.query(
-        `SELECT id, barcode, size, shade, qty, variant_id
+        `SELECT id, barcode, size, qty, variant_id
          FROM items WHERE variant_id = ANY($1::text[]) ORDER BY created_at ASC`,
         [variantIds],
       )
       for (const it of itemsRes.rows) {
         const list = itemsByVariant.get(it.variant_id) || []
-        list.push({ id: it.id, barcode: it.barcode, size: it.size, shade: it.shade, qty: it.qty })
+        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty })
         itemsByVariant.set(it.variant_id, list)
       }
     }
@@ -63,6 +63,7 @@ export default defineEventHandler(async (event) => {
       subcategoryId: p.subcategory_id,
       brandId: p.brand_id,
       collectionId: p.collection_id,
+      customFields: p.custom_fields || {},
       category: p.category_id ? { id: p.category_id, name: p.category_name, targetAudience: p.category_target_audience } : null,
       brand: p.brand_id ? { id: p.brand_id, name: p.brand_name } : null,
       subcategory: p.subcategory_id ? { id: p.subcategory_id, name: p.subcategory_name } : null,
@@ -78,6 +79,8 @@ export default defineEventHandler(async (event) => {
         discount: v.discount,
         weight: v.weight,
         images: v.images || [],
+        sizeLabel: v.size_label || 'Size',
+        customFields: v.custom_fields || {},
         items: itemsByVariant.get(v.id) || [],
       })),
     }

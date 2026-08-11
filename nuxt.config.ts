@@ -32,6 +32,19 @@ export default defineNuxtConfig({
       exclude: ['@point-of-sale/receipt-printer-encoder'],
     },
 
+    // Cloudflare tunnel dev access (local.markit.co.in -> localhost:3000).
+    server: {
+      // Always allowed: Vite 403s any Host it doesn't know, and listing the
+      // tunnel hostname costs nothing when browsing plain localhost.
+      allowedHosts: ['local.markit.co.in'],
+      // HMR is the part that must be gated — pointing the websocket at the
+      // tunnel breaks hot reload on localhost. Set TUNNEL_HOST=local.markit.co.in
+      // only when you intend to develop through the tunnel.
+      hmr: process.env.TUNNEL_HOST
+        ? { protocol: 'wss', host: process.env.TUNNEL_HOST, clientPort: 443 }
+        : undefined,
+    },
+
     // ⭐ Eager load EVERYTHING → One bundle
     build: {
       rollupOptions: {
@@ -83,12 +96,45 @@ export default defineNuxtConfig({
     // custom-api (FastAPI) — server-only; seller shipping ops proxy through here.
     customApiUrl: process.env.CUSTOM_API_URL || 'http://localhost:8000',
     customApiServiceToken: process.env.CUSTOM_API_SERVICE_TOKEN || '',
+    geminiApiKey: process.env.GEMINI_API_KEY || '',
+    // Encrypts seller-supplied AI credentials at rest. A dedicated secret is
+    // preferred; auth.password remains a migration-safe fallback.
+    aiProviderEncryptionKey: process.env.AI_PROVIDER_ENCRYPTION_KEY || '',
+    githubStorefront: {
+      appId: process.env.GITHUB_STOREFRONT_APP_ID || '',
+      privateKey: process.env.GITHUB_STOREFRONT_PRIVATE_KEY || '',
+      installationId: process.env.GITHUB_STOREFRONT_INSTALLATION_ID || '',
+      owner: process.env.GITHUB_STOREFRONT_OWNER || 'Markit-Store',
+      templateRepository: process.env.GITHUB_STOREFRONT_TEMPLATE_REPOSITORY || 'storefront-starter',
+    },
+    // AI token pricing for /ai/usage. Google publishes list rates in USD per 1M
+    // tokens; these are estimates for the antigravity agent and are meant to be
+    // updated from env when Google changes pricing. costMultiplier is the seller
+    // markup applied on top of the converted INR amount.
+    aiUsage: {
+      costMultiplier: process.env.AI_COST_MULTIPLIER || '2.5',
+      cachedInputMultiplier: process.env.AI_CACHED_INPUT_MULTIPLIER || '0.25',
+      usdToInr: process.env.AI_USD_TO_INR || '88',
+      storefrontInputUsdPerMillion: process.env.AI_STOREFRONT_INPUT_USD_PER_M || '1.25',
+      storefrontOutputUsdPerMillion: process.env.AI_STOREFRONT_OUTPUT_USD_PER_M || '10',
+    },
+    vercelStorefront: {
+      token: process.env.VERCEL_STOREFRONT_TOKEN || '',
+      teamId: process.env.VERCEL_STOREFRONT_TEAM_ID || '',
+      apiBaseUrl: process.env.VERCEL_STOREFRONT_API_BASE_URL || 'https://markit-custom-api.vercel.app/api',
+      // Pushed to each storefront as VITE_EDITOR_ORIGIN — the origin its
+      // preview/element-picker channel trusts. Without it the preview is inert.
+      editorOrigin: process.env.VERCEL_STOREFRONT_EDITOR_ORIGIN || 'http://localhost:3000,https://local.markit.co.in,https://markit.co.in',
+    },
+
+    // Cloudflare R2 credentials are server-only. Never place these under
+    // runtimeConfig.public because public runtime config is sent to browsers.
+    r2Id: process.env.R2_ID || '',
+    r2Secret: process.env.R2_SECRET || '',
+    r2Bucket: process.env.R2_BUCKET || '',
+    r2AccountId: process.env.R2_ACCOUNT_ID || '',
 
     public: {
-      r2Id: process.env.R2_ID,
-      r2Secret: process.env.R2_SECRET,
-      r2Bucket: process.env.R2_BUCKET,
-      r2AccountId: process.env.R2_ACCOUNT_ID,
       baseUrl: process.env.BASE_URL,
       serverUrl: process.env.SERVER_URL,
       storefrontUrl: process.env.STOREFRONT_URL || 'http://localhost:5173',

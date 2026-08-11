@@ -15,7 +15,7 @@ function makeEmptyVariant() {
     pprice: 0,
     dprice: 0,
     discount: 0,
-    items: [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
+    items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: [],
   }
 }
@@ -130,7 +130,7 @@ export function useProductDraft() {
           images: [],
           items: Array.isArray(variant.items) && variant.items.length
             ? variant.items
-            : [{ id: uuidv4(), size: null, shade: null, qty: undefined }],
+            : [{ id: uuidv4(), size: null, qty: undefined }],
         }))
       : [makeEmptyVariant()]
     purchaseInfo.value = { ...makeEmptyPurchaseInfo(), ...(draft.purchaseInfo ?? {}) }

@@ -40,7 +40,7 @@ export default defineEventHandler(async (event) => {
     const itemsByVariant = new Map<string, any[]>()
     if (productIds.length) {
       const vRes = await client.query(
-        `SELECT id, name, code, unit, s_price, p_price, d_price, discount, images, product_id
+        `SELECT id, name, code, unit, s_price, p_price, d_price, discount, images, size_label, product_id
          FROM variants WHERE product_id = ANY($1::text[]) ORDER BY created_at ASC`,
         [productIds],
       )
@@ -88,7 +88,8 @@ export default defineEventHandler(async (event) => {
         variants: (variantsByProduct.get(p.id) || []).map((v) => ({
           id: v.id, name: v.name, code: v.code, unit: v.unit,
           sprice: v.s_price, pprice: v.p_price, dprice: v.d_price, discount: v.discount,
-          images: v.images || [], items: itemsByVariant.get(v.id) || [],
+          images: v.images || [], sizeLabel: v.size_label || 'Size',
+          items: itemsByVariant.get(v.id) || [],
         })),
       })),
     }
