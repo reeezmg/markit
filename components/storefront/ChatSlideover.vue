@@ -561,9 +561,10 @@ async function sendLegacy() {
 
 async function pollCurrentInteraction() {
   const startedAt = Date.now()
+  let consecutiveStatusFailures = 0
   while (Date.now() - startedAt < 62 * 60 * 1000) {
     await new Promise(resolve => setTimeout(resolve, 2500))
-    const result = await $fetch<{
+    let result: {
       status: string
       stage: string
       reply: string | null
@@ -579,7 +580,22 @@ async function pollCurrentInteraction() {
       codeChanged?: boolean
       canUndo?: boolean
       piLeafId?: string | null
-    }>('/api/ecommerce-cms/storefront-agent/status', { query: { conversationId: conversationId.value } })
+    }
+    try {
+      result = await $fetch<typeof result>('/api/ecommerce-cms/storefront-agent/status', {
+        query: { conversationId: conversationId.value },
+      })
+      consecutiveStatusFailures = 0
+    } catch (error: any) {
+      const statusCode = Number(error?.statusCode || error?.status || error?.response?.status || error?.data?.statusCode)
+      const rolloutOrTransientFailure = statusCode === 404 || statusCode === 429 || statusCode >= 500
+      if (rolloutOrTransientFailure && consecutiveStatusFailures < 5) {
+        consecutiveStatusFailures += 1
+        toolActivity.value = 'Reconnecting to storefront agent...'
+        continue
+      }
+      throw error
+    }
     if (stopRequested.value) return
     showStage(result.stage, result.status)
     if (result.timingReport) timingReport.value = result.timingReport
