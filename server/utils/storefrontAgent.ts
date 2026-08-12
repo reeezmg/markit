@@ -40,6 +40,12 @@ export interface StorefrontPlanState {
   total: number
 }
 
+export interface StorefrontQueuedMessage {
+  id: string
+  content: string
+  createdAt: string
+}
+
 export type StorefrontRunMode = 'normal' | 'plan' | 'refine-plan' | 'execute-plan' | 'cancel-plan'
 
 export function shouldAutoPlanStorefrontTask(value: string) {
@@ -92,9 +98,81 @@ export function ensureStorefrontAgentSessionsTable() {
       ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS timing_report JSONB NOT NULL DEFAULT '{}'::jsonb;
       ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS plan_state JSONB;
       ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS user_id TEXT;
+      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS queued_messages JSONB NOT NULL DEFAULT '[]'::jsonb;
     `).then(() => undefined)
   }
   return tableReady
+}
+
+export async function listStorefrontQueuedMessages(companyId: string, conversationId: string) {
+  await ensureStorefrontAgentSessionsTable()
+  const result = await pool.query<{ queuedMessages: StorefrontQueuedMessage[] }>(
+    `SELECT queued_messages AS "queuedMessages"
+       FROM storefront_agent_sessions
+      WHERE company_id=$1 AND conversation_id=$2`,
+    [companyId, conversationId],
+  )
+  if (!result.rows[0]) throw createError({ statusCode: 404, statusMessage: 'Chat not found' })
+  return { messages: Array.isArray(result.rows[0].queuedMessages) ? result.rows[0].queuedMessages : [] }
+}
+
+export async function addStorefrontQueuedMessage(companyId: string, conversationId: string, content: string) {
+  await ensureStorefrontAgentSessionsTable()
+  const message: StorefrontQueuedMessage = { id: crypto.randomUUID(), content, createdAt: new Date().toISOString() }
+  const result = await pool.query(
+    `UPDATE storefront_agent_sessions
+        SET queued_messages=queued_messages || $3::jsonb, updated_at=NOW()
+      WHERE company_id=$1 AND conversation_id=$2
+      RETURNING id`,
+    [companyId, conversationId, JSON.stringify([message])],
+  )
+  if (!result.rowCount) throw createError({ statusCode: 404, statusMessage: 'Chat not found' })
+  return message
+}
+
+export async function updateStorefrontQueuedMessage(companyId: string, conversationId: string, id: string, content: string) {
+  const current = await listStorefrontQueuedMessages(companyId, conversationId)
+  const index = current.messages.findIndex(message => message.id === id)
+  if (index < 0) throw createError({ statusCode: 404, statusMessage: 'Queued message not found' })
+  current.messages[index] = { ...current.messages[index], content }
+  await pool.query(
+    `UPDATE storefront_agent_sessions SET queued_messages=$3::jsonb, updated_at=NOW()
+      WHERE company_id=$1 AND conversation_id=$2`,
+    [companyId, conversationId, JSON.stringify(current.messages)],
+  )
+  return current.messages[index]
+}
+
+export async function removeStorefrontQueuedMessage(companyId: string, conversationId: string, id: string) {
+  const current = await listStorefrontQueuedMessages(companyId, conversationId)
+  const messages = current.messages.filter(message => message.id !== id)
+  if (messages.length === current.messages.length) throw createError({ statusCode: 404, statusMessage: 'Queued message not found' })
+  await pool.query(
+    `UPDATE storefront_agent_sessions SET queued_messages=$3::jsonb, updated_at=NOW()
+      WHERE company_id=$1 AND conversation_id=$2`,
+    [companyId, conversationId, JSON.stringify(messages)],
+  )
+  return { removed: true }
+}
+
+export async function steerStorefrontInteraction(args: {
+  companyId: string
+  userId: string
+  conversationId: string
+  content: string
+}) {
+  await ensureStorefrontAgentSessionsTable()
+  const result = await orchestratorRequest<{ accepted: boolean }>('/agent/steer', {
+    method: 'POST', body: JSON.stringify(args),
+  })
+  await pool.query(
+    `UPDATE storefront_agent_sessions
+        SET messages=messages || jsonb_build_array(jsonb_build_object(
+          'role','user','content',$3::text,'steered',true,'createdAt',NOW())), updated_at=NOW()
+      WHERE company_id=$1 AND conversation_id=$2`,
+    [args.companyId, args.conversationId, args.content],
+  )
+  return result
 }
 
 /**

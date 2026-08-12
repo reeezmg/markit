@@ -62,6 +62,12 @@ interface AgentSessionData {
   planState?: PlanState | null
 }
 
+interface QueuedMessage {
+  id: string
+  content: string
+  createdAt: string
+}
+
 const props = defineProps<{
   modelValue?: boolean
   pageSlug: string
@@ -124,6 +130,10 @@ const refineRequested = ref(false)
 const stopRequested = ref(false)
 const undoingId = ref('')
 const forkingId = ref('')
+const queuedMessages = ref<QueuedMessage[]>([])
+const editingQueueId = ref('')
+const editingQueueText = ref('')
+const queueBusy = ref(false)
 
 function publicAgentText(value: unknown) {
   return String(value ?? '').replace(/\bpi\b/gi, 'AI agent')
@@ -230,6 +240,75 @@ async function loadSessions() {
   } finally {
     loadingSessions.value = false
   }
+}
+
+async function loadQueuedMessages() {
+  try {
+    const result = await $fetch<{ messages: QueuedMessage[] }>('/api/ecommerce-cms/storefront-agent/queue', {
+      query: { conversationId: conversationId.value },
+    })
+    queuedMessages.value = result.messages || []
+  } catch (error: any) {
+    if (Number(error?.statusCode || error?.status || error?.data?.statusCode) !== 404) throw error
+    queuedMessages.value = []
+  }
+}
+
+async function queueMessage() {
+  const content = input.value.trim()
+  if (!content || queueBusy.value) return
+  queueBusy.value = true
+  try {
+    const message = await $fetch<QueuedMessage>('/api/ecommerce-cms/storefront-agent/queue', {
+      method: 'POST', body: { conversationId: conversationId.value, content },
+    })
+    queuedMessages.value.push(message)
+    input.value = ''
+  } finally { queueBusy.value = false }
+}
+
+async function steerMessage() {
+  const content = input.value.trim()
+  if (!content || queueBusy.value) return
+  queueBusy.value = true
+  try {
+    await $fetch('/api/ecommerce-cms/storefront-agent/steer', {
+      method: 'POST', body: { conversationId: conversationId.value, content },
+    })
+    messages.value.push({ role: 'user', content })
+    input.value = ''
+    toolActivity.value = 'Additional guidance sent to the running task...'
+    await scrollToBottom()
+  } finally { queueBusy.value = false }
+}
+
+function beginQueueEdit(message: QueuedMessage) {
+  editingQueueId.value = message.id
+  editingQueueText.value = message.content
+}
+
+async function saveQueueEdit(message: QueuedMessage) {
+  const content = editingQueueText.value.trim()
+  if (!content) return
+  const updated = await $fetch<QueuedMessage>(`/api/ecommerce-cms/storefront-agent/queue/${message.id}`, {
+    method: 'PUT', body: { conversationId: conversationId.value, content },
+  })
+  Object.assign(message, updated)
+  editingQueueId.value = ''
+}
+
+async function removeQueuedMessage(message: QueuedMessage) {
+  await $fetch(`/api/ecommerce-cms/storefront-agent/queue/${message.id}`, {
+    method: 'DELETE', query: { conversationId: conversationId.value },
+  })
+  queuedMessages.value = queuedMessages.value.filter(item => item.id !== message.id)
+}
+
+async function runNextQueuedMessage() {
+  await loadQueuedMessages()
+  const next = queuedMessages.value[0]
+  if (!next || loading.value || stopRequested.value) return
+  await send(undefined, next.content, next.id)
 }
 
 // ─── Memory ───────────────────────────────────────────────────────────────────
@@ -631,7 +710,7 @@ async function pollCurrentInteraction() {
   throw new Error('The storefront request is still running. You can reopen this session from Recent chats.')
 }
 
-async function send(requestedMode?: StorefrontRunMode, actionText?: string) {
+async function send(requestedMode?: StorefrontRunMode, actionText?: string, queuedMessageId?: string) {
   const runMode = requestedMode || (refineRequested.value ? 'refine-plan' : planRequested.value ? 'plan' : undefined)
   const text = actionText || input.value.trim()
   const images = pendingImages.value.length ? [...pendingImages.value] : undefined
@@ -652,6 +731,7 @@ async function send(requestedMode?: StorefrontRunMode, actionText?: string) {
   streamingIdx.value = messages.value.length - 1
   await scrollToBottom()
 
+  let pollFinished = false
   try {
     const started = await $fetch<{
       status: string
@@ -673,9 +753,16 @@ async function send(requestedMode?: StorefrontRunMode, actionText?: string) {
       userMsg.images = started.uploaded
       images?.forEach(image => URL.revokeObjectURL(image.url))
     }
+    if (queuedMessageId) {
+      await $fetch(`/api/ecommerce-cms/storefront-agent/queue/${queuedMessageId}`, {
+        method: 'DELETE', query: { conversationId: conversationId.value },
+      })
+      queuedMessages.value = queuedMessages.value.filter(item => item.id !== queuedMessageId)
+    }
     showStage(started.stage, started.status)
     if (started.timingReport) timingReport.value = started.timingReport
     await pollCurrentInteraction()
+    pollFinished = true
   } catch (err: any) {
     const message = err?.data?.statusMessage || err?.data?.message || err?.message || 'Something went wrong.'
     messages.value[streamingIdx.value].content = `**Error:** ${message}`
@@ -686,6 +773,7 @@ async function send(requestedMode?: StorefrontRunMode, actionText?: string) {
     stopElapsed()
     loadSessions()
     await scrollToBottom()
+    if (pollFinished && !stopRequested.value) setTimeout(() => { runNextQueuedMessage() }, 0)
   }
 }
 
@@ -816,6 +904,7 @@ function newChat() {
   planRequested.value = false
   refineRequested.value = false
   conversationId.value = crypto.randomUUID()
+  queuedMessages.value = []
   showSessions.value = false
 }
 
@@ -838,6 +927,7 @@ async function openSession(item: AgentSessionSummary) {
     openingSessionId.value = ''
   }
   conversationId.value = session.conversationId
+  await loadQueuedMessages()
   messages.value = Array.isArray(session.messages)
     ? session.messages.map(message => ({ ...message }))
     : []
@@ -975,6 +1065,30 @@ async function openSession(item: AgentSessionSummary) {
           </div>
         </div>
 
+        <div v-if="queuedMessages.length" class="message-queue">
+          <div class="message-queue__title">Queued next</div>
+          <div v-for="queued in queuedMessages" :key="queued.id" class="message-queue__item">
+            <input
+              v-if="editingQueueId === queued.id"
+              v-model="editingQueueText"
+              class="message-queue__edit"
+              maxlength="4000"
+              @keydown.enter.prevent="saveQueueEdit(queued)"
+              @keydown.esc="editingQueueId = ''"
+            />
+            <span v-else class="message-queue__text">{{ queued.content }}</span>
+            <button v-if="editingQueueId === queued.id" title="Save queued message" @click="saveQueueEdit(queued)">
+              <UIcon name="i-heroicons-check" />
+            </button>
+            <button v-else title="Edit queued message" @click="beginQueueEdit(queued)">
+              <UIcon name="i-heroicons-pencil-square" />
+            </button>
+            <button title="Remove queued message" @click="removeQueuedMessage(queued)">
+              <UIcon name="i-heroicons-x-mark" />
+            </button>
+          </div>
+        </div>
+
         <!-- Selected element context -->
         <div v-if="selectedElement" class="sel-chip">
           <UIcon name="i-heroicons-cursor-arrow-rays" class="sel-chip-icon" />
@@ -1008,20 +1122,15 @@ async function openSession(item: AgentSessionSummary) {
               autoresize
               :maxrows="5"
               class="flex-1 text-sm"
-              :disabled="loading"
+              :disabled="false"
               @keydown="handleKey"
               @paste.native="handlePaste"
             />
-            <UButton
-              v-if="loading"
-              icon="i-heroicons-stop"
-              color="red"
-              variant="soft"
-              size="sm"
-              :loading="stopRequested"
-              title="Stop task and discard this task's changes"
-              @click="stopTask"
-            />
+            <template v-if="loading">
+              <UButton icon="i-heroicons-queue-list" color="gray" variant="soft" size="sm" :loading="queueBusy" :disabled="!input.trim()" title="Run after the current task" @click="queueMessage" />
+              <UButton icon="i-heroicons-forward" color="primary" variant="soft" size="sm" :loading="queueBusy" :disabled="!input.trim()" title="Add guidance to the running task" @click="steerMessage" />
+              <UButton icon="i-heroicons-stop" color="red" variant="soft" size="sm" :loading="stopRequested" title="Stop task and discard this task's changes" @click="stopTask" />
+            </template>
             <UButton v-else icon="i-heroicons-paper-airplane" color="primary" size="sm" :disabled="!input.trim() && !pendingImages.length" @click="send()" />
           </div>
           <div class="composer-options">
@@ -1037,6 +1146,7 @@ async function openSession(item: AgentSessionSummary) {
               <span>{{ refineRequested ? 'Refining plan' : planRequested ? 'Plan mode on' : 'Plan' }}</span>
             </button>
             <span v-if="planRequested || refineRequested" class="composer-options__hint">Read-only until you approve</span>
+            <span v-else-if="loading" class="composer-options__hint">Queue for later or steer the running task</span>
           </div>
         </div>
       </div>
@@ -1135,6 +1245,22 @@ async function openSession(item: AgentSessionSummary) {
   justify-content: center;
   padding: 24px;
 }
+
+.message-queue {
+  flex-shrink: 0;
+  margin: 0 10px 6px;
+  padding: 7px;
+  border: 1px solid var(--ui-border, #e5e7eb);
+  border-radius: 8px;
+  background: var(--ui-bg-elevated, #f9fafb);
+}
+.message-queue__title { margin-bottom: 5px; font-size: 10px; font-weight: 700; color: var(--ui-text-muted, #6b7280); text-transform: uppercase; }
+.message-queue__item { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; }
+.message-queue__item + .message-queue__item { margin-top: 4px; }
+.message-queue__text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.message-queue__edit { flex: 1; min-width: 0; padding: 3px 5px; border: 1px solid var(--ui-border, #d1d5db); border-radius: 5px; background: var(--ui-bg, #fff); }
+.message-queue__item button { flex-shrink: 0; padding: 2px; color: var(--ui-text-muted, #6b7280); }
+.message-queue__item button:hover { color: var(--ui-text, #111827); }
 
 /* Model picker. Deliberately quieter than the selection chip - the chip is
    about what you're changing, this is a setting you rarely touch. */
