@@ -44,6 +44,7 @@ export interface StorefrontQueuedMessage {
   id: string
   content: string
   createdAt: string
+  images?: { url: string; mimeType: string; name?: string }[]
 }
 
 export type StorefrontRunMode = 'normal' | 'plan' | 'refine-plan' | 'execute-plan' | 'cancel-plan'
@@ -116,31 +117,91 @@ export async function listStorefrontQueuedMessages(companyId: string, conversati
   return { messages: Array.isArray(result.rows[0].queuedMessages) ? result.rows[0].queuedMessages : [] }
 }
 
-export async function addStorefrontQueuedMessage(companyId: string, conversationId: string, content: string) {
+export async function addStorefrontQueuedMessage(
+  companyId: string,
+  conversationId: string,
+  content: string,
+  options: {
+    id?: string
+    images?: StorefrontQueuedMessage['images']
+    beforeId?: string
+    afterId?: string
+  } = {},
+) {
   await ensureStorefrontAgentSessionsTable()
-  const message: StorefrontQueuedMessage = { id: crypto.randomUUID(), content, createdAt: new Date().toISOString() }
-  const result = await pool.query(
-    `UPDATE storefront_agent_sessions
-        SET queued_messages=queued_messages || $3::jsonb, updated_at=NOW()
-      WHERE company_id=$1 AND conversation_id=$2
-      RETURNING id`,
-    [companyId, conversationId, JSON.stringify([message])],
-  )
-  if (!result.rowCount) throw createError({ statusCode: 404, statusMessage: 'Chat not found' })
-  return message
+  const message: StorefrontQueuedMessage = {
+    id: options.id || crypto.randomUUID(), content, createdAt: new Date().toISOString(),
+    ...(options.images?.length ? { images: options.images } : {}),
+  }
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await client.query<{ queuedMessages: StorefrontQueuedMessage[] }>(
+      `SELECT queued_messages AS "queuedMessages" FROM storefront_agent_sessions
+        WHERE company_id=$1 AND conversation_id=$2 FOR UPDATE`,
+      [companyId, conversationId],
+    )
+    if (!result.rows[0]) throw createError({ statusCode: 404, statusMessage: 'Chat not found' })
+    const messages = Array.isArray(result.rows[0].queuedMessages) ? result.rows[0].queuedMessages : []
+    const existing = messages.findIndex(item => item.id === message.id)
+    if (existing >= 0) messages.splice(existing, 1)
+    const afterIndex = options.afterId ? messages.findIndex(item => item.id === options.afterId) : -1
+    const beforeIndex = options.beforeId ? messages.findIndex(item => item.id === options.beforeId) : -1
+    const insertAt = afterIndex >= 0 ? afterIndex : beforeIndex >= 0 ? beforeIndex + 1 : messages.length
+    messages.splice(insertAt, 0, message)
+    await client.query(
+      `UPDATE storefront_agent_sessions SET queued_messages=$3::jsonb, updated_at=NOW()
+        WHERE company_id=$1 AND conversation_id=$2`,
+      [companyId, conversationId, JSON.stringify(messages)],
+    )
+    await client.query('COMMIT')
+    return message
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally { client.release() }
 }
 
-export async function updateStorefrontQueuedMessage(companyId: string, conversationId: string, id: string, content: string) {
+export async function updateStorefrontQueuedMessage(companyId: string, conversationId: string, id: string, content: string, images?: StorefrontQueuedMessage['images']) {
   const current = await listStorefrontQueuedMessages(companyId, conversationId)
   const index = current.messages.findIndex(message => message.id === id)
   if (index < 0) throw createError({ statusCode: 404, statusMessage: 'Queued message not found' })
-  current.messages[index] = { ...current.messages[index], content }
+  current.messages[index] = { ...current.messages[index], content, ...(images?.length ? { images } : { images: undefined }) }
   await pool.query(
     `UPDATE storefront_agent_sessions SET queued_messages=$3::jsonb, updated_at=NOW()
       WHERE company_id=$1 AND conversation_id=$2`,
     [companyId, conversationId, JSON.stringify(current.messages)],
   )
   return current.messages[index]
+}
+
+export async function reorderStorefrontQueuedMessages(companyId: string, conversationId: string, ids: string[]) {
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const result = await client.query<{ queuedMessages: StorefrontQueuedMessage[] }>(
+      `SELECT queued_messages AS "queuedMessages" FROM storefront_agent_sessions
+        WHERE company_id=$1 AND conversation_id=$2 FOR UPDATE`,
+      [companyId, conversationId],
+    )
+    if (!result.rows[0]) throw createError({ statusCode: 404, statusMessage: 'Chat not found' })
+    const messages = Array.isArray(result.rows[0].queuedMessages) ? result.rows[0].queuedMessages : []
+    if (ids.length !== messages.length || new Set(ids).size !== ids.length || ids.some(id => !messages.some(item => item.id === id))) {
+      throw createError({ statusCode: 409, statusMessage: 'Queue changed; refresh and try again' })
+    }
+    const byId = new Map(messages.map(item => [item.id, item]))
+    const ordered = ids.map(id => byId.get(id)!)
+    await client.query(
+      `UPDATE storefront_agent_sessions SET queued_messages=$3::jsonb, updated_at=NOW()
+        WHERE company_id=$1 AND conversation_id=$2`,
+      [companyId, conversationId, JSON.stringify(ordered)],
+    )
+    await client.query('COMMIT')
+    return { messages: ordered }
+  } catch (error) {
+    await client.query('ROLLBACK').catch(() => {})
+    throw error
+  } finally { client.release() }
 }
 
 export async function removeStorefrontQueuedMessage(companyId: string, conversationId: string, id: string) {

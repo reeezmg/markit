@@ -18,6 +18,7 @@ export default defineEventHandler(async (event) => {
     model?: string
     runMode?: 'normal' | 'plan' | 'refine-plan' | 'execute-plan' | 'cancel-plan'
     images?: { mimeType?: string; data?: string; name?: string }[]
+    existingImages?: { url?: string; mimeType?: string; name?: string }[]
   }>(event)
   const conversationId = body?.conversationId?.trim()
   const prompt = body?.prompt?.trim()
@@ -37,6 +38,19 @@ export default defineEventHandler(async (event) => {
   )) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid image attachment' })
   }
+  const imagePrefix = `https://images.markit.co.in/storefront-agent/${session.data.companyId}/${conversationId}/`
+  const existingImages = Array.isArray(body.existingImages) ? body.existingImages : []
+  if (images.length + existingImages.length > 4 || existingImages.some(image =>
+    !image.url?.startsWith(imagePrefix) || !image.mimeType || !IMAGE_EXTENSIONS[image.mimeType]
+  )) throw createError({ statusCode: 400, statusMessage: 'Invalid existing image attachment' })
+  const restoredImages = await Promise.all(existingImages.map(async (image) => {
+    const response = await fetch(image.url!)
+    if (!response.ok) throw createError({ statusCode: 409, statusMessage: 'A queued image is no longer available' })
+    const bytes = Buffer.from(await response.arrayBuffer())
+    if (bytes.length > 6_000_000) throw createError({ statusCode: 400, statusMessage: 'Queued image is too large' })
+    return { data: bytes.toString('base64'), mimeType: image.mimeType!, name: image.name?.slice(0, 120) }
+  }))
+  const runtimeImages = [...images.map(image => ({ data: image.data!, mimeType: image.mimeType!, name: image.name })), ...restoredImages]
   // Shape-check only. The sandbox validates the key against its own list and
   // rejects an unknown one, so we don't duplicate the model list here.
   const model = body?.model?.trim()
@@ -50,7 +64,7 @@ export default defineEventHandler(async (event) => {
   const autoPlanned = !requestedRunMode && shouldAutoPlanStorefrontTask(displayPrompt)
   const runMode = requestedRunMode || (autoPlanned ? 'plan' : 'normal')
 
-  const imageAttachments = await Promise.all(images.map(async (image) => {
+  const uploadedImages = await Promise.all(images.map(async (image) => {
     const mimeType = image.mimeType!
     const key = `storefront-agent/${session.data.companyId}/${conversationId}/${crypto.randomUUID()}${IMAGE_EXTENSIONS[mimeType] || ''}`
     return {
@@ -59,6 +73,10 @@ export default defineEventHandler(async (event) => {
       name: image.name?.slice(0, 120),
     }
   }))
+  const imageAttachments = [
+    ...uploadedImages,
+    ...existingImages.map(image => ({ url: image.url!, mimeType: image.mimeType!, name: image.name?.slice(0, 120) })),
+  ]
 
   const result = await startStorefrontInteraction({
     runtime: useRuntimeConfig(event),
@@ -70,7 +88,7 @@ export default defineEventHandler(async (event) => {
     model,
     runMode,
     autoPlanned,
-    images: images.map(image => ({ mimeType: image.mimeType!, data: image.data! })),
+    images: runtimeImages.map(image => ({ mimeType: image.mimeType, data: image.data })),
     imageAttachments: imageAttachments.map(image => ({ url: image.url!, mimeType: image.mimeType!, name: image.name })),
     requestStartedAt,
   })

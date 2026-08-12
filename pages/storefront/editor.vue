@@ -186,17 +186,30 @@ onBeforeUnmount(() => {
 // ─── Save ─────────────────────────────────────────────────────────────────────
 
 async function save() {
-  if (!config.value) return
   isSaving.value = true
   try {
-    await $fetch(`/api/ecommerce-cms/storefront-pages/${slug.value}`, {
-      method: 'PUT',
-      body: { config: config.value, published: isPublished.value },
+    if (config.value && isDirty.value) {
+      await $fetch(`/api/ecommerce-cms/storefront-pages/${slug.value}`, {
+        method: 'PUT',
+        body: { config: config.value, published: isPublished.value },
+      })
+      isDirty.value = false
+    }
+    const result = await $fetch<{ published: boolean; message: string }>(
+      '/api/ecommerce-cms/storefront-source/publish',
+      { method: 'POST' },
+    )
+    toast.add({
+      title: result.published ? 'Storefront published' : 'Nothing to publish',
+      description: result.message,
+      color: result.published ? 'green' : 'gray',
     })
-    toast.add({ title: 'Saved', color: 'green' })
-    isDirty.value = false
-  } catch {
-    toast.add({ title: 'Save failed', color: 'red' })
+  } catch (error: any) {
+    toast.add({
+      title: 'Publish failed',
+      description: error?.data?.statusMessage || error?.data?.message || error?.message || 'Please try again.',
+      color: 'red',
+    })
   } finally {
     isSaving.value = false
   }
@@ -433,7 +446,6 @@ onBeforeUnmount(() => {
             <UButton
               size="sm"
               :loading="isSaving"
-              :disabled="!isDirty"
               icon="i-heroicons-cloud-arrow-up"
               @click="save"
             >

@@ -2939,6 +2939,7 @@ model StorefrontAgentSession {
   stage                 String    @default("idle")
   title                 String?
   messages              Json      @default("[]")
+  queuedMessages        Json      @default("[]") @map("queued_messages")
   timingReport          Json      @default("{}") @map("timing_report")
   planState             Json?     @map("plan_state")
   savedInteractionId    String?   @map("saved_interaction_id")
@@ -3057,6 +3058,7 @@ model EditEnvironment {
   leaseUntil          DateTime?    @map("lease_until") @db.Timestamptz(6)
   ownerConversationId String?      @map("owner_conversation_id")
   ownerUserId         String?      @map("owner_user_id")
+  ownerCompanyId      String?      @map("owner_company_id")
   lastActivityAt      DateTime?    @map("last_activity_at") @db.Timestamptz(6)
   processingStartedAt DateTime?    @map("processing_started_at") @db.Timestamptz(6)
 

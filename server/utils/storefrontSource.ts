@@ -77,6 +77,41 @@ async function githubRequest<T>(path: string, token: string, init: RequestInit =
   return response.status === 204 ? undefined as T : await response.json() as T
 }
 
+export async function publishStorefrontPreview(config: GitHubConfig, repositoryFullName: string) {
+  if (!config.appId || !config.privateKey || !config.installationId) {
+    throw new Error('Storefront repository service is not configured')
+  }
+  if (!/^[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+$/.test(repositoryFullName)) {
+    throw new Error('Invalid storefront repository')
+  }
+
+  const token = await getGitHubInstallationToken(config)
+  const [preview, main] = await Promise.all([
+    githubRequest<{ object: { sha: string } }>(`/repos/${repositoryFullName}/git/ref/heads/preview`, token),
+    githubRequest<{ object: { sha: string } }>(`/repos/${repositoryFullName}/git/ref/heads/main`, token),
+  ])
+  const previewSha = preview.object.sha
+  const mainSha = main.object.sha
+  if (previewSha === mainSha) return { published: false, sha: mainSha }
+
+  const comparison = await githubRequest<{ status: string }>(
+    `/repos/${repositoryFullName}/compare/${mainSha}...${previewSha}`,
+    token,
+  )
+  if (!['ahead', 'identical'].includes(comparison.status)) {
+    const error = new Error('Preview and live storefront histories have diverged. Publish was stopped to protect the live branch.')
+    Object.assign(error, { statusCode: 409 })
+    throw error
+  }
+
+  await githubRequest(
+    `/repos/${repositoryFullName}/git/refs/heads/main`,
+    token,
+    { method: 'PATCH', body: JSON.stringify({ sha: previewSha, force: false }) },
+  )
+  return { published: true, sha: previewSha }
+}
+
 export async function getGitHubInstallationToken(config: GitHubConfig) {
   const result = await githubRequest<{ token: string }>(
     `/app/installations/${encodeURIComponent(config.installationId)}/access_tokens`,

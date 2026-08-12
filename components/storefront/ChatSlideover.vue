@@ -66,7 +66,10 @@ interface QueuedMessage {
   id: string
   content: string
   createdAt: string
+  images?: { url: string; mimeType: string; name?: string }[]
 }
+
+type ComposerImage = { url: string; mimeType: string; name?: string; data?: string }
 
 const props = defineProps<{
   modelValue?: boolean
@@ -115,7 +118,7 @@ const loading = ref(false)
 const messages = ref<Message[]>([])
 const scrollRef = ref<HTMLElement | null>(null)
 const fileInputRef = ref<HTMLInputElement | null>(null)
-const pendingImages = ref<{ url: string; mimeType: string; name?: string; data: string }[]>([])
+const pendingImages = ref<ComposerImage[]>([])
 const toolActivity = ref('')   // e.g. "Reading hero-banner source..."
 const streamingIdx = ref(-1)   // index of the currently-streaming assistant message
 const conversationId = ref('')
@@ -131,8 +134,8 @@ const stopRequested = ref(false)
 const undoingId = ref('')
 const forkingId = ref('')
 const queuedMessages = ref<QueuedMessage[]>([])
-const editingQueueId = ref('')
-const editingQueueText = ref('')
+const queueEditDraft = ref<{ id: string; beforeId?: string; afterId?: string } | null>(null)
+const draggedQueueId = ref('')
 const queueBusy = ref(false)
 
 function publicAgentText(value: unknown) {
@@ -256,14 +259,32 @@ async function loadQueuedMessages() {
 
 async function queueMessage() {
   const content = input.value.trim()
-  if (!content || queueBusy.value) return
+  if ((!content && !pendingImages.value.length) || queueBusy.value) return
   queueBusy.value = true
   try {
+    const localImages = pendingImages.value.filter(image => image.data)
+    const existingImages = pendingImages.value.filter(image => !image.data)
+    const uploaded = localImages.length
+      ? await $fetch<{ uploaded: QueuedMessage['images'] }>('/api/ecommerce-cms/storefront-agent/media', {
+          method: 'POST', body: {
+            conversationId: conversationId.value,
+            images: localImages.map(image => ({ data: image.data, mimeType: image.mimeType, name: image.name })),
+          },
+        })
+      : { uploaded: [] }
+    const images = [...existingImages.map(({ url, mimeType, name }) => ({ url, mimeType, name })), ...(uploaded.uploaded || [])]
+    const draft = queueEditDraft.value
     const message = await $fetch<QueuedMessage>('/api/ecommerce-cms/storefront-agent/queue', {
-      method: 'POST', body: { conversationId: conversationId.value, content },
+      method: 'POST', body: {
+        conversationId: conversationId.value, content: content || '(see attached image)', images,
+        id: draft?.id, beforeId: draft?.beforeId, afterId: draft?.afterId,
+      },
     })
-    queuedMessages.value.push(message)
+    await loadQueuedMessages()
     input.value = ''
+    pendingImages.value.forEach(image => { if (image.data) URL.revokeObjectURL(image.url) })
+    pendingImages.value = []
+    queueEditDraft.value = null
   } finally { queueBusy.value = false }
 }
 
@@ -282,19 +303,21 @@ async function steerMessage() {
   } finally { queueBusy.value = false }
 }
 
-function beginQueueEdit(message: QueuedMessage) {
-  editingQueueId.value = message.id
-  editingQueueText.value = message.content
-}
-
-async function saveQueueEdit(message: QueuedMessage) {
-  const content = editingQueueText.value.trim()
-  if (!content) return
-  const updated = await $fetch<QueuedMessage>(`/api/ecommerce-cms/storefront-agent/queue/${message.id}`, {
-    method: 'PUT', body: { conversationId: conversationId.value, content },
-  })
-  Object.assign(message, updated)
-  editingQueueId.value = ''
+async function beginQueueEdit(message: QueuedMessage) {
+  if (queueBusy.value) return
+  const index = queuedMessages.value.findIndex(item => item.id === message.id)
+  const beforeId = index > 0 ? queuedMessages.value[index - 1]?.id : undefined
+  const afterId = index >= 0 ? queuedMessages.value[index + 1]?.id : undefined
+  queueBusy.value = true
+  try {
+    await $fetch(`/api/ecommerce-cms/storefront-agent/queue/${message.id}`, {
+      method: 'DELETE', query: { conversationId: conversationId.value },
+    })
+    queuedMessages.value = queuedMessages.value.filter(item => item.id !== message.id)
+    input.value = message.content === '(see attached image)' ? '' : message.content
+    pendingImages.value = (message.images || []).map(image => ({ ...image }))
+    queueEditDraft.value = { id: message.id, beforeId, afterId }
+  } finally { queueBusy.value = false }
 }
 
 async function removeQueuedMessage(message: QueuedMessage) {
@@ -304,11 +327,49 @@ async function removeQueuedMessage(message: QueuedMessage) {
   queuedMessages.value = queuedMessages.value.filter(item => item.id !== message.id)
 }
 
+async function steerQueuedMessage(message: QueuedMessage) {
+  if (queueBusy.value) return
+  queueBusy.value = true
+  try {
+    const imageContext = message.images?.length
+      ? `\n\nAttached images:\n${message.images.map(image => `- ${image.url}`).join('\n')}`
+      : ''
+    await $fetch('/api/ecommerce-cms/storefront-agent/steer', {
+      method: 'POST', body: { conversationId: conversationId.value, content: `${message.content}${imageContext}` },
+    })
+    await removeQueuedMessage(message)
+    messages.value.push({ role: 'user', content: message.content, images: message.images })
+    toolActivity.value = 'Queued prompt added to the running task...'
+  } finally { queueBusy.value = false }
+}
+
+function queueDragStart(message: QueuedMessage) { draggedQueueId.value = message.id }
+async function queueDrop(target: QueuedMessage) {
+  const sourceId = draggedQueueId.value
+  draggedQueueId.value = ''
+  if (!sourceId || sourceId === target.id) return
+  const previous = [...queuedMessages.value]
+  const sourceIndex = queuedMessages.value.findIndex(item => item.id === sourceId)
+  const targetIndex = queuedMessages.value.findIndex(item => item.id === target.id)
+  if (sourceIndex < 0 || targetIndex < 0) return
+  const [moved] = queuedMessages.value.splice(sourceIndex, 1)
+  queuedMessages.value.splice(queuedMessages.value.findIndex(item => item.id === target.id), 0, moved)
+  try {
+    await $fetch('/api/ecommerce-cms/storefront-agent/queue/reorder', {
+      method: 'PUT', body: { conversationId: conversationId.value, ids: queuedMessages.value.map(item => item.id) },
+    })
+  } catch (error) {
+    queuedMessages.value = previous
+    await loadQueuedMessages()
+    throw error
+  }
+}
+
 async function runNextQueuedMessage() {
   await loadQueuedMessages()
   const next = queuedMessages.value[0]
   if (!next || loading.value || stopRequested.value) return
-  await send(undefined, next.content, next.id)
+  await send(undefined, next.content, next.id, next.images)
 }
 
 // ─── Memory ───────────────────────────────────────────────────────────────────
@@ -522,6 +583,7 @@ const elementContext = computed(() => {
 // the picker simply hides — sending must never depend on it.
 const models = ref<{ key: string; label: string; note: string; family: string; supportsImages?: boolean }[]>([])
 const selectedModel = ref<string>('')
+const selectedModelLabel = computed(() => models.value.find(model => model.key === selectedModel.value)?.label || 'Model')
 
 onMounted(async () => {
   try {
@@ -710,13 +772,14 @@ async function pollCurrentInteraction() {
   throw new Error('The storefront request is still running. You can reopen this session from Recent chats.')
 }
 
-async function send(requestedMode?: StorefrontRunMode, actionText?: string, queuedMessageId?: string) {
+async function send(requestedMode?: StorefrontRunMode, actionText?: string, queuedMessageId?: string, queuedImages?: QueuedMessage['images']) {
   const runMode = requestedMode || (refineRequested.value ? 'refine-plan' : planRequested.value ? 'plan' : undefined)
   const text = actionText || input.value.trim()
   const images = pendingImages.value.length ? [...pendingImages.value] : undefined
-  if ((!text && !images) || loading.value) return
+  const existingImages = queuedImages?.length ? queuedImages : undefined
+  if ((!text && !images && !existingImages) || loading.value) return
 
-  const userMsg: Message = { role: 'user', content: text || '(see attached image)', images }
+  const userMsg: Message = { role: 'user', content: text || '(see attached image)', images: existingImages || images }
   messages.value.push(userMsg)
   input.value = ''
   planRequested.value = false
@@ -747,6 +810,7 @@ async function send(requestedMode?: StorefrontRunMode, actionText?: string, queu
         model: selectedModel.value || undefined,
         runMode,
         images: images?.map(image => ({ mimeType: image.mimeType, data: image.data, name: image.name })),
+        existingImages,
       },
     })
     if (started.uploaded?.length) {
@@ -890,7 +954,8 @@ function cancelPlan() {
 function handleKey(e: KeyboardEvent) {
   if (e.key === 'Enter' && !e.shiftKey) {
     e.preventDefault()
-    send()
+    if (loading.value || queueEditDraft.value) queueMessage()
+    else send()
   }
 }
 
@@ -1057,34 +1122,31 @@ async function openSession(item: AgentSessionSummary) {
           </section>
         </div>
 
-        <!-- Pending images -->
-        <div v-if="pendingImages.length" class="flex gap-2 px-2 py-2 border-t border-gray-200 dark:border-gray-700 overflow-x-auto flex-shrink-0">
-          <div v-for="(img, j) in pendingImages" :key="j" class="relative shrink-0">
-            <img :src="img.url" class="w-16 h-16 rounded-lg object-cover" />
-            <button class="absolute -top-1.5 -right-1.5 w-5 h-5 rounded-full bg-red-500 text-white flex items-center justify-center text-xs leading-none" @click="removePendingImage(j)">✕</button>
-          </div>
-        </div>
-
         <div v-if="queuedMessages.length" class="message-queue">
-          <div class="message-queue__title">Queued next</div>
-          <div v-for="queued in queuedMessages" :key="queued.id" class="message-queue__item">
-            <input
-              v-if="editingQueueId === queued.id"
-              v-model="editingQueueText"
-              class="message-queue__edit"
-              maxlength="4000"
-              @keydown.enter.prevent="saveQueueEdit(queued)"
-              @keydown.esc="editingQueueId = ''"
-            />
-            <span v-else class="message-queue__text">{{ queued.content }}</span>
-            <button v-if="editingQueueId === queued.id" title="Save queued message" @click="saveQueueEdit(queued)">
-              <UIcon name="i-heroicons-check" />
+          <div
+            v-for="queued in queuedMessages"
+            :key="queued.id"
+            class="message-queue__item"
+            draggable="true"
+            :class="{ 'message-queue__item--dragging': draggedQueueId === queued.id }"
+            @dragstart="queueDragStart(queued)"
+            @dragover.prevent
+            @drop.prevent="queueDrop(queued)"
+          >
+            <UIcon name="i-heroicons-bars-2" class="message-queue__handle" title="Drag to reorder" />
+            <span class="message-queue__text">{{ queued.content }}</span>
+            <span v-if="queued.images?.length" class="message-queue__images">
+              <UIcon name="i-heroicons-photo" /> {{ queued.images.length }}
+            </span>
+            <button title="Steer the running task with this prompt" @click="steerQueuedMessage(queued)">
+              <UIcon name="i-heroicons-arrow-turn-down-right" />
+              <span>Steer</span>
             </button>
-            <button v-else title="Edit queued message" @click="beginQueueEdit(queued)">
+            <button title="Remove from queue" @click="removeQueuedMessage(queued)">
+              <UIcon name="i-heroicons-trash" />
+            </button>
+            <button title="Edit queued prompt" @click="beginQueueEdit(queued)">
               <UIcon name="i-heroicons-pencil-square" />
-            </button>
-            <button title="Remove queued message" @click="removeQueuedMessage(queued)">
-              <UIcon name="i-heroicons-x-mark" />
             </button>
           </div>
         </div>
@@ -1101,52 +1163,64 @@ async function openSession(item: AgentSessionSummary) {
           >✕</button>
         </div>
 
-        <!-- Model picker. Hidden entirely when the list can't be loaded, so a
-             sandbox hiccup never blocks sending a message. -->
-        <div v-if="models.length" class="model-row">
-          <UIcon name="i-heroicons-cpu-chip" class="model-icon" />
-          <select v-model="selectedModel" :disabled="loading" class="model-select" title="Which AI makes the change">
-            <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}{{ m.supportsImages ? ' · Vision' : '' }} - {{ m.note }}</option>
-          </select>
-        </div>
-
         <!-- Input -->
         <div class="composer">
-          <div class="ai-input-area">
-            <input ref="fileInputRef" type="file" multiple accept="image/*" class="hidden" @change="onFileSelected" />
-            <UButton icon="i-heroicons-photo" color="gray" variant="ghost" size="sm" :disabled="loading" title="Attach screenshot" @click="openFilePicker" />
-            <UTextarea
-              v-model="input"
-              :placeholder="inputPlaceholder"
-              :rows="1"
-              autoresize
-              :maxrows="5"
-              class="flex-1 text-sm"
-              :disabled="false"
-              @keydown="handleKey"
-              @paste.native="handlePaste"
-            />
-            <template v-if="loading">
-              <UButton icon="i-heroicons-queue-list" color="gray" variant="soft" size="sm" :loading="queueBusy" :disabled="!input.trim()" title="Run after the current task" @click="queueMessage" />
-              <UButton icon="i-heroicons-forward" color="primary" variant="soft" size="sm" :loading="queueBusy" :disabled="!input.trim()" title="Add guidance to the running task" @click="steerMessage" />
-              <UButton icon="i-heroicons-stop" color="red" variant="soft" size="sm" :loading="stopRequested" title="Stop task and discard this task's changes" @click="stopTask" />
-            </template>
-            <UButton v-else icon="i-heroicons-paper-airplane" color="primary" size="sm" :disabled="!input.trim() && !pendingImages.length" @click="send()" />
+          <div v-if="queueEditDraft" class="composer-editing">
+            <UIcon name="i-heroicons-pencil-square" /> Editing queued prompt
           </div>
-          <div class="composer-options">
-            <button
-              type="button"
-              class="plan-toggle"
-              :class="{ 'plan-toggle--active': planRequested || refineRequested }"
-              :disabled="loading"
-              title="Plan with read-only tools before editing"
-              @click="togglePlanMode"
-            >
-              <UIcon name="i-heroicons-clipboard-document-list" />
-              <span>{{ refineRequested ? 'Refining plan' : planRequested ? 'Plan mode on' : 'Plan' }}</span>
-            </button>
-            <span v-if="planRequested || refineRequested" class="composer-options__hint">Read-only until you approve</span>
-            <span v-else-if="loading" class="composer-options__hint">Queue for later or steer the running task</span>
+          <div v-if="pendingImages.length" class="composer-images">
+            <div v-for="(img, j) in pendingImages" :key="img.url" class="composer-image">
+              <img :src="img.url" />
+              <button title="Remove image" @click="removePendingImage(j)">✕</button>
+            </div>
+          </div>
+          <UTextarea
+            v-model="input"
+            :placeholder="inputPlaceholder"
+            :rows="2"
+            autoresize
+            :maxrows="6"
+            class="composer-textarea"
+            :ui="{ base: 'composer-textarea__input' }"
+            :disabled="false"
+            @keydown="handleKey"
+            @paste.native="handlePaste"
+          />
+          <div class="composer-toolbar">
+            <div class="composer-toolbar__left">
+              <input ref="fileInputRef" type="file" multiple accept="image/*" class="hidden" @change="onFileSelected" />
+              <UButton icon="i-heroicons-photo" color="gray" variant="ghost" size="sm" title="Attach image" @click="openFilePicker" />
+              <button
+                type="button"
+                class="plan-toggle"
+                :class="{ 'plan-toggle--active': planRequested || refineRequested }"
+                :disabled="loading"
+                title="Plan with read-only tools before editing"
+                @click="togglePlanMode"
+              >
+                <UIcon name="i-heroicons-clipboard-document-list" />
+                <span>{{ refineRequested ? 'Refining' : planRequested ? 'Plan on' : 'Plan' }}</span>
+              </button>
+              <label v-if="models.length" class="model-picker" title="Choose model">
+                <span>{{ selectedModelLabel }}</span>
+                <UIcon name="i-heroicons-chevron-down" />
+                <select v-model="selectedModel" :disabled="loading">
+                  <option v-for="m in models" :key="m.key" :value="m.key">{{ m.label }}{{ m.supportsImages ? ' · Vision' : '' }} — {{ m.note }}</option>
+                </select>
+              </label>
+            </div>
+            <div class="composer-toolbar__right">
+              <UButton v-if="loading" icon="i-heroicons-stop" color="red" variant="soft" size="sm" :loading="stopRequested" title="Stop current task" @click="stopTask" />
+              <UButton
+                :icon="queueEditDraft ? 'i-heroicons-check' : loading ? 'i-heroicons-arrow-turn-down-left' : 'i-heroicons-arrow-up'"
+                color="primary"
+                size="sm"
+                :loading="queueBusy"
+                :disabled="!input.trim() && !pendingImages.length"
+                :title="queueEditDraft ? 'Save queued prompt' : loading ? 'Run after current task' : 'Send'"
+                @click="loading || queueEditDraft ? queueMessage() : send()"
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -1254,47 +1328,25 @@ async function openSession(item: AgentSessionSummary) {
   border-radius: 8px;
   background: var(--ui-bg-elevated, #f9fafb);
 }
-.message-queue__title { margin-bottom: 5px; font-size: 10px; font-weight: 700; color: var(--ui-text-muted, #6b7280); text-transform: uppercase; }
-.message-queue__item { display: flex; align-items: center; gap: 5px; min-width: 0; font-size: 11px; }
+.message-queue__item { display: flex; align-items: center; gap: 6px; min-width: 0; font-size: 11px; transition: opacity .15s, background .15s; }
 .message-queue__item + .message-queue__item { margin-top: 4px; }
+.message-queue__item--dragging { opacity: .45; }
+.message-queue__handle { width: 13px; height: 13px; flex: 0 0 auto; color: var(--ui-text-muted, #9ca3af); cursor: grab; }
+.message-queue__handle:active { cursor: grabbing; }
 .message-queue__text { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.message-queue__edit { flex: 1; min-width: 0; padding: 3px 5px; border: 1px solid var(--ui-border, #d1d5db); border-radius: 5px; background: var(--ui-bg, #fff); }
-.message-queue__item button { flex-shrink: 0; padding: 2px; color: var(--ui-text-muted, #6b7280); }
+.message-queue__images { display: inline-flex; align-items: center; gap: 2px; color: var(--ui-text-muted, #6b7280); font-size: 10px; }
+.message-queue__images svg { width: 12px; height: 12px; }
+.message-queue__item button { display: inline-flex; align-items: center; gap: 3px; flex-shrink: 0; padding: 2px; color: var(--ui-text-muted, #6b7280); }
+.message-queue__item button svg { width: 13px; height: 13px; }
 .message-queue__item button:hover { color: var(--ui-text, #111827); }
 
 /* Model picker. Deliberately quieter than the selection chip - the chip is
    about what you're changing, this is a setting you rarely touch. */
-.model-row {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-  margin: 0 10px 6px;
-}
-.model-icon {
-  width: 13px;
-  height: 13px;
-  color: var(--ui-text-muted, #9ca3af);
-  flex-shrink: 0;
-}
-.model-select {
-  flex: 1;
-  min-width: 0;
-  padding: 3px 6px;
-  font-size: 11px;
-  color: var(--ui-text-muted, #6b7280);
-  background: transparent;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 6px;
-  outline: none;
-  cursor: pointer;
-}
-.model-select:disabled { opacity: 0.5; cursor: default; }
-.dark .model-select {
-  border-color: rgba(255, 255, 255, 0.12);
-  color: #9ca3af;
-}
-.dark .model-select option { background: #1f2937; color: #e5e7eb; }
+.model-picker { position: relative; display: inline-flex; align-items: center; gap: 3px; max-width: 112px; padding: 4px 5px; color: var(--ui-text-muted, #6b7280); font-size: 10px; cursor: pointer; }
+.model-picker span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-picker svg { width: 11px; height: 11px; flex: 0 0 auto; }
+.model-picker select { position: absolute; inset: 0; width: 100%; opacity: 0; cursor: pointer; }
+.model-picker select:disabled { cursor: default; }
 
 .sel-chip {
   display: flex;
@@ -1335,24 +1387,25 @@ async function openSession(item: AgentSessionSummary) {
 .dark .sel-chip-clear { color: #fdba74; }
 
 .composer {
-  border-top: 1px solid var(--ui-border, #e5e7eb);
   flex-shrink: 0;
-  padding: 8px 10px 7px;
+  margin: 0 8px 8px;
+  padding: 7px;
+  border: 1px solid var(--ui-border, #d1d5db);
+  border-radius: 15px;
+  background: var(--ui-bg, #fff);
+  box-shadow: 0 1px 2px rgba(0,0,0,.03);
 }
-
-.ai-input-area {
-  display: flex;
-  gap: 6px;
-  align-items: flex-end;
-}
-
-.composer-options {
-  min-height: 25px;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 5px 3px 0 39px;
-}
+.dark .composer { background: var(--ui-bg, #111827); }
+.composer-editing { display: flex; align-items: center; gap: 4px; padding: 1px 4px 5px; color: #2563eb; font-size: 10px; }
+.composer-editing svg { width: 12px; height: 12px; }
+.composer-images { display: flex; gap: 7px; padding: 2px 3px 7px; overflow-x: auto; }
+.composer-image { position: relative; flex: 0 0 auto; }
+.composer-image img { width: 54px; height: 54px; border-radius: 8px; object-fit: cover; }
+.composer-image button { position: absolute; top: -5px; right: -5px; display: grid; place-items: center; width: 17px; height: 17px; border-radius: 999px; background: #ef4444; color: white; font-size: 9px; }
+.composer-textarea { width: 100%; }
+.composer-textarea :deep(textarea), .composer-textarea__input { border: 0 !important; box-shadow: none !important; background: transparent !important; padding: 4px 5px !important; resize: none; }
+.composer-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding-top: 4px; }
+.composer-toolbar__left, .composer-toolbar__right { display: flex; align-items: center; gap: 3px; min-width: 0; }
 
 .plan-toggle {
   display: inline-flex;
@@ -1360,16 +1413,16 @@ async function openSession(item: AgentSessionSummary) {
   gap: 4px;
   padding: 3px 7px;
   border-radius: 6px;
-  color: var(--ui-text-muted, #6b7280);
+  color: #2563eb;
+  background: rgba(37, 99, 235, .09);
   font-size: 11px;
   line-height: 1.2;
 }
 .plan-toggle svg { width: 13px; height: 13px; }
-.plan-toggle:hover:not(:disabled) { background: rgba(107, 114, 128, 0.1); }
+.plan-toggle:hover:not(:disabled) { background: rgba(37, 99, 235, .15); }
 .plan-toggle:disabled { opacity: 0.45; }
-.plan-toggle--active { background: rgba(249, 115, 22, 0.12); color: #c2410c; }
-.dark .plan-toggle--active { color: #fdba74; }
-.composer-options__hint { font-size: 10px; color: var(--ui-text-muted, #9ca3af); }
+.plan-toggle--active { background: rgba(37, 99, 235, .2); color: #1d4ed8; }
+.dark .plan-toggle, .dark .plan-toggle--active { color: #93c5fd; }
 
 .plan-card {
   margin: 0 4px;
