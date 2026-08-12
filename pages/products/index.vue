@@ -378,7 +378,13 @@ const action = (row) => [
             icon: 'i-heroicons-trash-20-solid',
             click: () => {
                 isDeleteModalOpen.value = true
-                deletingRowIdentity.value = {name:row.name,id:row.id}
+                // Keep the variants' R2 keys so the images can be removed from
+                // Cloudflare once the product row is gone.
+                deletingRowIdentity.value = {
+                    name: row.name,
+                    id: row.id,
+                    imageKeys: (row.variants || []).flatMap((v: any) => v.images || []),
+                }
                 }
         },
     ],
@@ -750,7 +756,9 @@ function openImageViewer(images: string[], updatedAt: Date) {
 
 const removeProduct = async() => {
   try {
-    DeleteProduct.mutate({ where: { id :deletingRowIdentity.value.id} });
+    await DeleteProduct.mutateAsync({ where: { id :deletingRowIdentity.value.id} });
+    // Variants cascade with the product, so their photos are now unreferenced.
+    await awsService.deleteObjects(deletingRowIdentity.value.imageKeys || []);
   } catch (err) {
     console.log(err);
   }finally{
@@ -835,9 +843,13 @@ const fileValue = (data: any) => {
     images = data.files
 };
 
-const handleAddPhoto = async () => {  
+const handleAddPhoto = async () => {
   try {
     isPhotoSaving.value = true;
+
+    // Photos the variant carries today — any that the new set drops are
+    // replaced/removed and must go from Cloudflare too.
+    const previousKeys: string[] = items.value?.variant?.images || [];
 
     // Step 1: Prepare and upload files first
     const base64files = await Promise.all(
@@ -865,12 +877,13 @@ const handleAddPhoto = async () => {
     }
 
     // Step 2: Update DB after successful upload
-    const res = await Updatevariant.mutateAsync({
+    const nextKeys = images.map((image) => image.uuid);
+    await Updatevariant.mutateAsync({
       where: { id: items.value?.variant.id },
-      data: { images: images.map((image) => image.uuid) },
+      data: { images: nextKeys },
     });
 
-    console.log("DB updated with image UUIDs:", res);
+    await awsService.deleteObjects(previousKeys.filter((key) => !nextKeys.includes(key)));
 
     itemBarcode.value = '';
   } catch (err: any) {

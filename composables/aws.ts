@@ -16,6 +16,27 @@ export default class CloudflareService {
   }
 
 
+  /**
+   * Delete uploaded media from R2 once the row referencing it is gone or its
+   * image has been replaced. Call this *after* the database write succeeds —
+   * the server skips any key something still points at.
+   *
+   * Housekeeping, so it never throws: a failed cleanup leaves an orphan object
+   * in the bucket, which must not surface as a failed delete/save to the user.
+   */
+  public async deleteObjects(keys: (string | { uuid?: string } | null | undefined)[]) {
+    const list = keys
+      .map(k => (typeof k === 'string' ? k : k?.uuid || ''))
+      .filter(Boolean)
+    if (!list.length) return
+
+    try {
+      await $fetch('/api/r2/delete', { method: 'POST', body: { keys: list } });
+    } catch (error) {
+      console.error('R2 cleanup failed', error);
+    }
+  }
+
   public async uploadBase64Object(base64String: string, key: string) {
     try {
       const prefixRegex = /^data:(.+);base64,/;

@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import AwsService from '~/composables/aws'
+
 type BlogRow = {
   id: string
   title: string
@@ -13,6 +15,7 @@ type BlogRow = {
 }
 
 const toast = useToast()
+const awsService = new AwsService()
 
 const { data: blogs, pending, refresh } = await useFetch<BlogRow[]>('/api/ecommerce-cms/blogs', {
   default: () => [],
@@ -73,8 +76,24 @@ function openCreate() {
   })
 }
 
+/**
+ * Covers uploaded in this form session that no blog row points at yet. Without
+ * this, uploading an image and then cancelling (or picking a different one)
+ * would leave the file in Cloudflare forever. The server ignores any key a row
+ * still references, so a saved cover is never removed by mistake.
+ */
+const pendingUploads = new Set<string>()
+
+async function discardPendingUploads(keep?: string) {
+  const orphans = [...pendingUploads].filter(key => key !== keep)
+  pendingUploads.clear()
+  if (keep) pendingUploads.add(keep)
+  await awsService.deleteObjects(orphans)
+}
+
 function closeForm() {
   isFormOpen.value = false
+  discardPendingUploads()
   resetForm()
 }
 
@@ -127,6 +146,11 @@ async function uploadImage(event: Event) {
       method: 'POST',
       body: { base64, key, isAiImage: false },
     })
+
+    // A previous upload from this same session is now superseded.
+    await discardPendingUploads()
+    pendingUploads.add(key)
+
     form.image = key
     imagePreview.value = URL.createObjectURL(file)
     toast.add({ title: 'Image uploaded' })
@@ -168,6 +192,10 @@ async function save() {
       await $fetch('/api/ecommerce-cms/blogs', { method: 'POST', body })
       toast.add({ title: 'Blog added' })
     }
+
+    // Saved, so this upload is referenced now — stop tracking it as pending.
+    pendingUploads.delete(form.image)
+    await discardPendingUploads()
 
     resetForm()
     isFormOpen.value = false

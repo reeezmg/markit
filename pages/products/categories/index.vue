@@ -3,6 +3,7 @@ import { Switch } from '@headlessui/vue';
 
 import { sub } from 'date-fns';
 import type { Period, Range } from '~/types';
+import AwsService from '~/composables/aws';
 import {
     useUpdateCategory,
     useUpdateManyCategory,
@@ -12,6 +13,7 @@ import {
     useDeleteManyCategory,
     useDeleteProduct
 } from '~/lib/hooks';
+const awsService = new AwsService();
 const DeleteCategory = useDeleteCategory({ optimisticUpdate: true });
 const DeleteManyCategory = useDeleteManyCategory({ optimisticUpdate: true });
 const UpdateCategory = useUpdateCategory({ optimisticUpdate: true });
@@ -142,7 +144,7 @@ const action = (row) => [
             icon: 'i-heroicons-trash-20-solid',
             click: () => {
                 isCategoryDeleteModalOpen.value = true
-                deletingCategoryRowIdentity.value = {name:row.name,id:row.id, productsLength:row.products.length}
+                deletingCategoryRowIdentity.value = {name:row.name,id:row.id, productsLength:row.products.length, imageKeys:[row.image, row.banner]}
                 }
         },
     ],
@@ -162,7 +164,13 @@ const productAction = (row) => [
             icon: 'i-heroicons-trash-20-solid',
              click: () => {
                 isProductDeleteModalOpen.value = true
-                deletingProductRowIdentity.value = {name:row.name,id:row.id}
+                // Carry the variants' R2 keys so the photos can be dropped from
+                // Cloudflare once the product row is gone.
+                deletingProductRowIdentity.value = {
+                    name: row.name,
+                    id: row.id,
+                    imageKeys: (row.variants || []).flatMap((v: any) => v.images || []),
+                }
                 }
         },
     ],
@@ -245,7 +253,8 @@ const queryArgs = reactive({
         shortCut:true,
         name:true,
         status:true,
-        image:true,  
+        image:true,
+        banner:true,
         products: {
             select:{
                 id:true,
@@ -359,7 +368,7 @@ watch([search, selectedStatus], () => {
     page.value = 1;
 });
 
-const removeCategory = () => {
+const removeCategory = async () => {
     if(deletingCategoryRowIdentity.value.productsLength){
         toast.add({
             title: 'Category Deletion failed!',
@@ -368,7 +377,8 @@ const removeCategory = () => {
         });
     }else{
   try {
-     DeleteCategory.mutate({ where: { id:deletingCategoryRowIdentity.value.id } });
+     await DeleteCategory.mutateAsync({ where: { id:deletingCategoryRowIdentity.value.id } });
+     await awsService.deleteObjects(deletingCategoryRowIdentity.value.imageKeys || []);
   } catch (err) {
     console.log(err);
   }finally{
@@ -377,9 +387,10 @@ const removeCategory = () => {
 }
 };
 
-const removeProduct = () => {
+const removeProduct = async () => {
   try {
-     DeleteProduct.mutate({ where: { id:deletingProductRowIdentity.value.id } });
+     await DeleteProduct.mutateAsync({ where: { id:deletingProductRowIdentity.value.id } });
+     await awsService.deleteObjects(deletingProductRowIdentity.value.imageKeys || []);
   } catch (err) {
     console.log(err);
   }

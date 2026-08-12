@@ -45,6 +45,13 @@ const uploadFile = async (f?: ImageData | null) => {
 const saveBrand = async () => {
   isLoading.value = true;
   try {
+    // Whatever the brand points at right now; replaced files are dropped from
+    // Cloudflare once the new keys are saved.
+    const replaced = [
+      imageFile.value?.uuid && imageFile.value.uuid !== brand.value?.image ? brand.value?.image : null,
+      bannerFile.value?.uuid && bannerFile.value.uuid !== brand.value?.banner ? brand.value?.banner : null,
+    ];
+
     await Promise.all([uploadFile(imageFile.value), uploadFile(bannerFile.value)]);
     await UpdateBrand.mutateAsync({
       where: { id: route.params.id as string },
@@ -57,6 +64,7 @@ const saveBrand = async () => {
         targetAudience: targetAudience.value || undefined,
       },
     });
+    await awsService.deleteObjects(replaced);
     toast.add({ title: 'Brand updated successfully!', color: 'green' });
     await refetch();
   } catch (err: any) {

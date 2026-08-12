@@ -204,6 +204,12 @@ const saveSubcategoryDraft = async () => {
 
   try {
     const companyId = getCompanyId();
+    // The image this subcategory is stored with today — replaced by the save
+    // below when the draft carries a different key.
+    const storedImage = subcategoryDraft.value.id
+      ? (category.value?.subcategories || []).find((s: any) => s.id === subcategoryDraft.value?.id)?.image
+      : null;
+
     await uploadImage(subcategoryDraft.value.imageFile);
 
     if (subcategoryModalMode.value === 'add') {
@@ -217,6 +223,10 @@ const saveSubcategoryDraft = async () => {
         data: getSubcategoryPayload(subcategoryDraft.value, companyId),
       });
       toast.add({ title: 'Subcategory updated', color: 'green' });
+    }
+
+    if (storedImage && storedImage !== subcategoryDraft.value.image) {
+      await awsService.deleteObjects([storedImage]);
     }
 
     await refetchCategory();
@@ -248,6 +258,7 @@ const confirmDeleteSubcategory = async () => {
   if (!subcat.isNew && subcat.id) {
     try {
       await DeleteSubcategory.mutateAsync({ where: { id: subcat.id } });
+      await awsService.deleteObjects([subcat.image]);
       toast.add({ title: 'Subcategory deleted', color: 'green' });
       await refetchCategory();
     } catch (error) {
@@ -290,6 +301,13 @@ const saveCategory = async () => {
   isCategorySaving.value = true;
 
   try {
+    // Files the category points at right now; the replaced ones are dropped
+    // from Cloudflare once the new keys are saved.
+    const replaced = [
+      files[0]?.uuid && files[0].uuid !== category.value?.image ? category.value?.image : null,
+      bannerFile.value?.uuid && bannerFile.value.uuid !== category.value?.banner ? category.value?.banner : null,
+    ];
+
     await uploadImage(files[0]);
     await uploadImage(bannerFile.value || undefined);
     await UpdateCategory.mutateAsync({
@@ -311,6 +329,8 @@ const saveCategory = async () => {
         targetAudience: targetAudience.value || undefined,
       },
     });
+
+    await awsService.deleteObjects(replaced);
 
     toast.add({
       title: 'Category updated successfully!',

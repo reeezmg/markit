@@ -1513,20 +1513,26 @@ model EcommBlog {
     @@map("ecomm_blogs")
 }
 
-// Gallery is strictly YouTube-only. `type`/`mediaKey` are retained for backwards
-// compatibility but are always 'YOUTUBE'/null.
+// A gallery row is a PHOTO or a VIDEO. 'YOUTUBE' is the legacy value for
+// pre-photo-support rows and is migrated to VIDEO by ensureEcommGalleryTable().
 enum EcommGalleryType {
+    PHOTO
+    VIDEO
     YOUTUBE
 }
 
 // Table provisioned at runtime via server/utils/ecommGallery.ts (CREATE TABLE IF NOT EXISTS).
 // Mirrored here so `prisma migrate` never drops it. Keep the two definitions in sync.
+//
+// `mediaKey` (uploaded R2 object) and `url` (external link — YouTube for VIDEO,
+// image URL for PHOTO) are both optional individually, but at least one must be
+// set; enforced by the ecomm_gallery_media_present_chk CHECK constraint.
 model EcommGallery {
     id        String           @id @unique @default(dbgenerated("gen_random_uuid()"))
     createdAt DateTime         @default(now()) @map("created_at")
     updatedAt DateTime         @default(now()) @updatedAt @map("updated_at")
     name      String
-    type      EcommGalleryType @default(YOUTUBE)
+    type      EcommGalleryType @default(VIDEO)
     mediaKey  String?          @map("media_key")
     url       String?
     sortOrder Int              @default(0) @map("sort_order")
@@ -1535,6 +1541,7 @@ model EcommGallery {
     companyId String           @map("company_id")
 
     @@index([companyId, status, sortOrder])
+    @@index([companyId, type, status, sortOrder])
     @@allow('read', true)
     @@allow('create, update, delete', company.users?[userId == auth().id])
     @@map("ecomm_gallery")

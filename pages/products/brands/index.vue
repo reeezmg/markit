@@ -359,6 +359,7 @@ import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Switch } from '@headlessui/vue'
 
+import AwsService from '~/composables/aws'
 import {
   useFindManyBrand,
   useUpdateBrand,
@@ -366,6 +367,8 @@ import {
   useDeleteBrand,
   useCountBrand
 } from '~/lib/hooks'
+
+const awsService = new AwsService()
 
 import type { Prisma } from '@prisma/client'
 
@@ -473,6 +476,7 @@ const queryArgs = computed<Prisma.BrandFindManyArgs>(() => {
       id: true,
       name: true,
       image: true,
+      banner: true,
       status: true,
 
       /* BRAND PRODUCTS */
@@ -629,9 +633,9 @@ function multiToggle(ids: string[], status: boolean) {
 
 const DeleteBrand = useDeleteBrand({ optimisticUpdate: true })
 const isDeleteModalOpen = ref(false)
-const deletingBrand = ref<{ name?: string; id?: string; productsLength?: number }>({})
+const deletingBrand = ref<{ name?: string; id?: string; productsLength?: number; imageKeys?: (string | null)[] }>({})
 
-const removeBrand = () => {
+const removeBrand = async () => {
   if (deletingBrand.value.productsLength) {
     useToast().add({
       title: 'Brand deletion failed!',
@@ -642,7 +646,8 @@ const removeBrand = () => {
     return
   }
   try {
-    DeleteBrand.mutate({ where: { id: deletingBrand.value.id } })
+    await DeleteBrand.mutateAsync({ where: { id: deletingBrand.value.id } })
+    await awsService.deleteObjects(deletingBrand.value.imageKeys || [])
   } catch (err) {
     console.log(err)
   } finally {
@@ -663,7 +668,8 @@ const action = (row: any) => [
       label: 'Delete',
       icon: 'i-heroicons-trash-20-solid',
       click: () => {
-        deletingBrand.value = { name: row.name, id: row.id, productsLength: row.products?.length || 0 }
+        // Keep the logo/banner keys so they can leave Cloudflare with the row.
+        deletingBrand.value = { name: row.name, id: row.id, productsLength: row.products?.length || 0, imageKeys: [row.image, row.banner] }
         isDeleteModalOpen.value = true
       }
     }

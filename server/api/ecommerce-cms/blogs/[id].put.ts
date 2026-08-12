@@ -1,5 +1,6 @@
 import { pool } from '~/server/db'
 import { ensureEcommBlogsTable } from '~/server/utils/ecommFaqs'
+import { cleanupMediaKeys } from '~/server/utils/mediaCleanup'
 
 const slugify = (value: string) =>
   value
@@ -25,6 +26,12 @@ export default defineEventHandler(async (event) => {
 
   await ensureEcommBlogsTable()
   const slug = body.slug == null ? null : slugify(body.slug)
+
+  const previous = await pool.query(
+    'SELECT image FROM ecomm_blogs WHERE id = $1 AND company_id = $2',
+    [id, session.data.companyId]
+  )
+  const previousImage = previous.rows[0]?.image || null
 
   const { rows } = await pool.query(
     `
@@ -63,5 +70,11 @@ export default defineEventHandler(async (event) => {
   )
 
   if (!rows[0]) throw createError({ statusCode: 404, statusMessage: 'Blog not found' })
+
+  // A swapped cover leaves the old upload unreferenced.
+  if (previousImage && previousImage !== rows[0].image) {
+    await cleanupMediaKeys([previousImage])
+  }
+
   return rows[0]
 })

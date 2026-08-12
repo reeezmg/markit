@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue';
+import AwsService from '~/composables/aws';
 import {
   useUpdateCollection,
   useFindManyCollection,
   useDeleteCollection,
 } from '~/lib/hooks';
 
+const awsService = new AwsService();
 const UpdateCollection = useUpdateCollection({ optimisticUpdate: true });
 const DeleteCollection = useDeleteCollection({ optimisticUpdate: true });
 const router = useRouter();
@@ -13,7 +15,7 @@ const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 
 const isDeleteModalOpen = ref(false);
-const deletingRow = ref<{ name?: string; id?: string; productsLength?: number }>({});
+const deletingRow = ref<{ name?: string; id?: string; productsLength?: number; imageKeys?: (string | null)[] }>({});
 
 const columns = [
   { key: 'name', label: 'Name', sortable: true },
@@ -37,7 +39,8 @@ const action = (row: any) => [
       icon: 'i-heroicons-trash-20-solid',
       click: () => {
         isDeleteModalOpen.value = true;
-        deletingRow.value = { name: row.name, id: row.id, productsLength: row.products?.length || 0 };
+        // Keep the image/banner keys so they can leave Cloudflare with the row.
+        deletingRow.value = { name: row.name, id: row.id, productsLength: row.products?.length || 0, imageKeys: [row.image, row.banner] };
       },
     },
   ],
@@ -77,6 +80,7 @@ const queryArgs = reactive<any>({
     id: true,
     name: true,
     image: true,
+    banner: true,
     targetAudience: true,
     status: true,
     products: { select: { id: true } },
@@ -100,7 +104,7 @@ watchEffect(() => {
   refetch();
 });
 
-const removeCollection = () => {
+const removeCollection = async () => {
   if (deletingRow.value.productsLength) {
     toast.add({
       title: 'Collection deletion failed!',
@@ -111,7 +115,8 @@ const removeCollection = () => {
     return;
   }
   try {
-    DeleteCollection.mutate({ where: { id: deletingRow.value.id } });
+    await DeleteCollection.mutateAsync({ where: { id: deletingRow.value.id } });
+    await awsService.deleteObjects(deletingRow.value.imageKeys || []);
   } catch (err) {
     console.log(err);
   } finally {

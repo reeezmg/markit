@@ -130,6 +130,8 @@ enum CouponAudience {
 }
 
 enum EcommGalleryType {
+  PHOTO
+  VIDEO
   YOUTUBE
 }
 
@@ -1520,7 +1522,7 @@ model EcommGallery {
   createdAt DateTime         @default(now()) @map("created_at")
   updatedAt DateTime         @default(now()) @updatedAt() @map("updated_at")
   name      String
-  type      EcommGalleryType @default(YOUTUBE)
+  type      EcommGalleryType @default(VIDEO)
   mediaKey  String?          @map("media_key")
   url       String?
   sortOrder Int              @default(0) @map("sort_order")
@@ -1529,6 +1531,7 @@ model EcommGallery {
   companyId String           @map("company_id")
 
   @@index([companyId, status, sortOrder])
+  @@index([companyId, type, status, sortOrder])
   @@map("ecomm_gallery")
 }
 

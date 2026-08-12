@@ -119,6 +119,9 @@ function handleAddImageChange(e: Event) {
 
 const onProfileUpdate = async () => {
     try{
+    // The avatar being replaced, if the user picked a new one.
+    const replacedAvatar = selectedFile.value?.file ? useAuth().session.value?.image : null;
+
     await UpdateUser.mutateAsync({
         where: {
             id: useAuth().session.value?.id,
@@ -154,6 +157,10 @@ const onProfileUpdate = async () => {
     }
 
     await updateProfileDetails(state.name,null,selectedFile.value?.uuid)
+
+    if (replacedAvatar && replacedAvatar !== selectedFile.value?.uuid) {
+        await awsService.deleteObjects([replacedAvatar]);
+    }
 }catch(error){
     console.error(error);
     toast.add({

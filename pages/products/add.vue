@@ -49,9 +49,23 @@ const effectiveDeliveryType = computed(() =>
   isDistributorPurchaseOrderFlow.value ? 'order' : deliveryType.value || 'trynbuy'
 )
 
+// Staged products keep their photos in R2 already (they upload at Add time, not
+// at Save), so dropping or re-editing a staged product orphans whatever images
+// it no longer carries.
+const stagedImageKeys = (product: any): string[] =>
+  (product?.variants || []).flatMap((variant: any) =>
+    (variant?.images || [])
+      .map((image: any) => (typeof image === 'string' ? image : image?.uuid))
+      .filter(Boolean)
+  )
+
 const onDraftProductDeleted = async (id: string) => {
+  const removed = draft.stagedProducts.value.find((p: any) => p.id === id)
   draft.productIds.value = draft.productIds.value.filter(productId => productId !== id)
   draft.stagedProducts.value = draft.stagedProducts.value.filter((p: any) => p.id !== id)
+  // Saved products are cleaned up by /api/products/delete; this covers the
+  // staged-only case, and the server skips keys a row still references.
+  await awsService.deleteObjects(stagedImageKeys(removed))
   if (isEditingPurchaseOrder.value) await refetchEditPurchaseOrder()
 }
 
@@ -701,7 +715,11 @@ const handleEdit = async (e: Event) => {
       await refetchEditPurchaseOrder()
     } else {
       // Unsaved products remain local until the purchase order is saved.
+      const previous = draft.stagedProducts.value.find((p: any) => p.id === productId);
       draft.stagedProducts.value = draft.stagedProducts.value.map((p: any) => (p.id === productId ? updated : p));
+
+      const keptKeys = new Set(stagedImageKeys(updated));
+      await awsService.deleteObjects(stagedImageKeys(previous).filter(key => !keptKeys.has(key)));
     }
 
     handleReset();

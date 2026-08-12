@@ -788,7 +788,10 @@ const onLogoUpdate = async () => {
       statusMessage: 'No internet connection',
     })
   }
-    UpdateCompany.mutate({
+    // The logo being replaced, if a new file was picked.
+    const replacedLogo = selectedFile.value?.file ? useAuth().session.value?.logo : null;
+
+    await UpdateCompany.mutateAsync({
         where: {
             id: useAuth().session.value?.companyId,
         },
@@ -800,7 +803,7 @@ const onLogoUpdate = async () => {
     });
 
 
-    
+
     if (selectedFile.value) {
         const base64 = await prepareFileForApi(selectedFile.value.file);
         const base64file = { base64, uuid: selectedFile.value.uuid };
@@ -808,6 +811,10 @@ const onLogoUpdate = async () => {
     }
 
 updateLogo(selectedFile.value?.uuid);
+
+if (replacedLogo && replacedLogo !== selectedFile.value?.uuid) {
+    await awsService.deleteObjects([replacedLogo]);
+}
 toast.add({ title: 'Logo updated', icon: 'i-heroicons-check-circle' });
 }catch(error){
     console.error(error);

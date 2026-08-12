@@ -754,7 +754,14 @@ const handleEdit = async (e: Event) => {
 
    const productId = selectedProduct.value.id;
 
-const updatedProduct =  UpdateProduct.mutate({
+   // Photos the product carries today. Removed variants and replaced images are
+   // both dropped by the update below, so whatever is missing afterwards is no
+   // longer referenced and should leave Cloudflare too.
+   const previousImageKeys: string[] = (selectedProduct.value.variants || [])
+     .flatMap((v: any) => (v.images || []).map((img: any) => (typeof img === 'string' ? img : img?.uuid)))
+     .filter(Boolean);
+
+const updatedProduct =  await UpdateProduct.mutateAsync({
   where: { id: productId },
   data: {
     name: name.value || '',
@@ -867,6 +874,10 @@ const updatedProduct =  UpdateProduct.mutate({
   select: { id: true }
 });
 
+    const keptImageKeys = new Set(
+      variants.value.flatMap((v: any) => (v.images || []).map((file: any) => file?.uuid)).filter(Boolean)
+    );
+    await awsService.deleteObjects(previousImageKeys.filter(key => !keptImageKeys.has(key)));
 
     handleReset();
 

@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { cleanupMediaKeys } from '~/server/utils/mediaCleanup'
 import { recalculatePurchaseOrderTotals } from '~/server/utils/purchase-order-totals'
 
 // Raw-SQL replacement for the nested useUpdateProduct (upsert + deleteMany) used
@@ -54,6 +55,19 @@ export default defineEventHandler(async (event) => {
     }
   }
 
+  // Every R2 key currently attached to this product's variants. Sampled before
+  // the write and again after it: whatever disappears — a deleted variant, a
+  // replaced or removed photo — is no longer referenced and can leave R2 too.
+  const productImageKeys = async (runner: { query: Function }): Promise<string[]> => {
+    const res = await runner.query(
+      `SELECT COALESCE(array_agg(DISTINCT img), '{}'::text[]) AS keys
+         FROM variants v, unnest(v.images) AS img
+        WHERE v.product_id = $1 AND v.company_id = $2`,
+      [productId, companyId],
+    )
+    return res.rows[0]?.keys || []
+  }
+
   async function runTransaction(attempt = 1): Promise<any> {
     const client = await pool.connect()
     try {
@@ -64,6 +78,7 @@ export default defineEventHandler(async (event) => {
         [productId, companyId],
       )
       const purchaseOrderId = purchaseOrderRes.rows[0]?.purchaseorder_id || null
+      const imageKeysBefore = await productImageKeys(client)
 
       // 1) product row (COALESCE keeps existing when a field isn't supplied — mirrors
       //    the page only connecting brand/category/subcategory when chosen)
@@ -199,6 +214,13 @@ export default defineEventHandler(async (event) => {
 
       await client.query('COMMIT')
       client.release()
+
+      // After the commit and off the transaction's connection, so a cleanup
+      // failure can never undo the save the user just made.
+      if (imageKeysBefore.length) {
+        const stillUsed = new Set(await productImageKeys(pool))
+        await cleanupMediaKeys(imageKeysBefore.filter(key => !stillUsed.has(key)))
+      }
 
       const itemsByVariant = new Map<string, any[]>()
       for (const it of returnedItems) {

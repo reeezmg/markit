@@ -67,6 +67,8 @@ const handleSave = async () => {
     const b64files = await base64files();
     if (!b64files) return;
 
+    const replacedLogo = props.info?.logo || null;
+
     try {
         // Upload base64 file to AWS
         await awsService.uploadBase64File(b64files.base64, b64files.uuid);
@@ -76,6 +78,11 @@ const handleSave = async () => {
             where: { id: props.info.id },
             data: { logo: b64files.uuid }
         });
+
+        // The old logo is nobody's now — drop it from Cloudflare.
+        if (replacedLogo && replacedLogo !== b64files.uuid) {
+            await awsService.deleteObjects([replacedLogo]);
+        }
 
         isOpen.value = false;
     } catch (error) {

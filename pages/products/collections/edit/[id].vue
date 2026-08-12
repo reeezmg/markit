@@ -45,6 +45,13 @@ const uploadFile = async (f?: ImageData | null) => {
 const saveCollection = async () => {
   isLoading.value = true;
   try {
+    // Files the collection points at right now; the replaced ones are dropped
+    // from Cloudflare once the new keys are saved.
+    const replaced = [
+      imageFile.value?.uuid && imageFile.value.uuid !== collection.value?.image ? collection.value?.image : null,
+      bannerFile.value?.uuid && bannerFile.value.uuid !== collection.value?.banner ? collection.value?.banner : null,
+    ];
+
     await Promise.all([uploadFile(imageFile.value), uploadFile(bannerFile.value)]);
     await UpdateCollection.mutateAsync({
       where: { id: route.params.id as string },
@@ -57,6 +64,7 @@ const saveCollection = async () => {
         targetAudience: targetAudience.value || undefined,
       },
     });
+    await awsService.deleteObjects(replaced);
     toast.add({ title: 'Collection updated successfully!', color: 'green' });
     await refetch();
   } catch (err: any) {

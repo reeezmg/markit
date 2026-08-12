@@ -1,5 +1,5 @@
 import { pool } from '~/server/db'
-import { ensureEcommGalleryTable } from '~/server/utils/ecommGallery'
+import { ensureEcommGalleryTable, normalizeGalleryType } from '~/server/utils/ecommGallery'
 
 export default defineEventHandler(async (event) => {
   const session = await requireAuthSession(event)
@@ -17,5 +17,9 @@ export default defineEventHandler(async (event) => {
     [session.data.companyId]
   )
 
-  return rows
+  return rows.map((row: any) => ({
+    ...row,
+    type: normalizeGalleryType(row.type),
+    mediaUrl: row.mediaKey ? `https://images.markit.co.in/${row.mediaKey}` : null,
+  }))
 })

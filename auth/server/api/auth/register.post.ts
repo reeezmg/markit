@@ -1,5 +1,5 @@
-import { createDefaultExpenseCategories,createPipeline,updateUser } from '../../utils/db';
-import type { CompanyType } from '@prisma/client';
+import { registerCompanyWithOwner } from '../../utils/db';
+import { Prisma, type CompanyType } from '@prisma/client';
 
 const VALID_COMPANY_TYPES = new Set(['seller', 'buyer', 'retail', 'service']);
 const VALID_PLANS = new Set(['free', 'lite', 'pro']);
@@ -44,45 +44,36 @@ export default eventHandler(async (event) => {
         });
     }
 
-    const company = await createCompany({
-        name: companyname,
-        type: companyType as CompanyType,
-        plan,
-        variantinput: { create: {} },
-        productinput: { create: {} },
-    });
-
-    if (existingUser) {
-     await updateUser(existingUser.id, company.id, name, 'admin', 1);
-    } else {
-      await createUser({
-        email,
-        password: hashedPassword,
-        companies: {
-            create: [
-            {
-                company: {
-                connect: { id: company.id },
-                },
-                role: 'admin',
-                code: 1,
-                name,     
+    // Company, owner user/link, default expense category and pipeline are created in one
+    // transaction — if any step fails nothing is persisted, so no orphan company or user is left.
+    try {
+        await registerCompanyWithOwner({
+            company: {
+                name: companyname,
+                type: companyType as CompanyType,
+                plan,
+                variantinput: { create: {} },
+                productinput: { create: {} },
             },
-            ],
-        },
-         });
+            email,
+            hashedPassword,
+            name,
+            existingUserId: existingUser?.id,
+        });
+    } catch (err) {
+        if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === 'P2002') {
+            throw createError({
+                message: 'An account with these details already exists.',
+                statusCode: 409,
+            });
+        }
+
+        console.error('[auth/register] registration failed, rolled back:', err);
+        throw createError({
+            message: 'Registration failed. No account was created, please try again.',
+            statusCode: 500,
+        });
     }
-    
-    await createDefaultExpenseCategories(company.id);
-
-    
-    await createPipeline({
-        company: {
-            connect: {
-                id: company.id,
-            },
-        },
-    });
 
     return {
         message: 'Successfully registered!',
