@@ -379,15 +379,19 @@ const handleScan = () => {
 
 
 
-const dateOnly = computed({
-  get: () => date.value.split('T')[0],
-  set: val => {
-    // Preserve original time, but update the date
-    const original = new Date(date.value)
-    const updated = new Date(val + 'T' + original.toISOString().split('T')[1])
-    date.value = updated.toISOString()
-  }
+// See pages/erp/edit/[salesId].vue — the date input owns its own string and only
+// commits a complete, valid local date on change/blur.
+const dateInput = ref(toDateInputValue(date.value))
+
+watch(date, (val) => {
+  dateInput.value = toDateInputValue(val)
 })
+
+const commitDateInput = () => {
+  const updated = applyDateInputValue(date.value, dateInput.value)
+  if (updated) date.value = updated
+  else dateInput.value = toDateInputValue(date.value)
+}
 
 
 const columns = computed(() => [
@@ -1024,7 +1028,10 @@ const handleInvalidBarcode = (index) => {
 
 const handleEdit = async () => {
   isSaving.value = true;
- 
+
+  // Flush a date that is typed but not yet blurred.
+  commitDateInput();
+
   try {
 
     if (!navigator.onLine) {
@@ -2335,7 +2342,15 @@ const couponModel = computed({
         </div>
      
          <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
-            <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" :disabled="bill?.isMarkit" />
+            <UInput
+              v-model="dateInput"
+              type="date"
+              label="Date"
+              class="flex-1"
+              :disabled="bill?.isMarkit"
+              @change="commitDateInput"
+              @blur="commitDateInput"
+            />
             <UInput
               v-if="isUserTrackIncluded"
               v-model="parentUserCode"
@@ -2352,11 +2367,13 @@ const couponModel = computed({
         
         <div class="lg:flex lg:flex-row lg:justify-between text-sm py-2 px-2 hidden">
           <div class="lg:flex lg:flex-row gap-2">
-            <UInput 
-              v-model="dateOnly" 
-              type="date" 
-              label="Date" 
+            <UInput
+              v-model="dateInput"
+              type="date"
+              label="Date"
               :disabled="bill?.isMarkit"
+              @change="commitDateInput"
+              @blur="commitDateInput"
             />
             <UInput
               v-if="isUserTrackIncluded"

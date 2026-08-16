@@ -110,14 +110,22 @@ export function useBillingDraft() {
     }, 0)
   )
 
-  const dateOnly = computed({
-    get: () => date.value.split('T')[0],
-    set: (val) => {
-      const original = new Date(date.value)
-      const updated = new Date(val + 'T' + original.toISOString().split('T')[1])
-      date.value = updated.toISOString()
-    },
+  // Date input model. A native date input emits '' on every keystroke until all
+  // three segments are filled, so it holds its own string and only commits a
+  // complete, valid date on change/blur (`commitDateInput`); anything else snaps
+  // back to the last good value. Values are local-day, matching how dates are
+  // rendered everywhere else (`toLocaleString`).
+  const dateInput = ref(toDateInputValue(date.value))
+
+  watch(date, (val) => {
+    dateInput.value = toDateInputValue(val)
   })
+
+  const commitDateInput = () => {
+    const updated = applyDateInputValue(date.value, dateInput.value)
+    if (updated) date.value = updated
+    else dateInput.value = toDateInputValue(date.value)
+  }
 
   // ─── localStorage sync ──────────────────────────────────────────────────────
 
@@ -293,7 +301,9 @@ export function useBillingDraft() {
     splitPayments, isRedeemPoint, selected, tempSplits, items,
     draftBills, selectedDraft,
     // Computeds
-    currentBill, returnAmt, subtotal, grandTotal, tQty, dateOnly,
+    currentBill, returnAmt, subtotal, grandTotal, tQty,
+    // Date input model
+    dateInput, commitDateInput,
     // Functions
     createNewBill, loadDraftBills, loadBill, deleteBill, resetDraft,
     LOCAL_BILLS_KEY, MAX_BILL_DRAFTS,

@@ -20,7 +20,8 @@ const {
   phoneNo, points, clientName, clientId, couponValue,
   splitPayments, isRedeemPoint, selected, tempSplits, items,
   draftBills, selectedDraft,
-  currentBill, returnAmt, subtotal, grandTotal, tQty, dateOnly,
+  currentBill, returnAmt, subtotal, grandTotal, tQty,
+  dateInput, commitDateInput,
   createNewBill, loadDraftBills, loadBill, deleteBill, resetDraft,
   LOCAL_BILLS_KEY, MAX_BILL_DRAFTS,
 } = useBillingDraft()
@@ -816,6 +817,9 @@ async function ensureClientExists() {
 const handleSave = async () => {
   if (isSaving.value) return
 
+  // Flush a date that is typed but not yet blurred.
+  commitDateInput()
+
   isSaving.value = true
   try {
     if (process.client && typeof navigator !== 'undefined' && !navigator.onLine) {
@@ -1239,7 +1243,14 @@ const handleDiscountEnter = (index) => {
         </div>
      
          <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
-            <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" />
+            <UInput
+              v-model="dateInput"
+              type="date"
+              label="Date"
+              class="flex-1"
+              @change="commitDateInput"
+              @blur="commitDateInput"
+            />
             <UInput
               v-if="isUserTrackIncluded"
               v-model="parentUserCode"
@@ -1254,7 +1265,14 @@ const handleDiscountEnter = (index) => {
           </div>
         
        <div class="lg:grid grid-cols-1 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
-          <UInput v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
+          <UInput
+            v-model="dateInput"
+            type="date"
+            label="Date"
+            class="lg:col-span-2"
+            @change="commitDateInput"
+            @blur="commitDateInput"
+          />
           <UInput
             v-if="isUserTrackIncluded"
             v-model="parentUserCode"

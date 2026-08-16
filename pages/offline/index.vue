@@ -40,15 +40,19 @@ const issalesReturnModelOpen = ref(false);
 
 
 
-const dateOnly = computed({
-  get: () => date.value.split('T')[0],
-  set: val => {
-    // Preserve original time, but update the date
-    const original = new Date(date.value)
-    const updated = new Date(val + 'T' + original.toISOString().split('T')[1])
-    date.value = updated.toISOString()
-  }
+// See composables/useBillingDraft.ts — the date input owns its own string and
+// only commits a complete, valid local date on change/blur.
+const dateInput = ref(toDateInputValue(date.value))
+
+watch(date, (val) => {
+  dateInput.value = toDateInputValue(val)
 })
+
+const commitDateInput = () => {
+  const updated = applyDateInputValue(date.value, dateInput.value)
+  if (updated) date.value = updated
+  else dateInput.value = toDateInputValue(date.value)
+}
 
 
 const items = ref([
@@ -670,6 +674,9 @@ const handleInvalidBarcode = (index) => {
 
 
 const handleSave = async () => {
+  // Flush a date that is typed but not yet blurred.
+  commitDateInput();
+
   isSaving.value = true;
 
   try {
@@ -945,13 +952,27 @@ onMounted(() => {
         
      
          <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
-            <UInput v-model="dateOnly" type="date" label="Date" class="flex-1" />
+            <UInput
+              v-model="dateInput"
+              type="date"
+              label="Date"
+              class="flex-1"
+              @change="commitDateInput"
+              @blur="commitDateInput"
+            />
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
        <div class="lg:grid grid-cols-1 lg:grid-cols-2 lg:grid-cols-12 gap-4 text-sm hidden py-2 px-2">
   <!-- Date Input: visible only if token is empty -->
-  <UInput v-model="dateOnly" type="date" label="Date" class="lg:col-span-2" />
+  <UInput
+    v-model="dateInput"
+    type="date"
+    label="Date"
+    class="lg:col-span-2"
+    @change="commitDateInput"
+    @blur="commitDateInput"
+  />
 
 
   <!-- Draft Selector + Reset -->
