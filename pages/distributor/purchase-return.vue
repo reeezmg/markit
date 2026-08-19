@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useFindManyPurchaseReturn, useDeletePurchaseReturn } from '~/lib/hooks'
+import { useFindManyPurchaseReturn, useDeletePurchaseReturn } from '~/lib/hooks/purchase-return';
+
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 

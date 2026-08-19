@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useFindUniqueUser } from '~/lib/hooks';
+import { useFindUniqueUser } from '~/lib/hooks/user';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Capacitor } from '@capacitor/core'
 const useAuth = () => useNuxtApp().$auth;

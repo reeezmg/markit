@@ -1,6 +1,7 @@
 
 <script setup lang="ts">
-import { useCreateDistributor, useUpdateDistributor, useDeleteDistributor, useUpdateDistributorCompany } from '~/lib/hooks';
+import { useCreateDistributor, useUpdateDistributor, useDeleteDistributor } from '~/lib/hooks/distributor';
+import { useUpdateDistributorCompany } from '~/lib/hooks/distributor-company';
 
 const props = defineProps({
     selectedSupplier: {

@@ -1,17 +1,11 @@
 <script setup lang="ts">
-import {
-    useFindManyCompanyUser,
-    useFindManyShiftAssignment,
-    useFindManyBankAccount,
-    useFindManySalaryConfig,
-    useUpsertSalaryConfig,
-    useFindManyPayrollAdjustment,
-    useCreatePayrollAdjustment,
-    useUpdatePayrollAdjustment,
-    useDeletePayrollAdjustment,
-    useFindManyPayrollCycle,
-    useFindManySalaryPayment,
-} from '~/lib/hooks'
+import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
+import { useFindManyCompanyUser } from '~/lib/hooks/company-user';
+import { useFindManyPayrollAdjustment, useCreatePayrollAdjustment, useUpdatePayrollAdjustment, useDeletePayrollAdjustment } from '~/lib/hooks/payroll-adjustment';
+import { useFindManyPayrollCycle } from '~/lib/hooks/payroll-cycle';
+import { useFindManySalaryConfig, useUpsertSalaryConfig } from '~/lib/hooks/salary-config';
+import { useFindManySalaryPayment } from '~/lib/hooks/salary-payment';
+import { useFindManyShiftAssignment } from '~/lib/hooks/shift-assignment';
 
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()

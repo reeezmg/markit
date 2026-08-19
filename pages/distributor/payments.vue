@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import {
-  useFindManyDistributorPayment,
-  useCountDistributorPayment,
-  useFindManyDistributorCompany,
-  useCreateDistributorPayment,
-} from '~/lib/hooks'
+import { useFindManyDistributorCompany } from '~/lib/hooks/distributor-company';
+import { useFindManyDistributorPayment, useCountDistributorPayment, useCreateDistributorPayment } from '~/lib/hooks/distributor-payment';
+
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
 const toast = useToast()

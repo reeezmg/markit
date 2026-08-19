@@ -1,7 +1,9 @@
 
 <script setup>
 import { item } from '@unovis/ts/components/bullet-legend/style';
-import { useFindUniqueTrynbuy,useUpdateItem, useFindUniqueItem,useUpdateTrynbuyCartItem } from '~/lib/hooks';
+import { useUpdateItem, useFindUniqueItem } from '~/lib/hooks/item';
+import { useFindUniqueTrynbuy } from '~/lib/hooks/trynbuy';
+import { useUpdateTrynbuyCartItem } from '~/lib/hooks/trynbuy-cart-item';
 
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();

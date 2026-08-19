@@ -4,9 +4,7 @@ import { format } from 'date-fns'
 
 import { useQueryClient } from '@tanstack/vue-query'
 import InvestmentForm from '~/components/Investment/Form.vue'
-import {
-  useFindManyInvestment,
-} from '~/lib/hooks'
+import { useFindManyInvestment } from '~/lib/hooks/investment';
 
 /* ---------------------------------------------------
    EMITS

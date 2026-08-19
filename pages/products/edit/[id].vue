@@ -37,7 +37,7 @@ interface Variant {
   pprice: number;
   dprice: number;
   discount: number;
-  items: {id: string; size: string | null; qty: number | undefined}[];
+  items: {id: string; size: string | null; qty: number | undefined; dimensionId?: string | null}[];
   images: string[];
   sizeLabel?: string;
   customFields?: Record<string, any>;
@@ -91,6 +91,9 @@ const collection = ref('');
 // Custom product-level inputs (Settings → Products → Create fields) as a
 // { fieldKey: value } map — stored on products.custom_fields.
 const productCustomFields = ref<Record<string, any>>({});
+// Linked product-dimension ShippingBox (products.dimension_id). Mirrors the
+// select inside AddProductCreate so handleEdit can save what the user picked.
+const productDimensionId = ref<string | null>(null);
 
 const barcodes = ref<BarcodeItem[]>([]);
 
@@ -108,7 +111,7 @@ const variants = ref<{
     pprice: number; 
     dprice: number; 
     discount: number; 
-    items: { id: string; size: string | null; qty: number | undefined }[];
+    items: { id: string; size: string | null; qty: number | undefined; dimensionId?: string | null }[];
     images: ImageData[];
     sizeLabel?: string;
     customFields?: Record<string, any>;
@@ -147,6 +150,7 @@ const createValue = (data: any) => {
     category.value = data.category;
     subcategory.value = data.subcategory;
     collection.value = data.collection || '';
+    productDimensionId.value = data.dimensionId ?? null;
     productCustomFields.value = data.customFields || {};
 };
 
@@ -212,6 +216,7 @@ watch(selectedProductRaw, (newVal) => {
     category.value = newVal.category ?? {};
     subcategory.value = newVal.subcategoryId ?? '';
     collection.value = newVal.collectionId ?? '';
+    productDimensionId.value = newVal.dimensionId ?? null;
     productCustomFields.value = newVal.customFields ?? {};
     variants.value = JSON.parse(JSON.stringify(newVal.variants ?? []));
   }
@@ -420,6 +425,7 @@ const updateResult: any = await $fetch('/api/products/update', {
       categoryId: category.value?.id || null,
       subcategoryId: subcategory.value || null,
       collectionId: collection.value || null,
+      dimensionId: productDimensionId.value ?? null,
       customFields: productCustomFields.value || {},
     },
     variants: variants.value.map(v => ({
@@ -434,7 +440,9 @@ const updateResult: any = await $fetch('/api/products/update', {
       images: v.images || [],
       sizeLabel: v.sizeLabel || defaultSizeLabel.value,
       customFields: v.customFields || {},
-      items: v.items.map(item => ({ id: item.id, size: item.size || null, qty: item.qty || 0 })),
+      items: v.items.map(item => ({
+        id: item.id, size: item.size || null, qty: item.qty || 0, dimensionId: item.dimensionId ?? null,
+      })),
     })),
     categoryTax: categoryTax.value,
     updateImages: !!variantInputs?.value?.images,
@@ -719,6 +727,7 @@ const confirmPrint = async () => {
           :editCategory="selectedProduct?.categoryId"
           :editSubcategory="selectedProduct?.subcategoryId"
           :editCollection="selectedProduct?.collectionId"
+          :editDimensionId="selectedProduct?.dimensionId"
           :editCustomFields="selectedProduct?.customFields"
           @update="createValue" />
       </UPageCard>
@@ -820,6 +829,7 @@ const confirmPrint = async () => {
                 :editCategory="selectedProduct?.categoryId"
                 :editSubcategory="selectedProduct?.subcategoryId"
                 :editCollection="selectedProduct?.collectionId"
+                :editDimensionId="selectedProduct?.dimensionId"
                 :editCustomFields="selectedProduct?.customFields"
                 @update="createValue" />
             </UPageCard>

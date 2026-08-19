@@ -1,7 +1,5 @@
 <script setup lang="ts">
-import {
-    useFindManyBankAccount,
-} from '~/lib/hooks'
+import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
 
 const route = useRoute()
 const useAuth = () => useNuxtApp().$auth

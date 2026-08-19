@@ -1,12 +1,7 @@
 <script setup lang="ts">
-import {
-    useFindManyShift,
-    useDeleteShift,
-    useFindManyShiftAssignment,
-    useCreateShiftAssignment,
-    useDeleteShiftAssignment,
-    useFindManyCompanyUser,
-} from '~/lib/hooks'
+import { useFindManyCompanyUser } from '~/lib/hooks/company-user';
+import { useFindManyShift, useDeleteShift } from '~/lib/hooks/shift';
+import { useFindManyShiftAssignment, useCreateShiftAssignment, useDeleteShiftAssignment } from '~/lib/hooks/shift-assignment';
 
 const useAuth = () => useNuxtApp().$auth
 const toast = useToast()

@@ -2,7 +2,7 @@
 import { v4 as uuidv4 } from 'uuid'
 import { ref, watch, computed, defineExpose } from 'vue'
 import AwsService from '~/composables/aws'
-import {useUpdateProduct} from '~/lib/hooks';
+import { useUpdateProduct } from '~/lib/hooks/product';
 
 const UpdateProduct = useUpdateProduct();
 

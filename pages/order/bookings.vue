@@ -2,12 +2,8 @@
 import { Switch } from '@headlessui/vue';
 
 import type { Period, Range } from '~/types';
-import {
-    useUpdateBill,
-    useUpdateManyCategory,
-    useFindManyBill,
-    useCountBill
-} from '~/lib/hooks';
+import { useUpdateBill, useFindManyBill, useCountBill } from '~/lib/hooks/bill';
+import { useUpdateManyCategory } from '~/lib/hooks/category';
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 

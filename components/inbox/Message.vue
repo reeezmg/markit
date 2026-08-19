@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Message } from '~/types';
-import { useUpdateMessage, useFindUniqueMessage } from '~/lib/hooks';
+import { useUpdateMessage, useFindUniqueMessage } from '~/lib/hooks/message';
 import type { Prisma } from '@prisma/client';
 import { format, isToday } from 'date-fns';
 

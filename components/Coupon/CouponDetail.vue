@@ -1,14 +1,8 @@
 <script setup lang="ts">
 import { format } from 'date-fns'
-import {
-    useFindManyCouponClient,
-    useCountCouponClient,
-    useFindManyCouponUsage,
-    useCountCouponUsage,
-    useCreateCouponClient,
-    useDeleteCouponClient,
-    useFindManyCompanyClient,
-} from '~/lib/hooks';
+import { useFindManyCompanyClient } from '~/lib/hooks/company-client';
+import { useFindManyCouponClient, useCountCouponClient, useCreateCouponClient, useDeleteCouponClient } from '~/lib/hooks/coupon-client';
+import { useFindManyCouponUsage, useCountCouponUsage } from '~/lib/hooks/coupon-usage';
 import type { Prisma } from '@prisma/client'
 
 const props = defineProps<{

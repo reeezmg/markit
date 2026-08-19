@@ -15,7 +15,7 @@ const props = defineProps<{
     editpPrice?: number | null;
     editDiscount?: number | null;
     editdPrice?: number | null;
-    editItems?: {id:string; size: string | null; qty: number }[] | null;
+    editItems?: {id:string; size: string | null; qty: number; dimensionId?: string | null }[] | null;
     editSizeLabel?: string | null;
     editCustomFields?: Record<string, any> | null;
     // products/purchase.vue still writes variants through ZenStack and has no

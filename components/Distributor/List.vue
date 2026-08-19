@@ -1,11 +1,6 @@
 <script setup lang="ts">
-import {
-  useFindManyDistributorCompany,
-  useCreateDistributorCredit,
-  useUpdateDistributorCredit,
-  useDeleteDistributorCredit,
-  useDeleteDistributorCompany,
-} from '~/lib/hooks';
+import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/hooks/distributor-company';
+import { useCreateDistributorCredit, useUpdateDistributorCredit, useDeleteDistributorCredit } from '~/lib/hooks/distributor-credit';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
 const toast = useToast();

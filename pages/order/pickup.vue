@@ -1,12 +1,6 @@
 <script setup lang="ts">
 import { format } from 'date-fns';
-import {
-  useFindManyEcommPickupLocation,
-  useCreateEcommPickupLocation,
-  useUpdateEcommPickupLocation,
-  useUpdateManyEcommPickupLocation,
-  useDeleteEcommPickupLocation,
-} from '~/lib/hooks';
+import { useFindManyEcommPickupLocation, useCreateEcommPickupLocation, useUpdateEcommPickupLocation, useUpdateManyEcommPickupLocation, useDeleteEcommPickupLocation } from '~/lib/hooks/ecomm-pickup-location';
 
 definePageMeta({ auth: true });
 

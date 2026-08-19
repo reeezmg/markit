@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { v4 as uuidv4 } from 'uuid'
 import AwsService from '~/composables/aws'
-import { useCreateSubcategory, useFindManyCategory } from '~/lib/hooks'
+import { useFindManyCategory } from '~/lib/hooks/category';
+import { useCreateSubcategory } from '~/lib/hooks/subcategory';
 
 const useAuth = () => useNuxtApp().$auth
 

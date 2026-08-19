@@ -3,14 +3,10 @@ import { Switch } from '@headlessui/vue';
 import type { Prisma } from '@prisma/client'
 import { BillingAddClient } from '#components';
 
-import {
-    useFindManyClient,
-    useUpdateCompanyClient,
-    useUpdateManyCompanyClient,
-    useUpdatePipeline,
-    useUpdateBill,
-    useCountClient
-} from '~/lib/hooks';
+import { useUpdateBill } from '~/lib/hooks/bill';
+import { useFindManyClient, useCountClient } from '~/lib/hooks/client';
+import { useUpdateCompanyClient, useUpdateManyCompanyClient } from '~/lib/hooks/company-client';
+import { useUpdatePipeline } from '~/lib/hooks/pipeline';
 
 
 const UpdateCompanyClient = useUpdateCompanyClient({ optimisticUpdate: true });

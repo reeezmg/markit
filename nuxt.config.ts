@@ -14,9 +14,19 @@ export default defineNuxtConfig({
   },
 
   build: {
-    transpile: [
-      'trpc-nuxt',
-    ]
+    transpile: []
+  },
+
+  // Dev-only savings. Production keeps server sourcemaps so error traces stay
+  // readable; generating them in dev is pure cost.
+  sourcemap: process.env.NODE_ENV === 'production'
+    ? { server: true, client: false }
+    : { server: false, client: false },
+
+  experimental: {
+    // Native file watching — the default watcher struggles with a tree this
+    // size (130 pages, 103 components, 345 server routes) on Windows.
+    watcher: 'parcel',
   },
 
   nitro: {
@@ -43,6 +53,17 @@ export default defineNuxtConfig({
       hmr: process.env.TUNNEL_HOST
         ? { protocol: 'wss', host: process.env.TUNNEL_HOST, clientPort: 443 }
         : undefined,
+
+      // Pre-transform the heaviest pages instead of compiling them on first
+      // visit. Costs nothing at startup — Vite warms these in the background.
+      warmup: {
+        clientFiles: [
+          './pages/erp/billing.vue',
+          './pages/erp/edit/[salesId].vue',
+          './pages/products/add.vue',
+          './layouts/default.vue',
+        ],
+      },
     },
 
     // ⭐ Eager load EVERYTHING → One bundle
@@ -87,7 +108,9 @@ export default defineNuxtConfig({
     safelistColors: ['primary', 'red', 'orange', 'green', 'tertiary'],
   },
 
-  devtools: { enabled: true },
+  // Measured at 6-21s of startup setup plus its own client bundle. Re-enable
+  // (or run `NUXT_DEVTOOLS=true nuxt dev`) when you actually need it.
+  devtools: { enabled: process.env.NUXT_DEVTOOLS === 'true' },
 
   runtimeConfig: {
     sessionSecret: process.env.SESSION_SECRET,
@@ -146,7 +169,12 @@ export default defineNuxtConfig({
   image: {},
 
   icon: {
-    serverBundle: 'remote'
+    // Bundle the installed @iconify-json collections into the server build.
+    // 'remote' resolved every icon over the network at render time even though
+    // both collections are already installed locally.
+    serverBundle: {
+      collections: ['heroicons', 'simple-icons']
+    }
   },
 
   compatibilityDate: '2025-02-28'

@@ -1,7 +1,8 @@
 
 <script setup>
 import { BillingAddClient } from '#components';
-import {useFindFirstItem, useFindManyCategory} from '~/lib/hooks';
+import { useFindManyCategory } from '~/lib/hooks/category';
+import { useFindFirstItem } from '~/lib/hooks/item';
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'

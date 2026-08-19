@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useUpdateBrand, useFindUniqueBrand } from '~/lib/hooks';
+import { useUpdateBrand, useFindUniqueBrand } from '~/lib/hooks/brand';
 
 const route = useRoute();
 const toast = useToast();

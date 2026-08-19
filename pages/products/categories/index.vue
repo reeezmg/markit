@@ -4,15 +4,8 @@ import { Switch } from '@headlessui/vue';
 import { sub } from 'date-fns';
 import type { Period, Range } from '~/types';
 import AwsService from '~/composables/aws';
-import {
-    useUpdateCategory,
-    useUpdateManyCategory,
-    useFindManyCategory,
-    useCountCategory,
-    useDeleteCategory,
-    useDeleteManyCategory,
-    useDeleteProduct
-} from '~/lib/hooks';
+import { useUpdateCategory, useUpdateManyCategory, useFindManyCategory, useCountCategory, useDeleteCategory, useDeleteManyCategory } from '~/lib/hooks/category';
+import { useDeleteProduct } from '~/lib/hooks/product';
 const awsService = new AwsService();
 const DeleteCategory = useDeleteCategory({ optimisticUpdate: true });
 const DeleteManyCategory = useDeleteManyCategory({ optimisticUpdate: true });

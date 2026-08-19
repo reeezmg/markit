@@ -1,14 +1,10 @@
 <script setup lang="ts">
-import {
-  useFindManyDistributorCompany,
-  useDeleteDistributorCompany,
-  useDeletePurchaseOrder,
-  useCreateDistributorCredit,
-  useUpdateDistributorCredit,
-  useDeleteDistributorCredit,
-  useDeletePurchaseReturn,
-  useFindManyBankAccount,
-} from '~/lib/hooks'
+import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
+import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/hooks/distributor-company';
+import { useCreateDistributorCredit, useUpdateDistributorCredit, useDeleteDistributorCredit } from '~/lib/hooks/distributor-credit';
+import { useDeletePurchaseOrder } from '~/lib/hooks/purchase-order';
+import { useDeletePurchaseReturn } from '~/lib/hooks/purchase-return';
+
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 import { exportToCSV } from '~/utils/export-csv'

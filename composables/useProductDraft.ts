@@ -28,6 +28,8 @@ function makeEmptyForm() {
     description: '',
     category: {},
     subcategoryId: '',
+    // ShippingBox (type='product') linked via products.dimension_id.
+    dimensionId: null,
     live: true,
     variants: [makeEmptyVariant()],
     deliveryType: '',

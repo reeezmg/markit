@@ -20,6 +20,11 @@ export default defineEventHandler(async (event) => {
   } = body || {}
   if (!productId) throw createError({ statusCode: 400, statusMessage: 'Missing productId' })
 
+  // products.dimension_id / items.dimension_id are only written when the caller
+  // sends them — older callers that omit the key keep whatever is stored.
+  const hasProductDimension = product.dimensionId !== undefined
+  const hasItemDimension = variants.some((v: any) => (v.items || []).some((it: any) => it.dimensionId !== undefined))
+
   const TRANSIENT_ERROR_CODES = ['40001', '40P01', '53300', '57P01', '55006', '08006', '08003', 'P1001']
 
   // Custom field values (Settings → Products) are a { key: value } map stored in
@@ -92,6 +97,7 @@ export default defineEventHandler(async (event) => {
            subcategory_id = COALESCE($8, subcategory_id),
            collection_id = COALESCE($9, collection_id),
            custom_fields = COALESCE($10::jsonb, custom_fields),
+           dimension_id = CASE WHEN $11::boolean THEN $12::text ELSE dimension_id END,
            updated_at = now()
          WHERE id = $1 AND company_id = $2`,
         [
@@ -105,6 +111,8 @@ export default defineEventHandler(async (event) => {
           product.subcategoryId || null,
           product.collectionId || null,
           customFieldsJson(product.customFields),
+          hasProductDimension,
+          product.dimensionId || null,
         ],
       )
       if (!upd.rowCount) throw new Error('Product not found for this company')
@@ -167,27 +175,29 @@ export default defineEventHandler(async (event) => {
         [keepVariantIds, keepItemIds],
       )
       if (allItems.length) {
-        const IC = 6 // params per item row
+        const IC = 7 // params per item row
         const iVals: any[] = []
         const iRows = allItems.map((it: any, i: number) => {
           const base = i * IC
           // initial_qty is seeded for new items. Existing items only change it
           // when the caller explicitly identifies this as a purchase-order edit.
-          iVals.push(it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, it.variantId)
+          iVals.push(it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, it.variantId, it.dimensionId || null)
           const p = Array.from({ length: IC }, (_, k) => `$${base + k + 1}`)
-          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},now(),now())`
+          return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6]},now(),now())`
         })
         const updateInitialQtyParam = `$${allItems.length * IC + 1}`
+        const itemDimensionParam = `$${allItems.length * IC + 2}`
         const itemsRes = await client.query(
-          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, created_at, updated_at)
+          `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, dimension_id, created_at, updated_at)
            VALUES ${iRows.join(',')}
            ON CONFLICT (id) DO UPDATE SET
              size = EXCLUDED.size,
              qty = EXCLUDED.qty,
              initial_qty = CASE WHEN ${updateInitialQtyParam}::boolean THEN EXCLUDED.initial_qty ELSE items.initial_qty END,
+             dimension_id = CASE WHEN ${itemDimensionParam}::boolean THEN EXCLUDED.dimension_id ELSE items.dimension_id END,
              updated_at = now()
-           RETURNING id, barcode, size, qty, variant_id`,
-          [...iVals, updateInitialQty],
+           RETURNING id, barcode, size, qty, dimension_id, variant_id`,
+          [...iVals, updateInitialQty, hasItemDimension],
         )
         returnedItems = itemsRes.rows
       }
@@ -195,6 +205,7 @@ export default defineEventHandler(async (event) => {
       const productRes = await client.query(
         `SELECT p.id, p.updated_at, p.name, p.description, p.status,
                 p.category_id, p.subcategory_id, p.brand_id, p.collection_id, p.custom_fields,
+                p.dimension_id,
                 c.name AS category_name, c.target_audience AS category_target_audience,
                 b.name AS brand_name,
                 s.name AS subcategory_name,
@@ -225,7 +236,7 @@ export default defineEventHandler(async (event) => {
       const itemsByVariant = new Map<string, any[]>()
       for (const it of returnedItems) {
         const list = itemsByVariant.get(it.variant_id) || []
-        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty })
+        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty, dimensionId: it.dimension_id })
         itemsByVariant.set(it.variant_id, list)
       }
 
@@ -263,6 +274,7 @@ export default defineEventHandler(async (event) => {
           brandId: p.brand_id,
           collectionId: p.collection_id,
           customFields: p.custom_fields || {},
+          dimensionId: p.dimension_id,
           category: p.category_id ? { id: p.category_id, name: p.category_name, targetAudience: p.category_target_audience } : null,
           brand: p.brand_id ? { id: p.brand_id, name: p.brand_name } : null,
           subcategory: p.subcategory_id ? { id: p.subcategory_id, name: p.subcategory_name } : null,

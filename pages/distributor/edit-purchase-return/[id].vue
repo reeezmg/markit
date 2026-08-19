@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { useFindManyDistributorCompany } from '~/lib/hooks'
+import { useFindManyDistributorCompany } from '~/lib/hooks/distributor-company';
+
 import { useQueryClient } from '@tanstack/vue-query'
 import type { Prisma } from '@prisma/client'
 

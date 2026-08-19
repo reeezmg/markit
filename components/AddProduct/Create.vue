@@ -3,12 +3,10 @@ import * as z from 'zod'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 
-import {
-  useFindManyCategory,
-  useFindManySubcategory,
-  useFindManyBrand,
-  useFindManyCollection
-} from '~/lib/hooks'
+import { useFindManyBrand } from '~/lib/hooks/brand';
+import { useFindManyCategory } from '~/lib/hooks/category';
+import { useFindManyCollection } from '~/lib/hooks/collection';
+import { useFindManySubcategory } from '~/lib/hooks/subcategory';
 
 const useAuth = () => useNuxtApp().$auth
 
@@ -63,9 +61,17 @@ onMounted(async () => {
     showProductDimension.value = !!flags.productDimension
   } catch { /* default hidden */ }
 })
-// Hydrate selection on edit from the product's stored dimensionId.
+// Hydrate selection on edit from the product's stored dimensionId. A cleared id
+// must clear the select too, otherwise loading a product that has no dimension
+// right after one that does would carry the previous product's dimension over.
+// (Only fires when the prop actually changes, so it can't wipe a selection the
+// user is making — the parent doesn't push dimensionId back down mid-edit.)
 watch([() => props.editDimensionId, productDimensions], ([id, list]) => {
-  if (id && (list as any[])?.length) {
+  if (!id) {
+    selectedProductDimension.value = null
+    return
+  }
+  if ((list as any[])?.length) {
     selectedProductDimension.value = (list as any[]).find((d: any) => d.id === id) || null
   }
 }, { immediate: true })

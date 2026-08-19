@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useUpdateCompany } from '~/lib/hooks';
+import { useUpdateCompany } from '~/lib/hooks/company';
 import { startNewYear, updatePrefixes } from '~/auth/composables/auth';
 
 const UpdateCompany = useUpdateCompany({ optimisticUpdate: true });

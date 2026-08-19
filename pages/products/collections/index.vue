@@ -1,11 +1,7 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue';
 import AwsService from '~/composables/aws';
-import {
-  useUpdateCollection,
-  useFindManyCollection,
-  useDeleteCollection,
-} from '~/lib/hooks';
+import { useUpdateCollection, useFindManyCollection, useDeleteCollection } from '~/lib/hooks/collection';
 
 const awsService = new AwsService();
 const UpdateCollection = useUpdateCollection({ optimisticUpdate: true });

@@ -1,13 +1,7 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue';
-import {
-    useUpdateBill,
-    useFindManyAccount,
-    useCreateAccount,
-    useUpdateAccount,
-    useDeleteAccount,
-    useCountAccount
-} from '~/lib/hooks';
+import { useFindManyAccount, useCreateAccount, useUpdateAccount, useDeleteAccount, useCountAccount } from '~/lib/hooks/account';
+import { useUpdateBill } from '~/lib/hooks/bill';
 import type { Prisma } from '@prisma/client'
 import { format } from 'date-fns'
 const toast = useToast();

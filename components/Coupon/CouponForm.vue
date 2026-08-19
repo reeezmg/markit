@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import {
-    useFindManyCoupon,
-    useCreateCoupon,
-    useUpdateCoupon,
-} from '~/lib/hooks';
+import { useFindManyCoupon, useCreateCoupon, useUpdateCoupon } from '~/lib/hooks/coupon';
 import type { Prisma } from '@prisma/client'
 
 const props = defineProps({

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useFindManyCompany } from '~/lib/hooks';
+import { useFindManyCompany } from '~/lib/hooks/company';
 import type { Prisma } from '@prisma/client';
 
 

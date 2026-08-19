@@ -1,7 +1,6 @@
 <script setup lang="ts">
-import {
-  useFindManyMoneyTransaction,
-} from '~/lib/hooks'
+import { useFindManyMoneyTransaction } from '~/lib/hooks/money-transaction';
+
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'

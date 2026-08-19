@@ -360,13 +360,7 @@ import { useRouter } from 'vue-router'
 import { Switch } from '@headlessui/vue'
 
 import AwsService from '~/composables/aws'
-import {
-  useFindManyBrand,
-  useUpdateBrand,
-  useUpdateManyBrand,
-  useDeleteBrand,
-  useCountBrand
-} from '~/lib/hooks'
+import { useFindManyBrand, useUpdateBrand, useUpdateManyBrand, useDeleteBrand, useCountBrand } from '~/lib/hooks/brand';
 
 const awsService = new AwsService()
 

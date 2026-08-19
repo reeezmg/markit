@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useCreateCompany } from '~/lib/hooks';
+import { useCreateCompany } from '~/lib/hooks/company';
 const useAuth = () => useNuxtApp().$auth;
 const CreateCompany = useCreateCompany();
 const router = useRouter();

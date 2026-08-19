@@ -1,12 +1,7 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import {
-  useUpdateCategory,
-  useFindUniqueCategory,
-  useUpdateSubcategory,
-  useCreateSubcategory,
-  useDeleteSubcategory,
-} from '~/lib/hooks';
+import { useUpdateCategory, useFindUniqueCategory } from '~/lib/hooks/category';
+import { useUpdateSubcategory, useCreateSubcategory, useDeleteSubcategory } from '~/lib/hooks/subcategory';
 import type { Subcategory } from '@prisma/client';
 
 const route = useRoute();

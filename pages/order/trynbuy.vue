@@ -4,11 +4,9 @@ import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
 import { useRouter } from '#app'
 import { computed, ref, watch } from 'vue'
-import {
-  useFindManyTrynbuy,
-  useCountTrynbuy,
-  useUpdateBill,
-} from '~/lib/hooks'
+import { useUpdateBill } from '~/lib/hooks/bill';
+import { useFindManyTrynbuy, useCountTrynbuy } from '~/lib/hooks/trynbuy';
+
 import type { Prisma } from '@prisma/client'
 const checkoutStore = useCheckoutStore()
 

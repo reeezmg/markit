@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws'
-import { useCreateCategory } from '~/lib/hooks'
+import { useCreateCategory } from '~/lib/hooks/category';
 
 const useAuth = () => useNuxtApp().$auth
 

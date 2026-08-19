@@ -71,7 +71,7 @@
 </template>
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useFindManyBankAccount } from '~/lib/hooks'
+import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
 
 const props = defineProps<{ transfer?: any; loading?: boolean }>()
 const emit = defineEmits(['save', 'cancel'])

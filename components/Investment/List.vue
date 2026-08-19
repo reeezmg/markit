@@ -1,9 +1,7 @@
 <script setup lang="ts">
-import {
-  useFindManyInvestment,
-  useUpdateManyInvestment,
-  useFindManyCompanyUser,
-} from '~/lib/hooks'
+import { useFindManyCompanyUser } from '~/lib/hooks/company-user';
+import { useFindManyInvestment, useUpdateManyInvestment } from '~/lib/hooks/investment';
+
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'

@@ -208,7 +208,7 @@
 </template>
 
 <script setup lang="ts">
-import { useCreateDistributor, useFindManyDistributor } from '~/lib/hooks'
+import { useCreateDistributor, useFindManyDistributor } from '~/lib/hooks/distributor';
 
 /* ------------------------------------
    PROPS (DB STATE)

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useFindManyCompanyUser } from '~/lib/hooks'
+import { useFindManyCompanyUser } from '~/lib/hooks/company-user';
 
 const toast = useToast()
 const router = useRouter()

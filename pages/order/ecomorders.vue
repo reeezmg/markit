@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { format } from 'date-fns';
-import { useFindManyEcommOrder } from '~/lib/hooks';
+import { useFindManyEcommOrder } from '~/lib/hooks/ecomm-order';
 
 definePageMeta({ auth: true });
 

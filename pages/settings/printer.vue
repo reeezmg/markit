@@ -3,7 +3,7 @@ import { computed, onMounted, ref, watch } from 'vue';
 import { Capacitor } from '@capacitor/core';
 import { BleClient } from '@capacitor-community/bluetooth-le';
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
-import { useUpdateCompany } from '~/lib/hooks';
+import { useUpdateCompany } from '~/lib/hooks/company';
 import { useWebUsbPrinter } from '~/composables/useWebUsbPrinter';
 
 const UpdateCompany = useUpdateCompany({ optimisticUpdate: true });

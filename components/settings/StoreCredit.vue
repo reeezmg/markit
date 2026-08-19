@@ -1,9 +1,6 @@
 <script setup lang="ts">
-import {
-  useFindManyClientCredit,
-  useFindManyClient,
-  useCreateClientCredit,
-} from '~/lib/hooks';
+import { useFindManyClient } from '~/lib/hooks/client';
+import { useFindManyClientCredit, useCreateClientCredit } from '~/lib/hooks/client-credit';
 
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();

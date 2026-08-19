@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue';
-import { useFindFirstItem, useFindManyCategory } from '~/lib/hooks';
+import { useFindManyCategory } from '~/lib/hooks/category';
+import { useFindFirstItem } from '~/lib/hooks/item';
 import Quagga from '@ericblade/quagga2'
 import {
   CapacitorBarcodeScanner,

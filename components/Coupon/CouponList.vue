@@ -1,9 +1,5 @@
 <script setup lang="ts">
-import {
-    useFindManyCoupon,
-    useCountCoupon,
-    useUpdateManyCoupon
-} from '~/lib/hooks';
+import { useFindManyCoupon, useCountCoupon, useUpdateManyCoupon } from '~/lib/hooks/coupon';
 import type { Prisma } from '@prisma/client'
 import { format} from 'date-fns'
 

@@ -4,11 +4,9 @@ import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'dat
 
 import AccountTransferForm from '~/components/AccountTransfer/Form.vue'
 
-import {
-  useFindManyAccountTransfer,
-  useFindManyBankAccount,
-  useFindUniqueCompany,
-} from '~/lib/hooks'
+import { useFindManyAccountTransfer } from '~/lib/hooks/account-transfer';
+import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
+import { useFindUniqueCompany } from '~/lib/hooks/company';
 
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth

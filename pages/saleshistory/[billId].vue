@@ -1,10 +1,8 @@
 
 <script setup>
-import {
-  useFindUniqueBillHistory,
-  useFindManyCategory,
-  useFindManyAccount,
-} from '~/lib/hooks';
+import { useFindManyAccount } from '~/lib/hooks/account';
+import { useFindUniqueBillHistory } from '~/lib/hooks/bill-history';
+import { useFindManyCategory } from '~/lib/hooks/category';
 
 const useAuth = () => useNuxtApp().$auth;
 const route = useRoute();

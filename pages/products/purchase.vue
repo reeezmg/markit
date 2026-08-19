@@ -1,7 +1,14 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
 import { v4 as uuidv4 } from 'uuid';
-import { useCreateProduct,useCreatePurchaseOrder,   useCreateDistributorCredit,useDeleteManyItem,useUpsertVariant,useUpdateManyDistributorCredit, useDeleteManyDistributorCredit, useUpdateProduct,useUpdatePurchaseOrder, useFindUniqueCategory,useFindUniquePurchaseOrder, useUpdateDistributorCompany,useCreateDistributorPayment, useUpdateManyDistributorPayment , useDeleteManyDistributorPayment} from '~/lib/hooks';
+import { useFindUniqueCategory } from '~/lib/hooks/category';
+import { useUpdateDistributorCompany } from '~/lib/hooks/distributor-company';
+import { useCreateDistributorCredit, useUpdateManyDistributorCredit, useDeleteManyDistributorCredit } from '~/lib/hooks/distributor-credit';
+import { useCreateDistributorPayment, useUpdateManyDistributorPayment, useDeleteManyDistributorPayment } from '~/lib/hooks/distributor-payment';
+import { useDeleteManyItem } from '~/lib/hooks/item';
+import { useCreateProduct, useUpdateProduct } from '~/lib/hooks/product';
+import { useCreatePurchaseOrder, useUpdatePurchaseOrder, useFindUniquePurchaseOrder } from '~/lib/hooks/purchase-order';
+import { useUpsertVariant } from '~/lib/hooks/variant';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
 import { useQueryClient } from '@tanstack/vue-query';

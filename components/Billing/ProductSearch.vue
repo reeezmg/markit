@@ -1,11 +1,9 @@
 <script setup lang="ts">
 import { ref, watch, computed } from 'vue'
-import {
-  useFindManyCategory,
-  useFindManySubcategory,
-  useFindManyProduct,
-  useFindManyVariant
-} from '~/lib/hooks'
+import { useFindManyCategory } from '~/lib/hooks/category';
+import { useFindManyProduct } from '~/lib/hooks/product';
+import { useFindManySubcategory } from '~/lib/hooks/subcategory';
+import { useFindManyVariant } from '~/lib/hooks/variant';
 
 // Props
 const props = defineProps({ open: Boolean })

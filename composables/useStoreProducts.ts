@@ -1,4 +1,5 @@
-// import { useFindManyProduct, useFindManyCategory } from '~/lib/hooks';
+// import { useFindManyCategory } from '~/lib/hooks/category';
+import { useFindManyProduct } from '~/lib/hooks/product';
 // import type { Prisma } from '@prisma/client';
 
 // export const useStoreProducts = () => {
@@ -109,7 +110,9 @@
 
 // import { ref, computed, watch } from 'vue'
 // import { useRoute } from 'vue-router'
-// import { useFindManyProduct, useFindManyCategory } from '~/lib/hooks'
+// import { useFindManyCategory } from '~/lib/hooks/category';
+import { useFindManyProduct } from '~/lib/hooks/product';
+
 // import type { Prisma } from '@prisma/client'
 
 // export const useStoreProducts = ({
@@ -261,7 +264,8 @@
 //   }
 // }
 
-import { useFindManyProduct, useFindManyCategory } from '~/lib/hooks';
+import { useFindManyCategory } from '~/lib/hooks/category';
+import { useFindManyProduct } from '~/lib/hooks/product';
 import type { Prisma } from '@prisma/client';
 import { ref, computed } from 'vue';
 import { useRoute } from 'vue-router';

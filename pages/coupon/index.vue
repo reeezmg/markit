@@ -3,11 +3,7 @@ import { ref } from 'vue';
 import CouponForm from '~/components/Coupon/CouponForm.vue';
 import CouponList from '~/components/Coupon/CouponList.vue';
 import CouponDetail from '~/components/Coupon/CouponDetail.vue';
-import {
-    useCreateCoupon,
-    useUpdateCoupon,
-    useDeleteCoupon,
-} from '~/lib/hooks';
+import { useCreateCoupon, useUpdateCoupon, useDeleteCoupon } from '~/lib/hooks/coupon';
 
 const createCoupon = useCreateCoupon({ optimisticUpdate: true });
 const updateCoupon = useUpdateCoupon({ optimisticUpdate: true });

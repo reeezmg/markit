@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { v4 as uuidv4 } from 'uuid'
-import { useUpdateCompany } from '~/lib/hooks'
+import { useUpdateCompany } from '~/lib/hooks/company';
+
 import { billingUnitOptions, billingUnitSelectOptions, normalizeBillingUnits } from '~/utils/billing-units'
 import { normalizeSizeLabels, sizeLabelSuggestions } from '~/utils/size-labels'
 import type { ProductCustomFieldDef, ProductCustomFieldScope } from '~/composables/useProductCustomFields'

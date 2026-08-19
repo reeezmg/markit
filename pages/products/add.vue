@@ -287,6 +287,7 @@ const applyDraftToForm = () => {
   subcategory.value = savedForm.subcategoryId || '';
   collection.value = savedForm.collectionId || '';
   productCustomFields.value = savedForm.customFields || {};
+  productDimensionId.value = savedForm.dimensionId ?? null;
   live.value = savedForm.live ?? true;
   deliveryType.value = isDistributorPurchaseOrderFlow.value
     ? 'order'
@@ -305,6 +306,9 @@ const applyDraftToForm = () => {
     categoryId: category.value?.id || '',
     subcategoryId: subcategory.value,
     collectionId: collection.value,
+    // Feeds AddProductCreate's `editDimensionId`, which re-selects the saved
+    // dimension once the preset list loads.
+    dimensionId: productDimensionId.value,
     customFields: productCustomFields.value,
     variants: variants.value,
   };
@@ -369,6 +373,9 @@ const persistDraftForm = () => {
     subcategoryId: subcategory.value,
     collectionId: collection.value,
     customFields: productCustomFields.value,
+    // Without this the selected dimension is lost on reload / draft switch and
+    // the product silently saves with dimension_id = NULL.
+    dimensionId: productDimensionId.value ?? null,
     live: live.value,
     deliveryType: effectiveDeliveryType.value,
     variants: stripDraftImages(variants.value),
@@ -452,6 +459,7 @@ const handleProductSelected = (product:any) => {
   category.value = product.category || {};
   subcategory.value = product.subcategoryId || '';
   productCustomFields.value = product.customFields || {};
+  productDimensionId.value = product.dimensionId ?? null;
   variants.value = stripDraftImages(product.variants || []);
   selectedProduct.value = {
     ...selectedProduct.value,
@@ -567,6 +575,30 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
   })),
 })
 
+// Every staged product is an INSERT — nothing in `stagedProducts` exists in the
+// database yet. Its variant/item ids, however, are whatever the form held at Add
+// time, and those can be ids that DO already exist: the form keeps the original
+// ids when an existing product is loaded into it, and an old localStorage draft
+// restores them verbatim after a reload. save-batch then fails on
+// `variants_pkey` / `items_pkey`, the whole transaction rolls back so *nothing*
+// saves, and because failed saves keep the staged list for retry, every
+// subsequent Save fails the same way until the draft is cleared by hand.
+//
+// Minting fresh row ids for the payload makes a collision impossible (and also
+// de-duplicates ids shared between two staged products). Only the outgoing body
+// is rewritten — the staged list the table renders keeps its identities, and
+// barcodes are built from the server's RETURNING rows, not from these ids.
+const withFreshRowIds = (product: any) => ({
+  ...product,
+  variants: (product?.variants || []).map((variant: any) => ({
+    ...variant,
+    id: uuidv4(),
+    items: (variant?.items || []).map((item: any) => ({ ...item, id: uuidv4() })),
+  })),
+})
+
+const stagedProductsForSave = () => draft.stagedProducts.value.map(withFreshRowIds)
+
 const handleAdd = async (e: Event) => {
   isLoad.value = true
   e.preventDefault();
@@ -617,7 +649,7 @@ const handleAdd = async (e: Event) => {
       // immediately and keep its stored totals/payment amount synchronized.
       await $fetch('/api/products/save-batch', {
         method: 'POST',
-        body: { products: [stagedProduct], poId: editPurchaseOrderId.value },
+        body: { products: [withFreshRowIds(stagedProduct)], poId: editPurchaseOrderId.value },
       })
       await refetchEditPurchaseOrder()
     } else {
@@ -701,6 +733,7 @@ const handleEdit = async (e: Event) => {
             categoryId: updated.categoryId,
             subcategoryId: updated.subcategoryId,
             collectionId: updated.collectionId,
+            dimensionId: updated.dimensionId,
             customFields: updated.customFields,
           },
           variants: updated.variants,
@@ -1233,7 +1266,7 @@ const handleSaveEditedPurchaseOrder = async () => {
     if (draft.stagedProducts.value.length) {
       await $fetch('/api/products/save-batch', {
         method: 'POST',
-        body: { products: draft.stagedProducts.value, poId: editPurchaseOrderId.value },
+        body: { products: stagedProductsForSave(), poId: editPurchaseOrderId.value },
       })
       draft.stagedProducts.value = []
     }
@@ -1258,7 +1291,7 @@ const handleSaveNoPO = async () => {
     // Batch-create all staged products in ONE transaction (no PO).
     const res: any = await $fetch('/api/products/save-batch', {
       method: 'POST',
-      body: { products: draft.stagedProducts.value },
+      body: { products: stagedProductsForSave() },
     })
     generateBarcodes(res?.products || [])
     clearCurrentDraftForNextProducts()   // reset staged ONLY after success
@@ -1349,7 +1382,7 @@ const handleSaveWithPO = async () => {
     const res: any = await $fetch('/api/products/save-batch', {
       method: 'POST',
       body: {
-        products: draft.stagedProducts.value,
+        products: stagedProductsForSave(),
         po: {
           paymentType: paymentType.value || null,
           billNo: billNo.value || null,
@@ -1401,6 +1434,7 @@ const handleReset = () => {
 
   clearInputs.value = true
   productCustomFields.value = {}
+  productDimensionId.value = null
   createRef.value?.resetForm()
   variantRef.value.forEach((refInstance:any) => {
     refInstance?.resetForm();

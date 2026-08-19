@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AwsService from '~/composables/aws';
-import { useCreateCollection } from '~/lib/hooks';
+import { useCreateCollection } from '~/lib/hooks/collection';
 
 const router = useRouter();
 const toast = useToast();

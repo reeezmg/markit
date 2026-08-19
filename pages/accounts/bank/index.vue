@@ -3,10 +3,8 @@ import { ref, computed } from 'vue'
 
 import BankForm from '~/components/Bank/Form.vue'
 
-import {
-  useFindManyBankAccount,
-  useFindUniqueCompany,
-} from '~/lib/hooks'
+import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
+import { useFindUniqueCompany } from '~/lib/hooks/company';
 
 const toast = useToast()
 const useAuth = () => useNuxtApp().$auth

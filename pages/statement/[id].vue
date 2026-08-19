@@ -2,7 +2,7 @@
 import { useFindUniqueStatementBatch, useUpdateStatementBatch } from '~/lib/hooks/statement-batch'
 import { useUpdateStatementRow, useDeleteStatementRow } from '~/lib/hooks/statement-row'
 import { useFindManyBankAccount } from '~/lib/hooks/bank-account'
-import { useFindUniqueCompany } from '~/lib/hooks'
+import { useFindUniqueCompany } from '~/lib/hooks/company';
 
 definePageMeta({ auth: true })
 

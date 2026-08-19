@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useCreateBrand } from '~/lib/hooks'
+import { useCreateBrand } from '~/lib/hooks/brand';
 
 const useAuth = () => useNuxtApp().$auth
 

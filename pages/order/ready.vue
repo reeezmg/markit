@@ -1,7 +1,9 @@
 
 <script setup>
 import { item } from '@unovis/ts/components/bullet-legend/style';
-import { useFindUniqueBill,useUpdateItem, useFindFirstItem,useUpdateEntry,useUpdateBill } from '~/lib/hooks';
+import { useFindUniqueBill, useUpdateBill } from '~/lib/hooks/bill';
+import { useUpdateEntry } from '~/lib/hooks/entry';
+import { useUpdateItem, useFindFirstItem } from '~/lib/hooks/item';
 
 const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();

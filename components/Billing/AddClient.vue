@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { reactive, ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { useFindUniqueClient, useCreateClient, useUpdateClient } from '~/lib/hooks'
+import { useFindUniqueClient, useCreateClient, useUpdateClient } from '~/lib/hooks/client';
+
 import { v4 as uuidv4 } from 'uuid'
 
 const useAuth = () => useNuxtApp().$auth

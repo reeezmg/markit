@@ -2,19 +2,11 @@
 import { hash } from '~/composables/hash';
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
-import {
-    useFindManyCompanyUser,
-    useUpdateUser,
-    useUpdateCompanyUser,
-    useCreateUser,
-    useFindUniqueUser,
-    useCountCompanyUser,
-    useFindManyEntry,
-    useCountEntry,
-    useFindManyExpense,
-    useCountExpense,
-    useFindManyExpenseCategory,
-} from '~/lib/hooks';
+import { useFindManyCompanyUser, useUpdateCompanyUser, useCountCompanyUser } from '~/lib/hooks/company-user';
+import { useFindManyEntry, useCountEntry } from '~/lib/hooks/entry';
+import { useFindManyExpense, useCountExpense } from '~/lib/hooks/expense';
+import { useFindManyExpenseCategory } from '~/lib/hooks/expense-category';
+import { useUpdateUser, useCreateUser, useFindUniqueUser } from '~/lib/hooks/user';
 import { useCompanyEntries } from '~/composables/companyReports'
 
 const userStore = useUserStore()

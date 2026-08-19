@@ -1,11 +1,8 @@
 <script setup lang="ts">
 import { format, isToday } from 'date-fns'
 
-import {
-    useCreateConversation,
-    useCreateMessage,
-    useUpdateMessage
-} from '~/lib/hooks';
+import { useCreateConversation } from '~/lib/hooks/conversation';
+import { useCreateMessage, useUpdateMessage } from '~/lib/hooks/message';
 import type { Message } from '~/types';
 const { $client } = useNuxtApp();
 const CreateMessage = useCreateMessage();

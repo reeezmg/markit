@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { useFindFirstGeneralPreference, useUpsertGeneralPreference } from '~/lib/hooks';
+import { useFindFirstGeneralPreference, useUpsertGeneralPreference } from '~/lib/hooks/general-preference';
 
 definePageMeta({ auth: true });
 

@@ -95,7 +95,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
-import { useFindManyBankAccount } from '~/lib/hooks'
+import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
 
 /* ---------------------------------------------------
    PROPS / EMITS

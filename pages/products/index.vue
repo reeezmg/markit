@@ -5,15 +5,9 @@ import type { Period, Range } from '~/types';
 import type { Prisma } from '@prisma/client'
 import AwsService from '~/composables/aws';
 import Quagga from '@ericblade/quagga2'
-import {
-    useFindManyProduct,
-    useUpdateProduct,
-    useUpdateManyProduct,
-    useUpdateVariant,
-    useCountProduct,
-    useDeleteProduct,
-    useFindFirstItem
-} from '~/lib/hooks';
+import { useFindFirstItem } from '~/lib/hooks/item';
+import { useFindManyProduct, useUpdateProduct, useUpdateManyProduct, useCountProduct, useDeleteProduct } from '~/lib/hooks/product';
+import { useUpdateVariant } from '~/lib/hooks/variant';
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Pagination } from 'swiper/modules'
 import 'swiper/css'

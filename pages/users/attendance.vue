@@ -1,16 +1,11 @@
 <script setup lang="ts">
-import {
-    useFindManyCompanyUser,
-    useFindManyShift,
-    useFindManyShiftAssignment,
-    useFindManyAttendance,
-    useUpsertAttendance,
-    useCreateAttendanceLog,
-    useFindManyAttendanceAdjustment,
-    useCreateAttendanceAdjustment,
-    useUpdateAttendanceAdjustment,
-    useDeleteAttendanceAdjustment,
-} from '~/lib/hooks'
+import { useFindManyAttendance, useUpsertAttendance } from '~/lib/hooks/attendance';
+import { useFindManyAttendanceAdjustment, useCreateAttendanceAdjustment, useUpdateAttendanceAdjustment, useDeleteAttendanceAdjustment } from '~/lib/hooks/attendance-adjustment';
+import { useCreateAttendanceLog } from '~/lib/hooks/attendance-log';
+import { useFindManyCompanyUser } from '~/lib/hooks/company-user';
+import { useFindManyShift } from '~/lib/hooks/shift';
+import { useFindManyShiftAssignment } from '~/lib/hooks/shift-assignment';
+
 import {
     dateKey,
     formatPunchTime,

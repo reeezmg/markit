@@ -1,10 +1,7 @@
 <script setup lang="ts">
-import {
-  useFindManyPurchaseOrder,
-  useCountPurchaseOrder,
-  useDeletePurchaseOrder,
-  useCreateDistributorPayment,
-} from '~/lib/hooks'
+import { useCreateDistributorPayment } from '~/lib/hooks/distributor-payment';
+import { useFindManyPurchaseOrder, useCountPurchaseOrder, useDeletePurchaseOrder } from '~/lib/hooks/purchase-order';
+
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
 const toast = useToast()

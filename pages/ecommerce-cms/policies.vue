@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { v4 as uuidv4 } from 'uuid';
-import { useFindFirstGeneralPreference, useUpsertGeneralPreference } from '~/lib/hooks';
+import { useFindFirstGeneralPreference, useUpsertGeneralPreference } from '~/lib/hooks/general-preference';
 
 type Policy = {
   id: string;

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { FormError, FormSubmitEvent } from '#ui/types';
-import { useUpdateCompany, useFindUniqueCompany, useUpsertAddress } from '~/lib/hooks';
+import { useUpsertAddress } from '~/lib/hooks/address';
+import { useUpdateCompany, useFindUniqueCompany } from '~/lib/hooks/company';
 import { v4 as uuidv4 } from 'uuid';
 import AwsService from '~/composables/aws';
 

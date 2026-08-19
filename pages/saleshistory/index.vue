@@ -1,10 +1,8 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue'
 import type { Period, Range } from '~/types'
-import {
-  useFindManyBill,
-  useCountBill
-} from '~/lib/hooks'
+import { useFindManyBill, useCountBill } from '~/lib/hooks/bill';
+
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 
