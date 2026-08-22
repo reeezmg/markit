@@ -14,6 +14,7 @@ const isEdit = computed(() => String(route.query.isEdit || ''));
 const isSettled = (productId: string) => props.settledMap.get(productId) ?? true;
 const totalAmount = ref(0);
 const toast = useToast();
+const { invalidateModels } = useModelCache();
 
 // Ids hidden from the visible table while their DELETE is in flight (optimistic
 // remove). On error we drop the id from this set and the row reappears; on
@@ -120,6 +121,8 @@ const removeProduct = (id: string) => {
   deletingIds.value = new Set([...deletingIds.value, id]);
   $fetch('/api/products/delete', { method: 'POST', body: { id } })
     .then(() => {
+      // Raw-SQL delete bypasses the ZenStack cache — drop it so /products drops the row.
+      invalidateModels('Product', 'Variant', 'Item');
       emit('product-deleted', id);
     })
     .catch((err: any) => {

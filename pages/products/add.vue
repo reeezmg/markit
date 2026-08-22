@@ -8,6 +8,7 @@ const route = useRoute();
 const toast = useToast();
 const useAuth = () => useNuxtApp().$auth;
 const draft = useProductDraft();
+const { invalidateModels } = useModelCache();
 const draftProductIds = computed({
   get: () => draft.productIds.value,
   set: (value: string[]) => {
@@ -651,6 +652,7 @@ const handleAdd = async (e: Event) => {
         method: 'POST',
         body: { products: [withFreshRowIds(stagedProduct)], poId: editPurchaseOrderId.value },
       })
+      await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder')
       await refetchEditPurchaseOrder()
     } else {
       // A new PO does not exist yet; retain the normal staged draft flow.
@@ -745,6 +747,7 @@ const handleEdit = async (e: Event) => {
           updateInitialQty: true,
         },
       })
+      await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder')
       await refetchEditPurchaseOrder()
     } else {
       // Unsaved products remain local until the purchase order is saved.
@@ -1269,11 +1272,13 @@ const handleSaveEditedPurchaseOrder = async () => {
         body: { products: stagedProductsForSave(), poId: editPurchaseOrderId.value },
       })
       draft.stagedProducts.value = []
+      await invalidateModels('Product', 'Variant', 'Item')
     }
     await $fetch('/api/purchaseorder/recalculate', {
       method: 'POST',
       body: { poId: editPurchaseOrderId.value },
     })
+    await invalidateModels('PurchaseOrder')
     const result = await refetchEditPurchaseOrder()
     generateBarcodes(result.data?.products || editPurchaseOrder.value?.products || [])
     isOpen.value = true
@@ -1293,6 +1298,7 @@ const handleSaveNoPO = async () => {
       method: 'POST',
       body: { products: stagedProductsForSave() },
     })
+    await invalidateModels('Product', 'Variant', 'Item')
     generateBarcodes(res?.products || [])
     clearCurrentDraftForNextProducts()   // reset staged ONLY after success
     isOpen.value = true
@@ -1352,6 +1358,7 @@ const saveEditedPurchaseInfo = async () => {
       },
     })
 
+    await invalidateModels('PurchaseOrder', 'DistributorCredit', 'DistributorPayment')
     oldPaymentType.value = paymentType.value
     addProductTopBarRef.value?.syncPaymentState?.()
     await refetchEditPurchaseOrder()
@@ -1398,6 +1405,7 @@ const handleSaveWithPO = async () => {
     })
 
     if (!res?.poId) throw new Error('Purchase order was not created')
+    await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder')
     generateBarcodes(res.products || [])
     clearCurrentDraftForNextProducts()   // reset staged + PO info ONLY after success
     isOpen.value = true

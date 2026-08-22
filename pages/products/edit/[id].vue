@@ -8,6 +8,7 @@ const useAuth = () => useNuxtApp().$auth;
 
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 const { defaultSizeLabel, labelFor } = useSizeLabel()
+const { invalidateModels } = useModelCache()
 interface ImageData {
     file: File;
     uuid: string;
@@ -453,6 +454,8 @@ const updateResult: any = await $fetch('/api/products/update', {
     } else {
       await productRefetch();
     }
+    // Raw-SQL write bypasses the ZenStack cache — drop it so /products shows the edit.
+    await invalidateModels('Product', 'Variant', 'Item');
     toast.add({
       title: 'Product Edited!',
       id: 'modal-success',
