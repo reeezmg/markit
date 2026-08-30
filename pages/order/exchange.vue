@@ -16,7 +16,7 @@ async function load() {
     requests.value = (res.requests || []).filter((r: any) => r.type === 'exchange');
     await refreshExchangeStatuses();
   } catch (e: any) {
-    toast.add({ title: 'Could not load exchange requests', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Could not load exchange requests', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally {
     loading.value = false;
   }
@@ -46,10 +46,8 @@ const exchangeAwb = (r: any) => r.meta?.exchangeAwb || r.shipping?.exchange?.awb
 
 // ─── Live tracking of exchange (REPL) shipments ──────────────────────────────
 // One waybill covers the whole journey: replacement out → swap at the customer
-// → old item back to the warehouse. Failed delivery/swap attempts surface as
-// RE-ATTEMPT NSL codes; a cancelled shipment as EOD-777 / EOD-21.
-const REATTEMPT_NSL = ['EOD-74', 'EOD-15', 'EOD-104', 'EOD-43', 'EOD-86', 'EOD-11', 'EOD-69', 'EOD-6'];
-const RESCHEDULE_NSL = ['EOD-777', 'EOD-21'];
+// → old item back to the warehouse. A failure on any leg surfaces as an NSL
+// code, and the carrier's rules for acting on it are in utils/ndr.ts.
 const liveStatus = ref<Record<string, any>>({});
 
 async function refreshExchangeStatuses() {
@@ -71,12 +69,15 @@ const exchangeLive = (r: any) => {
   const awb = exchangeAwb(r);
   return awb ? liveStatus.value[awb] : null;
 };
-const ndrAction = (r: any) => {
-  const nsl = (exchangeLive(r)?.nslCode || '').toUpperCase();
-  if (REATTEMPT_NSL.includes(nsl)) return 'RE-ATTEMPT';
-  if (RESCHEDULE_NSL.includes(nsl)) return 'PICKUP_RESCHEDULE';
-  return null;
-};
+
+// The exception and what can be done about it. The NSL code alone is not
+// enough: the carrier also requires the attempt count to be 1 or 2.
+const ndr = (r: any) => (isNdrException(exchangeLive(r)) ? ndrVerdict(exchangeLive(r)) : null);
+
+// ─── Raising a request on the customer's behalf ──────────────────────────────
+// Not every exchange comes through the storefront - some arrive by phone or message,
+// and the seller records them here. See components/OrderRequestModal.vue.
+const newRequestOpen = ref(false);
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
 const busyId = ref<string | null>(null);
@@ -88,7 +89,7 @@ async function decide(r: any, status: 'APPROVED' | 'REJECTED') {
     toast.add({ title: `Request ${status.toLowerCase()}`, color: status === 'APPROVED' ? 'green' : 'orange' });
     await load();
   } catch (e: any) {
-    toast.add({ title: 'Update failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Update failed', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally {
     busyId.value = null;
   }
@@ -104,7 +105,7 @@ async function createExchange(r: any) {
     toast.add({ title: 'Exchange shipment created', description: `AWB ${res.awb}`, color: 'green' });
     await load();
   } catch (e: any) {
-    toast.add({ title: 'Exchange shipment failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Exchange shipment failed', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally {
     busyId.value = null;
   }
@@ -112,22 +113,28 @@ async function createExchange(r: any) {
 
 async function submitNdr(r: any) {
   const awb = exchangeAwb(r);
-  const action = ndrAction(r);
-  if (!awb || !action) return;
+  const verdict = ndr(r);
+  if (!awb || !verdict?.actionable) return;
   busyId.value = r.id;
   try {
     const res: any = await $fetch('/api/ecommerce-cms/shipping/ndr', {
       method: 'POST',
-      body: { awb, action },
+      body: { awb, action: verdict.action },
     });
     toast.add({
-      title: `NDR action queued (${action})`,
+      title: `${verdict.label} queued`,
       description: res?.uplId ? `Request ID ${res.uplId}` : 'Request submitted to the carrier.',
       color: 'green',
     });
     await load();
   } catch (e: any) {
-    toast.add({ title: 'NDR action failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({
+      title: `${verdict.label} failed`,
+      description: carrierError(e),
+      color: 'red',
+      timeout: 0,
+      ui: { description: 'whitespace-pre-line' },
+    });
   } finally {
     busyId.value = null;
   }
@@ -144,6 +151,7 @@ async function submitNdr(r: any) {
         </p>
       </div>
       <div class="flex items-center gap-2">
+        <UButton icon="i-heroicons-plus" @click="newRequestOpen = true">New exchange</UButton>
         <USelect v-model="statusFilter" :options="statusOptions" class="w-36" />
         <UButton icon="i-heroicons-arrow-path" color="gray" variant="soft" :loading="loading" @click="load">Refresh</UButton>
       </div>
@@ -157,7 +165,7 @@ async function submitNdr(r: any) {
       <div v-else-if="!filtered.length" class="flex flex-col items-center gap-3 py-16 text-center">
         <UIcon name="i-heroicons-arrows-right-left" class="h-10 w-10 text-gray-400" />
         <p class="text-sm font-medium text-gray-900 dark:text-white">No exchange requests</p>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Exchange requests from your storefront will appear here.</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Requests from your storefront appear here. Raise one yourself with New exchange if a customer asked by phone or message.</p>
       </div>
 
       <div v-else class="space-y-3">
@@ -180,8 +188,8 @@ async function submitNdr(r: any) {
               >
                 {{ exchangeLive(r)?.status || exchangeLive(r)?.rawStatus }}
               </UBadge>
-              <UBadge v-if="ndrAction(r)" color="amber" variant="subtle" size="xs">
-                {{ ndrAction(r) === 'RE-ATTEMPT' ? 'Attempt failed' : 'Shipment cancelled' }} · {{ exchangeLive(r)?.nslCode }}
+              <UBadge v-if="ndr(r)" color="amber" variant="subtle" size="xs" :title="ndr(r)!.reason">
+                {{ ndr(r)!.label }} · {{ ndr(r)!.nsl || 'exception' }} · {{ ndr(r)!.attempts }} attempt(s)
               </UBadge>
             </div>
             <p v-if="r.reason" class="mt-1 text-sm text-gray-700 dark:text-gray-300">{{ r.reason }}</p>
@@ -219,16 +227,19 @@ async function submitNdr(r: any) {
             >Create exchange shipment</UButton>
 
             <UButton
-              v-if="ndrAction(r)"
+              v-if="ndr(r)"
               icon="i-heroicons-arrow-path"
               color="amber"
               variant="soft"
               :loading="busyId === r.id"
+              :disabled="!ndr(r)!.actionable"
+              :title="ndr(r)!.blockedReason || (beforeNdrWindow() ? 'Delhivery asks for NDR actions after 9 PM' : ndr(r)!.label)"
               @click="submitNdr(r)"
-            >{{ ndrAction(r) === 'RE-ATTEMPT' ? 'Re-attempt' : 'Reschedule pickup' }}</UButton>
+            >{{ ndr(r)!.actionable ? ndr(r)!.label : 'Blocked' }}</UButton>
           </div>
         </div>
       </div>
     </UCard>
+    <OrderRequestModal v-model="newRequestOpen" type="exchange" @created="load" />
   </div>
 </template>

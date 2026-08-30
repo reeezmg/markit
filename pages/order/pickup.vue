@@ -45,6 +45,9 @@ const fields: Array<{ key: keyof ReturnType<typeof blank>; label: string; requir
   { key: 'state',       label: 'State', half: true },
 ];
 
+// A warehouse already registered with the carrier cannot be renamed.
+const nameLocked = computed(() => Boolean(form.value.id && (form.value as any).registeredWithCarrier));
+
 const isValid = computed(() =>
   fields.filter((f) => f.required).every((f) => String(form.value[f.key] || '').trim() !== ''),
 );
@@ -54,7 +57,11 @@ function openEdit(loc: any) { form.value = { ...blank(), ...loc }; modalOpen.val
 
 function save() {
   if (!isValid.value) return;
-  const { id, ...data } = form.value;
+  const { id, ...rest } = form.value;
+  // Delhivery matches the warehouse name exactly — a stray leading/trailing
+  // space makes every shipment fail with "ClientWarehouse matching query does
+  // not exist", so never store an untrimmed name.
+  const data = { ...rest, name: rest.name.trim() };
   const payload = { ...data, companyId: companyId.value, carrier: 'delhivery' };
   // After the local row is saved, push it straight to Delhivery (create on add,
   // edit on update) so the warehouse always mirrors what's in storetools.
@@ -81,6 +88,22 @@ function setDefault(loc: any) {
 }
 
 function remove(loc: any) {
+  // Deleting is local-only and has consequences the seller cannot see: shipment
+  // creation resolves its pickup location from this table, so removing the last
+  // (or default) one silently stops every new shipment.
+  const openPickups = requests.value.filter(
+    (r: any) => r.location === loc.name && r.status === 'REQUESTED').length;
+  const warnings = [
+    loc.isDefault ? '• This is the DEFAULT pickup location.' : '',
+    (locations.value || []).length <= 1 ? '• It is your ONLY pickup location — new shipments will fail without one.' : '',
+    openPickups ? `• ${openPickups} open pickup request(s) reference it.` : '',
+  ].filter(Boolean);
+  if (!window.confirm(
+    `Remove "${loc.name}" from storetools?\n\n`
+    + (warnings.length ? warnings.join('\n') + '\n\n' : '')
+    + 'Delhivery has no delete API, so the warehouse stays registered on their side '
+    + 'and must be removed from their portal manually.')) return;
+
   deleteLocation({ where: { id: loc.id } },
     { onSuccess: () => {
         // Delhivery exposes no warehouse-delete API, so this only removes the
@@ -107,7 +130,13 @@ async function syncToCarrier(id: string, name: string) {
     await $fetch(`/api/ecommerce-cms/shipping/pickup-locations/${id}/register`, { method: 'POST' });
     toast.add({ title: `${name} synced with Delhivery`, color: 'green' });
   } catch (e: any) {
-    toast.add({ title: 'Delhivery sync failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({
+      title: 'Delhivery sync failed',
+      description: carrierError(e),
+      color: 'red',
+      timeout: 0,
+      ui: { description: 'whitespace-pre-line' },
+    });
   } finally {
     registeringId.value = null;
     refetch();
@@ -151,19 +180,83 @@ async function refreshRemaining() {
 }
 watch(() => [pickupForm.value.location, pickupForm.value.carriers], refreshRemaining, { deep: true });
 
+// ─── Confirm which parcels go on the pickup ─────────────────────────────────
+// Handing a parcel over is a physical act — the seller must see exactly which
+// ones the driver is expected to take, and be able to hold one back (still on
+// the bench, damaged box, anything). Everything starts ticked.
+//
+// A row is a shipment, not an order: an exchange (REPL) replacement leaves the
+// warehouse just like a forward parcel, so it is listed and counted separately
+// with its own id ("<orderId>:<kind>").
+const confirmOpen = ref(false);
+const pendingLoading = ref(false);
+const pendingOrders = ref<any[]>([]);
+const pendingSelected = ref<string[]>([]);
+
+const allPendingSelected = computed({
+  get: () => pendingOrders.value.length > 0 && pendingSelected.value.length === pendingOrders.value.length,
+  set: (on: boolean) => { pendingSelected.value = on ? pendingOrders.value.map((o) => o.id) : []; },
+});
+
+async function openConfirm() {
+  const { location, date, carriers } = pickupForm.value;
+  if (!location || !date || !carriers.length) return;
+  confirmOpen.value = true;
+  pendingLoading.value = true;
+  pendingOrders.value = [];
+  pendingSelected.value = [];
+  try {
+    const all: any[] = [];
+    for (const carrier of carriers) {
+      const r: any = await $fetch('/api/ecommerce-cms/pickup/pending', { query: { location, carrier } });
+      all.push(...(r.orders || []).map((o: any) => ({ ...o, carrier })));
+    }
+    pendingOrders.value = all;
+    // Everything is ticked except parcels the seller held back from the orders
+    // screen — that decision is stored on the order, so it survives reloads.
+    pendingSelected.value = all.filter((o: any) => !o.excluded).map((o: any) => o.id);
+  } catch (e: any) {
+    toast.add({ title: 'Could not load parcels', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
+    confirmOpen.value = false;
+  } finally {
+    pendingLoading.value = false;
+  }
+}
+
 async function raisePickup() {
   const { location, date, time, carriers } = pickupForm.value;
   if (!location || !date || !carriers.length) return;
+  if (!pendingSelected.value.length) return;
   raising.value = true;
   try {
-    const res: any = await $fetch('/api/ecommerce-cms/pickup/raise', { method: 'POST', body: { location, date, time, carriers } });
+    const res: any = await $fetch('/api/ecommerce-cms/pickup/raise', {
+      method: 'POST',
+      body: { location, date, time, carriers, shipmentIds: pendingSelected.value },
+    });
+    confirmOpen.value = false;
     const ok = (res.results || []).filter((r: any) => r.ok);
     const failed = (res.results || []).filter((r: any) => !r.ok);
     if (ok.length) toast.add({ title: `Pickup raised: ${ok.map((r: any) => `${r.carrier} (${r.orders} orders)`).join(', ')}`, color: 'green' });
-    if (failed.length) toast.add({ title: `Failed: ${failed.map((r: any) => r.carrier).join(', ')}`, description: failed[0]?.error, color: 'red' });
+    if (failed.length) {
+      toast.add({
+        title: `Pickup failed: ${failed.map((r: any) => r.carrier).join(', ')}`,
+        // One line per carrier: raising two carriers can fail for two different
+        // reasons, and only naming them tells the seller which to fix.
+        description: failed.map((r: any) => `${r.carrier}: ${carrierMessage(r.error)}`).join('\n'),
+        color: 'red',
+        timeout: 0,
+        ui: { description: 'whitespace-pre-line' },
+      });
+    }
     await Promise.all([loadRequests(), refreshRemaining()]);
   } catch (e: any) {
-    toast.add({ title: 'Raise pickup failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({
+      title: 'Raise pickup failed',
+      description: carrierError(e),
+      color: 'red',
+      timeout: 0,
+      ui: { description: 'whitespace-pre-line' },
+    });
   } finally { raising.value = false; }
 }
 
@@ -179,7 +272,7 @@ async function loadRequests() {
     const res: any = await $fetch('/api/ecommerce-cms/pickup/requests');
     requests.value = res.requests || [];
   } catch (e: any) {
-    toast.add({ title: 'Could not load pickup requests', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Could not load pickup requests', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally { loadingRequests.value = false; }
 }
 
@@ -190,7 +283,7 @@ async function updateStatus(req: any, status: string) {
     toast.add({ title: `Pickup marked ${status}`, color: 'green' });
     loadRequests();
   } catch (e: any) {
-    toast.add({ title: 'Status update failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Status update failed', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   }
 }
 
@@ -258,18 +351,103 @@ onMounted(() => {
       <div class="mt-4 flex items-center justify-between">
         <p class="text-xs text-gray-500">
           <UIcon name="i-heroicons-cube" class="align-text-bottom" />
-          {{ remainingCount }} remaining order{{ remainingCount === 1 ? '' : 's' }} will be auto-attached.
+          {{ remainingCount }} parcel{{ remainingCount === 1 ? '' : 's' }} awaiting pickup — you can choose which to hand over.
         </p>
         <UButton
           icon="i-heroicons-truck"
-          :loading="raising"
           :disabled="!pickupForm.carriers.length || !pickupForm.location || !pickupForm.date"
-          @click="raisePickup"
+          @click="openConfirm"
         >
           Raise Pickup
         </UButton>
       </div>
     </UCard>
+
+    <!-- Which parcels go on this pickup -->
+    <UModal v-model="confirmOpen" :ui="{ width: 'sm:max-w-3xl' }">
+      <UCard>
+        <template #header>
+          <div class="flex items-center justify-between">
+            <div>
+              <h2 class="text-lg font-semibold">Parcels for this pickup</h2>
+              <p class="text-xs text-gray-500">
+                {{ pickupForm.location }} · {{ pickupForm.date }} at {{ pickupForm.time }}
+              </p>
+            </div>
+            <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="confirmOpen = false" />
+          </div>
+        </template>
+
+        <div v-if="pendingLoading" class="flex items-center justify-center py-12 text-gray-400">
+          <UIcon name="i-heroicons-arrow-path" class="animate-spin text-2xl" />
+        </div>
+
+        <div v-else-if="!pendingOrders.length" class="py-10 text-center text-sm text-gray-500">
+          No parcels are awaiting pickup at this location.
+          <p class="mt-1 text-xs">Create a shipment first — a parcel appears here once it has a waybill.</p>
+        </div>
+
+        <div v-else class="space-y-3">
+          <p class="text-sm text-gray-600 dark:text-gray-300">
+            <strong>{{ pendingSelected.length }}</strong> of {{ pendingOrders.length }} selected.
+            Untick anything you are not handing over — it stays available for a later pickup.
+            <span v-if="pendingOrders.some((o) => o.excluded)">
+              Parcels marked <em>held back</em> were excluded from the orders screen; tick one to include it anyway.
+            </span>
+          </p>
+
+          <div class="max-h-96 overflow-y-auto rounded-md border border-gray-200 dark:border-gray-800">
+            <table class="w-full text-sm">
+              <thead class="sticky top-0 bg-gray-50 text-left text-xs uppercase text-gray-400 dark:bg-gray-900">
+                <tr>
+                  <th class="w-8 p-2"><UCheckbox v-model="allPendingSelected" /></th>
+                  <th class="p-2">Order</th>
+                  <th>AWB</th>
+                  <th>Customer</th>
+                  <th>Destination</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-for="o in pendingOrders" :key="o.id" class="border-t border-gray-100 dark:border-gray-800">
+                  <td class="p-2"><UCheckbox v-model="pendingSelected" :value="o.id" /></td>
+                  <td class="p-2 font-medium text-gray-900 dark:text-white">
+                    #{{ o.orderNumber }}
+                    <!-- Which leg of the order this parcel is: the original one
+                         going out, or the replacement for an exchange. -->
+                    <UBadge v-if="o.kind === 'exchange'" color="violet" variant="subtle" size="xs" class="ml-1">
+                      exchange
+                    </UBadge>
+                    <UBadge v-if="o.excluded" color="amber" variant="subtle" size="xs" class="ml-1">held back</UBadge>
+                  </td>
+                  <td class="font-mono text-xs">{{ o.awb }}</td>
+                  <td class="truncate max-w-[150px]">{{ o.customer || '—' }}</td>
+                  <td class="text-gray-500">{{ [o.city, o.pincode].filter(Boolean).join(', ') || '—' }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <template #footer>
+          <div class="flex items-center justify-between gap-2">
+            <span class="text-xs text-gray-500">
+              Delhivery is told to expect {{ pendingSelected.length }} parcel(s).
+            </span>
+            <div class="flex gap-2">
+              <UButton variant="ghost" color="gray" @click="confirmOpen = false">Cancel</UButton>
+              <UButton
+                icon="i-heroicons-truck"
+                :loading="raising"
+                :disabled="!pendingSelected.length"
+                @click="raisePickup"
+              >
+                Raise pickup for {{ pendingSelected.length }}
+              </UButton>
+            </div>
+          </div>
+        </template>
+      </UCard>
+    </UModal>
 
     <!-- Pickup requests table -->
     <UCard>
@@ -290,7 +468,7 @@ onMounted(() => {
             <th class="py-2">Date</th>
             <th>Location</th>
             <th>Carrier</th>
-            <th>Orders</th>
+            <th>Parcels</th>
             <th>Packages</th>
             <th>Pickup ID</th>
             <th>Status</th>
@@ -386,8 +564,19 @@ onMounted(() => {
           <h2 class="text-lg font-semibold">{{ editing ? 'Edit' : 'Add' }} Pickup Location</h2>
         </template>
         <div class="grid grid-cols-2 gap-3">
-          <UFormGroup v-for="f in fields" :key="f.key" :label="f.label" :class="f.half ? 'col-span-1' : 'col-span-2'">
-            <UInput v-model="(form as any)[f.key]" />
+          <UFormGroup
+            v-for="f in fields"
+            :key="f.key"
+            :label="f.label"
+            :class="f.half ? 'col-span-1' : 'col-span-2'"
+            :help="f.key === 'name' && nameLocked
+              ? 'Delhivery cannot rename a registered warehouse — add a new location instead'
+              : undefined"
+          >
+            <!-- The name is the key Delhivery matches every shipment and pickup
+                 against, and its edit API cannot change it. Once registered it
+                 is locked, or the local name and the carrier's would drift. -->
+            <UInput v-model="(form as any)[f.key]" :disabled="f.key === 'name' && nameLocked" />
           </UFormGroup>
         </div>
         <template #footer>

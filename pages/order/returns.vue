@@ -17,7 +17,7 @@ async function load() {
     requests.value = (res.requests || []).filter((r: any) => r.type === 'return');
     await refreshReverseStatuses();
   } catch (e: any) {
-    toast.add({ title: 'Could not load return requests', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Could not load return requests', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally {
     loading.value = false;
   }
@@ -46,10 +46,9 @@ const requestBadge = (s: string) => (s === 'APPROVED' ? 'green' : s === 'REJECTE
 const reverseAwb = (r: any) => r.meta?.reverseAwb || r.shipping?.reverse?.awb || null;
 
 // ─── Live tracking of reverse shipments ──────────────────────────────────────
-// Same track API as the orders page; for a reverse AWB the NSL codes
-// EOD-777 / EOD-21 mean the customer pickup was cancelled (non-OTP) and can be
-// revived with PICKUP_RESCHEDULE after 1-2 failed attempts.
-const RESCHEDULE_NSL = ['EOD-777', 'EOD-21'];
+// Same track API as the orders page. A reverse pickup fails the same way a
+// delivery does, and the carrier's rules for acting on it are identical — see
+// utils/ndr.ts, which the orders and NDR screens read from too.
 const liveStatus = ref<Record<string, any>>({});
 
 async function refreshReverseStatuses() {
@@ -71,10 +70,16 @@ const reverseLive = (r: any) => {
   const awb = reverseAwb(r);
   return awb ? liveStatus.value[awb] : null;
 };
-const canReschedule = (r: any) => {
-  const nsl = (reverseLive(r)?.nslCode || '').toUpperCase();
-  return RESCHEDULE_NSL.includes(nsl);
-};
+
+// The exception and what can be done about it. Offering the button on the NSL
+// code alone (as this page used to) asks the carrier for actions it rejects:
+// it also requires the attempt count to be 1 or 2.
+const ndr = (r: any) => (isNdrException(reverseLive(r)) ? ndrVerdict(reverseLive(r)) : null);
+
+// ─── Raising a request on the customer's behalf ──────────────────────────────
+// Not every return comes through the storefront - some arrive by phone or message,
+// and the seller records them here. See components/OrderRequestModal.vue.
+const newRequestOpen = ref(false);
 
 // ─── Actions ─────────────────────────────────────────────────────────────────
 const busyId = ref<string | null>(null);
@@ -86,7 +91,7 @@ async function decide(r: any, status: 'APPROVED' | 'REJECTED') {
     toast.add({ title: `Request ${status.toLowerCase()}`, color: status === 'APPROVED' ? 'green' : 'orange' });
     await load();
   } catch (e: any) {
-    toast.add({ title: 'Update failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Update failed', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally {
     busyId.value = null;
   }
@@ -102,29 +107,36 @@ async function createReverse(r: any) {
     toast.add({ title: 'Reverse pickup created', description: `AWB ${res.awb}`, color: 'green' });
     await load();
   } catch (e: any) {
-    toast.add({ title: 'Reverse pickup failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Reverse pickup failed', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally {
     busyId.value = null;
   }
 }
 
-async function reschedulePickup(r: any) {
+async function submitNdr(r: any) {
   const awb = reverseAwb(r);
-  if (!awb) return;
+  const verdict = ndr(r);
+  if (!awb || !verdict?.actionable) return;
   busyId.value = r.id;
   try {
     const res: any = await $fetch('/api/ecommerce-cms/shipping/ndr', {
       method: 'POST',
-      body: { awb, action: 'PICKUP_RESCHEDULE' },
+      body: { awb, action: verdict.action },
     });
     toast.add({
-      title: 'Pickup reschedule queued',
+      title: `${verdict.label} queued`,
       description: res?.uplId ? `Request ID ${res.uplId}` : 'Request submitted to the carrier.',
       color: 'green',
     });
     await load();
   } catch (e: any) {
-    toast.add({ title: 'Reschedule failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({
+      title: `${verdict.label} failed`,
+      description: carrierError(e),
+      color: 'red',
+      timeout: 0,
+      ui: { description: 'whitespace-pre-line' },
+    });
   } finally {
     busyId.value = null;
   }
@@ -141,6 +153,7 @@ async function reschedulePickup(r: any) {
         </p>
       </div>
       <div class="flex items-center gap-2">
+        <UButton icon="i-heroicons-plus" @click="newRequestOpen = true">New return</UButton>
         <USelect v-model="statusFilter" :options="statusOptions" class="w-36" />
         <UButton icon="i-heroicons-arrow-path" color="gray" variant="soft" :loading="loading" @click="load">Refresh</UButton>
       </div>
@@ -154,7 +167,7 @@ async function reschedulePickup(r: any) {
       <div v-else-if="!filtered.length" class="flex flex-col items-center gap-3 py-16 text-center">
         <UIcon name="i-heroicons-arrow-uturn-left" class="h-10 w-10 text-gray-400" />
         <p class="text-sm font-medium text-gray-900 dark:text-white">No return requests</p>
-        <p class="text-sm text-gray-500 dark:text-gray-400">Return and exchange requests from your storefront will appear here.</p>
+        <p class="text-sm text-gray-500 dark:text-gray-400">Requests from your storefront appear here. Raise one yourself with New return if a customer asked by phone or message.</p>
       </div>
 
       <div v-else class="space-y-3">
@@ -178,8 +191,8 @@ async function reschedulePickup(r: any) {
               >
                 {{ reverseLive(r)?.status || reverseLive(r)?.rawStatus }}
               </UBadge>
-              <UBadge v-if="canReschedule(r)" color="amber" variant="subtle" size="xs">
-                Pickup cancelled · {{ reverseLive(r)?.nslCode }}
+              <UBadge v-if="ndr(r)" color="amber" variant="subtle" size="xs" :title="ndr(r)!.reason">
+                {{ ndr(r)!.label }} · {{ ndr(r)!.nsl || 'exception' }} · {{ ndr(r)!.attempts }} attempt(s)
               </UBadge>
             </div>
             <p v-if="r.reason" class="mt-1 text-sm text-gray-700 dark:text-gray-300">{{ r.reason }}</p>
@@ -217,16 +230,19 @@ async function reschedulePickup(r: any) {
             >Create reverse pickup</UButton>
 
             <UButton
-              v-if="canReschedule(r)"
+              v-if="ndr(r)"
               icon="i-heroicons-arrow-path"
               color="amber"
               variant="soft"
               :loading="busyId === r.id"
-              @click="reschedulePickup(r)"
-            >Reschedule pickup</UButton>
+              :disabled="!ndr(r)!.actionable"
+              :title="ndr(r)!.blockedReason || (beforeNdrWindow() ? 'Delhivery asks for NDR actions after 9 PM' : ndr(r)!.label)"
+              @click="submitNdr(r)"
+            >{{ ndr(r)!.actionable ? ndr(r)!.label : 'Blocked' }}</UButton>
           </div>
         </div>
       </div>
     </UCard>
+    <OrderRequestModal v-model="newRequestOpen" type="return" @created="load" />
   </div>
 </template>

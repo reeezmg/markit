@@ -1,23 +1,77 @@
 <script setup lang="ts">
 import { format } from 'date-fns';
-import { useFindManyEcommOrder } from '~/lib/hooks/ecomm-order';
+import { useFindManyEcommOrder, useCountEcommOrder, useUpdateEcommOrder } from '~/lib/hooks/ecomm-order';
 
 definePageMeta({ auth: true });
 
 const useAuth = () => useNuxtApp().$auth;
 const { labelFor } = useSizeLabel();
+const toast = useToast();
 const companyId = computed(() => useAuth().session.value?.companyId || '');
 
-const search = ref('');
+// Labels (print / download / carrier PDF) and shipment cancellation are shared
+// with ShipOrderModal — see composables/useShippingLabels.ts and
+// composables/useShipmentActions.ts.
+const { printLabels, downloadLabels } = useShippingLabels();
+const { cancelShipment: cancelShipmentRequest } = useShipmentActions();
+
+// A waybill or order number can arrive in the URL - the NDR screen links back
+// here that way, and a bookmarked search should survive a reload.
+const route = useRoute();
+const search = ref(String(route.query.q || ''));
 const statusFilter = ref('All');
 const paymentFilter = ref('All');
 
-const statusOptions = ['All', 'PLACED', 'PACKED', 'PICKED', 'SHIPPED', 'OUT_FOR_DELIVERY', 'DELIVERED', 'RTO', 'RTO_DELIVERED', 'CANCELLED'];
+// One vocabulary for the whole app — see utils/order-status.ts.
+const statusOptions = computed(() => [
+  { value: 'All', label: 'All' },
+  ...ORDER_STATUS_KEYS.map((key) => ({ value: key, label: statusLabel(key) })),
+]);
 const paymentOptions = ['All', 'PENDING', 'PAID', 'FAILED', 'REFUNDED'];
+
+// ─── Paging + server-side filtering ─────────────────────────────────────────
+// Filtering and search run in the DATABASE, not over a loaded slice: with a
+// client-side filter over `take: 100`, order 101 and older could never be
+// found, filtered or shipped.
+const page = ref(1);
+const pageSize = 25;
+
+// Debounce the search so a query does not fire on every keystroke. Seeded from
+// the URL so a link into a specific waybill filters on first paint, not after
+// the first keypress.
+const searchTerm = ref(search.value.trim());
+let searchTimer: any = null;
+watch(search, (value) => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { searchTerm.value = value.trim(); }, 300);
+});
+
+const where = computed(() => {
+  const q = searchTerm.value;
+  const filters: any = { companyId: companyId.value };
+  if (statusFilter.value !== 'All') filters.status = statusFilter.value;
+  if (paymentFilter.value !== 'All') filters.paymentStatus = paymentFilter.value;
+  if (q) {
+    const asNumber = Number(q);
+    filters.OR = [
+      ...(Number.isInteger(asNumber) ? [{ orderNumber: asNumber }] : []),
+      { client: { is: { name: { contains: q, mode: 'insensitive' } } } },
+      { client: { is: { phone: { contains: q } } } },
+      { client: { is: { email: { contains: q, mode: 'insensitive' } } } },
+      { bill: { is: { invoiceNumber: { contains: q, mode: 'insensitive' } } } },
+      // A seller chasing a parcel usually has the waybill in front of them.
+      { meta: { path: ['awb'], string_contains: q } },
+    ];
+  }
+  return filters;
+});
+
+// Any filter change invalidates the current page number.
+watch([() => statusFilter.value, () => paymentFilter.value, searchTerm], () => { page.value = 1; });
 
 const { data: orders, isLoading, refetch } = useFindManyEcommOrder(
   computed(() => ({
-    where: { companyId: companyId.value },
+    where: where.value,
     include: {
       client: {
         select: {
@@ -35,21 +89,38 @@ const { data: orders, isLoading, refetch } = useFindManyEcommOrder(
       },
     },
     orderBy: { createdAt: 'desc' },
-    take: 100,
+    skip: (page.value - 1) * pageSize,
+    take: pageSize,
   })),
   { enabled: computed(() => Boolean(companyId.value)) },
 );
 
+// The real total from the database — not the length of the current page.
+const { data: orderTotal, refetch: refetchCount } = useCountEcommOrder(
+  computed(() => ({ where: where.value })),
+  { enabled: computed(() => Boolean(companyId.value)) },
+);
+const total = computed(() => Number(orderTotal.value ?? 0));
+const pageFrom = computed(() => (total.value ? (page.value - 1) * pageSize + 1 : 0));
+const pageTo = computed(() => Math.min(page.value * pageSize, total.value));
+
+async function reload() {
+  await Promise.all([refetch(), refetchCount()]);
+}
+
+// Every column has a width so the table fits a laptop screen instead of
+// scrolling sideways with the actions menu off the edge. They add up to 86% plus
+// a fixed actions column; anything longer than its share truncates with an
+// ellipsis and keeps the full text in a tooltip.
 const columns = [
-  { key: 'order', label: 'Order' },
-  { key: 'createdAt', label: 'Date' },
-  { key: 'customer', label: 'Customer' },
-  { key: 'items', label: 'Items' },
-  { key: 'payment', label: 'Payment' },
-  { key: 'status', label: 'Status' },
-  { key: 'shipment', label: 'Shipment' },
-  { key: 'grandTotal', label: 'Total' },
-  { key: 'actions', label: 'Actions' },
+  { key: 'order', label: 'Order', class: 'w-[10%]', rowClass: 'align-top whitespace-normal' },
+  { key: 'createdAt', label: 'Date', class: 'w-[8%]', rowClass: 'align-top' },
+  { key: 'customer', label: 'Customer', class: 'w-[15%]', rowClass: 'align-top whitespace-normal' },
+  { key: 'items', label: 'Items', class: 'w-[12%]', rowClass: 'align-top whitespace-normal' },
+  { key: 'payment', label: 'Payment', class: 'w-[10%]', rowClass: 'align-top' },
+  { key: 'status', label: 'Status', class: 'w-[22%]', rowClass: 'align-top whitespace-normal' },
+  { key: 'grandTotal', label: 'Total', class: 'w-[9%] text-right', rowClass: 'align-top text-right' },
+  { key: 'actions', label: 'Actions', class: 'w-[104px] text-right', rowClass: 'align-top' },
 ];
 
 // Box / weight info stored on the order after (bulk) shipment creation.
@@ -86,12 +157,12 @@ const addressLine = (order: any) => {
   ].filter(Boolean).join(', ');
 };
 
-const badgeColor = (status: string) => {
-  if (['PAID', 'DELIVERED', 'PLACED'].includes(status)) return 'green';
-  if (['PENDING', 'PACKED', 'PICKED', 'SHIPPED', 'OUT_FOR_DELIVERY'].includes(status)) return 'yellow';
-  // Return-to-origin: the shipment is coming back (RTO) / arrived back (RTO_DELIVERED).
-  if (status?.startsWith('RTO')) return 'orange';
-  if (['CANCELLED', 'FAILED', 'REFUNDED'].includes(status)) return 'red';
+// Payment status only — shipment status is coloured from utils/order-status.ts.
+const paymentColor = (status: string) => {
+  if (status === 'PAID') return 'green';
+  if (status === 'PENDING') return 'yellow';
+  if (status === 'FAILED') return 'red';
+  if (status === 'REFUNDED') return 'orange';
   return 'gray';
 };
 
@@ -110,15 +181,41 @@ const liveStatus = ref<Record<string, {
 
 const orderAwb = (order: any) => order?.meta?.shipping?.awb || order?.meta?.shipping?.trackingId || null;
 
-// What the table shows: carrier status when we have it, else the stored status.
-const displayStatus = (order: any) => {
+// What the Status badge renders.
+//
+// Delhivery does not publish its full status vocabulary, so the adapter can meet
+// a word it cannot map. When that happens we must NOT fall back to the stored
+// status — showing "Placed" for a parcel already in transit is worse than
+// showing a word we don't recognise. So an unmapped carrier status is shown
+// verbatim, in grey, and flagged as unrecognised.
+const statusBadge = (order: any) => {
   const awb = orderAwb(order);
-  return (awb && liveStatus.value[awb]?.status) || order.status;
+  const live = awb ? liveStatus.value[awb] : null;
+  if (live?.status) {
+    return { text: statusLabel(live.status), color: statusColor(live.status), hint: statusHint(live.status), mapped: true };
+  }
+  if (live?.rawStatus) {
+    return {
+      text: live.rawStatus,
+      color: 'gray',
+      hint: `Unrecognised carrier status — shown exactly as the carrier sent it. The order's own status is still ${statusLabel(order.status)}.`,
+      mapped: false,
+    };
+  }
+  return { text: statusLabel(order.status), color: statusColor(order.status), hint: statusHint(order.status), mapped: true };
 };
-const rawStatus = (order: any) => {
+
+// The carrier's own wording, kept under the badge so nothing is lost in
+// translation. Hidden when the badge already shows it.
+const carrierStatus = (order: any) => {
   const awb = orderAwb(order);
-  return awb ? (liveStatus.value[awb]?.rawStatus || null) : null;
+  const raw = awb ? liveStatus.value[awb]?.rawStatus : null;
+  if (!raw) return null;
+  const badge = statusBadge(order);
+  if (!badge.mapped) return null;                    // the badge IS the raw text
+  return raw.trim().toLowerCase() === badge.text.toLowerCase() ? null : raw;
 };
+
 
 async function refreshLiveStatuses() {
   const awbs = [...new Set((orders.value || []).map(orderAwb).filter(Boolean))] as string[];
@@ -148,83 +245,176 @@ watch(orders, () => refreshLiveStatuses(), { immediate: true });
 //   PICKUP_RESCHEDULE — cancelled (non-OTP) shipment
 // Both require attempt count 1-2 and are best applied after 9 PM. The NDR API
 // is async: it returns a UPL ID which we persist on the order and poll.
-const REATTEMPT_NSL = ['EOD-74', 'EOD-15', 'EOD-104', 'EOD-43', 'EOD-86', 'EOD-11', 'EOD-69', 'EOD-6'];
-const RESCHEDULE_NSL = ['EOD-777', 'EOD-21'];
-
 const ndrInfo = (row: any) => {
   const awb = orderAwb(row);
   const live = awb ? liveStatus.value[awb] : null;
-  const nsl = (live?.nslCode || '').toUpperCase();
-  if (!nsl) return null;
-  const action = REATTEMPT_NSL.includes(nsl) ? 'RE-ATTEMPT'
-    : RESCHEDULE_NSL.includes(nsl) ? 'PICKUP_RESCHEDULE' : null;
-  if (!action) return null;
-  return {
-    awb,
-    nsl,
-    action,
-    label: action === 'RE-ATTEMPT' ? 'Re-attempt delivery' : 'Reschedule pickup',
-    reason: live?.instructions || live?.rawStatus || 'Delivery attempt failed',
-    attempts: live?.ndrAttempts || 0,
-  };
+  if (!isNdrException(live)) return null;
+  // The carrier's rules (which NSL codes map to which action, and the 1-2
+  // attempt window) live in utils/ndr.ts - the returns, exchange and NDR
+  // screens read the same ones.
+  return { awb, ...ndrVerdict(live) };
 };
 
 const ndrUpl = (row: any) => row?.meta?.shipping?.ndr?.upl || null;
 
-const ndrModalOpen = ref(false);
-const ndrRow = ref<any>(null);
-const ndrBusy = ref(false);
-const ndrTarget = computed(() => (ndrRow.value ? ndrInfo(ndrRow.value) : null));
-
-function openNdr(row: any) {
-  ndrRow.value = row;
-  ndrModalOpen.value = true;
+// ─── Row actions (kebab menu) ────────────────────────────────────────────────
+const detailsOpen = ref(false);
+const detailsRow = ref<any>(null);
+function openDetails(row: any) {
+  detailsRow.value = row;
+  detailsOpen.value = true;
 }
 
-async function submitNdr() {
-  const target = ndrTarget.value;
-  if (!target?.awb) return;
-  ndrBusy.value = true;
+// Pack / Ship from the details modal.
+// Pack is a purely local step (the carrier knows nothing yet); Ship hands over
+// to the shipping modal, which owns the preview + create flow.
+const { mutate: updateOrder } = useUpdateEcommOrder();
+const packing = ref(false);
+
+// Packing only applies before the parcel exists at the carrier.
+const canPack = (row: any) => !!row && !orderAwb(row) && row.status === 'PLACED';
+const canShip = (row: any) => !!row && !orderAwb(row);
+
+function markPacked(row: any) {
+  if (!canPack(row)) return;
+  packing.value = true;
+  updateOrder(
+    { where: { id: row.id }, data: { status: 'PACKED' } },
+    {
+      onSuccess: async () => {
+        // Keep the open modal in step with the refetched row.
+        if (detailsRow.value?.id === row.id) detailsRow.value = { ...detailsRow.value, status: 'PACKED' };
+        toast.add({ title: `Order ${orderLabel(row)} marked packed`, color: 'green' });
+        await reload();
+      },
+      onError: (e: any) => toast.add({ title: 'Could not mark packed', description: e.message, color: 'red' }),
+      onSettled: () => { packing.value = false; },
+    },
+  );
+}
+
+function shipFromDetails(row: any) {
+  detailsOpen.value = false;
+  openShip(row);
+}
+
+// Pull this one shipment's live carrier status and fold it into liveStatus so
+// the Status column updates in place.
+const trackBusy = ref<string | null>(null);
+async function trackRow(row: any) {
+  const awb = orderAwb(row);
+  if (!awb) return;
+  trackBusy.value = row.id;
   try {
-    const res: any = await $fetch('/api/ecommerce-cms/shipping/ndr', {
-      method: 'POST',
-      body: { awb: target.awb, action: target.action },
-    });
+    const res: any = await $fetch('/api/ecommerce-cms/shipping/track', { query: { trackingId: awb } });
+    await refreshLiveStatuses();
     toast.add({
-      title: `NDR action queued (${target.action})`,
-      description: res?.uplId ? `Request ID ${res.uplId} — check its status from the order row.` : 'Request submitted to the carrier.',
+      title: `AWB ${awb}`,
+      description: res?.status || res?.rawStatus || 'No status returned by the carrier',
       color: 'green',
     });
-    ndrModalOpen.value = false;
-    await refetch(); // pick up the persisted UPL id on the order meta
   } catch (e: any) {
-    toast.add({ title: 'NDR action failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Track failed', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally {
-    ndrBusy.value = false;
+    trackBusy.value = null;
   }
 }
 
-// Poll the async NDR request (UPL) status.
-const uplModalOpen = ref(false);
-const uplLoading = ref(false);
-const uplRow = ref<any>(null);
-const uplResult = ref<any>(null);
+async function cancelShipment(row: any) {
+  const awb = orderAwb(row);
+  if (!awb) return;
+  if (await cancelShipmentRequest(awb, row.id, orderLabel(row))) await reload();
+}
 
-async function checkUplStatus(row: any) {
-  const uplId = ndrUpl(row)?.id;
-  if (!uplId) return;
-  uplRow.value = row;
-  uplResult.value = null;
-  uplModalOpen.value = true;
-  uplLoading.value = true;
+// Hold a parcel back from pickups, or put it back in. Stored on the order so the
+// choice persists and the pickup screen sees it — not a per-session toggle.
+const pickupExcluded = (row: any) => Boolean(row?.meta?.shipping?.pickupExcluded);
+const pickupBusy = ref<string | null>(null);
+
+async function togglePickup(row: any) {
+  const excluded = !pickupExcluded(row);
+  pickupBusy.value = row.id;
   try {
-    uplResult.value = await $fetch('/api/ecommerce-cms/shipping/ndr-status', { query: { uplId } });
+    await $fetch('/api/ecommerce-cms/pickup/exclude', {
+      method: 'POST', body: { orderId: row.id, excluded },
+    });
+    toast.add({
+      title: excluded
+        ? `Order ${orderLabel(row)} held back from pickup`
+        : `Order ${orderLabel(row)} included in pickup`,
+      description: excluded
+        ? 'It stays out of pickup requests until you include it again.'
+        : undefined,
+      icon: excluded ? 'i-heroicons-pause-circle' : 'i-heroicons-check-circle',
+      color: excluded ? 'amber' : 'green',
+    });
+    await reload();
   } catch (e: any) {
-    toast.add({ title: 'Status check failed', description: e.data?.statusMessage || e.message, color: 'red' });
-    uplModalOpen.value = false;
+    toast.add({ title: 'Could not update', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally {
-    uplLoading.value = false;
+    pickupBusy.value = null;
   }
+}
+
+// ─── Per-row label actions ───────────────────────────────────────────────────
+// Print and Download both render Markit's own label from the carrier's label
+// data - shared with the ship modal, which is also where the carrier's own PDF
+// stayed for the rare case someone needs their exact document.
+function labelAwb(row: any): string | null {
+  const awb = orderAwb(row);
+  if (!awb) toast.add({ title: 'Create the shipment first', color: 'orange' });
+  return awb;
+}
+
+function printRowLabel(row: any) {
+  const awb = labelAwb(row);
+  if (awb) printLabels([awb]);
+}
+
+function downloadRowLabel(row: any) {
+  const awb = labelAwb(row);
+  if (awb) downloadLabels([awb], `label-order-${row.orderNumber ?? ''}-${awb}.pdf`);
+}
+
+// Everything except "Create shipment" lives in one menu — the column carried
+// six icons before and most of them only applied to some rows.
+function rowActions(row: any) {
+  const awb = orderAwb(row);
+  const ndr = ndrInfo(row);
+  const upl = ndrUpl(row);
+
+  const label = awb ? [
+    { label: 'Print label', icon: 'i-heroicons-printer-20-solid', click: () => printRowLabel(row) },
+    { label: 'Download PDF', icon: 'i-heroicons-arrow-down-tray-20-solid', click: () => downloadRowLabel(row) },
+    { label: 'Track shipment', icon: 'i-heroicons-magnifying-glass-20-solid', click: () => trackRow(row) },
+    // The edit form lives inside the shipping modal.
+    { label: 'Edit shipment', icon: 'i-heroicons-pencil-square-20-solid', click: () => openShip(row) },
+    {
+      label: pickupExcluded(row) ? 'Include in pickup' : 'Hold back from pickup',
+      icon: pickupExcluded(row) ? 'i-heroicons-check-circle-20-solid' : 'i-heroicons-pause-circle-20-solid',
+      click: () => togglePickup(row),
+    },
+  ] : [];
+
+  // Failed deliveries are worked in one place - /order/ndr - where the three
+  // buckets and the carrier's rules live. The row only points at it.
+  const ndrItems = ndr || upl
+    ? [{
+        label: upl ? `${upl.action} request status` : ndr!.label,
+        icon: 'i-heroicons-exclamation-triangle-20-solid',
+        click: () => navigateTo(`/order/ndr?q=${encodeURIComponent(awb || '')}`),
+      }]
+    : [];
+
+  const general = [
+    { label: 'View details', icon: 'i-heroicons-eye-20-solid', click: () => openDetails(row) },
+  ];
+
+  const danger = awb
+    ? [{ label: 'Cancel shipment', icon: 'i-heroicons-x-circle-20-solid', click: () => cancelShipment(row) }]
+    : [];
+
+  return [label, ndrItems, general, danger].filter((group) => group.length);
 }
 
 const shipOpen = ref(false);
@@ -235,20 +425,31 @@ function openShip(order: any) {
 }
 
 // ─── Bulk shipment creation ──────────────────────────────────────────────────
-const toast = useToast();
 const bulkOpen = ref(false);
 const bulkLoading = ref(false);
 const bulkCreating = ref(false);
 const bulkData = ref<any>(null);
 
+// Which orders the bulk run will actually ship. Creating a shipment spends a
+// real waybill, so this is an explicit choice — every shippable order starts
+// ticked, but any of them can be left out.
+const bulkSelected = ref<string[]>([]);
+const bulkShippable = computed(() => (bulkData.value?.orders || []).filter((o: any) => o.canShip));
+const bulkAllSelected = computed({
+  get: () => bulkShippable.value.length > 0 && bulkSelected.value.length === bulkShippable.value.length,
+  set: (on: boolean) => { bulkSelected.value = on ? bulkShippable.value.map((o: any) => o.orderId) : []; },
+});
+
 async function openBulk() {
   bulkOpen.value = true;
   bulkLoading.value = true;
   bulkData.value = null;
+  bulkSelected.value = [];
   try {
     bulkData.value = await $fetch('/api/ecommerce-cms/shipping/bulk-preview', { method: 'POST', body: {} });
+    bulkSelected.value = bulkShippable.value.map((o: any) => o.orderId);
   } catch (e: any) {
-    toast.add({ title: 'Preview failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Preview failed', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
     bulkOpen.value = false;
   } finally {
     bulkLoading.value = false;
@@ -257,84 +458,49 @@ async function openBulk() {
 
 // After bulk create + label generation, prompt to print the generated labels.
 const printPromptOpen = ref(false);
-const pendingLabels = ref<string[]>([]);
-const labelBusy = ref<string | null>(null);
+const pendingLabels = ref<string[]>([]);   // AWBs of freshly generated labels
 
-// Open the label PDFs in one window and print them all at once.
-function printLabels(urls: string[]) {
-  const valid = urls.filter(Boolean);
-  if (!valid.length) { toast.add({ title: 'No labels to print', color: 'orange' }); return; }
-  if (valid.length === 1) { window.open(valid[0], '_blank'); return; }
-  const w = window.open('', '_blank');
-  if (!w) { toast.add({ title: 'Allow pop-ups to print labels', color: 'orange' }); return; }
-  const frames = valid.map((u) =>
-    `<iframe src="${u}" style="width:100%;height:100vh;border:0;page-break-after:always"></iframe>`).join('');
-  w.document.write(
-    `<!doctype html><html><head><title>Shipping labels</title></head>` +
-    `<body style="margin:0">${frames}` +
-    `<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},1500)}<\/script>` +
-    `</body></html>`,
-  );
-  w.document.close();
+// Download the batch bulk-create just generated. Same document the Print
+// button beside it produces - one PDF, one page per label.
+function downloadPendingLabels() {
+  downloadLabels(pendingLabels.value, `shipping-labels-${pendingLabels.value.length}.pdf`);
+  printPromptOpen.value = false;
 }
 
 async function runBulkCreate() {
   bulkCreating.value = true;
   try {
-    const res: any = await $fetch('/api/ecommerce-cms/shipping/bulk-create', { method: 'POST', body: {} });
+    // Ship only what is ticked — never everything by default.
+    const res: any = await $fetch('/api/ecommerce-cms/shipping/bulk-create', {
+      method: 'POST', body: { orderIds: bulkSelected.value },
+    });
+    // Name the orders that failed and why — a bare count leaves the seller with
+    // nothing to act on.
+    const failures = (res.results || [])
+      .filter((r: any) => !r.ok)
+      .map((r: any) => `• #${r.orderNumber ?? r.orderId?.slice(0, 8)} — ${carrierMessage(r.error) || 'unknown error'}`);
     toast.add({
       title: `Created ${res.created} shipment(s)`,
-      description: res.failed ? `${res.failed} could not be created` : undefined,
+      description: failures.length ? `${res.failed} failed:\n${failures.join('\n')}` : undefined,
       color: res.created ? 'green' : 'orange',
+      timeout: failures.length ? 0 : 5000,
+      ui: { description: 'whitespace-pre-line' },
     });
     bulkOpen.value = false;
-    await refetch();
+    await reload();
     // Labels were generated (not printed) — offer to print them now.
-    pendingLabels.value = (res.labels || []).map((l: any) => l.labelUrl).filter(Boolean);
+    pendingLabels.value = (res.labels || []).map((l: any) => l.awb).filter(Boolean);
     if (pendingLabels.value.length) printPromptOpen.value = true;
   } catch (e: any) {
-    toast.add({ title: 'Bulk create failed', description: e.data?.statusMessage || e.message, color: 'red' });
+    toast.add({ title: 'Bulk create failed', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally {
     bulkCreating.value = false;
   }
 }
 
-// Per-row: generate (if needed) + print a single label.
-async function generateAndPrintLabel(row: any) {
-  const awb = shipInfo(row)?.awb || row?.meta?.awb;
-  if (!awb) { toast.add({ title: 'Create the shipment first', color: 'orange' }); return; }
-  labelBusy.value = row.id;
-  try {
-    let url = shipInfo(row)?.labelUrl;
-    if (!url) {
-      const res: any = await $fetch('/api/ecommerce-cms/shipping/label', { query: { trackingId: awb } });
-      url = res?.labelUrl;
-    }
-    if (url) { printLabels([url]); await refetch(); }
-    else toast.add({ title: 'Label not available yet', color: 'orange' });
-  } catch (e: any) {
-    toast.add({ title: 'Label failed', description: e.data?.statusMessage || e.message, color: 'red' });
-  } finally {
-    labelBusy.value = null;
-  }
-}
-
-const filteredOrders = computed(() => {
-  const query = search.value.trim().toLowerCase();
-  return (orders.value || []).filter((order: any) => {
-    const matchesStatus = statusFilter.value === 'All' || displayStatus(order) === statusFilter.value;
-    const matchesPayment = paymentFilter.value === 'All' || order.paymentStatus === paymentFilter.value;
-    const searchable = [
-      order.orderNumber,
-      order.client?.name,
-      order.client?.phone,
-      order.client?.email,
-      order.bill?.invoiceNumber,
-    ].filter(Boolean).join(' ').toLowerCase();
-    const matchesSearch = !query || searchable.includes(query);
-    return matchesStatus && matchesPayment && matchesSearch;
-  });
-});
+// The query already applied the filters and the page window, so the table just
+// renders what came back.
+const rows = computed(() => orders.value || []);
 </script>
 
 <template>
@@ -355,7 +521,7 @@ const filteredOrders = computed(() => {
           color="gray"
           variant="soft"
           :loading="isLoading"
-          @click="() => refetch()"
+          @click="() => reload()"
         >
           Refresh
         </UButton>
@@ -373,75 +539,106 @@ const filteredOrders = computed(() => {
         <USelect v-model="paymentFilter" :options="paymentOptions" />
       </div>
 
-      <UTable :rows="filteredOrders" :columns="columns" :loading="isLoading">
+      <UTable
+        :rows="rows"
+        :columns="columns"
+        :loading="isLoading"
+        :ui="{ th: { padding: 'px-3 py-2.5' }, td: { padding: 'px-3 py-3', base: 'align-top' } }"
+      >
         <template #order-data="{ row }">
-          <div>
-            <p class="font-medium text-gray-900 dark:text-white">{{ orderLabel(row) }}</p>
-            <p v-if="row.bill?.invoiceNumber" class="text-xs text-gray-500">
+          <div class="min-w-0">
+            <p class="truncate font-medium text-gray-900 dark:text-white">{{ orderLabel(row) }}</p>
+            <p v-if="row.bill?.invoiceNumber" class="truncate text-xs text-gray-400">
               Bill #{{ row.bill.invoiceNumber }}
             </p>
           </div>
         </template>
 
         <template #createdAt-data="{ row }">
-          <span class="text-sm text-gray-600 dark:text-gray-300">
-            {{ format(new Date(row.createdAt), 'dd MMM yyyy, hh:mm a') }}
-          </span>
-        </template>
-
-        <template #shipment-data="{ row }">
-          <div v-if="shipInfo(row)" class="text-xs">
-            <p class="text-gray-900 dark:text-white">
-              {{ shipInfo(row).boxCount || 1 }} box{{ (shipInfo(row).boxCount || 1) === 1 ? '' : 'es' }}
-              <span v-if="shipInfo(row).totalWeight != null" class="text-gray-500">· {{ shipInfo(row).totalWeight }} kg</span>
-            </p>
-            <p v-if="shipInfo(row).boxes?.length" class="text-gray-400 truncate max-w-[140px]">
-              {{ shipInfo(row).boxes.join(', ') }}
-            </p>
+          <div class="text-xs leading-tight">
+            <p class="text-gray-900 dark:text-white">{{ format(new Date(row.createdAt), 'dd/MM/yy') }}</p>
+            <p class="text-gray-500">{{ format(new Date(row.createdAt), 'HH:mm') }}</p>
           </div>
-          <span v-else class="text-xs text-gray-400">—</span>
         </template>
 
         <template #customer-data="{ row }">
-          <div>
-            <p class="font-medium text-gray-900 dark:text-white">{{ row.client?.name || 'Customer' }}</p>
-            <p class="text-xs text-gray-500">{{ row.client?.phone || row.client?.email || '-' }}</p>
+          <div class="min-w-0">
+            <p class="truncate font-medium text-gray-900 dark:text-white" :title="row.client?.name">
+              {{ row.client?.name || 'Customer' }}
+            </p>
+            <p class="truncate text-xs text-gray-500">{{ row.client?.phone || row.client?.email || '-' }}</p>
           </div>
         </template>
 
         <template #items-data="{ row }">
-          <div class="max-w-xs">
-            <p class="text-sm text-gray-900 dark:text-white">{{ itemCount(row) }} item{{ itemCount(row) === 1 ? '' : 's' }}</p>
-            <p class="truncate text-xs text-gray-500">{{ firstItems(row) || 'No item snapshot' }}</p>
+          <div class="min-w-0">
+            <p class="truncate text-sm text-gray-900 dark:text-white">{{ itemCount(row) }} item{{ itemCount(row) === 1 ? '' : 's' }}</p>
+            <p class="truncate text-xs text-gray-500" :title="firstItems(row)">
+              {{ firstItems(row) || 'No item snapshot' }}
+            </p>
+            <!-- Box dimensions moved to the tooltip when this folded into the
+                 items cell; they are detail, not something read at a glance. -->
+            <p
+              v-if="shipInfo(row)"
+              class="truncate text-xs text-gray-400"
+              :title="shipInfo(row).boxes?.length ? `Boxes: ${shipInfo(row).boxes.join(', ')}` : undefined"
+            >
+              {{ shipInfo(row).boxCount || 1 }} box{{ (shipInfo(row).boxCount || 1) === 1 ? '' : 'es' }}
+              <span v-if="shipInfo(row).totalWeight != null">· {{ shipInfo(row).totalWeight }} kg</span>
+            </p>
           </div>
         </template>
 
         <template #payment-data="{ row }">
           <div class="space-y-1">
-            <UBadge :color="badgeColor(row.paymentStatus)" variant="subtle">
+            <UBadge :color="paymentColor(row.paymentStatus)" variant="subtle">
               {{ row.paymentStatus }}
             </UBadge>
-            <p class="text-xs text-gray-500">{{ row.paymentMethod || '-' }}</p>
+            <p class="truncate text-xs text-gray-500" :title="row.paymentMethod">{{ row.paymentMethod || '-' }}</p>
           </div>
         </template>
 
         <template #status-data="{ row }">
           <div class="flex flex-wrap items-center gap-1">
-            <UBadge :color="badgeColor(displayStatus(row))" variant="subtle" :title="rawStatus(row) || ''">
-              {{ displayStatus(row) }}
+            <UBadge
+              :color="statusBadge(row).color"
+              variant="subtle"
+              :title="statusBadge(row).hint"
+            >
+              {{ statusBadge(row).text }}
+              <UIcon v-if="!statusBadge(row).mapped" name="i-heroicons-question-mark-circle" class="ml-0.5" />
             </UBadge>
-            <UBadge v-if="ndrInfo(row)" color="amber" variant="subtle" size="xs" :title="ndrInfo(row)!.reason">
-              NDR · {{ ndrInfo(row)!.nsl }}
+            <UBadge
+              v-if="ndrInfo(row)"
+              :color="ndrInfo(row)!.known ? 'amber' : 'orange'"
+              variant="subtle"
+              size="xs"
+              :title="ndrInfo(row)!.reason"
+            >
+              {{ ndrInfo(row)!.known ? 'NDR' : 'Issue' }} · {{ ndrInfo(row)!.nsl || ndrInfo(row)!.rawStatus }}
+            </UBadge>
+            <UBadge
+              v-if="pickupExcluded(row)"
+              color="amber"
+              variant="subtle"
+              size="xs"
+              title="Held back from pickup requests"
+            >
+              Held back
             </UBadge>
             <UBadge v-if="ndrUpl(row)" color="blue" variant="subtle" size="xs" :title="`UPL ${ndrUpl(row).id}`">
               {{ ndrUpl(row).action }} queued
             </UBadge>
           </div>
-          <p v-if="ndrInfo(row)" class="mt-0.5 text-[10px] text-amber-600 dark:text-amber-400 truncate max-w-[140px]">
+          <p v-if="ndrInfo(row)" class="mt-0.5 truncate text-[10px] text-amber-600 dark:text-amber-400">
             {{ ndrInfo(row)!.reason }}
           </p>
-          <p v-else-if="rawStatus(row)" class="mt-0.5 text-[10px] text-gray-400 truncate max-w-[120px]">
-            {{ rawStatus(row) }}
+          <p
+            v-else-if="carrierStatus(row)"
+            class="mt-0.5 truncate text-[10px] text-gray-400"
+            :title="`Carrier status: ${carrierStatus(row)}`"
+          >
+            {{ carrierStatus(row) }}
           </p>
         </template>
 
@@ -450,87 +647,23 @@ const filteredOrders = computed(() => {
         </template>
 
         <template #actions-data="{ row }">
-          <div class="flex items-center gap-1">
-          <UButton
-            icon="i-heroicons-truck"
-            :color="row.meta?.shipping?.awb ? 'primary' : 'gray'"
-            variant="ghost"
-            :title="row.meta?.shipping?.awb ? `AWB ${row.meta.shipping.awb}` : 'Create shipment'"
-            @click="openShip(row)"
-          />
-          <UButton
-            v-if="row.meta?.shipping?.awb"
-            icon="i-heroicons-printer"
-            :color="row.meta?.shipping?.labelUrl ? 'primary' : 'gray'"
-            variant="ghost"
-            :loading="labelBusy === row.id"
-            :title="row.meta?.shipping?.labelUrl ? 'Print label' : 'Generate & print label'"
-            @click="generateAndPrintLabel(row)"
-          />
-          <UButton
-            v-if="ndrInfo(row)"
-            icon="i-heroicons-exclamation-triangle"
-            color="amber"
-            variant="ghost"
-            :title="ndrInfo(row)!.label"
-            @click="openNdr(row)"
-          />
-          <UButton
-            v-if="ndrUpl(row)"
-            icon="i-heroicons-magnifying-glass"
-            color="blue"
-            variant="ghost"
-            :title="`Check NDR request status (UPL ${ndrUpl(row).id})`"
-            @click="checkUplStatus(row)"
-          />
-          <UPopover>
-            <UButton icon="i-heroicons-eye" color="gray" variant="ghost" />
-            <template #panel>
-              <div class="w-96 max-w-[90vw] space-y-4 p-4">
-                <div>
-                  <p class="text-sm font-semibold text-gray-900 dark:text-white">Order {{ orderLabel(row) }}</p>
-                  <p class="text-xs text-gray-500">Placed {{ format(new Date(row.createdAt), 'dd MMM yyyy, hh:mm a') }}</p>
-                </div>
-                <div class="rounded-md bg-gray-50 p-3 text-sm dark:bg-gray-900">
-                  <p class="font-medium text-gray-900 dark:text-white">Shipping address</p>
-                  <p class="mt-1 text-gray-600 dark:text-gray-300">{{ addressLine(row) || 'No address saved' }}</p>
-                </div>
-                <div>
-                  <p class="mb-2 text-sm font-medium text-gray-900 dark:text-white">Items</p>
-                  <div class="max-h-56 space-y-2 overflow-y-auto">
-                    <div
-                      v-for="(item, index) in (Array.isArray(row.items) ? row.items : [])"
-                      :key="`${row.id}-${index}`"
-                      class="flex justify-between gap-3 rounded-md border border-gray-200 p-2 text-sm dark:border-gray-800"
-                    >
-                      <div>
-                        <p class="font-medium text-gray-900 dark:text-white">{{ item.name || item.variantName || 'Item' }}</p>
-                        <p class="text-xs text-gray-500">
-                          <span v-if="item.variantName">{{ item.variantName }}</span>
-                          <span v-if="item.variantName && item.size"> · </span>
-                          <span v-if="item.size">{{ labelFor(item) }}: {{ item.size }}</span>
-                        </p>
-                      </div>
-                      <div class="text-right">
-                        <p>Qty {{ item.quantity || item.qty || 1 }}</p>
-                        <p class="text-xs text-gray-500">{{ money(item.value || item.dprice || item.sprice) }}</p>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div class="grid grid-cols-2 gap-2 text-sm">
-                  <span class="text-gray-500">Subtotal</span>
-                  <span class="text-right">{{ money(row.subtotal) }}</span>
-                  <span class="text-gray-500">Discount</span>
-                  <span class="text-right">-{{ money(row.discount) }}</span>
-                  <span class="text-gray-500">Delivery</span>
-                  <span class="text-right">{{ money(row.deliveryFee) }}</span>
-                  <span class="font-medium text-gray-900 dark:text-white">Total</span>
-                  <span class="text-right font-medium text-gray-900 dark:text-white">{{ money(row.grandTotal) }}</span>
-                </div>
-              </div>
-            </template>
-          </UPopover>
+          <div class="flex items-center justify-end gap-1">
+            <UButton
+              icon="i-heroicons-truck"
+              :color="orderAwb(row) ? 'primary' : 'gray'"
+              variant="ghost"
+              :title="orderAwb(row) ? `AWB ${orderAwb(row)}` : 'Create shipment'"
+              @click="openShip(row)"
+            />
+            <UDropdown :items="rowActions(row)" :popper="{ placement: 'bottom-end' }">
+              <UButton
+                icon="i-heroicons-ellipsis-vertical-20-solid"
+                color="gray"
+                variant="ghost"
+                :loading="trackBusy === row.id"
+                title="More actions"
+              />
+            </UDropdown>
           </div>
         </template>
 
@@ -538,17 +671,35 @@ const filteredOrders = computed(() => {
           <div class="flex flex-col items-center justify-center gap-3 py-14 text-center">
             <UIcon name="i-heroicons-shopping-bag" class="h-10 w-10 text-gray-400" />
             <div>
-              <p class="text-sm font-medium text-gray-900 dark:text-white">No ecommerce orders</p>
+              <p class="text-sm font-medium text-gray-900 dark:text-white">
+                {{ searchTerm || statusFilter !== 'All' || paymentFilter !== 'All'
+                   ? 'No orders match these filters' : 'No ecommerce orders' }}
+              </p>
               <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                Orders placed from Revomotive will appear here.
+                {{ searchTerm || statusFilter !== 'All' || paymentFilter !== 'All'
+                   ? 'Try clearing the search or filters.'
+                   : 'Orders placed from Revomotive will appear here.' }}
               </p>
             </div>
           </div>
         </template>
       </UTable>
+
+      <!-- Paging: the count comes from the database, not the loaded page -->
+      <div
+        v-if="total > pageSize"
+        class="flex flex-wrap items-center justify-between gap-3 border-t border-gray-200 px-4 py-3 dark:border-gray-800"
+      >
+        <span class="text-sm text-gray-500">
+          Showing <span class="font-medium text-gray-700 dark:text-gray-300">{{ pageFrom }}</span>–<span
+            class="font-medium text-gray-700 dark:text-gray-300">{{ pageTo }}</span>
+          of <span class="font-medium text-gray-700 dark:text-gray-300">{{ total }}</span> orders
+        </span>
+        <UPagination v-model="page" :page-count="pageSize" :total="total" />
+      </div>
     </UCard>
 
-    <ShipOrderModal v-model="shipOpen" :order="shipOrder" @updated="() => { refetch(); }" />
+    <ShipOrderModal v-model="shipOpen" :order="shipOrder" @updated="() => { reload(); }" />
 
     <!-- Bulk create shipments -->
     <UModal v-model="bulkOpen" :ui="{ width: 'sm:max-w-3xl' }">
@@ -566,7 +717,7 @@ const filteredOrders = computed(() => {
 
         <div v-else-if="bulkData" class="space-y-4">
           <div class="flex flex-wrap gap-4 text-sm">
-            <span><strong>{{ bulkData.shippable }}</strong> of {{ bulkData.total }} unshipped orders ready</span>
+            <span><strong>{{ bulkSelected.length }}</strong> selected · {{ bulkData.shippable }} of {{ bulkData.total }} unshipped orders ready</span>
             <span class="text-gray-500">Pickup: {{ bulkData.pickupLocation || '— none registered' }}</span>
             <span class="text-gray-500">{{ bulkData.boxesConfigured }} box preset(s)</span>
           </div>
@@ -579,6 +730,7 @@ const filteredOrders = computed(() => {
             <table class="w-full text-sm">
               <thead class="sticky top-0 bg-gray-50 dark:bg-gray-900 text-left text-xs uppercase text-gray-400">
                 <tr>
+                  <th class="p-2 w-8"><UCheckbox v-model="bulkAllSelected" :disabled="!bulkShippable.length" /></th>
                   <th class="p-2">Order</th>
                   <th>Weight</th>
                   <th>Boxes</th>
@@ -587,6 +739,9 @@ const filteredOrders = computed(() => {
               </thead>
               <tbody>
                 <tr v-for="o in bulkData.orders" :key="o.orderId" class="border-t border-gray-100 dark:border-gray-800">
+                  <td class="p-2">
+                    <UCheckbox v-model="bulkSelected" :value="o.orderId" :disabled="!o.canShip" />
+                  </td>
                   <td class="p-2 font-medium text-gray-900 dark:text-white">#{{ o.orderNumber }}</td>
                   <td>{{ o.canShip ? `${o.totalWeight} kg` : '—' }}</td>
                   <td>{{ o.canShip ? (o.boxCount ? `${o.boxCount} (${o.boxes.join(', ')})` : 'single') : '—' }}</td>
@@ -606,78 +761,132 @@ const filteredOrders = computed(() => {
             <UButton
               icon="i-heroicons-truck"
               :loading="bulkCreating"
-              :disabled="!bulkData || !bulkData.shippable"
+              :disabled="!bulkSelected.length"
               @click="runBulkCreate"
             >
-              Create {{ bulkData?.shippable || 0 }} shipment(s)
+              Create {{ bulkSelected.length }} shipment(s)
             </UButton>
           </div>
         </template>
       </UCard>
     </UModal>
 
-    <!-- NDR action (re-attempt / pickup reschedule) -->
-    <UModal v-model="ndrModalOpen" :ui="{ width: 'sm:max-w-lg' }">
-      <UCard v-if="ndrRow && ndrTarget">
+    <!-- Order details (opened from the row actions menu) -->
+    <UModal v-model="detailsOpen" :ui="{ width: 'sm:max-w-2xl' }">
+      <UCard v-if="detailsRow">
         <template #header>
-          <h2 class="text-lg font-semibold">{{ ndrTarget.label }} · {{ orderLabel(ndrRow) }}</h2>
-          <p class="text-xs text-gray-500">AWB {{ ndrTarget.awb }} · NSL {{ ndrTarget.nsl }}</p>
+          <div class="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 class="text-lg font-semibold">Order {{ orderLabel(detailsRow) }}</h2>
+              <p class="text-xs text-gray-500">
+                Placed {{ format(new Date(detailsRow.createdAt), 'dd MMM yyyy, hh:mm a') }}
+              </p>
+            </div>
+            <div class="flex items-center gap-2">
+              <UBadge
+                :color="statusBadge(detailsRow).color"
+                variant="subtle"
+                :title="statusBadge(detailsRow).hint"
+              >
+                {{ statusBadge(detailsRow).text }}
+              </UBadge>
+              <UBadge :color="paymentColor(detailsRow.paymentStatus)" variant="subtle">
+                {{ detailsRow.paymentStatus }}
+              </UBadge>
+            </div>
+          </div>
         </template>
 
-        <div class="space-y-3">
-          <p class="text-sm text-amber-700 dark:text-amber-300 font-medium">{{ ndrTarget.reason }}</p>
-          <p class="text-xs text-gray-500">
-            Failed attempts so far: <span class="font-medium text-gray-700 dark:text-gray-300">{{ ndrTarget.attempts || '—' }}</span>
-          </p>
+        <div class="space-y-4">
+          <!-- Shipment -->
+          <div v-if="orderAwb(detailsRow)" class="rounded-md bg-gray-50 p-3 text-sm dark:bg-gray-900">
+            <p class="font-medium text-gray-900 dark:text-white">Shipment</p>
+            <p class="mt-1 text-gray-600 dark:text-gray-300">
+              AWB {{ orderAwb(detailsRow) }}
+              <span v-if="detailsRow.meta?.shipping?.provider"> · {{ detailsRow.meta.shipping.provider }}</span>
+              <span v-if="detailsRow.meta?.shipping?.boxCount"> · {{ detailsRow.meta.shipping.boxCount }} box(es)</span>
+            </p>
+            <p v-if="carrierStatus(detailsRow)" class="text-xs text-gray-500">
+              Carrier status: {{ carrierStatus(detailsRow) }}
+            </p>
+          </div>
 
-          <UAlert
-            v-if="ndrTarget.attempts > 2"
-            color="amber"
-            variant="subtle"
-            icon="i-heroicons-exclamation-triangle"
-            :description="`Attempt count is ${ndrTarget.attempts} — the carrier allows this action only when it is 1 or 2, so it may be rejected.`"
-          />
+          <!-- Customer -->
+          <div class="rounded-md bg-gray-50 p-3 text-sm dark:bg-gray-900">
+            <p class="font-medium text-gray-900 dark:text-white">Deliver to</p>
+            <p class="mt-1 text-gray-900 dark:text-white">
+              {{ [detailsRow.shippingAddress?.firstName, detailsRow.shippingAddress?.lastName].filter(Boolean).join(' ')
+                 || detailsRow.client?.name || '—' }}
+            </p>
+            <p class="text-gray-500">
+              {{ detailsRow.shippingAddress?.phoneNo || detailsRow.client?.phone || '—' }}
+            </p>
+            <p class="mt-1 text-gray-600 dark:text-gray-300">{{ addressLine(detailsRow) || 'No address saved' }}</p>
+          </div>
 
-          <UAlert
-            color="blue"
-            variant="subtle"
-            icon="i-heroicons-clock"
-            :description="`This queues a ${ndrTarget.action} request with the carrier (processed asynchronously — you get a request ID to track). Best applied after 9 PM, once the day's dispatches are closed.`"
-          />
+          <!-- Items -->
+          <div>
+            <p class="mb-2 text-sm font-medium text-gray-900 dark:text-white">
+              Items ({{ itemCount(detailsRow) }})
+            </p>
+            <div class="max-h-56 space-y-2 overflow-y-auto">
+              <div
+                v-for="(item, index) in (Array.isArray(detailsRow.items) ? detailsRow.items : [])"
+                :key="`${detailsRow.id}-${index}`"
+                class="flex justify-between gap-3 rounded-md border border-gray-200 p-2 text-sm dark:border-gray-800"
+              >
+                <div>
+                  <p class="font-medium text-gray-900 dark:text-white">{{ item.name || item.variantName || 'Item' }}</p>
+                  <p class="text-xs text-gray-500">
+                    <span v-if="item.variantName">{{ item.variantName }}</span>
+                    <span v-if="item.variantName && item.size"> · </span>
+                    <span v-if="item.size">{{ labelFor(item) }}: {{ item.size }}</span>
+                  </p>
+                </div>
+                <div class="text-right">
+                  <p>Qty {{ item.quantity || item.qty || 1 }}</p>
+                  <p class="text-xs text-gray-500">{{ money(item.value || item.dprice || item.sprice) }}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Totals -->
+          <div class="grid grid-cols-2 gap-2 text-sm">
+            <span class="text-gray-500">Subtotal</span>
+            <span class="text-right">{{ money(detailsRow.subtotal) }}</span>
+            <span class="text-gray-500">Discount</span>
+            <span class="text-right">-{{ money(detailsRow.discount) }}</span>
+            <span class="text-gray-500">Delivery</span>
+            <span class="text-right">{{ money(detailsRow.deliveryFee) }}</span>
+            <span class="text-gray-500">Payment</span>
+            <span class="text-right">{{ detailsRow.paymentMethod || '—' }}</span>
+            <span class="font-medium text-gray-900 dark:text-white">Total</span>
+            <span class="text-right font-medium text-gray-900 dark:text-white">{{ money(detailsRow.grandTotal) }}</span>
+          </div>
         </div>
 
         <template #footer>
           <div class="flex justify-end gap-2">
-            <UButton variant="ghost" color="gray" @click="ndrModalOpen = false">Cancel</UButton>
-            <UButton :loading="ndrBusy" icon="i-heroicons-paper-airplane" @click="submitNdr">
-              Queue {{ ndrTarget.action }}
+            <UButton variant="ghost" color="gray" @click="detailsOpen = false">Close</UButton>
+            <!-- Pack disappears once packed; both disappear once shipped. -->
+            <UButton
+              v-if="canPack(detailsRow)"
+              icon="i-heroicons-archive-box"
+              color="gray"
+              variant="soft"
+              :loading="packing"
+              @click="markPacked(detailsRow)"
+            >
+              Pack
             </UButton>
-          </div>
-        </template>
-      </UCard>
-    </UModal>
-
-    <!-- NDR request (UPL) status -->
-    <UModal v-model="uplModalOpen" :ui="{ width: 'sm:max-w-lg' }">
-      <UCard v-if="uplRow">
-        <template #header>
-          <h2 class="text-lg font-semibold">NDR request status · {{ orderLabel(uplRow) }}</h2>
-          <p class="text-xs text-gray-500">
-            {{ ndrUpl(uplRow)?.action }} · UPL {{ ndrUpl(uplRow)?.id }}
-            <template v-if="ndrUpl(uplRow)?.at">
-              · queued {{ format(new Date(ndrUpl(uplRow).at), 'dd MMM, hh:mm a') }}
-            </template>
-          </p>
-        </template>
-
-        <div v-if="uplLoading" class="flex items-center justify-center py-10 text-gray-400">
-          <UIcon name="i-heroicons-arrow-path" class="animate-spin text-2xl" />
-        </div>
-        <pre v-else class="max-h-80 overflow-auto rounded-lg bg-gray-50 dark:bg-gray-900 p-3 text-xs text-gray-700 dark:text-gray-300">{{ JSON.stringify(uplResult?.response ?? uplResult, null, 2) }}</pre>
-
-        <template #footer>
-          <div class="flex justify-end">
-            <UButton variant="ghost" color="gray" @click="uplModalOpen = false">Close</UButton>
+            <UButton
+              v-if="canShip(detailsRow)"
+              icon="i-heroicons-truck"
+              @click="shipFromDetails(detailsRow)"
+            >
+              Ship
+            </UButton>
           </div>
         </template>
       </UCard>
@@ -687,14 +896,22 @@ const filteredOrders = computed(() => {
     <UModal v-model="printPromptOpen" :ui="{ width: 'sm:max-w-md' }">
       <UCard>
         <template #header>
-          <h2 class="text-lg font-semibold">Print shipping labels?</h2>
+          <h2 class="text-lg font-semibold">Labels ready</h2>
         </template>
         <p class="text-sm text-gray-600 dark:text-gray-300">
-          {{ pendingLabels.length }} label(s) were generated for the new shipments. Print them now?
+          {{ pendingLabels.length }} label(s) were generated for the new shipments. Print or download them now?
         </p>
         <template #footer>
           <div class="flex justify-end gap-2">
             <UButton variant="ghost" color="gray" @click="printPromptOpen = false">Not now</UButton>
+            <UButton
+              icon="i-heroicons-arrow-down-tray"
+              color="gray"
+              variant="soft"
+              @click="downloadPendingLabels()"
+            >
+              Download {{ pendingLabels.length > 1 ? 'ZIP' : 'PDF' }}
+            </UButton>
             <UButton icon="i-heroicons-printer" @click="printLabels(pendingLabels); printPromptOpen = false">
               Print {{ pendingLabels.length }} label(s)
             </UButton>

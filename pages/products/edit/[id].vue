@@ -565,8 +565,8 @@ const printBarcodesVariant = async (variant: any) => {
       barcode: item.barcode ?? "",
       code: variant.code ?? "",
       shopname: auth.session.value?.companyName,
-      productName: selectedProduct.value.name || selectedProduct.value.category.name || '',
-      brand: selectedProduct.value.brand.name || selectedProduct.value.subcategory.name || '' ,
+      productName: selectedProduct.value?.name || selectedProduct.value?.category?.name || '',
+      brand: selectedProduct.value?.brand?.name || selectedProduct.value?.subcategory?.name || '' ,
       name: variant.name,
       sprice: variant.sprice,
       ...(variant.sprice !== variant.dprice && { dprice: variant.dprice }),
@@ -614,54 +614,60 @@ const openPrintModal = (variant: any) => {
 
 const confirmPrint = async () => {
   const auth = useAuth()
-    console.log(auth.session.value?.printerLabelSize)
-  barcodes.value =
-    selectedVariant.value.items.flatMap((item: any) => {
+  const variant = selectedVariant.value
+  if (!variant) return
+
+  try {
+    barcodes.value = (variant.items ?? []).flatMap((item: any) => {
       const qty = Number(printQtyMap.value[item.id]) || 0
       if (qty <= 0) return []
 
       const base = {
         barcode: item.barcode ?? "",
-        code: selectedVariant.value.code ?? "",
+        code: variant.code ?? "",
         shopname: auth.session.value?.companyName,
         productName:
-          selectedProduct.value.name ||
-          selectedProduct.value.category.name ||
+          selectedProduct.value?.name ||
+          selectedProduct.value?.category?.name ||
           "",
         brand:
-          selectedProduct.value.brand ||
-          selectedProduct.value.subcategory.name ||
+          selectedProduct.value?.brand?.name ||
+          selectedProduct.value?.subcategory?.name ||
           "",
-        name: selectedVariant.value.name,
-        sprice: selectedVariant.value.sprice,
-        ...(selectedVariant.value.sprice !==
-          selectedVariant.value.dprice && {
-          dprice: selectedVariant.value.dprice,
+        name: variant.name,
+        sprice: variant.sprice,
+        ...(variant.sprice !== variant.dprice && {
+          dprice: variant.dprice,
         }),
         size: item.size,
-        sizeLabel: labelFor(selectedVariant.value),
+        sizeLabel: labelFor(variant),
       }
 
       return Array.from({ length: qty }, () => ({ ...base }))
     })
 
-  isPrintModalOpen.value = false
+    if (!barcodes.value.length) {
+      toast.add({
+        title: "Nothing to print",
+        description: "Enter a quantity of at least 1.",
+        color: "orange",
+      })
+      return
+    }
 
-  try {
-    await printLabel(
-      barcodes.value,
-      auth.session.value?.printerLabelSize
-    )
+    isPrintModalOpen.value = false
 
+    await printLabel(barcodes.value, auth.session.value?.printerLabelSize)
 
     toast.add({
       title: "Printing success!",
       color: "green",
     })
   } catch (err: any) {
+    isPrintModalOpen.value = false
     toast.add({
       title: "Printing failed!",
-      description: err.message,
+      description: err?.message,
       color: "red",
     })
   }

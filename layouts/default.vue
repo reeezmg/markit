@@ -242,6 +242,24 @@ const links = computed(() => {
       },
     },
     {
+      id: 'pickup',
+      label: 'Pickup',
+      to: `/order/pickup`,
+      icon: 'i-heroicons-truck',
+      tooltip: {
+        text: 'Pickup requests & locations',
+      },
+    },
+    {
+      id: 'ndr',
+      label: 'Failed deliveries',
+      to: `/order/ndr`,
+      icon: 'i-heroicons-exclamation-triangle',
+      tooltip: {
+        text: 'Failed deliveries (NDR)',
+      },
+    },
+    {
       id: 'returns',
       label: 'Returns',
       to: `/order/returns`,
@@ -257,15 +275,6 @@ const links = computed(() => {
       icon: 'i-heroicons-arrows-right-left',
       tooltip: {
         text: 'Exchange requests & REPL shipments',
-      },
-    },
-    {
-      id: 'pickup',
-      label: 'Pickup',
-      to: `/order/pickup`,
-      icon: 'i-heroicons-truck',
-      tooltip: {
-        text: 'Pickup requests & locations',
       },
     },
     {
@@ -653,6 +662,20 @@ const links = computed(() => {
                         },
                         },
                         {
+                        label: 'Pickup',
+                        to: `/order/pickup`,
+                        tooltip: {
+                            text: 'Pickup requests & locations',
+                        },
+                        },
+                        {
+                        label: 'Failed deliveries',
+                        to: `/order/ndr`,
+                        tooltip: {
+                            text: 'Failed deliveries (NDR)',
+                        },
+                        },
+                        {
                         label: 'Requests',
                         to: `/order/requests`,
                         tooltip: {
@@ -672,13 +695,6 @@ const links = computed(() => {
                         to: `/order/exchange`,
                         tooltip: {
                             text: 'Exchange requests & REPL shipments',
-                        },
-                        },
-                        {
-                        label: 'Pickup',
-                        to: `/order/pickup`,
-                        tooltip: {
-                            text: 'Pickup requests & locations',
                         },
                         },
             ],

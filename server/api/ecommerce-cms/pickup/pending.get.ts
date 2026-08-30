@@ -2,20 +2,23 @@ import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
 import { PICKUP_SHIPMENTS_SQL } from '~/server/utils/pickup-shipments'
 
-// How many shipments a pickup for this location + carrier would collect —
-// forward parcels plus exchange (REPL) replacements. See
-// server/utils/pickup-shipments.ts for what qualifies and why a return does not.
+// The parcels a pickup would collect, with enough detail for the seller to
+// recognise them on the bench. Same selection as the count endpoint, but
+// returning rows so the raise flow can show them and let any be left out.
+//
+// Rows are shipments, not orders: an order with an exchange contributes both its
+// forward parcel and the REPL replacement, each with its own id and pickup tag.
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
   const { location = '', carrier } = getQuery(event) as { location?: string; carrier?: string }
-  if (!carrier) return { count: 0 }
+  if (!carrier) return { orders: [] }
 
   const { rows } = await pool.query(
-    `SELECT count(*)::int AS count FROM (${PICKUP_SHIPMENTS_SQL}) s`,
+    `SELECT * FROM (${PICKUP_SHIPMENTS_SQL}) s ORDER BY s."createdAt" ASC`,
     [companyId, carrier, location],
   )
-  return { count: rows[0]?.count ?? 0 }
+  return { orders: rows }
 })
