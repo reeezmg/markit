@@ -1558,8 +1558,10 @@ model EcommCheckout {
   clientId        String      @map("client_id")
   bill            Bill?       @relation(fields: [billId], references: [id])
   billId          String?     @unique() @map("bill_id")
+  idempotencyKey  String?     @map("idempotency_key")
   order           EcommOrder?
 
+  @@unique([companyId, clientId, idempotencyKey], map: "ecomm_checkouts_idempotency_idx")
   @@index([companyId, clientId, createdAt])
   @@map("ecomm_checkouts")
 }
@@ -1676,11 +1678,13 @@ model EcommPaymentVerification {
   payload    Json?
   consumedAt DateTime? @map("consumed_at")
   checkoutId String?   @map("checkout_id")
+  primaryRef String?   @map("primary_ref")
   company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId  String    @map("company_id")
   client     Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
   clientId   String?   @map("client_id")
 
+  @@unique([companyId, gateway, primaryRef], map: "ecomm_payment_verifications_primary_ref_idx")
   @@index([refs], type: Gin, map: "ecomm_payment_verifications_refs_idx")
   @@index([companyId, consumedAt], map: "ecomm_payment_verifications_company_idx")
   @@map("ecomm_payment_verifications")
