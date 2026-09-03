@@ -63,6 +63,8 @@ export async function eligibleCoupons(
   clientId: string | null,
   subtotal: number,
   code?: string | null,
+  couponId?: string | null,
+  includePrivate = false,
 ): Promise<Coupon[]> {
   const trimmed = code?.trim().toUpperCase() || null
   const { rows } = await db.query(
@@ -76,9 +78,13 @@ export async function eligibleCoupons(
        AND COALESCE(c.min_order_value, 0) <= $2
        AND (c.usage_limit IS NULL OR c.times_used < c.usage_limit)
        AND ($3::text IS NULL OR upper(c.code) = $3::text)
+       AND ($5::text IS NULL OR c.id = $5::text)
        AND (
          c.audience_type = 'ALL'
+         OR (($3::text IS NOT NULL OR $6::boolean) AND c.audience_type = 'PRIVATE')
          OR (
+           c.audience_type IN ('SPECIFIC', 'GENERATE')
+           AND
            $4::text IS NOT NULL
            AND EXISTS (
              SELECT 1 FROM coupon_clients cc
@@ -98,7 +104,7 @@ export async function eligibleCoupons(
        )
      ORDER BY c.is_markit DESC, c.discount_value DESC, c.end_date ASC
      LIMIT 20`,
-    [companyId, subtotal, trimmed, clientId],
+    [companyId, subtotal, trimmed, clientId, couponId || null, includePrivate],
   )
   return rows as Coupon[]
 }
@@ -111,8 +117,8 @@ export async function findEligibleCoupon(
   subtotal: number,
   couponId: string,
 ): Promise<Coupon | null> {
-  const rows = await eligibleCoupons(db, companyId, clientId, subtotal)
-  return rows.find((row) => row.id === couponId) || null
+  const rows = await eligibleCoupons(db, companyId, clientId, subtotal, null, couponId, true)
+  return rows[0] || null
 }
 
 /**

@@ -100,6 +100,7 @@ export function useBillingCoupons(
   const eligibleCoupons = computed(() => {
     if (!clientId.value) return []
     return (allCoupons.value || [])
+      .filter(coupon => coupon.audienceType !== 'PRIVATE')
       .filter(coupon => isCouponEligible(coupon, grandTotal.value, clientId.value))
       .map(coupon => {
         const clientUsageCount = coupon.couponUsage.filter((u: any) => u.clientId === clientId.value).length

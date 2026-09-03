@@ -127,6 +127,7 @@ enum CouponAudience {
   ALL
   GENERATE
   SPECIFIC
+  PRIVATE
 }
 
 enum EcommGalleryType {

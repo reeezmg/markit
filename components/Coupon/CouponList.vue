@@ -179,6 +179,7 @@ const formatAudienceType = (coupon: any) => {
         case 'ALL': return 'All';
         case 'GENERATE': return 'Generate';
         case 'SPECIFIC': return 'Specific';
+        case 'PRIVATE': return 'Private';
         default: return coupon.audienceType;
     }
 }
@@ -223,7 +224,7 @@ const isCurrentlyActive = (row: any) => {
                         <USelectMenu
                             v-if="!selectedCoupon"
                             v-model="selectedAudienceType"
-                            :options="['ALL', 'SPECIFIC', 'GENERATE']"
+                            :options="['ALL', 'SPECIFIC', 'GENERATE', 'PRIVATE']"
                             multiple
                             placeholder="Audience"
                             class="w-28"

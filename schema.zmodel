@@ -1078,6 +1078,7 @@ enum CouponAudience {
     ALL
     GENERATE
     SPECIFIC
+    PRIVATE
 }
 
 

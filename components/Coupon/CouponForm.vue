@@ -27,6 +27,7 @@ const audienceTypeOptions =[
     { label: 'All', value: 'ALL' },
     { label: 'Generate', value: 'GENERATE' },
     { label: 'Specific', value: 'SPECIFIC' },
+    { label: 'Private (code only)', value: 'PRIVATE' },
 ]
 const targetTypeOptions =[
     { label: 'All Products', value: 'ALL' },
