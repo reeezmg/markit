@@ -1678,11 +1678,11 @@ model EcommPaymentVerification {
   payload    Json?
   consumedAt DateTime? @map("consumed_at")
   checkoutId String?   @map("checkout_id")
-  primaryRef String?   @map("primary_ref")
   company    Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   companyId  String    @map("company_id")
   client     Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
   clientId   String?   @map("client_id")
+  primaryRef String?   @map("primary_ref")
 
   @@unique([companyId, gateway, primaryRef], map: "ecomm_payment_verifications_primary_ref_idx")
   @@index([refs], type: Gin, map: "ecomm_payment_verifications_refs_idx")

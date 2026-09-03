@@ -66,7 +66,7 @@ async function main() {
       `SELECT id, qty, sold_qty FROM items WHERE id = ANY($1::text[])`,
       [itemIds],
     )
-    const beforeById = new Map(before.rows.map((r) => [r.id, r]))
+    const beforeById = new Map<string, any>(before.rows.map((r: any) => [r.id, r]))
 
     const result = await cancelEcommOrder(client, order.company_id, order.id, {
       source: 'test',

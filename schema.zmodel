@@ -1569,8 +1569,16 @@ model EcommCheckout extends Base {
     clientId        String      @map("client_id")
     bill            Bill?       @relation(fields: [billId], references: [id])
     billId          String?     @unique @map("bill_id")
+    // custom-api's double-submit guard: the storefront sends a key per checkout
+    // attempt and the unique index below is what actually stops a double-click
+    // becoming two orders (an application-level check can be raced). storetools
+    // never writes this, but it MUST stay declared here — the column only
+    // survives a `zenstack generate` + `prisma db push` if the zmodel knows
+    // about it, and dropping it breaks storefront checkout outright.
+    idempotencyKey  String?     @map("idempotency_key")
     order           EcommOrder?
 
+    @@unique([companyId, clientId, idempotencyKey], map: "ecomm_checkouts_idempotency_idx")
     @@index([companyId, clientId, createdAt])
     @@allow('read, create, update, delete', true)
     @@map("ecomm_checkouts")
@@ -1711,7 +1719,13 @@ model EcommPaymentVerification extends Base {
     companyId  String    @map("company_id")
     client     Client?   @relation(fields: [clientId], references: [id], onDelete: SetNull)
     clientId   String?   @map("client_id")
+    // The gateway's own payment id, and the same story as EcommCheckout's
+    // idempotencyKey: payment.py upserts ON CONFLICT (company_id, gateway,
+    // primary_ref), so without the unique index below a retried gateway
+    // callback verifies the same payment twice.
+    primaryRef String?   @map("primary_ref")
 
+    @@unique([companyId, gateway, primaryRef], map: "ecomm_payment_verifications_primary_ref_idx")
     @@index([refs], type: Gin, map: "ecomm_payment_verifications_refs_idx")
     @@index([companyId, consumedAt], map: "ecomm_payment_verifications_company_idx")
     @@allow('read, create, update, delete', true)

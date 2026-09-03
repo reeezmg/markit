@@ -27,8 +27,11 @@ export default defineEventHandler(async (event) => {
     // The client counter lives in the session too, so it stays in step with
     // whatever the seller does next. Only after the commit — a rolled-back
     // customer must not consume a number in the session.
+    // The cast mirrors /api/counter/increment, which writes the same field: the
+    // session carries clientCounter at runtime but AuthSession does not declare
+    // it, so a plain object literal is rejected.
     if (result.clientCounter !== null) {
-      await session.update({ clientCounter: result.clientCounter })
+      await session.update({ clientCounter: result.clientCounter } as any)
     }
 
     return { ok: true, ...result }

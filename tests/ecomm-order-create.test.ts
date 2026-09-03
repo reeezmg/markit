@@ -1,7 +1,9 @@
 import 'dotenv/config'
+import { randomUUID } from 'node:crypto'
 import { Pool } from 'pg'
 import { createEcommOrder } from '../server/utils/ecomm-order-create'
 import { cancelEcommOrder } from '../server/utils/ecomm-order-cancel'
+import { couponDiscount, eligibleCoupons } from '../server/utils/ecomm-coupons'
 
 /**
  * Exercises manual order creation against the real database.
@@ -61,16 +63,16 @@ async function main() {
   }
   console.log(`Company ${companyId}, ${stockRows.length} item(s) in stock\n`)
 
-  const orderLines = stockRows.map((r) => ({ itemId: r.id, quantity: 1 }))
-  const itemIds = stockRows.map((r) => r.id)
+  const orderLines = stockRows.map((r: any) => ({ itemId: r.id, quantity: 1 }))
+  const itemIds = stockRows.map((r: any) => r.id)
 
   const db = await pool.connect()
   try {
     await db.query('BEGIN')
 
-    const before = new Map(
+    const before = new Map<string, any>(
       (await db.query(`SELECT id, qty, sold_qty FROM items WHERE id = ANY($1::text[])`, [itemIds]))
-        .rows.map((r) => [r.id, r]),
+        .rows.map((r: any) => [r.id, r]),
     )
 
     // ── Create ─────────────────────────────────────────────────────────────
@@ -104,7 +106,7 @@ async function main() {
     )
 
     // Totals are the server's, not the caller's.
-    const expectedSubtotal = money(stockRows.reduce((s, r) => s + Number(r.d_price), 0))
+    const expectedSubtotal = money(stockRows.reduce((s: number, r: any) => s + Number(r.d_price), 0))
     check('subtotal is priced from the database', money(order.subtotal) === expectedSubtotal,
       { got: order.subtotal, expected: expectedSubtotal })
     check('grand total = subtotal + delivery - discount (tax inclusive)',
@@ -120,7 +122,7 @@ async function main() {
       if (Number(row.sold_qty) - Number(prev.sold_qty) !== 1) downOk = false
     }
     check('creating the order took the stock', downOk,
-      afterCreate.map((r) => ({ id: r.id, was: before.get(r.id)?.qty, now: r.qty })))
+      afterCreate.map((r: any) => ({ id: r.id, was: before.get(r.id)?.qty, now: r.qty })))
 
     // ── Bill + entries ─────────────────────────────────────────────────────
     const { rows: bill } = await db.query(`SELECT status, grand_total, client_id FROM bills WHERE id = $1`, [created.billId])
@@ -144,7 +146,7 @@ async function main() {
       if (Number(row.sold_qty) !== Number(prev.sold_qty)) roundTripOk = false
     }
     check('create then cancel leaves stock exactly where it started', roundTripOk,
-      afterCancel.map((r) => ({ id: r.id, start: before.get(r.id)?.qty, end: r.qty })))
+      afterCancel.map((r: any) => ({ id: r.id, start: before.get(r.id)?.qty, end: r.qty })))
 
     // ── Guards ─────────────────────────────────────────────────────────────
     let noItems = false
@@ -176,6 +178,90 @@ async function main() {
       })
     } catch { badPhone = true }
     check('a short phone number is refused', badPhone)
+
+    // ── Coupons ────────────────────────────────────────────────────────────
+    // A coupon must consume and un-consume symmetrically, or a cancelled order
+    // silently burns the customer's code.
+    let bogusRefused = false
+    try {
+      await createEcommOrder(db, companyId, null, {
+        client: { name: 'Test Buyer', phone: '9000000001' },
+        address: { pincode: '682001' },
+        items: orderLines,
+        couponId: 'not-a-real-coupon',
+      })
+    } catch { bogusRefused = true }
+    check('an unknown coupon is refused', bogusRefused)
+
+    const subtotalForCoupon = expectedSubtotal
+    // The test writes its own coupon rather than hunting for a usable one in
+    // seed data: every existing coupon is currently outside its date window, and
+    // a test that silently skips the behaviour it exists to check is worthless.
+    // It is rolled back with everything else.
+    const testCouponId = randomUUID()
+    await db.query(
+      `INSERT INTO coupons (id, code, type, discount_value, min_order_value, start_date, end_date,
+                            is_active, times_used, target_type, audience_type, company_id,
+                            created_at, updated_at, is_markit, is_bill_combine)
+       VALUES ($1, $2, 'PERCENTAGE'::"CouponType", 10, 0, now() - interval '1 day', now() + interval '1 day',
+               true, 0, 'ALL'::"CouponTarget", 'ALL'::"CouponAudience", $3, now(), now(), false, false)`,
+      [testCouponId, `TEST-${testCouponId.slice(0, 8)}`, companyId],
+    )
+
+    const available = await eligibleCoupons(db, companyId, null, subtotalForCoupon)
+    check('the eligibility query finds a valid coupon',
+      available.some((c) => c.id === testCouponId), available.map((c) => c.code))
+
+    {
+      const coupon = available.find((c) => c.id === testCouponId)!
+      const expectedOff = couponDiscount(coupon, subtotalForCoupon)
+      const { rows: usedBefore } = await db.query(`SELECT times_used FROM coupons WHERE id = $1`, [coupon.id])
+
+      const withCoupon = await createEcommOrder(db, companyId, null, {
+        client: { name: 'Test Buyer', phone: '9000000001' },
+        address: { pincode: '682001' },
+        items: orderLines,
+        couponId: coupon.id,
+        deliveryFee: 0,
+        discount: 0,
+      })
+
+      check('the coupon discount is the server-computed amount',
+        money(withCoupon.couponDiscount) === money(expectedOff),
+        { got: withCoupon.couponDiscount, expected: expectedOff })
+      check('the coupon code comes back', withCoupon.couponCode === coupon.code, withCoupon.couponCode)
+      check('the total is reduced by the coupon',
+        money(withCoupon.grandTotal) === money(subtotalForCoupon - expectedOff),
+        { got: withCoupon.grandTotal, expected: money(subtotalForCoupon - expectedOff) })
+
+      const { rows: billCoupon } = await db.query(
+        `SELECT coupon_value FROM bills WHERE id = $1`, [withCoupon.billId])
+      check('the bill records the coupon value',
+        Number(billCoupon[0]?.coupon_value) === Math.round(expectedOff), billCoupon[0])
+
+      const { rows: usage } = await db.query(
+        `SELECT count(*)::int AS n FROM coupon_usages WHERE bill_id = $1 AND coupon_id = $2`,
+        [withCoupon.billId, coupon.id])
+      check('a coupon usage row was written', usage[0].n === 1, usage[0])
+
+      const { rows: usedAfter } = await db.query(`SELECT times_used FROM coupons WHERE id = $1`, [coupon.id])
+      check('times_used went up by one',
+        Number(usedAfter[0].times_used) === Number(usedBefore[0].times_used) + 1,
+        { before: usedBefore[0].times_used, after: usedAfter[0].times_used })
+
+      // Cancelling must hand the code back.
+      const reversal = await cancelEcommOrder(db, companyId, withCoupon.orderId, { source: 'test' })
+      check('the cancellation reported reversing one coupon',
+        reversal.couponsReversed === 1, reversal)
+      const { rows: usageGone } = await db.query(
+        `SELECT count(*)::int AS n FROM coupon_usages WHERE bill_id = $1`, [withCoupon.billId])
+      check('cancelling deletes the coupon usage', usageGone[0].n === 0, usageGone[0])
+
+      const { rows: usedFinal } = await db.query(`SELECT times_used FROM coupons WHERE id = $1`, [coupon.id])
+      check('cancelling puts times_used back',
+        Number(usedFinal[0].times_used) === Number(usedBefore[0].times_used),
+        { start: usedBefore[0].times_used, end: usedFinal[0].times_used })
+    }
 
     let overSold = false
     try {

@@ -167,9 +167,18 @@ export async function cancelEcommOrder(
         [usage.coupon_id],
       )
       if (['GENERATE', 'SPECIFIC'].includes(usage.audience_type)) {
+        // Exactly ONE row, mirroring the single-row decrement in checkout.
+        // (coupon_id, client_id) is not unique here — real data has two rows
+        // per pair — so a blanket UPDATE would hand back two uses for the one
+        // that was spent.
         await db.query(
           `UPDATE coupon_clients SET usage_limit = usage_limit + 1
-           WHERE coupon_id = $1 AND client_id = $2 AND usage_limit IS NOT NULL`,
+           WHERE id = (
+             SELECT id FROM coupon_clients
+             WHERE coupon_id = $1 AND client_id = $2 AND usage_limit IS NOT NULL
+             ORDER BY "createdAt" ASC
+             LIMIT 1
+           )`,
           [usage.coupon_id, order.client_id],
         )
       }

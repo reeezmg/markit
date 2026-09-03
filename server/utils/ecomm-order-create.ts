@@ -4,6 +4,7 @@ import type { PoolClient } from 'pg'
 // Relative on purpose: this module is also loaded directly by
 // tests/ecomm-order-create.test.ts, outside Nitro's `~` alias.
 import { writeStatusHistory } from './ecomm-order-cancel'
+import { couponDiscount, findEligibleCoupon, redeemCoupon } from './ecomm-coupons'
 
 /**
  * Creating an ecommerce order by hand, from the seller's side.
@@ -33,8 +34,39 @@ export interface CreateOrderInput {
   paymentMethod?: string
   paymentStatus?: string
   deliveryFee?: number
+  /** A manual, seller-entered reduction. Independent of any coupon. */
   discount?: number
+  /** A coupon to redeem, by id — re-validated server-side before it counts. */
+  couponId?: string | null
   notes?: string
+}
+
+/**
+ * One line of the order's `items` snapshot — the same shape storefront checkout
+ * writes, so /order/ecomorders, the labels and the cancellation all read it the
+ * same way. `itemId` is what cancellation restores stock through, so it is not
+ * optional.
+ */
+export interface OrderLine {
+  variantId: string
+  itemId: string
+  name: string
+  variantName: string
+  size: string | null
+  sizeLabel: string
+  shade: string | null
+  barcode: string | null
+  quantity: number
+  sprice: number
+  dprice: number
+  image: string | null
+  images: string[]
+  tax: number
+  taxAmount: number
+  weight: number
+  categoryId: string | null
+  value: number
+  discount: number
 }
 
 export interface CreateOrderResult {
@@ -46,7 +78,11 @@ export interface CreateOrderResult {
   /** The company's client counter after linking, so the caller can refresh the session. */
   clientCounter: number | null
   subtotal: number
+  /** Everything taken off: the coupon plus the seller's manual reduction. */
   discount: number
+  /** The coupon's share of that, also stored on the bill as coupon_value. */
+  couponDiscount: number
+  couponCode: string | null
   deliveryFee: number
   tax: number
   grandTotal: number
@@ -138,7 +174,7 @@ export async function createEcommOrder(
   )
   const isTaxIncluded = companyRows[0]?.is_tax_included !== false
 
-  const snapshot = stock.map((row: any) => {
+  const snapshot: OrderLine[] = stock.map((row: any): OrderLine => {
     const quantity = wanted.get(row.item_id)!
     if (Number(row.stock_qty) < quantity) {
       throw createError({
@@ -179,8 +215,29 @@ export async function createEcommOrder(
   })
 
   const subtotal = money(snapshot.reduce((sum, i) => sum + i.value, 0))
-  // A discount larger than the order would produce a negative bill.
-  const discount = Math.min(subtotal, Math.max(0, money(input?.discount)))
+
+  // ── Coupon ───────────────────────────────────────────────────────────────
+  // Re-validated here against the subtotal the SERVER just computed, not the
+  // one the browser quoted against. A coupon with a minimum order value must
+  // not be redeemable by quoting it on a big basket and then creating a small
+  // one.
+  let coupon = null
+  if (input?.couponId) {
+    coupon = await findEligibleCoupon(db, companyId, clientId, subtotal, input.couponId)
+    if (!coupon) {
+      throw createError({
+        statusCode: 400,
+        statusMessage: 'That coupon is not valid for this order any more — remove it and try again',
+      })
+    }
+  }
+  const couponPart = coupon ? couponDiscount(coupon, subtotal) : 0
+
+  // The seller's own reduction stacks on top of the coupon, and the pair is
+  // capped together: two separate caps would let them sum past the subtotal and
+  // produce a negative bill.
+  const manualPart = Math.max(0, money(input?.discount))
+  const discount = Math.min(subtotal, money(couponPart + manualPart))
   const deliveryFee = Math.max(0, money(input?.deliveryFee))
   const tax = money(snapshot.reduce((sum, i) => sum + i.taxAmount, 0))
   const chargedTax = isTaxIncluded ? 0 : tax
@@ -195,12 +252,18 @@ export async function createEcommOrder(
                         delivery_fee, payment_method, payment_status, company_id, client_id, address_id,
                         notes, type, status, is_markit, coupon_value)
      VALUES ($1, now(), now(), NULL, $2, $3, $4, $5, $6, $7, $8::"PaymentStatus", $9, $10, $11, $12,
-             'STANDARD'::"OrderType", 'PENDING'::"OrderStatus", false, 0)
+             'STANDARD'::"OrderType", 'PENDING'::"OrderStatus", false, $13)
      RETURNING invoice_number`,
     [billId, subtotal, grandTotal, discount, tax, deliveryFee, paymentMethod,
-      paymentStatus === 'PAID' ? 'PAID' : 'PENDING', companyId, clientId, addressId, input?.notes || null],
+      paymentStatus === 'PAID' ? 'PAID' : 'PENDING', companyId, clientId, addressId, input?.notes || null,
+      // coupon_value is an integer column, so the coupon's share is rounded —
+      // the exact figure lives in `discount`, which is a float.
+      Math.round(couponPart)],
   )
   const invoiceNumber = billRows[0]?.invoice_number ?? null
+
+  // Consumed only now that the bill it is spent against exists.
+  if (coupon) await redeemCoupon(db, coupon, clientId, billId)
 
   // ── Entries + stock ──────────────────────────────────────────────────────
   for (const item of snapshot) {
@@ -258,6 +321,8 @@ export async function createEcommOrder(
     clientCounter: resolved.clientCounter,
     subtotal,
     discount,
+    couponDiscount: couponPart,
+    couponCode: coupon?.code ?? null,
     deliveryFee,
     tax,
     grandTotal,

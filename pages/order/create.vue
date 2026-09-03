@@ -176,10 +176,96 @@ const money = (value?: number | null) =>
 // price here is corrected rather than trusted.
 const subtotal = computed(() =>
   lines.value.reduce((sum, l) => sum + Number(l.dprice || 0) * Number(l.quantity || 0), 0));
-const cappedDiscount = computed(() => Math.min(subtotal.value, Math.max(0, Number(discount.value) || 0)));
+const unitCount = computed(() => lines.value.reduce((sum, l) => sum + Number(l.quantity || 0), 0));
+
+// ─── Coupon ──────────────────────────────────────────────────────────────────
+// Quoted against the current basket, redeemed only when the order is created.
+// The same rules the storefront applies — a coupon it would refuse is refused
+// here too, so the counter is not a way around the seller's own limits.
+const couponCode = ref('');
+const appliedCoupon = ref<any>(null);
+const couponChecking = ref(false);
+const couponError = ref('');
+const couponSuggestions = ref<any[]>([]);
+
+async function loadCoupons(code?: string) {
+  couponError.value = '';
+  couponChecking.value = true;
+  try {
+    const res: any = await $fetch('/api/ecommerce-cms/orders/coupons', {
+      query: {
+        clientId: selectedClient.value?.id || '',
+        subtotal: subtotal.value,
+        ...(code ? { code } : {}),
+      },
+    });
+    return res.coupons || [];
+  } catch (e: any) {
+    couponError.value = carrierError(e);
+    return [];
+  } finally {
+    couponChecking.value = false;
+  }
+}
+
+async function applyCoupon() {
+  const code = couponCode.value.trim();
+  if (!code) return;
+  const found = await loadCoupons(code);
+  if (!found.length) {
+    couponError.value = 'That code is not valid for this order — check the customer, the code and the order value.';
+    appliedCoupon.value = null;
+    return;
+  }
+  appliedCoupon.value = found[0];
+}
+
+async function showAvailableCoupons() {
+  couponSuggestions.value = await loadCoupons();
+  if (!couponSuggestions.value.length && !couponError.value) {
+    couponError.value = 'No coupon is available for this customer and order value.';
+  }
+}
+
+function useCoupon(coupon: any) {
+  appliedCoupon.value = coupon;
+  couponCode.value = coupon.code;
+  couponSuggestions.value = [];
+  couponError.value = '';
+}
+
+function removeCoupon() {
+  appliedCoupon.value = null;
+  couponCode.value = '';
+  couponError.value = '';
+}
+
+// A coupon priced against a basket that has since changed is misleading, so it
+// is re-quoted whenever the basket or the customer moves. Re-quoting can also
+// find it no longer eligible (the order dropped below its minimum), which is
+// exactly what the seller needs to see before creating the order.
+watch([subtotal, selectedClient], async () => {
+  if (!appliedCoupon.value) return;
+  const found = await loadCoupons(appliedCoupon.value.code);
+  if (found.length) {
+    appliedCoupon.value = found[0];
+  } else {
+    appliedCoupon.value = null;
+    couponError.value = 'The coupon no longer applies to this order and has been removed.';
+  }
+});
+
+
+// Declared after the coupon so the reader meets both halves of the discount
+// before the sum of them. The coupon's share is the server's own quote, never
+// recomputed here.
+const couponAmount = computed(() => Number(appliedCoupon.value?.discount || 0));
+// Coupon and manual reduction are capped TOGETHER, exactly as the server does
+// it — capping them separately would let the pair exceed the subtotal.
+const cappedDiscount = computed(() =>
+  Math.min(subtotal.value, couponAmount.value + Math.max(0, Number(discount.value) || 0)));
 const grandTotal = computed(() =>
   Math.max(0, subtotal.value + (Number(deliveryFee.value) || 0) - cappedDiscount.value));
-const unitCount = computed(() => lines.value.reduce((sum, l) => sum + Number(l.quantity || 0), 0));
 
 // ─── Create ──────────────────────────────────────────────────────────────────
 const customerReady = computed(() => {
@@ -209,6 +295,7 @@ async function createOrder() {
         paymentStatus: paymentStatus.value,
         deliveryFee: Number(deliveryFee.value) || 0,
         discount: Number(discount.value) || 0,
+        couponId: appliedCoupon.value?.id || null,
         notes: notes.value,
       },
     });
@@ -487,7 +574,71 @@ async function createOrder() {
             <UFormGroup label="Delivery fee">
               <UInput v-model="deliveryFee" type="number" min="0" />
             </UFormGroup>
-            <UFormGroup label="Discount" hint="Capped at the order subtotal">
+            <UFormGroup label="Coupon">
+              <div v-if="appliedCoupon" class="flex items-center justify-between gap-2 rounded-lg border border-green-300 bg-green-50 px-3 py-2 dark:border-green-800 dark:bg-green-950">
+                <div class="min-w-0">
+                  <p class="truncate text-sm font-medium text-green-800 dark:text-green-300">
+                    {{ appliedCoupon.code }}
+                  </p>
+                  <p class="truncate text-xs text-green-700 dark:text-green-400">
+                    {{ appliedCoupon.description }} · −{{ money(appliedCoupon.discount) }}
+                  </p>
+                </div>
+                <UButton size="xs" color="gray" variant="ghost" icon="i-heroicons-x-mark" @click="removeCoupon()" />
+              </div>
+
+              <div v-else class="flex gap-2">
+                <UInput
+                  v-model="couponCode"
+                  placeholder="Enter code"
+                  class="flex-1"
+                  @keyup.enter="applyCoupon()"
+                />
+                <UButton
+                  color="gray"
+                  variant="soft"
+                  :loading="couponChecking"
+                  :disabled="!couponCode.trim() || !lines.length"
+                  @click="applyCoupon()"
+                >
+                  Apply
+                </UButton>
+              </div>
+
+              <template #hint>
+                <UButton
+                  size="xs"
+                  color="gray"
+                  variant="link"
+                  :padded="false"
+                  :disabled="!lines.length"
+                  @click="showAvailableCoupons()"
+                >
+                  See available
+                </UButton>
+              </template>
+            </UFormGroup>
+
+            <!-- Browsing what this customer could use on this basket -->
+            <div v-if="couponSuggestions.length" class="divide-y divide-gray-200 rounded-lg border border-gray-200 dark:divide-gray-700 dark:border-gray-700">
+              <button
+                v-for="c in couponSuggestions"
+                :key="c.id"
+                type="button"
+                class="flex w-full items-center justify-between gap-3 px-3 py-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800"
+                @click="useCoupon(c)"
+              >
+                <span class="min-w-0">
+                  <span class="block truncate text-sm font-medium">{{ c.code }}</span>
+                  <span class="block truncate text-xs text-gray-500">{{ c.description }}</span>
+                </span>
+                <span class="flex-shrink-0 text-sm font-medium text-green-600">−{{ money(c.discount) }}</span>
+              </button>
+            </div>
+
+            <p v-if="couponError" class="text-xs text-red-600 dark:text-red-400">{{ couponError }}</p>
+
+            <UFormGroup label="Manual discount" hint="On top of any coupon; the pair is capped at the subtotal">
               <UInput v-model="discount" type="number" min="0" />
             </UFormGroup>
             <UFormGroup label="Notes">
@@ -510,10 +661,20 @@ async function createOrder() {
               <span class="text-gray-500">Delivery</span>
               <span>{{ money(deliveryFee) }}</span>
             </div>
-            <div v-if="cappedDiscount" class="flex justify-between text-green-600">
-              <span>Discount</span>
-              <span>-{{ money(cappedDiscount) }}</span>
+            <div v-if="couponAmount" class="flex justify-between text-green-600">
+              <span>Coupon {{ appliedCoupon?.code }}</span>
+              <span>-{{ money(couponAmount) }}</span>
             </div>
+            <div v-if="Number(discount) > 0" class="flex justify-between text-green-600">
+              <span>Manual discount</span>
+              <span>-{{ money(discount) }}</span>
+            </div>
+            <p
+              v-if="couponAmount + Number(discount || 0) > subtotal"
+              class="text-xs text-amber-600 dark:text-amber-400"
+            >
+              Capped at the subtotal — {{ money(cappedDiscount) }} will be taken off.
+            </p>
             <div class="flex justify-between border-t border-gray-200 pt-2 font-semibold dark:border-gray-700">
               <span>Total</span>
               <span>{{ money(grandTotal) }}</span>
@@ -529,7 +690,7 @@ async function createOrder() {
               <UAlert
                 v-if="!canCreate"
                 icon="i-heroicons-information-circle"
-                color="gray"
+                color="orange"
                 variant="soft"
                 :description="!customerReady
                   ? 'Choose or add a customer to continue.'

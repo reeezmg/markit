@@ -344,6 +344,22 @@ const cancelCarrierWarning = ref<string | null>(null);
 
 const isCancelled = (row: any) => row?.status === 'CANCELLED';
 
+// The server refuses to cancel a DELIVERED order, but it reads the order's
+// STORED status — and the table shows the carrier's LIVE one, which runs ahead
+// of it whenever a status webhook was missed. So an order can read "Delivered"
+// here while the row still says Manifested, and the server would happily cancel
+// it and hand back stock for goods the customer already has. Warn on what the
+// carrier says, not on what we stored.
+const DELIVERED_LIVE = ['DELIVERED', 'RTO_DELIVERED', 'RETURNED'];
+const cancelLiveWarning = computed(() => {
+  const row = cancelRow.value;
+  if (!row) return null;
+  const awb = orderAwb(row);
+  const live = awb ? liveStatus.value[awb]?.status : null;
+  if (!live || !DELIVERED_LIVE.includes(live)) return null;
+  return statusLabel(live);
+});
+
 function openCancelOrder(row: any) {
   cancelRow.value = row;
   cancelReason.value = '';
@@ -1222,6 +1238,14 @@ const rows = computed(() => orders.value || []);
             />
           </UFormGroup>
 
+          <UAlert
+            v-if="cancelLiveWarning"
+            icon="i-heroicons-exclamation-triangle"
+            color="red"
+            variant="soft"
+            title="The carrier says this order is already with the customer"
+            :description="`Its live status is ${cancelLiveWarning}. Cancelling would return this stock to your shelf even though the goods have gone — raise a return instead, unless you know the carrier's status is wrong.`"
+          />
           <UAlert
             v-if="cancelCarrierWarning"
             icon="i-heroicons-exclamation-triangle"
