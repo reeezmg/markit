@@ -62,6 +62,8 @@ const teams = (items) =>
           deliveryMode: item.company.deliveryMode || [],
           fundDeliveryFees: item.company.fundDeliveryFees || false,
           deliveryRadius: item.company.deliveryRadius || 0,
+          deliveryDiscount: item.company.deliveryDiscount ?? 0,
+          codCharge: item.company.codCharge ?? 0,
           deliveryFeesPerKm: item.company.deliveryFeesPerKm || 0,
           waitingTime: item.company.waitingTime || 0,
           waitingChargesPerMin: item.company.waitingChargesPerMin || 0,

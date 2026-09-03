@@ -87,6 +87,7 @@ export const updateCompanySession = async (params: {
   deliveryMode?: string[]
   deliveryRadius?: number
   deliveryDiscount?: number
+  codCharge?: number
   isCostIncluded?: boolean
   isUserTrackIncluded?: boolean
   companyId?: string

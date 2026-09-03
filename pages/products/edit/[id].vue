@@ -157,7 +157,12 @@ const createValue = (data: any) => {
 
 const updateVariant = (index,data: any) => {
   variants.value[index] = { ...variants.value[index], ...data };
-  console.log(variants.value)
+  if (selectedProduct.value) {
+    selectedProduct.value = {
+      ...selectedProduct.value,
+      variants: [...variants.value],
+    };
+  }
 };
 
 
@@ -475,8 +480,7 @@ const updateResult: any = await $fetch('/api/products/update', {
 }
 
 const addVariant = () => {
-  const newVariants = [...selectedProduct.value.variants];
-  newVariants.push({
+  const newVariant = {
     id: uuidv4(), // ✅ generate a unique ID
     key: String(idCounter.value++),
     name: '',
@@ -490,30 +494,23 @@ const addVariant = () => {
     sizeLabel: defaultSizeLabel.value,
     items: [{ id: uuidv4(), size: null, qty: undefined }],
     images: [],
-  });
+  };
+
+  variants.value.push(newVariant);
 
   selectedProduct.value = {
     ...selectedProduct.value,
-    variants: newVariants,
+    variants: [...variants.value],
   };
 };
 
 
 const removeVariant = (index: number) => {
-  
-    // If a product is selected, modify its variants array
-    const newVariants = [...selectedProduct.value.variants]; // Create a shallow copy
-    newVariants.splice(index, 1); // Remove the variant at the specified index
-
-    // Update the selectedProduct with the new variants array
-    selectedProduct.value = {
-      ...selectedProduct.value,
-      variants: newVariants,
-    };
-
-    variants.value.splice(index, 1);
-   
-
+  variants.value.splice(index, 1);
+  selectedProduct.value = {
+    ...selectedProduct.value,
+    variants: [...variants.value],
+  };
 };
 
 
@@ -741,7 +738,7 @@ const confirmPrint = async () => {
           @update="createValue" />
       </UPageCard>
   
-      <div v-for="(variant, index) in (selectedProduct?.variants)" 
+      <div v-for="(variant, index) in variants" 
              :key="variant.id" 
              class="mb-3"
              :id="`variant-${index}`">
@@ -760,23 +757,23 @@ const confirmPrint = async () => {
           
           <AddProductVariants   
             ref="variantRef"
-            :id="selectedProduct?.variants[index]?.id"
-            :editName="selectedProduct?.variants[index]?.name" 
-            :editCode="selectedProduct?.variants[index]?.code"
-            :editQty="selectedProduct?.variants[index]?.qty"
-            :editUnit="selectedProduct?.variants[index]?.unit || variants[0]?.unit"
-            :editsPrice="selectedProduct?.variants[index]?.sprice"
-            :editpPrice="selectedProduct?.variants[index]?.pprice"
-            :editdPrice="selectedProduct?.variants[index]?.dprice"
-            :editDiscount="selectedProduct?.variants[index]?.discount"
-            :editItems="selectedProduct?.variants[index]?.items"
-            :editSizeLabel="selectedProduct?.variants[index]?.sizeLabel"
-            :editCustomFields="selectedProduct?.variants[index]?.customFields"
+            :id="variant.id"
+            :editName="variant.name" 
+            :editCode="variant.code"
+            :editQty="variant.qty"
+            :editUnit="variant.unit || variants[0]?.unit"
+            :editsPrice="variant.sprice"
+            :editpPrice="variant.pprice"
+            :editdPrice="variant.dprice"
+            :editDiscount="variant.discount"
+            :editItems="variant.items"
+            :editSizeLabel="variant.sizeLabel"
+            :editCustomFields="variant.customFields"
             @update="updateVariant(index,$event)" />
           <AddProductMedia 
            v-if="variantInputs?.images"
             ref="mediaRefs"
-            :editFile="selectedProduct && selectedProduct.variants[index]?.images"
+            :editFile="variant.images"
             :index="index" 
             :categoryName="category.name"
             :targetAudience = "category.targetAudience"
@@ -857,13 +854,14 @@ const confirmPrint = async () => {
                 </div>
                 <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
                 <AddProductVariants :key="index"
+                  :id="variant.id"
                   :editName="selectedProduct?.variants[index].name"
                   :editCode="selectedProduct?.variants[index].code"
                   :editQty="selectedProduct?.variants[index].qty"
                   :editUnit="selectedProduct?.variants[index].unit || variants[0]?.unit"
                   :editsPrice="selectedProduct?.variants[index].sprice"
                   :editpPrice="selectedProduct?.variants[index].pprice"
-                  :editSizes="selectedProduct?.variants[index].sizes"
+                  :editItems="selectedProduct?.variants[index].items"
                   :editSizeLabel="selectedProduct?.variants[index].sizeLabel"
                   :editCustomFields="selectedProduct?.variants[index].customFields"
                   @update="updateVariant(index,$event)" />

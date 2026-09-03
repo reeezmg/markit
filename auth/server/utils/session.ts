@@ -60,6 +60,7 @@ export type AuthSession = {
     deliveryMode: string[];
     deliveryRadius?: number;
     deliveryDiscount?: number;
+    codCharge?: number;
     commissionRate?: number;
     printerLabelSize?: string;
     cash?: number;

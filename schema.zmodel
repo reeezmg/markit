@@ -198,6 +198,7 @@ model Company extends Base {
 
     deliveryRadius            Float?                     @map("delivery_radius")
     deliveryDiscount          Float?                     @default(0) @map("delivery_discount")
+    codCharge                 Float?                     @default(0) @map("cod_charge")
     operationFeesShare        Float?                     @default(0) @map("operation_fees_share")
 
     cash                      Float?                     @default(0)
@@ -1389,6 +1390,7 @@ model Bill extends Base {
     handlingFee                       Float?                             @map("handling_fee")
     waitingFee                        Float?                             @map("waiting_fee")
     deliveryFee                       Float?                             @map("delivery_fee")
+    codCharge                         Float?                             @default(0) @map("cod_charge")
     storeWaitingFee                   Float?                             @map("store_waiting_fee")
     commission                        Float?                             @map("commission")
 
@@ -1557,6 +1559,7 @@ model EcommCheckout extends Base {
     subtotal        Float       @default(0)
     discount        Float       @default(0)
     deliveryFee     Float       @default(0) @map("delivery_fee")
+    codCharge       Float       @default(0) @map("cod_charge")
     tax             Float       @default(0)
     grandTotal      Float       @default(0) @map("grand_total")
     contact         Json?
@@ -1595,6 +1598,7 @@ model EcommOrder extends Base {
     subtotal        Float                     @default(0)
     discount        Float                     @default(0)
     deliveryFee     Float                     @default(0) @map("delivery_fee")
+    codCharge       Float                     @default(0) @map("cod_charge")
     tax             Float                     @default(0)
     grandTotal      Float                     @default(0) @map("grand_total")
     items           Json

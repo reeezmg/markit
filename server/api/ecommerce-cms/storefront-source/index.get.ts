@@ -6,6 +6,7 @@ import {
   getVercelDeployment,
   getVercelDeploymentAliases,
   latestVercelDeployment,
+  makeVercelStorefrontEmbeddable,
   stablePreviewUrl,
   stableProductionUrl,
 } from '~/server/utils/vercelStorefront'
@@ -39,6 +40,26 @@ export default defineEventHandler(async (event) => {
   )
   const row = rows[0]
   if (!row) return publicStorefrontSourceStatus()
+
+  // Provisioning disables Vercel Authentication for new projects, but stores
+  // created before that setting was added can still redirect the editor iframe
+  // (and anyone opening the preview on another computer) to Vercel sign-in.
+  // Repair the project on the editor's initial status request. Do not repeat
+  // this PATCH during the three-second deployment polling loop.
+  if (!refreshLatest && row.vercelProjectId) {
+    try {
+      await makeVercelStorefrontEmbeddable(
+        useRuntimeConfig(event).vercelStorefront,
+        row.vercelProjectId,
+      )
+    } catch (error) {
+      // Status must remain readable even when Vercel is temporarily unavailable.
+      console.error('[storefront-source] disabling Vercel Authentication failed', {
+        companyId: session.data.companyId,
+        error,
+      })
+    }
+  }
 
   // The Vercel webhook is only a fast path. It cannot reach local.markit.co.in
   // and may occasionally be delayed in production, so the editor's active

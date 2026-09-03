@@ -45,22 +45,12 @@
       <!-- TABLE HEADER -->
       <div :class="columnsClass" class="font-bold">
         <span>SL</span>
-        <span>DESCRIPTION</span>
+        <span class="min-w-0">DESCRIPTION</span>
         <span v-if="showUnit" class="text-right">UNIT</span>
         <span class="text-right">QTY</span>
         <span class="text-right">MRP</span>
-        <span class="text-right">TAX</span>
         <span class="text-right">DISC</span>
-      </div>
-
-      <div :class="columnsClass" class="font-bold">
-        <span></span>
-        <span></span>
-        <span v-if="showUnit"></span>
-        <span></span>
-        <span></span>
-        <span class="text-right">HSN</span>
-        <span class="text-right">T.VALUE</span>
+        <span class="text-right">VALUE</span>
       </div>
 
       <!-- ITEMS -->
@@ -68,45 +58,39 @@
         <div :class="columnsClass">
           <span>{{ i + 1 }}</span>
 
-          <span class="break-words">
-            <div v-for="(line, idx) in wrap(item.description)" :key="idx">
-              {{ line }}
+          <span class="min-w-0">
+            <div class="truncate" :title="item.description || ''">
+              {{ item.description || '' }}
             </div>
-            <div v-if="item.size" class="text-[10px]">
+            <div v-if="item.size" class="truncate text-[10px]" :title="`${labelFor(item)}: ${item.size}`">
               {{ labelFor(item) }}: {{ item.size }}
+            </div>
+            <div v-if="item.hsn || Number(item.tax || 0)" class="truncate text-[9px] text-gray-600">
+              <span v-if="item.hsn">HSN: {{ item.hsn }}</span>
+              <span v-if="item.hsn && Number(item.tax || 0)"> · </span>
+              <span v-if="Number(item.tax || 0)">Tax: {{ item.tax }}%</span>
             </div>
           </span>
 
-          <span v-if="showUnit" class="text-right">{{ item.unit || 'Nos' }}</span>
-          <span class="text-right">{{ item.qty }}</span>
-          <span class="text-right">{{ money(item.mrp) }}</span>
-          <span class="text-right">{{ item.tax }}%</span>
-          <span class="text-right">{{ item.discount }}</span>
-        </div>
-
-        <div :class="columnsClass">
-          <span></span>
-          <span></span>
-          <span v-if="showUnit"></span>
-          <span></span>
-          <span></span>
-          <span></span>
-          <span class="text-right">{{ item.hsn }}</span>
-          <span class="text-right">{{ money(item.tvalue) }}</span>
+          <span v-if="showUnit" class="text-right tabular-nums whitespace-nowrap">{{ item.unit || 'Nos' }}</span>
+          <span class="text-right tabular-nums whitespace-nowrap">{{ item.qty }}</span>
+          <span class="text-right tabular-nums whitespace-nowrap">{{ money(item.mrp) }}</span>
+          <span class="text-right tabular-nums whitespace-nowrap">{{ money(item.discount) }}</span>
+          <span class="text-right tabular-nums whitespace-nowrap">{{ money(item.tvalue) }}</span>
         </div>
       </div>
 
       <hr class="my-1 border-dashed border-black" />
 
       <!-- TOTALS -->
-      <div :class="columnsClass" class="font-bold">
+      <div :class="columnsClass" class="font-bold text-[10px] leading-none py-1">
         <span></span>
         <span>TOTAL</span>
         <span v-if="showUnit"></span>
-        <span class="text-right">{{ data.tqty }}</span>
-        <span class="text-right">{{ money(data.tvalue) }}</span>
-        <span class="text-right">{{ money(data.tdiscount) }}</span>
-        <span class="text-right">{{ money(data.ttvalue) }}</span>
+        <span class="text-right tabular-nums whitespace-nowrap">{{ data.tqty }}</span>
+        <span class="text-right tabular-nums whitespace-nowrap">{{ money(data.tvalue) }}</span>
+        <span class="text-right tabular-nums whitespace-nowrap">{{ money(data.tdiscount) }}</span>
+        <span class="text-right tabular-nums whitespace-nowrap">{{ money(data.ttvalue) }}</span>
       </div>
 
       <hr class="my-1 border-dashed border-black" />
@@ -159,23 +143,6 @@ const columnsClass = computed(() =>
 
 const join = (a?: string, b?: string) =>
   a && b ? `${a}, ${b}` : a || b || ''
-
-const wrap = (text = '', limit = 22) => {
-  const words = text.split(' ')
-  const lines: string[] = []
-  let line = ''
-
-  for (const w of words) {
-    if ((line + w).length > limit) {
-      lines.push(line.trim())
-      line = w + ' '
-    } else {
-      line += w + ' '
-    }
-  }
-  if (line) lines.push(line.trim())
-  return lines
-}
 
 const money = (v: any) => Number(v || 0).toFixed(2)
 const formatDate = (d: any) => new Date(d).toLocaleString()

@@ -191,6 +191,8 @@ const deliveryMode = ref<string[]>(['self'])
 const deliveryRadius = ref<number | null>(useAuth().session.value?.deliveryRadius || null)
 // % discount to give on the delivery cost (0 = no discount). Applied at storefront checkout.
 const deliveryDiscount = ref<number>(useAuth().session.value?.deliveryDiscount ?? 0)
+// Flat surcharge applied only when a storefront customer chooses COD.
+const codCharge = ref<number>(useAuth().session.value?.codCharge ?? 0)
 
 // Dropdown options
 const deliveryModeOptions = ['markit','self']
@@ -248,6 +250,9 @@ watch(() => deliveryRadius.value, (newConfig) => {
 }, { immediate: true });
 watch(() => deliveryDiscount.value, (newConfig) => {
   isDeliveryConfigChanged.value = newConfig !== (useAuth().session.value?.deliveryDiscount ?? 0);
+}, { immediate: true });
+watch(() => codCharge.value, (newConfig) => {
+  isDeliveryConfigChanged.value = newConfig !== (useAuth().session.value?.codCharge ?? 0);
 }, { immediate: true });
 watch(() => deliveryType.value, (newType) => {
   isDeliveryTypeChanged.value = newType.sort().toString() !== (useAuth().session.value?.deliveryType || []).sort().toString();
@@ -860,13 +865,20 @@ const normalizeDeliveryDiscount = () => {
   return deliveryDiscount.value;
 };
 
+const normalizeCodCharge = () => {
+  codCharge.value = Math.max(0, Number(codCharge.value) || 0);
+  return codCharge.value;
+};
+
 const saveDeliveryConfig = () => {
   isUpdatingDeliveryConfig.value = true;
   const normalizedDeliveryDiscount = normalizeDeliveryDiscount();
+  const normalizedCodCharge = normalizeCodCharge();
   const payload = {
     deliveryMode: deliveryMode.value,
     deliveryRadius: deliveryRadius.value,
-    deliveryDiscount: normalizedDeliveryDiscount
+    deliveryDiscount: normalizedDeliveryDiscount,
+    codCharge: normalizedCodCharge
   }
    isUpdatingAccount.value = true;
   try {
@@ -883,7 +895,8 @@ const saveDeliveryConfig = () => {
       data: {
         deliveryMode: deliveryMode.value,
         deliveryRadius: deliveryRadius.value,
-        deliveryDiscount: normalizedDeliveryDiscount
+        deliveryDiscount: normalizedDeliveryDiscount,
+        codCharge: normalizedCodCharge
       }
     });
     updateDeliveryConfig(payload);
@@ -988,6 +1001,7 @@ const isUpdatingAllDelivery = ref(false);
 const onAllDeliverySave = () => {
   isUpdatingAllDelivery.value = true;
   const normalizedDeliveryDiscount = normalizeDeliveryDiscount();
+  const normalizedCodCharge = normalizeCodCharge();
   try {
     if (!navigator.onLine) {
       throw createError({ statusCode: 0, statusMessage: 'No internet connection' });
@@ -1001,6 +1015,7 @@ const onAllDeliverySave = () => {
         deliveryMode: deliveryMode.value,
         deliveryRadius: deliveryRadius.value,
         deliveryDiscount: normalizedDeliveryDiscount,
+        codCharge: normalizedCodCharge,
       });
     }
 
@@ -1014,6 +1029,7 @@ const onAllDeliverySave = () => {
         deliveryMode: deliveryMode.value,
         deliveryRadius: deliveryRadius.value,
         deliveryDiscount: normalizedDeliveryDiscount,
+        codCharge: normalizedCodCharge,
       });
       isDeliveryConfigChanged.value = false;
     }
@@ -1383,6 +1399,21 @@ const onAllDeliverySave = () => {
             max="100"
             placeholder="Enter delivery discount percentage"
             @blur="normalizeDeliveryDiscount"
+          />
+        </div>
+
+        <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
+          <div class="mb-3">
+            <div class="text-sm font-semibold text-gray-900 dark:text-white">COD Charge</div>
+            <div class="text-sm text-gray-500 dark:text-gray-400">Flat amount added when a customer chooses cash on delivery.</div>
+          </div>
+          <UInput
+            v-model.number="codCharge"
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Enter COD charge"
+            @blur="normalizeCodCharge"
           />
         </div>
       </div>
