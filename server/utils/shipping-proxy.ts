@@ -1,12 +1,11 @@
 import { createError, type H3Event } from 'h3'
 
 /**
- * Forward a shipping request to the custom-api (FastAPI) shipping endpoints.
+ * Forward seller shipping requests to the private FastAPI service in storetools.
  *
  * companyId is taken from the authenticated seller session (never trusted from
  * the client), and the shared X-Service-Token is injected server-side so it is
- * never exposed to the browser. All Delhivery logic lives in custom-api adapters
- * — these proxies only authenticate + forward.
+ * never exposed to the browser. Carrier operations live under storetools/server/shipping_service.
  */
 export async function shippingProxy(
   event: H3Event,
@@ -17,9 +16,9 @@ export async function shippingProxy(
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
   const config = useRuntimeConfig()
-  const base = (config.customApiUrl as string).replace(/\/$/, '')
-  const token = config.customApiServiceToken as string
-  const url = `${base}/api/custom/${companyId}/shipping/${opts.path}`
+  const base = (config.shippingServiceUrl as string).replace(/\/$/, '')
+  const token = config.shippingServiceToken as string
+  const url = `${base}/api/seller/${companyId}/shipping/${opts.path}`
 
   try {
     return await $fetch(url, {
@@ -52,9 +51,9 @@ export async function shippingProxyBinary(
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
   const config = useRuntimeConfig()
-  const base = (config.customApiUrl as string).replace(/\/$/, '')
-  const token = config.customApiServiceToken as string
-  const url = `${base}/api/custom/${companyId}/shipping/${opts.path}`
+  const base = (config.shippingServiceUrl as string).replace(/\/$/, '')
+  const token = config.shippingServiceToken as string
+  const url = `${base}/api/seller/${companyId}/shipping/${opts.path}`
 
   try {
     const res = await $fetch.raw<ArrayBuffer>(url, {

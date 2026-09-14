@@ -41,6 +41,7 @@ const PROVIDERS: Array<{
     fields: [
       { key: 'apiToken',      label: 'API Token',       type: 'password', help: 'Merchant portal → API Access' },
       { key: 'warehouseCode', label: 'Warehouse Code',  placeholder: 'Optional — multi-warehouse only' },
+      { key: 'webhookToken',  label: 'Webhook Token',  type: 'password', placeholder: 'Optional until webhooks are configured', help: 'Choose a long random token and add it to the Delhivery webhook URL as ?token=...' },
     ],
   },
   {
@@ -185,6 +186,10 @@ function normalizePriority(saved?: ProviderId[]) {
 const modalOpen      = ref(false);
 const activeProvider = ref<typeof PROVIDERS[0] | null>(null);
 const tempCreds      = ref<Record<string, string>>({});
+const delhiveryWebhookUrl = computed(() => {
+  if (activeProvider.value?.id !== 'delhivery' || !companyId.value || !tempCreds.value.webhookToken?.trim()) return '';
+  return `https://markit.co.in/api/webhooks/shipping/${encodeURIComponent(companyId.value)}/delhivery?token=${encodeURIComponent(tempCreds.value.webhookToken.trim())}`;
+});
 const disconnectConfirm = ref<ProviderId | null>(null);
 const testStatus     = ref<'idle' | 'testing' | 'ok' | 'error'>('idle');
 const testMessage    = ref('');
@@ -528,6 +533,13 @@ function moveInPriority(id: ProviderId, dir: -1 | 1) {
             </template>
           </UFormGroup>
         </template>
+
+        <UFormGroup v-if="activeProvider.id === 'delhivery' && delhiveryWebhookUrl" label="Delhivery webhook URL">
+          <UInput :model-value="delhiveryWebhookUrl" readonly />
+          <template #help>
+            <span class="text-gray-400 text-xs">Save these settings, then register this URL in Delhivery's carrier portal. Keep the URL private because it contains the webhook token.</span>
+          </template>
+        </UFormGroup>
 
         <!-- Test result -->
         <Transition name="fade">

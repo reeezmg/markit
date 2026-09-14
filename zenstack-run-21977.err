@@ -1,0 +1,7 @@
+- Generating Prisma schema
+Error: 
+EPERM: operation not permitted, rename 'C:\markit-v1\storetools\node_modules\.prisma\client\query_engine-windows.dll.node.tmp6912' -> 'C:\markit-v1\storetools\node_modules\.prisma\client\query_engine-windows.dll.node'
+
+
+× Generating Prisma schema
+[31mPrisma: Failed to run "prisma generate"[39m

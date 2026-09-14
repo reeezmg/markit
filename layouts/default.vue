@@ -10,6 +10,15 @@ const showSidebar = computed(() =>
 )   
 const isSidebarCollapsed = ref(false)
 const plan = ref(useAuth().session.value?.plan || 'free');
+const sidebarSection = ref<'erp' | 'storefront'>('erp')
+
+watch(() => route.path, (path) => {
+  if (path.startsWith('/storefront/') || path.startsWith('/ecommerce-cms/') || path.startsWith('/ai/')) {
+    sidebarSection.value = 'storefront'
+  } else if (!path.startsWith('/settings')) {
+    sidebarSection.value = 'erp'
+  }
+}, { immediate: true })
 
 const { isHelpSlideoverOpen } = useDashboard();
 
@@ -149,6 +158,18 @@ const links = computed(() => {
             shortcuts: ['C', 'M'],
           },
         },
+        {
+          id: 'ecom-customers',
+          label: 'Customers',
+          to: '/ecommerce-cms/customers',
+          icon: 'i-heroicons-user-group',
+        },
+        ...(['admin', 'manager'].includes(String(auth.session.value?.role || '')) ? [{
+          id: 'ecom-marketing',
+          label: 'Marketing',
+          to: '/ecommerce-cms/marketing',
+          icon: 'i-heroicons-megaphone',
+        }] : []),
         {
           id: 'ecom-faq',
           label: 'FAQ',
@@ -885,6 +906,18 @@ const links = computed(() => {
                     },
                 },
                 {
+                    label: 'Customers',
+                    to: '/ecommerce-cms/customers',
+                    exact: true,
+                    icon: 'i-heroicons-user-group',
+                },
+                ...(['admin', 'manager'].includes(String(auth.session.value?.role || '')) ? [{
+                    label: 'Marketing',
+                    to: '/ecommerce-cms/marketing',
+                    exact: true,
+                    icon: 'i-heroicons-megaphone',
+                }] : []),
+                {
                     label: 'FAQ',
                     to: '/ecommerce-cms/faq',
                     exact: true,
@@ -1044,11 +1077,38 @@ const links = computed(() => {
     const collapseGroups = (arr: any[]) =>
       arr.map((link) => (link.children?.length ? { ...link, defaultOpen: false } : link));
 
-      if (plan.value === "free" || plan.value === "lite" ) {
-    return collapseGroups(simplifiedLinks);
+  const allLinks = plan.value === 'free' || plan.value === 'lite'
+    ? simplifiedLinks
+    : baseLinks
+
+  if (sidebarSection.value === 'storefront') {
+    const ecomChildren = (allLinks.find((link) => link.id === 'ecom') as { children?: any[] } | undefined)?.children ?? []
+    const editor = ecomChildren.find((link) => link.to === '/storefront/editor')
+    const group = (id: string, label: string, icon: string, paths: string[]) => ({
+      id,
+      label,
+      icon,
+      children: ecomChildren.filter((link) => paths.includes(link.to)),
+    })
+
+    return collapseGroups([
+      ...(editor ? [{ ...editor, id: 'storefront-editor', icon: 'i-heroicons-paint-brush' }] : []),
+      group('storefront-content', 'Content', 'i-heroicons-document-text', [
+        '/ecommerce-cms/faq', '/ecommerce-cms/blogs', '/ecommerce-cms/gallery', '/ecommerce-cms/policies',
+      ]),
+      group('storefront-customer', 'Customer', 'i-heroicons-chat-bubble-left-right', [
+        '/ecommerce-cms/customers', '/ecommerce-cms/marketing', '/ecommerce-cms/messages', '/ecommerce-cms/feedback',
+      ]),
+      group('storefront-commerce', 'Commerce', 'i-heroicons-shopping-bag', [
+        '/ecommerce-cms/payment', '/ecommerce-cms/shipping',
+      ]),
+      ...allLinks.filter((link) => link.id === 'ai' || link.id === 'settings'),
+    ])
   }
 
-  return collapseGroups(baseLinks);
+  const sectionLinks = allLinks.filter((link) => link.id !== 'ecom' && link.id !== 'ai')
+
+  return collapseGroups(sectionLinks)
 
 });
 
@@ -1060,17 +1120,6 @@ const footerLinks = [
         click: () => (isHelpSlideoverOpen.value = true),
     },
 ];
-
-const groups = computed(() => [
-    {
-        key: 'links',
-        label: 'Go to',
-        commands: links.value.map((link) => ({
-            ...link,
-            shortcuts: link.tooltip?.shortcuts,
-        })),
-    },
-]);
 
 const isRouteActive = (to?: string) => {
   if (!to) return false
@@ -1106,7 +1155,24 @@ const isRouteActive = (to?: string) => {
 
             <UDashboardSidebar>
                 <template #header>
-                    <UDashboardSearchButton />
+                    <div class="grid grid-cols-2 gap-1 rounded-lg bg-primary-50 p-1 dark:bg-primary-950" role="tablist" aria-label="Sidebar section">
+                        <button
+                            v-for="section in (['erp', 'storefront'] as const)"
+                            :key="section"
+                            type="button"
+                            role="tab"
+                            :aria-selected="sidebarSection === section"
+                            :class="[
+                                'rounded-md px-2 py-1.5 text-sm font-medium transition-colors',
+                                sidebarSection === section
+                                    ? 'bg-primary-500 text-white shadow-sm'
+                                    : 'text-primary-700 hover:bg-primary-100 dark:text-primary-300 dark:hover:bg-primary-900',
+                            ]"
+                            @click="sidebarSection = section"
+                        >
+                            {{ section === 'erp' ? 'ERP' : 'Storefront' }}
+                        </button>
+                    </div>
                 </template>
 
                 <UDashboardSidebarLinks :links="links" />
@@ -1138,7 +1204,31 @@ const isRouteActive = (to?: string) => {
             </template>
           </UDashboardNavbar>
 
-          <UDashboardSidebar>
+          <UDashboardSidebar :ui="{ header: 'px-2', body: 'px-1', footer: 'px-1' }">
+            <template #header>
+              <div class="mx-auto flex w-11 flex-col items-center gap-1 rounded-xl border border-primary-100 bg-primary-50 p-0.5 dark:border-primary-900 dark:bg-primary-950" role="tablist" aria-label="Sidebar section">
+                <UTooltip v-for="section in (['erp', 'storefront'] as const)" :key="section" :text="section === 'erp' ? 'ERP' : 'Storefront'">
+                  <button
+                    type="button"
+                    :aria-label="section === 'erp' ? 'ERP' : 'Storefront'"
+                    :class="[
+                      'flex h-9 w-9 items-center justify-center rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary-500 focus-visible:ring-offset-2',
+                      sidebarSection === section
+                        ? 'bg-primary-500 text-white shadow-sm'
+                        : 'text-primary-700 hover:bg-primary-100 dark:text-primary-300 dark:hover:bg-primary-900',
+                    ]"
+                    role="tab"
+                    :aria-selected="sidebarSection === section"
+                    @click="sidebarSection = section"
+                  >
+                    <UIcon :name="section === 'erp' ? 'i-heroicons-credit-card' : 'i-heroicons-globe-alt'" class="h-5 w-5" />
+                  </button>
+                </UTooltip>
+              </div>
+            </template>
+
+            <UDivider />
+
             <div class="flex flex-col items-center gap-2 py-2">
               <template v-for="link in links" :key="link.id || link.label">
                 <UPopover
@@ -1197,8 +1287,5 @@ const isRouteActive = (to?: string) => {
         <AiChatChatBox />
         
 
-        <ClientOnly>
-            <LazyUDashboardSearch :groups="groups" />
-        </ClientOnly>
     </UDashboardLayout>
 </template>

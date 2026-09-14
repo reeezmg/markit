@@ -49,7 +49,8 @@ export default defineEventHandler(async (event) => {
     }
 
     const { rows } = await client.query(
-      `SELECT status FROM ecomm_orders WHERE id = $1 AND company_id = $2 FOR UPDATE`,
+      `SELECT status, payment_method, checkout_id, bill_id
+       FROM ecomm_orders WHERE id = $1 AND company_id = $2 FOR UPDATE`,
       [orderId, companyId],
     )
     if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Order not found' })
@@ -76,6 +77,32 @@ export default defineEventHandler(async (event) => {
       source: 'manual',
       note: note || `Set to ${ORDER_STATUS[status].label} by the seller`,
     })
+
+    // Delivery confirms COD collection. Keep the order, checkout and bill in
+    // sync in the same transaction as the manual status change.
+    if (status === 'DELIVERED' && String(rows[0].payment_method || '').toUpperCase() === 'COD') {
+      await client.query(
+        `UPDATE ecomm_orders SET payment_status = 'PAID', updated_at = now()
+         WHERE id = $1 AND company_id = $2 AND payment_status = 'PENDING'`,
+        [orderId, companyId],
+      )
+      if (rows[0].checkout_id) {
+        await client.query(
+          `UPDATE ecomm_checkouts SET payment_status = 'PAID', status = 'PAID', updated_at = now()
+           WHERE id = $1 AND company_id = $2 AND UPPER(COALESCE(payment_method, '')) = 'COD'
+             AND payment_status = 'PENDING'`,
+          [rows[0].checkout_id, companyId],
+        )
+      }
+      if (rows[0].bill_id) {
+        await client.query(
+          `UPDATE bills SET payment_status = 'PAID', updated_at = now()
+           WHERE id = $1 AND company_id = $2 AND UPPER(COALESCE(payment_method, '')) = 'COD'
+             AND payment_status = 'PENDING'`,
+          [rows[0].bill_id, companyId],
+        )
+      }
+    }
 
     await client.query('COMMIT')
     return { ok: true, status, previous, cancelled: false }

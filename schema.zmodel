@@ -213,6 +213,12 @@ model Company extends Base {
     entries                   Entry[]
     category                  String[]
     clients                   CompanyClient[]
+    marketingVerifications    EcommMarketingVerification[]
+    marketingCampaigns        EcommMarketingCampaign[]
+    marketingAutomations      EcommMarketingAutomation[]
+    marketingJobs             EcommMarketingJob[]
+    marketingAudit            EcommMarketingAudit[]
+    crmActivities             EcommCrmActivity[]
     products                  Product[]
     categories                Category[]
     subcategories             Subcategory[]
@@ -561,6 +567,9 @@ model Client extends Base {
     dob                       String?
     phone                     String                     @unique
     companies                 CompanyClient[]
+    marketingVerifications    EcommMarketingVerification[]
+    marketingJobs             EcommMarketingJob[]
+    crmActivities             EcommCrmActivity[]
     cart                      CartCompanyClient[]
     address                   Address[]
     bills                     Bill[]
@@ -1620,6 +1629,7 @@ model EcommOrder extends Base {
     @@index([companyId, clientId, createdAt])
     @@index([companyId, orderNumber])
     @@allow('read, create, update, delete', true)
+    @@deny('read, create, update, delete', !(company.users?[userId == auth().id]))
     @@map("ecomm_orders")
 }
 
@@ -1640,6 +1650,7 @@ model EcommCart extends Base {
     @@unique([companyId, clientId])
     @@index([companyId, clientId], map: "ecomm_carts_company_client_idx")
     @@allow('read, create, update, delete', true)
+    @@deny('read, create, update, delete', !(company.users?[userId == auth().id]))
     @@map("ecomm_carts")
 }
 
@@ -1700,6 +1711,7 @@ model EcommWishlist extends Base {
     @@unique([companyId, clientId])
     @@index([companyId, clientId], map: "ecomm_wishlists_company_client_idx")
     @@allow('read, create, update, delete', true)
+    @@deny('read, create, update, delete', !(company.users?[userId == auth().id]))
     @@map("ecomm_wishlists")
 }
 
@@ -2070,9 +2082,111 @@ model CompanyClient {
     pipelineStatus String  @default('new') @map("pipeline_status")
     points         Int     @default(0)
     clientNumber   Int?    @map("client_number")
+    marketingOptInRequestedAt DateTime? @map("marketing_opt_in_requested_at") @deny('update', true)
+    marketingOptInAt DateTime? @map("marketing_opt_in_at") @deny('update', true)
+    marketingOptInEmail String? @map("marketing_opt_in_email") @deny('update', true)
     @@id([companyId, clientId])
     @@allow('read,create, update, delete', true)
+    @@deny('read, create, update, delete', !(company.users?[userId == auth().id]))
     @@map('company_clients')
+}
+
+model EcommMarketingVerification {
+    companyId String @map("company_id")
+    clientId String @map("client_id")
+    email String
+    tokenHash String @unique @map("token_hash")
+    expiresAt DateTime @map("expires_at")
+    requestedAt DateTime @default(now()) @map("requested_at")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+    @@id([companyId, clientId])
+    @@allow('all', false)
+    @@map("ecomm_marketing_verifications")
+}
+
+model EcommMarketingCampaign {
+    id String @id @default(dbgenerated("gen_random_uuid()"))
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    name String
+    subject String
+    body String
+    segment String
+    status String @default("DRAFT")
+    scheduledAt DateTime? @map("scheduled_at")
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    jobs EcommMarketingJob[]
+    @@allow('all', false)
+    @@map("ecomm_marketing_campaigns")
+}
+
+model EcommMarketingAutomation {
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    kind String
+    enabled Boolean @default(false)
+    delayHours Int @map("delay_hours")
+    subject String
+    body String
+    updatedAt DateTime @updatedAt @map("updated_at")
+    @@id([companyId, kind])
+    @@allow('all', false)
+    @@map("ecomm_marketing_automations")
+}
+
+model EcommMarketingJob {
+    id String @id @default(dbgenerated("gen_random_uuid()"))
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    clientId String @map("client_id")
+    client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+    campaignId String? @map("campaign_id")
+    campaign EcommMarketingCampaign? @relation(fields: [campaignId], references: [id], onDelete: Cascade)
+    automationKind String? @map("automation_kind")
+    eventKey String @map("event_key")
+    email String
+    subject String
+    body String
+    status String @default("PENDING")
+    attempts Int @default(0)
+    nextAttemptAt DateTime @default(now()) @map("next_attempt_at")
+    claimedAt DateTime? @map("claimed_at")
+    sentAt DateTime? @map("sent_at")
+    lastError String? @map("last_error")
+    createdAt DateTime @default(now()) @map("created_at")
+    @@unique([companyId, eventKey, clientId])
+    @@allow('all', false)
+    @@map("ecomm_marketing_jobs")
+}
+
+model EcommCrmActivity {
+    id String @id @default(dbgenerated("gen_random_uuid()"))
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    clientId String @map("client_id")
+    client Client @relation(fields: [clientId], references: [id], onDelete: Cascade)
+    createdBy String @map("created_by")
+    kind String
+    body String
+    dueAt DateTime? @map("due_at")
+    completedAt DateTime? @map("completed_at")
+    createdAt DateTime @default(now()) @map("created_at")
+    @@allow('all', false)
+    @@map("ecomm_crm_activities")
+}
+
+model EcommMarketingAudit {
+    id String @id @default(dbgenerated("gen_random_uuid()"))
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    actorUserId String @map("actor_user_id")
+    action String
+    entityId String? @map("entity_id")
+    createdAt DateTime @default(now()) @map("created_at")
+    @@allow('all', false)
+    @@map("ecomm_marketing_audit")
 }
 
 model UserConversation {
