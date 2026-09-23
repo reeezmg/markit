@@ -46,9 +46,9 @@ const GATEWAYS: Array<{
     from: '#7c3aed', to: '#6d28d9',
     features: ['UPI', 'PhonePe Wallet', 'Cards', 'Net Banking'],
     fields: [
-      { key: 'merchantId', label: 'Merchant ID', help: 'Business Dashboard → Developers → Integrate' },
-      { key: 'saltKey',    label: 'Salt Key',    type: 'password' },
-      { key: 'saltIndex',  label: 'Salt Index',  placeholder: '1', help: 'Usually 1 unless specified otherwise' },
+      { key: 'clientId',      label: 'Client ID',      help: 'PhonePe OAuth Client ID (not Merchant ID) — Business Dashboard → Developer Settings → API Keys' },
+      { key: 'clientSecret',  label: 'Client Secret',  type: 'password' },
+      { key: 'clientVersion', label: 'Client Version', placeholder: '1', help: 'Use the Client Version shown with your PhonePe API credentials' },
       { key: 'environment', label: 'Environment', options: [{ label: 'Production', value: 'PROD' }, { label: 'UAT / Staging', value: 'UAT' }] },
     ],
   },
@@ -82,7 +82,7 @@ const GATEWAYS: Array<{
 const defaultCreds: Record<GatewayId, Record<string, string>> = {
   razorpay: { keyId: '', keySecret: '', webhookSecret: '' },
   cashfree: { appId: '', secretKey: '', environment: 'PROD' },
-  phonepe:  { merchantId: '', saltKey: '', saltIndex: '1', environment: 'PROD' },
+  phonepe:  { clientId: '', clientSecret: '', clientVersion: '1', environment: 'PROD' },
   payu:     { merchantKey: '', merchantSalt: '', environment: 'PROD' },
   paytm:    { merchantId: '', merchantKey: '', website: 'DEFAULT', channelId: 'WEB', industryTypeId: 'Retail', environment: 'PROD' },
 };
@@ -108,6 +108,24 @@ const tempCreds     = ref<Record<string, string>>({});
 const testStatus       = ref<'idle' | 'testing' | 'ok' | 'error'>('idle');
 const testMessage      = ref('');
 const webhookGuideOpen = ref(false);
+const visibleSecrets   = ref<Record<string, boolean>>({});
+
+const secretFieldId = (fieldKey: string) => `${activeGateway.value?.id || ''}:${fieldKey}`;
+const isSecretVisible = (fieldKey: string) => !!visibleSecrets.value[secretFieldId(fieldKey)];
+
+function toggleSecretVisibility(fieldKey: string) {
+  const id = secretFieldId(fieldKey);
+  visibleSecrets.value[id] = !visibleSecrets.value[id];
+}
+
+const webhookUrl = computed(() =>
+  `https://api.markit.co.in/api/custom/${companyId.value}/payment/webhook/cashfree`,
+);
+
+async function copyWebhookUrl() {
+  await navigator.clipboard.writeText(webhookUrl.value);
+  toast.add({ title: 'Webhook URL copied', color: 'green', timeout: 1500 });
+}
 
 const { data: prefData, isLoading } = useFindFirstGeneralPreference({
   where: { companyId: companyId.value, pageName: PAGE_NAME, key: PREF_KEY },
@@ -116,22 +134,34 @@ const { data: prefData, isLoading } = useFindFirstGeneralPreference({
 watch(prefData, (val) => {
   if (val?.value) {
     const s = val.value as Partial<PaymentConfig>;
+    const savedPhonePe = (s.phonepe || {}) as Record<string, string>;
     config.value = {
       gateway: s.gateway || 'razorpay', enabled: s.enabled ?? false,
       razorpay: { ...defaultCreds.razorpay, ...(s.razorpay || {}) },
       cashfree:  { ...defaultCreds.cashfree,  ...(s.cashfree  || {}) },
-      phonepe:   { ...defaultCreds.phonepe,   ...(s.phonepe   || {}) },
+      phonepe: {
+        ...defaultCreds.phonepe,
+        clientId: savedPhonePe.clientId || '',
+        clientSecret: savedPhonePe.clientSecret || '',
+        clientVersion: savedPhonePe.clientVersion || '1',
+        environment: savedPhonePe.environment || defaultCreds.phonepe.environment,
+      },
       payu:      { ...defaultCreds.payu,      ...(s.payu      || {}) },
       paytm:     { ...defaultCreds.paytm,     ...(s.paytm     || {}) },
     };
   }
 }, { immediate: true });
 
-const isConnected = (id: GatewayId) => {
-  const skip = new Set(['PROD','TEST','UAT','STAGING','WEB','WAP','DEFAULT','Retail','1']);
-  return Object.values(config.value[id]).some((v) => v && !skip.has(v));
+const isConfigured = (id: GatewayId) => {
+  const gateway = GATEWAYS.find((item) => item.id === id);
+  if (!gateway) return false;
+
+  return gateway.fields.every((field) => {
+    if (field.options || field.placeholder?.toLowerCase().includes('optional')) return true;
+    return (config.value[id][field.key] ?? '').trim() !== '';
+  });
 };
-const isActive = (id: GatewayId) => config.value.enabled && config.value.gateway === id && isConnected(id);
+const isActive = (id: GatewayId) => config.value.enabled && config.value.gateway === id && isConfigured(id);
 
 const isFormValid = computed(() => {
   if (!activeGateway.value) return false;
@@ -145,6 +175,7 @@ const isFormValid = computed(() => {
 function openConfigure(gw: typeof GATEWAYS[0]) {
   activeGateway.value = gw;
   tempCreds.value = { ...config.value[gw.id] };
+  visibleSecrets.value = {};
   testStatus.value = 'idle';
   testMessage.value = '';
   webhookGuideOpen.value = false;
@@ -168,40 +199,60 @@ async function testConnection() {
   }
 }
 
-const { mutate: upsertPref, isPending: isSaving } = useUpsertGeneralPreference();
+const { mutateAsync: upsertPref, isPending: isSaving } = useUpsertGeneralPreference();
 
-function persist(msg?: string) {
-  upsertPref(
-    {
+async function persist(msg?: string) {
+  const value = JSON.parse(JSON.stringify(config.value));
+  try {
+    await upsertPref({
       where:  { companyId_pageName_key: { companyId: companyId.value, pageName: PAGE_NAME, key: PREF_KEY } },
-      create: { companyId: companyId.value, pageName: PAGE_NAME, key: PREF_KEY, value: config.value as any, active: true },
-      update: { value: config.value as any },
-    },
-    {
-      onSuccess: () => { if (msg) toast.add({ title: msg, color: 'green' }); },
-      onError:   (e: any) => toast.add({ title: 'Save failed', description: e.message, color: 'red' }),
-    },
-  );
+      create: { companyId: companyId.value, pageName: PAGE_NAME, key: PREF_KEY, value: value as any, active: true },
+      update: { value: value as any },
+    });
+    if (msg) toast.add({ title: msg, color: 'green' });
+    return true;
+  } catch (e: any) {
+    toast.add({ title: 'Save failed', description: e.message, color: 'red' });
+    return false;
+  }
 }
 
-function setActive(id: GatewayId) {
+async function setActive(id: GatewayId) {
+  if (!isConfigured(id) || isSaving.value) return;
+  const previousGateway = config.value.gateway;
+  const previousEnabled = config.value.enabled;
   config.value.gateway = id;
   config.value.enabled = true;
-  persist(`${GATEWAYS.find((g) => g.id === id)?.label} set as active gateway`);
+  const saved = await persist(`${GATEWAYS.find((g) => g.id === id)?.label} set as active gateway`);
+  if (!saved) {
+    config.value.gateway = previousGateway;
+    config.value.enabled = previousEnabled;
+  }
+}
+
+async function disablePayments() {
+  if (isSaving.value) return;
+  config.value.enabled = false;
+  const saved = await persist('Online payments disabled');
+  if (!saved) config.value.enabled = true;
 }
 
 async function saveCredentials() {
   if (!activeGateway.value || !isFormValid.value) return;
+  const gateway = activeGateway.value;
   if (testStatus.value !== 'ok') {
     await testConnection();
     if (testStatus.value !== 'ok') return;
   }
-  const id = activeGateway.value.id;
+  const id = gateway.id;
+  const previousCredentials = { ...config.value[id] };
   (config.value[id] as any) = { ...tempCreds.value };
-  config.value.gateway = id;
-  config.value.enabled = true;
-  modalOpen.value = false;
-  persist(`${activeGateway.value.label} is now active`);
+  const saved = await persist(`${gateway.label} configuration saved`);
+  if (saved) {
+    modalOpen.value = false;
+  } else {
+    config.value[id] = previousCredentials;
+  }
 }
 </script>
 
@@ -212,7 +263,7 @@ async function saveCredentials() {
         <template #header>
           <div>
             <h1 class="text-xl font-semibold text-gray-900 dark:text-white">Payment Gateways</h1>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Configure a gateway — it becomes active immediately after saving credentials.</p>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Save multiple gateway configurations, then switch the active gateway whenever you need.</p>
           </div>
         </template>
 
@@ -225,7 +276,7 @@ async function saveCredentials() {
         <!-- Active banner -->
         <Transition name="fade">
           <div
-            v-if="config.enabled && isConnected(config.gateway)"
+            v-if="config.enabled && isConfigured(config.gateway)"
             class="mb-6 flex items-center gap-3 px-4 py-3 rounded-xl border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/50"
           >
             <div class="flex items-center justify-center w-8 h-8 rounded-full bg-green-100 dark:bg-green-900">
@@ -237,7 +288,7 @@ async function saveCredentials() {
               </p>
               <p class="text-xs text-green-600 dark:text-green-400">Customers can now complete purchases online</p>
             </div>
-            <UButton size="xs" variant="ghost" color="green" icon="i-heroicons-x-mark" @click="config.enabled = false; persist()" />
+            <UButton size="xs" variant="ghost" color="green" icon="i-heroicons-x-mark" :loading="isSaving" @click="disablePayments" />
           </div>
         </Transition>
 
@@ -252,7 +303,7 @@ async function saveCredentials() {
               'border-2',
               isActive(gw.id)
                 ? 'border-primary-400 dark:border-primary-500 shadow-lg shadow-primary-100 dark:shadow-primary-900/30'
-                : isConnected(gw.id)
+                : isConfigured(gw.id)
                   ? 'border-green-300 dark:border-green-700 shadow-md'
                   : 'border-gray-100 dark:border-gray-800 shadow-sm hover:shadow-md hover:border-gray-200 dark:hover:border-gray-700',
             ]"
@@ -290,7 +341,7 @@ async function saveCredentials() {
                   <span class="w-2 h-2 rounded-full bg-green-400 animate-pulse shadow-sm shadow-green-400" />
                   <span class="text-white text-xs font-semibold">Live</span>
                 </div>
-                <div v-else-if="isConnected(gw.id)" class="flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-2.5 py-1">
+                <div v-else-if="isConfigured(gw.id)" class="flex items-center gap-1.5 bg-white/15 border border-white/20 rounded-full px-2.5 py-1">
                   <UIcon name="i-heroicons-check" class="text-white text-xs" />
                   <span class="text-white text-xs font-medium">Connected</span>
                 </div>
@@ -330,17 +381,19 @@ async function saveCredentials() {
                   class="flex-1"
                   @click="openConfigure(gw)"
                 >
-                  {{ isConnected(gw.id) ? 'Edit Config' : 'Configure' }}
+                  {{ isConfigured(gw.id) ? 'Edit Config' : 'Configure' }}
                 </UButton>
 
                 <template v-if="!isActive(gw.id)">
                   <UButton
-                    v-if="isConnected(gw.id)"
+                    v-if="isConfigured(gw.id)"
                     size="sm"
                     icon="i-heroicons-bolt"
                     variant="soft"
                     color="primary"
                     class="flex-1"
+                    :loading="isSaving && config.gateway === gw.id"
+                    :disabled="isSaving"
                     @click="setActive(gw.id)"
                   >
                     Switch to this
@@ -355,8 +408,8 @@ async function saveCredentials() {
               </div>
 
               <!-- Hint if not configured yet -->
-              <p v-if="!isConnected(gw.id)" class="text-[11px] text-gray-400 text-center -mt-1">
-                Fill in credentials to activate this gateway
+              <p v-if="!isConfigured(gw.id)" class="text-[11px] text-gray-400 text-center -mt-1">
+                Save valid credentials before activating this gateway
               </p>
             </div>
           </div>
@@ -420,10 +473,51 @@ async function saveCredentials() {
             <UInput
               v-else
               v-model="tempCreds[field.key]"
-              :type="field.type || 'text'"
+              :type="field.type === 'password' && isSecretVisible(field.key) ? 'text' : (field.type || 'text')"
               :placeholder="field.placeholder || (field.type === 'password' ? '••••••••••••••••' : '')"
-            />
-            <template v-if="field.key === 'webhookSecret'" #help>
+            >
+              <template v-if="field.type === 'password'" #trailing>
+                <div class="pointer-events-auto">
+                  <button
+                    type="button"
+                    class="flex items-center text-gray-400 transition-colors hover:text-gray-600 dark:hover:text-gray-200"
+                    :aria-label="`${isSecretVisible(field.key) ? 'Hide' : 'Show'} ${field.label}`"
+                    :title="`${isSecretVisible(field.key) ? 'Hide' : 'Show'} ${field.label}`"
+                    @mousedown.prevent
+                    @click.stop="toggleSecretVisibility(field.key)"
+                  >
+                    <UIcon
+                      :name="isSecretVisible(field.key) ? 'i-heroicons-eye-slash' : 'i-heroicons-eye'"
+                      class="text-lg"
+                    />
+                  </button>
+                </div>
+              </template>
+            </UInput>
+            <template v-if="activeGateway.id === 'cashfree' && field.key === 'secretKey'" #help>
+              <div class="space-y-2 mt-1">
+                <span class="text-gray-400 text-xs">{{ field.help }}</span>
+                <div class="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg px-2.5 py-1.5">
+                  <code class="text-[11px] text-gray-600 dark:text-gray-300 flex-1 break-all select-all">{{ webhookUrl }}</code>
+                  <UButton
+                    size="xs"
+                    variant="ghost"
+                    color="gray"
+                    icon="i-heroicons-clipboard-document"
+                    title="Copy Cashfree webhook URL"
+                    @click="copyWebhookUrl"
+                  />
+                </div>
+                <button
+                  type="button"
+                  class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                  @click="webhookGuideOpen = !webhookGuideOpen"
+                >
+                  {{ webhookGuideOpen ? 'Hide webhook setup' : 'Show webhook setup' }}
+                </button>
+              </div>
+            </template>
+            <template v-else-if="field.key === 'webhookSecret'" #help>
               <div class="flex items-center gap-1.5 mt-1 bg-gray-100 dark:bg-gray-800 rounded-lg px-2.5 py-1.5">
                 <code class="text-[11px] text-gray-600 dark:text-gray-300 flex-1 break-all select-all">https://api.markit.co.in/api/payment/{{ companyId }}/webhook/razorpay</code>
                 <UButton
@@ -440,6 +534,24 @@ async function saveCredentials() {
               <span class="text-gray-400 text-xs">{{ field.help }}</span>
             </template>
           </UFormGroup>
+
+          <Transition name="fade">
+            <div
+              v-if="activeGateway.id === 'cashfree' && field.key === 'secretKey' && webhookGuideOpen"
+              class="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/30 p-4 space-y-3"
+            >
+              <p class="text-xs font-semibold text-teal-700 dark:text-teal-300 flex items-center gap-1.5">
+                <UIcon name="i-heroicons-shield-check" />
+                Cashfree webhook setup
+              </p>
+              <p class="text-xs text-teal-700 dark:text-teal-300 leading-relaxed">
+                Add the URL above in Cashfree Dashboard under Developers → Webhooks and enable payment success, failed, and user-dropped events. Markit verifies every callback with your Cashfree Secret Key; no separate webhook secret is required.
+              </p>
+              <p class="text-[11px] text-teal-600 dark:text-teal-400">
+                The webhook is the recovery path when a customer pays but closes the browser before returning to your store.
+              </p>
+            </div>
+          </Transition>
 
           <!-- Webhook guide (Razorpay only) -->
           <Transition name="fade">
@@ -543,10 +655,10 @@ async function saveCredentials() {
             <UButton
               :loading="testStatus === 'testing' || isSaving"
               :disabled="!isFormValid || testStatus === 'testing'"
-              icon="i-heroicons-bolt"
+              icon="i-heroicons-check"
               @click="saveCredentials"
             >
-              {{ testStatus === 'testing' ? 'Verifying…' : testStatus === 'ok' ? 'Activate' : 'Test & Activate' }}
+              {{ testStatus === 'testing' ? 'Verifying…' : testStatus === 'ok' ? 'Save Configuration' : 'Test & Save' }}
             </UButton>
           </div>
         </div>

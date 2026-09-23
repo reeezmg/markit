@@ -169,7 +169,9 @@ export async function createEcommOrder(
   }
 
   const { rows: companyRows } = await db.query(
-    `SELECT COALESCE(is_tax_included, true) AS is_tax_included FROM companies WHERE id = $1`,
+    `SELECT COALESCE(is_tax_included, true) AS is_tax_included,
+            GREATEST(0, COALESCE(points_value, 0)) AS points_value
+     FROM companies WHERE id = $1`,
     [companyId],
   )
   const isTaxIncluded = companyRows[0]?.is_tax_included !== false
@@ -242,6 +244,9 @@ export async function createEcommOrder(
   const tax = money(snapshot.reduce((sum, i) => sum + i.taxAmount, 0))
   const chargedTax = isTaxIncluded ? 0 : tax
   const grandTotal = money(Math.max(0, subtotal + deliveryFee + chargedTax - discount))
+  const loyaltyAmount = money(Math.max(0, subtotal - discount - (isTaxIncluded ? tax : 0)))
+  const pointsValue = Number(companyRows[0]?.points_value || 0)
+  const billPoints = pointsValue > 0 ? Math.floor(loyaltyAmount / pointsValue) : 0
 
   // ── Bill ─────────────────────────────────────────────────────────────────
   // invoice_number is assigned by the generate_invoice_number trigger on
@@ -250,15 +255,15 @@ export async function createEcommOrder(
   const { rows: billRows } = await db.query(
     `INSERT INTO bills (id, created_at, updated_at, invoice_number, subtotal, grand_total, discount, tax,
                         delivery_fee, payment_method, payment_status, company_id, client_id, address_id,
-                        notes, type, status, is_markit, coupon_value)
+                        notes, type, status, is_markit, coupon_value, bill_points)
      VALUES ($1, now(), now(), NULL, $2, $3, $4, $5, $6, $7, $8::"PaymentStatus", $9, $10, $11, $12,
-             'STANDARD'::"OrderType", 'PENDING'::"OrderStatus", false, $13)
+             'STANDARD'::"OrderType", 'PENDING'::"OrderStatus", false, $13, $14)
      RETURNING invoice_number`,
     [billId, subtotal, grandTotal, discount, tax, deliveryFee, paymentMethod,
       paymentStatus === 'PAID' ? 'PAID' : 'PENDING', companyId, clientId, addressId, input?.notes || null,
       // coupon_value is an integer column, so the coupon's share is rounded —
       // the exact figure lives in `discount`, which is a float.
-      Math.round(couponPart)],
+      Math.round(couponPart), billPoints],
   )
   const invoiceNumber = billRows[0]?.invoice_number ?? null
 
@@ -311,6 +316,15 @@ export async function createEcommOrder(
     source: 'manual',
     note: 'Order created by the seller',
   })
+
+  if (billPoints > 0) {
+    await db.query(
+      `UPDATE company_clients
+       SET points = GREATEST(0, COALESCE(points, 0)) + $1
+       WHERE company_id = $2 AND client_id = $3`,
+      [billPoints, companyId, clientId],
+    )
+  }
 
   return {
     orderId,

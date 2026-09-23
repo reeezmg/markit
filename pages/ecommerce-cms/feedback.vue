@@ -249,7 +249,11 @@ onMounted(resetForm)
           </div>
         </template>
         <template #status-data="{ row }">
-          <UBadge :color="row.status ? 'green' : 'gray'" variant="subtle">{{ row.status ? 'Live' : 'Hidden' }}</UBadge>
+          <UToggle
+            :model-value="row.status"
+            :aria-label="`${row.status ? 'Hide' : 'Show'} feedback from ${row.customerName}`"
+            @update:model-value="toggle(row)"
+          />
         </template>
         <template #actions-data="{ row }">
           <UDropdown :items="rowActions(row)">

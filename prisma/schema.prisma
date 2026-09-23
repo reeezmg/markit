@@ -1471,23 +1471,46 @@ model EcommFaq {
 }
 
 model EcommFeedback {
-  id           String   @id() @unique() @default(dbgenerated("gen_random_uuid()"))
-  createdAt    DateTime @default(now()) @map("created_at")
-  updatedAt    DateTime @default(now()) @updatedAt() @map("updated_at")
-  customerName String   @map("customer_name")
+  id           String      @id() @unique() @default(dbgenerated("gen_random_uuid()"))
+  createdAt    DateTime    @default(now()) @map("created_at")
+  updatedAt    DateTime    @default(now()) @updatedAt() @map("updated_at")
+  customerName String      @map("customer_name")
   title        String
   message      String
-  rating       Int      @default(5)
-  sortOrder    Int      @default(0) @map("sort_order")
-  status       Boolean  @default(true)
-  company      Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId    String   @map("company_id")
-  client       Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
-  clientId     String?  @map("client_id")
+  rating       Int         @default(5)
+  sortOrder    Int         @default(0) @map("sort_order")
+  status       Boolean     @default(true)
+  company      Company     @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId    String      @map("company_id")
+  client       Client?     @relation(fields: [clientId], references: [id], onDelete: SetNull)
+  clientId     String?     @map("client_id")
+  order        EcommOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+  orderId      String?     @map("order_id")
 
+  @@unique([companyId, orderId])
   @@index([companyId, status, sortOrder])
   @@index([companyId, clientId])
   @@map("ecomm_feedback")
+}
+
+model EcommProductReview {
+  id          String   @id() @unique() @default(uuid())
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt() @map("updated_at")
+  companyId   String   @map("company_id")
+  clientId    String   @map("client_id")
+  orderId     String   @map("order_id")
+  orderItemId String   @map("order_item_id")
+  productId   String   @map("product_id")
+  variantId   String   @map("variant_id")
+  rating      Int
+  reviewText  String   @map("review_text")
+  photos      Json     @default("[]")
+  status      String   @default("APPROVED")
+
+  @@unique([companyId, orderId, orderItemId])
+  @@index([companyId, productId, status, createdAt])
+  @@map("ecomm_product_reviews")
 }
 
 model EcommContactMessage {
@@ -1608,6 +1631,7 @@ model EcommOrder {
   billId          String?                   @unique() @map("bill_id")
   statusHistory   EcommOrderStatusHistory[]
   requests        EcommOrderRequest[]
+  feedback        EcommFeedback[]
 
   @@index([companyId, clientId, createdAt])
   @@index([companyId, orderNumber])

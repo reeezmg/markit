@@ -89,3 +89,10 @@ Check out the [deployment documentation](https://nuxt.com/docs/getting-started/d
 ## Renovate integration
 
 Install [Renovate GitHub app](https://github.com/apps/renovate/installations/select_target) on your repository and you are good to go.
+
+## Project documentation
+
+- [Ecommerce payment gateways](docs/ecommerce-payments.md) — seller configuration,
+  Cashfree connection testing, webhook setup, runtime flow, and troubleshooting.
+- [Storefront memory](docs/storefront-memory.md) — storefront editor and generated
+  storefront behavior.

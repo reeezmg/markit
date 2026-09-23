@@ -62,15 +62,45 @@ export default defineEventHandler(async (event) => {
     })
   }
 
-  const { rows } = await pool.query(
-    `INSERT INTO ecomm_order_requests
+  const client = await pool.connect()
+  try {
+    await client.query('BEGIN')
+    const { rows } = await client.query(
+      `INSERT INTO ecomm_order_requests
        (company_id, client_id, order_id, type, status, reason, images, items, fee, meta)
      VALUES ($1, $2, $3, $4, 'APPROVED', $5, '[]'::jsonb, $6::jsonb, $7, $8::jsonb)
      RETURNING id, type, status, created_at AS "createdAt"`,
-    [companyId, order.clientId, order.id, type, reason,
-     JSON.stringify(Array.isArray(body.items) ? body.items : []),
-     Number(body.fee || 0),
-     JSON.stringify({ source: 'seller', createdBy: userId || null })],
-  )
-  return { request: rows[0], orderNumber: order.orderNumber }
+      [companyId, order.clientId, order.id, type, reason,
+       JSON.stringify(Array.isArray(body.items) ? body.items : []),
+       Number(body.fee || 0),
+       JSON.stringify({ source: 'seller', createdBy: userId || null })],
+    )
+    if (type === 'return') {
+      const awarded = await client.query(
+        `SELECT b.id, COALESCE(b.bill_points, 0) AS bill_points
+         FROM bills b JOIN ecomm_orders o ON o.bill_id = b.id
+         WHERE o.id = $1 AND o.company_id = $2 FOR UPDATE OF b`,
+        [order.id, companyId],
+      )
+      const pointsToRemove = Math.max(0, Number(awarded.rows[0]?.bill_points || 0))
+      if (pointsToRemove > 0) {
+        await client.query(
+          `UPDATE company_clients SET points = GREATEST(0, COALESCE(points, 0) - $1)
+           WHERE company_id = $2 AND client_id = $3`,
+          [pointsToRemove, companyId, order.clientId],
+        )
+        await client.query(
+          `UPDATE bills SET bill_points = 0, updated_at = now() WHERE id = $1 AND company_id = $2`,
+          [awarded.rows[0].id, companyId],
+        )
+      }
+    }
+    await client.query('COMMIT')
+    return { request: rows[0], orderNumber: order.orderNumber }
+  } catch (error) {
+    await client.query('ROLLBACK')
+    throw error
+  } finally {
+    client.release()
+  }
 })

@@ -46,6 +46,16 @@ export const ensureEcommCmsTables = async () => {
   `)
 
   await pool.query(`
+    ALTER TABLE ecomm_feedback
+    ADD COLUMN IF NOT EXISTS order_id TEXT REFERENCES ecomm_orders(id) ON DELETE SET NULL
+  `)
+
+  await pool.query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS ecomm_feedback_company_order_idx
+    ON ecomm_feedback (company_id, order_id) WHERE order_id IS NOT NULL
+  `)
+
+  await pool.query(`
     CREATE TABLE IF NOT EXISTS ecomm_blogs (
       id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),

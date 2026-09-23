@@ -1470,12 +1470,35 @@ model EcommFeedback {
     companyId    String   @map("company_id")
     client       Client?  @relation(fields: [clientId], references: [id], onDelete: SetNull)
     clientId     String?  @map("client_id")
+    order        EcommOrder? @relation(fields: [orderId], references: [id], onDelete: SetNull)
+    orderId      String?  @map("order_id")
 
     @@index([companyId, status, sortOrder])
     @@index([companyId, clientId])
+    @@unique([companyId, orderId])
     @@allow('read', true)
     @@allow('create, update, delete', company.users?[userId == auth().id])
     @@map("ecomm_feedback")
+}
+
+model EcommProductReview extends Base {
+    createdAt  DateTime @default(now()) @map("created_at")
+    updatedAt  DateTime @updatedAt @map("updated_at")
+    companyId  String   @map("company_id")
+    clientId   String   @map("client_id")
+    orderId    String   @map("order_id")
+    orderItemId String  @map("order_item_id")
+    productId  String   @map("product_id")
+    variantId  String   @map("variant_id")
+    rating     Int
+    reviewText String   @map("review_text")
+    photos     Json     @default("[]")
+    status     String   @default("APPROVED")
+
+    @@unique([companyId, orderId, orderItemId])
+    @@index([companyId, productId, status, createdAt])
+    @@allow('read, create, update, delete', true)
+    @@map("ecomm_product_reviews")
 }
 
 // Storefront contact-form submissions. Table provisioned by custom-api
@@ -1625,6 +1648,7 @@ model EcommOrder extends Base {
     billId          String?                   @unique @map("bill_id")
     statusHistory   EcommOrderStatusHistory[]
     requests        EcommOrderRequest[]
+    feedback        EcommFeedback[]
 
     @@index([companyId, clientId, createdAt])
     @@index([companyId, orderNumber])

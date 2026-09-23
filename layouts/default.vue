@@ -191,6 +191,10 @@ const links = computed(() => {
           },
         },
         {
+          id: 'ecom-reviews', label: 'Product Reviews', to: '/ecommerce-cms/reviews',
+          icon: 'i-heroicons-star', tooltip: { text: 'Product Reviews', shortcuts: ['C', 'V'] },
+        },
+        {
           id: 'ecom-blogs',
           label: 'Blogs',
           to: '/ecommerce-cms/blogs',
@@ -936,6 +940,10 @@ const links = computed(() => {
                     },
                 },
                 {
+                    label: 'Product Reviews', to: '/ecommerce-cms/reviews', exact: true,
+                    tooltip: { text: 'Product Reviews', shortcuts: ['C', 'V'] },
+                },
+                {
                     label: 'Blogs',
                     to: '/ecommerce-cms/blogs',
                     exact: true,
@@ -1084,6 +1092,9 @@ const links = computed(() => {
   if (sidebarSection.value === 'storefront') {
     const ecomChildren = (allLinks.find((link) => link.id === 'ecom') as { children?: any[] } | undefined)?.children ?? []
     const editor = ecomChildren.find((link) => link.to === '/storefront/editor')
+    const orderLinks = allLinks
+      .filter((link) => link.id === 'orders' || link.id === 'bookings')
+      .map((link) => ({ ...link, id: 'storefront-orders' }))
     const group = (id: string, label: string, icon: string, paths: string[]) => ({
       id,
       label,
@@ -1097,16 +1108,19 @@ const links = computed(() => {
         '/ecommerce-cms/faq', '/ecommerce-cms/blogs', '/ecommerce-cms/gallery', '/ecommerce-cms/policies',
       ]),
       group('storefront-customer', 'Customer', 'i-heroicons-chat-bubble-left-right', [
-        '/ecommerce-cms/customers', '/ecommerce-cms/marketing', '/ecommerce-cms/messages', '/ecommerce-cms/feedback',
+        '/ecommerce-cms/customers', '/ecommerce-cms/marketing', '/ecommerce-cms/messages', '/ecommerce-cms/feedback', '/ecommerce-cms/reviews',
       ]),
       group('storefront-commerce', 'Commerce', 'i-heroicons-shopping-bag', [
         '/ecommerce-cms/payment', '/ecommerce-cms/shipping',
       ]),
+      ...orderLinks,
       ...allLinks.filter((link) => link.id === 'ai' || link.id === 'settings'),
     ])
   }
 
-  const sectionLinks = allLinks.filter((link) => link.id !== 'ecom' && link.id !== 'ai')
+  const sectionLinks = allLinks.filter((link) =>
+    link.id !== 'ecom' && link.id !== 'ai' && link.id !== 'orders' && link.id !== 'bookings'
+  )
 
   return collapseGroups(sectionLinks)
 

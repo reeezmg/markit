@@ -1,0 +1,7 @@
+<script setup lang="ts">
+type Row={id:string;rating:number;text:string;photos:string[];status:string;createdAt:string;customerName:string;productName:string;orderNumber:number}
+const toast=useToast();const {data:rows,refresh,pending}=await useFetch<Row[]>('/api/ecommerce-cms/reviews',{default:()=>[]})
+async function remove(row:Row){await $fetch(`/api/ecommerce-cms/reviews/${row.id}`,{method:'DELETE'});await refresh()}
+const columns=[{key:'productName',label:'Product'},{key:'customerName',label:'Customer'},{key:'rating',label:'Rating'},{key:'text',label:'Review'},{key:'photos',label:'Photos'},{key:'actions',label:'Actions'}]
+</script>
+<template><UDashboardPanelContent><UCard><template #header><div><h1 class="text-xl font-semibold">Product reviews</h1><p class="text-sm text-gray-500">Verified-purchase reviews are published automatically on their product pages.</p></div></template><UTable :rows="rows" :columns="columns" :loading="pending"><template #rating-data="{row}"><b>{{row.rating}}★</b></template><template #text-data="{row}"><p class="max-w-md line-clamp-3">{{row.text}}</p></template><template #photos-data="{row}"><div class="flex gap-1"><a v-for="(photo,i) in row.photos" :key="i" :href="photo" target="_blank"><img :src="photo" class="h-10 w-10 rounded object-cover"></a></div></template><template #actions-data="{row}"><UButton size="xs" color="red" variant="ghost" icon="i-heroicons-trash" aria-label="Delete review" @click="remove(row)"/></template></UTable></UCard></UDashboardPanelContent></template>

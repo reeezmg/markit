@@ -26,7 +26,8 @@ export default defineEventHandler(async (event) => {
 
     const existingRes = await client.query(
       `
-      SELECT invoice_number, payment_status, payment_method, split_payments, grand_total, created_at, is_markit, deleted
+      SELECT invoice_number, payment_status, payment_method, split_payments, grand_total, created_at,
+             is_markit, deleted, client_id, COALESCE(bill_points, 0) AS bill_points
       FROM bills
       WHERE id = $1
         AND company_id = $2
@@ -71,6 +72,28 @@ export default defineEventHandler(async (event) => {
       })
     }
     const bill = res.rows[0]
+
+    // Ecommerce points are granted when the order is created. Starting a
+    // refund removes that award once; bill_points = 0 is the idempotency guard.
+    if (status === 'REFUNDED' && existingBill.client_id && Number(existingBill.bill_points || 0) > 0) {
+      const ecommerceOrder = await client.query(
+        `SELECT id FROM ecomm_orders WHERE bill_id = $1 AND company_id = $2 LIMIT 1`,
+        [billId, companyId],
+      )
+      if (ecommerceOrder.rows.length) {
+        await client.query(
+          `UPDATE company_clients
+           SET points = GREATEST(0, COALESCE(points, 0) - $1)
+           WHERE company_id = $2 AND client_id = $3`,
+          [Number(existingBill.bill_points), companyId, existingBill.client_id],
+        )
+        await client.query(
+          `UPDATE bills SET bill_points = 0, updated_at = now()
+           WHERE id = $1 AND company_id = $2`,
+          [billId, companyId],
+        )
+      }
+    }
     const adjustmentRows = paymentMethodChangeRows(
       billId,
       companyId,

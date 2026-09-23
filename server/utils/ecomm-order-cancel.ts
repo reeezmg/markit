@@ -143,10 +143,24 @@ export async function cancelEcommOrder(
     const bill = await db.query(
       `UPDATE bills SET status = 'CANCELED', updated_at = now()
        WHERE id = $1 AND company_id = $2
-       RETURNING id`,
+       RETURNING id, COALESCE(bill_points, 0) AS bill_points`,
       [order.bill_id, companyId],
     )
     billCancelled = bill.rows.length > 0
+    const pointsToRemove = Math.max(0, Number(bill.rows[0]?.bill_points || 0))
+    if (pointsToRemove > 0) {
+      await db.query(
+        `UPDATE company_clients
+         SET points = GREATEST(0, COALESCE(points, 0) - $1)
+         WHERE company_id = $2 AND client_id = $3`,
+        [pointsToRemove, companyId, order.client_id],
+      )
+      await db.query(
+        `UPDATE bills SET bill_points = 0, updated_at = now()
+         WHERE id = $1 AND company_id = $2`,
+        [order.bill_id, companyId],
+      )
+    }
   }
 
   // ── Coupons ──────────────────────────────────────────────────────────────

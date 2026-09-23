@@ -120,6 +120,13 @@ export default defineEventHandler(async (event) => {
     let whereSQL = `
       b.company_id = $1
       AND b.deleted = false
+      AND NOT EXISTS (
+        SELECT 1
+        FROM ecomm_checkouts pending_checkout
+        WHERE pending_checkout.bill_id = b.id
+          AND UPPER(COALESCE(pending_checkout.payment_method, '')) <> 'COD'
+          AND pending_checkout.payment_status <> 'PAID'
+      )
       AND ($${idx} = true OR b.precedence IS NOT TRUE)
     `
     values.push(includeCleanupPrecedence)
