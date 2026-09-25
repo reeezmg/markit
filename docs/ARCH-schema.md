@@ -7,13 +7,15 @@
 > explicitly awaiting review. See [`database/WORKFLOWS.md`](./database/WORKFLOWS.md)
 > for the main record lifecycles.
 
-## Known schema-source discrepancy
+## Runtime payment table alignment
 
 `ecommerce-api/api/app/tables.py` creates and payment routes use
-`ecomm_payment_intents`, but `storetools/schema.zmodel` has no corresponding model. It
-stores pending payment attempts, request JSON, transaction/checkout references,
-company/client scope and idempotency. The generated catalog preserves its DDL under
-`unmodeledRuntimeTables`. Add a proper schema model before changing it.
+`ecomm_payment_intents`, mirrored by `EcommPaymentIntent` in `storetools/schema.zmodel`.
+It stores pending payment attempts, request JSON, transaction/checkout references,
+company/client scope and idempotency. The model preserves the runtime table's
+timestamp types, defaults, foreign keys and named idempotency index. Generated
+ZenStack CRUD access is denied; the trusted payment API owns these records.
+`EcommFeedback.images` preserves the existing non-null JSONB column with an empty-array default.
 
 ## Project Overview
 
@@ -100,6 +102,15 @@ ZenStack-modeled raw-SQL-compatible tables for custom storefront content. Define
 - `ecomm_carts`: one custom-storefront cart per `(company_id, client_id)`, with `items` JSONB and `meta` JSONB. Created/updated by `ecommerce-api/api/app/routes/cart.py`; Revomotive's Pinia cart store syncs add/edit/delete operations to this table.
 - `ecomm_wishlists`: one custom-storefront wishlist per `(company_id, client_id)`, with `variant_ids text[]` plus full `items` JSONB for fast client rendering. Created/updated by `ecommerce-api/api/app/routes/wishlist.py`; Revomotive's Pinia wishlist store syncs toggles and logout clearing to this table.
 - **Used in:** storetools ecommerce CMS pages/API, ecommerce-api bootstrap, Revomotive custom storefront.
+
+#### Virtual custom objects (`custom_objects`, `custom_fields`, `custom_records`, `custom_values`, `custom_relationships`)
+These five tables are the storage foundation for company-defined storefront data. They are defined in `storetools/schema.zmodel` and created by `20260925120000_add_custom_objects/migration.sql`; no custom-object API or editor UI is wired yet.
+- `custom_objects` defines a company-scoped logical table with a unique `(company_id, slug)`.
+- `custom_fields` defines named fields on one object. `value_type` is restricted to `TEXT`, `NUMBER`, `BOOLEAN`, `DATE`, `TIMESTAMP`, or `REFERENCE`; `required` is metadata for future write validation.
+- `custom_records` holds logical rows. Composite `(company_id, object_id, id)` keys make tenant and object ownership available to child foreign keys.
+- `custom_values` stores one value per `(company_id, record_id, field_id)` in a typed column. Foreign keys require the field and record to belong to the same company and object. A SQL check and trigger require exactly one populated value column matching the field's declared type. Typed lookup indexes support field filtering without JSONB record values.
+- `custom_relationships` links a source record's `REFERENCE` field to a target. `CUSTOM` targets use a composite foreign key to another custom record in the same company. Other `target_type` values can represent core entities, but their existence and company ownership require future application validation because the polymorphic target cannot have a single core-table foreign key.
+- The database does not yet enforce a required field on every record, per-field uniqueness, or cardinality. Those rules need a transactional write API before customer data is accepted.
 
 #### `delivery_partners` (DeliveryPartner)
 Delivery staff for try-at-home orders.

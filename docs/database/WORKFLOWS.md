@@ -31,8 +31,10 @@ entries and first status event, then decrements stock in one transaction. Positi
 total online checkout first creates `ecomm_payment_intents` with a server-computed
 total and saved request. After gateway verification, `ecomm_payment_verifications`
 holds one-use proof. Settlement consumes that proof and creates the actual order.
-`ecomm_payment_intents` currently comes from API startup DDL and has no zmodel model.
-Sources: `ecommerce-api/api/app/routes/checkout.py`, `payment.py`, `tables.py`.
+`EcommPaymentIntent` mirrors the API-created `ecomm_payment_intents` table in
+`schema.zmodel`; the trusted ecommerce API creates and updates payment attempts.
+Sources: `schema.zmodel` and `ecommerce-api/api/app/routes/checkout.py`,
+`payment.py`, `tables.py`.
 
 `ecomm_orders.items` is a purchase-time snapshot. `ecomm_order_status_history` records
 status events. `ecomm_order_requests` holds cancellation, return and exchange requests.

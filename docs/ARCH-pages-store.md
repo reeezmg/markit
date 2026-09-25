@@ -18,43 +18,32 @@ While a task runs, Enter and the primary composer action add durable FIFO items 
 
 During a Pi run, sandbox `message_update` events update the internal `writing` stage but their text deltas are not streamed or concatenated into the seller reply. Tool execution remains visible through structured activity events. When the run becomes idle, the sandbox extracts text only from the final assistant message in `active.session.messages`; that single final summary becomes `turn.text`, the persisted PostgreSQL reply, and the message rendered by `ChatSlideover.vue`.
 
-### `pages/index.vue` — Consumer-Facing Landing Page
-Same template as `landing.vue` — identical content. Uses `layout: 'marketing'`, `colorMode: 'light'`.
+### `pages/index.vue` — Unified AI commerce landing page
 
-**Sections:**
-- Hero: "Shop Smarter. Try Before You Buy." with logo
-- Hero image (`/images/hero.png`)
-- `ULandingSection` for each feature: Try at Home, Book Now Pay Later, Instant Delivery (with images)
-- `ULandingLogos` row with category icons (apparel, shoes, fancy, trending)
-- 3 benefit cards: Convenient Shopping, Local First, No Clickbait Offers
-- `ULandingCTA` → `/launching`
+Public, server-rendered marketing page using `layouts/brand.vue`, forced light colour mode and `auth: false`. It replaces the former consumer and seller landing pages. It does not perform its former page-level logged-in redirect; existing global auth/session restoration still applies.
 
-**Navbar:** Seller button → `/storelanding`, Try N Buy button → external `https://store.markit.co.in`
+- The shared warm-studio design system lives in `assets/css/brand.css`; navigation, mobile menu and footer live in `layouts/brand.vue`. Orange is the action/accent colour, cream the canvas, apricot the supporting surface, and warm charcoal the contrasting ERP panel. Cards use the shared 16px outer radius and 8px control radius. Extend these tokens and shared card rules rather than introducing unrelated section palettes; product photography can retain its own colours. The journal uses the same palette.
+- The hero, metadata, navigation and FAQ introduce **A-commerce (agentic commerce)**. `#acommerce` explains direction → AI storefront development → merchant review/publishing. The [Amboras explanation](https://www.amboras.com/what-is-agentic-ecommerce) informed the category definition; the page describes Markit's own preview/publish workflow and does not promise unattended optimisation or autonomous commerce operations.
+- `assets/css/brand-motion.css` provides finite hero/underline/floating-card entrances and hover feedback. The page's IntersectionObserver adds one-time Web Animations API reveals to off-screen section headings/cards without hiding server-rendered content. Reduced-motion preferences disable CSS motion and are checked before every reveal; a live preference change cancels active reveals. Unmount disconnects the observer, cancels animations and removes the preference listener. Pricing and demo changes remain user-triggered.
+- Sections cover AI storefront development, an explicitly labelled interactive demonstration, content/image/SEO assistance, custom plugin and agent development ideas, existing retail ERP workflows, pricing and visible questions/answers. The journal section and all blog links are omitted from the landing page and shared header/mobile/footer navigation; articles remain accessible at their public URLs.
+- `components/Marketing/StorefrontDemo.vue` offers four local design prompts (accessories, skincare, streetwear, coffee), each with its own generated WebP storefront screenshot in `public/images/marketing/demo-*.webp`. `assets/css/storefront-demo.css` styles the responsive preview and animated simulated terminal. Clicking runs three stages over 2.1 seconds before revealing the loaded image; reduced-motion users skip the delay. New clicks cancel previous timers and image callbacks; failed loads expose a retry and pending work is cleared on unmount. The UI labels the sequence as a simulation: it does not invoke a model or edit a real store. ERP graphics are also explicitly illustrative.
+- `data/marketing.ts` owns the visible FAQ and four screenshot-specified marketing plans: Basic, Pro, Advanced and Plus. Monthly prices are INR 4,695 / 10.06K / 38.23K / 239.5K; yearly monthly equivalents are INR 3,737 / 9,103 / 34.5K / 239.5K. Yearly totals derive from these displayed rates. Savings vary by plan.
+- Start-for-free links go to `/register` without passing the new plan names. Registration still supports the existing free/lite/pro values; the marketing change does not provision paid entitlements or implement subscription billing. Plus uses the existing public contact email.
+- Custom plugins and agents are described as development projects requiring their own integrations, permissions and testing, not as preinstalled features.
+- Generated imagery is local under `public/images/marketing/`; the page uses the compressed WebP. The asset README records the original prompt and tool.
+- Home metadata includes canonical, Open Graph/Twitter image, Organization/WebSite and FAQPage JSON-LD. FAQ answers are rendered visibly from the same data. Search placement is not guaranteed; Google retired FAQ rich results in May 2026.
 
----
+### `pages/landing.vue` and `pages/storelanding.vue` — Legacy redirects
 
-### `pages/landing.vue` — Consumer Landing Page (Duplicate of index.vue)
-Identical to `index.vue`. Also uses `layout: 'marketing'`, `colorMode: 'light'`. Both files contain the exact same template and script content.
+Both routes permanently redirect to `/`. `nuxt.config.ts` defines Nitro 301 rules and each page provides a `navigateTo` fallback for client navigation. There is only one active landing-page implementation.
 
----
+### `/blogs` — The Commerce Edit
 
-### `pages/storelanding.vue` — Seller-Facing Landing Page
-Rendered inside `UDashboardPage` + `UDashboardPanel` (not the `marketing` layout).
+`pages/blogs.vue` is the brand-layout parent. `pages/blogs/index.vue` lists ten original articles from `data/commerce-articles.ts`; `pages/blogs/[slug].vue` renders their full server-rendered content, table of contents, related links and signup CTA. Unknown slugs throw 404. Article metadata uses canonical URLs, BlogPosting and BreadcrumbList JSON-LD, with no invented reviews or publication dates. The existing static Try N Buy article remains available at its original URL.
 
-**Content:** Same feature cards as index.vue (Inventory Management, CRM, ERP/Billing, Try-at-Home, Wholesaler Marketplace, Sales Analytics)
-
-**Pricing section:**
-- `UPricingToggle` for monthly/yearly toggle (`isYearly` ref)
-- `UPricingGrid` with `UPricingCard` for 3 plans (all computed from `pricingPlans`):
-  - **Free**: ₹0 — 50 products, 1 user, no billing/accounts/PO
-  - **Lite**: ₹1,000/month or ₹10,000/year — unlimited products/users, no billing/accounts; 300 cataloging assistance
-  - **Pro**: ₹2,000/month or ₹20,000/year — full features including billing, accounts, PO; 300 cataloging assistance
-- "List Your Store" CTA → `/register?plan={plan}`
-
-**Navbar:** Login + Register buttons
+The sitemap configuration includes only home, public blogs and terms; dynamic article URLs are supplied explicitly from the article data. The library covers storefront creation, A-commerce, SEO, custom plugins/agents, retail ERP, AI briefs, imagery, product pages, bundles and shopping assistants. Articles retain visible content, canonical metadata, related links and sitemap discovery even though they are not promoted on the landing page. These are reviewed static articles included in source, not a recurring unattended publishing service. Add an article to the data module to include it in the journal and sitemap. No new database, AI API call or scheduler is needed to render these pages.
 
 ---
-
 ### `pages/launching.vue` — "Launching Soon" Placeholder
 Consumer-facing coming soon page. Uses `layout: false`.
 

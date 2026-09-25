@@ -289,6 +289,7 @@ model Company extends Base {
     ecommPickupRequests       EcommPickupRequest[]
     ecommOrderStatusHistory   EcommOrderStatusHistory[]
     ecommPaymentVerifications EcommPaymentVerification[]
+    ecommPaymentIntents       EcommPaymentIntent[]
 
     shifts                    Shift[]
     shiftAssignments          ShiftAssignment[]
@@ -311,6 +312,7 @@ model Company extends Base {
     storefrontAgentSessions   StorefrontAgentSession[]
     storefrontSource          StorefrontSource?
     productCustomFields       ProductCustomField[]
+    customObjects             CustomObject[]
 
     @@allow('create', auth() != null && status)
     @@allow('update', users?[userId == auth().id])
@@ -382,6 +384,103 @@ model ProductCustomField extends Base {
     @@index([companyId, scope])
     @@allow("create, read, update, delete", true)
     @@map("product_custom_fields")
+}
+
+// Tenant-scoped virtual tables. Each definition owns fields and records; the
+// customer data lives in typed custom_values rows rather than JSONB.
+model CustomObject {
+    id String @id @unique @default(uuid())
+    companyId String @map("company_id")
+    company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    slug      String
+    name      String
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    fields    CustomField[]
+    records   CustomRecord[]
+
+    @@unique([companyId, slug])
+    @@unique([companyId, id])
+    @@map("custom_objects")
+}
+
+model CustomField {
+    id String @id @unique @default(uuid())
+    companyId String @map("company_id")
+    objectId  String @map("object_id")
+    object    CustomObject @relation(fields: [companyId, objectId], references: [companyId, id], onDelete: Cascade)
+    key       String
+    name      String
+    valueType String @map("value_type") // TEXT, NUMBER, BOOLEAN, DATE, TIMESTAMP, or REFERENCE
+    required  Boolean @default(false)
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    values    CustomValue[]
+    relationships CustomRelationship[]
+
+    @@unique([companyId, objectId, key])
+    @@unique([companyId, objectId, id])
+    @@map("custom_fields")
+}
+
+model CustomRecord {
+    id String @id @unique @default(uuid())
+    companyId String @map("company_id")
+    objectId  String @map("object_id")
+    object    CustomObject @relation(fields: [companyId, objectId], references: [companyId, id], onDelete: Cascade)
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    values    CustomValue[]
+    outgoingRelationships CustomRelationship[] @relation("CustomRelationSource")
+    incomingRelationships CustomRelationship[] @relation("CustomRelationTarget")
+
+    @@unique([companyId, objectId, id])
+    @@index([companyId, objectId, createdAt])
+    @@map("custom_records")
+}
+
+model CustomValue {
+    companyId String @map("company_id")
+    objectId String @map("object_id")
+    recordId String @map("record_id")
+    fieldId String @map("field_id")
+    textValue String? @map("text_value")
+    numberValue Decimal? @db.Decimal(38, 10) @map("number_value")
+    booleanValue Boolean? @map("boolean_value")
+    dateValue DateTime? @db.Date @map("date_value")
+    timestampValue DateTime? @map("timestamp_value")
+    record CustomRecord @relation(fields: [companyId, objectId, recordId], references: [companyId, objectId, id], onDelete: Cascade)
+    field CustomField @relation(fields: [companyId, objectId, fieldId], references: [companyId, objectId, id], onDelete: Cascade)
+
+    @@id([companyId, recordId, fieldId])
+    @@index([companyId, fieldId, textValue])
+    @@index([companyId, fieldId, numberValue])
+    @@index([companyId, fieldId, dateValue])
+    @@index([companyId, fieldId, timestampValue])
+    @@map("custom_values")
+}
+
+// A relation field belongs to the source object. A nullable target record
+// allows references to core Markit entities via target_type + target_id;
+// those core references require application-level existence checks.
+model CustomRelationship {
+    id String @id @unique @default(uuid())
+    companyId String @map("company_id")
+    sourceObjectId String @map("source_object_id")
+    sourceRecordId String @map("source_record_id")
+    fieldId String @map("field_id")
+    targetObjectId String? @map("target_object_id")
+    targetRecordId String? @map("target_record_id")
+    targetType String @map("target_type") // CUSTOM or a core entity type
+    targetId String @map("target_id")
+    sourceRecord CustomRecord @relation("CustomRelationSource", fields: [companyId, sourceObjectId, sourceRecordId], references: [companyId, objectId, id], onDelete: Cascade)
+    field CustomField @relation(fields: [companyId, sourceObjectId, fieldId], references: [companyId, objectId, id], onDelete: Cascade)
+    targetRecord CustomRecord? @relation("CustomRelationTarget", fields: [companyId, targetObjectId, targetRecordId], references: [companyId, objectId, id], onDelete: Cascade)
+    createdAt DateTime @default(now()) @map("created_at")
+
+    @@unique([companyId, sourceRecordId, fieldId, targetType, targetId])
+    @@index([companyId, targetType, targetId])
+    @@map("custom_relationships")
 }
 
 model GeneralPreference extends Base {
@@ -596,6 +695,7 @@ model Client extends Base {
     ecommOrderRequests        EcommOrderRequest[]
     ecommFeedback             EcommFeedback[]
     ecommPaymentVerifications EcommPaymentVerification[]
+    ecommPaymentIntents       EcommPaymentIntent[]
     clientCredits             ClientCredit[]
     deleted                   Boolean                    @default(false)
     @@allow('read, create, update, delete', true)
@@ -1463,6 +1563,7 @@ model EcommFeedback {
     customerName String   @map("customer_name")
     title        String
     message      String
+    images       Json     @default("[]")
     rating       Int      @default(5)
     sortOrder    Int      @default(0) @map("sort_order")
     status       Boolean  @default(true)
@@ -1749,6 +1850,29 @@ model EcommWishlist extends Base {
 // paytm ORDERID), because which one the storefront quotes back differs per
 // gateway. custom-api owns writes (raw SQL); modelled here so Prisma/ZenStack
 // keeps the table instead of dropping it.
+// Mirrors the checkout/payment API's runtime table; preserve existing attempts.
+model EcommPaymentIntent {
+    id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
+    createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+    updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+    status         String   @default("PENDING")
+    paymentMethod  String   @map("payment_method")
+    grandTotal     Float    @map("grand_total")
+    requestPayload Json     @map("request_payload")
+    transactionId  String?  @map("transaction_id")
+    checkoutId     String?  @map("checkout_id")
+    company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+    companyId      String   @map("company_id")
+    client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+    clientId       String   @map("client_id")
+    idempotencyKey String?  @map("idempotency_key")
+
+    @@unique([companyId, clientId, idempotencyKey], map: "ecomm_payment_intents_idempotency_idx")
+    // Payment payloads are managed by the trusted API, not generated CRUD routes.
+    @@deny('all', true)
+    @@map("ecomm_payment_intents")
+}
+
 model EcommPaymentVerification extends Base {
     createdAt  DateTime  @default(now()) @map("created_at")
     gateway    String

@@ -1,3 +1,5 @@
+import { commerceArticles } from './data/commerce-articles'
+
 export default defineNuxtConfig({
   extends: ['@nuxt/ui-pro', './auth'],
 
@@ -33,6 +35,8 @@ export default defineNuxtConfig({
     preset: 'vercel',
     routeRules: {
       '/nonetwork': { prerender: true },
+      '/storelanding': { redirect: { to: '/', statusCode: 301 } },
+      '/landing': { redirect: { to: '/', statusCode: 301 } },
     },
     esbuild: { options: { target: 'es2022' } }
   },
@@ -100,6 +104,11 @@ export default defineNuxtConfig({
   site: { 
     url: 'https://markit.co.in',
     name: 'Markit'
+  },
+
+  sitemap: {
+    include: ['/', '/blogs', '/blogs/**', '/terms'],
+    urls: commerceArticles.map(article => `/blogs/${article.slug}`),
   },
 
   imports: { dirs: ['stores'] },

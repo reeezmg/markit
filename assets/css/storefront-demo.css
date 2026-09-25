@@ -1,0 +1,318 @@
+.brand-site .storefront-demo {
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.35fr);
+}
+.brand-site .storefront-demo > * {
+  min-width: 0;
+}
+.brand-site .storefront-demo .demo-chat {
+  padding: 26px;
+}
+.brand-site .storefront-demo .demo-intro {
+  margin: 24px 0 18px;
+}
+.brand-site .storefront-demo .demo-options {
+  gap: 10px;
+}
+.brand-site .storefront-demo .demo-options button {
+  gap: 10px;
+  min-height: 45px;
+  padding: 11px 12px;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.brand-site .storefront-demo .demo-options button > span:nth-child(2) {
+  flex: 1;
+}
+.brand-site .demo-swatch {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px #30231d06;
+}
+.brand-site .storefront-demo .demo-response {
+  margin: 20px 0;
+  min-height: 57px;
+}
+.brand-site .storefront-demo .demo-preview {
+  justify-content: center;
+  background: var(--surface);
+  padding: 24px;
+}
+.brand-site .storefront-demo .browser-bar {
+  min-height: 34px;
+  border: 1px solid var(--line);
+  border-bottom: 0;
+}
+.brand-site .demo-stage {
+  display: grid;
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 2;
+  background: var(--cream);
+  border: 1px solid var(--line);
+  overflow: hidden;
+}
+.brand-site .demo-stage > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+  min-height: 0;
+}
+.brand-site .demo-result {
+  display: flex;
+  height: 100%;
+  width: 100%;
+}
+.brand-site .demo-result img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+.brand-site .demo-agent {
+  background: #261f1b;
+  color: #efdfd2;
+  padding: 20px 23px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  overflow: hidden;
+}
+.brand-site .agent-terminal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: #d3b9a6;
+  font-size: 9px;
+}
+.brand-site .agent-terminal-head > span:first-child {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.brand-site .agent-demo-pill {
+  font-size: 6px;
+  border: 1px solid #75604e;
+  border-radius: 4px;
+  padding: 3px 5px;
+  letter-spacing: 0.7px;
+}
+.brand-site .agent-task {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 20px 0 16px;
+  color: #ffbd8d;
+}
+.brand-site .agent-task strong {
+  font-size: 17px;
+  font-weight: 500;
+  letter-spacing: -0.4px;
+}
+.brand-site .agent-steps {
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 9px;
+  list-style: none;
+}
+.brand-site .agent-steps li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 10px;
+  color: #b3a397;
+}
+.brand-site .agent-steps .complete {
+  color: #e1b99b;
+}
+.brand-site .agent-steps .current {
+  color: #fff3e9;
+}
+.brand-site .step-placeholder {
+  width: 14px;
+  height: 14px;
+  border: 1px solid #716053;
+  border-radius: 50%;
+}
+.brand-site .agent-code {
+  background: #ffffff05;
+  border: 1px solid #ffffff14;
+  border-radius: 6px;
+  margin: 17px 0 0;
+  padding: 11px 13px;
+  color: #ddb99d;
+  font-size: 9px;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.brand-site .agent-progress {
+  height: 3px;
+  margin-top: 17px;
+  background: #4d3c31;
+  border-radius: 3px;
+  overflow: hidden;
+}
+.brand-site .agent-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--orange);
+  transition: width 500ms var(--motion-ease);
+}
+.brand-site .demo-output-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 1px solid var(--line);
+  border-top: 0;
+  border-radius: 0 0 8px 8px;
+  background: var(--cream);
+}
+.brand-site .demo-output-footer > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--accent-ink);
+  font-size: 9px;
+}
+.brand-site .demo-output-footer small {
+  font-size: 7px;
+  color: var(--muted);
+}
+.brand-site .demo-error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 15px;
+  padding: 25px;
+  text-align: center;
+  color: var(--muted);
+}
+.brand-site .demo-error p {
+  font-size: 13px;
+}
+.brand-site .demo-error button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--line);
+  padding: 9px 14px;
+  background: white;
+  border-radius: 7px;
+  font-size: 12px;
+  color: var(--accent-ink);
+}
+@keyframes demo-agent-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.brand-site .demo-spinner {
+  animation: demo-agent-spin 1.2s linear infinite;
+}
+.brand-site .storefront-reveal-enter-active {
+  transition: opacity 420ms ease, transform 500ms var(--motion-ease);
+}
+.brand-site .storefront-reveal-leave-active {
+  transition: opacity 140ms ease;
+}
+.brand-site .storefront-reveal-enter-from {
+  opacity: 0;
+  transform: translateY(8px) scale(0.99);
+}
+.brand-site .storefront-reveal-leave-to {
+  opacity: 0;
+}
+@media (max-width: 1150px) {
+  .brand-site .storefront-demo .demo-chat {
+    padding: 20px;
+  }
+  .brand-site .storefront-demo .demo-preview {
+    padding: 16px;
+  }
+  .brand-site .demo-stage {
+    min-height: 290px;
+  }
+  .brand-site .agent-task {
+    margin: 15px 0 12px;
+  }
+  .brand-site .agent-code {
+    margin-top: 12px;
+  }
+}
+@media (max-width: 850px) {
+  .brand-site .storefront-demo {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .brand-site .storefront-demo .demo-preview {
+    padding: 20px;
+  }
+  .brand-site .demo-agent {
+    padding: 26px;
+  }
+  .brand-site .agent-task strong {
+    font-size: 21px;
+  }
+  .brand-site .agent-steps li {
+    font-size: 12px;
+  }
+  .brand-site .agent-code {
+    font-size: 11px;
+  }
+}
+@media (max-width: 520px) {
+  .brand-site .storefront-demo .demo-chat {
+    padding: 18px;
+  }
+  .brand-site .storefront-demo .demo-preview {
+    padding: 12px;
+  }
+  .brand-site .storefront-demo .demo-options button {
+    font-size: 10px;
+  }
+  .brand-site .demo-stage {
+    min-height: 260px;
+  }
+  .brand-site .demo-agent {
+    padding: 17px;
+  }
+  .brand-site .agent-terminal-head {
+    font-size: 8px;
+  }
+  .brand-site .agent-task strong {
+    font-size: 17px;
+  }
+  .brand-site .agent-steps li {
+    font-size: 10px;
+  }
+  .brand-site .agent-code {
+    font-size: 9px;
+    padding: 8px;
+  }
+  .brand-site .agent-progress {
+    margin-top: 12px;
+  }
+  .brand-site .demo-output-footer {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 3px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-site .demo-spinner {
+    animation: none;
+  }
+  .brand-site .agent-progress > span,
+  .brand-site .storefront-reveal-enter-active,
+  .brand-site .storefront-reveal-leave-active {
+    transition: none;
+  }
+  .brand-site .storefront-reveal-enter-from {
+    transform: none;
+  }
+}

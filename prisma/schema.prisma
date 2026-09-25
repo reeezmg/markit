@@ -484,6 +484,7 @@ model Company {
   ecommPickupRequests       EcommPickupRequest[]
   ecommOrderStatusHistory   EcommOrderStatusHistory[]
   ecommPaymentVerifications EcommPaymentVerification[]
+  ecommPaymentIntents       EcommPaymentIntent[]
   shifts                    Shift[]
   shiftAssignments          ShiftAssignment[]
   holidays                  CompanyHoliday[]
@@ -505,6 +506,7 @@ model Company {
   storefrontAgentSessions   StorefrontAgentSession[]
   storefrontSource          StorefrontSource?
   productCustomFields       ProductCustomField[]
+  customObjects             CustomObject[]
 
   @@map("companies")
 }
@@ -562,6 +564,98 @@ model ProductCustomField {
   @@unique([companyId, scope, key])
   @@index([companyId, scope])
   @@map("product_custom_fields")
+}
+
+model CustomObject {
+  id        String         @id() @unique() @default(uuid())
+  companyId String         @map("company_id")
+  company   Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  slug      String
+  name      String
+  createdAt DateTime       @default(now()) @map("created_at")
+  updatedAt DateTime       @updatedAt() @map("updated_at")
+  fields    CustomField[]
+  records   CustomRecord[]
+
+  @@unique([companyId, slug])
+  @@unique([companyId, id])
+  @@map("custom_objects")
+}
+
+model CustomField {
+  id            String               @id() @unique() @default(uuid())
+  companyId     String               @map("company_id")
+  objectId      String               @map("object_id")
+  object        CustomObject         @relation(fields: [companyId, objectId], references: [companyId, id], onDelete: Cascade)
+  key           String
+  name          String
+  valueType     String               @map("value_type")
+  required      Boolean              @default(false)
+  createdAt     DateTime             @default(now()) @map("created_at")
+  updatedAt     DateTime             @updatedAt() @map("updated_at")
+  values        CustomValue[]
+  relationships CustomRelationship[]
+
+  @@unique([companyId, objectId, key])
+  @@unique([companyId, objectId, id])
+  @@map("custom_fields")
+}
+
+model CustomRecord {
+  id                    String               @id() @unique() @default(uuid())
+  companyId             String               @map("company_id")
+  objectId              String               @map("object_id")
+  object                CustomObject         @relation(fields: [companyId, objectId], references: [companyId, id], onDelete: Cascade)
+  createdAt             DateTime             @default(now()) @map("created_at")
+  updatedAt             DateTime             @updatedAt() @map("updated_at")
+  values                CustomValue[]
+  outgoingRelationships CustomRelationship[] @relation("CustomRelationSource")
+  incomingRelationships CustomRelationship[] @relation("CustomRelationTarget")
+
+  @@unique([companyId, objectId, id])
+  @@index([companyId, objectId, createdAt])
+  @@map("custom_records")
+}
+
+model CustomValue {
+  companyId      String       @map("company_id")
+  objectId       String       @map("object_id")
+  recordId       String       @map("record_id")
+  fieldId        String       @map("field_id")
+  textValue      String?      @map("text_value")
+  numberValue    Decimal?     @map("number_value") @db.Decimal(38, 10)
+  booleanValue   Boolean?     @map("boolean_value")
+  dateValue      DateTime?    @map("date_value") @db.Date()
+  timestampValue DateTime?    @map("timestamp_value")
+  record         CustomRecord @relation(fields: [companyId, objectId, recordId], references: [companyId, objectId, id], onDelete: Cascade)
+  field          CustomField  @relation(fields: [companyId, objectId, fieldId], references: [companyId, objectId, id], onDelete: Cascade)
+
+  @@id([companyId, recordId, fieldId])
+  @@index([companyId, fieldId, textValue])
+  @@index([companyId, fieldId, numberValue])
+  @@index([companyId, fieldId, dateValue])
+  @@index([companyId, fieldId, timestampValue])
+  @@map("custom_values")
+}
+
+model CustomRelationship {
+  id             String        @id() @unique() @default(uuid())
+  companyId      String        @map("company_id")
+  sourceObjectId String        @map("source_object_id")
+  sourceRecordId String        @map("source_record_id")
+  fieldId        String        @map("field_id")
+  targetObjectId String?       @map("target_object_id")
+  targetRecordId String?       @map("target_record_id")
+  targetType     String        @map("target_type")
+  targetId       String        @map("target_id")
+  sourceRecord   CustomRecord  @relation("CustomRelationSource", fields: [companyId, sourceObjectId, sourceRecordId], references: [companyId, objectId, id], onDelete: Cascade)
+  field          CustomField   @relation(fields: [companyId, sourceObjectId, fieldId], references: [companyId, objectId, id], onDelete: Cascade)
+  targetRecord   CustomRecord? @relation("CustomRelationTarget", fields: [companyId, targetObjectId, targetRecordId], references: [companyId, objectId, id], onDelete: Cascade)
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  @@unique([companyId, sourceRecordId, fieldId, targetType, targetId])
+  @@index([companyId, targetType, targetId])
+  @@map("custom_relationships")
 }
 
 model GeneralPreference {
@@ -756,6 +850,7 @@ model Client {
   ecommOrderRequests        EcommOrderRequest[]
   ecommFeedback             EcommFeedback[]
   ecommPaymentVerifications EcommPaymentVerification[]
+  ecommPaymentIntents       EcommPaymentIntent[]
   clientCredits             ClientCredit[]
   deleted                   Boolean                      @default(false)
 
@@ -1477,6 +1572,7 @@ model EcommFeedback {
   customerName String      @map("customer_name")
   title        String
   message      String
+  images       Json        @default("[]")
   rating       Int         @default(5)
   sortOrder    Int         @default(0) @map("sort_order")
   status       Boolean     @default(true)
@@ -1706,6 +1802,26 @@ model EcommWishlist {
   @@unique([companyId, clientId])
   @@index([companyId, clientId], map: "ecomm_wishlists_company_client_idx")
   @@map("ecomm_wishlists")
+}
+
+model EcommPaymentIntent {
+  id             String   @id() @default(dbgenerated("(gen_random_uuid())::text"))
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+  updatedAt      DateTime @default(now()) @map("updated_at") @db.Timestamptz(6)
+  status         String   @default("PENDING")
+  paymentMethod  String   @map("payment_method")
+  grandTotal     Float    @map("grand_total")
+  requestPayload Json     @map("request_payload")
+  transactionId  String?  @map("transaction_id")
+  checkoutId     String?  @map("checkout_id")
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  companyId      String   @map("company_id")
+  client         Client   @relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  clientId       String   @map("client_id")
+  idempotencyKey String?  @map("idempotency_key")
+
+  @@unique([companyId, clientId, idempotencyKey], map: "ecomm_payment_intents_idempotency_idx")
+  @@map("ecomm_payment_intents")
 }
 
 model EcommPaymentVerification {

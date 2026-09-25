@@ -1,0 +1,116 @@
+/* Motion is progressive enhancement: server-rendered content stays visible.
+   All entrance animations finish once; nothing runs on an endless loop. */
+@keyframes markit-enter {
+  from {
+    opacity: 0.2;
+    translate: 0 18px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes markit-draw {
+  from {
+    stroke-dashoffset: 460;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+@keyframes markit-float {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  50% {
+    translate: 0 -8px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .brand-site .hero-copy {
+    animation: markit-enter 700ms var(--motion-ease) both;
+  }
+  .brand-site .hero-art {
+    animation: markit-enter 850ms 100ms var(--motion-ease) both;
+  }
+  .brand-site .headline-swish path {
+    stroke-dasharray: 460;
+    animation: markit-draw 900ms 350ms ease-out both;
+  }
+  .brand-site .floating-prompt {
+    animation: markit-float 2800ms 850ms ease-in-out;
+  }
+  .brand-site .floating-status {
+    animation: markit-float 2400ms 1100ms ease-in-out;
+  }
+  .brand-site .preview-content {
+    animation: markit-enter 400ms var(--motion-ease);
+  }
+  .brand-site .mobile-nav {
+    animation: markit-enter 220ms var(--motion-ease);
+  }
+  .brand-site .faq-list details[open] > p {
+    animation: markit-enter 250ms var(--motion-ease);
+  }
+}
+.brand-site .button,
+.brand-site .text-link svg,
+.brand-site .faq-list summary svg,
+.brand-site .demo-options button svg,
+.brand-site .acommerce-card,
+.brand-site .ai-card,
+.brand-site .plugin-card,
+.brand-site .agent-card,
+.brand-site .price-card,
+.brand-site .journal-art {
+  transition: transform 240ms var(--motion-ease), translate 240ms var(--motion-ease),
+    box-shadow 240ms ease, border-color 240ms ease, background 240ms ease;
+}
+.brand-site .button:active {
+  transform: translateY(0) scale(0.98);
+}
+.brand-site .button:hover svg,
+.brand-site .text-link:hover svg,
+.brand-site .demo-options button:hover svg {
+  translate: 2px -2px;
+}
+.brand-site .button svg {
+  transition: translate 240ms var(--motion-ease);
+}
+@media (hover: hover) and (pointer: fine) {
+  .brand-site .acommerce-card:hover,
+  .brand-site .ai-card:hover,
+  .brand-site .plugin-card:hover,
+  .brand-site .agent-card:hover,
+  .brand-site .price-card:hover {
+    translate: 0 -4px;
+    border-color: #efb18f;
+    box-shadow: 0 15px 35px #6430160d;
+  }
+  .brand-site .journal-card:hover .journal-art {
+    translate: 0 -4px;
+    box-shadow: var(--soft-shadow);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .brand-site *,
+  .brand-site *::before,
+  .brand-site *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
+  .brand-site .button:hover,
+  .brand-site .button:active {
+    transform: none;
+  }
+  .brand-site .acommerce-card:hover,
+  .brand-site .ai-card:hover,
+  .brand-site .plugin-card:hover,
+  .brand-site .agent-card:hover,
+  .brand-site .price-card:hover,
+  .brand-site .journal-card:hover .journal-art {
+    translate: none;
+  }
+}

@@ -118,15 +118,6 @@ function toggleSecretVisibility(fieldKey: string) {
   visibleSecrets.value[id] = !visibleSecrets.value[id];
 }
 
-const webhookUrl = computed(() =>
-  `https://api.markit.co.in/api/custom/${companyId.value}/payment/webhook/cashfree`,
-);
-
-async function copyWebhookUrl() {
-  await navigator.clipboard.writeText(webhookUrl.value);
-  toast.add({ title: 'Webhook URL copied', color: 'green', timeout: 1500 });
-}
-
 const { data: prefData, isLoading } = useFindFirstGeneralPreference({
   where: { companyId: companyId.value, pageName: PAGE_NAME, key: PREF_KEY },
 });
@@ -494,30 +485,7 @@ async function saveCredentials() {
                 </div>
               </template>
             </UInput>
-            <template v-if="activeGateway.id === 'cashfree' && field.key === 'secretKey'" #help>
-              <div class="space-y-2 mt-1">
-                <span class="text-gray-400 text-xs">{{ field.help }}</span>
-                <div class="flex items-center gap-1.5 bg-gray-100 dark:bg-gray-800 rounded-lg px-2.5 py-1.5">
-                  <code class="text-[11px] text-gray-600 dark:text-gray-300 flex-1 break-all select-all">{{ webhookUrl }}</code>
-                  <UButton
-                    size="xs"
-                    variant="ghost"
-                    color="gray"
-                    icon="i-heroicons-clipboard-document"
-                    title="Copy Cashfree webhook URL"
-                    @click="copyWebhookUrl"
-                  />
-                </div>
-                <button
-                  type="button"
-                  class="text-xs text-primary-600 dark:text-primary-400 hover:underline"
-                  @click="webhookGuideOpen = !webhookGuideOpen"
-                >
-                  {{ webhookGuideOpen ? 'Hide webhook setup' : 'Show webhook setup' }}
-                </button>
-              </div>
-            </template>
-            <template v-else-if="field.key === 'webhookSecret'" #help>
+            <template v-if="field.key === 'webhookSecret'" #help>
               <div class="flex items-center gap-1.5 mt-1 bg-gray-100 dark:bg-gray-800 rounded-lg px-2.5 py-1.5">
                 <code class="text-[11px] text-gray-600 dark:text-gray-300 flex-1 break-all select-all">https://api.markit.co.in/api/payment/{{ companyId }}/webhook/razorpay</code>
                 <UButton
@@ -534,24 +502,6 @@ async function saveCredentials() {
               <span class="text-gray-400 text-xs">{{ field.help }}</span>
             </template>
           </UFormGroup>
-
-          <Transition name="fade">
-            <div
-              v-if="activeGateway.id === 'cashfree' && field.key === 'secretKey' && webhookGuideOpen"
-              class="rounded-xl border border-teal-200 dark:border-teal-800 bg-teal-50 dark:bg-teal-950/30 p-4 space-y-3"
-            >
-              <p class="text-xs font-semibold text-teal-700 dark:text-teal-300 flex items-center gap-1.5">
-                <UIcon name="i-heroicons-shield-check" />
-                Cashfree webhook setup
-              </p>
-              <p class="text-xs text-teal-700 dark:text-teal-300 leading-relaxed">
-                Add the URL above in Cashfree Dashboard under Developers → Webhooks and enable payment success, failed, and user-dropped events. Markit verifies every callback with your Cashfree Secret Key; no separate webhook secret is required.
-              </p>
-              <p class="text-[11px] text-teal-600 dark:text-teal-400">
-                The webhook is the recovery path when a customer pays but closes the browser before returning to your store.
-              </p>
-            </div>
-          </Transition>
 
           <!-- Webhook guide (Razorpay only) -->
           <Transition name="fade">

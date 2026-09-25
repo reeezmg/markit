@@ -166,6 +166,7 @@
         "ecommPickupRequests": "Links this Company record to EcommPickupRequest.",
         "ecommOrderStatusHistory": "Links this Company record to EcommOrderStatusHistory.",
         "ecommPaymentVerifications": "Links this Company record to EcommPaymentVerification.",
+        "ecommPaymentIntents": "Payment attempts belonging to this company.",
         "shifts": "Links this Company record to Shift.",
         "shiftAssignments": "Links this Company record to ShiftAssignment.",
         "holidays": "Links this Company record to CompanyHoliday.",
@@ -186,7 +187,8 @@
         "aiUsageEvents": "Links this Company record to AiUsageEvent.",
         "storefrontAgentSessions": "Links this Company record to StorefrontAgentSession.",
         "storefrontSource": "Links this Company record to StorefrontSource.",
-        "productCustomFields": "Links this Company record to ProductCustomField."
+        "productCustomFields": "Links this Company record to ProductCustomField.",
+        "customObjects": "Virtual custom table definitions owned by this company."
       }
     },
     "Productinput": {
@@ -240,6 +242,85 @@
         "updatedAt": "Time this ProductCustomField record was last updated.",
         "company": "Links this ProductCustomField record to Company through companyId.",
         "companyId": "Company that owns this ProductCustomField record; use it when scoping tenant data."
+      }
+    },
+    "CustomObject": {
+      "purpose": "Defines a company-owned virtual table for custom storefront data.",
+      "fields": {
+        "id": "Stable object identifier.",
+        "companyId": "Company that owns this virtual table.",
+        "company": "Owning company; deletion cascades to its custom data.",
+        "slug": "Unique machine name within the company.",
+        "name": "Display name of the virtual table.",
+        "createdAt": "Creation time.",
+        "updatedAt": "Last definition update time.",
+        "fields": "Field definitions belonging to this object.",
+        "records": "Records belonging to this object."
+      }
+    },
+    "CustomField": {
+      "purpose": "Defines one typed field on a company-owned custom object.",
+      "fields": {
+        "id": "Stable field identifier.",
+        "companyId": "Owning company, included in the object foreign key.",
+        "objectId": "Object on which this field is defined.",
+        "object": "Owning virtual table.",
+        "key": "Unique machine name within the object.",
+        "name": "Display name of the field.",
+        "valueType": "Allowed field type: TEXT, NUMBER, BOOLEAN, DATE, TIMESTAMP, or REFERENCE. References use custom_relationships.",
+        "required": "Required-field metadata for a future transactional write API; not yet database-enforced across records.",
+        "createdAt": "Creation time.",
+        "updatedAt": "Last definition update time.",
+        "values": "Typed values stored for this field.",
+        "relationships": "Outgoing custom relationships using this field."
+      }
+    },
+    "CustomRecord": {
+      "purpose": "Represents one virtual row within a company-owned custom object.",
+      "fields": {
+        "id": "Stable record identifier.",
+        "companyId": "Owning company, used by composite foreign keys.",
+        "objectId": "Virtual table containing this record.",
+        "object": "Definition of this record's virtual table.",
+        "createdAt": "Creation time.",
+        "updatedAt": "Last record update time.",
+        "values": "Typed values attached to this record.",
+        "outgoingRelationships": "References originating at this record.",
+        "incomingRelationships": "Custom-object references targeting this record."
+      }
+    },
+    "CustomValue": {
+      "purpose": "Stores one typed field value for a custom record without JSONB.",
+      "fields": {
+        "companyId": "Owning company for record and field constraints.",
+        "objectId": "Object shared by the record and field.",
+        "recordId": "Record receiving this value.",
+        "fieldId": "Definition that determines which typed column is valid.",
+        "textValue": "Text value when the field type is TEXT.",
+        "numberValue": "Numeric value when the field type is NUMBER.",
+        "booleanValue": "Boolean value when the field type is BOOLEAN.",
+        "dateValue": "Calendar date when the field type is DATE.",
+        "timestampValue": "Timestamp when the field type is TIMESTAMP.",
+        "record": "Record owning the value.",
+        "field": "Field definition governing the value."
+      }
+    },
+    "CustomRelationship": {
+      "purpose": "Links a custom record to another custom record or a core entity identifier.",
+      "fields": {
+        "id": "Stable relationship identifier.",
+        "companyId": "Owning company for all custom-record foreign keys.",
+        "sourceObjectId": "Object containing the source record and relation field.",
+        "sourceRecordId": "Record from which the relationship originates.",
+        "fieldId": "Field representing this relationship on the source object.",
+        "targetObjectId": "Target custom object when targetType is CUSTOM.",
+        "targetRecordId": "Foreign key to a target custom record when targetType is CUSTOM.",
+        "targetType": "CUSTOM for a custom record, otherwise a core entity type requiring application validation.",
+        "targetId": "Identifier of the target custom record or core entity.",
+        "sourceRecord": "Source custom record.",
+        "field": "Source object's relationship field.",
+        "targetRecord": "Target custom record when applicable.",
+        "createdAt": "Creation time."
       }
     },
     "GeneralPreference": {
@@ -434,6 +515,7 @@
         "ecommOrderRequests": "Links this Client record to EcommOrderRequest.",
         "ecommFeedback": "Links this Client record to EcommFeedback.",
         "ecommPaymentVerifications": "Links this Client record to EcommPaymentVerification.",
+        "ecommPaymentIntents": "Payment attempts belonging to this customer.",
         "clientCredits": "Links this Client record to ClientCredit.",
         "deleted": "Whether this Client record has been marked deleted."
       }
@@ -1119,6 +1201,7 @@
         "customerName": "Display name used when the feedback author has no linked customer.",
         "title": "Title shown for this EcommFeedback record.",
         "message": "Message text stored in this EcommFeedback record.",
+        "images": "Existing feedback image data stored as JSONB, defaulting to an empty array.",
         "rating": "Numerical customer rating.",
         "sortOrder": "Position used when ordering these records for display.",
         "status": "Current workflow state of this EcommFeedback record.",
@@ -1323,6 +1406,25 @@
         "companyId": "Company that owns this EcommWishlist record; use it when scoping tenant data.",
         "client": "Links this EcommWishlist record to Client through clientId.",
         "clientId": "Customer associated with this EcommWishlist record."
+      }
+    },
+    "EcommPaymentIntent": {
+      "purpose": "Stores pending payment attempts created by the trusted ecommerce checkout/payment API.",
+      "fields": {
+        "id": "Primary key of the payment attempt.",
+        "createdAt": "Creation timestamp.",
+        "updatedAt": "Last update timestamp maintained by the payment API.",
+        "status": "Payment-attempt status, initially PENDING.",
+        "paymentMethod": "Selected payment method.",
+        "grandTotal": "Total amount for this payment attempt.",
+        "requestPayload": "Checkout request JSON retained by the payment API.",
+        "transactionId": "Optional transaction reference.",
+        "checkoutId": "Optional checkout reference.",
+        "company": "Company owning the payment attempt.",
+        "companyId": "Company identifier.",
+        "client": "Customer making the payment attempt.",
+        "clientId": "Customer identifier.",
+        "idempotencyKey": "Optional retry-deduplication key, unique within company and customer."
       }
     },
     "EcommPaymentVerification": {
@@ -2761,23 +2863,5 @@
       }
     }
   },
-  "runtimeTables": {
-    "ecomm_payment_intents": {
-      "purpose": "Holds a pending online checkout before gateway verification creates the bill and order. The stored request and server-calculated total let settlement resume safely and enforce idempotency.",
-      "fields": {
-        "id": "Primary identifier of this pending payment attempt.",
-        "created_at": "Time the payment intent was created.",
-        "updated_at": "Time the payment intent was last updated.",
-        "status": "Current state of the pending payment attempt.",
-        "payment_method": "Online payment method selected for this checkout.",
-        "grand_total": "Server-calculated amount expected from the gateway before order creation.",
-        "request_payload": "Saved checkout request used to create the order after payment verification.",
-        "transaction_id": "Gateway or payment transaction reference attached to the intent.",
-        "checkout_id": "Checkout created when the payment attempt is settled.",
-        "company_id": "Company that owns the payment attempt; part of the tenant and idempotency scope.",
-        "client_id": "Customer who started the payment attempt; part of the idempotency scope.",
-        "idempotency_key": "Client-supplied key used to prevent duplicate checkout attempts for the same company and customer."
-      }
-    }
-  }
+  "runtimeTables": {}
 }

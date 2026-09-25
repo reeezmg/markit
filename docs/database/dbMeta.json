@@ -7,11 +7,11 @@
     "Business explanations come from dbExplanations.json. Empty text means a human explanation is still required."
   ],
   "counts": {
-    "models": 135,
-    "concreteModels": 134,
+    "models": 136,
+    "concreteModels": 135,
     "enums": 45,
-    "fields": 2085,
-    "explainedFields": 2085
+    "fields": 2102,
+    "explainedFields": 2102
   },
   "enums": {
     "UserRole": {
@@ -2731,6 +2731,18 @@
           "sourceLine": 292,
           "schemaComment": "",
           "description": "Links this Company record to EcommPaymentVerification.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "ecommPaymentIntents": {
+          "kind": "relation",
+          "type": "EcommPaymentIntent",
+          "required": false,
+          "list": true,
+          "id": false,
+          "unique": false,
+          "sourceLine": 293,
+          "schemaComment": "",
+          "description": "Payment attempts belonging to this company.",
           "descriptionSource": "dbExplanations.json"
         },
         "shifts": {
@@ -6314,6 +6326,18 @@
           "sourceLine": 599,
           "schemaComment": "",
           "description": "Links this Client record to EcommPaymentVerification.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "ecommPaymentIntents": {
+          "kind": "relation",
+          "type": "EcommPaymentIntent",
+          "required": false,
+          "list": true,
+          "id": false,
+          "unique": false,
+          "sourceLine": 699,
+          "schemaComment": "",
+          "description": "Payment attempts belonging to this customer.",
           "descriptionSource": "dbExplanations.json"
         },
         "clientCredits": {
@@ -16169,6 +16193,22 @@
           "description": "Message text stored in this EcommFeedback record.",
           "descriptionSource": "dbExplanations.json"
         },
+        "images": {
+          "kind": "scalar",
+          "type": "Json",
+          "required": true,
+          "list": false,
+          "id": false,
+          "unique": false,
+          "default": "\"[]\"",
+          "attributes": [
+            "@default(\"[]\")"
+          ],
+          "sourceLine": 1567,
+          "schemaComment": "",
+          "description": "Existing feedback image data stored as JSONB, defaulting to an empty array.",
+          "descriptionSource": "dbExplanations.json"
+        },
         "rating": {
           "kind": "scalar",
           "type": "Int",
@@ -19094,6 +19134,274 @@
         "storetools/server/api/ecommerce-cms/customers/[id].get.ts",
         "ecommerce-api/api/app/routes/client.py",
         "ecommerce-api/api/app/routes/wishlist.py",
+        "ecommerce-api/api/app/tables.py"
+      ]
+    },
+    "EcommPaymentIntent": {
+      "table": "ecomm_payment_intents",
+      "abstract": false,
+      "extends": null,
+      "sourceLine": 1854,
+      "attributes": [
+        "@@unique([companyId, clientId, idempotencyKey], map: \"ecomm_payment_intents_idempotency_idx\")",
+        "@@deny('all', true)",
+        "@@map(\"ecomm_payment_intents\")"
+      ],
+      "fields": {
+        "id": {
+          "kind": "scalar",
+          "type": "String",
+          "required": true,
+          "list": false,
+          "id": true,
+          "unique": false,
+          "default": "dbgenerated(\"(gen_random_uuid())::text\")",
+          "attributes": [
+            "@id",
+            "@default(dbgenerated(\"(gen_random_uuid())::text\"))"
+          ],
+          "sourceLine": 1856,
+          "schemaComment": "",
+          "description": "Primary key of the payment attempt.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "createdAt": {
+          "kind": "scalar",
+          "type": "DateTime",
+          "required": true,
+          "list": false,
+          "column": "created_at",
+          "id": false,
+          "unique": false,
+          "default": "now()",
+          "attributes": [
+            "@default(now())",
+            "@map(\"created_at\")",
+            "@db.Timestamptz(6)"
+          ],
+          "sourceLine": 1857,
+          "schemaComment": "",
+          "description": "Creation timestamp.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "updatedAt": {
+          "kind": "scalar",
+          "type": "DateTime",
+          "required": true,
+          "list": false,
+          "column": "updated_at",
+          "id": false,
+          "unique": false,
+          "default": "now()",
+          "attributes": [
+            "@default(now())",
+            "@map(\"updated_at\")",
+            "@db.Timestamptz(6)"
+          ],
+          "sourceLine": 1858,
+          "schemaComment": "",
+          "description": "Last update timestamp maintained by the payment API.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "status": {
+          "kind": "scalar",
+          "type": "String",
+          "required": true,
+          "list": false,
+          "id": false,
+          "unique": false,
+          "default": "\"PENDING\"",
+          "attributes": [
+            "@default(\"PENDING\")"
+          ],
+          "sourceLine": 1859,
+          "schemaComment": "",
+          "description": "Payment-attempt status, initially PENDING.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "paymentMethod": {
+          "kind": "scalar",
+          "type": "String",
+          "required": true,
+          "list": false,
+          "column": "payment_method",
+          "id": false,
+          "unique": false,
+          "attributes": [
+            "@map(\"payment_method\")"
+          ],
+          "sourceLine": 1860,
+          "schemaComment": "",
+          "description": "Selected payment method.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "grandTotal": {
+          "kind": "scalar",
+          "type": "Float",
+          "required": true,
+          "list": false,
+          "column": "grand_total",
+          "id": false,
+          "unique": false,
+          "attributes": [
+            "@map(\"grand_total\")"
+          ],
+          "sourceLine": 1861,
+          "schemaComment": "",
+          "description": "Total amount for this payment attempt.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "requestPayload": {
+          "kind": "scalar",
+          "type": "Json",
+          "required": true,
+          "list": false,
+          "column": "request_payload",
+          "id": false,
+          "unique": false,
+          "attributes": [
+            "@map(\"request_payload\")"
+          ],
+          "sourceLine": 1862,
+          "schemaComment": "",
+          "description": "Checkout request JSON retained by the payment API.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "transactionId": {
+          "kind": "scalar",
+          "type": "String",
+          "required": false,
+          "list": false,
+          "column": "transaction_id",
+          "id": false,
+          "unique": false,
+          "attributes": [
+            "@map(\"transaction_id\")"
+          ],
+          "sourceLine": 1863,
+          "schemaComment": "",
+          "description": "Optional transaction reference.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "checkoutId": {
+          "kind": "scalar",
+          "type": "String",
+          "required": false,
+          "list": false,
+          "column": "checkout_id",
+          "id": false,
+          "unique": false,
+          "attributes": [
+            "@map(\"checkout_id\")"
+          ],
+          "sourceLine": 1864,
+          "schemaComment": "",
+          "description": "Optional checkout reference.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "company": {
+          "kind": "relation",
+          "type": "Company",
+          "required": true,
+          "list": false,
+          "id": false,
+          "unique": false,
+          "relation": {
+            "name": null,
+            "fields": [
+              "companyId"
+            ],
+            "references": [
+              "id"
+            ],
+            "raw": "@relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)"
+          },
+          "attributes": [
+            "@relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)"
+          ],
+          "sourceLine": 1865,
+          "schemaComment": "",
+          "description": "Company owning the payment attempt.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "companyId": {
+          "kind": "scalar",
+          "type": "String",
+          "required": true,
+          "list": false,
+          "column": "company_id",
+          "id": false,
+          "unique": false,
+          "attributes": [
+            "@map(\"company_id\")"
+          ],
+          "sourceLine": 1866,
+          "schemaComment": "",
+          "description": "Company identifier.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "client": {
+          "kind": "relation",
+          "type": "Client",
+          "required": true,
+          "list": false,
+          "id": false,
+          "unique": false,
+          "relation": {
+            "name": null,
+            "fields": [
+              "clientId"
+            ],
+            "references": [
+              "id"
+            ],
+            "raw": "@relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)"
+          },
+          "attributes": [
+            "@relation(fields: [clientId], references: [id], onDelete: Cascade, onUpdate: NoAction)"
+          ],
+          "sourceLine": 1867,
+          "schemaComment": "",
+          "description": "Customer making the payment attempt.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "clientId": {
+          "kind": "scalar",
+          "type": "String",
+          "required": true,
+          "list": false,
+          "column": "client_id",
+          "id": false,
+          "unique": false,
+          "attributes": [
+            "@map(\"client_id\")"
+          ],
+          "sourceLine": 1868,
+          "schemaComment": "",
+          "description": "Customer identifier.",
+          "descriptionSource": "dbExplanations.json"
+        },
+        "idempotencyKey": {
+          "kind": "scalar",
+          "type": "String",
+          "required": false,
+          "list": false,
+          "column": "idempotency_key",
+          "id": false,
+          "unique": false,
+          "attributes": [
+            "@map(\"idempotency_key\")"
+          ],
+          "sourceLine": 1869,
+          "schemaComment": "",
+          "description": "Optional retry-deduplication key, unique within company and customer.",
+          "descriptionSource": "dbExplanations.json"
+        }
+      },
+      "description": "Stores pending payment attempts created by the trusted ecommerce checkout/payment API.",
+      "codeReferences": [
+        "ecommerce-api/api/app/routes/checkout.py",
+        "ecommerce-api/api/app/routes/payment.py",
         "ecommerce-api/api/app/tables.py"
       ]
     },
@@ -38385,68 +38693,5 @@
       "codeReferences": []
     }
   },
-  "unmodeledRuntimeTables": [
-    {
-      "table": "ecomm_payment_intents",
-      "source": "ecommerce-api/api/app/tables.py",
-      "explanation": "Holds a pending online checkout before gateway verification creates the bill and order. The stored request and server-calculated total let settlement resume safely and enforce idempotency.",
-      "columns": {
-        "id": {
-          "declaration": "text PRIMARY KEY DEFAULT gen_random_uuid()::text",
-          "description": "Primary identifier of this pending payment attempt."
-        },
-        "created_at": {
-          "declaration": "timestamptz NOT NULL DEFAULT now()",
-          "description": "Time the payment intent was created."
-        },
-        "updated_at": {
-          "declaration": "timestamptz NOT NULL DEFAULT now()",
-          "description": "Time the payment intent was last updated."
-        },
-        "status": {
-          "declaration": "text NOT NULL DEFAULT 'PENDING'",
-          "description": "Current state of the pending payment attempt."
-        },
-        "payment_method": {
-          "declaration": "text NOT NULL",
-          "description": "Online payment method selected for this checkout."
-        },
-        "grand_total": {
-          "declaration": "double precision NOT NULL",
-          "description": "Server-calculated amount expected from the gateway before order creation."
-        },
-        "request_payload": {
-          "declaration": "jsonb NOT NULL",
-          "description": "Saved checkout request used to create the order after payment verification."
-        },
-        "transaction_id": {
-          "declaration": "text",
-          "description": "Gateway or payment transaction reference attached to the intent."
-        },
-        "checkout_id": {
-          "declaration": "text",
-          "description": "Checkout created when the payment attempt is settled."
-        },
-        "company_id": {
-          "declaration": "text NOT NULL REFERENCES companies(id) ON DELETE CASCADE",
-          "description": "Company that owns the payment attempt; part of the tenant and idempotency scope."
-        },
-        "client_id": {
-          "declaration": "text NOT NULL REFERENCES clients(id) ON DELETE CASCADE",
-          "description": "Customer who started the payment attempt; part of the idempotency scope."
-        },
-        "idempotency_key": {
-          "declaration": "text",
-          "description": "Client-supplied key used to prevent duplicate checkout attempts for the same company and customer."
-        }
-      },
-      "warning": "Created by ecommerce-api startup DDL but missing from schema.zmodel; reconcile this schema drift before changing the table.",
-      "codeReferences": [
-        "ecommerce-api/api/app/routes/checkout.py",
-        "ecommerce-api/api/app/routes/payment.py",
-        "ecommerce-api/api/app/tables.py"
-      ],
-      "createSql": "CREATE TABLE IF NOT EXISTS ecomm_payment_intents (id              text PRIMARY KEY DEFAULT gen_random_uuid()::text,\r\n          created_at      timestamptz NOT NULL DEFAULT now(),\r\n          updated_at      timestamptz NOT NULL DEFAULT now(),\r\n          status          text NOT NULL DEFAULT 'PENDING',\r\n          payment_method  text NOT NULL,\r\n          grand_total     double precision NOT NULL,\r\n          request_payload jsonb NOT NULL,\r\n          transaction_id  text,\r\n          checkout_id     text,\r\n          company_id      text NOT NULL REFERENCES companies(id) ON DELETE CASCADE,\r\n          client_id       text NOT NULL REFERENCES clients(id) ON DELETE CASCADE,\r\n          idempotency_key text);"
-    }
-  ]
+  "unmodeledRuntimeTables": []
 }

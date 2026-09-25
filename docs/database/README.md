@@ -20,9 +20,7 @@ node storetools/scripts/check-db-meta.mjs
 Database change workflow: change `schema.zmodel`, generate the normal migration, regenerate this catalog, fill new entries in `dbExplanations.json`, update `ARCH-schema.md` and the owning topic, then run affected tests.
 
 `ecommerce-api/api/app/tables.py` contains compatibility/startup DDL. Compare it
-against `schema.zmodel` before changing either source. The current exception is
-`ecomm_payment_intents`: the API creates and uses it, but the zmodel lacks a model.
-`dbMeta.json` records its runtime DDL and each column under
-`unmodeledRuntimeTables`. Its editable explanation and column meanings live under
-`runtimeTables.ecomm_payment_intents` in `dbExplanations.json`. Newly discovered
-API-created tables and columns start with blank explanations too.
+against `schema.zmodel` before changing either source. `ecomm_payment_intents`
+is mirrored by `EcommPaymentIntent` in the zmodel. Any remaining API-created tables
+without models are recorded under `unmodeledRuntimeTables` in `dbMeta.json`.
+Newly discovered API-created tables and columns start with blank explanations too.

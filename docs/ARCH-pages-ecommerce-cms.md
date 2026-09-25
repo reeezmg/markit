@@ -32,7 +32,7 @@ Contact-message inbox. Lists messages from customers, tracks their status, allow
 
 ### `pages/ecommerce-cms/payment.vue`
 
-Payment gateway connection settings. Shows provider-specific credential fields and webhook guidance for Razorpay, Cashfree, PhonePe, PayU and Paytm. Reads/writes the company `GeneralPreference` record with page name `ecomm_payment` and key `gateway_config`; tests credentials via `/api/ecommerce-cms/payment/test` before saving. Only one gateway is selected as active in this UI. Treat values entered here as secrets; the page does not establish that storage is encrypted.
+Payment gateway connection settings. Shows provider-specific credential fields for Razorpay, Cashfree, PhonePe, PayU and Paytm, plus Razorpay webhook guidance. Cashfree payments use storefront return verification and authenticated recovery; the seller UI no longer offers a Cashfree webhook URL. Reads/writes the company `GeneralPreference` record with page name `ecomm_payment` and key `gateway_config`; tests credentials via `/api/ecommerce-cms/payment/test` before saving. Only one gateway is selected as active in this UI. Treat values entered here as secrets; the page does not establish that storage is encrypted.
 
 ### `pages/ecommerce-cms/policies.vue`
 
