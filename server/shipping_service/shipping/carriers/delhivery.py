@@ -488,9 +488,13 @@ def track_bulk(creds: dict, tracking_ids: list[str]) -> dict:
         raw = status.get("Status")
         stype = str(status.get("StatusType") or "").upper()
         nsl = str(status.get("StatusCode") or status.get("NSLCode") or "").upper()
+        # EOD-38 means delivered to consignee, not a failed delivery attempt.
+        if nsl == "EOD-38":
+            nsl = ""
         eod_scans = [
             code for s in (shipment.get("Scans") or [])
             if (code := str((s.get("ScanDetail") or {}).get("StatusCode") or "").upper()).startswith("EOD-")
+            and code != "EOD-38"
         ]
         # Failed delivery attempts so far — one EOD-* scan per attempt.
         attempts = len(eod_scans)

@@ -98,6 +98,24 @@ def test_seller_bulk_delivery_settles_cod_in_same_status_transaction():
     settle.assert_called_once_with(conn, "company-1", "order-1")
 
 
+def test_delhivery_bulk_tracking_ignores_delivered_eod38(client):
+    payload = {"ShipmentData": [
+        {"Shipment": {"AWB": "AWB1", "Status": {
+            "Status": "Delivered", "StatusType": "DL", "StatusCode": "EOD-38"},
+            "Scans": [
+                {"ScanDetail": {"StatusCode": "X-DDD3FD"}},
+                {"ScanDetail": {"StatusCode": "EOD-38"}},
+            ]}},
+    ]}
+    with patch.object(delhivery.httpx, "get", return_value=response(payload)):
+        result = client.get(f"{BASE}/track-bulk", params={"waybills": "AWB1"}, headers=HEADERS)
+    assert result.status_code == 200
+    status = result.json()["statuses"]["AWB1"]
+    assert status["status"] == "DELIVERED"
+    assert status["nslCode"] is None
+    assert status["ndrAttempts"] == 0
+
+
 def test_storetools_webhook_requires_configured_secret(client):
     response = client.post(f"{BASE}/webhook/delhivery", json={"waybill": "AWB1", "status": "Delivered"})
     assert response.status_code == 503
