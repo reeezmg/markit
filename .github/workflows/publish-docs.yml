@@ -1,0 +1,57 @@
+name: Publish Storetools docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/publish-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check mirror configuration
+        env:
+          DOCS_DEPLOY_KEY: ${{ secrets.DOCS_DEPLOY_KEY }}
+        run: |
+          if [ -z "$DOCS_DEPLOY_KEY" ]; then
+            echo 'Set the DOCS_DEPLOY_KEY Actions secret before publishing.' >&2
+            exit 1
+          fi
+      - uses: actions/checkout@v4
+        with:
+          path: source
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: reeezmg/markit-docs
+          ssh-key: ${{ secrets.DOCS_DEPLOY_KEY }}
+          ref: main
+          path: docs-target
+      - name: Mirror only Storetools docs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p docs-target/storetools
+          rsync --archive --delete source/docs/ docs-target/storetools/
+          git -C docs-target config user.name 'docs-mirror[bot]'
+          git -C docs-target config user.email 'docs-mirror[bot]@users.noreply.github.com'
+          git -C docs-target add -A -- storetools
+          if git -C docs-target diff --cached --quiet; then
+            echo 'Storetools docs are already in sync.'
+            exit 0
+          fi
+          git -C docs-target commit -m "Sync Storetools docs from $GITHUB_SHA"
+          for attempt in 1 2 3; do
+            git -C docs-target pull --rebase origin main
+            if git -C docs-target push origin HEAD:main; then
+              exit 0
+            fi
+            echo "Push conflict; retrying ($attempt/3)." >&2
+          done
+          exit 1
