@@ -1,3 +1,4 @@
+import { applyBillStock } from '~/server/utils/bill-stock'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { deleteUserLedgerEntryForSource } from '~/server/utils/user-ledger'
@@ -38,37 +39,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    // Reverse sale entries: sold_qty -= qty, qty += qty
-    await client.query(
-      `
-      UPDATE items i
-      SET sold_qty = COALESCE(i.sold_qty, 0) - e.qty,
-          qty      = COALESCE(i.qty, 0)      + e.qty,
-          updated_at = NOW()
-      FROM entries e
-      WHERE e.bill_id = $1
-        AND e.item_id = i.id
-        AND e.return = false
-        AND e.qty > 0
-      `,
-      [billId]
-    )
-
-    // Reverse return entries: sold_qty += qty, qty -= qty
-    await client.query(
-      `
-      UPDATE items i
-      SET sold_qty = COALESCE(i.sold_qty, 0) + e.qty,
-          qty      = COALESCE(i.qty, 0)      - e.qty,
-          updated_at = NOW()
-      FROM entries e
-      WHERE e.bill_id = $1
-        AND e.item_id = i.id
-        AND e.return = true
-        AND e.qty > 0
-      `,
-      [billId]
-    )
+    await applyBillStock(client, billId, companyId, false)
 
     // Reverse client points contribution: original create did points += billPoints - redeemedPoints
     const bill = billRes.rows[0]

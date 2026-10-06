@@ -231,7 +231,7 @@ Bill edit page data helpers.
 |---|---|---|
 | `billEdit/findUniqueBill` | GET | Full bill data for edit page: `?billId=&companyId=`. Returns bill + address + client + entries + coupon usage via raw SQL. Entries include item/variant shape |
 | `billEdit/findEntriesToDelete` | POST | Entries to delete for a bill: `{ billId, companyId, excludeEntryIds? }`. Returns entries not in `excludeEntryIds`. Used to find stock to restore on edit |
-| `billEdit/deleteBill` | POST | Soft-delete bill: sets `deleted=true`. Body: `{ billId, companyId }`. Returns 404 if already deleted |
+| `billEdit/deleteBill` | POST | Soft-delete bill and reverse stock/loyalty/coupon/staff-credit effects in one transaction. Body: `{ billId, companyId }`. Returns 404 if already deleted. Uses shared `server/utils/bill-stock.ts` (see lifecycle contract below). |
 
 ---
 
@@ -239,10 +239,24 @@ Bill edit page data helpers.
 
 Sales list page operations.
 
+Bill stock lifecycle (`server/utils/bill-stock.ts`): both delete routes and restore
+hold the company-scoped bill row lock before reading saved entries. Quantities are
+combined per item, with returns subtracting from the sale quantity. Restore adds
+this net quantity to `sold_qty` and subtracts it from `qty`; deletion applies the
+exact inverse. Item rows are company-scoped and locked in ID order; missing or
+foreign linked items abort with 409. Entries without an item link and non-positive
+quantities have no stock effect. Bill state, stock and other source effects commit
+together; repeat requests in the wrong state return 404 before stock changes.
+`bill/update` rejects deleted bills with 409 until restored, preventing edits from
+moving stock while the original sale is reversed. Existing POS negative-stock
+behavior is preserved. In-memory regression coverage:
+`npx tsx --test tests/bill-stock-lifecycle.test.ts` (no database connection).
+
 | Route | Method | Description |
 |---|---|---|
 | `billSale/findManyBills` | POST | Paginated, filtered, sorted bills list. Search rules (server-side): non-numeric → `clients.name ILIKE`; numeric AND fits int (≤ 2147483647) → `(b.invoice_number = N AND b.created_at > closingDate) OR c.phone ILIKE %N%` — invoice matches sorted to top via `invoice_match DESC`; numeric AND too large → `c.phone ILIKE` only. `closingDate` is read from the auth session and applies only to the invoice arm of the OR. Other filters: status, paymentMethods, min/maxGrandTotal, dateRange (date range is dropped when a search is active). Sort: invoiceNumber/createdAt/grandTotal/paymentStatus. Cleanup sessions use saved original bill/entry values where available for row values, min/max total filter, grand-total sort, and summary totals. Returns `{ rows[], total, totals }` |
-| `billSale/deleteBill` | POST | Soft-delete bill: `{ billId, companyId }`. Returns `invoiceNumber` |
+| `billSale/deleteBill` | POST | Soft-delete bill and reverse stock/loyalty/coupon/staff-credit effects in one transaction: `{ billId, companyId }`. Returns `invoiceNumber`; already deleted returns 404. |
+| `billSale/restoreBill` | POST | Restore a deleted bill from `/saleshistory`: `{ billId, companyId }`. Re-applies stock/loyalty/coupon/staff-credit effects in one transaction and returns `invoiceNumber`; an active or missing bill returns 404. |
 | `billSale/receipt` | GET | Print data for a bill receipt: `?id=`. Returns formatted print payload with entries, company info, totals, UPI ID, GSTIN, tqty/tvalue/ttvalue/tdiscount. **Bug:** `console.log('SALE ENTRIES:', sale.entries)` |
 | `billSale/updateBillNotes` | POST | Update bill notes: `{ billId, companyId, notes }` |
 | `billSale/updatePaymentStatus` | POST | Update bill payment status + method: `{ billId, companyId, status, paymentMethod }`. If status becomes PAID, also sets `created_at = now()` |

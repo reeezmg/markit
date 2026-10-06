@@ -1,4 +1,5 @@
 <script setup>
+import { billingErrorMessage } from '~/utils/billing-error';
 const companyScope = useCompanyScope();
 const $fetch = companyScope.fetch;
 
@@ -50,7 +51,7 @@ const submitForm = async () => {
   } catch (error) {
     toast.add({
       title: 'Account creation failed!',
-      description: error.message || 'Something went wrong',
+      description: billingErrorMessage(error, 'Unable to add the account. Please try again.'),
       color: 'red',
     })
   } finally {

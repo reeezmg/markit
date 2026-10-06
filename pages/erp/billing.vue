@@ -4,6 +4,7 @@ await companyScope.ready;
 const $fetch = companyScope.fetch;
 
 import { BillingAddClient } from '#components';
+import { billingErrorMessage } from '~/utils/billing-error';
 import { v4 as uuidv4 } from 'uuid';
 import { Capacitor } from '@capacitor/core';
 
@@ -536,7 +537,7 @@ const print = async() => {
       printModel.value = true
       toast.add({
         title: 'Printing failed!',
-        description: err.message,
+        description: billingErrorMessage(err, 'Unable to print the receipt. Check your printer and try again.'),
         color: 'red',
       });
   }
@@ -555,7 +556,7 @@ const download = async() => {
       printModel.value = true
       toast.add({
         title: 'Download failed!',
-        description: err.message,
+        description: billingErrorMessage(err, 'Unable to download the receipt. Please try again.'),
         color: 'red',
       });
   }
@@ -597,7 +598,7 @@ const send = async() => {
       printModel.value = true
       toast.add({
         title: 'Receipt failed to Sent!',
-        description: err.message,
+        description: billingErrorMessage(err, 'Unable to send the receipt. Please try again.'),
         color: 'red',
       });
   }
@@ -888,7 +889,7 @@ const handleSave = async () => {
     reset()
   } catch (error) {
     console.error('Error creating bill', error)
-    toast.add({ title: 'Bill creation failed!', description: error?.message || 'Unknown error', color: 'red' })
+    toast.add({ title: 'Bill creation failed!', description: billingErrorMessage(error, 'Unable to save the bill. Please try again.'), color: 'red' })
   } finally {
     isSaving.value = false
   }

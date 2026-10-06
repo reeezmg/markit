@@ -5,6 +5,7 @@ await companyScope.ready;
 const $fetch = companyScope.fetch;
 
 import { v4 as uuidv4 } from 'uuid';
+import { billingErrorMessage } from '~/utils/billing-error';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'
 import {
@@ -290,7 +291,7 @@ const startCamera = async () => {
           console.error('Quagga init error:', err)
           toast.add({
             title: 'Camera Error',
-            description: err.message,
+            description: 'Unable to start the camera. Check camera permissions and try again.',
             color: 'red',
           })
           return
@@ -337,7 +338,7 @@ const startCamera = async () => {
       toast.add({
         title: 'Unexpected Error',
         description:
-          err.message || 'Something went wrong while accessing the camera.',
+          'Unable to access the camera. Check camera permissions and try again.',
         color: 'gray',
         icon: 'i-heroicons-bug-ant',
       })
@@ -749,6 +750,9 @@ const fetchBill = async () => {
       }
     })
     if (!await selectOwnerAndReload(record.companyId)) return
+    // The bill watcher resolves saved category IDs when bill.value changes.
+    // Load the owning company's options first so those selections are retained.
+    await getCategories()
     bill.value = record
   } finally {
     dataLoading.value = false
@@ -759,7 +763,6 @@ const fetchBill = async () => {
 
 onMounted(async () => {
     await fetchBill()
-    await getCategories()
 });
 const dataLoading = ref(true)
 watch(bill, async (newBill) => {
@@ -1064,12 +1067,9 @@ const handleEdit = async () => {
 
   try {
 
-    if (!navigator.onLine) {
-    throw createError({
-      statusCode: 0,
-      statusMessage: 'No internet connection',
-    })
-  }
+    if (typeof navigator !== 'undefined' && navigator.onLine === false) {
+      throw new Error('No internet connection')
+    }
     
     // 1. Validate and filter items
     const finalitems = items.value.filter(item =>
@@ -1229,7 +1229,7 @@ const handleEdit = async () => {
     console.error('Error updating bill', error);
     toast.add({
       title: 'Bill update failed!',
-      description: error.message,
+      description: billingErrorMessage(error, 'Unable to update the bill. Please try again.'),
       color: 'red',
     });
   }finally{
@@ -1317,7 +1317,7 @@ const submitForm = async () => {
   } catch (error) {
     toast.add({
       title: 'Account creation failed!',
-      description: error.message || 'Something went wrong',
+      description: billingErrorMessage(error, 'Unable to add the account. Please try again.'),
       color: 'red',
     })
   } finally {
@@ -1337,7 +1337,7 @@ const print = async() => {
      printModel.value = true
       toast.add({
         title: 'Printing failed!',
-        description: err.message,
+        description: billingErrorMessage(err, 'Unable to print the receipt. Check your printer and try again.'),
         color: 'red',
       });
   }
@@ -1357,7 +1357,7 @@ const download = async() => {
       printModel.value = true
       toast.add({
         title: 'Download failed!',
-        description: err.message,
+        description: billingErrorMessage(err, 'Unable to download the receipt. Please try again.'),
         color: 'red',
       });
   }
@@ -1399,7 +1399,7 @@ const send = async() => {
       printModel.value = true
       toast.add({
         title: 'Receipt failed to Sent!',
-        description: err.message,
+        description: billingErrorMessage(err, 'Unable to send the receipt. Please try again.'),
         color: 'red',
       });
   }

@@ -149,6 +149,8 @@ Head-office admins default to the active head office plus active direct branches
 
 #### `pages/erp/billing.vue` — POS Billing
 
+Billing and bill edit use `utils/billing-error.ts` for save, receipt and client/account form error toasts. Offline failures show "No internet connection"; connection failures and timeouts get actionable messages. Clean validation messages are retained, while request URLs and database/runtime details use a plain action-specific fallback. Camera errors give permission/device guidance.
+
 billing.vue is a **coordination layer** (~1,700 lines). All logic lives in dedicated composables; the file owns only DOM refs, keyboard nav, table resize, and the template.
 
 **Composable architecture:**
@@ -348,6 +350,7 @@ Bill creation uses the shared `pg` pool and lazily installs/calls the source-onl
 #### `pages/erp/edit/[salesId].vue` — Bill Edit
 
 - Fetches bill via `GET /api/billEdit/findUniqueBill` — **raw SQL** (returns bill + entries + client + coupon usages)
+- Resolves the bill's owning company, then loads its category options before assigning the bill to the form watcher; saved entry categories are matched by ID during row initialization.
 - Same UI as billing.vue (barcode rows, camera scanning, keyboard nav, tax calc, split payments, skip points toggle, `+n` discount add); the table shows `unit` next to `qty` only when multiple billing units are enabled in settings
 - The Account Name selector mirrors billing.vue: existing `accountId` values load as `account:<id>`, staff-credit `creditUserId` values load as `user:<id>`, and save back into separate bill columns.
 - User tracking parity with billing: supports top-level user code input (near date); applying it updates all existing rows and pre-fills newly added rows

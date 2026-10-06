@@ -83,7 +83,7 @@ export function useBillingCamera(onBarcodeScanned: (barcode: string) => void) {
         (err: Error | null) => {
           if (err) {
             console.error('Quagga init error:', err)
-            toast.add({ title: 'Camera Error', description: err.message, color: 'red' })
+            toast.add({ title: 'Camera Error', description: 'Unable to start the camera. Check camera permissions and try again.', color: 'red' })
             return
           }
           Quagga.start()
@@ -116,7 +116,7 @@ export function useBillingCamera(onBarcodeScanned: (barcode: string) => void) {
       } else {
         toast.add({
           title: 'Unexpected Error',
-          description: err.message || 'Something went wrong while accessing the camera.',
+          description: 'Unable to access the camera. Check camera permissions and try again.',
           color: 'gray',
           icon: 'i-heroicons-bug-ant',
         })

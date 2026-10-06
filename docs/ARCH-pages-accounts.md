@@ -6,7 +6,9 @@ The main ERP sidebar has an **Account** group. It renders the Accounts, Journals
 Planning and controls, Fixed assets and Setup headings and page links from
 `utils/accountant-navigation.ts` through `components/Accountant/SidebarNavigation.vue`.
 The group opens on accounting routes; the collapsed sidebar shows the same grouped
-links in a scrollable popover. It is available to admin, manager and accountant
+links in a scrollable popover. Each subheading is a keyboard-accessible dropdown;
+the section containing the current page opens automatically, and other sections
+start collapsed. It is available to admin, manager and accountant
 roles across plans. Legacy Accounts is hidden from navigation; its history routes remain.
 The previous `/accounts` pages are read-only history. Operational sources no longer
 write, delete, move or recalculate `account_ledger_entries`.
@@ -323,15 +325,26 @@ atomically with role `investor`, an unusable random password hash (password-rese
 flow for login), and the investor/accounts; failed profile creation rolls everything
 back. Previously unlinked profiles can be linked when edited, but existing links
 cannot be reassigned. Profile contact edits do not change the linked user's identity.
-Native investor creation requires an existing active company Equity account
-(`capitalAccountId`) linked to the investor's user/profile. It creates no chart
-accounts. Optional `profitAccountId` and `loanAccountId` select existing profit
-payable and loan liability accounts of the correct type. Events without the
+Native investor creation resolves existing active company accounts from the
+Investments company defaults; explicit `capitalAccountId`, `profitAccountId` and
+`loanAccountId` override those defaults for that investor. Equity is required;
+profit payable and loan accounts are optional until those movements are used.
+Native creation creates no chart accounts. Accounts can be shared by investors:
+every journal line retains `sourceParties.investor`, while balances, profit-payment
+limits and loan-repayment limits are calculated from that investor's events.
+Events without the
 required purpose account are rejected; receipts still debit the selected existing
 Cash/Bank account and credit the mapped investor account. Legacy imports retain
 their three-account creation contract, and existing profiles keep their mappings.
-The profile modal offers these account selections when adding an investor and
-prefills them from Settings → Account → Investments. The same section configures
+The profile modal offers account selections when adding or editing an investor.
+Selecting Company default resolves the current default at save time; omitted
+fields on an API edit preserve the existing mapping. Changing an account with a
+nonzero balance for that investor/purpose is rejected until settlement or
+reclassification; profile-only edits preserve all mappings. Mapping edits retain
+before/after selections in the investor audit. Changing company defaults does not
+rewrite existing investor mappings or journals.
+Settings → Account → Investments also exposes an investor selector and override
+editor. The same section configures
 capital/loan cash-bank defaults, payout defaults and profit-distribution equity.
 Dated ownership/profit-share terms
 can be corrected by manager/admin through PUT `:id/terms/:termId` until protected

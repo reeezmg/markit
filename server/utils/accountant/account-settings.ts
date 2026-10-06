@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Router, badRequest, requireAuth, rbac } from './router';
 import { accountantPrisma as db, context, logActivity } from './context';
 import { accountDefaultGroups, acceptsDefaultAccount } from '../../../utils/account-defaults';
+import { validateProfitDistributionAccount } from './investment-account-settings';
 
 export const accountSettingsRouter = Router();
 accountSettingsRouter.use(requireAuth, rbac('ACCOUNT', 'WRITE'));
@@ -20,7 +21,7 @@ accountSettingsRouter.get('/', async (_req, res) => {
 accountSettingsRouter.put('/:group', async (req, res) => {
   const group = accountDefaultGroups[req.params.group];
   if (!group) throw badRequest('Unknown account settings group');
-  const { mappings } = z.object({ mappings: z.record(z.string()) }).parse(req.body);
+  const { mappings, profitDistributionAccountId } = z.object({ mappings: z.record(z.string()), profitDistributionAccountId: z.string().min(1).optional() }).parse(req.body);
   const selected = Object.fromEntries(Object.entries(mappings).filter(([, id]) => id));
   const accounts = await db.accountingAccount.findMany({ where: { id: { in: Object.values(selected) }, isActive: true } });
   for (const [key, id] of Object.entries(selected)) {
@@ -28,6 +29,13 @@ accountSettingsRouter.put('/:group', async (req, res) => {
     if (!field || !account || !acceptsDefaultAccount(field, account)) throw badRequest(`Select an active company account for ${field?.label || key}`);
   }
   if (req.params.group === 'transfers' && selected.fromAccountId && selected.fromAccountId === selected.toAccountId) throw badRequest('Transfer accounts must be different');
+  if (profitDistributionAccountId !== undefined) {
+    if (req.params.group !== 'investments') throw badRequest('Profit distribution belongs to investment settings');
+    if (!['admin', 'manager'].includes(context().role)) throw badRequest('Only managers and admins can change the profit distribution account');
+    await validateProfitDistributionAccount(profitDistributionAccountId);
+    if (Object.values(selected).includes(profitDistributionAccountId)) throw badRequest('Choose a separate equity account for profit distribution');
+  }
   await logActivity({ ...context(), action: 'configured', resource: 'account-defaults', resourceId: req.params.group, meta: selected });
+  if (profitDistributionAccountId !== undefined) await logActivity({ ...context(), action: 'configured', resource: 'investor-profit-settings', resourceId: context().companyId, meta: { accountId: profitDistributionAccountId } });
   res.json({ success: true });
 });

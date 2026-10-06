@@ -8,23 +8,24 @@ const api = useAccountantApi(),
     capitalAccountId = ref(''),
     profitAccountId = ref(''),
     loanAccountId = ref(''),
+    companyDefaults = ref<Record<string, string>>({}),
     mode = ref('existing'),
     userId = ref(props.investor?.legacy_user_id || ''),
     loadingUsers = ref(false),
     userError = ref('');
 const needsUser = !props.investor?.legacy_user_id;
 onMounted(async () => {
-    if (!needsUser && props.investor) return;
     loadingUsers.value = true;
     try {
         users.value = await api.get('/investors/users');
-        if (!props.investor) {
+        {
             const [options, settings] = await Promise.all([api.get('/investors/options'), api.get('/account-settings/defaults')]);
             accounts.value = options;
             const saved = settings.defaults.investments || {};
-            capitalAccountId.value ||= saved.capitalAccountId || '';
-            profitAccountId.value ||= saved.profitAccountId || '';
-            loanAccountId.value ||= saved.loanAccountId || '';
+            companyDefaults.value = saved;
+            capitalAccountId.value = props.investor?.accounts?.capital || '';
+            profitAccountId.value = props.investor?.accounts?.profit || '';
+            loanAccountId.value = props.investor?.accounts?.loan || '';
         }
     } catch (e: any) {
         userError.value = e.message;
@@ -56,16 +57,16 @@ watch(mode, () => {
     Object.assign(form, { name: '', email: '', phone: '' });
 });
 async function save() {
-    if (busy.value) return;
+    if (busy.value || loadingUsers.value || !accounts.value.length) return;
     busy.value = true;
     try {
         const payload = {
             ...form,
-            ...(!props.investor ? {
+            ...{
                 capitalAccountId: capitalAccountId.value,
-                profitAccountId: profitAccountId.value || undefined,
-                loanAccountId: loanAccountId.value || undefined,
-            } : {}),
+                profitAccountId: profitAccountId.value,
+                loanAccountId: loanAccountId.value,
+            },
             ...(needsUser
                 ? mode.value === 'existing'
                     ? { userId: userId.value }
@@ -99,7 +100,7 @@ async function save() {
                 investor ? 'Edit investor' : 'Add investor'
             }}</template
             ><form class="space-y-4" @submit.prevent="save"
-                ><fieldset :disabled="busy" class="space-y-4"
+                ><fieldset :disabled="busy || loadingUsers" class="space-y-4"
                     ><UAlert v-if="userError" color="red" :title="userError" />
                     <div v-if="needsUser" class="space-y-3">
                         <UFormGroup label="Investor user">
@@ -147,16 +148,17 @@ async function save() {
                             Forgot password.</p
                         >
                     </div>
-                    <div v-if="!investor" class="space-y-3">
+                    <div class="space-y-3">
+                        <p class="text-xs text-gray-500">Company investment defaults are shared across investors. Choose another account to override a default for this investor. Posted journal rows remain linked to their investor.</p>
                         <UFormGroup label="Equity account" required>
-                            <USelectMenu v-model="capitalAccountId" :options="accounts.filter(a => a.category === 'EQUITY' && a.accountType === 'EQUITY')" value-attribute="id" option-attribute="name" searchable placeholder="Select existing equity account" />
+                            <USelectMenu v-model="capitalAccountId" :options="[{ id: '', name: `Company default: ${accounts.find(a => a.id === companyDefaults.capitalAccountId)?.name || 'not configured'}` }, ...accounts.filter(a => a.category === 'EQUITY' && a.accountType === 'EQUITY')]" value-attribute="id" option-attribute="name" searchable placeholder="Use company default" />
                             <p class="text-xs text-gray-500 mt-1">Investments credit this account. Money received goes to the Cash or Bank account selected when recording the investment.</p>
                         </UFormGroup>
                         <UFormGroup label="Profit payable account (optional)">
-                            <USelectMenu v-model="profitAccountId" :options="accounts.filter(a => a.category === 'LIABILITY' && a.accountType === 'OTHER_CURRENT_LIABILITY')" value-attribute="id" option-attribute="name" searchable placeholder="Select existing liability account" />
+                            <USelectMenu v-model="profitAccountId" :options="[{ id: '', name: `Company default: ${accounts.find(a => a.id === companyDefaults.profitAccountId)?.name || 'not configured'}` }, ...accounts.filter(a => a.category === 'LIABILITY' && a.accountType === 'OTHER_CURRENT_LIABILITY')]" value-attribute="id" option-attribute="name" searchable placeholder="Use company default" />
                         </UFormGroup>
                         <UFormGroup label="Investor loan account (optional)">
-                            <USelectMenu v-model="loanAccountId" :options="accounts.filter(a => a.category === 'LIABILITY' && a.accountType === 'OTHER_LIABILITY')" value-attribute="id" option-attribute="name" searchable placeholder="Select existing loan liability account" />
+                            <USelectMenu v-model="loanAccountId" :options="[{ id: '', name: `Company default: ${accounts.find(a => a.id === companyDefaults.loanAccountId)?.name || 'not configured'}` }, ...accounts.filter(a => a.category === 'LIABILITY' && a.accountType === 'OTHER_LIABILITY')]" value-attribute="id" option-attribute="name" searchable placeholder="Use company default" />
                         </UFormGroup>
                     </div>
                     <UFormGroup label="Name" required
@@ -219,7 +221,7 @@ async function save() {
                     ><UButton
                         type="submit"
                         :loading="busy"
-                        :disabled="(needsUser && mode === 'existing' && !userId) || (!investor && !capitalAccountId)"
+                        :disabled="loadingUsers || !accounts.length || (needsUser && mode === 'existing' && !userId) || (!capitalAccountId && !companyDefaults.capitalAccountId)"
                         >Save investor</UButton
                     ></div
                 ></form

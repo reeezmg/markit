@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { accountantPrisma as db, context, logActivity } from './context';
 import { Router, requireAuth, rbac, badRequest, notFound } from './router';
 import { ensureDefaults } from './accounts';
+import { accountDefaults } from './account-settings';
 import {
     cents,
     validatePosting,
@@ -117,6 +118,32 @@ async function resolveInvestorUser(input: any) {
     });
     return linkedCompanyUser(id);
 }
+export async function resolveInvestorAccountSelections(input: unknown, current?: Record<string, string>) {
+    const selected = z.object({
+        capitalAccountId: z.string().optional(),
+        profitAccountId: z.string().optional(),
+        loanAccountId: z.string().optional(),
+    }).parse(input);
+    const defaults = (await accountDefaults()).investments || {};
+    const accounts: Record<string, string> = {};
+    for (const [key, category, accountType] of [
+        ['capital', 'EQUITY', 'EQUITY'],
+        ['profit', 'LIABILITY', 'OTHER_CURRENT_LIABILITY'],
+        ['loan', 'LIABILITY', 'OTHER_LIABILITY'],
+    ]) {
+        const field = `${key}AccountId` as keyof typeof selected;
+        const accountId = selected[field] === undefined && current ? current[key] : selected[field] || defaults[field];
+        if (!accountId) {
+            if (key === 'capital') throw badRequest('Choose an investor equity account or configure the company investment default');
+            continue;
+        }
+        const account = await db.accountingAccount.findFirst({ where: { id: accountId, isActive: true, category, accountType } });
+        if (!account) throw badRequest(`Select an active ${key} account of the correct type in this company`);
+        accounts[key] = account.id;
+    }
+    return accounts;
+}
+
 export async function createInvestor(
     input: unknown,
     legacyUserId: string | null = null
@@ -134,24 +161,16 @@ export async function createInvestor(
         id = randomUUID(),
         currency = (await db.company.findUnique()).currency;
     const accounts: Record<string, string> = {};
-    const selected = legacyUserId ? null : z.object({
-        capitalAccountId: z.string().min(1),
-        profitAccountId: z.string().optional(),
-        loanAccountId: z.string().optional(),
-    }).parse(input);
+    const selected = legacyUserId ? null : await resolveInvestorAccountSelections(input);
     for (const [key, label, category, accountType] of [
         ['capital', 'Capital', 'EQUITY', 'EQUITY'],
         ['profit', 'Profit payable', 'LIABILITY', 'OTHER_CURRENT_LIABILITY'],
         ['loan', 'Investor loan', 'LIABILITY', 'OTHER_LIABILITY'],
     ]) {
         if (selected) {
-            const accountId = selected[`${key}AccountId` as keyof typeof selected];
+            const accountId = selected[key];
             if (!accountId) continue;
-            const account = await db.accountingAccount.findFirst({
-                where: { id: accountId, isActive: true, category, accountType },
-            });
-            if (!account) throw badRequest(`Select an active ${label.toLowerCase()} account in this company`);
-            accounts[key] = account.id;
+            accounts[key] = accountId;
             continue;
         }
         // Legacy import retains its historical account creation contract.
@@ -591,19 +610,29 @@ investorRouter.put('/:id', async (req, res) => {
             'An existing investor cannot be reassigned to another user'
         );
     const b = profileSchema.parse(req.body);
+    const changingAccounts = ['capitalAccountId', 'profitAccountId', 'loanAccountId'].some(key => key in req.body);
+    const accounts = changingAccounts ? await resolveInvestorAccountSelections(req.body, current.accounts) : current.accounts;
+    if (changingAccounts) {
+        const totals = investorTotals(await investorEvents(current.id));
+        for (const [key, balance] of [['capital', totals.capital], ['profit', totals.payable], ['loan', totals.loan]] as const) {
+            if (accounts[key] !== current.accounts[key] && cents(balance) !== 0)
+                throw badRequest(`The ${key} account has an outstanding investor balance; settle or reclassify it before changing its account`);
+        }
+    }
     await execute(
-        'UPDATE accountant_v2_investors SET name=$3,profile=$4::jsonb,legacy_user_id=$5 WHERE company_id=$1 AND id=$2',
+        'UPDATE accountant_v2_investors SET name=$3,profile=$4::jsonb,legacy_user_id=$5,accounts=$6::jsonb WHERE company_id=$1 AND id=$2',
         req.params.id,
         b.name,
         JSON.stringify(b),
-        userId
+        userId,
+        JSON.stringify(accounts)
     );
     await logActivity({
         ...context(),
         resource: 'investor',
         resourceId: req.params.id,
         action: 'profile-updated',
-        meta: b,
+        meta: { ...b, accountSelections: { before: current.accounts, after: accounts } },
     });
     res.json({ id: req.params.id });
 });

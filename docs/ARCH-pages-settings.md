@@ -28,6 +28,19 @@ history import and overrides are embedded here through `Distributor/Accounting.v
 The previous Accounting buttons on billing, sales, expense, customer, staff and
 supplier pages have been removed. Ecommerce setup and investor profit-distribution
 account selection are also here; investment share-count settings remain separate.
+Investments exposes shared Equity, Profit payable and Investor loan defaults plus
+an investor selector opening `Investments/ProfileModal.vue` for account overrides.
+New investor creation resolves defaults server-side; explicit investor choices
+take precedence. Existing mappings remain until explicitly edited, and an account
+with an outstanding balance for that investor/purpose cannot be changed without
+settlement or reclassification. Shared accounts retain investor attribution on
+each journal line; investor event balances and payment limits remain separate.
+One **Save investment settings** button saves the investment defaults and profit
+distribution account together through PUT `/account-settings/investments` in the
+existing request transaction. Its optional `profitDistributionAccountId` requires
+admin/manager and validates an active company equity account distinct from investor
+purpose accounts before either setting is written. Accountants save defaults only;
+the distribution selector remains read-only for them.
 
 `/api/accountant/account-settings` lists active company accounts, suppliers and saved
 form defaults; `/defaults` reads just defaults. PUT `/:group` validates account type,

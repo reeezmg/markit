@@ -4,6 +4,7 @@ const companyScope = useCompanyScope(props.allowCompanySelection ? 'form' : unde
 const $fetch = companyScope.fetch;
 
 import { reactive, ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { billingErrorMessage } from '~/utils/billing-error';
 import { useFindUniqueClient, useCreateClient, useUpdateClient } from '~/lib/company-hooks/client';
 
 import { v4 as uuidv4 } from 'uuid'
@@ -306,7 +307,7 @@ const login = async () => {
   } catch (error: any) {
     toast.add({
       title: 'Failed to add client',
-      description: error?.info?.message || error?.message || 'Please try again',
+      description: billingErrorMessage(error, 'Unable to add the client. Please try again.'),
       color: 'red',
     })
   } finally {

@@ -10,11 +10,14 @@ const accounts = [
   { id: 'equity-a', companyId: 'a', accountType: 'EQUITY', isActive: true, deletedAt: null },
   { id: 'cash-b', companyId: 'b', accountType: 'CASH', isActive: true, deletedAt: null },
   { id: 'inactive', companyId: 'a', accountType: 'CASH', isActive: false, deletedAt: null },
+  { id: 'distribution', companyId: 'a', category: 'EQUITY', accountType: 'EQUITY', isActive: true, deletedAt: null },
+  { id: 'owned-equity', companyId: 'a', category: 'EQUITY', accountType: 'EQUITY', isActive: true, deletedAt: null },
 ];
 const audits: any[] = [];
 const matches = (row: any, where: any) => Object.entries(where).every(([k,v]: any) => v?.in ? v.in.includes(row[k]) : row[k] === v);
 const db: any = {
-  accountantAccountingAccount: { findMany: async ({ where }: any) => accounts.filter(a => matches(a, where)) },
+  accountantAccountingAccount: { findMany: async ({ where }: any) => accounts.filter(a => matches(a, where)), findFirst: async ({where}:any) => accounts.find(a=>matches(a,where)) },
+  $queryRawUnsafe: async (_sql:string, companyId:string, id:string) => companyId === 'a' && id === 'owned-equity' ? [{id:'investor'}] : [],
   accountantAudit: {
     findMany: async ({ where }: any) => audits.filter(a => matches(a, where)).reverse(),
     create: async ({ data }: any) => { const row = { ...data, deletedAt: null }; audits.push(row); return row; },
@@ -34,6 +37,18 @@ await assert.rejects(call('PUT','/unknown',{mappings:{}}));
 await assert.rejects(call('PUT','/receive',{mappings:{moneyAccountId:'cash-a'}},'a','user'));
 await call('PUT','/investments',{mappings:{}});
 assert.deepEqual((await call('GET','/defaults')).defaults.investments,{},'Clearing a default must not fall back to an older saved value');
+await call('PUT','/investments',{mappings:{capitalAccountId:'equity-a',counterAccountId:'cash-a'},profitDistributionAccountId:'distribution'});
+assert.equal((await call('GET','/defaults')).defaults.investments.capitalAccountId,'equity-a');
+assert.equal(audits.at(-1).resource,'investor-profit-settings');
+assert.equal(audits.at(-1).after.accountId,'distribution');
+const auditCount=audits.length;
+for(const id of ['cash-a','cash-b','owned-equity','missing'])await assert.rejects(call('PUT','/investments',{mappings:{capitalAccountId:'equity-a'},profitDistributionAccountId:id}));
+await assert.rejects(call('PUT','/investments',{mappings:{capitalAccountId:'distribution'},profitDistributionAccountId:'distribution'}));
+await assert.rejects(call('PUT','/investments',{mappings:{capitalAccountId:'equity-a'},profitDistributionAccountId:'distribution'},'a','accountant'));
+await assert.rejects(call('PUT','/receive',{mappings:{moneyAccountId:'cash-a'},profitDistributionAccountId:'distribution'}));
+assert.equal(audits.length,auditCount,'Invalid combined saves must validate both settings before writing either audit');
+await call('PUT','/investments',{mappings:{capitalAccountId:'equity-a'}},'a','accountant');
+assert.equal(audits.length,auditCount+1,'Accountants can still save defaults without changing the distribution account');
 
 async function purchase(recorded: any, overrides: any, enabled = true) {
   let written: any = null;

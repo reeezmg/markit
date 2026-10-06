@@ -5,6 +5,7 @@ import { accountantPrisma as db, context, logActivity } from './context';
 import { Router, requireAuth, rbac, badRequest } from './router';
 import { investorDate, investorEvents, addInvestorEvent } from './investors';
 import { cents, assertAccountingDateUnlocked } from './posting';
+import { validateProfitDistributionAccount as fundingAccount } from './investment-account-settings';
 
 export const investorProfitRouter = Router();
 investorProfitRouter.use(requireAuth, rbac('ACCOUNT', 'READ'));
@@ -32,24 +33,6 @@ function manager() {
         );
 }
 
-async function fundingAccount(id: string) {
-    const account = await db.accountingAccount.findFirst({
-        where: { id, isActive: true, category: 'EQUITY' },
-    });
-    if (!account)
-        throw badRequest(
-            'Select an active equity account in Investment settings'
-        );
-    const owned = await query(
-        "SELECT id FROM accountant_v2_investors WHERE company_id=$1 AND (accounts->>'capital'=$2 OR accounts->>'profit'=$2 OR accounts->>'loan'=$2)",
-        id
-    );
-    if (owned.length)
-        throw badRequest(
-            'The distribution account cannot be an individual investor account'
-        );
-    return account;
-}
 export async function investmentSettings() {
     const saved = await db.auditLog.findFirst({
         where: { resource: 'investor-profit-settings', action: 'configured' },

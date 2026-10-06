@@ -90,7 +90,7 @@ export default defineEventHandler(async (event) => {
 
     const billResult = await client.query(
       `
-      SELECT id, client_id, redeemed_points, bill_points, company_id, invoice_number
+      SELECT id, client_id, redeemed_points, bill_points, company_id, invoice_number, deleted
       FROM bills
       WHERE id = $1
       FOR UPDATE
@@ -103,6 +103,9 @@ export default defineEventHandler(async (event) => {
     }
 
     const existingBill = billResult.rows[0]
+    if (existingBill.deleted) {
+      throw createError({ statusCode: 409, statusMessage: 'Restore the deleted bill before editing it' })
+    }
     const oldClientId = existingBill.client_id || null
     const oldBillPoints = toNumber(existingBill.bill_points)
     const oldRedeemedPoints = toNumber(existingBill.redeemed_points)
