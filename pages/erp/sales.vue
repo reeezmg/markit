@@ -24,6 +24,8 @@ const showCleanedValues = ref(false)
 const canSeeCleanupRealValues = computed(() => canUseCleanupToggle.value && !showCleanedValues.value)
 const isMobile = ref(false);
 const isOpen = ref(false);
+const creditReceiptOpen = ref(false);
+const creditReceiptBill = ref<any>(null);
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
 const paymentMethod = ref('Cash');
@@ -1146,6 +1148,10 @@ const handleEnterPayment = (id:string, status:string, billNo:string, companyId:s
     if(status === 'PENDING'){
         onPaymentStatusChange(id, status, billNo, companyId)
     }else{
+        const bill = sales.value.find((b:any)=>b.id===id);
+        if (bill && (bill.paymentMethod === 'Credit' || bill.splitPayments?.some(p=>p.method==='Credit'))) {
+          creditReceiptBill.value={...bill,companyId};creditReceiptOpen.value=true;return;
+        }
         isOpen.value = true
         activeBillInfo.value = {id,billNo,companyId}
     }
@@ -1500,6 +1506,7 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
 
 
                <template #paymentStatus-data="{ row }">
+                        <UButton v-if="row.paymentMethod === 'Credit' || row.splitPayments?.some(p => p.method === 'Credit')" label="Payments" size="xs" variant="ghost" @click="handleEnterPayment(row.id,'PAID',row.invoiceNumber,row.companyId)" />
                     <USelect
                         v-model="row.paymentStatus"
                         :options="['PAID', 'PENDING']"
@@ -1663,6 +1670,7 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
     </UModal>
 
       
+  <BillingCreditReceiptModal v-model="creditReceiptOpen" :bill="creditReceiptBill" @saved="fetchSales()" />
   <UModal v-model="isOpen">
     <UCard :ui="{ ring: '', divide: 'divide-y divide-gray-100 dark:divide-gray-800' }">
     <template #header>

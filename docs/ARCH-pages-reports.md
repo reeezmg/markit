@@ -10,7 +10,7 @@ Financial totals include all CASH/BANK accounts, receivables, payables, stock, a
 
 Financial reports cover posted history only. They do not import missing source history on read. `components/Reports/Basis.vue` identifies accounting, source or mixed basis on all seven report pages. Operational bill/item, stock quantity, payroll and online-sales detail remains source-based. Do not add those source totals to posted financial totals.
 
-`npm run test:reports` runs GST allocation fixtures, rollback-isolated financial integration fixtures, then read-only API/export checks across connected companies. The API checks compare Accounts, Profit, Daily and Summary and generate GST/Daily Excel and Profit/Daily/Summary PDF files in memory.
+`npm run test:reports` includes older fixtures that create database schemas and must not be run under the current no-schema-change policy. Safe verification uses `npx tsc -p tests/tsconfig.reports.json`, `npm run test:bill-receipts:readonly`, and `npx tsx tests/report-pages.integration.test.ts` (read-only API/export checks). The API checks compare Accounts, Profit, Daily and Summary and generate GST/Daily Excel and Profit/Daily/Summary PDF files in memory.
 
 ### Report query structure and performance (2026-09-30)
 
@@ -33,7 +33,7 @@ Measured report-data SQL statements per request (authorization queries excluded)
 | GSTR-2B | 8 | 2 |
 | GSTR-3B | 7 | 3 |
 
-Daily PDF and Excel each use three report-data queries. These are round-trip reductions, not fixed latency guarantees. The report integration suite enforces query budgets, checks export amounts, exercises empty ranges and both cleanup modes in a read-only transaction, and can compare captured full JSON responses using `REPORT_BASELINE=write` / `REPORT_BASELINE=check`. Optional baselines are local `.cache/report-baseline.json` files; run against unchanged data when comparing. Financial helper type checking is part of `npm run test:reports`.
+Daily PDF and Excel each use four report-data queries: the same three-query daily loader plus one batched invoice/expense detail query. These are round-trip reductions, not fixed latency guarantees. The report integration suite enforces query budgets, checks export amounts, exercises empty ranges and both cleanup modes in a read-only transaction, and can compare captured full JSON responses using `REPORT_BASELINE=write` / `REPORT_BASELINE=check`. Optional baselines are local `.cache/report-baseline.json` files; run against unchanged data when comparing. Financial helper type checking is part of `npm run test:reports`.
 
 ### Precedence filter — all report APIs
 Source report APIs listed below read `cleanup` from `useAuthSession(event).data.cleanup`. When `cleanup = false` (normal users), soft-deleted bills (`precedence IS NOT TRUE`) are excluded from all aggregations and bill lists. When `cleanup = true` (cleanup admin), most report APIs include all bills regardless of `precedence`. Daily report APIs additionally accept a cleanup-only `showCleanedValues=true` query flag that switches cleanup admins back to current cleaned values and excludes `precedence=true` rows. The SQL pattern used is: `AND ($N = true OR b.precedence IS NOT TRUE)`.
@@ -49,9 +49,13 @@ For daily sales reports and sales exports, cleanup admins see preserved cleanup 
 
 When the logged-in session has `cleanup = true`, the page renders a cleanup-only `Cleaned values` toggle. Off uses original cleanup values for sales totals and entry revenue where available and includes `precedence=true` bills. On passes `showCleanedValues=true` to `/api/report/report`, `/api/report/generate-sales.pdf`, and `/api/report/generate-sales.excel`, which use current bill/entry values and exclude `precedence=true` bills. Normal users continue to see current visible bill and entry values and never render the toggle.
 
-**Layout order:** (1) Total Revenue, Total Expense and Selected Period Balance, with always-visible breakdowns; the first-row balance is source revenue minus source expenses (expenses include salary), broken down by Cash, UPI, Card, Bank transfer, Cheque and Credit instead of Revenue/Expense total rows. (2) Expanded salary details and purchase-payment breakdown. (3) Transfers and Receive/Pay. (4) Selected Period Balance - All fund accounts, showing Debit, Credit and Balance (period debit minus credit) for every posted CASH/BANK account and a total row. (5) Sales by category and brand.
+**Layout order:** (1) Total Sales (including credit), Collections (including credit repayments), Total Expense, Sales minus expenses, Cash and bank at end, and Posted customer dues at end, with breakdowns. (2) Salary and purchase-payment details. (3) Transfers and Receive/Pay. (4) Cash and bank movement for each posted CASH/BANK account. (5) Sales by category and brand.
 
-The fund table uses posted journals and includes transfers and Receive/Pay once only; its period total excludes customer receivables. The first-row Revenue minus Expense figure is period activity, not remaining funds. Salary methods are included in the expense card to match its total.
+`report-bill-sales.ts` defines invoice-date sales and collection-date money separately. Sales totals include PAID and PENDING non-Markit bills and the full original Credit portions of Split bills. Pending credit bills also appear in category/brand sales. Sales-by-method represents original invoice tender, not current dues; paying the bill does not move old Credit sales into Cash/UPI.
+
+Collections combine paid Cash/UPI/Card/Bank/Cheque invoice portions (including paid portions of a pending credit split) on invoice date with dated `ERP_CREDIT_RECEIPT` journal amounts. `ERP_CREDIT_RECEIPT_REVERSAL` amounts reduce collections on reversal date; reversing a receipt does not erase its earlier collection. `totalCollections`, `creditCollections` (net repayments only), and `collectionsByPaymentMethod` expose this separately. Receipt collections never increase sales. Source cleanup visibility applies to linked bills.
+
+Screen, PDF and Excel share the daily loader and the same sales/collection definitions. Invoice detail exports include pending credit invoices. Invoice totals include tax; posted P&L sales exclude output tax. The fund table reads all published journals, including receipts and reversals, once. It excludes receivables; closing customer dues appear separately. Sales minus paid expenses includes unpaid credit and is not available cash.
 
 `components/Reports/DailyTable.vue` supplies numeric alignment, signed amounts, sticky headings and contained scrolling. Date presets, loading/error/retry states, explicit refresh and stale-request cancellation remain. Optional `from`/`to` query dates initialize the range.
 
@@ -172,7 +176,7 @@ Store overview page. It calls `useCompanyDashboard()` for revenue, expenses, sal
 **Distributors section:** PDF export now renders `We Owe` and `Owed To Us` as two aligned side-by-side lists with their totals above the tables.
 
 **Pending Credit Bills card:**
-- Shows a compact summary strip at the top with the open bill count and the total pending amount before the table rows.
+- Shows a compact summary strip with the open bill count and current pending amount. Credit and Split-with-credit bills subtract active receipt amounts; original paid split portions are excluded.
 - Table columns: Invoice #, Date, Client, Phone, Amount.
 
 **PDF export:** mirrors the page wording and includes a `Pending Credit Bills` section with open count + total pending amount.

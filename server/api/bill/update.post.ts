@@ -4,12 +4,12 @@ import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
 import { createError } from 'h3'
 import { pool } from '~/server/db'
+import { billCreditCents, preserveCreditTender } from '~/utils/bill-credit'
+import { assertNoBillReceipts } from '~/server/utils/bill-receipts'
 import { generateCouponsForBill } from '~/server/utils/generatedCoupons'
 import { creditAmountFromBill, deleteUserLedgerEntryForSource, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
 
 
-// One-time `bills.discount_type` column add — gated to run once per process.
-let billDiscountTypeReady = false
 
 function toNumber(value: unknown) {
   const numeric = Number(value ?? 0)
@@ -67,7 +67,7 @@ async function applyPointsDelta(
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  await useCompanyRequestSession(event)
+  const requestSession = await useCompanyRequestSession(event)
 
   const {
     items = [],
@@ -79,23 +79,18 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
-    // Gated one-time source column setup.
-    if (!billDiscountTypeReady) {
-      await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
-      billDiscountTypeReady = true
-    }
     await client.query('BEGIN')
     await setDocumentStatusContext(event, client, 'bill.update')
       await lockCompanyRequest(event, client);
 
     const billResult = await client.query(
       `
-      SELECT id, client_id, redeemed_points, bill_points, company_id, invoice_number, deleted
+      SELECT *
       FROM bills
-      WHERE id = $1
+      WHERE id = $1 AND company_id = $2
       FOR UPDATE
       `,
-      [billData.id],
+      [billData.id,requestSession.data.companyId],
     )
 
     if (!billResult.rowCount) {
@@ -103,6 +98,12 @@ export default defineEventHandler(async (event) => {
     }
 
     const existingBill = billResult.rows[0]
+    try { preserveCreditTender(existingBill,billData) }
+    catch(e:any) { throw createError({statusCode:409,statusMessage:e.message}) }
+    const nextCredit = billCreditCents(billData)
+    if (billCreditCents(existingBill) > 0 && nextCredit <= 0) throw createError({statusCode:409,statusMessage:'Use a dated receipt to settle credit instead of changing the original payment method'})
+    if (nextCredit > 0) billData.paymentStatus = 'PENDING'
+    await assertNoBillReceipts(client, existingBill.company_id, billData.id)
     if (existingBill.deleted) {
       throw createError({ statusCode: 409, statusMessage: 'Restore the deleted bill before editing it' })
     }

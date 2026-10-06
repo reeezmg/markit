@@ -4,6 +4,7 @@ import { createRequire } from 'node:module'
 import { test } from 'node:test'
 import ts from 'typescript'
 import { applyBillStock, billStockDeltas } from '../server/utils/bill-stock'
+import { assertNoBillReceipts } from '../server/utils/bill-receipts'
 
 const entries = [
   { item_id: 'shirt', qty: 2, return: false },
@@ -33,6 +34,7 @@ function fixture() {
   let deleted = false
   let failCommit = false
   let foreignItem = false
+  let hasReceipts = false
   let snapshot: any
   let stock = { shirt: { qty: 6, sold: 4 }, shoe: { qty: 12, sold: -2 } }
   const original = structuredClone(stock)
@@ -48,6 +50,9 @@ function fixture() {
         const wantsDeleted = sql.includes('deleted = true')
         const rows = wantsDeleted === deleted ? [{ invoice_number: 1 }] : []
         return { rows, rowCount: rows.length }
+      } else if (sql.includes('FROM payments')) {
+        assert.deepEqual(args,['company','bill',['POS_CREDIT_RECEIPT']])
+        return {rows:hasReceipts ? [{id:'receipt'}] : [],rowCount:hasReceipts ? 1 : 0}
       } else if (sql.includes('FROM entries')) {
         assert.deepEqual(args, ['bill'])
         return { rows: entries, rowCount: entries.length }
@@ -77,16 +82,22 @@ function fixture() {
       if (name === 'h3') return { ...require('h3'), defineEventHandler: (fn: any) => fn, readBody: async (event: any) => event }
       if (name === '~/server/db') return { pool: { connect: async () => client } }
       if (name === '~/server/utils/bill-stock') return { applyBillStock }
+      if (name === '~/server/utils/bill-receipts') return { assertNoBillReceipts }
       if (name === '~/server/utils/user-ledger') return {}
       throw new Error(`Unexpected import: ${name}`)
     }, module, module.exports)
     return () => module.exports.default({ billId: 'bill', companyId: 'company' })
   }
   return { load, original, get stock() { return stock }, get deleted() { return deleted },
-    fail() { failCommit = true }, foreign() { foreignItem = true } }
+    fail() { failCommit = true }, foreign() { foreignItem = true }, receipt() {hasReceipts=true} }
 }
 
 for (const route of ['billSale/deleteBill', 'billEdit/deleteBill']) {
+  test(`${route}: recorded receipt prevents deleting the invoice or changing stock`,async()=>{
+    const f=fixture();f.receipt()
+    await assert.rejects(f.load(route)(),(e:any)=>e.statusCode===409)
+    assert.equal(f.deleted,false);assert.deepEqual(f.stock,f.original)
+  })
   test(`${route}: repeated delete/restore cycles preserve qty and sold_qty`, async () => {
     const f = fixture()
     const remove = f.load(route)

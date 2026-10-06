@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { assertNoBillReceipts } from '~/server/utils/bill-receipts'
 
 const PAYMENT_METHODS = ['Cash', 'UPI', 'Card', 'Credit']
 
@@ -208,6 +209,8 @@ export default defineEventHandler(async (event) => {
 
       await client.query('BEGIN')
       try {
+        await client.query('SELECT id FROM bills WHERE company_id=$1 AND id=ANY($2::text[]) ORDER BY id FOR UPDATE',[companyId,plan.map(r=>r.billId)])
+        for (const row of plan) await assertNoBillReceipts(client,companyId,row.billId,true)
         await client.query(
           `
           WITH updates AS (

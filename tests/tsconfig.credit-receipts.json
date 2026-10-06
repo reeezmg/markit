@@ -1,0 +1,11 @@
+{
+  "extends": "./tsconfig.reports.json",
+  "include": [
+    "../server/utils/bill-receipts.ts",
+    "../server/utils/bill-receipt-cleanup.ts",
+    "../utils/bill-credit.ts",
+    "../server/api/billSale/receipts.*.ts",
+    "../server/api/billSale/reverseReceipt.post.ts",
+    "./credit-receipt-globals.d.ts"
+  ]
+}

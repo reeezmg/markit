@@ -510,9 +510,12 @@ Deployment uses the owner's schema-push workflow from `schema.zmodel` and genera
 `prisma/schema.prisma`. Input validation is enforced by the recurring-expense APIs.
 
 #### `payments` (Payment)
-Payment records (separate from bill payments — likely used for subscription/platform payments).
-- Fields: `companyId`, `amount`, `paymentMode`, `paymentReference`, `status`, `currency`
-- **PENDING:** not seen in storetools server, usage unclear — may be in marketplace/server
+Existing payment records are reused for customer POS credit collections.
+- `companyId` and `billId` identify the company-scoped invoice; `clientId` is retained when present.
+- `paymentDate`, `amount`, `paymentMode`, `paymentReference`, and `currency` record the collection. For POS credit receipts, `depositTo` is the selected native CASH/BANK account ID.
+- `status = POS_CREDIT_RECEIPT` is active; `POS_CREDIT_REVERSED` retains the original after a dated reversal. Other pre-existing payment statuses are not counted as these receipts.
+- `ERP_CREDIT_RECEIPT` journals use the payment ID as `sourceId`; reversal journals use `ERP_CREDIT_RECEIPT_REVERSAL` and `reversedFromId`. Company-scoped request-ID audit records provide idempotency without schema additions.
+- `server/utils/bill-receipts.ts` owns trusted writes. The model adapter denies generated Payment mutations. Bill payment method/splits retain their original tender; payment status is PENDING until the credit portion minus active receipts is zero.
 
 #### `money_transactions` (MoneyTransaction)
 Cash/bank give-and-receive transactions with parties (customers, suppliers, employees, etc.).

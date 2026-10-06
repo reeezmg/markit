@@ -67,14 +67,6 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
-    if (cleanup) {
-      await client.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS original_subtotal DOUBLE PRECISION')
-      await client.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS original_grand_total DOUBLE PRECISION')
-      await client.query('ALTER TABLE bills ADD COLUMN IF NOT EXISTS original_discount DOUBLE PRECISION')
-      await client.query('ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_rate DOUBLE PRECISION')
-      await client.query('ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_value DOUBLE PRECISION')
-      await client.query('ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_discount DOUBLE PRECISION')
-    }
 
     const cleanupBillSelect = useOriginalCleanupValues
       ? `
@@ -254,6 +246,8 @@ export default defineEventHandler(async (event) => {
         b.payment_method   AS "paymentMethod",
         b.notes,
         b.split_payments   AS "splitPayments",
+        (SELECT COALESCE(json_agg(json_build_object('amount',p.amount,'status',p.status,'deleted',p.deleted)),'[]'::json)
+         FROM payments p WHERE p.company_id=b.company_id AND p.bill_id=b.id AND p.status='POS_CREDIT_RECEIPT' AND p.deleted=false) AS payments,
 
         json_build_object(
           'name', c.name,

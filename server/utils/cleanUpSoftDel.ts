@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '~/server/prisma';
+import { protectReceiptBills } from './bill-receipt-cleanup';
 
 type BillSoftDeleteOptions = {
   companyId: string;
@@ -12,6 +13,7 @@ export async function applySoftBillDeletionCleanup(opts: BillSoftDeleteOptions) 
   const { companyId, startDate, deleteBillIds, leastInvoice } = opts;
 
   return await prisma.$transaction(async (tx) => {
+    await protectReceiptBills(tx,companyId,deleteBillIds);
     // Step 1: Soft-delete selected bills by setting precedence = true
     const updateResult = await tx.bill.updateMany({
       where: {

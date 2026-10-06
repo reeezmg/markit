@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { Prisma } from '@prisma/client';
 import { createError } from 'h3';
 import { recalculateUserLedgerBalances } from './user-ledger';
+import { assertNoBillReceipts } from './bill-receipts';
 
 const metadata = new Map(Prisma.dmmf.datamodel.models.map(model => [model.name, model]));
 const roots = new Set(['Bill', 'Product', 'Brand', 'Category', 'Subcategory', 'Collection', 'ShippingBox',
@@ -148,6 +149,7 @@ export async function executeCompanyTransfer(db: any, input: TransferInput) {
   // Company locks serialize numbering and transfers in either direction.
   await db.query('SELECT id FROM companies WHERE id = ANY($1::text[]) ORDER BY id FOR UPDATE', [[input.sourceCompanyId, input.companyId]]);
   const graph = await transferGraph(db, input, true);
+  for (const node of graph.nodes.values()) if (node.model === 'Bill') await assertNoBillReceipts(db, input.sourceCompanyId, node.row.id, true);
   if (graph.fingerprint !== input.fingerprint) fail('Linked data changed; preview the transfer again');
   if (graph.nodes.size > 1 && !input.includeLinked) fail('Confirm all linked records before transferring');
   for (const requirement of graph.requirements) {

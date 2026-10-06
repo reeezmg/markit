@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '~/server/prisma';
+import { protectReceiptBills } from './bill-receipt-cleanup';
 
 type BillReduction = {
   billId: string;
@@ -28,12 +29,7 @@ export async function applyBillReductionCleanup(opts: BillReductionOptions) {
   }
 
   return await prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(Prisma.sql`ALTER TABLE bills ADD COLUMN IF NOT EXISTS original_subtotal DOUBLE PRECISION`);
-    await tx.$executeRaw(Prisma.sql`ALTER TABLE bills ADD COLUMN IF NOT EXISTS original_grand_total DOUBLE PRECISION`);
-    await tx.$executeRaw(Prisma.sql`ALTER TABLE bills ADD COLUMN IF NOT EXISTS original_discount DOUBLE PRECISION`);
-    await tx.$executeRaw(Prisma.sql`ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_rate DOUBLE PRECISION`);
-    await tx.$executeRaw(Prisma.sql`ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_value DOUBLE PRECISION`);
-    await tx.$executeRaw(Prisma.sql`ALTER TABLE entries ADD COLUMN IF NOT EXISTS original_discount DOUBLE PRECISION`);
+    await protectReceiptBills(tx,opts.companyId,reductions.map(r=>r.billId));
 
     const reductionsJson = JSON.stringify(reductions);
 

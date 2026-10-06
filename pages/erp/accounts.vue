@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { billOutstanding } from "~/utils/bill-credit";
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 
@@ -32,8 +33,9 @@ const deletingAccountRowIdentity = ref({});
 const isDeleteBillModalOpen = ref(false)
 const deletingBillRowIdentity = ref({});
 const isPaymentMethodModalOpen = ref(false)
-const paymentMethodForPaid = ref<'Cash' | 'UPI' | 'Card'>('Cash')
-const paymentMethodBillCtx = ref<{ id: string; billNo: string; row?: any } | null>(null)
+const receiptBillRow = ref<any>(null)
+const receiptRefreshKey = ref(0)
+const onReceiptSaved = async () => { receiptRefreshKey.value++; await refetch(); }
 
 const isMobile = ref(false)
 
@@ -219,6 +221,7 @@ const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
           deleted: false,
         },
         include: {
+          payments: { where: { status: 'POS_CREDIT_RECEIPT', deleted: false } },
           entries: {
             include: {
               category: {
@@ -264,15 +267,7 @@ const getPendingAmount = (accountRow: any) => {
   return (
     accountRow.bill
       ?.filter((b: any) => b.paymentStatus === 'PENDING')
-      .reduce((sum: number, b: any) => {
-        if (b.paymentMethod === 'Split' && b.splitPayments) {
-          const creditAmount = b.splitPayments
-            .filter((sp: any) => sp.method === 'Credit')
-            .reduce((cSum: number, sp: any) => cSum + (sp.amount ?? 0), 0)
-          return sum + creditAmount
-        }
-        return sum + (b.grandTotal ?? 0)
-      }, 0) ?? 0
+      .reduce((sum: number, b: any) => sum + billOutstanding(b), 0) ?? 0
   )
 }
 
@@ -499,41 +494,13 @@ const sendPendingWhatsappApi = async (row: any) => {
 
 const handlePaymentStatusSelect = (row: any, status: string) => {
   if (status === 'PAID') {
-    // Keep row stable until user confirms payment method.
-    paymentMethodForPaid.value = ['Cash', 'UPI', 'Card'].includes(row.paymentMethod)
-      ? row.paymentMethod
-      : 'Cash'
-    paymentMethodBillCtx.value = {
-      id: row.id,
-      billNo: row.invoiceNumber,
-      row
-    }
-    isPaymentMethodModalOpen.value = true
-    return
+    const owner = accounts.value?.find((a:any)=>a.bill?.some((b:any)=>b.id===row.id));
+    receiptBillRow.value={...row,companyId:owner?.companyId || row.companyId};
+    isPaymentMethodModalOpen.value=true;
+    return;
   }
 
   onPaymentStatusChange(row.id, status, row.invoiceNumber)
-}
-
-const confirmPaidWithMethod = async () => {
-  if (!paymentMethodBillCtx.value) return
-
-  const saved = await onPaymentStatusChange(
-    paymentMethodBillCtx.value.id,
-    'PAID',
-    paymentMethodBillCtx.value.billNo,
-    paymentMethodForPaid.value
-  )
-
-  if (!saved) return;
-
-  isPaymentMethodModalOpen.value = false
-  paymentMethodBillCtx.value = null
-}
-
-const cancelPaidWithMethod = () => {
-  isPaymentMethodModalOpen.value = false
-  paymentMethodBillCtx.value = null
 }
 
 const openEditModal = async (row:any) => {
@@ -752,7 +719,7 @@ watch(companyScope.readIds, () => { page.value = 1; });
             </template>
 
                 <template #expand="{ row: accountRow }">
-                    <AccountantCustomerLedger :company-id="accountRow.companyId" :account-id="accountRow.id" />
+                    <AccountantCustomerLedger :company-id="accountRow.companyId" :account-id="accountRow.id" :refresh-key="receiptRefreshKey" />
                     <UTable 
                         :rows="accountRow.bill" 
                         :columns="billColumns"
@@ -797,6 +764,7 @@ watch(companyScope.readIds, () => { page.value = 1; });
                         </template>
 
                         <template #paymentStatus-data="{ row }">
+                            <UButton v-if="row.paymentMethod === 'Credit' || row.splitPayments?.some(p => p.method === 'Credit')" label="Payments" size="xs" variant="ghost" @click="handlePaymentStatusSelect(row,'PAID')" />
                             <USelect
                                 :model-value="row.paymentStatus"
                                 :options="['PAID', 'PENDING']"
@@ -924,25 +892,7 @@ watch(companyScope.readIds, () => { page.value = 1; });
         </template>
     </UDashboardModal>
 
-    <UDashboardModal
-      v-model="isPaymentMethodModalOpen"
-      title="Select Payment Method"
-      description="Choose payment method before marking bill as paid."
-      icon="i-heroicons-credit-card"
-      prevent-close
-      :close-button="null"
-    >
-      <div class="px-4 pb-2">
-        <USelect
-          v-model="paymentMethodForPaid"
-          :options="['Cash', 'UPI', 'Card']"
-        />
-      </div>
-      <template #footer>
-        <UButton color="green" label="Confirm" @click="confirmPaidWithMethod" />
-        <UButton color="white" label="Cancel" @click="cancelPaidWithMethod" />
-      </template>
-    </UDashboardModal>
+    <BillingCreditReceiptModal v-model="isPaymentMethodModalOpen" :bill="receiptBillRow" @saved="onReceiptSaved" />
 
       <UDashboardModal
         v-model="isDeleteBillModalOpen"

@@ -26,6 +26,9 @@ export default defineEventHandler(async (event) => {
 
   const {
     sales,
+    totalCollections,
+    creditCollections,
+    collectionsByPaymentMethod,
     expenses,
     salaryPayments,
     salaryGiven,
@@ -91,6 +94,13 @@ export default defineEventHandler(async (event) => {
   salesSheet.addRow(['Cash', sales.cash]);
   salesSheet.addRow(['UPI', sales.upi]);
   salesSheet.addRow(['Card', sales.card]);
+  salesSheet.addRow(['Bank', sales.bank]);
+  salesSheet.addRow(['Cheque', sales.cheque]);
+  salesSheet.addRow(['Credit', sales.credit]);
+  const collectionsSheet = workbook.addWorksheet('Collections');
+  collectionsSheet.addRow(['Total collections', totalCollections]);
+  collectionsSheet.addRow(['Credit repayments (net of reversals)', creditCollections]);
+  for (const [method,amount] of Object.entries(collectionsByPaymentMethod)) collectionsSheet.addRow([method,amount]);
 
   const expenseSheet = workbook.addWorksheet('Expenses');
 

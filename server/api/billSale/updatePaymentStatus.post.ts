@@ -3,6 +3,8 @@ import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest'
 import { settleCreditPayment } from '~/utils/credit-payment'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { assertNoBillReceipts } from '~/server/utils/bill-receipts'
+import { billCreditCents } from '~/utils/bill-credit'
 
 
 export default defineEventHandler(async (event) => {
@@ -46,6 +48,14 @@ export default defineEventHandler(async (event) => {
     }
 
     const existingBill = existingRes.rows[0]
+    if (status === existingBill.payment_status) {
+      await client.query('COMMIT')
+      return { success: true, invoiceNumber: existingBill.invoice_number, paymentStatus: status }
+    }
+    await assertNoBillReceipts(client, companyId, billId)
+    if (status === 'PAID' && billCreditCents(existingBill) > 0) {
+      throw createError({statusCode:409,statusMessage:'Record a dated credit receipt to pay this bill'})
+    }
     let payment
     try { payment = settleCreditPayment(existingBill, status, paymentMethod) }
     catch (e: any) { throw createError({statusCode:400,statusMessage:e.message}) }

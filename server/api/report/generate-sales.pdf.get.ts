@@ -27,6 +27,9 @@ export default defineEventHandler(async (event) => {
 
   const {
     sales,
+    totalCollections,
+    creditCollections,
+    collectionsByPaymentMethod,
     expenses,
     salaryPayments,
     salaryGiven,
@@ -121,12 +124,19 @@ export default defineEventHandler(async (event) => {
       ['UPI', rs(sales.upi)],
       ['Card', rs(sales.card)],
       ['Credit', rs(sales.credit)],
+      ['Bank', rs(sales.bank)],
+      ['Cheque', rs(sales.cheque)],
     ],
     theme: 'grid',
   });
 
   y = doc.lastAutoTable.finalY + 8;
 
+  if (y > 240) {doc.addPage();y=MARGIN;}
+  doc.text('Collections by payment date', MARGIN, y);
+  autoTable(doc,{startY:y+4,head:[['Type','Amount']],body:[['Total collections',rs(totalCollections)],['Credit repayments (net)',rs(creditCollections)],...Object.entries(collectionsByPaymentMethod).map(([method,amount])=>[method,rs(amount)])],theme:'grid'});
+  y=doc.lastAutoTable.finalY+8;
+  if(y>245){doc.addPage();y=MARGIN;}
   doc.text('Expense Breakdown', MARGIN, y);
   y += 4;
 

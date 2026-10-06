@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '~/server/prisma';
+import { protectReceiptBills } from './bill-receipt-cleanup';
 
 type BillCleanupOptions = {
   companyId: string;
@@ -12,6 +13,7 @@ export async function applyBillDeletionCleanup(opts: BillCleanupOptions) {
   const { companyId, startDate, deleteBillIds, leastInvoice } = opts;
 
   return await prisma.$transaction(async (tx) => {
+    await protectReceiptBills(tx,companyId,deleteBillIds);
     // Step 1: Hard delete selected bills
     const deleteResult = await tx.bill.deleteMany({
       where: {

@@ -187,7 +187,7 @@ const accountTotal = computed(() => ({
     movement: position.value.delta,
 }));
 const salesRows = computed(() =>
-    ['Cash', 'UPI', 'Card', 'Credit'].map((name) => ({
+    ['Cash', 'UPI', 'Card', 'Bank', 'Cheque', 'Credit'].map((name) => ({
         name,
         amount: dashboard.value?.salesByPaymentMethod?.[name] || 0,
     }))
@@ -234,9 +234,14 @@ const transactionRows = computed(() =>
 );
 const summaryCards = computed(() => [
     {
-        name: 'Total Revenue',
+        name: 'Total Sales (including credit)',
         amount: dashboard.value?.totalSales,
         rows: salesRows.value,
+    },
+    {
+        name: 'Collections (including credit repayments)',
+        amount: dashboard.value?.totalCollections,
+        rows: ['Cash','UPI','Card','Bank','Cheque'].map(name=>({name,amount:dashboard.value?.collectionsByPaymentMethod?.[name] || 0})),
     },
     {
         name: 'Total Expense',
@@ -244,11 +249,21 @@ const summaryCards = computed(() => [
         rows: expensesRows.value,
     },
     {
-        name: 'Selected Period Balance',
+        name: 'Sales minus expenses',
         amount:
             Number(dashboard.value?.totalSales || 0) -
             Number(dashboard.value?.totalExpenses || 0),
         rows: paymentBalanceRows.value,
+    },
+    {
+        name: 'Cash and bank at end',
+        amount: financial.value?.balances?.total?.closing,
+        rows: ['cash','bank'].map(key=>({name:key === 'cash' ? 'Cash' : 'All banks',amount:financial.value?.balances?.[key]?.closing || 0})),
+    },
+    {
+        name: 'Posted customer dues at end',
+        amount: financial.value?.balances?.receivable?.closing,
+        rows: [{name:'Opening dues',amount:financial.value?.balances?.receivable?.opening || 0},{name:'Period change',amount:financial.value?.balances?.receivable?.delta || 0}],
     },
 ]);
 async function download(kind: 'pdf' | 'excel') {
@@ -458,10 +473,10 @@ const exportActions = [
                             :caption="card.name"
                         />
                         <p
-                            v-if="card.name === 'Selected Period Balance'"
+                            v-if="card.name === 'Sales minus expenses'"
                             class="mt-2 text-xs text-gray-500"
-                            >Revenue minus expenses by payment method for the
-                            selected period. Includes salary payments.</p
+                            >Includes unpaid credit sales and salary payments.
+                            Available funds are shown in Cash and bank at end.</p
                         >
                     </UCard>
                 </section>
@@ -562,7 +577,7 @@ const exportActions = [
                 >
                     <div class="p-5">
                         <h2 id="money-title" class="font-semibold"
-                            >Selected Period Balance - All fund accounts</h2
+                            >Cash and bank movement - All fund accounts</h2
                         >
                         <p class="mt-1 text-xs text-gray-500"
                             >Balance = Debit minus Credit for the selected
@@ -575,7 +590,7 @@ const exportActions = [
                         :columns="balanceColumns"
                         :total="accountTotal"
                         :currency="currency"
-                        caption="Selected period debit, credit and balance for each fund account"
+                        caption="Actual dated money movement; unpaid sales are excluded"
                         empty="No fund accounts to show for this period."
                     />
                 </section>

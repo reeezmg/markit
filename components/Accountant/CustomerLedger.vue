@@ -1,12 +1,12 @@
 <script setup lang="ts">
-const props=defineProps<{companyId:string;accountId:string}>();
+const props=defineProps<{companyId:string;accountId:string;refreshKey?:number}>();
 const auth=useNuxtApp().$auth;
 const allowed=computed(()=>['admin','manager','accountant'].includes(auth.session.value?.role || ''));
 const open=ref(false),busy=ref(false),data=ref<any>(null),error=ref('');
 let version=0;
 async function load(){const v=++version;busy.value=true;error.value='';data.value=null;try{const result=await $fetch(`/api/accountant/erp/customers/${props.accountId}`,{headers:{'x-company-id':props.companyId,'x-company-filter':props.companyId}});if(v===version)data.value=result;}catch(e:any){if(v===version)error.value=e.data?.statusMessage||e.message;}finally{if(v===version)busy.value=false;}}
 watch(open,value=>{if(value)load()});
-watch(()=>[props.companyId,props.accountId],()=>{++version;data.value=null;if(open.value)load()});
+watch(()=>[props.companyId,props.accountId,props.refreshKey],()=>{++version;data.value=null;if(open.value)load()});
 const columns=[{key:'journal_date',label:'Date'},{key:'reference_number',label:'Reference'},{key:'account_name',label:'Account'},{key:'side',label:'Debit / Credit'},{key:'amount',label:'Amount'},{key:'journal',label:'Journal'}];
 </script>
 <template>

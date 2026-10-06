@@ -1,3 +1,4 @@
+import { billCreditSql } from './report-bill-sales';
 type ReportRows = { rows: any[] };
 import { reportSections } from './report-query';
 import { outwardTaxReport } from './report-gst-source';
@@ -268,13 +269,13 @@ export async function gatherSummary(input: GatherSummaryInput): Promise<SummaryR
       b.created_at,
       cl.name AS client_name,
       cl.phone AS client_phone,
-      b.grand_total
+      GREATEST(${billCreditSql()}-COALESCE((SELECT sum(p.amount) FROM payments p WHERE p.company_id=b.company_id AND p.bill_id=b.id AND p.status='POS_CREDIT_RECEIPT' AND p.deleted=false),0),0) AS grand_total
     FROM bills b
     LEFT JOIN clients cl ON cl.id = b.client_id
     WHERE b.company_id = $1
       AND b.deleted = false
       AND b.is_markit = false
-      AND b.payment_method = 'Credit'
+      AND ${billCreditSql()} > 0
       AND b.payment_status = 'PENDING'
       AND b.created_at BETWEEN $2 AND $3
       AND ($4 = true OR b.precedence IS NOT TRUE)

@@ -1,5 +1,6 @@
 import { accountingReport, accountingMoneyActivity } from './report-accounting';
 import { reportSections, type ReportDatabase } from './report-query';
+import { billSalesSql, billCreditSql } from './report-bill-sales';
 
 export type DailyReportContext = {
   companyId: string;
@@ -71,7 +72,6 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
     [
       salesRes,
       brandRes,
-      creditSalesRes,
       creditBillsRes,
       expenseRes,
       salaryPaymentsRes,
@@ -84,64 +84,7 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
     reportSections(
       db,
       [
-        `
-        SELECT
-          COALESCE(SUM(
-            CASE WHEN b.payment_method != 'Split'
-            THEN ${billTotalExpr} ELSE 0 END
-          ),0)
-          +
-          COALESCE(SUM(sp.amount),0) AS total_sales,
-
-          COALESCE(SUM(
-            CASE WHEN b.payment_method = 'Cash'
-            THEN ${billTotalExpr} ELSE 0 END
-          ),0)
-          + COALESCE(SUM(
-            CASE WHEN sp.method = 'Cash'
-            THEN sp.amount ELSE 0 END
-          ),0) AS cash_sales,
-
-          COALESCE(SUM(
-            CASE WHEN b.payment_method = 'UPI'
-            THEN ${billTotalExpr} ELSE 0 END
-          ),0)
-          + COALESCE(SUM(
-            CASE WHEN sp.method = 'UPI'
-            THEN sp.amount ELSE 0 END
-          ),0) AS upi_sales,
-
-          COALESCE(SUM(
-            CASE WHEN b.payment_method = 'Card'
-            THEN ${billTotalExpr} ELSE 0 END
-          ),0)
-          + COALESCE(SUM(
-            CASE WHEN sp.method = 'Card'
-            THEN sp.amount ELSE 0 END
-          ),0) AS card_sales
-
-        FROM bills b
-
-        LEFT JOIN LATERAL (
-          SELECT
-            (elem->>'method') AS method,
-            (elem->>'amount')::numeric AS amount
-          FROM jsonb_array_elements(
-            CASE
-              WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-              THEN b.split_payments::jsonb
-              ELSE '[]'::jsonb
-            END
-          ) elem
-        ) sp ON b.payment_method = 'Split'
-
-        WHERE b.company_id = $1
-          AND b.deleted = false
-          AND b.payment_status IN ('PAID','PENDING')
-          AND b.is_markit = false
-          AND b.created_at BETWEEN $2 AND $3
-          AND ($4 = true OR b.precedence IS NOT TRUE)
-        `,
+        billSalesSql(billTotalExpr),
         `
         SELECT 
           COALESCE(br.name, 'Unbranded') AS name,
@@ -164,7 +107,7 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
 
         WHERE b.company_id = $1
           AND b.deleted = false
-          AND b.payment_status = 'PAID'
+          AND b.payment_status IN ('PAID','PENDING')
           AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3
           AND ($4 = true OR b.precedence IS NOT TRUE)
@@ -174,48 +117,16 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
         `,
         `
         SELECT
-          COALESCE(SUM(
-            CASE WHEN b.payment_method = 'Credit'
-            THEN ${billTotalExpr} ELSE 0 END
-          ),0)
-          +
-          COALESCE(SUM(
-            CASE WHEN sp.method = 'Credit'
-            THEN sp.amount ELSE 0 END
-          ),0) AS total_credit_sales
-        FROM bills b
-
-        LEFT JOIN LATERAL (
-          SELECT
-            (elem->>'method') AS method,
-            (elem->>'amount')::numeric AS amount
-          FROM jsonb_array_elements(
-            CASE
-              WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-              THEN b.split_payments::jsonb
-              ELSE '[]'::jsonb
-            END
-          ) elem
-        ) sp ON b.payment_method = 'Split'
-
-        WHERE b.company_id = $1
-          AND b.deleted = false
-          AND b.payment_status IN ('PAID','PENDING')
-          AND b.is_markit = false
-          AND b.created_at BETWEEN $2 AND $3
-          AND ($4 = true OR b.precedence IS NOT TRUE)
-        `,
-        `
-        SELECT
           b.invoice_number AS "invoiceNumber",
-          ${billTotalExpr} AS amount,
+          ${billCreditSql('b',billTotalExpr)} AS amount,
           a.name AS "accountName",
           a.phone AS "accountPhone"
         FROM bills b
         LEFT JOIN accounts a ON a.id = b.account_id
         WHERE b.company_id = $1
           AND b.deleted = false
-          AND b.payment_method = 'Credit'
+          AND ${billCreditSql('b',billTotalExpr)} > 0
+          AND b.payment_status IN ('PAID','PENDING')
           AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3
           AND ($4 = true OR b.precedence IS NOT TRUE)
@@ -236,7 +147,7 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
 
         WHERE b.company_id = $1
           AND b.deleted = false
-          AND b.payment_status = 'PAID'
+          AND b.payment_status IN ('PAID','PENDING')
           AND b.is_markit = false
           AND b.created_at BETWEEN $2 AND $3
           AND ($4 = true OR b.precedence IS NOT TRUE)
@@ -255,7 +166,6 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
     bankBalance = financial.balances.bank.delta,
     creditBalance = financial.balances.receivable.delta;
   const sales = salesRes.rows[0];
-  const creditRow = creditSalesRes.rows[0];
   const exp = expenseRes.rows[0];
   const salaryExpense = Number(salaryPaymentsRes.rows[0]?.total_salary_expense || 0);
   const salaryPayments = salaryPaymentsRes.rows;
@@ -271,7 +181,10 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
 
     totalSales: Number(sales.total_sales || 0),
 
-    totalCreditSales: Number(creditRow.total_credit_sales || 0),
+    totalCreditSales: Number(sales.credit || 0),
+    totalCollections: Number(sales.total_collections || 0),
+    creditCollections: Number(sales.credit_collections || 0),
+    collectionsByPaymentMethod: Object.fromEntries(['Cash','UPI','Card','Bank','Cheque'].map(m => [m, Number(sales['collected_'+m.toLowerCase()] || 0)])),
 
     creditBills: creditBillsRes.rows.map((r) => ({
       invoiceNumber: r.invoiceNumber,
@@ -284,7 +197,9 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
       Cash: Number(sales.cash_sales || 0),
       UPI: Number(sales.upi_sales || 0),
       Card: Number(sales.card_sales || 0),
-      Credit: Number(creditRow.total_credit_sales || 0),
+      Credit: Number(sales.credit || 0),
+      Bank: Number(sales.bank || 0),
+      Cheque: Number(sales.cheque || 0),
     },
 
     /* ---------- EXPENSES ---------- */
@@ -368,203 +283,35 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
 }
 
 export async function dailyExportReport(db: ReportDatabase, context: DailyReportContext) {
-  const { companyId, startDate, endDate, useOriginalCleanupValues, includeCleanupPrecedence } =
-    context;
-  const billTotalExpr = useOriginalCleanupValues
-    ? 'COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total)'
-    : 'b.grand_total';
-  const billSubtotalExpr = useOriginalCleanupValues
-    ? 'COALESCE(NULLIF(b.original_subtotal, 0), b.subtotal)'
-    : 'b.subtotal';
-  const [
-    financial,
-    moneyActivity,
-    [salesRes, expenseRes, salaryPaymentsRes, purchaseRes, billsRes, expenseRowsRes],
-  ] = await Promise.all([
-    accountingReport(db, [companyId], startDate, endDate),
-    accountingMoneyActivity(db, [companyId], startDate, endDate),
-    reportSections(
-      db,
-      [
-        `
-      SELECT
-        COALESCE(SUM(
-          CASE 
-            WHEN b.payment_method NOT IN ('Split','Credit')
-            THEN ${billTotalExpr}
-            ELSE 0 
-          END
-        ),0)
-        +
-        COALESCE(SUM(
-          CASE 
-            WHEN sp.method != 'Credit'
-            THEN sp.amount 
-            ELSE 0 
-          END
-        ),0) AS total_sales,
-
-        COALESCE(SUM(
-          CASE WHEN b.payment_method = 'Cash'
-          THEN ${billTotalExpr} ELSE 0 END
-        ),0)
-        +
-        COALESCE(SUM(
-          CASE WHEN sp.method = 'Cash'
-          THEN sp.amount ELSE 0 END
-        ),0) AS cash,
-
-        COALESCE(SUM(
-          CASE WHEN b.payment_method = 'UPI'
-          THEN ${billTotalExpr} ELSE 0 END
-        ),0)
-        +
-        COALESCE(SUM(
-          CASE WHEN sp.method = 'UPI'
-          THEN sp.amount ELSE 0 END
-        ),0) AS upi,
-
-        COALESCE(SUM(
-          CASE WHEN b.payment_method = 'Card'
-          THEN ${billTotalExpr} ELSE 0 END
-        ),0)
-        +
-        COALESCE(SUM(
-          CASE WHEN sp.method = 'Card'
-          THEN sp.amount ELSE 0 END
-        ),0) AS card
-
-      FROM bills b
-
-      LEFT JOIN LATERAL (
-        SELECT
-          (elem->>'method') AS method,
-          (elem->>'amount')::numeric AS amount
-        FROM jsonb_array_elements(
-          CASE
-            WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-            THEN b.split_payments::jsonb
-            ELSE '[]'::jsonb
-          END
-        ) elem
-      ) sp ON b.payment_method = 'Split'
-
-      WHERE b.company_id = $1
-        AND b.deleted = false
-        AND b.created_at BETWEEN $2 AND $3
-        AND ($4 = true OR b.precedence IS NOT TRUE)
-      `,
-        paidExpensesSql,
-        salaryPaymentsSql,
-        purchasePaymentsSql,
-        `
-      SELECT
-        invoice_number AS invoice,
-        created_at AS date,
-        COALESCE(${billSubtotalExpr},0) AS subtotal,
-        COALESCE(${billSubtotalExpr},0) - COALESCE(${billTotalExpr},0) AS discount,
-        ${billTotalExpr} AS total,
-        b.payment_method AS payment
-
-      FROM bills b
-
-      WHERE b.company_id = $1
-        AND b.deleted = false
-        AND b.payment_method != 'Credit'
-        AND b.payment_status != 'PENDING'
-        AND b.created_at BETWEEN $2 AND $3
-        AND ($4 = true OR b.precedence IS NOT TRUE)
-
-      ORDER BY b.created_at DESC
-      `,
-        `
-      SELECT
-        e.expense_date AS date,
-        ec.name AS category,
-        e.payment_mode AS mode,
-        e.note,
-        e.total_amount AS amount
-      FROM expenses e
-      JOIN expense_categories ec
-        ON ec.id=e.expense_category_id
-      WHERE e.company_id=$1
-        AND e.expense_date BETWEEN $2 AND $3
-      ORDER BY e.expense_date DESC
-      `,
-      ],
-      [companyId, startDate.toISOString(), endDate.toISOString(), includeCleanupPrecedence]
-    ),
-  ]);
-
-  const sales = salesRes.rows[0];
-
-  const expenses = expenseRes.rows[0];
-
-  const salaryPayments = salaryPaymentsRes.rows.map((r) => ({
-    ...r,
-    amount: Number(r.amount || 0),
-  }));
-  const salaryGiven = salaryPayments.reduce((sum, r) => sum + Number(r.amount || 0), 0);
-
-  const purchase = purchaseRes.rows[0];
-
-  const transfers = {
-    cash_debit: moneyActivity.transfers.cash.debit,
-    cash_credit: moneyActivity.transfers.cash.credit,
-    bank_debit: moneyActivity.transfers.bank.debit,
-    bank_credit: moneyActivity.transfers.bank.credit,
-  };
-
-  const transferCashNet = moneyActivity.transfers.cash.net;
-
-  const transferBankNet = moneyActivity.transfers.bank.net;
-
-  const transactions = {
-    cash_debit: moneyActivity.transactions.cash.debit,
-    cash_credit: moneyActivity.transactions.cash.credit,
-    bank_debit: moneyActivity.transactions.bank.debit,
-    bank_credit: moneyActivity.transactions.bank.credit,
-  };
-
-  const transactionCashNet = moneyActivity.transactions.cash.net;
-
-  const transactionBankNet = moneyActivity.transactions.bank.net;
-
-  const selectedPeriodCash = financial.balances.cash.delta;
-  const selectedPeriodBank = financial.balances.bank.delta;
-  const selectedPeriodTotal = financial.balances.total.delta;
-
-  const expenseRows = expenseRowsRes.rows.map((r) => ({
-    ...r,
-    amount: Number(r.amount),
-  }));
-
-  const expenseByCategory: Record<string, number> = {};
-
-  expenseRows.forEach((e) => {
-    expenseByCategory[e.category] = (expenseByCategory[e.category] || 0) + Number(e.amount);
-  });
-
-  return {
-    sales,
-    expenses,
-    salaryPayments,
-    salaryGiven,
-    purchase,
-    transfers,
-    transferCashNet,
-    transferBankNet,
-    transactions,
-    transactionCashNet,
-    transactionBankNet,
-    selectedPeriodCash,
-    selectedPeriodBank,
-    selectedPeriodTotal,
-    moneyPosition: financial.balances.total,
-    moneyAccounts: financial.accounts.filter(a => a.type === 'CASH' || a.type === 'BANK'),
-    customerDues: financial.balances.receivable.closing,
-    billsRes,
-    expenseRows,
-    expenseByCategory,
-  };
+  const daily = await dailyReport(db,context);
+  const {companyId,startDate,endDate,useOriginalCleanupValues,includeCleanupPrecedence} = context;
+  const billTotalExpr = useOriginalCleanupValues ? 'COALESCE(NULLIF(b.original_grand_total,0),b.grand_total)' : 'b.grand_total';
+  const billSubtotalExpr = useOriginalCleanupValues ? 'COALESCE(NULLIF(b.original_subtotal,0),b.subtotal)' : 'b.subtotal';
+  const [billsRes,expenseRowsRes] = await reportSections(db,[`
+    SELECT b.invoice_number AS invoice,b.created_at AS date,${billSubtotalExpr} AS subtotal,
+      ${billSubtotalExpr}-${billTotalExpr} AS discount,${billTotalExpr} AS total,b.payment_method AS payment
+    FROM bills b WHERE b.company_id=$1 AND b.deleted=false AND b.payment_status IN ('PAID','PENDING') AND b.is_markit=false
+      AND b.created_at BETWEEN $2 AND $3 AND ($4=true OR b.precedence IS NOT TRUE) ORDER BY b.created_at DESC`,`
+    SELECT e.expense_date AS date,ec.name AS category,e.payment_mode AS mode,e.note,e.total_amount AS amount
+    FROM expenses e JOIN expense_categories ec ON ec.id=e.expense_category_id
+    WHERE e.company_id=$1 AND e.expense_date BETWEEN $2 AND $3 ORDER BY e.expense_date DESC`
+  ],[companyId,startDate.toISOString(),endDate.toISOString(),includeCleanupPrecedence]);
+  const sales = {total_sales:daily.totalSales,credit:daily.totalCreditSales,
+    cash:daily.salesByPaymentMethod.Cash,upi:daily.salesByPaymentMethod.UPI,card:daily.salesByPaymentMethod.Card,
+    bank:daily.salesByPaymentMethod.Bank,cheque:daily.salesByPaymentMethod.Cheque};
+  const expenseRows = expenseRowsRes.rows.map(r => ({...r,amount:Number(r.amount)}));
+  const expenseByCategory: Record<string,number> = {};
+  for (const row of expenseRows) expenseByCategory[row.category] = (expenseByCategory[row.category] || 0)+row.amount;
+  const oldMovement = (rows:any) => ({cash_debit:rows.cash.debit,cash_credit:rows.cash.credit,bank_debit:rows.bank.debit,bank_credit:rows.bank.credit});
+  const exp=daily.expensesByPaymentMethod, purchase=daily.purchaseExpensesByPaymentMethod;
+  return {sales,
+    totalCollections:daily.totalCollections,creditCollections:daily.creditCollections,collectionsByPaymentMethod:daily.collectionsByPaymentMethod,
+    expenses:{total_expense:daily.totalExpenses-daily.salaryExpense,cash:exp.Cash,upi:exp.UPI,card:exp.Card,bank:exp.BankTransfer,cheque:exp.Cheque},
+    salaryPayments:daily.salaryPayments,salaryGiven:daily.salaryExpense,
+    purchase:{total_purchase:daily.totalPurchaseExpense,cash:purchase.Cash,upi:purchase.UPI,card:purchase.Card,bank:purchase.BankTransfer,cheque:purchase.Cheque},
+    transfers:oldMovement(daily.transfers),transferCashNet:daily.transfers.cash.net,transferBankNet:daily.transfers.bank.net,
+    transactions:oldMovement(daily.transactions),transactionCashNet:daily.transactions.cash.net,transactionBankNet:daily.transactions.bank.net,
+    selectedPeriodCash:daily.balances.cashBalance,selectedPeriodBank:daily.balances.bankBalance,selectedPeriodTotal:daily.balances.totalBalance,
+    moneyPosition:daily.financial.balances.total,moneyAccounts:daily.financial.accounts.filter(a=>a.type==='CASH'||a.type==='BANK'),
+    customerDues:daily.financial.balances.receivable.closing,billsRes,expenseRows,expenseByCategory};
 }

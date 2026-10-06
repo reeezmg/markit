@@ -161,7 +161,7 @@ try {
       await import('../server/api/report/generate-sales.excel.get')
     ).default
   );
-  assert.equal(queryCount - beforeExport, 3);
+  assert.equal(queryCount - beforeExport, 4);
   const book = new ExcelJS.Workbook();
   await book.xlsx.load(dailyExcel);
   assert.equal(

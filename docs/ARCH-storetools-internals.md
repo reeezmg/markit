@@ -350,3 +350,11 @@ formatStoreRoute('my-shop', 'products/123')
 | `stores/likeStore.ts` | `clearLikes` sets `sessionId.value = ''` before checking `if (sessionId.value)` — server sync never called on clear |
 | `stores/messageStore.ts` | `console.log(this.$state)` in `addToEdit` and `addToDelete` |
 | `stores/messageStore.ts` | Method name typo: `addToreply` should be `addToReply` |
+
+Source mutation protection (customer credit receipts, 2026-10-06):
+`server/utils/organizationModelScope.ts` denies generated Payment/Entry mutations,
+including nested and bulk-return operations, and generated Bill creation/deletion
+or financial changes. Non-financial bill fields remain available through scoped
+CRUD. Source bill APIs own original tender changes; dated receipt APIs own customer
+collections. `companyTransfer.ts` and cleanup utilities lock affected bills and
+reject any POS receipt history, preserving company/date/party accounting links.

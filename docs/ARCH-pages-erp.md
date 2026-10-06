@@ -64,8 +64,9 @@ current journal/account amounts, balance and repeat no-op checks run before comm
 Historical client snapshots may retain the bill's recorded client when current
 membership is absent, with an audit entry. See `scripts/ERP-HISTORY-IMPORT.md`.
 
-Verification: `npm run test:erp-accounting` creates an isolated schema and checks
-posting, reversals, party snapshots, company isolation and Accountant read responses.
+Historical `test:erp-accounting` fixtures create an isolated schema and must not be
+run under the current no-schema-change policy. Customer receipt verification uses
+the schema-free tests documented below.
 `npm run test:erp-accounting:api` exercises actual billing/expense handlers against
 installed database functions with test authentication. It wraps handler commits in
 savepoints and flushes deferred triggers, then rolls back all test records, counters
@@ -447,8 +448,8 @@ Lists `Account` records (B2B customers with deferred payment) with their bills.
   historical old-ledger rows remain frozen. Nested bill actions retain the parent
   customer's company ID.
 - Create account inline: name, phone, address (street/locality/city/state/pincode)
-- `pending` amount = sum of bills where `paymentStatus = PENDING`; for Split bills, only the Credit portion is counted
-- **Payment method on mark PAID:** when changing a bill status to PAID, a modal prompts for payment method (Cash/UPI/Card), which is saved on the bill
+- `pending` amount = original Credit obligation minus active `POS_CREDIT_RECEIPT` payments on PENDING bills; Split bills count only their original Credit portion.
+- **Credit payments:** Sales and Credit Accounts open `Billing/CreditReceiptModal.vue` to record an amount, payment date, method, receiving native CASH/BANK account and optional reference. Full settlement changes status to PAID; partial settlement remains PENDING. The original payment method/splits and invoice date are retained. Payment history offers manager/accountant/admin dated reversals.
 - **Excel export:** `Download` button generates `.xlsx` (exceljs + file-saver) with account name, phone, pending amount, bills count
 - **Table state persistence:** filter/sort/pagination/column state saved to `localStorage` key `erp_accounts_table_state_v1` and restored on mount
 - **WhatsApp reminder:** `Send Reminder` action calls `POST /api/whatsapp/send-pending-template` with account phone, pending amount, receipt URL, and UPI payment deep link
@@ -499,10 +500,40 @@ receivable lines and their net balance for that company-owned B2B `Account`.
 changing balances; new/changed source links validate company ownership. Customers
 share the configured receivable account while retaining separate identities.
 
-Mark paid now uses the scoped `billSale/updatePaymentStatus` API instead of generated
-Bill updates. It preserves invoice `createdAt`, validates payment methods and changes
-only Credit portions of split payments. API failure leaves the modal open. Changing
-a fully paid split bill back to pending requires editing its unpaid split explicitly.
-This retains the existing ERP reverse/repost model at the invoice date; it is not a
-separate dated customer-receipt allocation system. Journal detail/account ledgers
-show the B2B customer identity. Previously excluded source history stays excluded.
+Customer credit settlement uses company-scoped `billSale/receipts` GET/POST and
+`billSale/reverseReceipt` POST. `server/utils/bill-receipts.ts` reuses the existing
+`payments` table and native journals; no new table, trigger or schema installation
+is required. Receipt status is `POS_CREDIT_RECEIPT`; reversed records remain as
+`POS_CREDIT_REVERSED`. `deposit_to` stores the receiving native account ID.
+
+Each receipt debits the selected cash/bank account and credits the original ERP
+source's receivable account, carrying its original customer party snapshots.
+The receipt uses its own payment date. The invoice's Credit/Split payment portions,
+created date, sales/tax and COGS remain unchanged. PENDING-to-PAID changes retain the
+existing ERP financial signature and therefore do not reverse/repost the sale.
+Partial receipts keep PENDING until the original credit obligation is fully paid.
+
+Receipt/reversal writes, status history, journals and request-ID audit receipts
+share one transaction. Bill row locks serialize collections; integer cents validate
+amounts and prevent overpayment. Changed-payload retries reject. Receipts also verify the original posted credit amount against the invoice. They cannot
+precede the invoice day or use a future date, foreign/inactive receiving account,
+or a locked Accounts/Banking period. A reversal posts opposite lines on its own
+selected date and reopens the due, retaining both original receipt and journal.
+
+Collection requires an existing published ERP receivable source. Excluded/unposted
+history must be reviewed and posted through the existing history workflow first;
+no receipt backfill or invented historical collection date is performed. Staff
+credit recipients use Staff Accounting and are rejected by this customer API.
+
+Active receipts block invoice edits, deletion and payment-method/status changes.
+Unpaid credit edits preserve original paid portions; use receipts to collect money.
+Transfers and cleanup reject any receipt history, including reversed receipts.
+Generated Payment/Entry mutations and financial Bill mutations are blocked by the
+scoped model adapter so nested or bulk CRUD cannot bypass the source flow.
+Customer accounting ledgers refresh after receipt/reversal saves.
+
+Verification: `npm run test:bill-receipts` runs targeted type checks, in-memory
+transaction/journal tests and compiled Vue/form regressions. `npm run test:bill-receipts:readonly` uses SELECT CTE fixtures and EXPLAIN without ANALYZE
+inside a PostgreSQL read-only transaction, checks the existing schema/ERP function,
+and compares screen/export totals. `npm run test:customer-accounting` combines
+these safe suites. Neither creates schemas nor modifies database records.

@@ -1,6 +1,7 @@
 import { applyBillStock } from '~/server/utils/bill-stock'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { assertNoBillReceipts } from '~/server/utils/bill-receipts'
 import { deleteUserLedgerEntryForSource } from '~/server/utils/user-ledger'
 
 
@@ -39,6 +40,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
+    await assertNoBillReceipts(client, companyId, billId)
     await applyBillStock(client, billId, companyId, false)
 
     // Reverse client points contribution
