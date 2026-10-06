@@ -17,6 +17,24 @@ connect through Staff Accounting for new activity; bank statement posting remain
 Distributors are connected through Settings → Account → Purchase. Company account
 configuration and transaction-form defaults are centralized on `/settings/account`;
 see `ARCH-pages-settings.md` for the groups and default precedence.
+`server/utils/accountant/company-account-defaults.ts` provisions 38 standard
+accounts and default selections for each company. It combines the 18 core chart
+accounts with bank, salary, investment, Receive / Pay clearing, fixed-asset and
+ecommerce accounts. Account IDs belong to that company; investor and supplier
+purpose accounts are shared within the company, with optional party overrides.
+Registration and branch creation call this helper in their creation transaction.
+It reuses existing standard accounts and primary banks, preserves valid custom
+selections and integration activation flags, and fills missing selections for
+ERP, staff, ecommerce, purchases, investments, Receive / Pay, transfers and assets.
+Profit distribution has a separate shared equity default. New integration settings
+remain disabled until explicitly enabled. Provisioning does not post journals or
+replay source history. New accounts use the company currency; a newly created
+Primary Bank carries existing company bank details when available.
+`scripts/provision-all-company-account-defaults.ts` backfills existing companies
+using the same helper, with preview rollback by default and explicit `--apply`.
+The script backs up chart/configuration data before each company update and verifies
+unchanged existing accounts, financial-row hashes, activation flags and idempotence.
+It performs data writes only; it does not create or alter database schemas.
 Connected distributor purchases, credits, payments, returns and opening dues post
 balanced journals in the same database transaction as the source write. Existing
 history can be imported idempotently without replaying stock quantity changes.
@@ -426,10 +444,19 @@ Investors but retains its history. Install/import commands and limits are in
 
 `/accountant/money` uses `components/Accountant/MoneyPage.vue` and the
 `/api/accountant/money` router in `server/utils/accountant/money.ts`.
-Select Receive/Pay, date, cash/bank account, purpose account, amount, optional
-reference/note and a company-linked client, staff member, distributor or contact.
-Receivables/payables require a person. Cash/bank-to-cash/bank movements use Transfers.
-Receipts debit cash/bank and credit the purpose account; payments do the reverse.
+Select Receive/Pay, date, cash/bank account, amount, optional reference/note and a
+required company-linked client, user, distributor or contact. There is no purpose
+account selector. Generic entries automatically use the company system equity
+clearing account `MONEY-CLEARING` (Receive / Pay clearing), reused or created as a chart
+record on first posting. References remain descriptive; these entries do not infer
+sales, expense, capital, loan or invoice settlement. Receipts debit cash/bank and
+credit clearing; payments do the reverse. Both rows retain the person link.
+Receive / Pay is a standalone source document: this shared ledger is its permanent
+balancing account, not a queue requiring later classification or source settlement.
+The Receive / Pay list displays Cash/Bank, linked person and reference/note;
+the internal clearing account remains visible in the accounting ledger.
+Explicit-purpose payloads are accepted for compatibility with older callers, but
+new forms send none. Cash/bank-to-cash/bank movements use Transfers.
 Entries post immediately like transfers, in company base currency, without creating
 legacy money transactions or marking source invoices/expenses paid. Existing paid
 source documents should be handled on their source page to avoid a second posting.
@@ -440,7 +467,10 @@ canonical payload make identical retries safe and reject reuse with changed data
 The page lists entries with search/pagination. Reverse creates a separate
 MONEY_REVERSAL journal preserving person links; originals remain visible. Company
 scope, active accounts, cent precision, accounting/banking locks and role checks are
-server-enforced. `npm run test:accountant-money` runs isolated database coverage.
+server-enforced. `tests/money-linked-person.test.ts` provides mocked coverage for
+shared clearing, person attribution, reversals and retry safety without DB writes.
+Do not run the historical integration test under the no-schema-write rule: it
+creates a disposable schema.
 
 ### Posting and controls
 
@@ -478,8 +508,24 @@ server-enforced. `npm run test:accountant-money` runs isolated database coverage
   metadata; **Reverse now** performs the reversal.
 - Budgets use the configured fiscal start month (default April). The UI's amount
   is per selected month/quarter/year; actuals follow the account's normal side.
-- Asset registration records a starting book value; acquisition itself is entered
-  through a manual journal. Depreciation posts once per successive month and
+- Fixed asset creation offers **Record purchase payment** with full-cost amount,
+  Cash/Bank/UPI/Card/Cheque method, matching Cash/Bank account, payment date,
+  reference, notes and optional company contact vendor. With this enabled, the
+  request atomically registers the asset and posts `ASSET_ACQUISITION`, debiting
+  the category's active FIXED_ASSET account. Same-day payment credits Cash/Bank;
+  later payment credits selected ACCOUNTS_PAYABLE on purchase date and posts
+  `ASSET_PURCHASE_PAYMENT` on payment date to debit payable and credit Cash/Bank.
+  Dates cannot precede purchase; accounting/banking locks and tenant/account types
+  are validated before creation. Both journals retain asset and optional vendor
+  links. Existing purchase cash/bank/payable defaults prefill new forms. This option
+  records a fully paid purchase, not partial payments or outstanding credit purchases.
+  Register-only remains available for assets already recorded elsewhere and creates
+  no acquisition/payment journal. Payment metadata and canonical request UUID are
+  stored in existing AccountantAudit (`fixed-asset-purchase` / `created`); identical
+  retries reuse the asset and changed-payload retries reject. The asset list shows
+  recorded payment type/date/reference. No schema change is required.
+  `tests/fixed-asset-purchase.test.ts` provides mocked purchase/link/lock/retry coverage.
+  Depreciation posts once per successive month and
   cannot precede availability. Disposal cannot precede acquisition/depreciation.
 - Currency revaluation uses entered foreign/base balances and rate. Draft
   adjustments have a Publish action; posting is journal-linked and respects the

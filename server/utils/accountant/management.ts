@@ -664,17 +664,25 @@ const assetSchema = z.object({
   serialNumber: z.string().nullish(),
   location: z.string().nullish(),
   vendorId: z.string().cuid().nullish(),
+  recordPayment: z.boolean().default(false),
+  requestId: z.string().uuid().optional(),
+  paymentMethod: z.enum(['CASH', 'BANK', 'UPI', 'CARD', 'CHEQUE']).optional(),
+  paymentAccountId: z.string().optional(),
+  paymentDate: z.coerce.date().optional(),
+  purchasePayableAccountId: z.string().optional(),
+  paymentReference: z.string().trim().max(150).default(''),
+  notes: z.string().trim().max(2000).default(''),
 });
 accountantManagementRouter.get(
   "/fixed-assets",
-  asyncHandler(async (req, res) =>
-    res.json({
-      data: await prisma.fixedAsset.findMany({
+  asyncHandler(async (req, res) => {
+    const data = await prisma.fixedAsset.findMany({
         where: { companyId: req.user!.companyId! },
         orderBy: { createdAt: "desc" },
-      }),
-    }),
-  ),
+      });
+    const purchases = await prisma.auditLog.findMany({ where: { resource: 'fixed-asset-purchase', action: 'created' } });
+    res.json({ data: data.map((asset:any) => ({ ...asset, purchasePayment: purchases.find((p:any) => p.after?.assetId === asset.id)?.after?.payment || null })) });
+  }),
 );
 accountantManagementRouter.post(
   "/fixed-assets",
@@ -682,25 +690,53 @@ accountantManagementRouter.post(
   asyncHandler(async (req, res) => {
     const companyId = req.user!.companyId!,
       body = assetSchema.parse(req.body);
-    if (
-      !(await prisma.fixedAssetCategory.findFirst({
+    const canonical = JSON.stringify(body);
+    if (body.recordPayment) {
+      if (!body.requestId) throw badRequest('A purchase request ID is required');
+      const previous = await prisma.auditLog.findFirst({ where: { resource: 'fixed-asset-purchase', resourceId: body.requestId, action: 'created' } });
+      if (previous) {
+        if (previous.after?.request !== canonical) throw badRequest('This purchase request was already used with different details');
+        const asset = await prisma.fixedAsset.findFirst({ where: { id: previous.after.assetId } });
+        if (!asset) throw notFound('Recorded asset');
+        res.status(201).json(asset);return;
+      }
+    }
+    const category = await prisma.fixedAssetCategory.findFirst({
         where: { id: body.categoryId, companyId, isActive: true },
-      }))
-    )
+      });
+    if (!category)
       throw notFound("Active asset category");
     if (body.salvageValue > body.purchaseCost) throw badRequest('Salvage value cannot exceed purchase cost');
     if (body.availableForUseDate < body.purchaseDate) throw badRequest('Available-for-use date cannot precede purchase');
     if (body.vendorId && !await prisma.party.findFirst({ where: { id: body.vendorId } })) throw badRequest('Invalid vendor');
     cents(body.purchaseCost); cents(body.salvageValue);
+    let purchaseLines:any[] = [], paymentLines:any[] = [];
+    if (body.recordPayment) {
+      if (!body.paymentMethod || !body.paymentAccountId || !body.paymentDate) throw badRequest('Select payment type, account and date');
+      if (body.paymentDate < body.purchaseDate) throw badRequest('Payment date cannot precede purchase date');
+      const assetAccount = await prisma.accountingAccount.findFirst({ where: { id: category.assetAccountId, isActive: true, category: 'ASSET', accountType: 'FIXED_ASSET' } });
+      const paymentAccount = await prisma.accountingAccount.findFirst({ where: { id: body.paymentAccountId, isActive: true, accountType: body.paymentMethod === 'CASH' ? 'CASH' : 'BANK' } });
+      if (!assetAccount || !paymentAccount) throw badRequest('Choose active company Asset and payment accounts of the correct type');
+      const dimensions = body.vendorId ? { partyId: body.vendorId } : {};
+      const line = (accountId:string, side:string) => ({ accountId, side, amount: body.purchaseCost, ...dimensions });
+      purchaseLines = [line(assetAccount.id, 'DEBIT'), line(paymentAccount.id, 'CREDIT')];
+      if (body.paymentDate.toISOString().slice(0,10) !== body.purchaseDate.toISOString().slice(0,10)) {
+        const payable = body.purchasePayableAccountId && await prisma.accountingAccount.findFirst({ where: { id: body.purchasePayableAccountId, isActive: true, accountType: 'ACCOUNTS_PAYABLE' } });
+        if (!payable) throw badRequest('Select an Accounts Payable account for payment after the purchase date');
+        purchaseLines[1] = line(payable.id, 'CREDIT');
+        paymentLines = [line(payable.id, 'DEBIT'), line(paymentAccount.id, 'CREDIT')];
+      }
+      await validatePosting(purchaseLines, body.purchaseDate, companyId);
+      await assertAccountingDateUnlocked(companyId, body.paymentDate, 'BANKING');
+      if (paymentLines.length) await validatePosting(paymentLines, body.paymentDate, companyId);
+    }
     const assetNumber = `FA-${String((await prisma.fixedAsset.count({ where: { companyId } })) + 1).padStart(5, "0")}`;
-    res
-      .status(201)
-      .json(
-        await prisma.fixedAsset.create({
+    const { recordPayment, requestId, paymentMethod, paymentAccountId, paymentDate, purchasePayableAccountId, paymentReference, notes, ...assetData } = body;
+    const asset = await prisma.fixedAsset.create({
           data: {
             companyId,
             assetNumber,
-            ...body,
+            ...assetData,
             description: body.description || null,
             serialNumber: body.serialNumber || null,
             location: body.location || null,
@@ -708,8 +744,14 @@ accountantManagementRouter.post(
             bookValue: body.purchaseCost,
             status: "ACTIVE",
           },
-        }),
-      );
+        });
+    if (recordPayment) {
+      const tag = (lines:any[]) => lines.map(l => ({ ...l, sourceParties: { asset: { id: asset.id, name: asset.name } } }));
+      const acquisition = await createJournal(prisma, { companyId, date: body.purchaseDate, notes: `Purchase of ${assetNumber} - ${asset.name}${notes ? ': '+notes : ''}`, reference: paymentReference, currency: (await prisma.company.findUnique()).currency, sourceType: 'ASSET_ACQUISITION', sourceId: asset.id, lines: tag(purchaseLines) });
+      const payment = paymentLines.length ? await createJournal(prisma, { companyId, date: paymentDate!, notes: `Purchase payment for ${assetNumber} - ${asset.name}`, reference: paymentReference, currency: acquisition.currency, sourceType: 'ASSET_PURCHASE_PAYMENT', sourceId: asset.id, lines: tag(paymentLines) }) : acquisition;
+      await logActivity({ ...context(), resource: 'fixed-asset-purchase', resourceId: requestId!, action: 'created', meta: { request: canonical, assetId: asset.id, acquisitionJournalId: acquisition.id, paymentJournalId: payment.id, payment: { status: 'PAID', method: paymentMethod, date: paymentDate, amount: body.purchaseCost, accountId: paymentAccountId, reference: paymentReference } } });
+    }
+    res.status(201).json(asset);
   }),
 );
 accountantManagementRouter.get(

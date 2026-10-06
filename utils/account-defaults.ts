@@ -12,8 +12,8 @@ export const accountDefaultGroups: Record<string, { title: string; fields: Recor
     loanAccountId: field('Investor loan', 'OTHER_LIABILITY'), counterAccountId: money('Capital & loan receipts / payments'),
     payoutAccountId: money('Profit payouts'),
   } },
-  receive: { title: 'Receive money', fields: { moneyAccountId: money('Receive into'), purposeAccountId: { label: 'Purpose account', exclude: ['CASH', 'BANK'] } } },
-  pay: { title: 'Pay money', fields: { moneyAccountId: money('Pay from'), purposeAccountId: { label: 'Purpose account', exclude: ['CASH', 'BANK'] } } },
+  receive: { title: 'Receive / Pay money', fields: { moneyAccountId: money('Receive into') } },
+  pay: { title: 'Pay money', fields: { moneyAccountId: money('Pay from') } },
   transfers: { title: 'Account transfers', fields: {
     fromAccountId: field('Transfer from', 'CASH', 'BANK', 'PAYMENT_CLEARING_ACCOUNT', 'CREDIT_CARD'),
     toAccountId: field('Transfer to', 'CASH', 'BANK', 'PAYMENT_CLEARING_ACCOUNT', 'CREDIT_CARD'),

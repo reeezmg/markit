@@ -18,6 +18,18 @@ accountSettingsRouter.get('/', async (_req, res) => {
   const suppliers = await db.$queryRawUnsafe(`SELECT d.id,d.name FROM distributors d JOIN distributor_companies dc ON dc.distributor_id=d.id WHERE dc.company_id=$1 ORDER BY d.name`, context().companyId);
   res.json({ defaults: await accountDefaults(), accounts, suppliers });
 });
+accountSettingsRouter.put('/receive-pay', async (req, res) => {
+  const { receiveAccountId, payAccountId } = z.object({ receiveAccountId: z.string(), payAccountId: z.string() }).parse(req.body);
+  const accounts = await db.accountingAccount.findMany({ where: { id: { in: [receiveAccountId, payAccountId].filter(Boolean) }, isActive: true } });
+  for (const id of [receiveAccountId, payAccountId].filter(Boolean)) {
+    const account = accounts.find((a:any) => a.id === id);
+    if (!account || !['CASH', 'BANK'].includes(account.accountType)) throw badRequest('Choose active company Cash or Bank accounts for Receive / Pay money');
+  }
+  for (const [group, id] of [['receive', receiveAccountId], ['pay', payAccountId]]) {
+    await logActivity({ ...context(), action: 'configured', resource: 'account-defaults', resourceId: group, meta: id ? { moneyAccountId: id } : {} });
+  }
+  res.json({ success: true });
+});
 accountSettingsRouter.put('/:group', async (req, res) => {
   const group = accountDefaultGroups[req.params.group];
   if (!group) throw badRequest('Unknown account settings group');

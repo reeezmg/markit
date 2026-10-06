@@ -49,6 +49,16 @@ await assert.rejects(call('PUT','/receive',{mappings:{moneyAccountId:'cash-a'},p
 assert.equal(audits.length,auditCount,'Invalid combined saves must validate both settings before writing either audit');
 await call('PUT','/investments',{mappings:{capitalAccountId:'equity-a'}},'a','accountant');
 assert.equal(audits.length,auditCount+1,'Accountants can still save defaults without changing the distribution account');
+await call('PUT','/receive-pay',{receiveAccountId:'cash-a',payAccountId:'bank-a'});
+assert.deepEqual((await call('GET','/defaults')).defaults.receive,{moneyAccountId:'cash-a'});
+assert.deepEqual((await call('GET','/defaults')).defaults.pay,{moneyAccountId:'bank-a'});
+const moneyAuditCount=audits.length;
+await assert.rejects(call('PUT','/receive-pay',{receiveAccountId:'cash-a',payAccountId:'cash-b'}));
+await assert.rejects(call('PUT','/receive-pay',{receiveAccountId:'equity-a',payAccountId:'bank-a'}));
+assert.equal(audits.length,moneyAuditCount,'Validate both Receive/Pay selections before writing either');
+await call('PUT','/receive-pay',{receiveAccountId:'',payAccountId:''});
+assert.deepEqual((await call('GET','/defaults')).defaults.receive,{});
+assert.deepEqual((await call('GET','/defaults')).defaults.pay,{});
 
 async function purchase(recorded: any, overrides: any, enabled = true) {
   let written: any = null;

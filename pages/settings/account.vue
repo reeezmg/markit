@@ -11,6 +11,7 @@ const busy = ref(''), error = ref(''), loading = ref(false), supplier = ref('');
 const profitSettings = ref<any>(null);
 const investors = ref<any[]>([]), selectedInvestor = ref(''), editInvestor = ref(false);
 const investorProfile = computed(() => investors.value.find(i => i.id === selectedInvestor.value));
+const defaultSections = Object.fromEntries(Object.entries(accountDefaultGroups).filter(([key]) => key !== 'pay'));
 const groups = [
   { key: 'billing', title: 'Billing & sales', owner: 'erp', fields: { cash: ['Cash', 'CASH'], bank: ['Payment bank', 'BANK'], receivable: ['Customer credit / receivable', 'ACCOUNTS_RECEIVABLE'], sales: ['Sales income', 'INCOME'], outputTax: ['Sales tax payable', 'OTHER_CURRENT_LIABILITY'], stock: ['Stock / inventory', 'STOCK'], cogs: ['Cost of goods sold', 'COST_OF_GOODS_SOLD'] } },
   { key: 'expense', title: 'Expenses', owner: 'erp', fields: { cash: ['Cash (shared with billing)', 'CASH'], bank: ['Payment bank (shared with billing)', 'BANK'], expense: ['Expense account', 'EXPENSE'], inputTax: ['Recoverable expense tax', 'OTHER_CURRENT_ASSET'], expensePayable: ['Unpaid expenses', 'OTHER_CURRENT_LIABILITY'] } },
@@ -59,6 +60,14 @@ async function saveDefaults(key: string) {
   error.value = '';
   const owner = api.companyId.value;
   try {
+    if (key === 'receive') {
+      await request('PUT', '/account-settings/receive-pay', {
+        receiveAccountId: data.value.defaults.receive.moneyAccountId || '',
+        payAccountId: data.value.defaults.pay.moneyAccountId || '',
+      }, owner);
+      toast.add({ title: 'Receive / Pay money settings saved', color: 'green' });
+      return;
+    }
     await request('PUT', `/account-settings/${key}`, {
       mappings: { ...data.value.defaults[key] },
       ...(key === 'investments' && canManageProfit.value ? { profitDistributionAccountId: profitSettings.value.accountId } : {}),
@@ -105,9 +114,9 @@ const onlineLabels: Record<string,string> = { codClearing: 'COD held by couriers
         </div>
         <div class="flex gap-3 mt-4"><UButton :loading="busy === group.key" :disabled="!!busy" @click="saveMapping(group)">Save {{ group.title.toLowerCase() }}</UButton><UButton v-if="!state(group.owner).enabled" variant="outline" :disabled="!!busy" @click="saveMapping(group, true)">Save & connect new activity</UButton></div>
       </UCard>
-      <UCard v-for="(group, key) in accountDefaultGroups" :key="key" :id="String(key)">
+      <UCard v-for="(group, key) in defaultSections" :key="key" :id="String(key)">
         <template #header><h2 class="font-semibold">{{ group.title }}</h2></template>
-        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><UFormGroup v-for="(field, role) in group.fields" :key="role" :label="field.label"><USelect v-model="data.defaults[key][role]" :options="[{ label: 'No default', value: '' }, ...data.accounts.filter((a:any) => acceptsDefaultAccount(field,a)).map((a:any) => ({ label:a.name,value:a.id }))]" :disabled="!!busy" /></UFormGroup></div>
+        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><UFormGroup v-for="(field, role) in group.fields" :key="role" :label="field.label"><USelect v-model="data.defaults[key][role]" :options="[{ label: 'No default', value: '' }, ...data.accounts.filter((a:any) => acceptsDefaultAccount(field,a)).map((a:any) => ({ label:a.name,value:a.id }))]" :disabled="!!busy" /></UFormGroup><UFormGroup v-if="key === 'receive'" label="Pay from"><USelect v-model="data.defaults.pay.moneyAccountId" :options="[{label:'No default',value:''}, ...data.accounts.filter((a:any)=>['CASH','BANK'].includes(a.accountType)).map((a:any)=>({label:a.name,value:a.id}))]" :disabled="!!busy" /></UFormGroup></div>
         <div v-if="key === 'investments' && profitSettings" class="mt-4"><UFormGroup label="Profit distribution equity account"><USelect v-model="profitSettings.accountId" :options="profitSettings.accounts.map((a:any)=>({label:a.name,value:a.id}))" :disabled="!!busy || !canManageProfit" /></UFormGroup><p v-if="!canManageProfit" class="text-sm text-gray-500 mt-2">An admin or manager can change the profit distribution account.</p></div>
         <UButton class="mt-4" :loading="busy === key" :disabled="!!busy" @click="saveDefaults(String(key))">{{ key === 'investments' ? 'Save investment settings' : 'Save defaults' }}</UButton>
         <template v-if="key === 'purchase'">

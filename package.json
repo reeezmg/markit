@@ -15,6 +15,7 @@
         "typecheck": "nuxt typecheck",
         "test": "tsx tests/payroll-attendance-shift.test.ts && tsx --test tests/shift-policy.test.ts tests/holiday-settings.test.ts tests/attendance-calendar-request.test.ts tests/salary-safety.test.ts",
         "test:user-credit": "tsx --test tests/user-credit-input.test.ts",
+        "test:billing": "node tests/billing/run.mjs",
         "test:recurring-expenses": "tsx tests/recurring-expenses.test.ts && tsx tests/recurring-expenses.integration.test.ts",
         "test:account-ledger": "tsx tests/account-ledger-reconciliation.test.ts",
         "test:accountant": "tsx tests/accountant-v2-pages.test.ts && tsx tests/accountant-v2.integration.test.ts",

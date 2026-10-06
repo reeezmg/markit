@@ -4,15 +4,14 @@ const toast=useToast();
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 const options=ref<any>({accounts:[],people:[],currency:'INR'});
 const defaults=ref<Record<string,Record<string,string>>>({});
-function applyDefaults(){const saved=defaults.value[form.direction==='RECEIVE'?'receive':'pay']||{};form.moneyAccountId=moneyAccounts.value.some((a:any)=>a.value===saved.moneyAccountId)?saved.moneyAccountId:options.value.accounts.find((a:any)=>a.isPrimary&&a.accountType==='BANK')?.id||moneyAccounts.value[0]?.value||'';form.purposeAccountId=purposeAccounts.value.some((a:any)=>a.value===saved.purposeAccountId)?saved.purposeAccountId:'';}
+function applyDefaults(){const saved=defaults.value[form.direction==='RECEIVE'?'receive':'pay']||{};form.moneyAccountId=moneyAccounts.value.some((a:any)=>a.value===saved.moneyAccountId)?saved.moneyAccountId:options.value.accounts.find((a:any)=>a.isPrimary&&a.accountType==='BANK')?.id||moneyAccounts.value[0]?.value||'';}
 const rows=ref<any[]>([]), total=ref(0), page=ref(1), search=ref('');
 const loading=ref(false), saving=ref(false), loadError=ref('');
-const form=reactive({direction:'RECEIVE',date:today(),moneyAccountId:'',purposeAccountId:'',amount:'',reference:'',note:'',person:''});
+const form=reactive({direction:'RECEIVE',date:today(),moneyAccountId:'',amount:'',reference:'',note:'',person:''});
 let requestId='';let submitted='';
 const moneyAccounts=computed(()=>options.value.accounts.filter((a:any)=>['CASH','BANK'].includes(a.accountType)).map((a:any)=>({label:a.name,value:a.id})));
-const purposeAccounts=computed(()=>options.value.accounts.filter((a:any)=>!['CASH','BANK'].includes(a.accountType)).map((a:any)=>({label:a.name,value:a.id})));
-const people=computed(()=>[{label:'No person selected',value:''},...options.value.people.map((p:any)=>({label:`${p.name} (${({client:'Client',user:'Staff',distributor:'Distributor',contact:'Other contact'} as any)[p.kind]})`,value:`${p.kind}:${p.id}`}))]);
-const columns=[{key:'date',label:'Date'},{key:'entryNumber',label:'Number'},{key:'direction',label:'Type'},{key:'details',label:'Accounts / person'},{key:'total',label:'Amount'},{key:'status',label:'Status'},{key:'actions',label:'Actions'}];
+const people=computed(()=>options.value.people.map((p:any)=>({label:`${p.name} (${({client:'Client',user:'User',distributor:'Distributor',contact:'Other contact'} as any)[p.kind]})`,value:`${p.kind}:${p.id}`})));
+const columns=[{key:'date',label:'Date'},{key:'entryNumber',label:'Number'},{key:'direction',label:'Type'},{key:'details',label:'Account / person'},{key:'total',label:'Amount'},{key:'status',label:'Status'},{key:'actions',label:'Actions'}];
 const amount=(n:any)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:options.value.currency}).format(Number(n));
 async function loadRows(){loading.value=true;loadError.value='';try{const r=await api.get('/money',{query:{page:page.value,search:search.value}});rows.value=r.data;total.value=r.total;}catch(e:any){loadError.value=e.message;}finally{loading.value=false;}}
 async function load(){try{const [o,s]=await Promise.all([api.get('/money/options'),api.get('/account-settings/defaults')]);options.value=o;defaults.value=s.defaults;applyDefaults();await loadRows();}catch(e:any){loadError.value=e.message;}}
@@ -21,8 +20,8 @@ onMounted(load);
 async function save(){
   if(saving.value)return;
   const [kind,id]=form.person.split(':');
-  const data={direction:form.direction,date:form.date,moneyAccountId:form.moneyAccountId,purposeAccountId:form.purposeAccountId,amount:Number(form.amount),reference:form.reference,note:form.note,party:id?{kind,id}:null};
-  if(!data.moneyAccountId || !data.purposeAccountId || !(data.amount>0)){toast.add({title:'Choose both accounts and enter a positive amount',color:'red'});return;}
+  const data={direction:form.direction,date:form.date,moneyAccountId:form.moneyAccountId,amount:Number(form.amount),reference:form.reference,note:form.note,party:id?{kind,id}:null};
+  if(!data.moneyAccountId || !data.party || !(data.amount>0)){toast.add({title:'Choose a Cash or Bank account, link a person and enter a positive amount',color:'red'});return;}
   const fingerprint=JSON.stringify(data);
   if(fingerprint!==submitted || !requestId){requestId=crypto.randomUUID();submitted=fingerprint;}
   saving.value=true;
@@ -46,8 +45,7 @@ watch(page,loadRows);
      <UFormGroup label="Date" required><UInput v-model="form.date" type="date" required /></UFormGroup>
      <UFormGroup :label="form.direction==='RECEIVE'?'Receive into':'Pay from'" required><USelect v-model="form.moneyAccountId" :options="moneyAccounts" placeholder="Cash or bank account" required /></UFormGroup>
      <UFormGroup :label="`Amount (${options.currency})`" required><UInput v-model="form.amount" type="number" min="0.01" step="0.01" placeholder="0.00" required /></UFormGroup>
-     <UFormGroup label="Purpose account" required help="Examples: Sales, Expenses, Accounts Receivable or Accounts Payable."><USelect v-model="form.purposeAccountId" :options="purposeAccounts" placeholder="Select an account" required /></UFormGroup>
-     <UFormGroup :label="form.direction==='RECEIVE'?'Received from':'Paid to'" help="Select a person when settling an outstanding amount."><USelectMenu v-model="form.person" :options="people" value-attribute="value" option-attribute="label" searchable placeholder="Optional person" /></UFormGroup>
+     <UFormGroup :label="form.direction==='RECEIVE'?'Received from':'Paid to'" required><USelectMenu v-model="form.person" :options="people" value-attribute="value" option-attribute="label" searchable placeholder="Select linked person" /></UFormGroup>
      <UFormGroup label="Reference"><UInput v-model="form.reference" maxlength="100" placeholder="Receipt or payment reference" /></UFormGroup>
      <UFormGroup label="Note" class="sm:col-span-2 lg:col-span-3"><UInput v-model="form.note" maxlength="1000" placeholder="What is this payment for?" /></UFormGroup>
     </fieldset>
@@ -60,7 +58,7 @@ watch(page,loadRows);
    <UTable :rows="rows" :columns="columns" :loading="loading">
     <template #date-data="{row}">{{ row.journalDate.slice(0,10) }}</template>
     <template #direction-data="{row}"><UBadge :color="isReceived(row)?'green':'orange'" variant="subtle">{{ isReceived(row)?'Received':'Paid' }}</UBadge></template>
-    <template #details-data="{row}"><div>{{ row.lines.map((l:any)=>l.account.name).join(' / ') }}</div><div class="text-xs text-gray-500">{{ personLabel(row) }}</div><div class="text-xs text-gray-500">{{ row.referenceNumber }} {{ row.notes }}</div></template>
+    <template #details-data="{row}"><div>{{ row.lines.filter((l:any)=>['CASH','BANK'].includes(l.account.accountType)).map((l:any)=>l.account.name).join(' / ') }}</div><div class="text-xs text-gray-500">{{ personLabel(row) }}</div><div class="text-xs text-gray-500">{{ row.referenceNumber }} {{ row.notes }}</div></template>
     <template #total-data="{row}">{{ amount(row.total) }}</template>
     <template #status-data="{row}">{{ row.reversals.length?'Reversed':'Posted' }}</template>
     <template #actions-data="{row}"><UButton v-if="!row.reversals.length" size="xs" variant="ghost" @click="askReverse(row)">Reverse</UButton></template>

@@ -1,4 +1,5 @@
 import { prisma } from '~/server/prisma';
+import { initializeNewCompanyAccounts } from '~/server/utils/accountant/company-account-defaults';
 
 export default eventHandler(async (event) => {
   const session = await requireAuthSession(event);
@@ -34,6 +35,7 @@ export default eventHandler(async (event) => {
     });
     await tx.expenseCategory.create({ data: { companyId: branch.id, name: 'Purchase', status: true } });
     await tx.pipeline.create({ data: { companyId: branch.id } });
+    await initializeNewCompanyAccounts(tx, branch.id, session.data.id);
     return { id: branch.id, name: branch.name };
-  });
+  }, { maxWait: 10000, timeout: 30000 });
 });

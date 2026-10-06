@@ -152,7 +152,31 @@ Head-office admins default to the active head office plus active direct branches
 
 Billing and bill edit use `utils/billing-error.ts` for save, receipt and client/account form error toasts. Offline failures show "No internet connection"; connection failures and timeouts get actionable messages. Clean validation messages are retained, while request URLs and database/runtime details use a plain action-specific fallback. Camera errors give permission/device guidance.
 
-billing.vue is a **coordination layer** (~1,700 lines). All logic lives in dedicated composables; the file owns only DOM refs, keyboard nav, table resize, and the template.
+`npm run test:billing` runs the database-free regression suite in `tests/billing/`
+and the existing billing error tests. It executes current page declarations and
+composables with real Vue reactivity and mocked requests/storage/devices; a hidden
+Chrome/Edge fixture mounts the actual desktop summary templates with native UI
+stand-ins. The folder README lists covered scenarios and integration limits.
+Results and fixture screenshots are saved under its ignored `reports/` directory.
+This is scenario coverage, not a 100% application/branch coverage claim.
+Barcode requests use unique per-request tokens; a stale completion cannot clear
+the latest request's loading/save guard, even when the same barcode is requested
+again. Network lookup failures preserve the typed barcode and show connection
+guidance. Both save handlers reject non-finite totals/quantities/rates; edit also
+blocks empty entries, pending item requests, missing payment/split/date/session
+and duplicate submissions before issuing requests.
+
+Desktop billing/edit share `assets/css/billing-layout.css`: the card gives remaining panel space to a scrolling table, while the header and payment/action footer keep their natural height. `useBillingTableLayout` measures the table header plus one row and padding as its minimum height. The panel scrolls only when those minimum contents cannot fit; the table header stays visible during table scrolling. Mobile retains the stacked form.
+
+The desktop summary uses five columns sharing three rows. The first is Subtotal / Discount / Save (including receipt-action dropdown); the second is Grand Total / Payment Method / Delete, with both total labels above their values. The third contains return-redeemed amounts / account / Sales Return, the fourth coupon selection / count-value / New and Search, and the last column client phone / name-points / loyalty actions. Sales Return and Delete use solid variants. New and Search are text-only buttons at the bottom of the fourth column; Add Client is a solid person-plus icon button beside the Cell No. input, and Add Account is a plus beside its selector. Qty/Invoice stays in a separate compact information strip. The measured footer height automatically gives the saved space to the table.
+Field labels, input values and select triggers on billing/edit use a consistent 12px font with 20px line height, matching the compact summary labels. Visible summary labels and button captions use one word; Account/Coupon placeholders follow the same convention. Save retains its selected receipt action in the tooltip and dropdown.
+The desktop Cell No. controls use an explicit non-wrapping horizontal row: input and Add Client icon in billing; input, clear-client X and Add Client icon in bill edit. The input shrinks while the icon buttons remain 32px square with centered icons.
+ The account selector uses "Account" as its placeholder and "Account Name" as its accessible label instead of a separate visible label; adjacent desktop actions reserve only button height.
+The account selector aligns with the second row of inputs; Save, Delete, Sales Return and loyalty actions occupy the third row.
+
+billing.vue is a **coordination layer**. Dedicated composables own drafts, items,
+clients, coupons and camera state; the page retains save validation/payload/receipt
+helpers, orchestration, DOM refs, keyboard navigation, table resizing and template.
 
 **Composable architecture:**
 
@@ -181,7 +205,7 @@ billing.vue is a **coordination layer** (~1,700 lines). All logic lives in dedic
 - `BillingSplitModal` — split payment modal; props `:grand-total`, `:payment-options-in-split`, `v-model:tempSplits`; emits `confirmed(splitPayments[])`
 
 **Draft system (localStorage):**
-- All in-progress bills stored in `localStorage` under key `bills` as a JSON array
+- In-progress bills are stored as a JSON array in company-specific `bills:<companyId>` localStorage keys; `companyStorageKey` handles adoption of the active company's legacy `bills` key
 - Multiple bills can be open simultaneously — each has a sequential `billNo` (1, 2, 3...)
 - Entire bill state auto-saved to localStorage on every change via `watch(currentBill, ...)` in `useBillingDraft`
 - On mount: loads existing drafts; if none exist, creates a default empty bill
@@ -296,6 +320,7 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 - Variant query filters by `productId` → `subcategoryId` → `categoryId` in priority order
 - Loading spinner (`variantsLoading`) shown while variants fetch
 - Multi-select items via checkbox; `done` emits selected barcodes array
+- Billing and bill edit bind the dialog's `open` prop and `close` event; edit uses its existing barcode lookup to populate selected items without replacing saved entries.
 
 **Sales return modal (`components/Billing/SalesReturn.vue`):**
 - No ZenStack hooks — uses `$fetch` for all data (categories via `GET /api/bill/findManyCategory`, entry lookup via `GET /api/bill/findFirstEntry`)

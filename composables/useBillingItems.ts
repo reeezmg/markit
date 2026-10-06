@@ -15,6 +15,8 @@
  * @param parentUser    Parent user tracking refs (from useBillingDraft)
  * @param focusBarcodeAt  Callback to focus the barcode input at a given row index
  */
+import { billingErrorMessage } from '~/utils/billing-error'
+
 export function useBillingItems(
   items: ReturnType<typeof ref>,
   categories: ReturnType<typeof ref>,
@@ -33,7 +35,7 @@ export function useBillingItems(
   const toast = useToast()
 
   const loadingStates = ref<boolean[]>([])
-  const currentRequestIds = ref<Record<number, string>>({})
+  const currentRequestIds = ref<Record<number, symbol>>({})
 
   // ─── Watchers ───────────────────────────────────────────────────────────────
 
@@ -107,7 +109,7 @@ export function useBillingItems(
     if (!hasEmptyRow) {
       items.value.push({
         id: '', variantId: '', sn: items.value.length + 1, barcode: '',
-        category: {}, size: '', unit: '', name: '', qty: 1, rate: null, discount: null,
+        category: [], size: '', unit: '', name: '', qty: 1, rate: null, discount: null,
         tax: null, value: 0, sizes: {}, totalQty: 0, return: false, cost: 0,
         userCode: parentUser.code.value,
         user: parentUser.name.value,
@@ -176,19 +178,24 @@ export function useBillingItems(
     if (!barcode || !items.value[index]) return
 
     loadingStates.value[index] = true
-    currentRequestIds.value[index] = barcode
+    const requestId = Symbol(barcode)
+    currentRequestIds.value[index] = requestId
 
     try {
       const data = await fetchItemFromServer(barcode)
-      if (currentRequestIds.value[index] !== barcode) return // stale response guard
+      if (currentRequestIds.value[index] !== requestId) return // stale response guard
       if (data) processItemResponse(data, index)
       else handleInvalidBarcode(index)
     } catch (error) {
       console.error('Error fetching item:', error)
-      if (currentRequestIds.value[index] === barcode) handleInvalidBarcode(index)
+      if (currentRequestIds.value[index] === requestId) {
+        toast.add({ title: 'Item lookup failed', description: billingErrorMessage(error, 'Unable to load the item. Please try again.'), color: 'red' })
+      }
     } finally {
-      loadingStates.value[index] = false
-      delete currentRequestIds.value[index]
+      if (currentRequestIds.value[index] === requestId) {
+        loadingStates.value[index] = false
+        delete currentRequestIds.value[index]
+      }
     }
   }
 

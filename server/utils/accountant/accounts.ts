@@ -106,7 +106,7 @@ const OPENING_BALANCE_OFFSET = "Opening Balance Adjustments";
 // date; income and expense accounts always start a period at zero.
 const openingBalanceCategories = new Set(["ASSET", "LIABILITY", "EQUITY"]);
 
-const defaults = [
+export const coreAccountDefaults = [
   ["Accounts Receivable", "1100", "ACCOUNTS_RECEIVABLE"],
   ["Petty Cash", "1001", "CASH"],
   ["Undeposited Funds", "1010", "CASH"],
@@ -129,7 +129,7 @@ const defaults = [
 
 export async function ensureDefaults(companyId: string) {
   await prisma.accountingAccount.createMany({
-    data: defaults.map(([name, code, accountType]) => ({
+    data: coreAccountDefaults.map(([name, code, accountType]) => ({
       companyId,
       name,
       code,

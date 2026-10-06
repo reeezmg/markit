@@ -126,7 +126,7 @@
             class="px-3 py-2"
             :class="{ 'text-right': amountKeys.includes(column) }"
           >
-            {{ display(row, column) }}
+            {{ column === 'purchasePayment' ? (row.purchasePayment ? `Paid ${row.purchasePayment.amount} · ${row.purchasePayment.method} · ${String(row.purchasePayment.date).slice(0,10)}${row.purchasePayment.reference ? ' · '+row.purchasePayment.reference : ''}` : 'Registered only') : display(row, column) }}
           </td>
           <td v-if="hasActions" class="px-3 py-2 text-right">
             <div class="flex justify-end gap-1">
@@ -439,7 +439,23 @@
                 ><UInput v-model="form.serialNumber" /></UFormGroup
               ><UFormGroup label="Location"
                 ><UInput v-model="form.location"
-              /></UFormGroup></div
+              /></UFormGroup>
+              <UFormGroup label="Vendor (optional)"><USelectMenu v-model="form.vendorId" :options="vendorOptions" value-attribute="id" option-attribute="label" searchable placeholder="Select contact" /></UFormGroup>
+              <div class="sm:col-span-2 border-t pt-3 space-y-3">
+                <UCheckbox v-model="form.recordPayment" label="Record purchase payment" />
+                <p v-if="!form.recordPayment" class="text-xs text-gray-500">Register only if this purchase is already recorded in accounts. No purchase or payment journal will be added.</p>
+                <template v-else>
+                  <p class="text-xs text-gray-500">Records the full cost of {{ form.purchaseCost }} as paid and posts the asset purchase. Use the cost above for the total amount paid.</p>
+                  <div class="grid gap-3 sm:grid-cols-2">
+                    <UFormGroup label="Payment amount"><UInput :model-value="form.purchaseCost" disabled /></UFormGroup>
+                    <UFormGroup label="Payment type" required><USelect v-model="form.paymentMethod" :options="['CASH','BANK','UPI','CARD','CHEQUE']" /></UFormGroup>
+                    <AccountField v-model="form.paymentAccountId" label="Paid from" :options="assetPaymentOptions" />
+                    <UFormGroup label="Payment date" required><UInput v-model="form.paymentDate" type="date" :min="form.purchaseDate" required /></UFormGroup>
+                    <UFormGroup label="Payment / invoice reference"><UInput v-model="form.paymentReference" maxlength="150" /></UFormGroup>
+                    <AccountField v-if="form.paymentDate > form.purchaseDate" v-model="form.purchasePayableAccountId" label="Purchase payable account" :options="assetPayableOptions" />
+                  </div>
+                </template>
+              </div></div
           ></template>
           <template
             v-else-if="['base-currency', 'currency-adjustments'].includes(view)"
@@ -820,6 +836,7 @@ const configs: any = {
       "Accumulated Depreciation",
       "Book Value",
       "Status",
+      "Purchase payment",
       "Actions",
     ],
     keys: [
@@ -829,6 +846,7 @@ const configs: any = {
       "accumulatedDepreciation",
       "bookValue",
       "status",
+      "purchasePayment",
     ],
   },
   "asset-categories": {
@@ -1007,6 +1025,14 @@ const rows = computed(() => query.data.value?.data || []),
       label: x.name,
     })),
   );
+const assetPurchaseDefaults = ref<Record<string,string>>({});
+const vendorOptions = computed(() => (bootstrapQ.data.value?.parties || []).map((p:any) => ({ id: p.id, label: p.name })));
+const assetPaymentOptions = computed(() => accountOptions.value.filter((o:any) => accounts.value.find((a:any) => a.id === o.id)?.accountType === (form.paymentMethod === 'CASH' ? 'CASH' : 'BANK')));
+const assetPayableOptions = computed(() => accountOptions.value.filter((o:any) => accounts.value.find((a:any) => a.id === o.id)?.accountType === 'ACCOUNTS_PAYABLE'));
+watch(() => form.paymentMethod, () => {
+  if (view.value !== 'fixed-assets' || assetAction.value) return;
+  if (!assetPaymentOptions.value.some((o:any) => o.id === form.paymentAccountId)) form.paymentAccountId = assetPurchaseDefaults.value[form.paymentMethod === 'CASH' ? 'cash' : 'bank'] || '';
+});
 const budgetOptions = computed(() =>
   (budgetsQ.data.value?.data || []).map((x: any) => ({
     id: x.id,
@@ -1116,6 +1142,12 @@ function reset() {
     purchaseDate: today(),
     availableForUseDate: today(),
     purchaseCost: 0,
+    recordPayment: false,
+    paymentMethod: 'CASH',
+    paymentDate: today(),
+    paymentAccountId: '',
+    purchasePayableAccountId: '',
+    paymentReference: '',
     salvageValue: 0,
     adjustmentDate: today(),
     adjustmentType:
@@ -1135,6 +1167,13 @@ function reset() {
 async function openCreate() {
   assetAction.value = "";
   reset();
+  if (view.value === 'fixed-assets') {
+    form.requestId = crypto.randomUUID();
+    const settings = await api.get('/account-settings/defaults');
+    assetPurchaseDefaults.value = settings.defaults.purchase || {};
+    form.paymentAccountId = assetPurchaseDefaults.value.cash || '';
+    form.purchasePayableAccountId = assetPurchaseDefaults.value.payable || '';
+  }
   if (view.value === 'asset-categories') {
     const settings = await api.get('/account-settings/defaults');
     const saved = settings.defaults.assets || {};
@@ -1149,10 +1188,12 @@ async function refresh() {
   await qc.invalidateQueries({ queryKey: ["accountant-v2"] });
 }
 async function save() {
+  if (saving.value) return;
   saving.value = true;
   try {
     let url = `/accountant-management/${endpoint.value.split("?")[0]}`,
       body: any = { ...form };
+    if (view.value === 'fixed-assets' && !assetAction.value && !body.vendorId) body.vendorId = null;
     if (view.value === "budgets")
       body = {
         ...body,

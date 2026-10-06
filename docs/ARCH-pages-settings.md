@@ -3,6 +3,7 @@
 ### Settings Tab Navigation
 - Current `pages/settings.vue` tabs: General, Store, Company & Branches, Products, Account, Printer, Numbering, Requests.
 - `/settings/branches` lets a company admin mark a root company as a head office and create branches. Branches have separate settings, stock, bills, and accounts. The page reads `/api/branches` and calls `/api/branches/head-office` and `/api/branches` for writes.
+- `server/api/branches/index.post.ts` provisions the branch's standard accounting accounts and default selections through `initializeNewCompanyAccounts` in the branch creation transaction. Each branch receives its own account IDs; parent account selections are not copied. A provisioning failure rolls back branch creation.
 - `TeamsDropdown.vue` lists actual companies and branches and is the explicit session company switch. ERP, Products, and Distributor use local table filters and form company fields; these controls do not change the sidebar company. There is no synthetic All Stores company or shared header selector.
 - When the selected company has `parentCompanyId`, the settings shell hides Company & Branches and a direct visit to `/settings/branches` redirects to `/settings/store`.
 - Inline horizontal tabs via `<SettingsTabNav />` component on the main settings pages: General (`/settings`), Printer (`/settings/printer`), Numbering (`/settings/numbering`), Requests (`/settings/requests`). The Store page (`/settings/store`) uses the parent navigation instead of rendering the tab row again.
@@ -21,7 +22,7 @@ authoritative on edits.
 
 Company-scoped admin/manager/accountant configuration is grouped into Billing & sales,
 Expenses, Salary & staff credit, Purchase & supplier payments, Investments,
-Receive money, Pay money, Transfers, Fixed assets, and Online sales & settlements.
+Receive / Pay money, Transfers, Fixed assets, and Online sales & settlements.
 ERP and staff sections use their existing configuration/activation APIs. Billing
 and expenses currently share the ERP cash/bank choices. Supplier-specific setup,
 history import and overrides are embedded here through `Distributor/Accounting.vue`.
@@ -41,6 +42,10 @@ existing request transaction. Its optional `profitDistributionAccountId` require
 admin/manager and validates an active company equity account distinct from investor
 purpose accounts before either setting is written. Accountants save defaults only;
 the distribution selector remains read-only for them.
+Receive / Pay money is one card containing Receive into and Pay from with one save
+button. Purpose-account defaults are no longer offered. PUT `/account-settings/receive-pay`
+validates both Cash/Bank selections before appending the existing `receive` and
+`pay` audit groups in one request transaction; empty selections clear defaults.
 
 `/api/accountant/account-settings` lists active company accounts, suppliers and saved
 form defaults; `/defaults` reads just defaults. PUT `/:group` validates account type,

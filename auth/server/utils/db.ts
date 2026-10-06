@@ -1,6 +1,7 @@
 import type { Address } from '@prisma/client';
 import { prisma } from '~/server/prisma';
 import type { Prisma } from '@prisma/client';
+import { initializeNewCompanyAccounts } from '~/server/utils/accountant/company-account-defaults';
 
 
 export async function findUserByEmail(email: string) {
@@ -84,6 +85,8 @@ export async function registerCompanyWithOwner(params: {
             await tx.pipeline.create({
                 data: { company: { connect: { id: createdCompany.id } } },
             });
+            const owner = await tx.companyUser.findFirst({ where: { companyId: createdCompany.id, role: 'admin' }, select: { userId: true } });
+            await initializeNewCompanyAccounts(tx, createdCompany.id, owner!.userId);
 
             return createdCompany;
         },

@@ -6,6 +6,7 @@ const $fetch = companyScope.fetch;
 
 import { v4 as uuidv4 } from 'uuid';
 import { billingErrorMessage } from '~/utils/billing-error';
+import '~/assets/css/billing-layout.css';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'
 import {
@@ -132,6 +133,7 @@ const paymentref = ref();
 const saveref = ref();
 const isOpen = ref(false);
 const isClientAddModelOpen = ref(false);
+const isProductSearchOpen = ref(false);
 const showClientSuggestions = ref(false);
 const account = ref({
     name: '',
@@ -444,6 +446,7 @@ const columns = computed(() => [
 
 
 const resizableTable = ref(null); // Reference to the table element
+const billingTableStyle = useBillingTableLayout(resizableTable);
 
 let isResizing = false;
 let startX = 0;
@@ -577,7 +580,7 @@ const addNewRow = async (index,moveTonNextRow = true) => {
     variantId: '',
     sn: items.value.length + 1,
     barcode: '',
-    category: {},
+    category: [],
     size: '',
     name: '',
     qty: 1,
@@ -992,14 +995,15 @@ const fetchItemData = async (barcode, index) => {
   if (!barcode || !items.value[index]) return
 
   loadingStates.value[index] = true
-  currentRequestIds.value[index] = barcode
+  const requestId = Symbol(barcode)
+  currentRequestIds.value[index] = requestId
 
   try {
     const data = await fetchItemFromServer(barcode)
     console.log('Fetched item data:', data)
 
     // ❗ Ignore stale responses
-    if (currentRequestIds.value[index] !== barcode) return
+    if (currentRequestIds.value[index] !== requestId) return
 
     if (data) {
       processItemResponse(data, index)
@@ -1009,12 +1013,14 @@ const fetchItemData = async (barcode, index) => {
   } catch (error) {
     console.error('Error fetching item:', error)
 
-    if (currentRequestIds.value[index] === barcode) {
-      handleInvalidBarcode(index)
+    if (currentRequestIds.value[index] === requestId) {
+      toast.add({ title: 'Item lookup failed', description: billingErrorMessage(error, 'Unable to load the item. Please try again.'), color: 'red' })
     }
   } finally {
-    loadingStates.value[index] = false
-    delete currentRequestIds.value[index]
+    if (currentRequestIds.value[index] === requestId) {
+      loadingStates.value[index] = false
+      delete currentRequestIds.value[index]
+    }
   }
 }
 
@@ -1057,8 +1063,21 @@ const handleInvalidBarcode = (index) => {
   })
 }
 
+const handleProductSelected = async (selectedItems) => {
+  if (bill.value?.isMarkit) return
+  for (const item of selectedItems || []) {
+    if (!item.barcode) continue
+    await addNewRow(items.value.length - 1, false)
+    const index = items.value.length - 1
+    items.value[index].barcode = item.barcode
+    await fetchItemData(item.barcode, index)
+    await addNewRow(index, false)
+  }
+}
+
 
 const handleEdit = async () => {
+  if (isSaving.value) return
   isSaving.value = true;
 
   // Saving via keyboard/shortcut can happen before the date input blurs, so
@@ -1076,7 +1095,14 @@ const handleEdit = async () => {
       item.name?.trim() || item.barcode?.trim() || item.category?.length > 0
     );
 
-    if (items.value.length === 0) {
+    if (Object.keys(currentRequestIds.value).length > 0) throw new Error('Please wait for all items to finish loading.')
+    if (!useAuth().session.value?.companyId) throw new Error('Session expired. Please refresh and try again.')
+    if (!Number.isFinite(Number(grandTotal.value))) throw new Error('Grand total is invalid. Check discount values.')
+    if (!paymentMethod.value) throw new Error('Select a payment method before saving.')
+    if (paymentMethod.value === 'Split' && !splitPayments.value?.length) throw new Error('Confirm the split payment breakdown before saving.')
+    if (!date.value || Number.isNaN(new Date(date.value).getTime())) throw new Error('Bill date is invalid.')
+
+    if (finalitems.length === 0) {
       throw new Error(`No valid items to bill.`);
     }
 
@@ -1085,6 +1111,11 @@ const handleEdit = async () => {
       if (!item.category || !item.category[0]?.id) {
         throw new Error(`No category in entry ${index + 1}`);
       }
+      const qty = Number(item.qty ?? 1), rate = Number(item.rate ?? 0)
+      if (!Number.isFinite(qty)) throw new Error(`Row ${index + 1}: qty is not a valid number`)
+      if (!item.return && qty <= 0) throw new Error(`Row ${index + 1}: qty must be greater than 0`)
+      if (!Number.isFinite(rate)) throw new Error(`Row ${index + 1}: rate is not a valid number`)
+      if (rate < 0) throw new Error(`Row ${index + 1}: rate cannot be negative`)
     });
 
 
@@ -1330,8 +1361,8 @@ const print = async() => {
   printModel.value = false
   await printBill(printData)
   toast.add({
-        title: 'Printing Sucess!',
-        color: 'Green',
+        title: 'Printing Success!',
+        color: 'green',
       });
   }catch(err){
      printModel.value = true
@@ -1351,7 +1382,7 @@ const download = async() => {
     const ress = await generateThermalReceiptPDF(printData,"receipt.pdf")
   toast.add({
         title: 'Download Success!',
-        color: 'Green',
+        color: 'green',
       });
   }catch(err){
       printModel.value = true
@@ -2094,7 +2125,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 
 <template>
 
-  <UDashboardPanelContent class="p-1">
+  <UDashboardPanelContent class="billing-page p-1">
       <CompanyFormField />
     <div v-if="dataLoading" class="w-full flex justify-center items-center py-20">
           <UIcon
@@ -2103,15 +2134,15 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
           />
           <span>Loading data...</span>
         </div>
-      <UCard v-else
+      <UCard v-else :style="billingTableStyle"
     :ui="{
-      base: 'h-full flex flex-col',
+      base: 'billing-card flex flex-col',
       rounded: '',
       ring: 'ring-0 lg:ring-1 lg:ring-gray-200 lg:dark:ring-gray-800', // force no ring on mobile
       divide: 'divide-y divide-gray-200 dark:divide-gray-700',
       body: {
         padding: '',
-        base: 'lg:flex-1 lg:min-h-40 lg:flex lg:flex-col lg:overflow-hidden grow divide-y divide-gray-200 dark:divide-gray-700 z-10'
+        base: 'billing-card-body divide-y divide-gray-200 dark:divide-gray-700 z-10'
       },
       footer: {
         base: 'divide-y divide-gray-200 dark:divide-gray-700',
@@ -2212,7 +2243,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
               :disabled="bill?.isMarkit"
             />
           </div>
-          <div class="lg:flex lg:flex-row">
+          <div class="lg:flex lg:flex-row gap-2">
            <UButton
                 color="primary"
                 icon="i-heroicons-plus"
@@ -2333,7 +2364,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
         </div>
 
         <!-- Desktop table layout -->   
-        <div v-else class="overflow-x-auto p-3 hidden lg:block pb-24 h-full relative">    
+        <div v-else class="billing-table-scroll p-3 hidden lg:block relative">
           <table class="divide-y divide-gray-50 dark:divide-gray-800 w-full" ref="resizableTable">
             <thead class="">
               <tr>
@@ -2529,22 +2560,26 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
          
 
   <template #footer>
-     <div class=" w-full flex justify-between  px-3 py-2">
+     <div class="billing-footer-bar  w-full flex justify-between  px-3 py-2">
       <div>
           Qty: {{ tQty }}
       </div>
       <div>
           Inv #: {{ bill?.invoiceNumber }}
       </div>
-    </div>
+
+</div>
         <!-- Other form elements -->
-         <div v-if="!isMobile" class="lg:grid hidden grid-cols-1 lg:grid-cols-2 lg:grid-cols-4 gap-4 text-sm px-3 py-3">
-
-          <div class="">
-
-        <!-- Discount Input -->
-        <div class="mb-6">
-          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-) / Add (+n)</label>
+         <div v-if="!isMobile" class="billing-summary hidden lg:grid text-sm px-3 py-3">
+<div>
+<div class="billing-summary-total border border-primary-700 dark:border-primary-300 rounded-md mb-7">
+  <div class="flex flex-col items-center justify-center py-3">
+    <div class="text-s">Subtotal</div>
+    <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
+  </div>
+</div>
+<div class="mb-6">
+          <label class="block text-gray-700 font-medium">Discount</label>
           <UInput
             ref="discountref"
             type="text"
@@ -2555,40 +2590,38 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
             :disabled="bill?.isMarkit"
           />
         </div>
-
-  <!-- Subtotal Display -->
-  <div class="border border-primary-700 dark:border-primary-300 rounded-md mb-7">
-  <div class="flex flex-col items-center justify-center py-3">
-    <div class="text-s">Sub Total</div>
-    <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
-  </div>
+<div class="billing-primary-action flex">
+            <UButton
+              :loading="isSaving"
+              ref="saveref" :title="selectedAction ? 'Save & ' + selectedAction : 'Save'"
+              color="green"
+              class="flex-1 rounded-r-none"
+              block
+              @click="handleEdit"
+              @keydown.enter.prevent="handleEdit"
+              :disabled="bill?.isMarkit"
+            >
+              Save
+            </UButton>
+            <UDropdown :items="actionItems">
+              <UButton
+                color="green"
+                class="rounded-l-none px-3"
+                icon="i-heroicons-chevron-up"
+                :disabled="bill?.isMarkit"
+              />
+            </UDropdown>
+          </div>
 </div>
-    
-
-  <!-- Grand Total Display -->
-   <div class="border border-green-700 dark:border-green-300 rounded-md">
+<div>
+<div class="billing-summary-grand-total billing-summary-total border border-green-700 dark:border-green-300 rounded-md">
   <div class="flex flex-col items-center justify-center py-3">
-    <div class="text-s">Grand Total</div>
+    <div class="text-s">Total</div>
     <div class="text-green-700 dark:text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
   </div>
 </div>
-
-</div>
-
-          <div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Sales Return AMT</label>
-              <UInput v-model="returnAmt" :disabled="bill?.isMarkit" />
-            </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Total Redeemed AMT</label>
-              <UInput
-                v-model="redeemedAmt"
-                disabled
-              />
-            </div>
-             <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Payment Method</label>
+<div class="mb-4">
+              <label class="block text-gray-700 font-medium">Payment</label>
               <div class="w-full flex flex-row gap-2">
                 <USelect
                   ref="paymentref"
@@ -2610,11 +2643,24 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
                 />
               </div>
             </div>
-
-
+<div class="billing-row-action"><UButton icon="i-heroicons-trash" aria-label="Delete" title="Delete" block variant="solid" color="red" class="w-full" @click="isBillDeleteModalOpen = true" :disabled="bill?.isMarkit">Delete</UButton></div>
+</div>
+<div>
+<div class="billing-summary-pair">
+<div class="mb-4">
+              <label class="block text-gray-700 font-medium">Return</label>
+              <UInput v-model="returnAmt" :disabled="bill?.isMarkit" />
+            </div>
             <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Account Name</label>
-              <UInputMenu v-model="selected" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit">
+              <label class="block text-gray-700 font-medium">Redeemed</label>
+              <UInput
+                v-model="redeemedAmt"
+                disabled
+              />
+            </div>
+</div>
+<div class="billing-summary-account flex gap-2">
+              <UInputMenu v-model="selected" placeholder="Account" aria-label="Account Name" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit">
                 <template #option="{ option }">
                   <div
                     :class="option.kind === 'header'
@@ -2626,18 +2672,18 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
                   </div>
                 </template>
               </UInputMenu>
-            </div>    
-          </div>
-
-        
-          <div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Apply Coupon</label>
+            <UButton icon="i-heroicons-plus" aria-label="Add account" title="Add account" square @click="isOpen=true" :loading="isSavingAcc" :disabled="bill?.isMarkit" />
+</div>
+<div class="billing-row-action"><UButton icon="i-heroicons-arrow-uturn-left" aria-label="Sales Return" title="Sales Return" block variant="solid" class="w-full" @click="issalesReturnModelOpen = true" :disabled="bill?.isMarkit">Return</UButton></div>
+</div>
+<div>
+<div class="mb-4">
+              <label class="block text-gray-700 font-medium">Coupon</label>
               <div class="flex gap-2">
-                <USelectMenu 
-                  v-model="selectedCouponId" 
-                  :options="eligibleCoupons" 
-                  placeholder="Select a coupon"
+                <USelectMenu
+                  v-model="selectedCouponId"
+                  :options="eligibleCoupons"
+                  placeholder="Coupon"
                   class="flex-1"
                   :disabled="bill?.isMarkit"
                 />
@@ -2648,31 +2694,31 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
                   variant="soft"
                   :disabled="bill?.isMarkit"
                   @click="clearSelectedCoupon"
-                >
-                  Remove Coupon
-                </UButton>
+                >Remove</UButton>
               </div>
 
             </div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Eligible Coupons</label>
+<div class="billing-summary-pair">
+<div class="mb-4">
+              <label class="block text-gray-700 font-medium">Eligible</label>
               <UInput :value="eligibleCoupons.length" :disabled="bill?.isMarkit" />
             </div>
             <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Total Value</label>
+              <label class="block text-gray-700 font-medium">Value</label>
               <UInput v-model="couponValue" :disabled="bill?.isMarkit" />
             </div>
-            <div class="mt-9">
-              <UButton color="primary" block @click="isOpen=true" :loading="isSavingAcc" :disabled="bill?.isMarkit">Add Account</UButton>
-            </div>
-          </div>
-          
-          <div>
-            <div class="mb-4">
-              <label class="block text-gray-700 font-medium">Cell No.</label>
+</div>
+<div class="billing-search-actions flex gap-2">
+<UButton color="blue" block class="flex-1" aria-label="New bill" title="New bill" @click="newBill" :disabled="bill?.isMarkit">New</UButton>
+<UButton block class="flex-1" aria-label="Product search" title="Product search" @click="isProductSearchOpen = true" :disabled="bill?.isMarkit">Search</UButton>
+</div>
+</div>
+<div>
+<div class="mb-4">
+              <label class="block text-gray-700 font-medium">Phone</label>
               
-              <div class="flex items-center gap-2">
-                <div class="relative flex-1">
+              <div class="billing-client-input-row flex items-center gap-2">
+                <div class="relative flex-1 min-w-0">
                   <UInput
                     v-model="phoneNo"
                     :loading="isClientLookupLoading"
@@ -2712,10 +2758,11 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
                   </div>
                 </div>
                 <UButton icon="i-heroicons-x-mark" color="red" @click="handleClearClient" :disabled="bill?.isMarkit" />
-              </div>
+              <UButton class="flex-shrink-0" icon="i-heroicons-user-plus" size="sm" variant="solid" square aria-label="Add client" title="Add client" @click="isClientAddModelOpen = true" :disabled="bill?.isMarkit" />
+</div>
             </div>
-
-            <div class="mb-4">
+<div class="billing-summary-pair billing-summary-client-details">
+<div class="mb-4">
               <label class="block text-gray-700 font-medium">Name</label>
               <UInput v-model="clientName"
               :disabled="clientFound || bill?.isMarkit" />
@@ -2725,16 +2772,18 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
               <UInput v-model="points"
               :disabled="clientFound || bill?.isMarkit" />
             </div>
-            <div class="mt-9">
+</div>
+<div class="billing-summary-actions mt-9">
             <div class="flex gap-2">
                <UButton v-if="!isRedeemPoint" color="green" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Redeem</UButton>
-              <UButton v-else-if="isRedeemPoint" color="red" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Cancel Redeem</UButton>
-              <UButton v-if="!skipPoints" color="red" class="flex-1" block @click="skipPoints = true" :disabled="bill?.isMarkit">Skip Points</UButton>
-              <UButton v-else color="green" class="flex-1" block @click="skipPoints = false" :disabled="bill?.isMarkit">Assign Points</UButton>
+              <UButton v-else-if="isRedeemPoint" color="red" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Undo</UButton>
+              <UButton v-if="!skipPoints" color="red" class="flex-1" block @click="skipPoints = true" :disabled="bill?.isMarkit">Skip</UButton>
+              <UButton v-else color="green" class="flex-1" block @click="skipPoints = false" :disabled="bill?.isMarkit">Include</UButton>
             </div>
             </div>
-          </div>
-        </div>
+</div>
+</div>
+
 
         <!-- mobile view -->
         <div  v-if="isMobile" class="lg:hidden flex flex-col gap-3 py-3 text-sm px-2" >
@@ -2838,9 +2887,8 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 </div>
 
         <div class="">
-          <label class="block text-gray-700 font-medium">Account Name</label>
           <div class="w-full flex flex-row gap-2">
-            <UInputMenu class="flex-1" v-model="selected" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit">
+            <UInputMenu class="flex-1" v-model="selected" placeholder="Account Name" aria-label="Account Name" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit">
               <template #option="{ option }">
                 <div
                   :class="option.kind === 'header'
@@ -2869,37 +2917,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 
          
 
-        <div v-else class="w-full flex-wrap gap-4  px-3 py-3 hidden lg:flex">
-          <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
 
-          <div class="flex-1 flex">
-            <UButton
-              :loading="isSaving"
-              ref="saveref"
-              color="green"
-              class="flex-1 rounded-r-none"
-              block
-              @click="handleEdit"
-              @keydown.enter.prevent="handleEdit"
-              :disabled="bill?.isMarkit"
-            >
-              Save{{ selectedAction ? ' & ' + selectedAction : '' }}
-            </UButton>
-            <UDropdown :items="actionItems">
-              <UButton
-                color="green"
-                class="rounded-l-none px-3"
-                icon="i-heroicons-chevron-up"
-                :disabled="bill?.isMarkit"
-              />
-            </UDropdown>
-          </div>
-
-          <UButton color="red" class="flex-1" block @click="isBillDeleteModalOpen = true" :disabled="bill?.isMarkit">Delete</UButton>
-          <UButton class="flex-1" block :disabled="bill?.isMarkit">Barcode Search</UButton>
-          <UButton class="flex-1" @click="issalesReturnModelOpen = true" block :disabled="bill?.isMarkit">Sales Return</UButton>
-          <UButton class="flex-1"  @click="isClientAddModelOpen = true" block :disabled="bill?.isMarkit">Add Client</UButton>
-        </div>
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block @click="newBill" :disabled="bill?.isMarkit">New</UButton>
@@ -2909,6 +2927,12 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
         </template>
       </UCard>
   </UDashboardPanelContent>
+
+  <BillingProductSearch
+    :open="isProductSearchOpen"
+    @done="handleProductSelected"
+    @close="isProductSearchOpen = false"
+  />
 
   <UModal v-model="isOpen">
         <div class="p-4 space-y-4">

@@ -122,16 +122,15 @@ Prisma helpers for seller auth. Uses `~/server/prisma` (bare client).
 |---|---|
 | `findUserByEmail(email)` | Finds user with full nested include: `companies → company → pipeline, productinput, variantinput, address` |
 | `findUserById(id)` | Finds user by id (no includes) |
-| `createUser(user)` | Creates user via `Prisma.UserCreateInput` |
-| `createCompany(company)` | Creates company with `variantinput: { create: {} }` and `productinput: { create: {} }` |
+| `registerCompanyWithOwner(params)` | Creates company, creates or links the owner user, creates the Purchase expense category and pipeline, then provisions company-owned standard accounting accounts and defaults in one transaction; any failure rolls back registration |
 | `updatePassword(id, password)` | Updates hashed password |
-| `updateUser(userId, companyId, name, role, code)` | Connects existing user to a company via `companies.create` |
 | `createAddress(address)` | Creates `Address` row |
-| `createPipeline(pipeline)` | Creates `Pipeline` row connected to company |
-| `createDefaultExpenseCategories(companyId)` | Creates `ExpenseCategory` named `'Purchase'` for new company |
 | `getPurchaseExpenseCategoryId(companyId)` | Finds first `ExpenseCategory` with `name: 'Purchase'` — throws if not found |
 
-**Bug:** `createCompany` has `console.log(company)` left in.
+Registration calls `initializeNewCompanyAccounts` from
+`server/utils/accountant/company-account-defaults.ts`. This configures selections
+without posting journals or enabling integrations. Company chart accounts and
+default settings commit together with the company and owner membership.
 
 ### `auth/server/utils/clientdb.ts`
 
@@ -409,7 +408,6 @@ in `scripts/production-accounting`; generating or building does not apply those 
 | File | Bug |
 |---|---|
 | `auth/server/utils/session.ts` | `console.log('Auth Config:', runtimeAuth)` fires at module load — logs session secret config |
-| `auth/server/utils/db.ts` | `createCompany()` has `console.log(company)` left in |
 | `auth/server/api/auth/login.post.ts` | `isAiImage: user.companies[0].company.isAiImage \|\| true` — always `true` even if DB is `false` |
 | `auth/server/api/auth/register.post.ts` | `code` hardcoded to integer `1` instead of a configurable code |
 | `auth/server/api/auth/session.put.ts` | `console.log("session", session.data)` on every call |

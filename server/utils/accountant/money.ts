@@ -15,11 +15,19 @@ const include = { lines: { include: { account: { select: { name: true, accountTy
 const schema = z.object({
   requestId: z.string().uuid(), direction: z.enum(['RECEIVE', 'PAY']),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  moneyAccountId: z.string().cuid(), purposeAccountId: z.string().cuid(),
+  moneyAccountId: z.string().min(1), purposeAccountId: z.string().min(1).optional(),
   amount: z.coerce.number().positive(), reference: z.string().trim().max(100).default(''),
   note: z.string().trim().max(1000).default(''),
-  party: z.object({ kind: z.enum(['client', 'user', 'distributor', 'contact']), id: z.string().min(1) }).nullable().default(null),
+  party: z.object({ kind: z.enum(['client', 'user', 'distributor', 'contact']), id: z.string().min(1) }),
 });
+async function clearingAccount() {
+  const existing = await db.accountingAccount.findFirstIncludingDeleted({ where: { code: 'MONEY-CLEARING' } });
+  if (existing) {
+    if (existing.deletedAt || !existing.isActive || existing.category !== 'EQUITY' || existing.accountType !== 'EQUITY') throw badRequest('The Receive / Pay money clearing account must be active');
+    return existing;
+  }
+  return db.accountingAccount.create({ data: { code: 'MONEY-CLEARING', name: 'Receive / Pay clearing', category: 'EQUITY', accountType: 'EQUITY', currency: (await db.company.findUnique()).currency, isSystem: true, description: 'Shared balancing ledger for standalone Receive / Pay documents. Entries retain person links and references without settling other source documents.' } });
+}
 async function people() {
   const c = context().companyId;
   return db.$queryRawUnsafe(`SELECT cl.id,cl.name,'client' AS kind FROM clients cl JOIN company_clients cc ON cc.client_id=cl.id WHERE cc.company_id=$1
@@ -43,19 +51,8 @@ moneyRouter.post('/', async (req, res) => {
   const b = schema.parse(req.body), c = context().companyId;
   const date = new Date(b.date+'T00:00:00.000Z');
   if (!Number.isFinite(date.getTime()) || date.toISOString().slice(0,10)!==b.date) throw badRequest('Select a valid date');
-  if (b.moneyAccountId===b.purposeAccountId) throw badRequest('Choose different money and purpose accounts');
-  const accounts = await db.accountingAccount.findMany({where:{id:{in:[b.moneyAccountId,b.purposeAccountId]},isActive:true}});
-  const money = accounts.find((a:any)=>a.id===b.moneyAccountId), purpose=accounts.find((a:any)=>a.id===b.purposeAccountId);
-  if (!money || !purpose) throw badRequest('Choose active accounts belonging to this company');
-  if (!['CASH','BANK'].includes(money.accountType)) throw badRequest('Select a cash or bank account');
-  if (['CASH','BANK'].includes(purpose.accountType)) throw badRequest('Use Transfers to move money between cash and bank accounts');
-  if (['ACCOUNTS_RECEIVABLE','ACCOUNTS_PAYABLE'].includes(purpose.accountType) && !b.party) throw badRequest('Select the person this outstanding amount belongs to');
-  const person=b.party ? (await people()).find((p:any)=>p.kind===b.party!.kind && p.id===b.party!.id) : null;
-  if (b.party && !person) throw badRequest('Selected person does not belong to this company');
-  const dimensions:any = person ? person.kind==='distributor' ? {distributorId:person.id} : person.kind==='contact' ? {partyId:person.id} : {sourceParties:{[person.kind]:{id:person.id,name:person.name}}} : {};
-  const lines=[{accountId:money.id,side:b.direction==='RECEIVE'?'DEBIT':'CREDIT',amount:b.amount,...dimensions},
-    {accountId:purpose.id,side:b.direction==='RECEIVE'?'CREDIT':'DEBIT',amount:b.amount,...dimensions}];
-  // Persist a canonical request for safe retries, including after a lost response.
+  // Check retries before account resolution so a recorded request cannot create
+  // another clearing account or depend on subsequent account/person changes.
   const canonical=JSON.stringify(b);
   const existing=await db.manualJournal.findFirst({where:{sourceType:{in:sources},sourceId:b.requestId},include});
   if(existing){
@@ -63,6 +60,22 @@ moneyRouter.post('/', async (req, res) => {
     if(audit?.after?.request!==canonical) throw badRequest('This request was already used for another entry');
     res.json(existing);return;
   }
+  const accounts = await db.accountingAccount.findMany({where:{id:{in:[b.moneyAccountId,...(b.purposeAccountId ? [b.purposeAccountId] : [])]},isActive:true}});
+  const money = accounts.find((a:any)=>a.id===b.moneyAccountId);
+  if (!money) throw badRequest('Choose an active account belonging to this company');
+  if (!['CASH','BANK'].includes(money.accountType)) throw badRequest('Select a cash or bank account');
+  const person=(await people()).find((p:any)=>p.kind===b.party.kind && p.id===b.party.id);
+  if (!person) throw badRequest('Selected person does not belong to this company');
+  // Preserve compatibility with previously submitted explicit-account requests.
+  // New forms carry only the money account, linked person and reference.
+  const purpose=b.purposeAccountId ? accounts.find((a:any)=>a.id===b.purposeAccountId) : await clearingAccount();
+  if (!purpose) throw badRequest('Choose active accounts belonging to this company');
+  if (money.id===purpose.id) throw badRequest('Choose different money and purpose accounts');
+  if (['CASH','BANK'].includes(purpose.accountType)) throw badRequest('Use Transfers to move money between cash and bank accounts');
+  if (['ACCOUNTS_RECEIVABLE','ACCOUNTS_PAYABLE'].includes(purpose.accountType) && !b.party) throw badRequest('Select the person this outstanding amount belongs to');
+  const dimensions:any = person ? person.kind==='distributor' ? {distributorId:person.id} : person.kind==='contact' ? {partyId:person.id} : {sourceParties:{[person.kind]:{id:person.id,name:person.name}}} : {};
+  const lines=[{accountId:money.id,side:b.direction==='RECEIVE'?'DEBIT':'CREDIT',amount:b.amount,...dimensions},
+    {accountId:purpose.id,side:b.direction==='RECEIVE'?'CREDIT':'DEBIT',amount:b.amount,...dimensions}];
   await validatePosting(lines,date,c);
   await assertAccountingDateUnlocked(c,date,'BANKING');
   const prefix=b.direction==='RECEIVE'?'RCV':'PAY';
