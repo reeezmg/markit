@@ -338,6 +338,11 @@ Inherits `@nuxt/ui-pro` (Nuxt UI Pro component library) and `./auth` (session au
 
 ### Build Transpile
 
+`vercel.json` sets the production build command to `npx zenstack generate && nuxt build`.
+Production builds generate clients/hooks and compile the application without running
+`prisma db push`. Database changes use the separate reviewed SQL migration workflow
+in `scripts/production-accounting`; generating or building does not apply those migrations.
+
 - `trpc-nuxt` — tRPC adapter (likely unused in current app but configured)
 - `@electric-sql/pglite` — ElectricSQL (paused feature, still needs transpile)
 

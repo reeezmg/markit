@@ -1,5 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npx zenstack generate && nuxt build",
   "crons": [
     { "path": "/api/ecommerce-cms/marketing/process", "schedule": "*/5 * * * *" },
     { "path": "/api/cron/recurring-expenses", "schedule": "30 0 * * *" }

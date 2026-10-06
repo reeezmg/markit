@@ -3,10 +3,12 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import dotenv from 'dotenv';
 import { Pool } from 'pg';
+import { accountingTestDatabaseUrl } from './lib/accounting-test-database.mjs';
 
 // Verification only: integration suites own temporary schemas or outer rollbacks.
 // Never runs deployment/import scripts. Keep a persisted-data fingerprint on both sides.
 dotenv.config({ quiet: true });
+const testDatabaseUrl = accountingTestDatabaseUrl(process.env.DATABASE_URL);
 const resume = process.argv.includes('--resume');
 const retryFailed = process.argv.includes('--retry-failed');
 const rerun = process.argv.includes('--rerun');
@@ -103,7 +105,7 @@ try {
     const args = (file.endsWith('.ts') || file === 'tests/account-settings-stock.integration.test.mjs') ? ['--import', 'tsx', file] : [file];
     const result = await new Promise(resolve => {
       const child = spawn(process.execPath, args, {
-        cwd: process.cwd(), env: { ...process.env, COMPANY_ID: company, ACCOUNTING_REVIEW_DIR: dir }, stdio: ['ignore', log, log],
+        cwd: process.cwd(), env: { ...process.env, DATABASE_URL: testDatabaseUrl, COMPANY_ID: company, ACCOUNTING_REVIEW_DIR: dir }, stdio: ['ignore', log, log],
       });
       child.on('error', e => resolve({ code: null, error: e.message }));
       child.on('exit', (code, signal) => resolve({ code, signal }));

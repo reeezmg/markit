@@ -6,6 +6,7 @@ generator client {
 datasource db {
     provider = 'postgresql'
     url      = env('DATABASE_URL')
+    directUrl = env('DIRECT_URL')
 }
 
 plugin hooks {
@@ -1638,6 +1639,7 @@ model EcommProductReview extends Base {
 
     @@unique([companyId, orderId, orderItemId])
     @@index([companyId, productId, status, createdAt])
+    @@index([companyId, productId, status, createdAt(sort: Desc)], map: "ecomm_product_reviews_product_status_idx")
     @@allow('read, create, update, delete', true)
     @@map("ecomm_product_reviews")
 }
@@ -3682,7 +3684,7 @@ model AiUsageEvent {
     // DDL owner is server/utils/aiUsage.ts (raw SQL). @db types and dbgenerated
     // defaults are pinned to match it — plain @default(uuid()) is client-side
     // only, so push would DROP the live column default.
-    id             String   @id @default(dbgenerated("gen_random_uuid()::text"))
+    id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
     source         String   @default("storefront_agent")
     conversationId String?  @map("conversation_id")
     interactionId  String   @map("interaction_id")
@@ -3734,7 +3736,7 @@ model StorefrontMemory {
 
 model StorefrontAgentSession {
     runtimeResult Json? @map("runtime_result")
-    id                    String    @id @default(dbgenerated("gen_random_uuid()::text"))
+    id                    String    @id @default(dbgenerated("(gen_random_uuid())::text"))
     conversationId        String    @map("conversation_id")
     userId                String?   @map("user_id")
     interactionId         String?   @map("interaction_id")
@@ -3781,7 +3783,7 @@ model StorefrontSource {
     templateDigest             String?  @map("template_digest")
     provisioningStage          String?  @map("provisioning_stage")
 
-    id                         String   @id @default(dbgenerated("gen_random_uuid()::text"))
+    id                         String   @id @default(dbgenerated("(gen_random_uuid())::text"))
     repositoryId               BigInt?  @map("repository_id")
     repositoryFullName         String?  @map("repository_full_name")
     previewBranch              String   @default("preview") @map("preview_branch")
@@ -3806,7 +3808,7 @@ model StorefrontSource {
 }
 
 model AiProviderCredential {
-    id              String   @id @default(dbgenerated("gen_random_uuid()::text"))
+    id              String   @id @default(dbgenerated("(gen_random_uuid())::text"))
     companyId       String   @map("company_id")
     name            String
     provider        String
@@ -3824,7 +3826,7 @@ model AiProviderCredential {
 }
 
 model StorefrontDesignProfile {
-    id                 String   @id @default(dbgenerated("gen_random_uuid()::text"))
+    id                 String   @id @default(dbgenerated("(gen_random_uuid())::text"))
     companyId          String   @unique @map("company_id")
     status             String   @default("NOT_CONFIGURED")
     companyDescription String?  @map("company_description")
@@ -4068,7 +4070,7 @@ model AccountantManualJournal {
 
 model AccountantManualJournalLine {
   distributorId String? @map("distributor_id")
-  distributor Distributor? @relation(fields: [distributorId], references: [id], onDelete: Restrict)
+  distributor Distributor? @relation(fields: [distributorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   id          String            @id @default(cuid())
   companyId   String            @map("company_id")
   company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -4399,15 +4401,15 @@ model AccountantAccountTransfer {
 
 model AccountantDistributorSettings {
   companyId String @map("company_id")
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   distributorId String @map("distributor_id")
-  distributor Distributor @relation(fields: [distributorId], references: [id], onDelete: Restrict)
+  distributor Distributor @relation(fields: [distributorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   contactId String @unique @map("contact_id")
-  contact AccountantContact @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  contact AccountantContact @relation(fields: [contactId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   enabled Boolean @default(false)
   mappings AccountantDistributorMapping[]
   createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
   @@id([companyId, distributorId])
   @@map("accountant_v2_distributor_settings")
   @@deny('all', true)
@@ -4416,10 +4418,10 @@ model AccountantDistributorSettings {
 model AccountantDistributorMapping {
   companyId String @map("company_id")
   distributorId String @map("distributor_id")
-  settings AccountantDistributorSettings @relation(fields: [companyId, distributorId], references: [companyId, distributorId], onDelete: Cascade)
+  settings AccountantDistributorSettings @relation(fields: [companyId, distributorId], references: [companyId, distributorId], onDelete: Cascade, onUpdate: NoAction, map: "accountant_v2_distributor_mappin_company_id_distributor_id_fkey")
   role String
   accountId String @map("account_id")
-  account AccountantAccountingAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  account AccountantAccountingAccount @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   @@id([companyId, distributorId, role])
   @@map("accountant_v2_distributor_mappings")
   @@deny('all', true)
@@ -4427,15 +4429,15 @@ model AccountantDistributorMapping {
 
 model AccountantDistributorSource {
   companyId String @map("company_id")
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   distributorId String @map("distributor_id")
-  distributor Distributor @relation(fields: [distributorId], references: [id], onDelete: Restrict)
+  distributor Distributor @relation(fields: [distributorId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   sourceKey String @map("source_key")
   signature Json
   accounts Json
   revision Int @default(0)
   journalId String? @map("journal_id")
-  journal AccountantManualJournal? @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  journal AccountantManualJournal? @relation(fields: [journalId], references: [id], onDelete: Restrict, onUpdate: NoAction)
   @@id([companyId, distributorId, sourceKey])
   @@index([journalId], map: "accountant_v2_distributor_sources_journal_idx")
   @@map("accountant_v2_distributor_sources")
@@ -4446,7 +4448,7 @@ model AccountantDistributorSource {
 model AccountantInvestor {
   id String @id @default(uuid())
   companyId String @map("company_id")
-  company Company @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onUpdate: NoAction, onDelete: NoAction)
   terms AccountantInvestorTerm[]
   events AccountantInvestorEvent[]
   name String
@@ -4466,7 +4468,7 @@ model AccountantInvestorTerm {
   id String @id @default(uuid())
   companyId String @map("company_id")
   investorId String @map("investor_id")
-  investor AccountantInvestor @relation(fields: [companyId, investorId], references: [companyId, id])
+  investor AccountantInvestor @relation(fields: [companyId, investorId], references: [companyId, id], onUpdate: NoAction, onDelete: NoAction)
   effectiveDate DateTime @db.Date @map("effective_date")
   terms Json
   createdAt DateTime @default(now()) @map("created_at")
@@ -4479,7 +4481,7 @@ model AccountantInvestorEvent {
   id String @id @default(uuid())
   companyId String @map("company_id")
   investorId String @map("investor_id")
-  investor AccountantInvestor @relation(fields: [companyId, investorId], references: [companyId, id])
+  investor AccountantInvestor @relation(fields: [companyId, investorId], references: [companyId, id], onUpdate: NoAction, onDelete: NoAction)
   eventDate DateTime @db.Date @map("event_date")
   kind String
   amount Decimal @db.Decimal(16, 2)
@@ -4492,7 +4494,7 @@ model AccountantInvestorEvent {
   @@unique([companyId, requestId])
   @@unique([companyId, legacyId])
   @@unique([companyId, reversedId])
-  @@index([companyId, investorId, eventDate])
+  @@index([companyId, investorId, eventDate], map: "accountant_v2_investor_events_company_id_investor_id_event_date")
   @@map("accountant_v2_investor_events")
   @@deny('all', true)
 }
@@ -4558,7 +4560,7 @@ model AccountantEcommerceSettings {
 
 model AccountantErpSettings {
   companyId String @id @map("company_id")
-  company Company @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onUpdate: NoAction, onDelete: NoAction)
   enabled Boolean @default(false)
   activatedAt DateTime @default(now()) @map("activated_at")
   accounts Json @default("{}")
@@ -4567,7 +4569,7 @@ model AccountantErpSettings {
 }
 model AccountantErpSource {
   companyId String @map("company_id")
-  company Company @relation(fields: [companyId], references: [id])
+  company Company @relation(fields: [companyId], references: [id], onUpdate: NoAction, onDelete: NoAction)
   sourceKey String @map("source_key")
   signature Json @default("{}")
   accounts Json @default("{}")
@@ -4581,7 +4583,7 @@ model AccountantErpSource {
 
 model AccountantStockControl {
   companyId String @id @map("company_id")
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade, onUpdate: NoAction)
   stockAccountId String @map("stock_account_id")
   openingAccountId String @map("opening_account_id")
   adjustmentAccountId String @map("adjustment_account_id")
@@ -4596,7 +4598,7 @@ model AccountantStockControl {
 
 model AccountantUserSettings {
  companyId String @id @map("company_id")
- company Company @relation(fields: [companyId], references: [id])
+ company Company @relation(fields: [companyId], references: [id], onUpdate: NoAction, onDelete: NoAction)
  enabled Boolean @default(false)
  accounts Json @default("{}")
  activatedAt DateTime @default(now()) @map("activated_at")
@@ -4605,7 +4607,7 @@ model AccountantUserSettings {
 }
 model AccountantUserSource {
  companyId String @map("company_id")
- company Company @relation(fields: [companyId], references: [id])
+ company Company @relation(fields: [companyId], references: [id], onUpdate: NoAction, onDelete: NoAction)
  sourceKey String @map("source_key")
  ledgerId String @map("ledger_id")
  signature Json @default("{}")

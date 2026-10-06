@@ -7,6 +7,17 @@ migration or deletion of historical financial data.
 
 # Markit v1 - Project Architecture Guide
 
+Datasource/admin alignment (2026-10-06): `schema.zmodel` uses pooled `DATABASE_URL`
+for application Prisma access and direct `DIRECT_URL` for Prisma schema commands.
+Both must target the same database; direct administration avoids stale pooled session
+search paths from disposable schemas. Production schema changes remain separate from builds.
+Accounting relations explicitly preserve the installed SQL foreign keys' `NoAction`
+update rules and existing delete rules. Supplier mappings retain their existing composite
+constraint name; supplier settings retain the database `updated_at` default alongside
+Prisma `@updatedAt`. Existing investor/review index names and the review's descending
+date index are declared, and database-generated UUID text defaults use PostgreSQL's
+canonical expression. These declaration changes do not alter production tables or rows.
+
 `AccountantInvestor`, `AccountantInvestorTerm` and `AccountantInvestorEvent` own
 the new Accountant investor area. Profiles store contact/document metadata, a
 linked company user ID (the existing `legacyUserId` column now links both native and

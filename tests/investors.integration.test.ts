@@ -3,7 +3,9 @@ import { readFileSync } from 'node:fs';
 import { randomUUID } from 'node:crypto';
 import { Pool } from 'pg';
 import dotenv from 'dotenv';
+import { accountingTestDatabaseUrl } from '../scripts/lib/accounting-test-database.mjs';
 dotenv.config({ quiet: true });
+process.env.DATABASE_URL = accountingTestDatabaseUrl(process.env.DATABASE_URL!);
 const url = new URL(process.env.DATABASE_URL!),
     schema = `investor_test_${randomUUID().replaceAll('-', '')}`;
 const pool = new Pool({

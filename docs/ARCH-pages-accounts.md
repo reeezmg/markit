@@ -64,6 +64,9 @@ and native reversal/destination posting during a real source transfer.
 workflow, actual API, settings and archive checks sequentially. Set
 `ACCOUNTING_REVIEW_DIR` to a new run directory to preserve prior fingerprints and
 reports. Database-writing suites use disposable schemas or an outer rollback;
+the runner uses Neon's direct endpoint for child suites so temporary-schema Prisma
+sessions do not leave a test `search_path` on shared application pooler connections.
+The standalone investor suite also selects the direct endpoint.
 the three old committing company-page suites are excluded. It records public
 source/financial table hashes and schema names before/after and exits nonzero on
 failed/incomplete suites or persistent differences. Some focused probes deliberately

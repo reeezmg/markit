@@ -2,6 +2,10 @@
 
 These instructions apply to every task in this repository.
 
+## Database changes (user instruction, 2026-10-06)
+
+Never modify Neon or another database directly through SQL, Prisma `db push`, migrations, import/repair scripts, or database-writing tests. Make database schema changes only in `C:/markit-v1/storetools/schema.zmodel`; never manually edit generated `prisma/schema.prisma`. Read-only database inspection is allowed. Local schema changes do not authorize database application. This supersedes earlier permission for production accounting migrations and direct ledger repairs.
+
 1. Before investigating or changing code, load and follow `.agents/skills/read-markit-docs/SKILL.md`. Read only the documentation it routes to for the area being changed.
 2. Keep tenant boundaries intact: seller/admin operations belong in Markit; browser storefront endpoints belong in `markit-custom-api`. Shared ecommerce data must remain scoped by `companyId`.
 3. `schema.zmodel` in this repository is the only source of truth for database schema changes, including tables and fields used by `markit-custom-api` or any storefront. Apply every schema addition or update here first; never create an independent schema definition in another repository.
