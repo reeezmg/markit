@@ -1,10 +1,13 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 import { v4 as uuidv4 } from 'uuid'
 import AwsService from '~/composables/aws'
-import { useFindManyCategory } from '~/lib/hooks/category';
-import { useCreateSubcategory } from '~/lib/hooks/subcategory';
+import { useFindManyCategory } from '~/lib/company-hooks/category';
+import { useCreateSubcategory } from '~/lib/company-hooks/subcategory';
 
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 
 const props = defineProps<{
   modelValue: boolean
@@ -29,7 +32,7 @@ const isOpen = computed({
 })
 
 const { data: categories } = useFindManyCategory({
-  where: { companyId: useAuth().session.value?.companyId },
+  where: { companyId: { in: useAuth().session.value?.companyId ? [useAuth().session.value!.companyId] : [] } },
   select: {
     id: true,
     name: true,
@@ -153,6 +156,7 @@ const createSubcategory = async () => {
     title="Add Subcategory"
      prevent-close
   >
+    <CompanyFormField locked />
     <div class="space-y-4">
       <UFormGroup label="Category" required>
         <USelectMenu

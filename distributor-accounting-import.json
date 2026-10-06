@@ -1,0 +1,582 @@
+{
+  "applied": true,
+  "at": "2026-09-27T11:21:44.841Z",
+  "report": [
+    {
+      "company": "Markit",
+      "companyId": "02856c86-60b8-41a4-ba18-79dbd55bf016",
+      "distributor": "Mangalore Computers",
+      "distributorId": "2956d942-344c-433f-9a3c-f014e2a81e56",
+      "before": {
+        "legacyBalance": 1000,
+        "postedBalance": 1000
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 3,
+      "changed": 0,
+      "legacyBalance": 1000,
+      "expectedBalance": 1000,
+      "postedBalance": 1000,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "bank": "Distributor payments - primary bank",
+        "bank:cmlez98pj00049usa9uctyrw9": "Distributor bank - reez (ctyrw9)",
+        "cash": "Petty Cash",
+        "opening": "Opening Balance Adjustments",
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "tax": "Input GST"
+      }
+    },
+    {
+      "company": "Markit",
+      "companyId": "02856c86-60b8-41a4-ba18-79dbd55bf016",
+      "distributor": "Nisarga",
+      "distributorId": "e0052432-8fbc-4c1f-8020-64b0e66a633a",
+      "before": {
+        "legacyBalance": 8850,
+        "postedBalance": 9180
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [
+        {
+          "sourceKey": "purchase:bc6a7e12-fa13-4bb0-b855-955f380d7013",
+          "reference": "741",
+          "date": "2026-02-03T00:00:00.000Z",
+          "amount": 330
+        }
+      ],
+      "sources": 15,
+      "changed": 0,
+      "legacyBalance": 8850,
+      "expectedBalance": 9180,
+      "postedBalance": 9180,
+      "legacyDifference": 330,
+      "errors": [],
+      "warnings": [
+        "PO-46: legacy credit 2000; purchase total 1000. Imported using the legacy credit.",
+        "PO-47: legacy credit 3000; purchase total 1000. Imported using the legacy credit."
+      ],
+      "mappings": {
+        "bank": "Distributor payments - primary bank",
+        "bank:cmlez98pj00049usa9uctyrw9": "Distributor bank - reez (ctyrw9)",
+        "cash": "Petty Cash",
+        "opening": "Opening Balance Adjustments",
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "tax": "Input GST"
+      }
+    },
+    {
+      "company": "Ubar Mobiles",
+      "companyId": "3c431903-0d62-4f8d-89aa-b8b456c179f3",
+      "distributor": "Surabi distributer",
+      "distributorId": "5e6f3d65-ea63-4a8a-9dff-e21e4ca8bbc6",
+      "before": {
+        "legacyBalance": 0,
+        "postedBalance": 0
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 2,
+      "changed": 0,
+      "legacyBalance": 0,
+      "expectedBalance": 0,
+      "postedBalance": 0,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "bank": "Distributor payments - primary bank",
+        "cash": "Petty Cash",
+        "opening": "Opening Balance Adjustments",
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "tax": "Input GST"
+      }
+    },
+    {
+      "company": "Ubar Mobiles",
+      "companyId": "3c431903-0d62-4f8d-89aa-b8b456c179f3",
+      "distributor": "Lava",
+      "distributorId": "6badd790-a8a1-47f1-aa16-1c0f88f52bd1",
+      "before": {
+        "legacyBalance": 18752,
+        "postedBalance": 18752
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 2,
+      "changed": 0,
+      "legacyBalance": 18752,
+      "expectedBalance": 18752,
+      "postedBalance": 18752,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "bank": "Distributor payments - primary bank",
+        "cash": "Petty Cash",
+        "opening": "Opening Balance Adjustments",
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "tax": "Input GST"
+      }
+    },
+    {
+      "company": "Ubar Mobiles",
+      "companyId": "3c431903-0d62-4f8d-89aa-b8b456c179f3",
+      "distributor": "Jayshree bhavish",
+      "distributorId": "98bb6298-8233-4a11-b00b-3ced19ff6b3d",
+      "before": {
+        "legacyBalance": 0,
+        "postedBalance": 0
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 0,
+      "changed": 0,
+      "legacyBalance": 0,
+      "expectedBalance": 0,
+      "postedBalance": 0,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "bank": "Distributor payments - primary bank",
+        "cash": "Petty Cash",
+        "opening": "Opening Balance Adjustments",
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "tax": "Input GST"
+      }
+    },
+    {
+      "company": "reezc",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "distributor": "Mohammed Irfan",
+      "distributorId": "b81698f9-5f8e-4af8-b7a2-923b2c0afeb2",
+      "before": {
+        "legacyBalance": 450,
+        "postedBalance": 450
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 4,
+      "changed": 0,
+      "legacyBalance": 450,
+      "expectedBalance": 450,
+      "postedBalance": 450,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "bank": "Distributor payments - primary bank",
+        "cash": "Petty Cash",
+        "opening": "Opening Balance Adjustments",
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "tax": "Input GST"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "NABEEL",
+      "distributorId": "07e01bc0-ef4c-4a1e-aa5b-6ce13cfd006d",
+      "before": {
+        "legacyBalance": -805.000000002,
+        "postedBalance": 24720
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [
+        {
+          "sourceKey": "purchase:e5b72a5a-0387-45e5-ad02-626ea60728b5",
+          "reference": "PO-235",
+          "date": "2026-01-13T00:00:00.000Z",
+          "amount": 20550
+        },
+        {
+          "sourceKey": "purchase:d3ed0183-9cc7-49f8-84e0-feb23c3dba0f",
+          "reference": "PO-305",
+          "date": "2026-07-10T00:00:00.000Z",
+          "amount": 4975
+        }
+      ],
+      "sources": 33,
+      "changed": 0,
+      "legacyBalance": -805.000000002,
+      "expectedBalance": 24720,
+      "postedBalance": 24720,
+      "legacyDifference": 25525,
+      "errors": [],
+      "warnings": [
+        "PO-264: legacy credit 24000; purchase total 12000. Imported using the legacy credit."
+      ],
+      "mappings": {
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)",
+        "cash": "Petty Cash",
+        "opening": "Opening Balance Adjustments",
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "tax": "Input GST"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "BAYMENS",
+      "distributorId": "13e06987-da4b-4823-9a8e-1aa2d620d9fe",
+      "before": {
+        "legacyBalance": 482803.4999986,
+        "postedBalance": 531023.5
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [
+        {
+          "sourceKey": "purchase:ad846018-6a0b-4938-91df-44182d0a497c",
+          "reference": "",
+          "date": "2025-12-16T15:14:49.178Z",
+          "amount": 8900
+        },
+        {
+          "sourceKey": "purchase:964432ab-b148-446c-b843-13a00b1f6f76",
+          "reference": "PO-203",
+          "date": "2025-12-17T00:00:00.000Z",
+          "amount": 16530
+        },
+        {
+          "sourceKey": "purchase:101aa1a6-a95a-4108-b530-47fbefa5df69",
+          "reference": "PO-212",
+          "date": "2025-12-25T00:00:00.000Z",
+          "amount": 22790
+        }
+      ],
+      "sources": 66,
+      "changed": 0,
+      "legacyBalance": 482803.4999986,
+      "expectedBalance": 531023.5,
+      "postedBalance": 531023.5,
+      "legacyDifference": 48220,
+      "errors": [],
+      "warnings": [
+        "PO-260: legacy credit 156000; purchase total 39000. Imported using the legacy credit.",
+        "PO-257: legacy credit 28800; purchase total 14400. Imported using the legacy credit.",
+        "PO-287: legacy credit 27839; purchase total 13580. Imported using the legacy credit."
+      ],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "BILLAL PERFUEM",
+      "distributorId": "33b8bc4d-50ef-4dc9-95b6-48e4481b64e4",
+      "before": {
+        "legacyBalance": -6840,
+        "postedBalance": 0
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [
+        {
+          "sourceKey": "purchase:3a50729f-0b0d-41d4-8224-6674caba3b99",
+          "reference": "",
+          "date": "2026-02-11T00:00:00.000Z",
+          "amount": 6840
+        }
+      ],
+      "sources": 2,
+      "changed": 0,
+      "legacyBalance": -6840,
+      "expectedBalance": 0,
+      "postedBalance": 0,
+      "legacyDifference": 6840,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "SHOW ZONE",
+      "distributorId": "4d4ea538-fdad-444c-b3bc-3371c921e9ed",
+      "before": {
+        "legacyBalance": 19351,
+        "postedBalance": 41663.5
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [
+        {
+          "sourceKey": "purchase:2a0f7dde-76ce-4c8d-a0c9-5e524879e1b6",
+          "reference": "PO-214",
+          "date": "2025-12-26T00:00:00.000Z",
+          "amount": 22312.5
+        }
+      ],
+      "sources": 5,
+      "changed": 0,
+      "legacyBalance": 19351,
+      "expectedBalance": 41663.5,
+      "postedBalance": 41663.5,
+      "legacyDifference": 22312.5,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "A.K.J  GARMENTS",
+      "distributorId": "5e4eac7b-1aff-4a9b-a246-0cfb0e311d34",
+      "before": {
+        "legacyBalance": -15098.250000012,
+        "postedBalance": -15098.25
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 3,
+      "changed": 0,
+      "legacyBalance": -15098.250000012,
+      "expectedBalance": -15098.25,
+      "postedBalance": -15098.25,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [
+        "PO-281: legacy credit 16585; purchase total 16584.999999988; distributor differs. Imported using the legacy credit."
+      ],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "CB Garments",
+      "distributorId": "ea4bf95c-a051-42d7-bd37-26a53f2744b7",
+      "before": {
+        "legacyBalance": -54545,
+        "postedBalance": -54545
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 7,
+      "changed": 0,
+      "legacyBalance": -54545,
+      "expectedBalance": -54545,
+      "postedBalance": -54545,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "GRAPHAPER APPARELS",
+      "distributorId": "97a5282b-84ca-466e-9f5c-9eadd0e20350",
+      "before": {
+        "legacyBalance": -38598,
+        "postedBalance": -38598
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 4,
+      "changed": 0,
+      "legacyBalance": -38598,
+      "expectedBalance": -38598,
+      "postedBalance": -38598,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [
+        "PO-299: legacy credit 27720; purchase total 26400. Imported using the legacy credit."
+      ],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "NEW PACIFIC ENTERPRISES",
+      "distributorId": "0617fd04-cbc6-495a-8ada-7a36bb83ab86",
+      "before": {
+        "legacyBalance": -55,
+        "postedBalance": -55
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 3,
+      "changed": 0,
+      "legacyBalance": -55,
+      "expectedBalance": -55,
+      "postedBalance": -55,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "GOLD",
+      "distributorId": "cb759458-2472-4c43-ad2a-4ccdb72018ba",
+      "before": {
+        "legacyBalance": 0,
+        "postedBalance": 0
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 2,
+      "changed": 0,
+      "legacyBalance": 0,
+      "expectedBalance": 0,
+      "postedBalance": 0,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "NOUFAL BHAI ",
+      "distributorId": "6a5f4459-aa69-40f1-971b-3f95c61f8370",
+      "before": {
+        "legacyBalance": -2000,
+        "postedBalance": 0
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [
+        {
+          "sourceKey": "purchase:0f4c4476-e4e3-411d-b0fd-a6e1bfc5bbb8",
+          "reference": "PO-304",
+          "date": "2026-06-28T00:00:00.000Z",
+          "amount": 2000
+        }
+      ],
+      "sources": 2,
+      "changed": 0,
+      "legacyBalance": -2000,
+      "expectedBalance": 0,
+      "postedBalance": 0,
+      "legacyDifference": 2000,
+      "errors": [],
+      "warnings": [],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "distributor": "Swadeshi Holdings",
+      "distributorId": "85da990e-141f-4037-8b9d-d8aa4c27ae3b",
+      "before": {
+        "legacyBalance": 220250.01,
+        "postedBalance": 220250.01
+      },
+      "missingJournals": [],
+      "reconstructedPurchases": [],
+      "sources": 35,
+      "changed": 0,
+      "legacyBalance": 220250.01,
+      "expectedBalance": 220250.01,
+      "postedBalance": 220250.01,
+      "legacyDifference": 0,
+      "errors": [],
+      "warnings": [
+        "PO-286: legacy credit 5536.56; purchase total 4692. Imported using the legacy credit.",
+        "PO-273: legacy credit 89250; purchase total 44625; distributor differs. Imported using the legacy credit."
+      ],
+      "mappings": {
+        "payable": "Accounts Payable",
+        "stock": "Stock",
+        "cash": "Petty Cash",
+        "tax": "Input GST",
+        "opening": "Opening Balance Adjustments",
+        "bank": "Distributor payments - primary bank",
+        "bank:cmkxzabuu000csxe6mos3qbfz": "Distributor bank - RAFEEQ (s3qbfz)",
+        "bank:cmlb2hsze0001bd57f89fulr5": "Distributor bank - SOCIETY BANK (9fulr5)"
+      }
+    }
+  ]
+}

@@ -1,11 +1,15 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import AwsService from '~/composables/aws';
-import { useCreateCollection } from '~/lib/hooks/collection';
+import { useCreateCollection } from '~/lib/company-hooks/collection';
 
 const router = useRouter();
 const toast = useToast();
 const awsService = new AwsService();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 const CreateCollection = useCreateCollection();
 
 interface ImageData {
@@ -67,6 +71,7 @@ const handleSubmit = async () => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+      <CompanyFormField />
     <UPageCard class="m-3">
       <div class="text-xl mb-4">Collection</div>
       <hr class="h-px my-6 bg-gray-200 border-0 dark:bg-gray-700" />

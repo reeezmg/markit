@@ -1,0 +1,364 @@
+{
+  "at": "2026-09-29T10:52:46.568Z",
+  "readOnly": true,
+  "distributors": [
+    {
+      "name": "Markit",
+      "kind": "PAYMENT",
+      "source_events": 9,
+      "posted_journals": 9
+    },
+    {
+      "name": "Markit",
+      "kind": "PURCHASE",
+      "source_events": 9,
+      "posted_journals": 9
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "kind": "OPENING",
+      "source_events": 1,
+      "posted_journals": 1
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "kind": "PAYMENT",
+      "source_events": 82,
+      "posted_journals": 82
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "kind": "PURCHASE",
+      "source_events": 79,
+      "posted_journals": 79
+    },
+    {
+      "name": "Ubar Mobiles",
+      "kind": "PAYMENT",
+      "source_events": 2,
+      "posted_journals": 2
+    },
+    {
+      "name": "Ubar Mobiles",
+      "kind": "PURCHASE",
+      "source_events": 2,
+      "posted_journals": 2
+    },
+    {
+      "name": "reezc",
+      "kind": "PAYMENT",
+      "source_events": 1,
+      "posted_journals": 1
+    },
+    {
+      "name": "reezc",
+      "kind": "PURCHASE",
+      "source_events": 2,
+      "posted_journals": 2
+    },
+    {
+      "name": "reezc",
+      "kind": "RETURN",
+      "source_events": 1,
+      "posted_journals": 1
+    }
+  ],
+  "erp": {
+    "coverage": [
+      {
+        "name": "Markit",
+        "excluded_historical_sources": 1,
+        "tracked_sources": 76,
+        "current_postings": 62
+      },
+      {
+        "name": "ORIGINALS CLOTHING",
+        "excluded_historical_sources": 0,
+        "tracked_sources": 1620,
+        "current_postings": 1579
+      },
+      {
+        "name": "Ubar Mobiles",
+        "excluded_historical_sources": 0,
+        "tracked_sources": 318,
+        "current_postings": 290
+      },
+      {
+        "name": "reezc",
+        "excluded_historical_sources": 0,
+        "tracked_sources": 239,
+        "current_postings": 216
+      }
+    ],
+    "checkedSources": 2253,
+    "lineMismatches": []
+  },
+  "issues": [],
+  "distributorLineMismatches": [],
+  "unbalanced": [],
+  "cashBankCurrent": [
+    {
+      "company": "Markit",
+      "account": "CASH",
+      "approvedMigrationBalance": "-88963.00",
+      "erpMovement": "0.00",
+      "expected": "-88963.00",
+      "actual": "-88963.00",
+      "difference": "0.00"
+    },
+    {
+      "company": "Markit",
+      "account": "PRIMARY_BANK",
+      "approvedMigrationBalance": "230.00",
+      "erpMovement": "0.00",
+      "expected": "230.00",
+      "actual": "230.00",
+      "difference": "0.00"
+    },
+    {
+      "company": "Ubar Mobiles",
+      "account": "CASH",
+      "approvedMigrationBalance": "134881.10",
+      "erpMovement": "-33572.00",
+      "expected": "101309.10",
+      "actual": "101309.10",
+      "difference": "0.00"
+    },
+    {
+      "company": "Ubar Mobiles",
+      "account": "PRIMARY_BANK",
+      "approvedMigrationBalance": "3364.99",
+      "erpMovement": "0.00",
+      "expected": "3364.99",
+      "actual": "3364.99",
+      "difference": "0.00"
+    },
+    {
+      "company": "reezc",
+      "account": "CASH",
+      "approvedMigrationBalance": "167534.80",
+      "erpMovement": "-210.00",
+      "expected": "167324.80",
+      "actual": "167324.80",
+      "difference": "0.00"
+    },
+    {
+      "company": "reezc",
+      "account": "PRIMARY_BANK",
+      "approvedMigrationBalance": "3891.00",
+      "erpMovement": "0.00",
+      "expected": "3891.00",
+      "actual": "3891.00",
+      "difference": "0.00"
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "account": "CASH",
+      "approvedMigrationBalance": "-601002.65",
+      "erpMovement": "0.00",
+      "expected": "-601002.65",
+      "actual": "-601002.65",
+      "difference": "0.00"
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "account": "PRIMARY_BANK",
+      "approvedMigrationBalance": "284157.81",
+      "erpMovement": "0.00",
+      "expected": "284157.81",
+      "actual": "284157.81",
+      "difference": "0.00"
+    }
+  ],
+  "stockComparison": [
+    {
+      "name": "Markit",
+      "product_stock_at_current_cost": "47280.00",
+      "accounting_stock": "47280.00",
+      "difference": "0.00"
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "product_stock_at_current_cost": "1739184.11",
+      "accounting_stock": "1739184.11",
+      "difference": "0.00"
+    },
+    {
+      "name": "Ubar Mobiles",
+      "product_stock_at_current_cost": "667936.00",
+      "accounting_stock": "667936.00",
+      "difference": "0.00"
+    },
+    {
+      "name": "reezc",
+      "product_stock_at_current_cost": "101225.01",
+      "accounting_stock": "101225.01",
+      "difference": "0.00"
+    }
+  ],
+  "cashBankSnapshotNote": "Cash-only snapshot verification predates full ERP adoption; superseded by ERP history reports where applied.",
+  "cashBank": [
+    {
+      "company": "Markit",
+      "missingJournals": 0,
+      "conflicts": [],
+      "acceptedConflicts": [
+        {
+          "source": "EXPENSE:7a4520f8-f7c4-45fd-82c9-2c6c49ec973a",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "DISTRIBUTOR_PAYMENT:1f2c566f-5993-4ede-ac99-30ad1b6a42fa",
+          "journalId": "cf8b874f12e4340816aaf520b"
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:ae7b0123-50aa-47b0-abb2-fb003d0c7ea7",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "EXPENSE:8da4605d-5cc2-4860-8224-fbf645f17b76",
+          "journalId": "c51ed5be9838e690c646aa1a2"
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:9d1003df-7846-4e3e-b888-ded08d8ffd17",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "EXPENSE:be184ec1-9517-4ab4-b736-a610b81fd7f5",
+          "journalId": "c3c57198b578f0692b30210a2"
+        },
+        {
+          "source": "EXPENSE:52204eed-59f1-4376-b9d3-7e541abd201b",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "DISTRIBUTOR_PAYMENT:c5677bec-2443-45c4-8891-1d60446b026d",
+          "journalId": "c601d9e3389a4349eb30c4fb7"
+        },
+        {
+          "account": "CASH",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "550.00"
+        }
+      ],
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujm9rc000021zuc5rbsml9f",
+          "oldBalance": "-89513.00",
+          "newBalanceBefore": "-88963.00",
+          "toImport": "0.00",
+          "newBalanceAfter": "-88963.00",
+          "difference": "550.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmn0gh000k10hvc72g30cs",
+          "oldBalance": "230.00",
+          "newBalanceBefore": "230.00",
+          "toImport": "0.00",
+          "newBalanceAfter": "230.00",
+          "difference": "0.00"
+        }
+      ]
+    },
+    {
+      "company": "Ubar Mobiles",
+      "missingJournals": 0,
+      "conflicts": [],
+      "acceptedConflicts": [],
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujm9urx00141zuc2nw3klxy",
+          "oldBalance": "134881.10",
+          "newBalanceBefore": "134881.10",
+          "toImport": "0.00",
+          "newBalanceAfter": "134881.10",
+          "difference": "0.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmnrgy005u10hvzzy7byk9",
+          "oldBalance": "3364.99",
+          "newBalanceBefore": "3364.99",
+          "toImport": "0.00",
+          "newBalanceAfter": "3364.99",
+          "difference": "0.00"
+        }
+      ]
+    },
+    {
+      "company": "reezc",
+      "missingJournals": 0,
+      "conflicts": [],
+      "acceptedConflicts": [
+        {
+          "source": "DISTRIBUTOR_PAYMENT:6d88bb54-75ea-4e25-b498-409d8c70cee3",
+          "reason": "Existing source posting differs in account, date or amount",
+          "legacy": [
+            [
+              "cmujmoiog00dn10hvj2ikxi6c|2026-05-08 06:13:26.1",
+              "-600.00"
+            ]
+          ],
+          "posted": []
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "600.00"
+        }
+      ],
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujj2907000210el5xemzhdq",
+          "oldBalance": "167534.80",
+          "newBalanceBefore": "167534.80",
+          "toImport": "0.00",
+          "newBalanceAfter": "167534.80",
+          "difference": "0.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmoiog00dn10hvj2ikxi6c",
+          "oldBalance": "3291.00",
+          "newBalanceBefore": "3891.00",
+          "toImport": "0.00",
+          "newBalanceAfter": "3891.00",
+          "difference": "600.00"
+        }
+      ]
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "missingJournals": 0,
+      "conflicts": [],
+      "acceptedConflicts": [
+        {
+          "account": "CASH",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "-27440.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "-249242.00"
+        }
+      ],
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujk8pon002x10elczamrss3",
+          "oldBalance": "-573562.65",
+          "newBalanceBefore": "-601002.65",
+          "toImport": "0.00",
+          "newBalanceAfter": "-601002.65",
+          "difference": "-27440.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmot8b00ga10hv36n32efa",
+          "oldBalance": "533399.81",
+          "newBalanceBefore": "284157.81",
+          "toImport": "0.00",
+          "newBalanceAfter": "284157.81",
+          "difference": "-249242.00"
+        }
+      ]
+    }
+  ]
+}

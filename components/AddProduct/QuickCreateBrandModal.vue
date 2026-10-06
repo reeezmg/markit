@@ -1,7 +1,10 @@
 <script setup lang="ts">
-import { useCreateBrand } from '~/lib/hooks/brand';
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
 
-const useAuth = () => useNuxtApp().$auth
+import { useCreateBrand } from '~/lib/company-hooks/brand';
+
+const useAuth = () => companyScope.auth
 
 const props = defineProps<{
   modelValue: boolean
@@ -77,6 +80,7 @@ const createBrand = async () => {
     title="Add Brand"
     prevent-close
   >
+    <CompanyFormField locked />
     <div class="space-y-4">
       <UInput v-model="brandForm.name" placeholder="Brand Name" autofocus />
 

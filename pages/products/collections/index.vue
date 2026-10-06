@@ -1,13 +1,17 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 import { Switch } from '@headlessui/vue';
 import AwsService from '~/composables/aws';
-import { useUpdateCollection, useFindManyCollection, useDeleteCollection } from '~/lib/hooks/collection';
+import { useUpdateCollection, useFindManyCollection, useDeleteCollection } from '~/lib/company-hooks/collection';
 
 const awsService = new AwsService();
 const UpdateCollection = useUpdateCollection({ optimisticUpdate: true });
 const DeleteCollection = useDeleteCollection({ optimisticUpdate: true });
 const router = useRouter();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { forOwner } = useOrganizationActions();
 const toast = useToast();
 
 const isDeleteModalOpen = ref(false);
@@ -20,6 +24,9 @@ const columns = [
   { key: 'status', label: 'Status', sortable: true },
   { key: 'actions', label: 'Actions', sortable: false },
 ];
+const displayColumns = computed(() => useAuth().session.value?.allStores
+  ? [{ key: 'company.name', label: 'Store' }, ...columns]
+  : columns);
 
 const action = (row: any) => [
   [
@@ -74,6 +81,7 @@ const queryArgs = reactive<any>({
   take: pageCount.value,
   select: {
     id: true,
+    company: { select: { name: true } },
     name: true,
     image: true,
     banner: true,
@@ -129,6 +137,8 @@ function toggleStatus(id: string) {
     console.error('Error updating collection status:', error);
   }
 }
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 
 <template>
@@ -145,6 +155,7 @@ function toggleStatus(id: string) {
     >
       <div class="flex flex-col sm:flex-row justify-between gap-3 px-4 py-3 w-full">
         <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <CompanyTableFilter />
           <UInput v-model="search" icon="i-heroicons-magnifying-glass-20-solid" placeholder="Search..." class="w-full sm:w-60" />
           <USelectMenu v-model="selectedStatus" :options="todoStatus" multiple placeholder="Status" class="w-full sm:w-60" />
         </div>
@@ -166,14 +177,14 @@ function toggleStatus(id: string) {
       <UTable
         v-model:sort="sort"
         :rows="collections"
-        :columns="columns"
+        :columns="displayColumns"
         :loading="isLoading"
         sort-asc-icon="i-heroicons-arrow-up"
         sort-desc-icon="i-heroicons-arrow-down"
         sort-mode="manual"
       >
         <template #actions-data="{ row }">
-          <UDropdown :items="action(row)">
+          <UDropdown :items="forOwner(action(row), row.companyId)">
             <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
           </UDropdown>
         </template>

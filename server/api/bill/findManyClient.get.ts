@@ -1,8 +1,9 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { createError, defineEventHandler, getQuery } from 'h3'
 import { pool } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data.companyId
 
   if (!companyId) {

@@ -1,9 +1,12 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 import { ref, watch, computed } from 'vue'
-import { useFindManyCategory } from '~/lib/hooks/category';
-import { useFindManyProduct } from '~/lib/hooks/product';
-import { useFindManySubcategory } from '~/lib/hooks/subcategory';
-import { useFindManyVariant } from '~/lib/hooks/variant';
+import { useFindManyCategory } from '~/lib/company-hooks/category';
+import { useFindManyProduct } from '~/lib/company-hooks/product';
+import { useFindManySubcategory } from '~/lib/company-hooks/subcategory';
+import { useFindManyVariant } from '~/lib/company-hooks/variant';
 
 // Props
 const props = defineProps({ open: Boolean })
@@ -14,7 +17,7 @@ const isOpen = ref(props.open)
 watch(() => props.open, v => (isOpen.value = v))
 
 // Auth → companyId
-const auth = useAuth()
+const auth = companyScope.auth
 // One table can list variants with different labels, so the header uses the
 // company default rather than any single row's label.
 const { defaultSizeLabel } = useSizeLabel()
@@ -39,7 +42,7 @@ const toggleExpand = (id: string) => {
 
 // Category
 const { data: categories } = useFindManyCategory(() => ({
-  where: { companyId: companyId.value, status: true },
+  where: { companyId: { in: companyId.value ? [companyId.value] : [] }, status: true },
   orderBy: { name: 'asc' }
 }))
 
@@ -47,7 +50,7 @@ const { data: categories } = useFindManyCategory(() => ({
 const { data: subcategories, refetch: refreshSubcategories } =
   useFindManySubcategory(() => ({
     where: {
-      companyId: companyId.value,
+      companyId: { in: companyId.value ? [companyId.value] : [] },
       status: true,
       categoryId: selectedCategory.value || undefined
     },
@@ -57,7 +60,7 @@ const { data: subcategories, refetch: refreshSubcategories } =
 // Products
 const { data: products, refetch: refreshProducts } = useFindManyProduct(() => ({
   where: {
-    companyId: companyId.value,
+    companyId: { in: companyId.value ? [companyId.value] : [] },
     status: true,
     categoryId: selectedCategory.value || undefined,
     subcategoryId: selectedSubcategory.value || undefined
@@ -71,7 +74,7 @@ const { data: products, refetch: refreshProducts } = useFindManyProduct(() => ({
 // ------------------------------
 const { data: variants, refetch: refreshVariants, isPending: variantsLoading } = useFindManyVariant(() => ({
   where: {
-    companyId: companyId.value,
+    companyId: { in: companyId.value ? [companyId.value] : [] },
     status: true,
 
     // If product is chosen → filter by product

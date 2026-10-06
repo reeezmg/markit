@@ -1,14 +1,18 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import AwsService from '~/composables/aws';
 import { v4 as uuidv4 } from 'uuid';
-import { useFindUniqueCategory } from '~/lib/hooks/category';
-import { useUpdateDistributorCompany } from '~/lib/hooks/distributor-company';
-import { useCreateDistributorCredit, useUpdateManyDistributorCredit, useDeleteManyDistributorCredit } from '~/lib/hooks/distributor-credit';
-import { useCreateDistributorPayment, useUpdateManyDistributorPayment, useDeleteManyDistributorPayment } from '~/lib/hooks/distributor-payment';
-import { useDeleteManyItem } from '~/lib/hooks/item';
-import { useCreateProduct, useUpdateProduct } from '~/lib/hooks/product';
-import { useCreatePurchaseOrder, useUpdatePurchaseOrder, useFindUniquePurchaseOrder } from '~/lib/hooks/purchase-order';
-import { useUpsertVariant } from '~/lib/hooks/variant';
+import { useFindUniqueCategory } from '~/lib/company-hooks/category';
+import { useUpdateDistributorCompany } from '~/lib/company-hooks/distributor-company';
+import { useCreateDistributorCredit, useUpdateManyDistributorCredit, useDeleteManyDistributorCredit } from '~/lib/company-hooks/distributor-credit';
+import { useCreateDistributorPayment, useUpdateManyDistributorPayment, useDeleteManyDistributorPayment } from '~/lib/company-hooks/distributor-payment';
+import { useDeleteManyItem } from '~/lib/company-hooks/item';
+import { useCreateProduct, useUpdateProduct } from '~/lib/company-hooks/product';
+import { useCreatePurchaseOrder, useUpdatePurchaseOrder, useFindUniquePurchaseOrder } from '~/lib/company-hooks/purchase-order';
+import { useUpsertVariant } from '~/lib/company-hooks/variant';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
 import { useQueryClient } from '@tanstack/vue-query';
@@ -16,7 +20,7 @@ const queryClient = useQueryClient();
 const { printLabel } = usePrint();
 const router = useRouter();
 const toast = useToast();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 const isAdd = ref(false);
 const settledMap = ref(new Map());
 const variantInputs = ref(useAuth().session.value?.variantInputs)
@@ -412,6 +416,7 @@ const barcodes = ref<BarcodeItem[]>([]);
 
 const distributorId = ref('');
 const paymentType = ref('');
+const purchaseAccountingAccounts = ref<Record<string,string>>({});
 const totalAmount = ref(0);
 const subTotalAmount = ref(0);
 const discount = ref(0);
@@ -499,6 +504,7 @@ const handleProductSelected = (product:any) => {
 };
 
 const handleDistributorValue = (data:any) => {
+  purchaseAccountingAccounts.value = data.accountingAccounts || {};
   console.log('Distributor data received:', data);
   distributorId.value = data.distributorId;
   paymentType.value = data.paymentType;
@@ -980,6 +986,9 @@ const {
   refetch:itemRefetch,
 } = useFindUniquePurchaseOrder(queryParams)
 
+const { selectOwnerAndReload } = useOrganizationActions();
+watch(items, record => { if (record?.companyId) void selectOwnerAndReload(record.companyId); }, { immediate: true });
+
 
 const addProductTopBarRef = ref(null)
 
@@ -1060,183 +1069,31 @@ const handleSave = async () => {
     /* ---------------------------------
        3️⃣ PAYMENT / CREDIT LOGIC
     ---------------------------------- */
-    const companyId = useAuth().session.value?.companyId!
-    const distributorCompanyKey = {
-      distributorId: distributorId.value,
-      companyId
-    }
-
-    const newType = paymentType.value || null
-    const oldType = oldPaymentType.value || null
-
-    const isNewCredit = newType === 'CREDIT'
-    const wasOldCredit = oldType === 'CREDIT'
-    const hasNew = newType !== null
-    const hasOld = oldType !== null
-
-    console.table({ newType, oldType })
-
-    /* ---------------------------------
-       PAYMENT STATE MACHINE (NO RETURNS)
-    ---------------------------------- */
-
-    if (!hasNew && !hasOld) {
-      console.log('🚫 CASE 0: no old, no new')
-    }
-
-    else if (hasNew && !hasOld) {
-      console.log('🆕 CASE 1: old empty → new exists')
-
-      if (isNewCredit) {
-        console.log('➕ Create CREDIT')
-        await CreateDistributorCredit.mutateAsync({
-          data: {
-            billNo: billNo.value,
-            amount: totalAmount.value,
-            createdAt: createdAtDate,
-            purchaseOrder: { connect: { id: poId.value } },
-            distributorCompany: {
-              connect: { distributorId_companyId: distributorCompanyKey }
-            }
-          }
-        })
-      } else {
-        console.log('➕ Create PAYMENT')
-        await CreateDistributorPayment.mutateAsync({
-          data: {
-            amount: totalAmount.value,
-            paymentType: newType as PType,
-            createdAt: createdAtDate,
-            purchaseOrder: { connect: { id: poId.value } },
-            distributorCompany: {
-              connect: { distributorId_companyId: distributorCompanyKey }
-            }
-          }
-        })
-      }
-    }
-
-    else if (!hasNew && hasOld) {
-      console.log('🧹 CASE 2: old exists → new empty')
-
-      if (wasOldCredit) {
-        await DeleteManyDistributorCredit.mutateAsync({
-          where: { purchaseOrderId: poId.value }
-        })
-      } else {
-        await DeleteManyDistributorPayment.mutateAsync({
-          where: { purchaseOrderId: poId.value }
-        })
-      }
-    }
-
-    else if (isNewCredit && wasOldCredit) {
-      console.log('🔁 CASE 3: credit → credit')
-      await UpdateManyDistributorCredit.mutateAsync({
-        where: { purchaseOrderId: poId.value },
-        data: {
-          amount: totalAmount.value,
-          billNo: billNo.value,
-          createdAt: createdAtDate
-        }
-      })
-    }
-
-    else if (!isNewCredit && wasOldCredit) {
-      console.log('🔄 CASE 4: credit → non-credit')
-      await DeleteManyDistributorCredit.mutateAsync({
-        where: { purchaseOrderId: poId.value }
-      })
-
-      await CreateDistributorPayment.mutateAsync({
-        data: {
-          amount: totalAmount.value,
-          paymentType: newType as PType,
+    await $fetch('/api/purchaseorder/update', {
+      method: 'POST',
+      body: {
+        poId: poId.value,
+        payment: {
+          paymentType: paymentType.value || null,
+          distributorId: distributorId.value || null,
+          billNo: billNo.value || null,
+          totalAmount: totalAmount.value || subTotalAmount.value,
+          subTotalAmount: subTotalAmount.value,
+          discount: discount.value || 0,
+          tax: tax.value || 0,
+          adjustment: adjustment.value || 0,
           createdAt: createdAtDate,
-          purchaseOrder: { connect: { id: poId.value } },
-          distributorCompany: {
-            connect: { distributorId_companyId: distributorCompanyKey }
-          }
-        }
-      })
-    }
-
-    else if (!isNewCredit && !wasOldCredit) {
-      console.log('🔁 CASE 5: non-credit → non-credit')
-      await UpdateManyDistributorPayment.mutateAsync({
-        where: { purchaseOrderId: poId.value },
-        data: {
-          amount: totalAmount.value,
-          paymentType: newType as PType,
-          createdAt: createdAtDate
-        }
-      })
-    }
-
-    else if (isNewCredit && !wasOldCredit) {
-      console.log('🔄 CASE 6: non-credit → credit')
-      await DeleteManyDistributorPayment.mutateAsync({
-        where: { purchaseOrderId: poId.value }
-      })
-
-      await CreateDistributorCredit.mutateAsync({
-        data: {
-          amount: totalAmount.value,
-          billNo: billNo.value,
-          createdAt: createdAtDate,
-          purchaseOrder: { connect: { id: poId.value } },
-          distributorCompany: {
-            connect: { distributorId_companyId: distributorCompanyKey }
-          }
-        }
-      })
-    }
-
-    /* ---------------------------------
-       4️⃣ UPDATE PURCHASE ORDER (ALWAYS)
-    ---------------------------------- */
-    console.log('🧾 Updating purchase order')
-    await UpdatePurchaseOrder.mutateAsync({
-      where: { id: poId.value },
-      data: {
-        ...paymentType.value && { paymentType: paymentType.value as PType },
-         ...(billNo.value && { billNo: billNo.value }),
-        createdAt: createdAtDate,
-        totalAmount: totalAmount.value || subTotalAmount.value,
-        subTotalAmount: subTotalAmount.value,
-        ...discount.value && { discount: discount.value },
-        ...tax.value && { tax: tax.value },
-        ...adjustment.value && { adjustment: adjustment.value },
-        
-      }
-    })
-
-    /* ---------------------------------
-       5️⃣ LINK DISTRIBUTOR COMPANY (ALWAYS)
-    ---------------------------------- */
-    if (distributorId.value) {
-      console.log('🔗 Linking distributor company')
-      await UpdateDistributorCompany.mutateAsync({
-        where: {
-          distributorId_companyId: {
-            distributorId: distributorId.value,
-            companyId
-          }
+          accountingAccounts: purchaseAccountingAccounts.value,
         },
-        data: {
-          purchaseOrders: {
-            connect: { id: poId.value }
-          }
-        }
-      })
-    }
+      },
+    })
+    oldPaymentType.value = paymentType.value
+    toast.add({ title: 'Purchase and accounting saved', color: 'green' })
 
   } catch (error) {
     console.error('❌ Failed to save purchase order', error)
   } finally {
     isSave.value = false
-    paymentType.value = ''
-    oldPaymentType.value = ''
     console.log('✅ handleSave finished')
   }
 }
@@ -1324,10 +1181,13 @@ const handleNewProduct = () => {
 
 
 
+watch(() => companyScope.auth.session.value?.variantInputs, value => { variantInputs.value = value; });
 </script>
 
 <template>
     <UDashboardPanelContent>
+      <CompanyFormField />
+      <CompanyFormField />
        
           <AddProductTopBar  ref="addProductTopBarRef" @update="handleDistributorValue" :totalAmount="subTotalAmount" :distributorId="items?.distributorId" :paymentType="items?.paymentType" :billNo="items?.billNo" :discount="items?.discount" :tax="items?.tax" :adjustment="items?.adjustment" :billDate="items?.createdAt" />   
 

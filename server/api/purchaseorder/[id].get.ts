@@ -1,12 +1,11 @@
 import { defineEventHandler, getRouterParam, createError } from 'h3'
 import { pool } from '~/server/db'
+import { getAuthorizedCompanyIds } from '~/server/utils/organizationReadScope'
 
 // Raw-SQL replacement for useFindUniquePurchaseOrder (with products > category/brand/
 // subcategory + variants > items) used by add.vue's PO edit flow / barcode generation.
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
-  const companyId = session.data?.companyId
-  if (!companyId) throw createError({ statusCode: 401, statusMessage: 'No company in session' })
+  const companyIds = await getAuthorizedCompanyIds(event)
 
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400, statusMessage: 'Missing PO id' })
@@ -14,10 +13,10 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     const poRes = await client.query(
-      `SELECT id, purchase_order_no, payment_type, bill_no, total_amount, subtotal_amount,
+      `SELECT id, company_id, purchase_order_no, payment_type, bill_no, total_amount, subtotal_amount,
               discount, tax, adjustment, distributor_id, created_at
-       FROM purchase_orders WHERE id = $1 AND company_id = $2`,
-      [id, companyId],
+       FROM purchase_orders WHERE id = $1 AND company_id = ANY($2::text[])`,
+      [id, companyIds],
     )
     if (!poRes.rowCount) throw createError({ statusCode: 404, statusMessage: 'Purchase order not found' })
     const po = poRes.rows[0]
@@ -30,9 +29,9 @@ export default defineEventHandler(async (event) => {
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN brands b ON b.id = p.brand_id
        LEFT JOIN subcategories s ON s.id = p.subcategory_id
-       WHERE p.purchaseorder_id = $1 AND p.company_id = $2
+       WHERE p.purchaseorder_id = $1 AND p.company_id = ANY($2::text[])
        ORDER BY p.created_at ASC`,
-      [id, companyId],
+      [id, companyIds],
     )
     const productIds = prodRes.rows.map((p) => p.id)
 
@@ -65,6 +64,7 @@ export default defineEventHandler(async (event) => {
 
     return {
       id: po.id,
+      companyId: po.company_id,
       purchaseOrderNo: po.purchase_order_no,
       paymentType: po.payment_type,
       billNo: po.bill_no,

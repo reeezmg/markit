@@ -19,6 +19,7 @@
 
         <!-- LEFT -->
         <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <CompanyTableFilter />
 
           <UInput
             v-model="search"
@@ -224,7 +225,7 @@
         <!-- ⚙️ ACTIONS -->
         <template #actions-data="{ row }">
 
-          <UDropdown :items="action(row)">
+          <UDropdown :items="forOwner(action(row), row.companyId)">
             <UButton
               color="gray"
               variant="ghost"
@@ -355,12 +356,15 @@
   </UDashboardPanelContent>
 </template>
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 import { ref, computed, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Switch } from '@headlessui/vue'
 
 import AwsService from '~/composables/aws'
-import { useFindManyBrand, useUpdateBrand, useUpdateManyBrand, useDeleteBrand, useCountBrand } from '~/lib/hooks/brand';
+import { useFindManyBrand, useUpdateBrand, useUpdateManyBrand, useDeleteBrand, useCountBrand } from '~/lib/company-hooks/brand';
 
 const awsService = new AwsService()
 
@@ -370,7 +374,8 @@ import type { Prisma } from '@prisma/client'
    AUTH
 ------------------------------------------------- */
 
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
+const { forOwner } = useOrganizationActions()
 const companyId = useAuth().session.value?.companyId
 
 const router = useRouter()
@@ -395,8 +400,9 @@ const brandCategoryColumns = [
 
 const selectedColumns = ref(columns)
 
-const columnsTable = computed(() =>
-  columns.filter(c => selectedColumns.value.includes(c))
+const columnsTable = computed(() => useAuth().session.value?.allStores
+  ? [{ key: 'company.name', label: 'Store' }, ...columns.filter(c => selectedColumns.value.includes(c))]
+  : columns.filter(c => selectedColumns.value.includes(c))
 )
 
 /* -------------------------------------------------
@@ -494,6 +500,7 @@ const queryArgs = computed<Prisma.BrandFindManyArgs>(() => {
       /* COMPANY → ALL CATEGORIES */
       company: {
         select: {
+          name: true,
           categories: {
             select: {
               id: true,
@@ -677,4 +684,6 @@ const action = (row: any) => [
 const selectedRows = ref([])
 
 
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>

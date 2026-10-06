@@ -1,3 +1,6 @@
+import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
@@ -20,7 +23,7 @@ import { recalculatePurchaseOrderTotals } from '~/server/utils/purchase-order-to
 // }
 // Returns { success, productIds, poId, purchaseOrderNo, products:[…with barcodes] }
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'No company in session' })
 
@@ -83,6 +86,7 @@ export default defineEventHandler(async (event) => {
     const createdAtDate = po?.createdAt ? new Date(po.createdAt) : new Date()
     try {
       await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
 
       // 1) optional purchase order (app-owned number = counter-1, matching add flow)
       let poId: string | null = existingPoId || null
@@ -211,6 +215,11 @@ export default defineEventHandler(async (event) => {
         [productIds],
       )
 
+      if (po?.distributorId) {
+        await selectDistributorAccounts(client,companyId,po.distributorId,`purchase:${poId}`,po.accountingAccounts);
+        const linked = await client.query('SELECT id FROM distributor_payments WHERE company_id=$1 AND purchase_order_id=$2',[companyId,poId]);
+        for(const row of linked.rows) await selectDistributorAccounts(client,companyId,po.distributorId,`payment:${row.id}`,po.accountingAccounts);
+      }
       await client.query('COMMIT')
       client.release()
 

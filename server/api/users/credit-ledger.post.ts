@@ -1,46 +1,26 @@
+import { assertCreditManager, validateUserCredit } from '~/server/utils/user-credit-input'
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import { ensureAccountLedgerSchema, moneyTransactionLedgerRows, rebuildAccountLedgerForSource, userCreditAccountLedgerRows } from '~/server/utils/account-ledger'
-import { upsertUserLedgerEntry, type UserLedgerDirection, type UserLedgerEntryType, type UserLedgerSourceType } from '~/server/utils/user-ledger'
+
+import { upsertUserLedgerEntry } from '~/server/utils/user-ledger'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
+  assertCreditManager(session.data.role)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
-  const body = await readBody<{
-    userId?: string
-    type?: 'CREDIT' | 'PAYMENT' | UserLedgerEntryType
-    direction?: UserLedgerDirection
-    sourceType?: UserLedgerSourceType
-    sourceId?: string | null
-    amount?: number
-    note?: string | null
-    paymentMode?: 'CASH' | 'BANK' | 'UPI'
-    transactionDate?: string | null
-    createdAt?: string | null
-  }>(event)
-
-  const amount = Number(body.amount || 0)
-  if (!body.userId) throw createError({ statusCode: 400, statusMessage: 'User is required' })
-  if (!amount || amount <= 0) throw createError({ statusCode: 400, statusMessage: 'Amount must be positive' })
-
-  const type: UserLedgerEntryType =
-    body.type === 'PAYMENT'
-      ? 'CREDIT_BILL_PAYMENT'
-      : body.type === 'CREDIT'
-        ? 'USER_CREDIT_BILL'
-        : (body.type as UserLedgerEntryType) || 'USER_CREDIT_BILL'
-  const direction: UserLedgerDirection =
-    body.direction || (type === 'CREDIT_BILL_PAYMENT' ? 'CREDIT' : 'DEBIT')
-  const when = body.createdAt || body.transactionDate ? new Date((body.createdAt || body.transactionDate) as string) : new Date()
-  const paymentMode = body.paymentMode === 'BANK' || body.paymentMode === 'UPI' ? 'BANK' : 'CASH'
-  const moneyDirection = type === 'CREDIT_BILL_PAYMENT' ? 'RECEIVED' : 'GIVEN'
+  const body = validateUserCredit(await readBody(event))
+  const { amount, type, direction, paymentMode, moneyDirection } = body
+  const when = body.when
 
   const client = await pool.connect()
   try {
-    await ensureAccountLedgerSchema(client)
+
     await client.query('BEGIN')
+    await lockCompanyRequest(event, client)
 
     const userRes = await client.query(
       `
@@ -60,14 +40,14 @@ export default defineEventHandler(async (event) => {
       userId: body.userId,
       type,
       direction,
-      sourceType: body.sourceType || 'MANUAL',
-      sourceId: body.sourceId || null,
+      sourceType: 'MANUAL',
+      sourceId: null,
       amount,
       note: body.note || null,
       createdAt: when,
     })
 
-    if (row?.id && (body.sourceType || 'MANUAL') === 'MANUAL') {
+    if (row?.id) {
       await client.query(
         `
         INSERT INTO money_transactions
@@ -93,41 +73,10 @@ export default defineEventHandler(async (event) => {
           when,
         ],
       )
-      await rebuildAccountLedgerForSource(client, {
-        companyId,
-        sourceType: 'MONEY_TRANSACTION',
-        sourceId: row.id,
-        rows: moneyTransactionLedgerRows({
-          id: row.id,
-          companyId,
-          amount,
-          paymentMode,
-          accountId: null,
-          direction: moneyDirection,
-          status: 'PAID',
-          createdAt: when,
-          note: body.note || (type === 'CREDIT_BILL_PAYMENT' ? 'User credit received' : 'User credit given'),
-        }),
-      })
+
     }
 
-    if (row?.id) {
-      await rebuildAccountLedgerForSource(client, {
-        companyId,
-        sourceType: 'USER_CREDIT',
-        sourceId: row.id,
-        rows: userCreditAccountLedgerRows({
-          id: row.id,
-          companyId,
-          type,
-          sourceType: body.sourceType || 'MANUAL',
-          sourceId: body.sourceId || null,
-          amount,
-          createdAt: when,
-          note: body.note || (type === 'CREDIT_BILL_PAYMENT' ? 'User credit received' : 'User credit given'),
-        }),
-      })
-    }
+
 
     await client.query('COMMIT')
     return { success: true, id: row?.id }

@@ -1,14 +1,17 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 import * as z from 'zod'
 import { useForm } from 'vee-validate'
 import { toTypedSchema } from '@vee-validate/zod'
 
-import { useFindManyBrand } from '~/lib/hooks/brand';
-import { useFindManyCategory } from '~/lib/hooks/category';
-import { useFindManyCollection } from '~/lib/hooks/collection';
-import { useFindManySubcategory } from '~/lib/hooks/subcategory';
+import { useFindManyBrand } from '~/lib/company-hooks/brand';
+import { useFindManyCategory } from '~/lib/company-hooks/category';
+import { useFindManyCollection } from '~/lib/company-hooks/collection';
+import { useFindManySubcategory } from '~/lib/company-hooks/subcategory';
 
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 
 /* -----------------------------
 PROPS
@@ -117,16 +120,16 @@ watch(
 /* -----------------------------
 FETCH CATEGORIES
 ------------------------------ */
-const { data: categories } = useFindManyCategory({
-  where: { companyId: useAuth().session.value?.companyId },
-})
+const { data: categories } = useFindManyCategory(computed(() => ({
+  where: { companyId: companyScope.companyId.value },
+})), { companyScope: 'form' } as any)
 
 /* -----------------------------
 FETCH SUBCATEGORIES
 ------------------------------ */
 const subArgs = computed(() => ({
   where: {
-    companyId: useAuth().session.value?.companyId,
+    companyId: { in: useAuth().session.value?.companyId ? [useAuth().session.value!.companyId] : [] },
     ...(selectedRow.value?.id && {
       categoryId: selectedRow.value.id,
     }),
@@ -134,7 +137,7 @@ const subArgs = computed(() => ({
 }))
 
 const { data: subcategories } =
-  useFindManySubcategory(subArgs)
+  useFindManySubcategory(subArgs, { companyScope: 'form' } as any)
 
 /* -----------------------------
 FETCH BRANDS
@@ -142,19 +145,19 @@ FETCH BRANDS
 ------------------------------ */
 const brandArgs = computed(() => ({
   where: {
-    companyId: useAuth().session.value?.companyId
+    companyId: { in: useAuth().session.value?.companyId ? [useAuth().session.value!.companyId] : [] }
   },
 }))
 
 const { data: brands } =
-  useFindManyBrand(brandArgs)
+  useFindManyBrand(brandArgs, { companyScope: 'form' } as any)
 
 /* -----------------------------
 FETCH COLLECTIONS
 ------------------------------ */
-const { data: collections } = useFindManyCollection({
-  where: { companyId: useAuth().session.value?.companyId },
-})
+const { data: collections } = useFindManyCollection(computed(() => ({
+  where: { companyId: companyScope.companyId.value },
+})), { companyScope: 'form' } as any)
 
 /* -----------------------------
 RESET FORM

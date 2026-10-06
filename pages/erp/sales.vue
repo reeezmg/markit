@@ -1,4 +1,7 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
@@ -14,7 +17,8 @@ const timeZone = 'Asia/Kolkata'
 const salesTableStore = useSalesTableStore()
 const toast = useToast();
 const router = useRouter();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { forOwner } = useOrganizationActions();
 const canUseCleanupToggle = computed(() => useAuth().session.value?.cleanup === true)
 const showCleanedValues = ref(false)
 const canSeeCleanupRealValues = computed(() => canUseCleanupToggle.value && !showCleanedValues.value)
@@ -54,6 +58,7 @@ const getColumns = (isMobile) => {
   if (!isMobile) {
     const desktopColumns = [
       { key: 'invoiceNumber', label: 'Inv#', sortable: true },
+      ...(useAuth().session.value?.allStores ? [{ key: 'companyName', label: 'Store', sortable: false }] : []),
       { key: 'createdAt', label: 'Date', sortable: true },
       { key: 'customer', label: 'Customer', sortable: true },
       { key: 'grandTotal', label: 'Grand Total', sortable: true },
@@ -70,6 +75,7 @@ const getColumns = (isMobile) => {
 
   const mobileColumns = [
     { key: 'invoiceNumber', label: 'Inv#', sortable: true },
+    ...(useAuth().session.value?.allStores ? [{ key: 'companyName', label: 'Store', sortable: false }] : []),
     { key: 'grandTotal', label: 'Grand Total', sortable: true },
     { key: 'paymentMethod', label: 'Method', sortable: true },
     { key: 'createdAt', label: 'Date', sortable: true },
@@ -318,8 +324,7 @@ const paymentMethodFilterOptions = [
   { label: 'Split', value: 'Split' },
 ]
 
-const formatInvoiceForExport = (invoiceNumber: string | number) => {
-  const prefix = useAuth().session.value?.billPrefix
+const formatInvoiceForExport = (invoiceNumber: string | number, prefix?: string | null) => {
   return prefix ? `${prefix}-${invoiceNumber}` : String(invoiceNumber ?? '')
 }
 
@@ -578,7 +583,8 @@ const buildSalesExportData = (rows: any[]) => {
   ]
 
   const billRows = rows.map((row: any) => ({
-    invoiceNumber: formatInvoiceForExport(row.invoiceNumber),
+    invoiceNumber: formatInvoiceForExport(row.invoiceNumber, row.billPrefix),
+    companyName: row.companyName || '',
     date: row.createdAt ? formatDateTimeForExport(row.createdAt) : '',
     subtotal: Number(row.subtotal || 0),
     discount: getBillDiscountAmount(row),
@@ -619,6 +625,7 @@ const handleDownloadExcel = async () => {
       { header: 'E', key: 'col5', width: 18 },
       { header: 'F', key: 'col6', width: 18 },
       { header: 'G', key: 'col7', width: 18 },
+      { header: 'H', key: 'col8', width: 22 },
     ]
 
     worksheet.mergeCells('A1:B1')
@@ -642,7 +649,7 @@ const handleDownloadExcel = async () => {
 
     worksheet.addRow([])
     const billsTitleRowIndex = worksheet.lastRow!.number + 1
-    worksheet.mergeCells(`A${billsTitleRowIndex}:G${billsTitleRowIndex}`)
+    worksheet.mergeCells(`A${billsTitleRowIndex}:H${billsTitleRowIndex}`)
     worksheet.getCell(`A${billsTitleRowIndex}`).value = 'Bills'
     worksheet.getCell(`A${billsTitleRowIndex}`).font = { bold: true, size: 14 }
 
@@ -654,6 +661,7 @@ const handleDownloadExcel = async () => {
       'Grand Total',
       'Total Tax Collected',
       'Payment',
+      'Store',
     ])
     billsHeaderRow.font = { bold: true }
     billsHeaderRow.eachCell((cell) => {
@@ -673,6 +681,7 @@ const handleDownloadExcel = async () => {
         row.grandTotal,
         row.taxCollected,
         row.payment,
+        row.companyName,
       ])
     })
 
@@ -737,16 +746,16 @@ const handleDownloadPdf = async () => {
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(18)
-    doc.text(session?.companyName || 'Sales Report', margin, 16)
+    doc.text(session?.allStores ? 'All Stores' : session?.companyName || 'Sales Report', margin, 16)
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(10)
     let headerY = 23
-    addressLines.forEach((line) => {
+    if (!session?.allStores) addressLines.forEach((line) => {
       doc.text(line, margin, headerY)
       headerY += 5
     })
-    if (session?.companyPhone) {
+    if (!session?.allStores && session?.companyPhone) {
       doc.text(`Phone: ${session.companyPhone}`, margin, headerY)
       headerY += 5
     }
@@ -786,6 +795,7 @@ const handleDownloadPdf = async () => {
         'Grand Total',
         'Total Tax Collected',
         'Payment',
+        'Store',
       ]],
       body: billRows.map((row) => [
         row.invoiceNumber,
@@ -795,19 +805,21 @@ const handleDownloadPdf = async () => {
         formatPdfCurrency(row.grandTotal),
         formatPdfCurrency(row.taxCollected),
         row.payment,
+        row.companyName,
       ]),
       tableWidth: pageWidth - margin * 2,
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 3 },
       headStyles: { fillColor: [100, 116, 139], textColor: 255, fontStyle: 'bold' },
       columnStyles: {
-        0: { cellWidth: 34 },
-        1: { cellWidth: 44 },
-        2: { halign: 'right', cellWidth: 34 },
-        3: { halign: 'right', cellWidth: 34 },
-        4: { halign: 'right', cellWidth: 34 },
-        5: { halign: 'right', cellWidth: 42 },
-        6: { cellWidth: 42 },
+        0: { cellWidth: 32 },
+        1: { cellWidth: 36 },
+        2: { halign: 'right', cellWidth: 28 },
+        3: { halign: 'right', cellWidth: 28 },
+        4: { halign: 'right', cellWidth: 28 },
+        5: { halign: 'right', cellWidth: 34 },
+        6: { cellWidth: 32 },
+        7: { cellWidth: 32 },
       },
     })
 
@@ -1097,14 +1109,16 @@ const onSplitConfirmed = async (confirmedPayments: Array<{ method: string; amoun
 const onPaymentStatusChange = async (
   id,
   status,
-  billNo
+  billNo,
+  companyId = useAuth().session.value?.companyId
 ) => {
   try {
     await $fetch('/api/billSale/updatePaymentStatus', {
       method: 'POST',
+      headers: { 'x-company-id': companyId },
       body: {
         billId: id,
-        companyId: useAuth().session.value?.companyId,
+        companyId,
         status,
         paymentMethod: paymentMethod.value,
       },
@@ -1128,16 +1142,16 @@ const onPaymentStatusChange = async (
 
 
 
-const handleEnterPayment = (id:string, status:string, billNo:string) => {
+const handleEnterPayment = (id:string, status:string, billNo:string, companyId:string) => {
     if(status === 'PENDING'){
-        onPaymentStatusChange(id, status, billNo)
+        onPaymentStatusChange(id, status, billNo, companyId)
     }else{
         isOpen.value = true
-        activeBillInfo.value = {id,billNo}
+        activeBillInfo.value = {id,billNo,companyId}
     }
 };
 const handlePaid = () => {
-    onPaymentStatusChange(activeBillInfo.value.id, 'PAID', activeBillInfo.value.billNo)
+    onPaymentStatusChange(activeBillInfo.value.id, 'PAID', activeBillInfo.value.billNo, activeBillInfo.value.companyId)
      isOpen.value = false
 };
 
@@ -1151,7 +1165,9 @@ const print = async (id) => {
 
   const session = useAuth().session.value
 
-  printData.value = buildPrintDataFromSale(sale, session)
+  printData.value = session?.allStores
+    ? await $fetch('/api/billSale/receipt', { query: { id: sale.id } })
+    : buildPrintDataFromSale(sale, session)
 
   await printBill(printData.value)
 }
@@ -1168,7 +1184,9 @@ const openBill = async (id) => {
 
   const session = useAuth().session.value
   
-  printData.value = buildPrintDataFromSale(sale, session)
+  printData.value = session?.allStores
+    ? await $fetch('/api/billSale/receipt', { query: { id: sale.id } })
+    : buildPrintDataFromSale(sale, session)
   isPrintOpen.value = true
 
 }
@@ -1247,6 +1265,8 @@ const download = async () => {
 }
 
 
+
+watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
 </script>
 
 <template>
@@ -1293,6 +1313,8 @@ const download = async () => {
             <template #header>
             <div class="flex justify-between items-center gap-3 w-full">
                     <div class="flex items-center gap-3">
+                  <CompanyTableFilter />
+                  
                       <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
                           <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
                           {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
@@ -1427,11 +1449,11 @@ const download = async () => {
             >
 
                 <template #invoiceNumber-data="{ row }">
-                    {{ useAuth().session.value?.billPrefix ? `${useAuth().session.value.billPrefix}-${row.invoiceNumber}` : row.invoiceNumber }}
+                    {{ row.billPrefix ? `${row.billPrefix}-${row.invoiceNumber}` : row.invoiceNumber }}
                 </template>
 
                 <template #actions-data="{ row }">
-                    <UDropdown  :items="action(row)">
+                    <UDropdown  :items="forOwner(action(row), row.companyId)">
                         <UButton
                             color="gray"
                             variant="ghost"
@@ -1481,7 +1503,7 @@ const download = async () => {
                     <USelect
                         v-model="row.paymentStatus"
                         :options="['PAID', 'PENDING']"
-                        @update:model-value="status => handleEnterPayment(row.id, status,row.invoiceNumber)"
+                        @update:model-value="status => handleEnterPayment(row.id, status,row.invoiceNumber,row.companyId)"
                         size="xs"
                         class="w-28"
                     />
@@ -1527,7 +1549,7 @@ const download = async () => {
                         :columns="entrycolumns"
                     >
                     <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
+                <UDropdown :items="forOwner(action(row), row.companyId)">
                         <UButton
                             color="gray"
                             variant="ghost"

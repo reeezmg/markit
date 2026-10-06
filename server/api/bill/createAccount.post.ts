@@ -1,3 +1,4 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { v4 as uuidv4 } from 'uuid'
@@ -23,6 +24,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
 
     const accountId = uuidv4()
     const addressId = address ? uuidv4() : null

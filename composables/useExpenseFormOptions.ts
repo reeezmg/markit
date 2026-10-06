@@ -5,7 +5,10 @@
  * behaviour stays identical in both places.
  */
 export function useExpenseFormOptions() {
-  const useAuth = () => useNuxtApp().$auth
+  const companyScope = useCompanyScope();
+  const $fetch = companyScope.fetch;
+
+  const useAuth = () => companyScope.auth
   const toast = useToast()
 
   const categories = ref<any[]>([])
@@ -16,7 +19,7 @@ export function useExpenseFormOptions() {
     if (!useAuth().session.value?.companyId) return
     categoriesLoading.value = true
     try {
-      categories.value = await $fetch<any[]>('/api/accounts/expense-categories')
+      categories.value = await $fetch<any[]>('/api/accounts/expense-categories', { query: { forWrite: 1 } })
     } finally {
       categoriesLoading.value = false
     }
@@ -25,7 +28,7 @@ export function useExpenseFormOptions() {
   const loadCompanyUsers = async (activeOnly = false) => {
     if (!useAuth().session.value?.companyId) return
     companyUsers.value = await $fetch<any[]>('/api/accounts/company-users', {
-      query: activeOnly ? { activeOnly: 1 } : {},
+      query: { forWrite: 1, ...(activeOnly ? { activeOnly: 1 } : {}) },
     })
   }
 
@@ -60,6 +63,8 @@ export function useExpenseFormOptions() {
       return false
     }
   }
+
+  watch(companyScope.companyId, () => { void loadCategories(); void loadCompanyUsers(); });
 
   return {
     categories,

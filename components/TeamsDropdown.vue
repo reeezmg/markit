@@ -1,155 +1,52 @@
 <script setup lang="ts">
-import { useFindUniqueUser } from '~/lib/hooks/user';
 import { SplashScreen } from '@capacitor/splash-screen';
-import { Capacitor } from '@capacitor/core'
-const useAuth = () => useNuxtApp().$auth;
-const router = useRouter();
+import { Capacitor } from '@capacitor/core';
 
-const { data: user }: any = useFindUniqueUser({
-    where: { id: useAuth().session.value?.id },
-    include: {
-        companies: {
-            include: {
-                company: {
-                    include:{
-                        productinput:true,
-                        variantinput:true
-                    }
-                },
-            },
-        },
-    },
-});
+type CompanyOption = { id: string; name: string; logo: string | null; parentCompanyId: string | null; isHeadOffice: boolean };
+const auth = useNuxtApp().$auth;
+const toast = useToast();
+const switching = ref(false);
+const { data: companies } = await useFetch<CompanyOption[]>('/api/auth/accessible-companies');
+const activeCompany = computed(() => companies.value?.find((company) => company.id === auth.session.value?.companyId));
 
-
-
-const isOpen = ref(false);
-const companies = ref([]);
-const activeCompany = ref({});
-
-watch(user, (newUser) => {
-  if (newUser) {
-    companies.value = newUser.companies.map((item) => item);
-    activeCompany.value = newUser.companies.find(
-      (item) => item.company.id === useAuth().session.value?.companyId
-    )?.company;
+async function changeView(companyId?: string) {
+  if (switching.value || !companyId || companyId === auth.session.value?.companyId) return;
+  switching.value = true;
+  try {
+    await $fetch('/api/auth/switch-company', { method: 'POST', body: { companyId }, credentials: 'include' });
+    await auth.updateSession();
+    if (auth.session.value?.companyId !== companyId) {
+      throw new Error('The selected store was not saved in your session');
+    }
+    if (Capacitor.isNativePlatform()) await SplashScreen.show({ autoHide: false });
+    window.location.reload();
+  } catch (error: any) {
+    toast.add({ title: 'Could not change store view', description: error?.data?.statusMessage ?? error?.message ?? 'Please try again', color: 'red' });
+    switching.value = false;
   }
-}, { immediate: true });
+}
 
-const teams = (items) =>
-    items.map((item) => ({
-        label: item.company.name,
-        avatar: {
-            src:`https://images.markit.co.in/${item.company.logo}` ,
-            alt: item.company.name
-        },
-       click: async () => {
-        activeCompany.value =  item.company
-       await updateCompanySession({
-          logo: item.company.logo ?? undefined,
-          description: item.company.description ?? undefined,
-          thankYouNote: item.company.thankYouNote ?? undefined,
-          refundPolicy: item.company.refundPolicy ?? undefined,
-          returnPolicy: item.company.returnPolicy ?? undefined,
-          companyPhone: item.company.phone ?? undefined,
-          commissionRate: item.company.commissionRate ?? undefined,
-          printerLabelSize: item.company.printerLabelSize ?? undefined,
-          code: item.code ?? undefined,
-          storeUniqueName: item.company.storeUniqueName ?? undefined,
-          isTaxIncluded: item.company.isTaxIncluded,
-          isAiImage: item.company.isAiImage ?? true,
-          deliveryType: item.company.deliveryType || [],
-          deliveryMode: item.company.deliveryMode || [],
-          fundDeliveryFees: item.company.fundDeliveryFees || false,
-          deliveryRadius: item.company.deliveryRadius || 0,
-          deliveryDiscount: item.company.deliveryDiscount ?? 0,
-          codCharge: item.company.codCharge ?? 0,
-          deliveryFeesPerKm: item.company.deliveryFeesPerKm || 0,
-          waitingTime: item.company.waitingTime || 0,
-          waitingChargesPerMin: item.company.waitingChargesPerMin || 0,
-          minDeliveryCharges: item.company.minDeliveryCharges || 0,
-          deliveryDiscountThreshold: item.company.deliveryDiscountThreshold || 0,
-          deliveryDiscountAmount: item.company.deliveryDiscountAmount || 0,
-          isCostIncluded: item.company.isCostIncluded,
-          isUserTrackIncluded: item.company.isUserTrackIncluded,
-          companyId: item.companyId,
-          companyType: item.company.type,
-          companyName: item.company.name,
-          pipelineId: item.company.pipeline?.id,
-          role: item.role,
-          pointsValue: item.company.pointsValue || 0,
-          currency: item.company.currency || 'INR',
-          type: item.role,
-          address: item.company.address || {},
-          openTime: item.company.openTime || '',
-          closeTime: item.company.closeTime || '',
-          gstin: item.company.gstin || '',
-          accHolderName: item.company.accHolderName || '',
-          ifsc: item.company.ifsc || '',
-          accountNo: item.company.accountNo || '',
-          bankName: item.company.bankName || '',
-          upiId: item.company.upiId || '',
-          plan: item.company.plan,
-          productInputs: (({ name, brand, category, subcategory, description }) =>
-            ({ name, brand, category, subcategory, description })
-          )(item.company.productinput || {}),
-          variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, sizes, images, button }) =>
-            ({ name, code, sprice, pprice, dprice, discount, qty, sizes, images, button })
-          )(item.company.variantinput || {}),
-        });
-
-        if (Capacitor.isNativePlatform()) {
-            SplashScreen.show({ autoHide: false });
-        }
-
-        setTimeout(() => window.location.reload(), 50);
-        }
-    }));
-
-const actions = computed(() => {
-    const baseActions = [
-        ...(useAuth().session.value?.role === 'admin'
-            ? [
-                  {
-                      label: 'Create company',
-                      icon: 'i-heroicons-plus-circle',
-                      click: () => {
-                          isOpen.value = true;
-                      },
-                  },
-              ]
-            : []),
-    ];
-    return baseActions;
-});
+const options = computed(() => [
+  (companies.value ?? []).map((company) => ({
+    label: company.name,
+    icon: company.id === auth.session.value?.companyId
+      ? 'i-heroicons-check'
+      : company.isHeadOffice ? 'i-heroicons-building-office-2' : 'i-heroicons-building-storefront',
+    click: () => changeView(company.id),
+  })),
+]);
 </script>
 
 <template>
-    <UDropdown
-        v-slot="{ open }"
-        mode="click"
-        :items="[teams(companies)]"
-        class="w-full"
-        :ui="{ width: 'w-full' }"
-        :popper="{ strategy: 'absolute' }"
-    >
-        <UButton
-            color="gray"
-            variant="ghost"
-            :class="[open && 'bg-gray-50 dark:bg-gray-800']"
-            class="w-full"
-        >
-            <UAvatar 
-                :src="activeCompany?.logo ? `https://images.markit.co.in/${activeCompany.logo}` : undefined"
-                :alt="activeCompany?.name"
-                size="sm" 
-            />
-
-            <span
-                class="truncate text-gray-900 dark:text-white font-semibold"
-                >{{ activeCompany?.name }}</span
-            >
-        </UButton>
-    </UDropdown>
-
+  <UDropdown v-slot="{ open }" mode="click" :items="options" class="w-full" :ui="{ width: 'w-full' }">
+    <UButton color="gray" variant="ghost" class="w-full min-w-0" :loading="switching" :class="[open && 'bg-gray-50 dark:bg-gray-800']" :title="activeCompany?.name">
+      <UAvatar
+        :src="activeCompany?.logo ? `https://images.markit.co.in/${activeCompany.logo}` : undefined"
+        :alt="activeCompany?.name" size="sm"
+      />
+      <span class="truncate text-gray-900 dark:text-white font-semibold">
+        {{ activeCompany?.name ?? auth.session.value?.companyName }}
+      </span>
+    </UButton>
+  </UDropdown>
 </template>

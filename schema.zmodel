@@ -26,6 +26,7 @@ enum UserRole {
     manager
     biller
     accountant
+    investor
 }
 
 enum CompanyType {
@@ -137,7 +138,40 @@ model DistributorCompany {
 }
 
 model Company extends Base {
+    recurringExpenses RecurringExpense[]
+    accountantStockControl AccountantStockControl?
+    accountantUserSettings AccountantUserSettings?
+    accountantUserSources AccountantUserSource[]
+    accountantErpSettings AccountantErpSettings?
+    accountantEcommerceSettings AccountantEcommerceSettings?
+    accountantErpSources AccountantErpSource[]
+    accountantDistributorSettings AccountantDistributorSettings[]
+    accountantDistributorSources AccountantDistributorSource[]
+    accountantAccountingAccountRows AccountantAccountingAccount[]
+    accountantManualJournalRows AccountantManualJournal[]
+    accountantManualJournalLineRows AccountantManualJournalLine[]
+    accountantJournalTemplateRows AccountantJournalTemplate[]
+    accountantRecurringJournalProfileRows AccountantRecurringJournalProfile[]
+    accountantAccountingBudgetRows AccountantAccountingBudget[]
+    accountantTransactionLockRows AccountantTransactionLock[]
+    accountantAccountOpeningBalanceRows AccountantAccountOpeningBalance[]
+    accountantFixedAssetCategoryRows AccountantFixedAssetCategory[]
+    accountantFixedAssetRows AccountantFixedAsset[]
+    accountantAssetDepreciationRows AccountantAssetDepreciation[]
+    accountantAssetDisposalRows AccountantAssetDisposal[]
+    accountantCurrencyAdjustmentRows AccountantCurrencyAdjustment[]
+    accountantPreferenceRows AccountantPreference?
+    accountantClientRows AccountantClient[]
+    accountantAccountTransferRows AccountantAccountTransfer[]
+    accountantContactRows AccountantContact[]
+    accountantInvestorRows AccountantInvestor[]
+    accountantProjectRows AccountantProject[]
+    accountantAuditRows AccountantAudit[]
     name                      String
+    isHeadOffice              Boolean                    @default(false) @map("is_head_office") @deny('update', true)
+    parentCompanyId           String?                    @map("parent_company_id") @deny('update', true)
+    parentCompany             Company?                   @relation("CompanyBranches", fields: [parentCompanyId], references: [id], onDelete: Restrict)
+    branches                  Company[]                  @relation("CompanyBranches")
     storecode                 Int                        @unique @default(autoincrement())
     storeUniqueName           String?                    @unique @map("store_unique_name")
     logo                      String?
@@ -314,9 +348,11 @@ model Company extends Base {
     productCustomFields       ProductCustomField[]
     customObjects             CustomObject[]
 
-    @@allow('create', auth() != null && status)
+    @@allow('create', auth() != null && status && parentCompanyId == null && !isHeadOffice)
     @@allow('update', users?[userId == auth().id])
     @@allow('read', true)
+
+    @@index([parentCompanyId])
 
     @@map('companies')
 }
@@ -501,6 +537,9 @@ model GeneralPreference extends Base {
 
 
 model Distributor extends Base {
+    accountantSettings AccountantDistributorSettings[]
+    accountantSources AccountantDistributorSource[]
+    accountantLines AccountantManualJournalLine[]
     name          String
     images        String?
     companies     DistributorCompany[]
@@ -1460,6 +1499,7 @@ model ShippingBox {
 
 
 model Bill extends Base {
+    paidAt                            DateTime?                          @map("paid_at") @db.Timestamptz(3)
     createdAt                         DateTime                           @map("created_at")
     updatedAt                         DateTime                           @updatedAt @map("updated_at")
     invoiceNumber                     Int?                               @map("invoice_number")
@@ -1684,6 +1724,7 @@ model EcommGallery {
 }
 
 model EcommCheckout extends Base {
+    paidAt          DateTime?  @map("paid_at") @db.Timestamptz(3)
     createdAt       DateTime    @default(now()) @map("created_at")
     updatedAt       DateTime    @updatedAt @map("updated_at")
     status          String      @default("CREATED")
@@ -1722,6 +1763,7 @@ model EcommCheckout extends Base {
 }
 
 model EcommOrder extends Base {
+    paidAt          DateTime?  @map("paid_at") @db.Timestamptz(3)
     createdAt       DateTime                  @default(now()) @map("created_at")
     updatedAt       DateTime                  @updatedAt @map("updated_at")
     orderNumber     Int?                      @map("order_number")
@@ -1995,6 +2037,26 @@ model Entry extends Base {
     @@map("entries")
 }
 
+// Written by database triggers; read through the tenant-scoped status-history API.
+// Deliberately no document FK: deleting a document must not erase its audit trail.
+model DocumentStatusHistory {
+    id             String   @id @default(uuid())
+    sequence       BigInt   @unique @default(autoincrement())
+    companyId      String   @map("company_id")
+    entityType     String   @map("entity_type")
+    entityId       String   @map("entity_id")
+    field          String
+    previousStatus String?  @map("previous_status")
+    status         String?
+    changedAt      DateTime @default(now()) @map("changed_at") @db.Timestamptz(3)
+    source         String   @default("database")
+    actorId        String?  @map("actor_id")
+
+    @@index([companyId, entityType, entityId, changedAt], map: "document_status_history_document_idx")
+    @@deny('all', true)
+    @@map("document_status_history")
+}
+
 model BillHistory extends Base {
     data       Json
     changedAt  DateTime @default(now()) @map("changed_at")
@@ -2046,6 +2108,7 @@ model TokenEntry extends Base {
 }
 
 model ExpenseCategory extends Base {
+    recurringExpenses RecurringExpense[]
     name      String    @length(1, 256)
     status    Boolean   @default(true)
     createdAt DateTime  @default(now()) @map("created_at")
@@ -2059,6 +2122,8 @@ model ExpenseCategory extends Base {
 }
 
 model Expense extends Base {
+    recurringOccurrence RecurringExpenseOccurrence?
+    recoverableTaxAmount Float @default(0) @map("recoverable_tax_amount")
     expenseNumber      Int?                @map("expense_number")
     expenseDate        DateTime            @default(now()) @map("expense_date")
     note               String?             @length(1, 512)
@@ -2081,6 +2146,46 @@ model Expense extends Base {
     @@index([companyId, expenseDate])
     @@allow("create, read, update, delete", true)
     @@map("expenses")
+}
+
+// Managed only by the scoped recurring-expense APIs and the authenticated cron.
+model RecurringExpense {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    categoryId String @map("category_id")
+    category ExpenseCategory @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+    name String
+    note String?
+    totalAmount Float @map("total_amount")
+    taxAmount Float @default(0) @map("tax_amount")
+    recoverableTaxAmount Float @default(0) @map("recoverable_tax_amount")
+    nextDueDate DateTime @db.Date @map("next_due_date")
+    dayOfMonth Int @map("day_of_month")
+    active Boolean @default(true)
+    lastError String? @map("last_error")
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    occurrences RecurringExpenseOccurrence[]
+
+    @@index([active, nextDueDate])
+    @@index([companyId])
+    @@deny('all', true)
+    @@map("recurring_expenses")
+}
+
+model RecurringExpenseOccurrence {
+    id String @id @default(uuid())
+    scheduleId String @map("schedule_id")
+    schedule RecurringExpense @relation(fields: [scheduleId], references: [id], onDelete: Cascade)
+    dueDate DateTime @db.Date @map("due_date")
+    expenseId String? @unique @map("expense_id")
+    expense Expense? @relation(fields: [expenseId], references: [id], onDelete: SetNull)
+    createdAt DateTime @default(now()) @map("created_at")
+
+    @@unique([scheduleId, dueDate])
+    @@deny('all', true)
+    @@map("recurring_expense_occurrences")
 }
 
 model Payment extends Base {
@@ -2190,6 +2295,7 @@ model CompanyUser {
     company                Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
     userId                 String                  @map('user_id')
     user                   User                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+    delegatedHeadOfficeId  String?                 @map('delegated_head_office_id') @deny('update', true)
     code                   Int?
     phone                  String?
     name                   String?
@@ -2217,6 +2323,7 @@ model CompanyUser {
     @@id([companyId, userId])
 
     @@allow('read,create, update, delete', auth() != null )
+    @@deny('create', delegatedHeadOfficeId != null)
     @@map('company_users')
 }
 
@@ -2584,6 +2691,7 @@ model MoneyTransaction {
 
     @@index([companyId])
     @@allow('read, create, update, delete', true)
+    @@deny('create, update, delete', true) // Legacy archive; source APIs own linked operational records.
     @@map("money_transactions")
 }
 
@@ -2609,6 +2717,7 @@ model AccountLedgerEntry {
     @@index([companyId, sourceType, sourceId])
     @@unique([companyId, accountType, accountId, sourceType, sourceId, direction])
     @@allow('read, create, update, delete', auth() != null)
+    @@deny('create, update, delete', true) // Legacy archive; source APIs own linked operational records.
     @@map("account_ledger_entries")
 }
 
@@ -2648,6 +2757,7 @@ model Investment {
     @@index([companyId, userId])
 
     @@allow('read, create, update, delete', true)
+    @@deny('create, update, delete', true) // Legacy archive; source APIs own linked operational records.
     @@map("investments")
 }
 
@@ -2664,6 +2774,7 @@ model CashAccount {
 
     @@unique([companyId])
     @@allow('read, create, update, delete', true)
+    @@deny('create, update, delete', true) // Legacy archive; source APIs own linked operational records.
     @@map("cash_accounts")
 }
 
@@ -2689,6 +2800,7 @@ model BankAccount {
 
     @@index([companyId])
     @@allow('read, create, update, delete', true)
+    @@deny('create, update, delete', true) // Legacy archive; source APIs own linked operational records.
     @@map("bank_accounts")
 }
 
@@ -2719,6 +2831,7 @@ model AccountTransfer {
 
     @@index([companyId])
     @@allow('read, create, update, delete', true)
+    @@deny('create, update, delete', true) // Legacy archive; source APIs own linked operational records.
     @@map("account_transfers")
 }
 
@@ -3033,6 +3146,7 @@ enum LeaveType {
     SICK
     EARNED
     OTHER
+    COMP_OFF
 }
 
 enum LeaveStatus {
@@ -3084,11 +3198,15 @@ model Shift extends Base {
     status                  Boolean              @default(true)
     deleted                 Boolean              @default(false)
 
+    policy                  Json?
+    policyHistory           Json?                @map("policy_history")
+
     assignments             ShiftAssignment[]
     attendances             Attendance[]
 
     @@index([companyId])
     @@allow('read, create, update, delete', auth() != null)
+    @@deny('create, update', true) // Policy changes must use the versioned shift API.
     @@map("shifts")
 }
 
@@ -3104,7 +3222,9 @@ model CompanyHoliday extends Base {
 
     @@unique([companyId, date])
     @@index([companyId, date])
-    @@allow('read, create, update, delete', auth() != null)
+    @@allow('read', auth() != null)
+    // Validated, company-scoped holiday APIs own mutations.
+    @@deny('create, update, delete', true)
     @@map("company_holidays")
 }
 
@@ -3203,7 +3323,8 @@ model AttendanceAdjustment extends Base {
 
     @@index([companyId])
     @@index([companyId, status])
-    @@allow('read, create, update, delete', auth() != null)
+    @@allow('read', auth() != null)
+    @@deny('create, update, delete', true)
     @@map("attendance_adjustments")
 }
 
@@ -3232,6 +3353,7 @@ model LeaveApplication extends Base {
     @@index([companyId, status])
     @@index([companyId, startDate, endDate])
     @@allow('read, create, update, delete', auth() != null)
+    @@deny('create, update, delete', true) // Approved leave changes must use the validated API.
     @@map("leave_applications")
 }
 
@@ -3326,11 +3448,13 @@ model SalaryConfig extends Base {
     amount               Decimal      @db.Decimal(12, 2) @default(0)   // salary for the chosen period
     commissionPercentage Decimal      @db.Decimal(5, 2) @default(0) @map("commission_percentage")
 
+    rateHistory          Json?       @map("rate_history")
     effectiveFrom        DateTime?    @map("effective_from")
 
     @@unique([companyId, userId])
     @@index([companyId])
     @@allow('read, create, update, delete', auth() != null)
+    @@deny('create, update, delete', true)
     @@map("salary_configs")
 }
 
@@ -3356,6 +3480,7 @@ model PayrollAdjustment extends Base {
     @@index([companyId, status])
     @@index([companyId, month, year])
     @@allow('read, create, update, delete', auth() != null)
+    @@deny('create, update, delete', true)
     @@map("payroll_adjustments")
 }
 
@@ -3382,6 +3507,7 @@ model PayrollCycle extends Base {
     @@index([companyId])
     @@index([companyId, year, month])
     @@allow('read, create, update, delete', auth() != null)
+    @@deny('create, update, delete', true)
     @@map("payroll_cycles")
 }
 
@@ -3416,6 +3542,7 @@ model PayrollCycleLine extends Base {
     @@unique([cycleId, userId])
     @@index([companyId, userId])
     @@allow('read, create, update, delete', auth() != null)
+    @@deny('create, update, delete', true)
     @@map("payroll_cycle_lines")
 }
 
@@ -3441,6 +3568,7 @@ model SalaryPayment extends Base {
     @@index([companyId, userId])
     @@index([companyId, cycleId])
     @@allow('read, create, update, delete', auth() != null)
+    @@deny('create, update, delete', true)
     @@map("salary_payments")
 }
 
@@ -3524,6 +3652,7 @@ model UserLedgerEntry extends Base {
     @@index([companyId, sourceType, sourceId])
     @@unique([companyId, sourceType, sourceId, type])
     @@allow('read, create, update, delete', auth() != null)
+    @@deny('create, update, delete', true)
     @@map("user_ledger_entries")
 }
 
@@ -3604,6 +3733,7 @@ model StorefrontMemory {
 // ---------------------------------------------------------------------------
 
 model StorefrontAgentSession {
+    runtimeResult Json? @map("runtime_result")
     id                    String    @id @default(dbgenerated("gen_random_uuid()::text"))
     conversationId        String    @map("conversation_id")
     userId                String?   @map("user_id")
@@ -3643,6 +3773,14 @@ model StorefrontAgentSession {
 }
 
 model StorefrontSource {
+    repositoryProvider         String   @default("github") @map("repository_provider")
+    hostingProvider            String   @default("vercel") @map("hosting_provider")
+    repositoryArn              String?  @map("repository_arn")
+    amplifyAppId               String?  @map("amplify_app_id")
+    sandboxRoleArn             String?  @map("sandbox_role_arn")
+    templateDigest             String?  @map("template_digest")
+    provisioningStage          String?  @map("provisioning_stage")
+
     id                         String   @id @default(dbgenerated("gen_random_uuid()::text"))
     repositoryId               BigInt?  @map("repository_id")
     repositoryFullName         String?  @map("repository_full_name")
@@ -3744,6 +3882,12 @@ model EditSession {
 }
 
 model EditEnvironment {
+    computeProvider     String       @default("gcp") @map("compute_provider")
+    taskArn             String?      @map("task_arn")
+    taskToken           String?      @map("task_token")
+    lifecycleState      String       @default("running") @map("lifecycle_state")
+    lifecycleError      String?      @map("lifecycle_error")
+
     id                  String       @id
     url                 String
     state               String       @default("idle")
@@ -3798,4 +3942,678 @@ model EditSessionMessage {
 
     @@unique([sessionId, messageId], map: "edit_session_message_uniq")
     @@map("edit_session_message")
+}
+
+// Independent Accountant system. Legacy account models remain in service.
+enum AccountantAccountingAccountCategory {
+  ASSET
+  LIABILITY
+  EQUITY
+  INCOME
+  EXPENSE
+}
+
+enum AccountantAccountingAccountType {
+  OTHER_ASSET
+  OTHER_CURRENT_ASSET
+  CASH
+  BANK
+  FIXED_ASSET
+  ACCOUNTS_RECEIVABLE
+  STOCK
+  PAYMENT_CLEARING_ACCOUNT
+  INTANGIBLE_ASSET
+  NON_CURRENT_ASSET
+  DEFERRED_TAX_ASSET
+  OTHER_CURRENT_LIABILITY
+  CREDIT_CARD
+  NON_CURRENT_LIABILITY
+  OTHER_LIABILITY
+  ACCOUNTS_PAYABLE
+  OVERSEAS_TAX_PAYABLE
+  DEFERRED_TAX_LIABILITY
+  EQUITY
+  INCOME
+  OTHER_INCOME
+  EXPENSE
+  COST_OF_GOODS_SOLD
+  OTHER_EXPENSE
+}
+
+enum AccountantManualJournalStatus {
+  DRAFT
+  PUBLISHED
+}
+
+enum AccountantManualJournalType {
+  BOTH
+  CASH
+  ACCRUAL
+}
+
+enum AccountantJournalEntrySide {
+  DEBIT
+  CREDIT
+}
+
+model AccountantAccountingAccount {
+  distributorMappings AccountantDistributorMapping[]
+  id                   String                    @id @default(cuid())
+  companyId            String                    @map("company_id")
+  company              Company                   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  parentId             String?                   @map("parent_id")
+  parent               AccountantAccountingAccount?        @relation("AccountingAccountTree", fields: [parentId], references: [id])
+  children             AccountantAccountingAccount[]       @relation("AccountingAccountTree")
+  journalLines         AccountantManualJournalLine[]
+  category             AccountantAccountingAccountCategory
+  accountType          AccountantAccountingAccountType     @map("account_type")
+  name                 String
+  code                 String?
+  currency             String                    @default("INR")
+  description          String?
+  showOnDashboard      Boolean                   @default(false) @map("show_on_dashboard")
+  isSystem             Boolean                   @default(false) @map("is_system")
+  isActive             Boolean                   @default(true) @map("is_active")
+  bankName             String?                   @map("bank_name")
+  accountNumber        String?                   @map("account_number")
+  routingNumber        String?                   @map("routing_number")
+  isPrimary            Boolean                   @default(false) @map("is_primary")
+  createdAt            DateTime                  @default(now()) @map("created_at")
+  updatedAt            DateTime                  @updatedAt @map("updated_at")
+  deletedAt            DateTime?                 @map("deleted_at")
+
+  @@unique([companyId, name])
+  @@unique([companyId, code])
+  @@index([companyId, category, isActive])
+  @@index([companyId, parentId])
+  @@map("accountant_v2_accounting_accounts")
+  @@deny('all', true)
+}
+
+model AccountantManualJournal {
+  distributorSources AccountantDistributorSource[]
+  createdById String? @map("created_by_id")
+  approvals Json @default("[]")
+  id                String              @id @default(cuid())
+  companyId         String              @map("company_id")
+  company           Company             @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entryNumber       String              @map("entry_number")
+  journalDate       DateTime            @map("journal_date")
+  referenceNumber   String?             @map("reference_number")
+  notes             String
+  currency          String              @default("INR")
+  exchangeRate      Decimal             @default(1) @map("exchange_rate") @db.Decimal(18, 6)
+  journalType       AccountantManualJournalType   @default(BOTH) @map("journal_type")
+  status            AccountantManualJournalStatus @default(DRAFT)
+  total             Decimal             @default(0) @db.Decimal(18, 2)
+  reversalDate      DateTime?           @map("reversal_date")
+  reversedFromId    String?             @map("reversed_from_id")
+  reversedFrom      AccountantManualJournal?      @relation("JournalReversal", fields: [reversedFromId], references: [id], onDelete: SetNull)
+  reversals         AccountantManualJournal[]     @relation("JournalReversal")
+  publishedAt       DateTime?           @map("published_at")
+  isSystemGenerated Boolean             @default(false) @map("is_system_generated")
+  sourceType        String?             @map("source_type")
+  sourceId          String?             @map("source_id")
+  createdAt         DateTime            @default(now()) @map("created_at")
+  updatedAt         DateTime            @updatedAt @map("updated_at")
+  deletedAt         DateTime?           @map("deleted_at")
+  lines             AccountantManualJournalLine[]
+
+  @@unique([companyId, entryNumber])
+  @@unique([companyId, sourceType, sourceId])
+  @@index([companyId, journalDate, status])
+  @@map("accountant_v2_manual_journals")
+  @@deny('all', true)
+}
+
+model AccountantManualJournalLine {
+  distributorId String? @map("distributor_id")
+  distributor Distributor? @relation(fields: [distributorId], references: [id], onDelete: Restrict)
+  id          String            @id @default(cuid())
+  companyId   String            @map("company_id")
+  company     Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  journalId   String            @map("journal_id")
+  journal     AccountantManualJournal     @relation(fields: [journalId], references: [id], onDelete: Cascade)
+  accountId   String            @map("account_id")
+  account     AccountantAccountingAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  side        AccountantJournalEntrySide
+  amount      Decimal           @db.Decimal(18, 2)
+  description String?
+  sourceParties Json? @map("source_parties")
+  partyId     String?           @map("party_id")
+  projectId   String?           @map("project_id")
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+  deletedAt   DateTime?         @map("deleted_at")
+
+  @@index([companyId, journalId])
+  @@index([companyId, accountId])
+  @@index([companyId, distributorId], map: "accountant_v2_journal_lines_distributor_idx")
+  @@index([sourceParties], type: Gin, map: "accountant_v2_journal_lines_source_parties_idx")
+  @@map("accountant_v2_manual_journal_lines")
+  @@deny('all', true)
+}
+
+model AccountantJournalTemplate {
+  id              String    @id @default(cuid())
+  companyId       String    @map("company_id")
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name            String
+  referenceNumber String?   @map("reference_number")
+  notes           String?
+  journalType     String    @default("BOTH") @map("journal_type")
+  currency        String    @default("INR")
+  exchangeRate    Decimal   @default(1) @map("exchange_rate") @db.Decimal(18, 6)
+  templateMode    String    @default("AMOUNT") @map("template_mode")
+  lines           Json
+  isActive        Boolean   @default(true) @map("is_active")
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+  @@map("accountant_v2_journal_templates")
+  @@deny('all', true)
+}
+
+model AccountantRecurringJournalProfile {
+  id              String    @id @default(cuid())
+  companyId       String    @map("company_id")
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  profileName     String    @map("profile_name")
+  frequency       String
+  repeatEvery     Int       @default(1) @map("repeat_every")
+  startDate       DateTime  @map("start_date")
+  endDate         DateTime? @map("end_date")
+  nextRunDate     DateTime  @map("next_run_date")
+  lastRunDate     DateTime? @map("last_run_date")
+  status          String    @default("ACTIVE")
+  childStatus     String    @default("DRAFT") @map("child_status")
+  referenceNumber String?   @map("reference_number")
+  notes           String
+  journalType     String    @default("BOTH") @map("journal_type")
+  currency        String    @default("INR")
+  exchangeRate    Decimal   @default(1) @map("exchange_rate") @db.Decimal(18, 6)
+  lines           Json
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  @@unique([companyId, profileName])
+  @@index([companyId, status, nextRunDate])
+  @@map("accountant_v2_recurring_journal_profiles")
+  @@deny('all', true)
+}
+
+model AccountantAccountingBudget {
+  id          String    @id @default(cuid())
+  companyId   String    @map("company_id")
+  company     Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  fiscalYear  Int       @map("fiscal_year")
+  periodType  String    @default("MONTHLY") @map("period_type")
+  status      String    @default("DRAFT")
+  allocations Json
+  notes       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  @@unique([companyId, name, fiscalYear])
+  @@index([companyId, fiscalYear, status])
+  @@map("accountant_v2_accounting_budgets")
+  @@deny('all', true)
+}
+
+model AccountantTransactionLock {
+  id           String    @id @default(cuid())
+  companyId    String    @map("company_id")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  module       String
+  lockDate     DateTime  @map("lock_date")
+  reason       String
+  isLocked     Boolean   @default(true) @map("is_locked")
+  lockedById   String    @map("locked_by_id")
+  unlockedById String?   @map("unlocked_by_id")
+  unlockedAt   DateTime? @map("unlocked_at")
+  unlockReason String?   @map("unlock_reason")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  @@index([companyId, module, isLocked, lockDate])
+  @@map("accountant_v2_transaction_locks")
+  @@deny('all', true)
+}
+
+model AccountantAccountOpeningBalance {
+  id           String    @id @default(cuid())
+  companyId    String    @map("company_id")
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  accountId    String    @map("account_id")
+  asOfDate     DateTime  @map("as_of_date")
+  side         String
+  amount       Decimal   @db.Decimal(18, 2)
+  currency     String    @default("INR")
+  exchangeRate Decimal   @default(1) @map("exchange_rate") @db.Decimal(18, 6)
+  journalId    String?   @map("journal_id")
+  notes        String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  @@unique([companyId, accountId])
+  @@index([companyId, asOfDate])
+  @@map("accountant_v2_account_opening_balances")
+  @@deny('all', true)
+}
+
+model AccountantFixedAssetCategory {
+  id                           String    @id @default(cuid())
+  companyId                    String    @map("company_id")
+  company                      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name                         String
+  assetAccountId               String    @map("asset_account_id")
+  accumulatedDepAccountId      String    @map("accumulated_dep_account_id")
+  depreciationExpenseAccountId String    @map("depreciation_expense_account_id")
+  depreciationMethod           String    @default("STRAIGHT_LINE") @map("depreciation_method")
+  usefulLifeMonths             Int       @map("useful_life_months")
+  salvagePercentage            Decimal   @default(0) @map("salvage_percentage") @db.Decimal(8, 4)
+  isActive                     Boolean   @default(true) @map("is_active")
+  createdAt                    DateTime  @default(now()) @map("created_at")
+  updatedAt                    DateTime  @updatedAt @map("updated_at")
+  deletedAt                    DateTime? @map("deleted_at")
+
+  @@unique([companyId, name])
+  @@index([companyId, isActive])
+  @@map("accountant_v2_fixed_asset_categories")
+  @@deny('all', true)
+}
+
+model AccountantFixedAsset {
+  id                      String    @id @default(cuid())
+  companyId               String    @map("company_id")
+  company                 Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  categoryId              String    @map("category_id")
+  assetNumber             String    @map("asset_number")
+  name                    String
+  description             String?
+  purchaseDate            DateTime  @map("purchase_date")
+  availableForUseDate     DateTime  @map("available_for_use_date")
+  purchaseCost            Decimal   @map("purchase_cost") @db.Decimal(18, 2)
+  salvageValue            Decimal   @default(0) @map("salvage_value") @db.Decimal(18, 2)
+  usefulLifeMonths        Int       @map("useful_life_months")
+  depreciationMethod      String    @default("STRAIGHT_LINE") @map("depreciation_method")
+  status                  String    @default("DRAFT")
+  serialNumber            String?   @map("serial_number")
+  location                String?
+  vendorId                String?   @map("vendor_id")
+  accumulatedDepreciation Decimal   @default(0) @map("accumulated_depreciation") @db.Decimal(18, 2)
+  bookValue               Decimal   @map("book_value") @db.Decimal(18, 2)
+  lastDepreciationDate    DateTime? @map("last_depreciation_date")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+  deletedAt               DateTime? @map("deleted_at")
+
+  @@unique([companyId, assetNumber])
+  @@index([companyId, categoryId, status])
+  @@map("accountant_v2_fixed_assets")
+  @@deny('all', true)
+}
+
+model AccountantAssetDepreciation {
+  id               String    @id @default(cuid())
+  companyId        String    @map("company_id")
+  company          Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assetId          String    @map("asset_id")
+  depreciationDate DateTime  @map("depreciation_date")
+  amount           Decimal   @db.Decimal(18, 2)
+  accumulatedAfter Decimal   @map("accumulated_after") @db.Decimal(18, 2)
+  bookValueAfter   Decimal   @map("book_value_after") @db.Decimal(18, 2)
+  status           String    @default("POSTED")
+  journalId        String?   @map("journal_id")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  deletedAt        DateTime? @map("deleted_at")
+
+  @@unique([assetId, depreciationDate])
+  @@index([companyId, depreciationDate])
+  @@map("accountant_v2_asset_depreciations")
+  @@deny('all', true)
+}
+
+model AccountantAssetDisposal {
+  id                String    @id @default(cuid())
+  companyId         String    @map("company_id")
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  assetId           String    @unique @map("asset_id")
+  disposalDate      DateTime  @map("disposal_date")
+  disposalMethod    String    @map("disposal_method")
+  proceeds          Decimal   @default(0) @db.Decimal(18, 2)
+  proceedsAccountId String?   @map("proceeds_account_id")
+  gainLoss          Decimal   @map("gain_loss") @db.Decimal(18, 2)
+  gainLossAccountId String    @map("gain_loss_account_id")
+  journalId         String?   @map("journal_id")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  @@index([companyId, disposalDate])
+  @@map("accountant_v2_asset_disposals")
+  @@deny('all', true)
+}
+
+model AccountantCurrencyAdjustment {
+  id                String    @id @default(cuid())
+  companyId         String    @map("company_id")
+  company           Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  adjustmentNumber  String    @map("adjustment_number")
+  adjustmentDate    DateTime  @map("adjustment_date")
+  adjustmentType    String    @map("adjustment_type")
+  currency          String
+  exchangeRate      Decimal   @map("exchange_rate") @db.Decimal(18, 6)
+  accountId         String    @map("account_id")
+  gainLossAccountId String    @map("gain_loss_account_id")
+  foreignBalance    Decimal   @map("foreign_balance") @db.Decimal(18, 2)
+  baseBalanceBefore Decimal   @map("base_balance_before") @db.Decimal(18, 2)
+  baseBalanceAfter  Decimal   @map("base_balance_after") @db.Decimal(18, 2)
+  gainLoss          Decimal   @map("gain_loss") @db.Decimal(18, 2)
+  status            String    @default("DRAFT")
+  journalId         String?   @map("journal_id")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  deletedAt         DateTime? @map("deleted_at")
+
+  @@unique([companyId, adjustmentNumber])
+  @@index([companyId, adjustmentType, adjustmentDate])
+  @@map("accountant_v2_currency_adjustments")
+  @@deny('all', true)
+}
+
+model AccountantPreference {
+  fyStartMonth Int @default(4) @map("fy_start_month")
+  id                      String    @id @default(cuid())
+  companyId               String    @unique @map("company_id")
+  company                 Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  recurringChildStatus    String    @default("DRAFT") @map("recurring_child_status")
+  allowThirteenthMonth    Boolean   @default(false) @map("allow_thirteenth_month")
+  journalApprovalType     String    @default("NONE") @map("journal_approval_type")
+  allowSelfApproval       Boolean   @default(false) @map("allow_self_approval")
+  unrealizedGainAccountId String?   @map("unrealized_gain_account_id")
+  unrealizedLossAccountId String?   @map("unrealized_loss_account_id")
+  journalCustomFields     Json      @default("[]") @map("journal_custom_fields")
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+  deletedAt               DateTime? @map("deleted_at")
+
+  @@map("accountant_v2_accountant_preferences")
+  @@deny('all', true)
+}
+
+model AccountantClient {
+  id                 String    @id @default(cuid())
+  companyId          String    @map("company_id")
+  company            Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  partyId            String    @map("party_id")
+  serviceType        String    @default("BOOKKEEPING") @map("service_type")
+  engagementStatus   String    @default("ACTIVE") @map("engagement_status")
+  accessLevel        String    @default("ACCOUNTANT") @map("access_level")
+  fiscalYearEndMonth Int       @default(3) @map("fiscal_year_end_month")
+  notes              String?
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+  deletedAt          DateTime? @map("deleted_at")
+
+  @@unique([companyId, partyId])
+  @@index([companyId, engagementStatus])
+  @@map("accountant_v2_accountant_clients")
+  @@deny('all', true)
+}
+
+model AccountantAccountTransfer {
+  id              String    @id @default(cuid())
+  companyId       String    @map("company_id")
+  company         Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  transferNumber  String    @map("transfer_number")
+  transferDate    DateTime  @map("transfer_date")
+  fromAccountId   String    @map("from_account_id")
+  toAccountId     String    @map("to_account_id")
+  amount          Decimal   @db.Decimal(18, 2)
+  currency        String    @default("INR")
+  exchangeRate    Decimal   @default(1) @map("exchange_rate") @db.Decimal(18, 6)
+  referenceNumber String?   @map("reference_number")
+  description     String?
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  deletedAt       DateTime? @map("deleted_at")
+
+  @@unique([companyId, transferNumber])
+  @@index([companyId, transferDate])
+  @@index([companyId, fromAccountId])
+  @@index([companyId, toAccountId])
+  @@map("accountant_v2_account_transfers")
+  @@deny('all', true)
+}
+
+
+model AccountantDistributorSettings {
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  distributorId String @map("distributor_id")
+  distributor Distributor @relation(fields: [distributorId], references: [id], onDelete: Restrict)
+  contactId String @unique @map("contact_id")
+  contact AccountantContact @relation(fields: [contactId], references: [id], onDelete: Restrict)
+  enabled Boolean @default(false)
+  mappings AccountantDistributorMapping[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@id([companyId, distributorId])
+  @@map("accountant_v2_distributor_settings")
+  @@deny('all', true)
+}
+
+model AccountantDistributorMapping {
+  companyId String @map("company_id")
+  distributorId String @map("distributor_id")
+  settings AccountantDistributorSettings @relation(fields: [companyId, distributorId], references: [companyId, distributorId], onDelete: Cascade)
+  role String
+  accountId String @map("account_id")
+  account AccountantAccountingAccount @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  @@id([companyId, distributorId, role])
+  @@map("accountant_v2_distributor_mappings")
+  @@deny('all', true)
+}
+
+model AccountantDistributorSource {
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  distributorId String @map("distributor_id")
+  distributor Distributor @relation(fields: [distributorId], references: [id], onDelete: Restrict)
+  sourceKey String @map("source_key")
+  signature Json
+  accounts Json
+  revision Int @default(0)
+  journalId String? @map("journal_id")
+  journal AccountantManualJournal? @relation(fields: [journalId], references: [id], onDelete: Restrict)
+  @@id([companyId, distributorId, sourceKey])
+  @@index([journalId], map: "accountant_v2_distributor_sources_journal_idx")
+  @@map("accountant_v2_distributor_sources")
+  @@deny('all', true)
+}
+
+// Investor profiles and immutable dated terms/events are owned by the Accountant API.
+model AccountantInvestor {
+  id String @id @default(uuid())
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id])
+  terms AccountantInvestorTerm[]
+  events AccountantInvestorEvent[]
+  name String
+  // Linked company user for native and imported investor profiles.
+  legacyUserId String? @map("legacy_user_id")
+  profile Json @default("{}")
+  accounts Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([companyId, legacyUserId])
+  @@unique([companyId, id])
+  @@index([companyId])
+  @@map("accountant_v2_investors")
+  @@deny('all', true)
+}
+
+model AccountantInvestorTerm {
+  id String @id @default(uuid())
+  companyId String @map("company_id")
+  investorId String @map("investor_id")
+  investor AccountantInvestor @relation(fields: [companyId, investorId], references: [companyId, id])
+  effectiveDate DateTime @db.Date @map("effective_date")
+  terms Json
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([companyId, investorId, effectiveDate])
+  @@map("accountant_v2_investor_terms")
+  @@deny('all', true)
+}
+
+model AccountantInvestorEvent {
+  id String @id @default(uuid())
+  companyId String @map("company_id")
+  investorId String @map("investor_id")
+  investor AccountantInvestor @relation(fields: [companyId, investorId], references: [companyId, id])
+  eventDate DateTime @db.Date @map("event_date")
+  kind String
+  amount Decimal @db.Decimal(16, 2)
+  journalId String? @map("journal_id")
+  legacyId String? @map("legacy_id")
+  requestId String @map("request_id")
+  reversedId String? @map("reversed_id")
+  details Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([companyId, requestId])
+  @@unique([companyId, legacyId])
+  @@unique([companyId, reversedId])
+  @@index([companyId, investorId, eventDate])
+  @@map("accountant_v2_investor_events")
+  @@deny('all', true)
+}
+
+model AccountantContact {
+  distributorSettings AccountantDistributorSettings?
+  id String @id @default(cuid())
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name String
+  type String @default("CLIENT")
+  email String?
+  phone String?
+  isActive Boolean @default(true)
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([companyId])
+  @@map("accountant_v2_accountant_contact")
+  @@deny('all', true)
+}
+
+model AccountantProject {
+  id String @id @default(cuid())
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name String
+  description String?
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([companyId])
+  @@map("accountant_v2_accountant_project")
+  @@deny('all', true)
+}
+
+model AccountantAudit {
+  id String @id @default(cuid())
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  userId String
+  action String
+  resource String
+  resourceId String
+  after Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  deletedAt DateTime? @map("deleted_at")
+  @@index([companyId])
+  @@map("accountant_v2_accountant_audit")
+  @@deny('all', true)
+}
+
+model AccountantEcommerceSettings {
+  companyId String @id @map("company_id")
+  company Company @relation(fields: [companyId], references: [id])
+  enabled Boolean @default(false)
+  activatedAt DateTime @default(now()) @map("activated_at")
+  accounts Json @default("{}")
+  @@map("accountant_v2_ecommerce_settings")
+  @@deny('all', true)
+}
+
+model AccountantErpSettings {
+  companyId String @id @map("company_id")
+  company Company @relation(fields: [companyId], references: [id])
+  enabled Boolean @default(false)
+  activatedAt DateTime @default(now()) @map("activated_at")
+  accounts Json @default("{}")
+  @@map("accountant_v2_erp_settings")
+  @@deny('all', true)
+}
+model AccountantErpSource {
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id])
+  sourceKey String @map("source_key")
+  signature Json @default("{}")
+  accounts Json @default("{}")
+  revision Int @default(0)
+  journalId String? @map("journal_id")
+  @@id([companyId, sourceKey])
+  @@map("accountant_v2_erp_sources")
+  @@deny('all', true)
+}
+
+
+model AccountantStockControl {
+  companyId String @id @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  stockAccountId String @map("stock_account_id")
+  openingAccountId String @map("opening_account_id")
+  adjustmentAccountId String @map("adjustment_account_id")
+  enabled Boolean @default(false)
+  initializedAt DateTime? @map("initialized_at")
+  revision Int @default(0)
+  sourceSnapshot Json @default("[]") @map("source_snapshot")
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at")
+  @@map("accountant_v2_stock_control")
+  @@deny('all', true)
+}
+
+model AccountantUserSettings {
+ companyId String @id @map("company_id")
+ company Company @relation(fields: [companyId], references: [id])
+ enabled Boolean @default(false)
+ accounts Json @default("{}")
+ activatedAt DateTime @default(now()) @map("activated_at")
+ @@map("accountant_v2_user_settings")
+ @@deny('all', true)
+}
+model AccountantUserSource {
+ companyId String @map("company_id")
+ company Company @relation(fields: [companyId], references: [id])
+ sourceKey String @map("source_key")
+ ledgerId String @map("ledger_id")
+ signature Json @default("{}")
+ accounts Json @default("{}")
+ revision Int @default(0)
+ journalId String? @map("journal_id")
+ @@id([companyId, sourceKey])
+ @@index([companyId, ledgerId], map: "accountant_v2_user_sources_ledger")
+ @@map("accountant_v2_user_sources")
+ @@deny('all', true)
 }

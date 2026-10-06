@@ -583,15 +583,21 @@ const elementContext = computed(() => {
 // the picker simply hides — sending must never depend on it.
 const models = ref<{ key: string; label: string; note: string; family: string; supportsImages?: boolean }[]>([])
 const selectedModel = ref<string>('')
+const modelConfigurationRequired = ref(false)
+const modelConfigurationMessage = ref('')
 const selectedModelLabel = computed(() => models.value.find(model => model.key === selectedModel.value)?.label || 'Model')
 
 onMounted(async () => {
   try {
     const res = await $fetch<{
       default: string
+      configurationRequired?: boolean
+      configurationMessage?: string | null
       models: { key: string; label: string; note: string; family: string; supportsImages?: boolean }[]
     }>('/api/ecommerce-cms/storefront-agent/models')
     models.value = res.models ?? []
+    modelConfigurationRequired.value = res.configurationRequired === true
+    modelConfigurationMessage.value = res.configurationMessage || ''
     // Server-side stickiness still applies: leaving this as the default and not
     // sending it means the backend reuses whatever the seller picked before.
     selectedModel.value = res.default ?? ''
@@ -777,7 +783,7 @@ async function send(requestedMode?: StorefrontRunMode, actionText?: string, queu
   const text = actionText || input.value.trim()
   const images = pendingImages.value.length ? [...pendingImages.value] : undefined
   const existingImages = queuedImages?.length ? queuedImages : undefined
-  if ((!text && !images && !existingImages) || loading.value) return
+  if ((!text && !images && !existingImages) || loading.value || modelConfigurationRequired.value) return
 
   const userMsg: Message = { role: 'user', content: text || '(see attached image)', images: existingImages || images }
   messages.value.push(userMsg)
@@ -1186,6 +1192,10 @@ async function openSession(item: AgentSessionSummary) {
             @keydown="handleKey"
             @paste.native="handlePaste"
           />
+          <p v-if="modelConfigurationRequired" class="px-3 py-2 text-sm">
+            <span v-if="modelConfigurationMessage">{{ modelConfigurationMessage }}</span>
+            <span v-else>Add an AI model in <NuxtLink to="/ai/models" class="underline">AI settings</NuxtLink> before editing.</span>
+          </p>
           <div class="composer-toolbar">
             <div class="composer-toolbar__left">
               <input ref="fileInputRef" type="file" multiple accept="image/*" class="hidden" @change="onFileSelected" />
@@ -1216,7 +1226,7 @@ async function openSession(item: AgentSessionSummary) {
                 color="primary"
                 size="sm"
                 :loading="queueBusy"
-                :disabled="!input.trim() && !pendingImages.length"
+                :disabled="modelConfigurationRequired || (!input.trim() && !pendingImages.length)"
                 :title="queueEditDraft ? 'Save queued prompt' : loading ? 'Run after current task' : 'Send'"
                 @click="loading || queueEditDraft ? queueMessage() : send()"
               />

@@ -42,3 +42,8 @@ electron-dist/
 electron/
 .vercel
 .env*
+investor-history-report.json
+investor-mappings.local.json
+
+# Local transfer adoption reports
+transfer-history-*.json

@@ -123,7 +123,7 @@ test('earlyExitHours leave 16:00 = 1', () => approx(attEarlyExitHours(entry([ci(
 test('overtimeHours worked 9h vs 8h = 1', () => approx(attOvertimeHours(entry([ci('09:00'), co('18:00')])), 1))
 test('attendanceMetrics formats fields', () => {
     const m = attendanceMetrics(entry([ci('09:30'), co('18:00')]))
-    eq(m.checkIn, '09:30'); eq(m.late, '0.50h'); eq(m.work, '8.50h'); eq(m.overtime, '0.50h')
+    eq(m.checkIn, '09:30 am'); eq(m.late, '0.50h'); eq(m.work, '8.50h'); eq(m.overtime, '0.50h')
 })
 
 // ════════════════════════════════════════════════════════════

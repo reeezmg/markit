@@ -1,12 +1,15 @@
 <script setup>
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import { BillingAddClient } from '#components';
 import { v4 as uuidv4 } from 'uuid';
 import { Capacitor } from '@capacitor/core';
 
-const uuid = ref('')
 
 const { printBill } = usePrint();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 const toast = useToast();
 const isTaxIncluded = ref(useAuth().session.value?.isTaxIncluded);
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
@@ -19,7 +22,7 @@ const {
   discount, redeemedAmt, redeemedPoints, paymentMethod,
   phoneNo, points, clientName, clientId, couponValue,
   splitPayments, isRedeemPoint, selected, tempSplits, items,
-  draftBills, selectedDraft,
+  draftBills, selectedDraft, requestId: uuid,
   currentBill, returnAmt, subtotal, grandTotal, tQty,
   dateInput, commitDateInput,
   createNewBill, loadDraftBills, loadBill, deleteBill, resetDraft,
@@ -841,7 +844,8 @@ const handleSave = async () => {
       currentRequestIds: currentRequestIds.value,
     })
 
-    uuid.value = uuidv4()
+    uuid.value ||= uuidv4()
+    await nextTick()
     const companyId = session?.companyId
     const userId = session?.id
 
@@ -1172,11 +1176,15 @@ const handleDiscountEnter = (index) => {
 
 
 
+watch(() => companyScope.auth.session.value?.isTaxIncluded, value => { isTaxIncluded.value = value; });
+watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isUserTrackIncluded.value = value; });
 </script>
 
 
 <template>
   <UDashboardPanelContent class="p-1">
+      <CompanyFormField />
+                  
       <UCard 
     :ui="{
       base: 'h-full flex flex-col',

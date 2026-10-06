@@ -1,11 +1,16 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import AwsService from '~/composables/aws';
-import { useUpdateCollection, useFindUniqueCollection } from '~/lib/hooks/collection';
+import { useUpdateCollection, useFindUniqueCollection } from '~/lib/company-hooks/collection';
 
 const route = useRoute();
 const toast = useToast();
 const awsService = new AwsService();
 const UpdateCollection = useUpdateCollection();
+const { selectOwnerAndReload } = useOrganizationActions();
 
 interface ImageData {
   file?: File;
@@ -26,6 +31,7 @@ const audienceOptions = ['men', 'women', 'girls', 'boys', 'all'];
 const { data: collection, refetch } = useFindUniqueCollection({
   where: { id: route.params.id as string },
 });
+watch(collection, (record) => { if (record?.companyId) void selectOwnerAndReload(record.companyId); }, { immediate: true });
 
 watchEffect(() => {
   if (collection.value) {
@@ -81,6 +87,7 @@ const saveCollection = async () => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+      <CompanyFormField />
     <UPageCard class="m-3">
       <div class="text-xl mb-4">Edit Collection</div>
       <hr class="h-px my-6 bg-gray-200 border-0 dark:bg-gray-700" />

@@ -1,0 +1,12 @@
+import assert from 'node:assert/strict';
+import { distributorAccountingTransactions } from '../utils/distributor-accounting-transactions';
+const line = (id: string, side: string, amount: number, type='ACCOUNTS_PAYABLE') => ({id,side,amount,account_type:type,journal_date:'2026-01-01',source_type:id==='reverse'?'DISTRIBUTOR_REVERSAL':'DISTRIBUTOR'});
+const rows = distributorAccountingTransactions({ledger:[line('purchase','CREDIT',100),line('purchase','DEBIT',100,'STOCK'),line('payment','DEBIT',30),line('payment','CREDIT',30,'CASH'),line('reverse','CREDIT',30)],sources:[{journal_id:'purchase',source_key:'purchase:po'}],events:[{source_key:'purchase:po',kind:'PURCHASE'}]});
+assert.equal(rows.length,3);
+assert.deepEqual(rows.map(r=>r.due),[100,70,100]);
+assert.equal(rows[0].lines.length,2);
+assert.equal(rows[0].type,'PURCHASE');
+assert.equal(rows[2].type,'REVERSAL');
+assert.equal(rows.filter(r=>r.debit>0)[0].due,70);
+assert.deepEqual(distributorAccountingTransactions({}),[]);
+console.log('Accounting transaction grouping and running balances passed.');

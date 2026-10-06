@@ -1,0 +1,49 @@
+{
+  "at": "2026-09-29T10:08:06.868Z",
+  "stock": [
+    {
+      "name": "Markit",
+      "product_stock_at_current_cost": "47280.00",
+      "accounting_stock": "16230.00",
+      "difference": "31050.00"
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "product_stock_at_current_cost": "1739184.11",
+      "accounting_stock": "745470.72",
+      "difference": "993713.39"
+    },
+    {
+      "name": "Ubar Mobiles",
+      "product_stock_at_current_cost": "667936.00",
+      "accounting_stock": "-36742.00",
+      "difference": "704678.00"
+    },
+    {
+      "name": "reezc",
+      "product_stock_at_current_cost": "101225.01",
+      "accounting_stock": "-20469.99",
+      "difference": "121695.00"
+    }
+  ],
+  "refunds": [
+    {
+      "name": "Ubar Mobiles",
+      "invoice_number": 290,
+      "grand_total": -33572,
+      "payment_method": "Cash",
+      "deleted": false,
+      "type": "BILL",
+      "return_entries": "0"
+    },
+    {
+      "name": "reezc",
+      "invoice_number": 129,
+      "grand_total": -210,
+      "payment_method": "Cash",
+      "deleted": false,
+      "type": "BILL",
+      "return_entries": "1"
+    }
+  ]
+}

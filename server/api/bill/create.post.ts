@@ -1,9 +1,12 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { setDocumentStatusContext } from '~/server/utils/document-status-context'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import { ensureAccountLedgerSchema } from '~/server/utils/account-ledger'
+import { saveSourceRequest } from '~/server/utils/source-save-request'
+
 
 const CREATE_BILL_FN = `
-CREATE OR REPLACE FUNCTION create_bill_plpgsql(p_body jsonb)
+CREATE OR REPLACE FUNCTION create_bill_source_plpgsql(p_body jsonb)
 RETURNS jsonb
 LANGUAGE plpgsql
 AS $fn$
@@ -41,7 +44,6 @@ DECLARE
   v_credit_amount numeric;
   v_existing_credit_user_id text;
   v_user_to_recalc text;
-  v_account record;
 BEGIN
   IF v_bill_id IS NULL OR v_bill_id = '' THEN
     RAISE EXCEPTION 'Bill id is required';
@@ -182,81 +184,6 @@ BEGIN
         WHERE ule.id = ordered.id;
       END LOOP;
     END IF;
-  END IF;
-
-  DELETE FROM account_ledger_entries
-  WHERE company_id = v_bill_company_id
-    AND source_type = 'BILL'::"AccountLedgerSourceType"
-    AND source_id = v_bill_id;
-
-  IF v_payment_status IN ('PAID', 'PENDING') AND v_grand_total > 0 THEN
-    WITH ledger_rows AS (
-      SELECT 'CASH'::"AccountLedgerAccountType" AS account_type,
-             COALESCE(SUM(COALESCE(NULLIF(payment->>'amount', '')::numeric, 0)), 0) AS amount
-      FROM jsonb_array_elements(COALESCE(v_split_payments, '[]'::jsonb)) AS p(payment)
-      WHERE v_payment_method = 'Split' AND payment->>'method' = 'Cash'
-      UNION ALL
-      SELECT 'PRIMARY_BANK'::"AccountLedgerAccountType",
-             COALESCE(SUM(COALESCE(NULLIF(payment->>'amount', '')::numeric, 0)), 0)
-      FROM jsonb_array_elements(COALESCE(v_split_payments, '[]'::jsonb)) AS p(payment)
-      WHERE v_payment_method = 'Split' AND payment->>'method' IN ('UPI', 'Card')
-      UNION ALL
-      SELECT 'CREDIT'::"AccountLedgerAccountType",
-             COALESCE(SUM(COALESCE(NULLIF(payment->>'amount', '')::numeric, 0)), 0)
-      FROM jsonb_array_elements(COALESCE(v_split_payments, '[]'::jsonb)) AS p(payment)
-      WHERE v_payment_method = 'Split' AND payment->>'method' = 'Credit'
-      UNION ALL SELECT 'CASH'::"AccountLedgerAccountType", v_grand_total WHERE v_payment_method = 'Cash'
-      UNION ALL SELECT 'PRIMARY_BANK'::"AccountLedgerAccountType", v_grand_total WHERE v_payment_method IN ('UPI', 'Card')
-      UNION ALL SELECT 'CREDIT'::"AccountLedgerAccountType", v_grand_total WHERE v_payment_method = 'Credit'
-    ),
-    grouped AS (
-      SELECT account_type, round(SUM(amount), 2) AS amount
-      FROM ledger_rows
-      GROUP BY account_type
-      HAVING round(SUM(amount), 2) > 0
-    )
-    INSERT INTO account_ledger_entries (
-      id, company_id, account_type, account_id, direction, amount,
-      source_type, source_id, entry_date, note, created_at, updated_at
-    )
-    SELECT
-      gen_random_uuid()::text,
-      v_bill_company_id,
-      account_type,
-      NULL,
-      'CREDIT'::"AccountLedgerDirection",
-      amount,
-      'BILL'::"AccountLedgerSourceType",
-      v_bill_id,
-      v_created_at,
-      CASE WHEN v_invoice_number IS NOT NULL THEN 'Sale #' || v_invoice_number::text ELSE 'Sale' END,
-      now(),
-      now()
-    FROM grouped;
-
-    FOR v_account IN
-      SELECT DISTINCT company_id, account_type, account_id
-      FROM account_ledger_entries
-      WHERE company_id = v_bill_company_id
-        AND source_type = 'BILL'::"AccountLedgerSourceType"
-        AND source_id = v_bill_id
-    LOOP
-      WITH ordered AS (
-        SELECT id,
-          SUM(CASE WHEN direction = 'CREDIT' THEN amount ELSE -amount END)
-            OVER (ORDER BY entry_date ASC, id ASC ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS balance
-        FROM account_ledger_entries
-        WHERE company_id = v_account.company_id
-          AND account_type = v_account.account_type
-          AND account_id IS NOT DISTINCT FROM v_account.account_id
-      )
-      UPDATE account_ledger_entries ale
-      SET balance_after = ordered.balance,
-          updated_at = now()
-      FROM ordered
-      WHERE ale.id = ordered.id
-        AND ale.entry_date >= v_created_at;
-    END LOOP;
   END IF;
 
   IF v_client_id IS NOT NULL THEN
@@ -416,7 +343,7 @@ async function ensureCreateBillFn(client: any) {
   if (fnReady) return
   if (!ensurePromise) {
     ensurePromise = (async () => {
-      await ensureAccountLedgerSchema(client)
+
       await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
       await client.query(CREATE_BILL_FN)
       fnReady = true
@@ -465,12 +392,17 @@ export default defineEventHandler(async (event) => {
     const client = await pool.connect()
     try {
       await ensureCreateBillFn(client)
-      const res = await client.query(
-        `SELECT create_bill_plpgsql($1::jsonb) AS result`,
-        [JSON.stringify(body)],
-      )
-      return res.rows[0]?.result
+      await client.query('BEGIN')
+      await setDocumentStatusContext(event, client, 'bill.create')
+      await lockCompanyRequest(event, client)
+      const result = await saveSourceRequest(client, body.companyId, body.userId || 'billing', 'bill-create', body.uuid, body, async () => {
+        const res = await client.query(`SELECT create_bill_source_plpgsql($1::jsonb) AS result`, [JSON.stringify(body)])
+        return res.rows[0]?.result
+      })
+      await client.query('COMMIT')
+      return result
     } catch (error: any) {
+      await client.query('ROLLBACK')
       console.error(`Bill create attempt ${attempt} failed:`, error?.message || error)
 
       if (TRANSIENT_ERROR_CODES.includes(error?.code) && attempt < 3) {
@@ -490,7 +422,7 @@ export default defineEventHandler(async (event) => {
     return await runCreate()
   } catch (error: any) {
     throw createError({
-      statusCode: 500,
+      statusCode: error?.statusCode || 500,
       statusMessage: error?.message || 'Failed to create bill after retries',
     })
   }

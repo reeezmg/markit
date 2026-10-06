@@ -1,3 +1,4 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { pool } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
@@ -15,6 +16,7 @@ export default defineEventHandler(async (event) => {
 
   try {
     await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
 
     // ── Renumber bills (invoice_number) after closing date ──
     await client.query(`

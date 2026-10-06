@@ -1,16 +1,16 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
+import { getAuthorizedCompanyIds } from '~/server/utils/organizationReadScope'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
+  const companyIds = await getAuthorizedCompanyIds(event)
 
   const billId = query.billId as string
-  const companyId = query.companyId as string
-
-  if (!billId || !companyId) {
+  if (!billId) {
     throw createError({
       statusCode: 400,
-      statusMessage: 'billId and companyId are required'
+      statusMessage: 'billId is required'
     })
   }
 
@@ -80,7 +80,7 @@ export default defineEventHandler(async (event) => {
       LEFT JOIN addresses a ON a.id = b.address_id
       LEFT JOIN clients c ON c.id = b.client_id
       LEFT JOIN company_clients cc
-        ON cc.client_id = c.id AND cc.company_id = $2
+        ON cc.client_id = c.id AND cc.company_id = b.company_id
       LEFT JOIN (
         SELECT trynbuy_id, company_id, SUM(amount) AS total_penalty
         FROM company_penalties
@@ -89,10 +89,10 @@ export default defineEventHandler(async (event) => {
         ON cp.trynbuy_id = b.trynbuy_id AND cp.company_id = b.company_id
 
       WHERE b.id = $1
-        AND b.company_id = $2
+        AND b.company_id = ANY($2::text[])
         AND b.deleted = false
       `,
-      [billId, companyId]
+      [billId, companyIds]
     )
 
     if (!billRes.rows.length) {

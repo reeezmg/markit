@@ -1,688 +1,618 @@
-<script setup lang="ts">
-import { ref, computed, onMounted, watch, nextTick, onUnmounted } from 'vue'
-import PullToRefresh from 'pulltorefreshjs'
-import CategoryRevenuePie from '@/components/dashboard/CategoryRevenuePie.vue'
+﻿<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import {
-  startOfDay,
-  endOfDay,
-  sub,
-  format,
-  isSameDay,
-  type Duration
-} from 'date-fns'
+    startOfDay,
+    endOfDay,
+    subDays,
+    subMonths,
+    format,
+    isSameDay,
+} from 'date-fns';
 
-/* =========================
-   STATE
-========================= */
-
-const scrollContainer = ref<HTMLElement | null>(null)
-
-const loading = ref(false)
-const pdfLoading = ref(false)
-const excelLoading = ref(false)
-const receiptLoading = ref(false)
-
-const dashboard = ref<any>(null)
-const expenses = ref<any[]>([])
-
+const auth = useNuxtApp().$auth;
+const toast = useToast();
+const { printReport } = usePrint();
+const route = useRoute();
+const initialDate = (value: unknown, fallback: Date) =>
+    typeof value === 'string' &&
+    /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    Number.isFinite(Date.parse(value))
+        ? new Date(value + 'T12:00:00')
+        : fallback;
 const selectedDate = ref({
-  start: new Date(),
-  end: new Date()
-})
-
-/* =========================
-   AUTH
-========================= */
-
-const auth = useNuxtApp().$auth
-const companyName = computed(() => auth.session.value?.companyName || '')
-const canUseCleanupToggle = computed(() => auth.session.value?.cleanup === true)
-const showCleanedValues = ref(false)
-
-const toast = useToast()
-const { printReport } = usePrint()
-
-/* =========================
-   FORMATTERS
-========================= */
-
-const formatCurrency = (val: number | string) => {
-  return `₹${Number(val || 0).toLocaleString('en-IN', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  })}`
-}
-
-/* =========================
-   DATE HELPERS
-========================= */
-
-function isRangeSelected(duration: Duration) {
-  return (
-    isSameDay(selectedDate.value.start, sub(new Date(), duration)) &&
-    isSameDay(selectedDate.value.end, new Date())
-  )
-}
-
-function selectRange(duration: Duration) {
-  selectedDate.value = {
-    start: sub(new Date(), duration),
-    end: new Date()
-  }
-}
-
-const ranges = [
-  { label: 'Last 7 days', duration: { days: 7 } },
-  { label: 'Last 14 days', duration: { days: 14 } },
-  { label: 'Last 30 days', duration: { days: 30 } },
-  { label: 'Last 3 months', duration: { months: 3 } },
-  { label: 'Last 6 months', duration: { months: 6 } },
-  { label: 'Last year', duration: { years: 1 } }
-]
-
-/* =========================
-   FETCH MAIN REPORT
-========================= */
-
-const fetchReportFromServer = async () => {
-  if (!selectedDate.value.start || !selectedDate.value.end) return
-
-  loading.value = true
-
-  try {
-    const res = await $fetch('/api/report/report', {
-      method: 'GET',
-      params: {
-        startDate: startOfDay(selectedDate.value.start).toISOString(),
-        endDate: endOfDay(selectedDate.value.end).toISOString(),
-        showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value
-      }
-    })
-
-    dashboard.value = res
-  } catch (err) {
-    console.error(err)
-
-    toast.add({
-      title: 'Error',
-      description: 'Failed to load report',
-      color: 'red'
-    })
-  } finally {
-    loading.value = false
-  }
-}
-
-/* =========================
-   FETCH EXPENSES (PRINT)
-========================= */
-
-const fetchExpenseFromServer = async () => {
-  if (!selectedDate.value.start || !selectedDate.value.end) return
-
-  try {
-    const res = await $fetch('/api/report/expenses', {
-      method: 'GET',
-      params: {
-        startDate: startOfDay(selectedDate.value.start).toISOString(),
-        endDate: endOfDay(selectedDate.value.end).toISOString()
-      }
-    })
-
-    expenses.value = res || []
-  } catch (err) {
-    console.error(err)
-  }
-}
-
-/* =========================
-   WATCHERS
-========================= */
-
-watch([selectedDate, companyName, showCleanedValues], () => {
-  fetchReportFromServer()
-})
-
-/* =========================
-   PULL TO REFRESH
-========================= */
-
-onMounted(async () => {
-  await nextTick()
-
-  if (!scrollContainer.value) return
-
-  PullToRefresh.init({
-    mainElement: scrollContainer.value,
-    onRefresh: () => fetchReportFromServer()
-  })
-
-  fetchReportFromServer()
-})
-
-onUnmounted(() => {
-  PullToRefresh.destroyAll()
-})
-
-/* =========================
-   EXPORT PDF
-========================= */
-
-const downloadPDF = async () => {
-  pdfLoading.value = true
-
-  try {
-    const res = await $fetch.raw('/api/report/generate-sales.pdf', {
-      method: 'GET',
-      params: {
-        startDate: startOfDay(selectedDate.value.start).toISOString(),
-        endDate: endOfDay(selectedDate.value.end).toISOString(),
-        showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value
-      },
-      headers: { Accept: 'application/pdf' }
-    })
-
-    const blob = new Blob([res._data], { type: 'application/pdf' })
-    const url = URL.createObjectURL(blob)
-
-    const disposition = res.headers.get('content-disposition')
-    const filename =
-      disposition?.match(/filename="(.+)"/)?.[1] || 'daily-report.pdf'
-
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.click()
-
-    URL.revokeObjectURL(url)
-  } catch (err) {
-    toast.add({
-      title: 'PDF Error',
-      description: 'Failed to download PDF',
-      color: 'red'
-    })
-  } finally {
-    pdfLoading.value = false
-  }
-}
-
-const downloadExcel = async () => {
-  excelLoading.value = true
-
-  try {
-    const res = await $fetch.raw('/api/report/generate-sales.excel', {
-      method: 'GET',
-      params: {
-        startDate: startOfDay(selectedDate.value.start).toISOString(),
-        endDate: endOfDay(selectedDate.value.end).toISOString(),
-        showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value
-      },
-      headers: {
-        Accept:
-          'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-      }
-    })
-
-    /* ---------- CREATE BLOB ---------- */
-
-    const blob = new Blob([res._data], {
-      type:
-        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    })
-
-    const url = URL.createObjectURL(blob)
-
-
-
-    /* ---------- FILENAME ---------- */
-
-    const disposition =
-      res.headers.get('content-disposition')
-
-    const filename =
-      disposition?.match(/filename="(.+)"/)?.[1] ||
-      'daily-report.xlsx'
-
-
-
-    /* ---------- DOWNLOAD ---------- */
-
-    const link = document.createElement('a')
-    link.href = url
-    link.download = filename
-    link.click()
-
-    URL.revokeObjectURL(url)
-
-  } catch (err) {
-    toast.add({
-      title: 'Excel Error',
-      description: 'Failed to download Excel',
-      color: 'red'
-    })
-  } finally {
-    excelLoading.value = false
-  }
-}
-
-
-/* =========================
-   PRINT REPORT
-========================= */
-
-const printReportHandle = async () => {
-  receiptLoading.value = true
-
-  await fetchExpenseFromServer()
-
-  try {
-    const printData = {
-      companyName: auth.session.value?.companyName || '',
-      expenses: expenses.value,
-
-      dateRange:
-        isSameDay(selectedDate.value.start, selectedDate.value.end)
-          ? format(selectedDate.value.start, 'dd MMM yyyy')
-          : `${format(selectedDate.value.start, 'dd MMM yyyy')} to ${format(
+    start: initialDate(route.query.from, new Date()),
+    end: initialDate(route.query.to, new Date()),
+});
+const companyName = computed(() => auth.session.value?.companyName || '');
+const companyId = computed(() => auth.session.value?.companyId);
+const canUseCleanupToggle = computed(
+    () => auth.session.value?.cleanup === true
+);
+const showCleanedValues = ref(false);
+const dashboard = ref<any>(null);
+const loading = ref(true);
+const error = ref('');
+const exportLoading = ref('');
+const lastUpdated = ref<Date | null>(null);
+let version = 0;
+let controller: AbortController | undefined;
+let refreshTimer: ReturnType<typeof setTimeout> | undefined;
+const period = computed(() =>
+    isSameDay(selectedDate.value.start, selectedDate.value.end)
+        ? format(selectedDate.value.start, 'd MMM yyyy')
+        : `${format(selectedDate.value.start, 'd MMM yyyy')} – ${format(
               selectedDate.value.end,
-              'dd MMM yyyy'
-            )}`,
+              'd MMM yyyy'
+          )}`
+);
+const params = computed(() => ({
+    startDate: startOfDay(selectedDate.value.start).toISOString(),
+    endDate: endOfDay(selectedDate.value.end).toISOString(),
+    showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value,
+}));
+const currency = computed(() => dashboard.value?.financial?.currency || 'INR');
+const money = (value: any) =>
+    new Intl.NumberFormat('en-IN', {
+        style: 'currency',
+        currency: currency.value,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+    }).format(Number(value || 0));
+const financial = computed(() => dashboard.value?.financial);
+const position = computed(
+    () =>
+        financial.value?.balances?.total || { opening: 0, delta: 0, closing: 0 }
+);
+const hasActivity = computed(() =>
+    Boolean(
+        dashboard.value &&
+            (dashboard.value.totalSales ||
+                dashboard.value.totalExpenses ||
+                dashboard.value.totalPurchaseExpense ||
+                financial.value.accounts.some((a: any) => a.debit || a.credit))
+    )
+);
 
-      totalSales: dashboard.value?.totalSales || 0,
-      salesByPaymentMethod: dashboard.value?.salesByPaymentMethod || {},
-
-      totalExpenses: dashboard.value?.totalExpenses || 0,
-      salaryExpense: dashboard.value?.salaryExpense || 0,
-      salaryPayments: dashboard.value?.salaryPayments || [],
-      expensesByPaymentMethod: dashboard.value?.expensesByPaymentMethod || {},
-
-      totalPurchaseExpense: dashboard.value?.totalPurchaseExpense || 0,
-      purchaseExpensesByPaymentMethod: dashboard.value?.purchaseExpensesByPaymentMethod || {},
-
-      transfersDisplay: dashboard.value?.transfersDisplay || [],
-      transactions: dashboard.value?.transactions || {},
-
-      balances: dashboard.value?.balances || {},
-
-      creditBills: dashboard.value?.creditBills || [],
+async function refresh() {
+    clearTimeout(refreshTimer);
+    const request = ++version;
+    controller?.abort();
+    controller = new AbortController();
+    loading.value = true;
+    error.value = '';
+    try {
+        if (selectedDate.value.start > selectedDate.value.end)
+            throw new Error('Choose a start date before the end date.');
+        const data = await $fetch('/api/report/report', {
+            params: params.value,
+            signal: controller.signal,
+        });
+        if (request !== version) return;
+        dashboard.value = data;
+        lastUpdated.value = new Date();
+    } catch (cause: any) {
+        if (request === version && !controller.signal.aborted) {
+            dashboard.value = null;
+            error.value =
+                cause?.data?.statusMessage ||
+                cause?.message ||
+                'The report could not be loaded.';
+        }
+    } finally {
+        if (request === version) loading.value = false;
     }
-
-    printReport(printData)
-  } catch (err) {
-    console.error(err)
-  } finally {
-    receiptLoading.value = false
-  }
 }
-
-/* =========================
-   DROPDOWN ACTIONS
-========================= */
-
-const actions = () => [
-  [
+watch(
+    [params, companyId],
+    () => {
+        ++version;
+        controller?.abort();
+        loading.value = true;
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(refresh, 150);
+    },
+    { deep: true }
+);
+onMounted(refresh);
+onUnmounted(() => {
+    ++version;
+    clearTimeout(refreshTimer);
+    controller?.abort();
+});
+const ranges = [
+    { label: 'Today', dates: () => ({ start: new Date(), end: new Date() }) },
     {
-      label: 'Download PDF',
-      icon: 'i-heroicons-arrow-down-tray',
-      click: downloadPDF,
-      loading: pdfLoading.value
-    }
-  ],
-  [
+        label: 'Yesterday',
+        dates: () => ({
+            start: subDays(new Date(), 1),
+            end: subDays(new Date(), 1),
+        }),
+    },
     {
-      label: 'Download EXCEL',
-      icon: 'i-heroicons-arrow-down-tray',
-      click: downloadExcel,
-      loading: excelLoading.value
-    }
-  ],
-  [
+        label: 'Last 7 days',
+        dates: () => ({ start: subDays(new Date(), 6), end: new Date() }),
+    },
     {
-      label: 'Print Report',
-      icon: 'i-heroicons-printer',
-      click: printReportHandle,
-      loading: receiptLoading.value
+        label: 'Last 30 days',
+        dates: () => ({ start: subDays(new Date(), 29), end: new Date() }),
+    },
+    {
+        label: 'Last 3 months',
+        dates: () => ({ start: subMonths(new Date(), 3), end: new Date() }),
+    },
+    {
+        label: 'Last year',
+        dates: () => ({ start: subMonths(new Date(), 12), end: new Date() }),
+    },
+];
+const amountColumns: any[] = [
+    { key: 'name', label: 'Payment method' },
+    { key: 'amount', label: 'Amount', type: 'money' },
+];
+const balanceColumns: any[] = [
+    { key: 'name', label: 'Account' },
+    { key: 'debit', label: 'Debit', type: 'money' },
+    { key: 'credit', label: 'Credit', type: 'money' },
+    { key: 'movement', label: 'Balance', type: 'money' },
+];
+const movementColumns: any[] = [
+    { key: 'name', label: 'Account' },
+    { key: 'debit', label: 'Debit', type: 'money' },
+    { key: 'credit', label: 'Credit', type: 'money' },
+    { key: 'net', label: 'Net change', type: 'signed' },
+];
+const itemColumns: any[] = [
+    { key: 'name', label: 'Name' },
+    { key: 'qty', label: 'Quantity', type: 'number' },
+    { key: 'sales', label: 'Sales', type: 'money' },
+];
+const salaryColumns: any[] = [
+    { key: 'date', label: 'Date', type: 'date' },
+    { key: 'userName', label: 'Staff' },
+    { key: 'paymentMode', label: 'Payment method' },
+    { key: 'amount', label: 'Amount', type: 'money' },
+];
+const accountRows = computed(() =>
+    (financial.value?.accounts || [])
+        .filter((a: any) => ['CASH', 'BANK'].includes(a.type))
+        .map((a: any) => ({
+            ...a,
+            href: `/accountant/chart-of-accounts?entryCompany=${a.company_id}&account=${a.id}`,
+        }))
+);
+const accountTotal = computed(() => ({
+    name: 'Total',
+    debit: accountRows.value.reduce((s: number, a: any) => s + a.debit, 0),
+    credit: accountRows.value.reduce((s: number, a: any) => s + a.credit, 0),
+    movement: position.value.delta,
+}));
+const salesRows = computed(() =>
+    ['Cash', 'UPI', 'Card', 'Credit'].map((name) => ({
+        name,
+        amount: dashboard.value?.salesByPaymentMethod?.[name] || 0,
+    }))
+);
+const paymentModes = [
+    ['Cash', 'CASH'],
+    ['UPI', 'UPI'],
+    ['Card', 'CARD'],
+    ['BankTransfer', 'BANK'],
+    ['Cheque', 'CHEQUE'],
+];
+const expensesRows = computed(() =>
+    paymentModes.map(([key, mode]) => ({
+        name: key === 'BankTransfer' ? 'Bank transfer' : key,
+        amount:
+            Number(dashboard.value?.expensesByPaymentMethod?.[key] || 0) +
+            (dashboard.value?.salaryPayments || [])
+                .filter((s: any) => s.paymentMode === mode)
+                .reduce((sum: number, s: any) => sum + Number(s.amount), 0),
+    }))
+);
+const paymentBalanceRows = computed(() =>
+    [...paymentModes.map(([key]) => key), 'Credit'].map((key) => {
+        const name = key === 'BankTransfer' ? 'Bank transfer' : key;
+        return {
+            name,
+            amount:
+                Number(dashboard.value?.salesByPaymentMethod?.[key] || 0) -
+                (expensesRows.value.find((row) => row.name === name)?.amount || 0),
+        };
+    })
+);
+const purchaseRows = computed(() =>
+    paymentModes.map(([key]) => ({
+        name: key === 'BankTransfer' ? 'Bank transfer' : key,
+        amount: dashboard.value?.purchaseExpensesByPaymentMethod?.[key] || 0,
+    }))
+);
+const transactionRows = computed(() =>
+    ['cash', 'bank'].map((key) => ({
+        name: key === 'cash' ? 'Cash' : 'All banks',
+        ...dashboard.value?.transactions?.[key],
+    }))
+);
+const summaryCards = computed(() => [
+    {
+        name: 'Total Revenue',
+        amount: dashboard.value?.totalSales,
+        rows: salesRows.value,
+    },
+    {
+        name: 'Total Expense',
+        amount: dashboard.value?.totalExpenses,
+        rows: expensesRows.value,
+    },
+    {
+        name: 'Selected Period Balance',
+        amount:
+            Number(dashboard.value?.totalSales || 0) -
+            Number(dashboard.value?.totalExpenses || 0),
+        rows: paymentBalanceRows.value,
+    },
+]);
+async function download(kind: 'pdf' | 'excel') {
+    exportLoading.value = kind;
+    try {
+        const response = await $fetch.raw(
+            `/api/report/generate-sales.${kind === 'pdf' ? 'pdf' : 'excel'}`,
+            { params: params.value, responseType: 'blob' }
+        );
+        const url = URL.createObjectURL(response._data as Blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `daily-report-${format(
+            selectedDate.value.end,
+            'yyyy-MM-dd'
+        )}.${kind === 'pdf' ? 'pdf' : 'xlsx'}`;
+        link.click();
+        URL.revokeObjectURL(url);
+    } catch {
+        toast.add({
+            title: 'Export failed',
+            description: 'Please try again.',
+            color: 'red',
+        });
+    } finally {
+        exportLoading.value = '';
     }
-  ]
-]
-
-/* =========================
-   COMPUTED HELPERS
-========================= */
-
-const openingBalances = computed(
-  () => dashboard.value?.balances?.opening || {}
-)
-
-const closingBalances = computed(
-  () => dashboard.value?.balances || {}
-)
-
-const salesByMode = computed(
-  () => dashboard.value?.salesByPaymentMethod || {}
-)
-
-const expenseByMode = computed(
-  () => dashboard.value?.expensesByPaymentMethod || {}
-)
-
-const purchaseExpenseByMode = computed(
-  () => dashboard.value?.purchaseExpensesByPaymentMethod || {}
-)
-
-const transfers = computed(
-  () => dashboard.value?.transfers || {}
-)
-
-const transfersDisplay = computed(
-  () => dashboard.value?.transfersDisplay || []
-)
-
-const transactions = computed(
-  () => dashboard.value?.transactions || {}
-)
-
-const salaryPayments = computed(
-  () => dashboard.value?.salaryPayments || []
-)
-
-const salaryExpense = computed(
-  () => dashboard.value?.salaryExpense || 0
-)
-
-const categorySales = computed(
-  () => dashboard.value?.categorySales || []
-)
-
-const revenueByCategory = computed(
-  () => dashboard.value?.revenueByCategory || []
-)
+}
+async function print() {
+    if (!dashboard.value) return;
+    exportLoading.value = 'print';
+    try {
+        const expenses = await $fetch('/api/report/expenses', {
+            params: params.value,
+        });
+        await printReport({
+            ...dashboard.value,
+            companyName: companyName.value,
+            dateRange: period.value,
+            expenses,
+            moneyPosition: position.value,
+        });
+    } catch {
+        toast.add({
+            title: 'Print failed',
+            description: 'Please try again.',
+            color: 'red',
+        });
+    } finally {
+        exportLoading.value = '';
+    }
+}
+const exportActions = [
+    [
+        {
+            label: 'Download PDF',
+            icon: 'i-lucide-file-text',
+            click: () => download('pdf'),
+        },
+        {
+            label: 'Download Excel',
+            icon: 'i-lucide-sheet',
+            click: () => download('excel'),
+        },
+        { label: 'Print report', icon: 'i-lucide-printer', click: print },
+    ],
+];
 </script>
 
 <template>
-  <UDashboardPanelContent>
-
-    <!-- ================= LOADING ================= -->
-    <div
-      v-if="loading"
-      class="w-full flex justify-center items-center py-20"
-    >
-      <UIcon
-        name="i-heroicons-arrow-path-20-solid"
-        class="animate-spin w-5 h-5 text-gray-500 mr-2"
-      />
-      <span>Loading report...</span>
-    </div>
-
-    <!-- ================= CONTENT ================= -->
-    <div v-else ref="scrollContainer" class="scroll-container">
-      <ClientOnly>
-        <div class="space-y-6 p-6">
-
-          <!-- ================= HEADER ================= -->
-          <div class="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-
-            <!-- Date Picker -->
-            <UPopover
-              :popper="{ placement: 'bottom-start' }"
-              class="z-10 w-full sm:w-60"
+    <UDashboardPanelContent>
+        <div
+            class="mx-auto w-full max-w-[1560px] space-y-6 pb-10 text-gray-800 dark:text-gray-200"
+            :aria-busy="loading"
+        >
+            <header
+                class="flex flex-col justify-between gap-4 xl:flex-row xl:items-center"
             >
-              <UButton
-                icon="i-heroicons-calendar-days-20-solid"
-                class="w-full sm:w-60"
-              >
-                {{ format(selectedDate.start,'d MMM yyyy') }}
-                -
-                {{ format(selectedDate.end,'d MMM yyyy') }}
-              </UButton>
-
-              <template #panel="{ close }">
-                <div class="flex sm:divide-x divide-gray-200">
-
-                  <!-- Quick Ranges -->
-                  <div class="hidden sm:flex flex-col py-4">
-                    <UButton
-                      v-for="(range,index) in ranges"
-                      :key="index"
-                      :label="range.label"
-                      variant="ghost"
-                      class="rounded-none px-6"
-                      @click="selectRange(range.duration)"
-                    />
-                  </div>
-
-                  <DatePicker
-                    v-model="selectedDate"
-                    @close="close"
-                  />
+                <div>
+                    <div
+                        class="mb-1 flex items-center gap-2 text-xs font-medium text-gray-500"
+                        ><UIcon
+                            name="i-lucide-chart-no-axes-combined"
+                            class="h-4 w-4"
+                        /><span>{{ companyName }} · Reports</span></div
+                    >
+                    <h1
+                        class="text-2xl font-semibold tracking-tight text-gray-950 dark:text-white"
+                        >Daily overview</h1
+                    >
+                    <p class="mt-1 text-sm text-gray-500"
+                        >Sales, spending and where your money stands.</p
+                    >
                 </div>
-              </template>
-            </UPopover>
-
-            <!-- Export -->
+                <div class="flex flex-wrap items-center gap-2">
+                    <UPopover :popper="{ placement: 'bottom-end' }">
+                        <UButton
+                            color="white"
+                            icon="i-lucide-calendar-days"
+                            :label="period"
+                            aria-label="Select report date range"
+                        />
+                        <template #panel="{ close }"
+                            ><div class="flex flex-col sm:flex-row"
+                                ><div
+                                    class="flex flex-wrap gap-1 border-b border-gray-200 p-2 sm:w-36 sm:flex-col sm:border-b-0 sm:border-r dark:border-gray-800"
+                                    ><UButton
+                                        v-for="range in ranges"
+                                        :key="range.label"
+                                        color="gray"
+                                        variant="ghost"
+                                        :label="range.label"
+                                        @click="
+                                            selectedDate = range.dates();
+                                            close();
+                                        " /></div
+                                ><DatePicker
+                                    v-model="selectedDate"
+                                    @close="close" /></div
+                        ></template>
+                    </UPopover>
+                    <UButton
+                        color="white"
+                        icon="i-lucide-refresh-cw"
+                        :loading="loading"
+                        aria-label="Refresh report"
+                        @click="refresh"
+                    />
+                    <UDropdown :items="exportActions"
+                        ><UButton
+                            label="Export"
+                            icon="i-lucide-download"
+                            :disabled="loading || !dashboard"
+                            :loading="Boolean(exportLoading)"
+                    /></UDropdown>
+                </div>
+            </header>
             <div
-              v-if="canUseCleanupToggle"
-              class="flex items-center gap-2 rounded-md border border-gray-200 px-3 py-2 dark:border-gray-700"
+                class="flex flex-wrap items-center justify-between gap-3 text-xs text-gray-500"
             >
-              <span class="text-xs font-medium text-gray-600 dark:text-gray-300">
-                Cleaned values
-              </span>
-              <UToggle v-model="showCleanedValues" />
+                <p
+                    >Activity for
+                    <strong
+                        class="font-medium text-gray-700 dark:text-gray-300"
+                        >{{ period }}</strong
+                    >
+                    · Balances through
+                    {{ format(selectedDate.end, 'd MMM yyyy') }}</p
+                >
+                <div class="flex items-center gap-3"
+                    ><span v-if="lastUpdated && !loading"
+                        >Updated {{ format(lastUpdated, 'HH:mm') }}</span
+                    ><label
+                        v-if="canUseCleanupToggle"
+                        class="flex items-center gap-2"
+                        ><UToggle
+                            v-model="showCleanedValues"
+                            aria-label="Use cleaned source values"
+                        />Cleaned values</label
+                    ></div
+                >
             </div>
-
-              <UDropdown :items="actions()">
-                <UButton
-                  label="Export / Print"
-                  icon="i-heroicons-chevron-down"
-                  color="primary"
-                />
-              </UDropdown>
-          </div>
-
-          <!-- ================= KPI ================= -->
-          <div
-            v-if="dashboard"
-            class="grid grid-cols-1 md:grid-cols-4 gap-4"
-          >
-            <UCard>
-              <div class="text-sm text-gray-500">Total Revenue</div>
-              <div class="text-xl font-semibold mb-3">
-                {{ formatCurrency(dashboard.totalSales) }}
-              </div>
-              
-            <UTable
-              :rows="[
-                { mode:'Cash', amount:formatCurrency(salesByMode.Cash || 0) },
-                { mode:'UPI', amount:formatCurrency(salesByMode.UPI || 0) },
-                { mode:'Card', amount:formatCurrency(salesByMode.Card || 0) },
-                { mode:'Credit', amount:formatCurrency(salesByMode.Credit || 0) }
-              ]"
-              :columns="[
-                { key:'mode', label:'Payment Mode' },
-                { key:'amount', label:'Amount' }
-              ]"
+            <UAlert
+                v-if="error"
+                color="red"
+                icon="i-lucide-circle-alert"
+                title="Could not load this report"
+                :description="error"
+                :actions="[{ label: 'Try again', click: refresh }]"
             />
-            </UCard>
-
-            <UCard>
-              <div class="text-sm text-gray-500">Total Expense</div>
-              <div class="text-xl font-semibold mb-3">
-                {{ formatCurrency(dashboard.totalExpenses) }}
-              </div>
-               <UTable
-                :rows="[
-                  { mode:'Cash', amount:formatCurrency(expenseByMode.Cash || 0) },
-                  { mode:'UPI', amount:formatCurrency(expenseByMode.UPI || 0) },
-                  { mode:'Card', amount:formatCurrency(expenseByMode.Card || 0) },
-                  { mode:'Bank', amount:formatCurrency(expenseByMode.BankTransfer || 0) },
-                  { mode:'Cheque', amount:formatCurrency(expenseByMode.Cheque || 0) }
-                ]"
-                :columns="[
-                  { key:'mode', label:'Mode' },
-                  { key:'amount', label:'Amount' }
-                ]"
-              />
-            </UCard>
-
-            
-            <UCard>
-              <div class="text-sm text-gray-500">Total Purchase</div>
-              <div class="text-xl font-semibold mb-3">
-                {{ formatCurrency(dashboard.totalPurchaseExpense) }}
-              </div>
-              
-              <UTable
-                :rows="[
-                  { mode:'Cash', amount:formatCurrency(purchaseExpenseByMode.Cash || 0) },
-                  { mode:'UPI', amount:formatCurrency(purchaseExpenseByMode.UPI || 0) },
-                  { mode:'Card', amount:formatCurrency(purchaseExpenseByMode.Card || 0) },
-                  { mode:'Bank', amount:formatCurrency(purchaseExpenseByMode.BankTransfer || 0) },
-                  { mode:'Cheque', amount:formatCurrency(purchaseExpenseByMode.Cheque || 0) }
-                ]"
-                :columns="[
-                  { key:'mode', label:'Mode' },
-                  { key:'amount', label:'Amount' }
-                ]"
-              />
-            </UCard>
-
-            <UCard>
-              <div class="text-sm text-gray-500">Selected Period Balance</div>
-              <div class="text-xl font-semibold mb-3">
-                {{ formatCurrency(closingBalances.totalBalance) }}
-              </div>
-              <UTable
-              :rows="[
-                { mode:'Cash', amount:formatCurrency(closingBalances.cashBalance || 0) },
-                { mode:'Bank', amount:formatCurrency(closingBalances.bankBalance || 0) },
-                { mode:'Credit', amount:formatCurrency(closingBalances.creditBalance || 0) },
-              ]"
-              :columns="[
-                { key:'mode', label:'Mode' },
-                { key:'amount', label:'Amount' }
-              ]"
-            />
-            </UCard>
-          </div>
-
-      
-          
-          <!-- ================= SALARY GIVEN ================= -->
-          <UCard>
-            <div class="flex items-center justify-between gap-3 mb-3">
-              <h3 class="font-semibold">Salary Given</h3>
-              <div class="text-sm font-medium text-gray-600">
-                {{ formatCurrency(salaryExpense) }}
-              </div>
-            </div>
-
-            <UTable
-              :rows="salaryPayments"
-              :columns="[
-                { key:'date', label:'Date' },
-                { key:'userName', label:'Staff' },
-                { key:'paymentMode', label:'Mode' },
-                { key:'amount', label:'Amount' }
-              ]"
-            >
-              <template #date-data="{ row }">
-                {{ row.date ? format(new Date(row.date), 'dd MMM yyyy') : '-' }}
-              </template>
-
-              <template #amount-data="{ row }">
-                {{ formatCurrency(row.amount || 0) }}
-              </template>
-            </UTable>
-          </UCard>
-
-           <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            
-      
-          <!-- ================= TRANSFERS ================= -->
-          <UCard>
-            <h3 class="font-semibold mb-3">Account Transfers</h3>
-
-            <UTable
-              :rows="transfersDisplay"
-              :columns="[
-                { key:'name', label:'Account' },
-                { key:'debit', label:'Debit', formatter:formatCurrency },
-                { key:'credit', label:'Credit', formatter:formatCurrency },
-                { key:'net', label:'Net', formatter:formatCurrency }
-              ]"
-            />
-          </UCard>
-
-          <!-- ================= TRANSACTIONS ================= -->
-          <UCard>
-            <h3 class="font-semibold mb-3">Money Transactions</h3>
-
-            <UTable
-              :rows="[
-                {
-                  type:'Cash',
-                  debit:transactions.cash?.debit,
-                  credit:transactions.cash?.credit,
-                  net:transactions.cash?.net
-                },
-                {
-                  type:'Bank',
-                  debit:transactions.bank?.debit,
-                  credit:transactions.bank?.credit,
-                  net:transactions.bank?.net
-                }
-              ]"
-              :columns="[
-                { key:'type', label:'Account' },
-                { key:'debit', label:'Debit', formatter:formatCurrency },
-                { key:'credit', label:'Credit', formatter:formatCurrency },
-                { key:'net', label:'Net', formatter:formatCurrency }
-              ]"
-            />
-          </UCard>
-     
-            </div>
-
-          <!-- ================= CATEGORY ================= -->
-          <div class="flex flex-col lg:flex-row gap-4 lg:h-[400px]">
-
-            <!-- Table -->
-            <UCard class="flex-1 p-4 overflow-y-auto">
-              <h3 class="font-semibold mb-3">
-                Category Sales
-              </h3>
-
-              <UTable
-                :rows="categorySales"
-                :columns="[
-                  { key:'name', label:'Category' },
-                  { key:'qty', label:'Qty' },
-                  { key:'sales', label:'Sales', formatter:formatCurrency }
-                ]"
-              />
-            </UCard>
-
-            <!-- Table -->
-            <UCard class="flex-1 p-4 overflow-y-auto">
-              <h3 class="font-semibold mb-3">
-                Brand Sales
-              </h3>
-
-              <UTable
-                :rows="brandSales"
-                :columns="[
-                  { key:'name', label:'Brand' },
-                  { key:'qty', label:'Qty' },
-                  { key:'sales', label:'Sales', formatter:formatCurrency }
-                ]"
-              />
-            </UCard>
-
-          </div>
-
+            <div
+                v-else-if="loading"
+                role="status"
+                aria-label="Loading daily report"
+                class="space-y-6"
+                ><div class="grid grid-cols-1 gap-4 lg:grid-cols-3"
+                    ><USkeleton
+                        v-for="n in 3"
+                        :key="n"
+                        class="h-36 rounded-xl" /></div
+                ><USkeleton class="h-80 rounded-xl"
+            /></div>
+            <template v-else-if="dashboard">
+                <div
+                    v-if="!hasActivity"
+                    class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400"
+                    >No activity in this period. Closing balances still include
+                    earlier posted entries.</div
+                >
+                <section
+                    class="grid grid-cols-1 gap-4 lg:grid-cols-3"
+                    aria-label="Report highlights"
+                >
+                    <UCard
+                        v-for="card in summaryCards"
+                        :key="card.name"
+                        :ui="{ body: { padding: 'p-4 sm:p-4' } }"
+                    >
+                        <h2 class="text-sm text-gray-500">{{ card.name }}</h2>
+                        <p class="mb-3 text-xl font-semibold tabular-nums">{{
+                            money(card.amount)
+                        }}</p>
+                        <ReportsDailyTable
+                            :rows="card.rows"
+                            :columns="amountColumns"
+                            :currency="currency"
+                            :caption="card.name"
+                        />
+                        <p
+                            v-if="card.name === 'Selected Period Balance'"
+                            class="mt-2 text-xs text-gray-500"
+                            >Revenue minus expenses by payment method for the
+                            selected period. Includes salary payments.</p
+                        >
+                    </UCard>
+                </section>
+                <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <section
+                        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+                        ><div
+                            class="flex items-center justify-between gap-3 p-5"
+                            ><span
+                                ><span class="font-semibold"
+                                    >Salary payments</span
+                                ><span class="ml-2 text-xs text-gray-500"
+                                    >{{
+                                        dashboard.salaryPayments?.length || 0
+                                    }}
+                                    entries · Included in paid expenses</span
+                                ></span
+                            ><span class="font-semibold tabular-nums">{{
+                                money(dashboard.salaryExpense)
+                            }}</span></div
+                        ><ReportsDailyTable
+                            :rows="dashboard.salaryPayments || []"
+                            :columns="salaryColumns"
+                            :currency="currency"
+                            caption="Salary payments included in paid expenses"
+                            empty="No salary payments in this period."
+                    /></section>
+                    <section
+                        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+                    >
+                        <div class="flex items-center justify-between gap-3 p-5"
+                            ><div
+                                ><h2 class="font-semibold">Total Purchase</h2
+                                ><p class="mt-1 text-xs text-gray-500"
+                                    >Payments to distributors in this period.</p
+                                ></div
+                            ><strong class="tabular-nums">{{
+                                money(dashboard.totalPurchaseExpense)
+                            }}</strong></div
+                        >
+                        <ReportsDailyTable
+                            :rows="purchaseRows"
+                            :columns="amountColumns"
+                            :currency="currency"
+                            caption="Purchase payments by payment method"
+                        /> </section
+                ></div>
+                <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <section
+                        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+                        ><div class="flex items-start justify-between gap-3 p-5"
+                            ><div
+                                ><h2 class="font-semibold">Account transfers</h2
+                                ><p class="mt-1 text-xs text-gray-500"
+                                    >Movement by account. Already included in
+                                    the remaining balances below.</p
+                                ></div
+                            ><UButton
+                                to="/accountant/account-transfers"
+                                color="gray"
+                                variant="ghost"
+                                icon="i-lucide-arrow-up-right"
+                                aria-label="Open account transfers" /></div
+                        ><ReportsDailyTable
+                            :rows="dashboard.transfersDisplay || []"
+                            :columns="movementColumns"
+                            :currency="currency"
+                            caption="Posted account transfer movements"
+                            empty="No transfers in this period."
+                    /></section>
+                    <section
+                        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+                        ><div class="flex items-start justify-between gap-3 p-5"
+                            ><div
+                                ><h2 class="font-semibold"
+                                    >Receive / Pay money</h2
+                                ><p class="mt-1 text-xs text-gray-500"
+                                    >Standalone entries. Already included in the
+                                    remaining balances below.</p
+                                ></div
+                            ><UButton
+                                to="/accountant/money"
+                                color="gray"
+                                variant="ghost"
+                                icon="i-lucide-arrow-up-right"
+                                aria-label="Open Receive and Pay money" /></div
+                        ><ReportsDailyTable
+                            :rows="transactionRows"
+                            :columns="movementColumns"
+                            :currency="currency"
+                            caption="Standalone money receipts and payments by cash and bank"
+                    /></section>
+                </div>
+                <section
+                    id="money-position"
+                    class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+                    aria-labelledby="money-title"
+                >
+                    <div class="p-5">
+                        <h2 id="money-title" class="font-semibold"
+                            >Selected Period Balance - All fund accounts</h2
+                        >
+                        <p class="mt-1 text-xs text-gray-500"
+                            >Balance = Debit minus Credit for the selected
+                            period. Includes Transfers and Receive / Pay
+                            money.</p
+                        >
+                    </div>
+                    <ReportsDailyTable
+                        :rows="accountRows"
+                        :columns="balanceColumns"
+                        :total="accountTotal"
+                        :currency="currency"
+                        caption="Selected period debit, credit and balance for each fund account"
+                        empty="No fund accounts to show for this period."
+                    />
+                </section>
+                <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
+                    <section
+                        v-for="group in [
+                            {
+                                title: 'Sales by category',
+                                rows: dashboard.categorySales,
+                            },
+                            {
+                                title: 'Sales by brand',
+                                rows: dashboard.brandSales,
+                            },
+                        ]"
+                        :key="group.title"
+                        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
+                        ><div class="p-5"
+                            ><h2 class="font-semibold">{{ group.title }}</h2
+                            ><p class="mt-1 text-xs text-gray-500"
+                                >Item detail from paid source bills.</p
+                            ></div
+                        ><ReportsDailyTable
+                            :rows="group.rows || []"
+                            :columns="itemColumns"
+                            :currency="currency"
+                            :caption="group.title"
+                            empty="No paid bill items in this period."
+                    /></section>
+                </div>
+                <p class="px-1 text-xs leading-5 text-gray-500"
+                    >Sales, expenses, supplier payments and item details use
+                    source records. Account balances use posted journals,
+                    including imported history and reversals. Unposted history
+                    is excluded.</p
+                >
+            </template>
         </div>
-      </ClientOnly>
-    </div>
-
-  </UDashboardPanelContent>
+    </UDashboardPanelContent>
 </template>

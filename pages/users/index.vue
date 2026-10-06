@@ -1,8 +1,11 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 import { hash } from '~/composables/hash';
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
-import { useFindManyCompanyUser, useUpdateCompanyUser, useCountCompanyUser } from '~/lib/hooks/company-user';
+import { useFindManyCompanyUser, useUpdateCompanyUser, useCountCompanyUser } from '~/lib/company-hooks/company-user';
 import { useFindManyEntry, useCountEntry } from '~/lib/hooks/entry';
 import { useFindManyExpense, useCountExpense } from '~/lib/hooks/expense';
 import { useFindManyExpenseCategory } from '~/lib/hooks/expense-category';
@@ -10,6 +13,8 @@ import { useUpdateUser, useCreateUser, useFindUniqueUser } from '~/lib/hooks/use
 import { useCompanyEntries } from '~/composables/companyReports'
 
 const userStore = useUserStore()
+const actualAuth = useNuxtApp().$auth;
+const refreshUserCache = () => userStore.fetchUsers(actualAuth.session.value?.companyId!);
 const toast = useToast();
 const isSaving = ref(false)
 const isDeleting = ref(false)
@@ -21,7 +26,7 @@ const UpdateCompanyUser = useUpdateCompanyUser({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
 const isOpen = ref(false);
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 
 // ─── Selected user & detail panel ───
 const selectedUser = ref<any>(null)
@@ -104,7 +109,7 @@ const salesColumns = [
 
 const salesEntryArgs = computed(() => {
     if (!selectedUser.value) return null
-    const companyId = useAuth().session.value?.companyId
+    const companyId = selectedUser.value.companyId
     return {
         where: {
             companyId,
@@ -227,14 +232,14 @@ const expenseColumns = [
 ]
 
 const expenseCategoryArgs = computed(() => ({
-    where: { companyId: useAuth().session.value?.companyId },
+    where: { companyId: selectedUser.value?.companyId || companyScope.companyId.value },
     select: { id: true, name: true },
 }))
 const { data: expenseCategories } = useFindManyExpenseCategory(expenseCategoryArgs)
 
 const expenseQueryArgs = computed(() => {
     if (!selectedUser.value) return null
-    const companyId = useAuth().session.value?.companyId
+    const companyId = selectedUser.value.companyId
     return {
         where: {
             companyId,
@@ -353,21 +358,25 @@ const resetForm = () => {
 
 // ─── Per-user salary dues (opening balance + accrued − paid) ───
 const dues = ref<Record<string, any>>({})
+let duesVersion = 0;
 const refreshDues = async () => {
+    const version = ++duesVersion;
     try {
         const res: any = await $fetch('/api/salary/dues')
-        dues.value = Object.fromEntries((res.dues ?? []).map((d: any) => [d.userId, d]))
+        if (version === duesVersion) dues.value = Object.fromEntries((res.dues ?? []).map((d: any) => [`${d.companyId}:${d.userId}`, d]))
     } catch { /* non-critical */ }
 }
 onMounted(refreshDues)
 const money = (v: any) => `₹${Number(v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })}`
 
-const openCreate = () => {
+const openCreate = async () => {
+    await companyScope.beginForm();
     resetForm()
     isOpen.value = true
 }
 
-const openEdit = (row) => {
+const openEdit = async (row: any) => {
+    await companyScope.beginForm({ model: 'CompanyUser', id: row.userId, companyId: row.companyId });
     resetForm()
     isOpen.value = true
     formData.email = row.user.email
@@ -381,6 +390,59 @@ const openEdit = (row) => {
     }
 
 
+const configModalOpen = ref(false)
+const isSavingConfig = ref(false)
+const periodOptions = ['MONTHLY', 'WEEKLY', 'DAILY', 'HOURLY']
+const configForm = reactive({
+    userId: '' as string,
+    period: 'MONTHLY',
+    amount: 0 as number,
+    commissionPercentage: 0 as number,
+    effectiveFrom: '',
+})
+const salaryConfigName = ref('')
+const salaryConfigOwner = ref('')
+const minimumSalaryEffectiveDate = ref('')
+const salaryVersions = ref<any[]>([])
+const canManageSalary = computed(() => ['admin', 'manager', 'accountant'].includes(useAuth().session.value?.role || ''))
+const openConfig = async (staff: any) => {
+    if (!canManageSalary.value) return
+    await companyScope.beginForm()
+    await companyScope.selectOwner(staff.companyId)
+    await nextTick()
+    let response: any
+    try { response = await $fetch('/api/salary/config', { query: { userId: staff.userId } }) }
+    catch (error: any) { toast.add({ title: 'Could not load salary settings', description: error?.data?.statusMessage || error.message, color: 'red' }); return }
+    const row = { ...staff, config: response.config }
+    minimumSalaryEffectiveDate.value = response.minimumEffectiveFrom
+    configForm.effectiveFrom = response.minimumEffectiveFrom
+    salaryVersions.value = response.config?.rateHistory || []
+    salaryConfigName.value = staff.name || staff.user?.email || staff.userId
+    salaryConfigOwner.value = staff.companyId
+    const c = row.config
+    configForm.userId = row.userId
+    configForm.period = c?.period ?? 'MONTHLY'
+    configForm.amount = Number(c?.amount ?? 0)
+    configForm.commissionPercentage = Number(c?.commissionPercentage ?? 0)
+    configModalOpen.value = true
+}
+const submitConfig = async () => {
+    if (!configForm.userId) return toast.add({ title: 'Pick a staff member', color: 'red' })
+    if (isSavingConfig.value || !canManageSalary.value || companyScope.busy.value) return
+    if (!Number.isFinite(configForm.amount) || configForm.amount < 0 || !Number.isFinite(configForm.commissionPercentage) || configForm.commissionPercentage < 0 || configForm.commissionPercentage > 100) return toast.add({ title: 'Enter a non-negative salary and commission from 0 to 100%', color: 'red' })
+    isSavingConfig.value = true
+    try {
+        await $fetch('/api/salary/config', { method: 'POST', headers: { 'x-company-id': salaryConfigOwner.value }, body: { ...configForm } })
+        toast.add({ title: 'Salary settings saved', color: 'green' })
+        configModalOpen.value = false
+    } catch (err: any) {
+        toast.add({ title: 'Could not save', description: err?.message, color: 'red' })
+    } finally {
+        isSavingConfig.value = false
+    }
+}
+
+
 const action = (row) => [
     [
         {
@@ -388,6 +450,7 @@ const action = (row) => [
             icon: 'i-heroicons-pencil-square-20-solid',
             click: () => openEdit(row),
         },
+        ...(canManageSalary.value ? [{ label: 'Salary settings', icon: 'i-heroicons-cog-6-tooth', click: () => openConfig(row) }] : []),
     ],
     [
         {
@@ -395,7 +458,7 @@ const action = (row) => [
             icon: 'i-heroicons-trash-20-solid',
            click: () => {
                 isDeleteModalOpen.value = true
-                deletingRowIdentinty.value = {name:row.name,id:row.userId}
+                deletingRowIdentinty.value = row
                 }
         },
     ],
@@ -425,6 +488,7 @@ const options = [
     { label: 'Manager', value: 'manager' },
     { label: 'Biller', value: 'biller' },
     { label: 'Accountant', value: 'accountant' },
+    { label: 'Investor', value: 'investor' },
     { label: 'User', value: 'user' },
 
 ];
@@ -451,7 +515,7 @@ const { refetch: refetchCodeCheck } = useFindManyCompanyUser(
     },
     take: 1,
   }),
-  { enabled: false }
+  { enabled: false, companyScope: 'form' } as any
 );
 
 
@@ -467,10 +531,11 @@ watch([page, pageCount, search, selectedStatus, sort], () => {
 }, { deep: true });
 
 
-const deleteUser = async (id: string) => {
+const deleteUser = async (row: any) => {
+  const id = row.userId;
   isDeleting.value = true
 
-  const companyId = useAuth().session.value?.companyId!
+  const companyId = row.companyId
   const currentUserId = useAuth().session.value?.id
 
   try {
@@ -478,23 +543,8 @@ const deleteUser = async (id: string) => {
       throw new Error('User list not loaded')
     }
 
-    const userToDelete = users.value.find(u => u.userId === id)
+    const userToDelete = users.value.find(u => u.userId === id && u.companyId === companyId)
     if (!userToDelete) return
-
-    if (userToDelete.role === 'admin') {
-      const adminCount = users.value.filter(u => u.role === 'admin' && !u.deleted).length
-
-      if (adminCount <= 1) {
-        alert('At least one admin must remain in the company')
-            toast.add({
-            title: 'At least one admin must remain in the company!',
-            description: 'You cannot delete the last admin user.',
-            color: 'red',
-            id: 'modal-success',
-        });
-        return
-      }
-    }
 
     await UpdateCompanyUser.mutateAsync({
       where: {
@@ -510,7 +560,7 @@ const deleteUser = async (id: string) => {
     });
 
 
-    if (id === currentUserId) {
+    if (id === currentUserId && companyId === actualAuth.session.value?.companyId) {
       await authLogout()
     }
 
@@ -519,7 +569,7 @@ const deleteUser = async (id: string) => {
       selectedUser.value = null
     }
 
-    await userStore.fetchUsers(companyId)
+    await refreshUserCache()
   } catch (error) {
     console.error('Failed to delete user:', error)
   } finally {
@@ -546,31 +596,12 @@ const deleteSelectedUsers = async () => {
       throw new Error('User list not loaded')
     }
 
-    // Guard: at least one admin must remain in the company.
-    const selectedAdminIds = selectedRows.value
-      .filter(r => r.role === 'admin')
-      .map(r => r.userId)
-    if (selectedAdminIds.length) {
-      const totalAdmins = users.value.filter(u => u.role === 'admin' && !u.deleted).length
-      if (totalAdmins - selectedAdminIds.length < 1) {
-        toast.add({
-          title: 'At least one admin must remain in the company!',
-          description: 'You cannot delete all admin users.',
-          color: 'red',
-          id: 'modal-success',
-        })
-        isBulkDeleting.value = false
-        isBulkDeleteModalOpen.value = false
-        return
-      }
-    }
-
     let deletedSelf = false
     for (const row of selectedRows.value) {
       await UpdateCompanyUser.mutateAsync({
         where: {
           companyId_userId: {
-            companyId,
+            companyId: row.companyId,
             userId: row.userId,
           },
         },
@@ -580,10 +611,10 @@ const deleteSelectedUsers = async () => {
         },
       })
 
-      if (row.userId === currentUserId) deletedSelf = true
+      if (row.userId === currentUserId && row.companyId === actualAuth.session.value?.companyId) deletedSelf = true
 
       // Close detail panel if the selected (open) user is being deleted
-      if (selectedUser.value?.userId === row.userId) {
+      if ((selectedUser.value?.userId === row.userId && selectedUser.value?.companyId === row.companyId)) {
         selectedUser.value = null
       }
     }
@@ -594,7 +625,7 @@ const deleteSelectedUsers = async () => {
     })
 
     selectedRows.value = []
-    await userStore.fetchUsers(companyId)
+    await refreshUserCache()
 
     if (deletedSelf) await authLogout()
   } catch (error) {
@@ -646,7 +677,9 @@ const queryArgs = computed(() => {
   };
 });
 
-const { data: users, isLoading } = useFindManyCompanyUser(queryArgs);
+const { data: rawUsers, isLoading } = useFindManyCompanyUser(queryArgs);
+const users = computed(() => (rawUsers.value ?? []).map((row: any) => ({ ...row, id: `${row.companyId}:${row.userId}` })));
+const displayColumns = computed(() => [...(companyScope.enabled.value ? [{ key: 'company.name', label: 'Company / branch' }] : []), ...columns]);
 
 const countArgs = computed(() => ({
   where: queryArgs.value.where,
@@ -659,16 +692,16 @@ const pageTo = computed(() =>
     Math.min(page.value * pageCount.value, pageTotal.value),
 );
 
-async function toggleStatus(userId: string) {
+async function toggleStatus(user: any) {
+  const userId = user.userId;
   if (!users.value) return
 
-  const user = users.value.find(u => u.userId === userId)
   if (!user) return
 
-  const companyId = useAuth().session.value?.companyId!
+  const companyId = user.companyId
 
   try {
-    UpdateCompanyUser.mutate({
+    await UpdateCompanyUser.mutateAsync({
       where: {
         companyId_userId: {
           companyId,
@@ -682,7 +715,7 @@ async function toggleStatus(userId: string) {
 
     // Keep the cached user list (used for billing/sales-edit code lookups) in sync,
     // so a deactivated user can no longer be resolved by code.
-    await userStore.fetchUsers(companyId)
+    await refreshUserCache()
   } catch (error) {
     console.error('Error updating user status:', error)
   }
@@ -698,6 +731,7 @@ const downloadSales = async (format: 'excel' | 'pdf') => {
     try {
         const res = await $fetch.raw(`/api/downloads/user-sales.${format}`, {
             method: 'GET',
+            headers: { 'x-company-id': selectedUser.value.companyId, 'x-company-filter': selectedUser.value.companyId },
             params: {
                 userId:         selectedUser.value.userId,
                 startDate:      startOfDay(salesSelectedDate.value.start).toISOString(),
@@ -726,6 +760,7 @@ const downloadExpenses = async (format: 'excel' | 'pdf') => {
     try {
         const res = await $fetch.raw(`/api/downloads/user-expenses.${format}`, {
             method: 'GET',
+            headers: { 'x-company-id': selectedUser.value.companyId, 'x-company-filter': selectedUser.value.companyId },
             params: {
                 userId:       selectedUser.value.userId,
                 startDate:    startOfDay(expenseSelectedDate.value.start).toISOString(),
@@ -783,28 +818,11 @@ const handleSubmit = async (e: Event) => {
                 }
             }
 
-            await UpdateUser.mutateAsync({
-    where: { id: formData.id },
-    data: {
-        companies: {
-        update: {
-            where: {
-            companyId_userId: {
-                companyId: useAuth().session.value?.companyId!,
-                userId: formData.id
-            }
-            },
-            data: {
-            name: formData.name,
-            role: formData.role.value,
-            phone: formData.phone?.trim() || null,
-            openingBalance: Number(formData.openingBalance) || 0,
-            ...(codeProvided ? { code: Number(formData.code) } : {})
-            }
-        }
-        }
-    }
-    });
+            await UpdateCompanyUser.mutateAsync({
+              where: { companyId_userId: { companyId: companyScope.companyId.value, userId: formData.id } },
+              data: { name: formData.name, role: formData.role.value as any, phone: formData.phone?.trim() || null,
+                openingBalance: Number(formData.openingBalance) || 0, ...(codeProvided ? { code: Number(formData.code) } : {}) },
+            });
     toast.add({
             title: 'user updated !',
             id: 'modal-success',
@@ -871,7 +889,7 @@ const handleSubmit = async (e: Event) => {
 
         isOpen.value = false;
 
-        await userStore.fetchUsers(useAuth().session.value?.companyId!)
+        await refreshUserCache()
     } catch (err: any) {
         console.log(err.info?.message ?? err);
          toast.add({
@@ -882,6 +900,7 @@ const handleSubmit = async (e: Event) => {
         isSaving.value = false
     }
 };
+watch(companyScope.readIds, () => { page.value = 1; selectedRows.value = []; selectedUser.value = null; void refreshDues(); });
 </script>
 
 <template>
@@ -903,7 +922,7 @@ const handleSubmit = async (e: Event) => {
                         body: {
                             padding: '',
                             base: 'divide-y divide-gray-200 dark:divide-gray-700',
-                        }, 
+                        },
                         footer: { padding: 'p-4' },
                     }"
                 >
@@ -911,11 +930,12 @@ const handleSubmit = async (e: Event) => {
                     <template #header>
                         <div class="flex flex-wrap items-center justify-between gap-3 w-full">
                             <div class="flex " :class="[selectedUser ? 'w-full justify-between items-center ' : 'gap-2']">
+                                <CompanyTableFilter />
                                 <UInput
                                     v-model="search"
                                     icon="i-heroicons-magnifying-glass-20-solid"
                                     placeholder="Search..."
-                                    
+
                                     size="sm"
                                 />
                                 <USelectMenu
@@ -923,7 +943,7 @@ const handleSubmit = async (e: Event) => {
                                     :options="todoStatus"
                                     multiple
                                     placeholder="Status"
-                                    
+
                                     size="sm"
                                 />
                             </div>
@@ -979,7 +999,7 @@ const handleSubmit = async (e: Event) => {
                             v-model="selectedRows"
                             v-model:sort="sort"
                             :rows="users"
-                            :columns="columns"
+                            :columns="displayColumns"
                             :loading="isLoading"
                             sort-asc-icon="i-heroicons-arrow-up"
                             sort-desc-icon="i-heroicons-arrow-down"
@@ -1019,13 +1039,13 @@ const handleSubmit = async (e: Event) => {
                             </template>
                             <template #salaryDue-data="{ row }">
                                 <span
-                                    v-if="dues[row.userId]"
+                                    v-if="dues[`${row.companyId}:${row.userId}`]"
                                     class="text-xs font-medium"
-                                    :class="(dues[row.userId].due) > 0.009 ? 'text-red-600' : (dues[row.userId].due) < -0.009 ? 'text-green-600' : 'text-gray-500'"
-                                    :title="`Opening ${dues[row.userId].openingBalance} + accrued ${dues[row.userId].accrued} - paid ${dues[row.userId].paid} - credit bills ${dues[row.userId].creditBills || 0}`"
+                                    :class="(dues[`${row.companyId}:${row.userId}`].due) > 0.009 ? 'text-red-600' : (dues[`${row.companyId}:${row.userId}`].due) < -0.009 ? 'text-green-600' : 'text-gray-500'"
+                                    :title="`Opening ${dues[`${row.companyId}:${row.userId}`].openingBalance} + accrued ${dues[`${row.companyId}:${row.userId}`].accrued} - paid ${dues[`${row.companyId}:${row.userId}`].paid} - credit bills ${dues[`${row.companyId}:${row.userId}`].creditBills || 0}`"
                                 >
-                                    {{ money(dues[row.userId].due) }}
-                                    <span v-if="(dues[row.userId].due) < -0.009" class="text-[10px] text-gray-400">(overpaid)</span>
+                                    {{ money(dues[`${row.companyId}:${row.userId}`].due) }}
+                                    <span v-if="(dues[`${row.companyId}:${row.userId}`].due) < -0.009" class="text-[10px] text-gray-400">(overpaid)</span>
                                 </span>
                                 <span v-else class="text-xs text-gray-300">—</span>
                             </template>
@@ -1033,7 +1053,7 @@ const handleSubmit = async (e: Event) => {
                                 <UToggle
                                     :model-value="row.status"
                                     size="xs"
-                                    @click.stop="toggleStatus(row.userId)"
+                                    @click.stop="toggleStatus(row)"
                                 />
                             </template>
                            <template #actions-data="{ row }">
@@ -1059,21 +1079,21 @@ const handleSubmit = async (e: Event) => {
                                 :key="row.id"
                                 type="button"
                                 class="w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/40"
-                                :class="selectedUser?.userId === row.userId ? 'bg-primary-50 dark:bg-primary-900/20' : ''"
+                                :class="(selectedUser?.userId === row.userId && selectedUser?.companyId === row.companyId) ? 'bg-primary-50 dark:bg-primary-900/20' : ''"
                                 @click="selectUser(row)"
                             >
                                 <div class="flex items-start gap-3">
                                     <UAvatar :alt="row.name" size="sm" />
                                     <div class="min-w-0 flex-1">
-                                        
+
                                         <p class="mt-1 truncate text-xs text-gray-500">
-                                            {{ row.role?.toUpperCase() }} - {{ row.code || '-' }}
+                                            {{ row.role?.toUpperCase() }} - {{ row.code || '-' }}<span v-if="companyScope.enabled.value"> ? {{ companyScope.companyName(row.companyId) }}</span>
                                         </p>
                                     </div>
                                     <div class="flex items-start justify-between gap-2">
                                         <p
                                             class="truncate text-sm"
-                                            :class="selectedUser?.userId === row.userId
+                                            :class="(selectedUser?.userId === row.userId && selectedUser?.companyId === row.companyId)
                                             ? 'font-semibold text-primary-700 dark:text-primary-300'
                                             : 'font-medium text-gray-900 dark:text-gray-100'"
                                         >
@@ -1165,12 +1185,12 @@ const handleSubmit = async (e: Event) => {
                         :items="tabs"
                         class="flex-1 flex flex-col overflow-hidden"
                         color="primary"
-                        :ui="{ list: 
-                            { 
+                        :ui="{ list:
+                            {
                                 tab: { active: 'text-primary-600 dark:text-primary-400' },
                                 background: 'bg-gray-50 dark:bg-gray-800/50 '
                             },
-                          
+
                              }"
                     >
                         <template #item="{ item, index }">
@@ -1330,7 +1350,7 @@ const handleSubmit = async (e: Event) => {
                                                     class="w-44"
                                                     size="xs"
                                                 />
-                                                
+
                                             </div>
                                         </template>
 
@@ -1495,6 +1515,7 @@ const handleSubmit = async (e: Event) => {
                     <div>{{ formData.id ? 'Edit user' : 'Add user' }}</div>
                 </template>
 
+                <CompanyFormField @transferred="isOpen = false; refreshDues(); refreshUserCache()" />
                 <UFormGroup name="name" label="name" class="mb-5">
                     <UInput
                         v-model="formData.name"
@@ -1573,7 +1594,7 @@ const handleSubmit = async (e: Event) => {
                 color="red"
                 label="Delete"
                 :loading="isDeleting"
-                @click="() => deleteUser(deletingRowIdentinty.id)"
+                @click="() => deleteUser(deletingRowIdentinty)"
             />
             <UButton color="white" label="Cancel" @click="isDeleteModalOpen = false" />
         </template>
@@ -1605,6 +1626,33 @@ const handleSubmit = async (e: Event) => {
             <UButton color="white" label="Cancel" @click="isBulkDeleteModalOpen = false" />
         </template>
     </UDashboardModal>
+        <UModal v-model="configModalOpen" :prevent-close="isSavingConfig" :ui="{ width: 'sm:max-w-xl' }">
+            <UCard :ui="{ header: { padding: 'px-4 py-4' } }">
+                <template #header><h3 class="text-base font-semibold">Salary settings — {{ salaryConfigName }}</h3></template>
+                <div class="space-y-4">
+                    <div class="grid grid-cols-2 gap-3">
+                        <CompanyFormField locked />
+                    <UFormGroup label="Effective from" help="Starts a new salary rate. Earlier rates are kept; dates covered by saved payroll cannot be changed."><UInput v-model="configForm.effectiveFrom" type="date" :min="minimumSalaryEffectiveDate" max="2100-12-31" /></UFormGroup>
+
+                    <UFormGroup label="Salary period" help="How the base amount is defined: monthly, weekly, daily or hourly."><USelect v-model="configForm.period" :options="periodOptions" /></UFormGroup>
+                        <UFormGroup label="Salary amount" help="Base amount for the chosen period. A shift assignment is required before payroll can calculate pay."><UInput v-model.number="configForm.amount" type="number" min="0" /></UFormGroup>
+                        <UFormGroup label="Commission %" help="Percentage of net staff sales in the payroll period. Use 0 for no commission.">
+                            <UInput v-model.number="configForm.commissionPercentage" type="number" min="0" max="100" step="0.01" />
+                        </UFormGroup>
+                    </div>
+                </div>
+                <div v-if="salaryVersions.length" class="mt-4 text-sm space-y-1">
+                    <h4 class="font-semibold">Saved salary rates</h4>
+                    <p v-for="version in salaryVersions" :key="version.effectiveFrom">{{ version.effectiveFrom === '0001-01-01' ? 'Previous rate' : version.effectiveFrom }}: {{ version.period }} {{ money(version.amount) }} + {{ version.commissionPercentage }}% commission</p>
+                </div>
+                <template #footer>
+                    <div class="flex justify-end gap-2">
+                        <UButton color="gray" variant="ghost" label="Cancel" :disabled="isSavingConfig" @click="configModalOpen = false" />
+                        <UButton :loading="isSavingConfig" :disabled="companyScope.busy.value" label="Save" @click="submitConfig" />
+                    </div>
+                </template>
+            </UCard>
+        </UModal>
     </UDashboardPanelContent>
 </template>
 

@@ -1,14 +1,17 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
+import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import { deleteAccountLedgerForSource, distributorPaymentLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 
 // Raw-SQL atomic replacement for add.vue's saveEditedPurchaseInfo +
 // syncEditedPurchasePayment (PO edit flow). Mirrors the credit/payment transition
 // matrix exactly (create / delete / update many keyed by purchase_order_id) then
 // updates the PO row — all in one transaction.
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'No company in session' })
 
@@ -22,11 +25,11 @@ export default defineEventHandler(async (event) => {
   } = payment
 
   const newType = paymentType || null
-  const oldType = oldPaymentType || null
+  let oldType: string | null = null
   const isNewCredit = newType === 'CREDIT'
-  const wasOldCredit = oldType === 'CREDIT'
+  let wasOldCredit = false
   const hasNew = newType !== null
-  const hasOld = oldType !== null
+  let hasOld = false
   if (hasNew && !distributorId) throw createError({ statusCode: 400, statusMessage: 'Distributor is required for purchase payment' })
 
   const createdAtDate = createdAt ? new Date(createdAt) : new Date()
@@ -44,19 +47,7 @@ export default defineEventHandler(async (event) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7)`,
       [paymentId, createdAtDate, totalAmount || 0, newType, distributorId, companyId, poId],
     )
-    await rebuildAccountLedgerForSource(client, {
-      companyId,
-      sourceType: 'DISTRIBUTOR_PAYMENT',
-      sourceId: paymentId,
-      rows: distributorPaymentLedgerRows({
-        id: paymentId,
-        companyId,
-        amount: totalAmount || 0,
-        paymentType: newType,
-        createdAt: createdAtDate,
-        remarks: `Purchase order ${poId}`,
-      }),
-    })
+
   }
 
   const deletePaymentsForPurchaseOrder = async (client: any) => {
@@ -64,9 +55,7 @@ export default defineEventHandler(async (event) => {
       `SELECT id FROM distributor_payments WHERE purchase_order_id = $1 AND company_id = $2`,
       [poId, companyId],
     )
-    for (const row of existing.rows) {
-      await deleteAccountLedgerForSource(client, { companyId, sourceType: 'DISTRIBUTOR_PAYMENT', sourceId: row.id })
-    }
+
     await client.query(`DELETE FROM distributor_payments WHERE purchase_order_id = $1 AND company_id = $2`, [poId, companyId])
   }
 
@@ -78,27 +67,20 @@ export default defineEventHandler(async (event) => {
        RETURNING id`,
       [poId, totalAmount || 0, newType, createdAtDate, companyId],
     )
-    for (const row of existing.rows) {
-      await rebuildAccountLedgerForSource(client, {
-        companyId,
-        sourceType: 'DISTRIBUTOR_PAYMENT',
-        sourceId: row.id,
-        rows: distributorPaymentLedgerRows({
-          id: row.id,
-          companyId,
-          amount: totalAmount || 0,
-          paymentType: newType,
-          createdAt: createdAtDate,
-          remarks: `Purchase order ${poId}`,
-        }),
-      })
-    }
+
   }
 
   async function runTransaction(attempt = 1): Promise<any> {
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
+      const previous = (await client.query('SELECT * FROM purchase_orders WHERE id=$1 AND company_id=$2 FOR UPDATE', [poId,companyId])).rows[0];
+      if (!previous) throw createError({statusCode:404,statusMessage:'Purchase order not found'});
+      oldType=previous.payment_type; wasOldCredit=oldType==='CREDIT'; hasOld=oldType!==null;
+      const payments=(await client.query('SELECT id,expense_id FROM distributor_payments WHERE purchase_order_id=$1 AND company_id=$2',[poId,companyId])).rows;
+      if (distributorId && previous.distributor_id && distributorId!==previous.distributor_id && payments.length) throw createError({statusCode:409,statusMessage:'This purchase has payments. Reverse its payments before changing distributor.'});
+      if (payments.length && (oldType!==newType || (oldType!=='CREDIT' && (payments.length>1 || payments.some((p:any)=>p.expense_id))))) throw createError({statusCode:409,statusMessage:'Edit payments separately before changing the payment method or a purchase with multiple settlements.'});
 
       // --- payment transition matrix (keyed by purchase_order_id) ---
       if (hasNew && !hasOld) {
@@ -108,8 +90,8 @@ export default defineEventHandler(async (event) => {
         else await deletePaymentsForPurchaseOrder(client)
       } else if (isNewCredit && wasOldCredit) {
         await client.query(
-          `UPDATE distributor_credits SET amount = $2, "billNo" = $3, created_at = $4 WHERE purchase_order_id = $1`,
-          [poId, totalAmount || 0, billNo || null, createdAtDate],
+          `UPDATE distributor_credits SET amount = $2, "billNo" = $3, created_at = $4, distributor_id=$5 WHERE purchase_order_id = $1 AND company_id=$6`,
+          [poId, totalAmount || 0, billNo || null, createdAtDate, distributorId, companyId],
         )
       } else if (!isNewCredit && wasOldCredit) {
         await client.query(`DELETE FROM distributor_credits WHERE purchase_order_id = $1`, [poId])
@@ -141,6 +123,13 @@ export default defineEventHandler(async (event) => {
         ],
       )
 
+      if (distributorId) {
+        await selectDistributorAccounts(client,companyId,distributorId,`purchase:${poId}`,payment.accountingAccounts);
+        if (newType && newType!=='CREDIT') {
+          const rows=await client.query('SELECT id FROM distributor_payments WHERE company_id=$1 AND purchase_order_id=$2',[companyId,poId]);
+          for(const row of rows.rows) await selectDistributorAccounts(client,companyId,distributorId,`payment:${row.id}`,payment.accountingAccounts);
+        }
+      }
       await client.query('COMMIT')
       client.release()
       return { success: true, poId }
@@ -158,7 +147,9 @@ export default defineEventHandler(async (event) => {
 
   try {
     return await runTransaction()
-  } catch {
+  } catch (error: any) {
+    if (error.statusCode) throw error;
+    if (error.code==='P0001') throw createError({statusCode:400,statusMessage:error.message});
     throw createError({ statusCode: 500, statusMessage: 'Failed to update purchase order' })
   }
 })

@@ -1,12 +1,11 @@
 // ~/server/api/expenses.get.ts
 import { defineEventHandler, getQuery } from 'h3'
 import { pool } from '~/server/db'
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
 
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
-  const companyId = session.data.companyId
-  if (!companyId)
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  const companyIds = await getReadCompanyIds(event)
 
   const query = getQuery(event)
 
@@ -33,11 +32,11 @@ export default defineEventHandler(async (event) => {
       FROM expenses e
       LEFT JOIN expense_categories ec ON e.expense_category_id = ec.id
       LEFT JOIN company_users cu ON cu.company_id = e.company_id AND cu.user_id = e.from_id
-      WHERE e.company_id = $1
+      WHERE e.company_id = ANY($1::text[])
         AND e.expense_date BETWEEN $2 AND $3
       ORDER BY e.expense_date DESC;
       `,
-      [companyId, startDate, endDate]
+      [companyIds, startDate.toISOString(), endDate.toISOString()]
     )
 
     // ✅ Transform to match your expected structure

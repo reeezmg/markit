@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery, createError, setHeader } from 'h3'
 import { pool } from '~/server/db'
+import { getReadCompanyId } from '~/server/utils/organizationReadScope'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 
@@ -10,9 +11,7 @@ const LIGHT = [220, 230, 241] as [number, number, number] // light blue row
 export default defineEventHandler(async (event) => {
 
   /* ── AUTH ── */
-  const session = await useAuthSession(event)
-  const companyId = session.data.companyId
-  if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  const companyId = await getReadCompanyId(event, getQuery(event).companyId as string | undefined)
 
   /* ── PARAMS ── */
   const query = getQuery(event)

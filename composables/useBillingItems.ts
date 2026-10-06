@@ -27,6 +27,9 @@ export function useBillingItems(
   },
   focusBarcodeAt: (index: number) => void
 ) {
+  const companyScope = useCompanyScope();
+  const $fetch = companyScope.fetch;
+
   const toast = useToast()
 
   const loadingStates = ref<boolean[]>([])

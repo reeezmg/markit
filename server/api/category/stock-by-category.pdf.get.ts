@@ -1,14 +1,10 @@
 import { defineEventHandler, createError, setHeader } from 'h3'
 import { pool } from '~/server/db'
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
 import { jsPDF } from 'jspdf'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
-  const companyId = session.data.companyId
-
-  if (!companyId) {
-    throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
-  }
+  const companyIds = await getReadCompanyIds(event)
 
   const client = await pool.connect()
 
@@ -22,24 +18,27 @@ export default defineEventHandler(async (event) => {
         SELECT
           c.id   AS category_id,
           c.name AS category_name,
+          co.name AS company_name,
           sc.id  AS subcategory_id,
           sc.name AS subcategory_name,
           COALESCE(SUM(i.qty), 0) AS qty
         FROM categories c
+        JOIN companies co ON co.id = c.company_id
         LEFT JOIN products p
           ON p.category_id = c.id
-         AND p.company_id = $1
+         AND p.company_id = c.company_id
         LEFT JOIN subcategories sc
           ON sc.id = p.subcategory_id
         LEFT JOIN variants v
           ON v.product_id = p.id
         LEFT JOIN items i
           ON i.variant_id = v.id
-        WHERE c.company_id = $1
-        GROUP BY c.id, c.name, sc.id, sc.name
+        WHERE c.company_id = ANY($1::text[])
+        GROUP BY c.id, c.name, co.name, sc.id, sc.name
       )
       SELECT
         category_name AS name,
+        company_name AS "companyName",
         SUM(qty) AS qty,
         COALESCE(
           json_agg(
@@ -51,10 +50,10 @@ export default defineEventHandler(async (event) => {
           '[]'
         ) AS subcategories
       FROM stock
-      GROUP BY category_id, category_name
+      GROUP BY category_id, category_name, company_name
       ORDER BY category_name;
       `,
-      [companyId]
+      [companyIds]
     )
 
     /* ------------------------------------
@@ -114,7 +113,7 @@ export default defineEventHandler(async (event) => {
 
       doc.setFont('helvetica', 'bold')
       doc.setFontSize(12)
-      doc.text(`CATEGORY: ${category.name.toUpperCase()}`, margin, y)
+      doc.text(`CATEGORY: ${category.name.toUpperCase()} (${category.companyName})`, margin, y)
       doc.text(`TOTAL QTY: ${category.qty}`, pageWidth - margin, y, {
         align: 'right'
       })

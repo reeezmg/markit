@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import { fetchCompanyContext, classifyRow, upsertMapping } from './_helpers'
+import { fetchCompanyContext, classifyRow } from './_helpers'
+import { assignStatementOperation } from '~/server/utils/statement-execution'
 
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
@@ -36,14 +37,7 @@ export default defineEventHandler(async (event) => {
     context,
   )
 
-  // Update the row with classification + userInput, reset executed state so user must re-execute
-  await pool.query(
-    `UPDATE statement_rows SET operation = $2, operation_meta = $3, operation_label = $4, user_input = $5, executed = false, execution_result = NULL WHERE id = $1`,
-    [body.rowId, result.operation, JSON.stringify(result.operationMeta), result.operationLabel, body.userInput]
-  )
-
-  // Save mapping for future auto-match
-  await upsertMapping(companyId, row.description, result.operation, result.operationMeta, result.operationLabel, body.userInput)
+  await assignStatementOperation(companyId,body.rowId,result,body.userInput,true)
 
   return { operation: result.operation, operationLabel: result.operationLabel, operationMeta: result.operationMeta }
 })

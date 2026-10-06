@@ -40,6 +40,7 @@ watch(selectedDate, () => {
 
 async function fetchSummary() {
   loading.value = true
+  summary.value=null
 
   try {
     summary.value = await $fetch('/api/report/summary', {
@@ -142,7 +143,7 @@ const kpiCards = computed(() => {
       meta: `${formatCurrency(summary.value.sales.discount)} discount`,
     },
     {
-      label: 'Tax Collected',
+      label: 'Invoice tax',
       value: formatCurrency(summary.value.sales.tax),
       tone: 'text-slate-900 dark:text-white',
       meta: summary.value.sales.total > 0
@@ -217,15 +218,15 @@ const cashFlowRows = computed(() => {
   return {
     inflows: [
       { label: 'Sales', amount: cf.inflows.sales },
-      { label: 'Money received', amount: cf.inflows.moneyReceived },
+      { label: 'Posted receipts', amount: cf.inflows.moneyReceived },
       { label: 'Investments in', amount: cf.inflows.investmentsIn },
-    ].map(r => ({ ...r, share: r.amount / inMax })),
+    ].filter(r=>r.amount!==0).map(r => ({ ...r, share: r.amount / inMax })),
     outflows: [
       { label: 'Expenses', amount: cf.outflows.expenses },
       { label: 'Distributor payments', amount: cf.outflows.distributorPayments },
-      { label: 'Money given', amount: cf.outflows.moneyGiven },
+      { label: 'Posted payments', amount: cf.outflows.moneyGiven },
       { label: 'Investments out', amount: cf.outflows.investmentsOut },
-    ].map(r => ({ ...r, share: r.amount / inMax })),
+    ].filter(r=>r.amount!==0).map(r => ({ ...r, share: r.amount / inMax })),
     net: cf.netChange,
     inflowsTotal: cf.inflows.total,
     outflowsTotal: cf.outflows.total,
@@ -366,6 +367,7 @@ const chartOptions = computed(() => {
 
 <template>
   <UDashboardPanelContent>
+    <ReportsBasis kind="mixed" detail="Profit, cash/bank balances, movements and supplier dues use posted accounting. Sales, stock quantities and payment details use source documents. Unposted history is excluded." />
     <div class=" w-full p-6 space-y-6">
       <UCard
         class="sticky top-0 z-10 border border-slate-200/80 dark:border-slate-800 bg-white/90 dark:bg-slate-900/90 backdrop-blur"

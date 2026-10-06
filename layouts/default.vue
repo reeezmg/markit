@@ -1,5 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { investmentPages } from '~/utils/investments';
+import { accountantSections } from '~/utils/accountant-navigation';
 import AiChatChatBox from '~/components/AiChat/ChatBox.vue';
 
 const route = useRoute();
@@ -453,14 +455,6 @@ const links = computed(() => {
                     tooltip: { text: 'Online Sales', shortcuts: ['E', 'O'] },
                 },
                 {
-                    label: 'Expenses',
-                    to: `/erp/expenses`,
-                    tooltip: {
-                        text: 'ERP',
-                        shortcuts: ['E', 'E'],
-                    },
-                },
-                {
                     label: 'Accounts',
                     to: `/erp/accounts`,
                     tooltip: {
@@ -738,8 +732,14 @@ const links = computed(() => {
         },
 
         {
+            id: 'accountant',
+            label: 'Accountant (New)',
+            to: '/accountant/chart-of-accounts',
+            icon: 'i-heroicons-book-open',
+        },
+        {
             id: 'accounts',
-            label: 'Accounts',
+            label: 'Legacy Accounts',
             to: `/accounts`,
             icon: 'i-heroicons-squares-2x2',
             children: [
@@ -780,7 +780,7 @@ const links = computed(() => {
                     },
                 },
                                 {
-                    label: 'Investments',
+                    label: 'Legacy investments',
                     to: `/accounts/investment`,
                     tooltip: {
                     text: 'investments',
@@ -1085,9 +1085,33 @@ const links = computed(() => {
     const collapseGroups = (arr: any[]) =>
       arr.map((link) => (link.children?.length ? { ...link, defaultOpen: false } : link));
 
-  const allLinks = plan.value === 'free' || plan.value === 'lite'
+  const expenseLinks = {
+    id: 'expense', label: 'Expense', icon: 'i-heroicons-receipt-percent',
+    children: [
+      { label: 'Daily Expense', to: '/erp/expenses', tooltip: { text: 'Daily Expense', shortcuts: ['E', 'E'] } },
+      { label: 'Recurring Expense', to: '/erp/recurring-expenses' },
+    ],
+  };
+  const selectedLinks = plan.value === 'free' || plan.value === 'lite'
     ? simplifiedLinks
     : baseLinks
+  const expenseIndex = selectedLinks.findIndex(link => link.id === 'erp') + 1;
+  const investmentLinks = {
+    id: 'investments', label: 'Investments', to: '/investments/overview', icon: 'i-heroicons-chart-pie',
+    children: investmentPages.map(([path, label]) => ({ label, to: `/investments/${path}`, exact: path !== 'investors' })),
+  };
+  const allLinks: any[] = [...selectedLinks.slice(0, expenseIndex), expenseLinks, ...selectedLinks.slice(expenseIndex)]
+    .filter(link => link.id !== 'accounts' && link.id !== 'accountant');
+  if (['admin', 'manager', 'accountant'].includes(auth.session.value?.role || '')) {
+    const accountIndex = allLinks.findIndex(link => link.id === 'users' || link.id === 'client' || link.id === 'settings');
+    allLinks.splice(accountIndex < 0 ? allLinks.length : accountIndex, 0, {
+      id: 'accountant', label: 'Account', to: '/accountant/chart-of-accounts', icon: 'i-heroicons-book-open',
+      children: accountantSections.flatMap(section => section.links.map(([path, label]) => ({ label, to: `/accountant/${path}` }))),
+    });
+  }
+
+  const accountantIndex = allLinks.findIndex(link => link.id === 'accountant');
+  allLinks.splice(accountantIndex >= 0 ? accountantIndex + 1 : expenseIndex + 1, 0, investmentLinks);
 
   if (sidebarSection.value === 'storefront') {
     const ecomChildren = (allLinks.find((link) => link.id === 'ecom') as { children?: any[] } | undefined)?.children ?? []
@@ -1189,7 +1213,12 @@ const isRouteActive = (to?: string) => {
                     </div>
                 </template>
 
-                <UDashboardSidebarLinks :links="links" />
+                <div class="space-y-1">
+                  <template v-for="link in links" :key="link.id || link.label">
+                    <AccountantSidebarNavigation v-if="link.id === 'accountant'" />
+                    <UDashboardSidebarLinks v-else :links="[link]" />
+                  </template>
+                </div>
 
                 <UDivider />
 
@@ -1253,12 +1282,16 @@ const isRouteActive = (to?: string) => {
                   <UButton
                     :icon="link.icon || 'i-heroicons-squares-2x2'"
                     color="gray"
-                    :variant="isRouteActive(link.to) ? 'soft' : 'ghost'"
+                    :variant="(link.id === 'accountant' ? isRouteActive('/accountant') : isRouteActive(link.to)) ? 'soft' : 'ghost'"
+                    :aria-label="link.label"
                     class="w-10 h-10 justify-center"
                   />
 
                   <template #panel>
-                    <div class="w-60 p-2">
+                    <div v-if="link.id === 'accountant'" class="w-64 max-h-[70vh] overflow-y-auto p-3">
+                      <AccountantSidebarNavigation compact />
+                    </div>
+                    <div v-else class="w-60 p-2">
                       <div class="text-sm font-medium px-2 py-1">{{ link.label }}</div>
                       <div class="space-y-1">
                         <NuxtLink

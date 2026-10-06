@@ -1,100 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
-import Form from '~/components/Accounts/Form.vue'
-import List from '~/components/Accounts/List.vue'
-
-const toast = useToast()
-
-const addTransaction = async (tx: any) => {
-  try {
-    await $fetch('/api/accounts/transactions', { method: 'POST', body: tx })
-    toast.add({ title: 'Entry added', color: 'green' })
-  } catch (error: any) {
-    toast.add({ title: 'Failed to add entry', description: error.message, color: 'red' })
-  }
-}
-
-const editTransaction = async (id: string, data: any) => {
-  try {
-    await $fetch(`/api/accounts/transactions/${id}`, { method: 'PUT', body: data })
-    toast.add({ title: 'Entry updated', color: 'green' })
-  } catch (error: any) {
-    toast.add({ title: 'Failed to update entry', description: error.message, color: 'red' })
-  }
-}
-
-const deleteTransaction = async (id: string) => {
-  try {
-    await $fetch(`/api/accounts/transactions/${id}`, { method: 'DELETE' })
-    toast.add({ title: 'Entry deleted', color: 'green' })
-  } catch (error: any) {
-    toast.add({ title: 'Error deleting entry', description: error.message, color: 'red' })
-  }
-}
-
-const showForm = ref(false)
-const selectedTx = ref<any | null>(null)
-
-const openForm = (tx = null) => {
-  selectedTx.value = tx
-  showForm.value = true
-}
-
-const closeForm = () => {
-  showForm.value = false
-  selectedTx.value = null
-}
-
-const saveTransaction = async (form: any) => {
-  try {
-    if (selectedTx.value) await editTransaction(selectedTx.value.id, form)
-    else await addTransaction(form)
-  } finally {
-    closeForm()
-  }
-}
-
-const pageTotal = ref(0)
-const totalAmount = ref(0)
-
-const onValues = ({ pageTotal: p, totalAmount: t }: { pageTotal: number; totalAmount: number }) => {
-  pageTotal.value = p
-  totalAmount.value = t
-}
-
-const formatCurrency = (v: number) =>
-  new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(v ?? 0)
+import { useFindManyMoneyTransaction } from '~/lib/hooks/money-transaction';
+const auth = useNuxtApp().$auth;
+const companyId = computed(() => auth.session.value?.companyId);
+const { data, isLoading, error, refetch } = useFindManyMoneyTransaction(computed(() => ({ where: { companyId: companyId.value }, orderBy: { createdAt: 'desc' as const } })), computed(() => ({ enabled: Boolean(companyId.value) })));
+const rows = computed(() => (data.value || []).map(row => ({ ...row, date: new Date(row.createdAt).toLocaleDateString('en-IN'), amount: new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(row.amount)) })));
+const columns = [{ key: 'date', label: 'Date' }, { key: 'partyType', label: 'Party' }, { key: 'direction', label: 'Direction' }, { key: 'paymentMode', label: 'Payment method' }, { key: 'amount', label: 'Amount' }, { key: 'status', label: 'Status' }, { key: 'note', label: 'Note' }];
 </script>
-
 <template>
-  <UDashboardPanelContent class="pb-24">
-    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
-      <UCard>
-        <div class="text-sm text-gray-500">Total Entries</div>
-        <div class="text-xl font-semibold">{{ pageTotal }}</div>
-      </UCard>
-
-      <UCard>
-        <div class="text-sm text-gray-500">Total Amount</div>
-        <div class="text-xl font-semibold">
-          {{ formatCurrency(totalAmount) }}
-        </div>
-      </UCard>
-    </div>
-
-    <List
-      @edit="openForm"
-      @delete="deleteTransaction"
-      @open="openForm"
-      @values="onValues"
-    />
-
-    <UModal v-model="showForm">
-      <Form
-        :transaction="selectedTx"
-        @save="saveTransaction"
-        @cancel="closeForm"
-      />
-    </UModal>
-  </UDashboardPanelContent>
+  <div class="p-6 space-y-4">
+    <h1 class="text-xl font-semibold">Old money transactions</h1>
+    <p class="text-sm text-gray-500">Original transaction history · {{ rows.length }} entries · Read only</p>
+    <div class="flex gap-3"><UButton to="/accountant/money">Receive / Pay money</UButton><UButton variant="outline" @click="refetch()">Refresh</UButton></div>
+    <p v-if="error" role="alert">Could not load transaction history. Please refresh.</p>
+    <UTable :rows="rows" :columns="columns" :loading="isLoading" />
+  </div>
 </template>

@@ -1,12 +1,15 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 import { v4 as uuidv4 } from 'uuid'
 import { ref, watch, computed, defineExpose } from 'vue'
 import AwsService from '~/composables/aws'
-import { useUpdateProduct } from '~/lib/hooks/product';
+import { useUpdateProduct } from '~/lib/company-hooks/product';
 
 const UpdateProduct = useUpdateProduct();
 
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 const awsService = new AwsService()
 
 const props = defineProps<{

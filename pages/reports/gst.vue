@@ -73,9 +73,12 @@ const dateParams = computed(() => ({
 ========================= */
 
 const fetchGstr1 = async () => {
+  const period=JSON.stringify(dateParams.value);
+  gstr1.value=null;
   loading1.value = true
   try {
-    gstr1.value = await $fetch('/api/report/gstr1', { query: dateParams.value })
+    const result = await $fetch('/api/report/gstr1', { query: dateParams.value })
+    if(period===JSON.stringify(dateParams.value))gstr1.value=result;
   } catch {
     toast.add({ title: 'Error', description: 'Failed to load GSTR-1', color: 'red' })
   } finally {
@@ -113,9 +116,12 @@ const downloadGstr1Excel = async () => {
 ========================= */
 
 const fetchGstr3b = async () => {
+  const period=JSON.stringify(dateParams.value);
+  gstr3b.value=null;
   loading3b.value = true
   try {
-    gstr3b.value = await $fetch('/api/report/gstr3b', { query: dateParams.value })
+    const result = await $fetch('/api/report/gstr3b', { query: dateParams.value })
+    if(period===JSON.stringify(dateParams.value))gstr3b.value=result;
   } catch {
     toast.add({ title: 'Error', description: 'Failed to load GSTR-3B', color: 'red' })
   } finally {
@@ -153,9 +159,12 @@ const downloadGstr3bExcel = async () => {
 ========================= */
 
 const fetchGstr2b = async () => {
+  const period=JSON.stringify(dateParams.value);
+  gstr2b.value=null;
   loading2b.value = true
   try {
-    gstr2b.value = await $fetch('/api/report/gstr2b', { query: dateParams.value })
+    const result = await $fetch('/api/report/gstr2b', { query: dateParams.value })
+    if(period===JSON.stringify(dateParams.value))gstr2b.value=result;
   } catch {
     toast.add({ title: 'Error', description: 'Failed to load GSTR-2B', color: 'red' })
   } finally {
@@ -194,6 +203,7 @@ const downloadGstr2bExcel = async () => {
 
 // On date change, re-fetch whichever tab is active
 watch(selectedDate, () => {
+  gstr1.value=null;gstr3b.value=null;gstr2b.value=null;
   if (activeTab.value === 0) fetchGstr1()
   else if (activeTab.value === 1) fetchGstr3b()
   else fetchGstr2b()
@@ -314,6 +324,8 @@ const table4Rows = computed(() => {
 
 <template>
   <UDashboardPanelContent>
+    <ReportsBasis kind="source" detail="Invoice and purchase details remain the tax-report source. Compare them with posted Input GST / Output GST below; ledger tax alone does not establish tax recovery eligibility." />
+    <ReportsTaxComparison :report="activeTab===0?gstr1:activeTab===1?gstr3b:gstr2b" />
     <div class="p-6 space-y-6">
 
       <!-- ================= HEADER ================= -->

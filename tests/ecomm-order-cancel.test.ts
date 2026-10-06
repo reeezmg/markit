@@ -1,15 +1,16 @@
 import 'dotenv/config'
 import { Pool } from 'pg'
 import { cancelEcommOrder } from '../server/utils/ecomm-order-cancel'
+import { createEcommOrder } from '../server/utils/ecomm-order-create'
 
 /**
  * Exercises the order-cancellation rollback against the real database.
  *
  * Every case runs inside a transaction that is ALWAYS rolled back, so the test
  * proves the SQL works against the live schema without leaving anything behind.
- * It picks a real cancellable order rather than fabricating one — the point is
- * to catch a column that does not exist or a constraint we forgot, which a
- * mocked client would happily let through.
+ * It uses a real cancellable order when available, otherwise creates one through
+ * the actual order writer inside the rollback. Both paths exercise real schema
+ * constraints; the terminal-status guard also has a rollback fixture fallback.
  *
  *   npx tsx tests/ecomm-order-cancel.test.ts
  */
@@ -21,6 +22,31 @@ if (!databaseUrl) {
 }
 
 const pool = new Pool({ connectionString: databaseUrl })
+const schema = new URL(databaseUrl).searchParams.get('schema') || 'public'
+if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(schema)) throw Error('Invalid database schema')
+async function readSource(query: string) {
+  const db = await pool.connect()
+  try {
+    await db.query('BEGIN READ ONLY')
+    await db.query(`SET LOCAL search_path TO "${schema}"`)
+    return await db.query(query)
+  } finally { await db.query('ROLLBACK'); db.release() }
+}
+
+async function createRollbackOrder(db: any) {
+  const { rows: [stock] } = await db.query(`SELECT i.id,i.company_id FROM items i
+    JOIN variants v ON v.id=i.variant_id AND v.status=true
+    JOIN products p ON p.id=v.product_id AND p.status=true
+    WHERE i.qty>=2 AND EXISTS(SELECT 1 FROM ecomm_orders o WHERE o.company_id=i.company_id)
+    ORDER BY i.company_id,i.id LIMIT 1`)
+  if (!stock) throw Error('An in-stock ecommerce item is required for the rollback fixture')
+  const created = await createEcommOrder(db, stock.company_id, null, {
+    client: { name: 'Cancellation rollback fixture', phone: '9000000001' },
+    address: { houseDetails: '1', street: 'Test Street', city: 'Kochi', state: 'Kerala', pincode: '682001' },
+    items: [{ itemId: stock.id, quantity: 1 }], paymentMethod: 'COD', notes: 'Cancellation test; always rolled back',
+  })
+  return (await db.query('SELECT id,company_id,order_number,status,items,bill_id FROM ecomm_orders WHERE id=$1',[created.orderId])).rows[0]
+}
 
 let failures = 0
 function check(name: string, condition: boolean, detail?: unknown) {
@@ -34,7 +60,7 @@ function check(name: string, condition: boolean, detail?: unknown) {
 }
 
 async function main() {
-  const { rows: candidates } = await pool.query(
+  const { rows: candidates } = await readSource(
     `SELECT id, company_id, order_number, status, items, bill_id
      FROM ecomm_orders
      WHERE status NOT IN ('CANCELLED', 'DELIVERED', 'RTO_DELIVERED', 'RETURNED')
@@ -42,25 +68,20 @@ async function main() {
      ORDER BY created_at DESC
      LIMIT 1`,
   )
-  if (!candidates.length) {
-    console.error('No cancellable order with items found — nothing to test against.')
-    process.exit(1)
-  }
-  const order = candidates[0]
-  console.log(`Testing against order #${order.order_number} (${order.status})\n`)
-
-  const itemIds: string[] = [
-    ...new Set(
-      (order.items as any[])
-        .map((line) => String(line?.itemId ?? line?.item_id ?? '').trim())
-        .filter(Boolean),
-    ),
-  ]
+  let order = candidates[0]
 
   // ── Case 1: a cancellation restores stock and flips every linked row ──────
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    await client.query(`SET LOCAL search_path TO "${schema}"`)
+    if (!order) {
+      order = await createRollbackOrder(client)
+      console.log('Created a cancellable fixture inside the outer rollback')
+    }
+    console.log(`Testing against order #${order.order_number} (${order.status})\n`)
+    const itemIds: string[] = [...new Set<string>((order.items as any[])
+      .map(line => String(line?.itemId ?? line?.item_id ?? '').trim()).filter(Boolean))]
 
     const before = await client.query(
       `SELECT id, qty, sold_qty FROM items WHERE id = ANY($1::text[])`,
@@ -122,7 +143,7 @@ async function main() {
     try {
       await cancelEcommOrder(client, order.company_id, order.id, { source: 'test' })
     } catch (e: any) {
-      secondFailed = true
+      secondFailed = e?.statusCode === 400 && /already cancelled/i.test(e?.statusMessage || e?.message)
       secondMessage = e?.statusMessage || e?.message
     }
     check('a second cancellation is refused', secondFailed, secondMessage)
@@ -141,26 +162,30 @@ async function main() {
   }
 
   // ── Case 4: a delivered order is protected unless forced ─────────────────
-  const { rows: delivered } = await pool.query(
+  const { rows: delivered } = await readSource(
     `SELECT id, company_id FROM ecomm_orders WHERE status = 'DELIVERED' LIMIT 1`,
   )
-  if (delivered.length) {
+  {
     const c2 = await pool.connect()
     try {
       await c2.query('BEGIN')
+      await c2.query(`SET LOCAL search_path TO "${schema}"`)
+      let terminalOrder = delivered[0]
+      if (!terminalOrder) {
+        terminalOrder = await createRollbackOrder(c2)
+        await c2.query("UPDATE ecomm_orders SET status='DELIVERED' WHERE id=$1",[terminalOrder.id])
+      }
       let blocked = false
       try {
-        await cancelEcommOrder(c2, delivered[0].company_id, delivered[0].id, { source: 'test' })
-      } catch {
-        blocked = true
+        await cancelEcommOrder(c2, terminalOrder.company_id, terminalOrder.id, { source: 'test' })
+      } catch (e: any) {
+        blocked = e?.statusCode === 400 && /DELIVERED.*cannot be cancelled/i.test(e?.statusMessage || e?.message)
       }
       check('a DELIVERED order is not cancellable by default', blocked)
     } finally {
       await c2.query('ROLLBACK')
       c2.release()
     }
-  } else {
-    console.log('SKIP no DELIVERED order to test the terminal-status guard')
   }
 
   await pool.end()

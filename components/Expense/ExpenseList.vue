@@ -1,10 +1,14 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 // import { saveAs } from 'file-saver';
 import { startOfDay, endOfDay } from 'date-fns'
 
 const emit = defineEmits(['edit','delete','values']);
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { forOwner, selectOwner } = useOrganizationActions();
 const toast = useToast()
 const expenseTableStore = useExpenseTableStore()
 const selectedRows = ref([]);
@@ -295,7 +299,9 @@ const pageTo = computed(() =>
 );
 const selectedColumns = ref(columns);
 const columnsTable = computed(() =>
-    columns.filter((column) => selectedColumns.value.includes(column)),
+    useAuth().session.value?.allStores
+      ? [{ key: 'companyName', label: 'Store', sortable: false }, ...columns.filter((column) => selectedColumns.value.includes(column))]
+      : columns.filter((column) => selectedColumns.value.includes(column)),
 );
 const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
 
@@ -441,7 +447,16 @@ function selectRange(duration: Duration) {
 }
 
 const multiUpdate = async (status: string, ids: string[]) => {
-    if (await updateStatus(ids, status)) selectedRows.value = []
+    const groups = new Map<string, string[]>()
+    for (const row of selectedRows.value.filter((item: any) => ids.includes(item.id))) {
+        const ownerId = row.companyId || useAuth().session.value?.companyId
+        if (!ownerId) continue
+        groups.set(ownerId, [...(groups.get(ownerId) ?? []), row.id])
+    }
+    for (const [ownerId, ownerIds] of groups) {
+        if (!await selectOwner(ownerId) || !await updateStatus(ownerIds, status)) return
+    }
+    selectedRows.value = []
 }
 
 const buildExpenseExportData = (rows: any[]) => {
@@ -455,7 +470,8 @@ const buildExpenseExportData = (rows: any[]) => {
   ]
 
   const billRows = rows.map((row: any) => ({
-    expenseNumber: row.expenseNumber ? `${useAuth().session.value?.expensePrefix || 'EXP'}-${row.expenseNumber}` : '',
+    expenseNumber: row.expenseNumber ? `${row.expensePrefix || 'EXP'}-${row.expenseNumber}` : '',
+    companyName: row.companyName || '',
     expenseDate: row.expenseDate ? format(row.expenseDate, 'd MMM yyyy') : '',
     category: row.expensecategory?.name || '',
     user: row.user?.name || '',
@@ -498,6 +514,7 @@ const handleDownloadExcel = async () => {
       { header: 'F', key: 'col6', width: 16 },
       { header: 'G', key: 'col7', width: 14 },
       { header: 'H', key: 'col8', width: 12 },
+      { header: 'I', key: 'col9', width: 24 },
     ]
 
     worksheet.mergeCells('A1:B1')
@@ -521,7 +538,7 @@ const handleDownloadExcel = async () => {
 
     worksheet.addRow([])
     const expensesTitleRowIndex = worksheet.lastRow!.number + 1
-    worksheet.mergeCells(`A${expensesTitleRowIndex}:H${expensesTitleRowIndex}`)
+    worksheet.mergeCells(`A${expensesTitleRowIndex}:I${expensesTitleRowIndex}`)
     worksheet.getCell(`A${expensesTitleRowIndex}`).value = 'Expenses'
     worksheet.getCell(`A${expensesTitleRowIndex}`).font = { bold: true, size: 14 }
 
@@ -534,6 +551,7 @@ const handleDownloadExcel = async () => {
       'Payment Mode',
       'Amount',
       'Status',
+      'Store',
     ])
     expenseHeaderRow.font = { bold: true }
     expenseHeaderRow.eachCell((cell) => {
@@ -554,6 +572,7 @@ const handleDownloadExcel = async () => {
         row.paymentMode,
         row.amount,
         row.status,
+        row.companyName,
       ])
     })
 
@@ -614,16 +633,16 @@ const handleDownloadPdf = async () => {
 
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(18)
-    doc.text(session?.companyName || 'Expense Report', margin, 16)
+    doc.text(session?.allStores ? 'All Stores' : session?.companyName || 'Expense Report', margin, 16)
 
     doc.setFont('helvetica', 'normal')
     doc.setFontSize(10)
     let headerY = 23
-    addressLines.forEach((line) => {
+    if (!session?.allStores) addressLines.forEach((line) => {
       doc.text(line, margin, headerY)
       headerY += 5
     })
-    if (session?.companyPhone) {
+    if (!session?.allStores && session?.companyPhone) {
       doc.text(`Phone: ${session.companyPhone}`, margin, headerY)
       headerY += 5
     }
@@ -663,6 +682,7 @@ const handleDownloadPdf = async () => {
         'Payment Mode',
         'Amount',
         'Status',
+        'Store',
       ]],
       body: billRows.map((row) => [
         row.expenseNumber,
@@ -673,6 +693,7 @@ const handleDownloadPdf = async () => {
         row.paymentMode,
         formatPdfExpenseCurrency(row.amount),
         row.status,
+        row.companyName,
       ]),
       tableWidth: pageWidth - margin * 2,
       theme: 'grid',
@@ -681,12 +702,13 @@ const handleDownloadPdf = async () => {
       columnStyles: {
         0: { cellWidth: 24 },
         1: { cellWidth: 26 },
-        2: { cellWidth: 30 },
-        3: { cellWidth: 28 },
-        4: { cellWidth: 70 },
+        2: { cellWidth: 26 },
+        3: { cellWidth: 24 },
+        4: { cellWidth: 58 },
         5: { cellWidth: 24 },
         6: { halign: 'right', cellWidth: 26 },
         7: { cellWidth: 24 },
+        8: { cellWidth: 24 },
       },
     })
 
@@ -744,6 +766,8 @@ const downloadItems = [[
 // invalidate the cache automatically, so this is rarely needed).
 defineExpose({ refresh })
 
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 
 <template>
@@ -791,6 +815,7 @@ defineExpose({ refresh })
             <template #header>
                 <div class="flex justify-between items-center gap-3 w-full">
                     <div class="flex items-center gap-3">
+                  <CompanyTableFilter />
                         <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
                         <UButton icon="i-heroicons-calendar-days-20-solid" class=" w-full sm:w-60">
                         {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
@@ -933,7 +958,7 @@ defineExpose({ refresh })
 
         <template #expenseNumber-data="{row}">
             <span v-if="row.expenseNumber" class="font-mono text-xs">
-              {{ (useAuth().session.value?.expensePrefix || 'EXP') + '-' + row.expenseNumber }}
+              {{ (row.expensePrefix || 'EXP') + '-' + row.expenseNumber }}
             </span>
             <span v-else class="text-xs text-gray-400">-</span>
         </template>
@@ -941,7 +966,7 @@ defineExpose({ refresh })
             {{ format(row.expenseDate, 'd MMM, yyy') }}
         </template>
             <template #actions-data="{ row }">
-                <UDropdown :items="action(row)">
+                <UDropdown :items="forOwner(action(row), row.companyId)">
                     <UButton
                         color="gray"
                         variant="ghost"

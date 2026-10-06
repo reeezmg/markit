@@ -1,7 +1,11 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import AwsService from '~/composables/aws';
-import { useUpdateCategory, useFindUniqueCategory } from '~/lib/hooks/category';
-import { useUpdateSubcategory, useCreateSubcategory, useDeleteSubcategory } from '~/lib/hooks/subcategory';
+import { useUpdateCategory, useFindUniqueCategory } from '~/lib/company-hooks/category';
+import { useUpdateSubcategory, useCreateSubcategory, useDeleteSubcategory } from '~/lib/company-hooks/subcategory';
 import type { Subcategory } from '@prisma/client';
 
 const route = useRoute();
@@ -12,7 +16,8 @@ const UpdateSubcategory = useUpdateSubcategory();
 const CreateSubcategory = useCreateSubcategory();
 const DeleteSubcategory = useDeleteSubcategory();
 const awsService = new AwsService();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { selectOwnerAndReload } = useOrganizationActions();
 
 interface ImageData {
   file?: File;
@@ -70,6 +75,7 @@ const { data: category, refetch: refetchCategory } = useFindUniqueCategory({
   where: { id: route.params.id as string },
   include: { subcategories: true },
 });
+watch(category, (record) => { if (record?.companyId) void selectOwnerAndReload(record.companyId); }, { immediate: true });
 
 // Explicit-source watch (not watchEffect): the body reads and rewrites `files`,
 // which createValue also mutates on every child emit. With watchEffect both
@@ -347,6 +353,7 @@ const saveCategory = async () => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+      <CompanyFormField />
     <div class="space-y-4">
       <UPageCard>
         <AddCategoryCreate

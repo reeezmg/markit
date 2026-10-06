@@ -2,10 +2,43 @@
 
 All reports use custom API routes (no ZenStack direct queries). Dates default to today (start/end of day). All pages share a `UDateRangePicker` for filtering.
 
-### Precedence filter — all report APIs
-All report and ledger APIs listed below read `cleanup` from `useAuthSession(event).data.cleanup`. When `cleanup = false` (normal users), soft-deleted bills (`precedence IS NOT TRUE`) are excluded from all aggregations and bill lists. When `cleanup = true` (cleanup admin), most report APIs include all bills regardless of `precedence`. Daily report APIs additionally accept a cleanup-only `showCleanedValues=true` query flag that switches cleanup admins back to current cleaned values and excludes `precedence=true` rows. The SQL pattern used is: `AND ($N = true OR b.precedence IS NOT TRUE)`.
+### Accounting basis (verified 2026-09-30)
 
-Bill-query APIs that implement this filter include `report/profit.get.ts`, `report/online.get.ts`, `report/onlinebills.get.ts`, `report/account.get.ts`, `report/generate-sales.pdf.get.ts`, `report/report.get.ts`, and `billSale/findManyBills.post.ts`. `accounts/cashledger.get.ts` and `accounts/primaryledger.get.ts` read persisted ledger rows through `accountLedgerRowsForApi`; they do not apply a bill `precedence` filter during ledger reads.
+`server/utils/report-accounting.ts` is the shared financial reader for Accounts, Profit, Daily, Summary and their financial exports. It reads published, non-deleted `accountant_v2_manual_journals` / lines, including reversal entries and historical lines on inactive accounts. Amounts use each journal's exchange rate, rounded per line. Opening is before the start instant; activity is inside the selected inclusive range. ISO SQL parameters preserve timestamp boundaries. Explicit company scope is required; combined reports reject different base currencies.
+
+Financial totals include all CASH/BANK accounts, receivables, payables, stock, accrual income/expenses and COGS. Receiving an outstanding invoice does not record sales again. Cash/bank transfers cancel from combined money movement. The balance sheet includes retained income/expense balances. `accountingMoneyActivity` supplies standalone Receive/Pay and transfer detail, including imported transaction links and reversals.
+
+Financial reports cover posted history only. They do not import missing source history on read. `components/Reports/Basis.vue` identifies accounting, source or mixed basis on all seven report pages. Operational bill/item, stock quantity, payroll and online-sales detail remains source-based. Do not add those source totals to posted financial totals.
+
+`npm run test:reports` runs GST allocation fixtures, rollback-isolated financial integration fixtures, then read-only API/export checks across connected companies. The API checks compare Accounts, Profit, Daily and Summary and generate GST/Daily Excel and Profit/Daily/Summary PDF files in memory.
+
+### Report query structure and performance (2026-09-30)
+
+`server/utils/report-query.ts` batches authored SELECT sections with shared bound parameters into a single statement. It returns JSON rows; public loaders normalize amounts and dates. There is no cross-request result cache. Company authorization remains in each route before the loader runs.
+
+`report-accounting.ts` retrieves company/currency, account balances, money flow and daily P&L in one statement. Tax comparisons use a targeted tax-role/posted-line query instead of calculating the entire financial report. `report-daily.ts` owns Daily data and the common PDF/Excel export loader; paid expense, salary and purchase-payment queries are shared. Rendering no longer holds a database connection. Obsolete company-opening calculations, legacy transfer/transaction reads and GET-time schema alterations are removed; cleanup original-value columns belong to the schema.
+
+`reportSummary.ts` batches its source sections, uses one filtered bill set for sales/payment totals, and does not run the superseded source-tax calculation. Its financial, money and outward-tax readers run alongside the source batch. Online totals/categories/count run in one statement. GSTR-2B reads distributor names with the source rows rather than making a separate name-lookup request.
+
+Measured report-data SQL statements per request (authorization queries excluded):
+
+| Report | Before | After |
+|---|---:|---:|
+| Accounts | 4 | 1 |
+| Profit | 5 | 2 |
+| Daily | 18 | 3 |
+| Summary | 14 | 4 |
+| Online | 3 | 1 |
+| GSTR-1 | 6 | 2 |
+| GSTR-2B | 8 | 2 |
+| GSTR-3B | 7 | 3 |
+
+Daily PDF and Excel each use three report-data queries. These are round-trip reductions, not fixed latency guarantees. The report integration suite enforces query budgets, checks export amounts, exercises empty ranges and both cleanup modes in a read-only transaction, and can compare captured full JSON responses using `REPORT_BASELINE=write` / `REPORT_BASELINE=check`. Optional baselines are local `.cache/report-baseline.json` files; run against unchanged data when comparing. Financial helper type checking is part of `npm run test:reports`.
+
+### Precedence filter — all report APIs
+Source report APIs listed below read `cleanup` from `useAuthSession(event).data.cleanup`. When `cleanup = false` (normal users), soft-deleted bills (`precedence IS NOT TRUE`) are excluded from all aggregations and bill lists. When `cleanup = true` (cleanup admin), most report APIs include all bills regardless of `precedence`. Daily report APIs additionally accept a cleanup-only `showCleanedValues=true` query flag that switches cleanup admins back to current cleaned values and excludes `precedence=true` rows. The SQL pattern used is: `AND ($N = true OR b.precedence IS NOT TRUE)`.
+
+Bill-query APIs that implement this filter include `report-profit.ts` bill detail, `report/online.get.ts`, `report/onlinebills.get.ts`, `report/generate-sales.pdf.get.ts`, `report/report.get.ts`, and `billSale/findManyBills.post.ts`. `accounts/cashledger.get.ts` and `accounts/primaryledger.get.ts` read persisted ledger rows through `accountLedgerRowsForApi`; they do not apply a bill `precedence` filter during ledger reads.
 
 For daily sales reports and sales exports, cleanup admins see preserved cleanup originals where available while the page toggle is off: `bills.original_grand_total` for bill totals, `bills.original_subtotal` for export bill subtotals, and `entries.original_value` for entry/category/brand revenue. When an original value is missing or `0`, report SQL falls back to the current visible value. Turning `Cleaned values` on passes `showCleanedValues=true`, uses current bill/entry values, and filters out `precedence=true` rows.
 
@@ -16,35 +49,29 @@ For daily sales reports and sales exports, cleanup admins see preserved cleanup 
 
 When the logged-in session has `cleanup = true`, the page renders a cleanup-only `Cleaned values` toggle. Off uses original cleanup values for sales totals and entry revenue where available and includes `precedence=true` bills. On passes `showCleanedValues=true` to `/api/report/report`, `/api/report/generate-sales.pdf`, and `/api/report/generate-sales.excel`, which use current bill/entry values and exclude `precedence=true` bills. Normal users continue to see current visible bill and entry values and never render the toggle.
 
-**KPI cards:**
-- Revenue (total sales)
-- Expense (paid expenses + paid salary payments)
-- Purchase (total purchases)
-- Selected Period Balance (cash + bank + credit movement within the selected date range)
+**Layout order:** (1) Total Revenue, Total Expense and Selected Period Balance, with always-visible breakdowns; the first-row balance is source revenue minus source expenses (expenses include salary), broken down by Cash, UPI, Card, Bank transfer, Cheque and Credit instead of Revenue/Expense total rows. (2) Expanded salary details and purchase-payment breakdown. (3) Transfers and Receive/Pay. (4) Selected Period Balance - All fund accounts, showing Debit, Credit and Balance (period debit minus credit) for every posted CASH/BANK account and a total row. (5) Sales by category and brand.
 
-Daily no longer renders an opening balance card. The balance card shows selected-period movement only (`ledger closing - ledger opening`) for Cash, Bank, and Credit, using the lightweight shared `accountLedgerBalancesForApi` helper over `account_ledger_entries` (`CASH`, `PRIMARY_BANK`, and `CREDIT`) without fetching ledger rows. This period movement includes money given/taken, salary/payment rows, transfers, sales, purchases, expenses, and credit ledger movement inside the selected range.
+The fund table uses posted journals and includes transfers and Receive/Pay once only; its period total excludes customer receivables. The first-row Revenue minus Expense figure is period activity, not remaining funds. Salary methods are included in the expense card to match its total.
 
-**Tables:**
-- Category sales breakdown (name, qty, revenue columns)
-- Salary Given table (date, staff, payment mode, amount) rendered above transfers/transactions
-- Transfers list
-- Transactions breakdown (payment method breakdown)
+`components/Reports/DailyTable.vue` supplies numeric alignment, signed amounts, sticky headings and contained scrolling. Date presets, loading/error/retry states, explicit refresh and stale-request cancellation remain. Optional `from`/`to` query dates initialize the range.
 
 **Export options:**
 - PDF: `GET /api/report/generate-sales.pdf` → downloads blob
 - Excel: `GET /api/report/generate-sales.excel` → downloads workbook blob
 - Print: `usePrint()` composable
 
-Daily report PDF/Excel/print exports include salary given details. PDF/Excel also add salary given into the expense total while cash/bank movement continues to flow through linked `money_transactions` rows.
+Daily report PDF/Excel/print exports include opening, movement and closing cash/bank totals; PDF/Excel also list individual cash/bank accounts and separate customer dues. Excel preserves the period-movement Summary rows and adds a Cash and bank position sheet. Exports include salary given details. PDF/Excel also add salary given into the expense total while cash/bank movement comes from posted journals.
 
-**Pull-to-refresh:** `pulltorefreshjs` library — `PullToRefresh.init()` in `onMounted`, `destroy()` in `onUnmounted`
+
 
 ---
 
 ### `pages/reports/profit.vue` — Profit Report
 **API:** `GET /api/report/profit` with `{ companyId, startDate, endDate }`
 
-**Summary cards:** Sales, COGS (Cost of Goods Sold), Gross Profit, Expenses, Net Profit. Paid salary payments are included in the expense total.
+**Summary cards:** Posted sales income excluding tax, COGS, gross profit, other income, expenses and net profit. Salary expense contributes when posted, not merely when paid.
+
+`server/utils/report-profit.ts` adds source bill/category detail for linked posted ERP journals. Invoice income is allocated over signed, tax-exclusive source item weights; COGS uses saved posting costs, with residual cents reconciled to journal totals. Manual or other income postings can contribute to headline totals without appearing in bill detail. The PDF uses the shared accounting headline. The page supports authorized table company scope.
 
 **Tables:**
 - Bill table — each row expandable to show per-entry breakdown with COGS columns
@@ -59,17 +86,9 @@ Daily report PDF/Excel/print exports include salary given details. PDF/Excel als
 ### `pages/reports/accounts.vue` — Accounts / Financial Report
 **API:** `GET /api/report/account` with `{ companyId, startDate, endDate }`
 
-**Balance cards:** Cash balance, Bank balance, Investment balance
+**Balance cards:** Cash, all banks, receivables, payables, stock and net assets.
 
-**P&L section:** Total Sales, Total Expenses, Total Purchases (from report). Total Expenses includes paid salary payments; cash/bank balances still move through linked `money_transactions` rows.
-
-**Breakdown tables:**
-- Cash flow: opening → each transaction → closing
-- Bank flow: opening → each transaction → closing
-
-**Charts:** Three pie charts — `cashFlowPie`, `bankFlowPie`, `pnlPie`
-
-**Computed `businessWorth`:** sum of cash + bank + investment balances
+**Sections:** Posted P&L, combined cash/bank opening/receipts/payments/closing, and account opening/debit/credit/closing balances with Dr/Cr signs. Account links open Chart of Accounts with `entryCompany` and `account` query selections. The page supports authorized table company scope. Net assets is assets minus liabilities, not a sum of cash, investment and profit.
 
 ---
 
@@ -122,6 +141,10 @@ Tabbed page: client is a thin wrapper that lazy-fetches each report via `$fetch`
   - **GSTR-3B Table 4:** excluded (the SQL keeps the legacy `v.tax > 0` filter — zero-rated items don't generate ITC).
 - Aggregation done in JS (TypeScript Maps for rate / distributor buckets), so the same logic powers both the JSON response and the Excel sheets.
 
+**Outward calculation:** `server/utils/report-gst-source.ts` supplies GSTR-1, GSTR-3B outward values and Summary source tax. It allocates each inclusive invoice total once across signed entries, extracts included tax after discounts, and includes returns and zero-rated rows. Unallocatable invoice values are reported explicitly. Existing equal CGST/SGST presentation is retained.
+
+`Reports/TaxComparison.vue` compares source tax with posted mapped tax-account movements. Input comparisons include recoverable expense postings and adjustments; they do not establish tax-recovery eligibility. Inward purchase tax retains the legacy calculation described above, including its reliance on product/variant data. `report-gst-excel.ts` exports the same JSON data and comparison instead of duplicating queries. Changing the date range invalidates all three tab caches.
+
 **GSTR-1 (outward):** sources `bills + entries`, filtered to `b.deleted=false`, `b.payment_status IN (PAID,PENDING)`, `b.is_markit=false`. Returns kpi + rate-wise + HSN summary.
 
 ---
@@ -138,9 +161,11 @@ Store overview page. It calls `useCompanyDashboard()` for revenue, expenses, sal
 
 **Layout:** full-height `min-h-screen` slate background so the page background fills the viewport.
 
-**KPI cards:** Opening Balance, Total Sales, Tax Collected, Net Profit, Total Expense, Closing Balance.
-- Tax card is labeled `Tax Collected` and uses `summary.sales.tax` from the summary API.
-- Net Profit and the Total Expense headline use `summary.profit`, whose expense total includes paid salary payments. Cash-flow sections continue to use `money_transactions`, so salary is not double-counted in cash movement.
+**KPI cards:** Opening Balance, Total Sales, Invoice tax, Net Profit, Total Expense, Closing Balance.
+- Tax card is labeled `Invoice tax` and uses `summary.sales.tax` from the summary API.
+- Net Profit and Total Expense use posted accrual P&L. Opening/closing balances and cash-flow receipts/payments use the shared financial reader; standalone transaction detail uses `accountingMoneyActivity`.
+- Supplier dues use posted distributor-linked payable lines through the selected end date. Sales/payment/category, pending bill, investment and current stock detail retain source data.
+- Trend and forecast use posted daily financial activity, with zero-activity calendar days included. Forecast is a simple trend estimate, not a reconciled balance.
 
 **Sales breakdown:** payment-method table plus top-category table.
 

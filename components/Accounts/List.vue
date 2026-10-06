@@ -66,22 +66,6 @@ const action = (row: any) => [
 ]
 
 /* ---------------------------------------------------
-   BULK ACTIONS
---------------------------------------------------- */
-const active = (rows: any[]) => [
-  [
-    {
-      label: 'Mark Paid',
-      click: () => multiUpdate('PAID', rows.map(r => r.id)),
-    },
-    {
-      label: 'Mark Pending',
-      click: () => multiUpdate('PENDING', rows.map(r => r.id)),
-    },
-  ],
-]
-
-/* ---------------------------------------------------
    DATE RANGES
 --------------------------------------------------- */
 const ranges = [
@@ -168,13 +152,6 @@ const pageFrom = computed(
 const pageTo = computed(() =>
   Math.min(page.value * Number(pageCount.value), pageTotal.value)
 )
-
-/* ---------------------------------------------------
-   BULK UPDATE
---------------------------------------------------- */
-const multiUpdate = async (status: string, ids: string[]) => {
-  await $fetch('/api/accounts/transactions/status', { method: 'POST', body: { ids, status } })
-}
 
 /* ---------------------------------------------------
    RESET
@@ -281,19 +258,6 @@ const resetFilters = () => {
         />
       </div>
 
-      <UDropdown
-        v-if="selectedRows.length > 1"
-        :items="active(selectedRows)"
-      >
-        <UButton
-          icon="i-heroicons-chevron-down"
-          trailing
-          color="gray"
-          size="xs"
-        >
-          Mark as
-        </UButton>
-      </UDropdown>
     </div>
 
     <!-- TABLE -->

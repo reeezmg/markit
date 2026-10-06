@@ -8,6 +8,7 @@ const LIST_KEY = ['expenses', 'list'] as const
 
 // Form payload → POST/PUT body (matches the server contract).
 const buildBody = (e: any) => ({
+  companyId: e.companyId,
   expenseDate: e.date,
   expensecategoryId: e.categoryId,
   userId: e.userId || null,
@@ -18,17 +19,20 @@ const buildBody = (e: any) => ({
   receipt: e.receipt || null,
   receiptName: e.receiptName || null,
   taxAmount: Number(e.taxAmount || 0),
+  recoverableTaxAmount: e.recoverableTaxAmount ?? null,
 })
 
 // Form payload → the row fields the table renders, for optimistic display. The
 // form keeps the full category/user objects, so we can show names immediately.
 const optimisticFields = (e: any) => ({
+  companyId: e.companyId,
   expenseDate: e.date,
   note: e.note || null,
   paymentMode: e.paymentMode,
   status: e.status || 'Paid',
   totalAmount: Number(e.amount) || 0,
   taxAmount: Number(e.taxAmount || 0),
+  recoverableTaxAmount: e.recoverableTaxAmount ?? null,
   expensecategoryId: e.categoryId,
   expensecategory: e.category
     ? { id: e.category.id, name: e.category.name }
@@ -47,11 +51,13 @@ const errMessage = (err: any): string =>
 export function useExpenseList(
   params: Ref<Record<string, any>> | ComputedRef<Record<string, any>>,
 ) {
-  const useAuth = () => useNuxtApp().$auth
+  const companyScope = useCompanyScope();
+  const $fetch = companyScope.fetch;
+  const useAuth = () => companyScope.auth
   const queryClient = useQueryClient()
 
   const query = useQuery({
-    queryKey: computed(() => [...LIST_KEY, params.value]),
+    queryKey: computed(() => [...LIST_KEY, params.value, companyScope.readIds.value]),
     queryFn: () =>
       $fetch<{ rows: any[]; total: number }>('/api/accounts/expenses', { query: params.value }),
     placeholderData: (prev: any) => prev, // keep current page visible while the next loads
@@ -68,6 +74,8 @@ export function useExpenseList(
 }
 
 export function useExpenseMutations() {
+  const companyScope = useCompanyScope();
+  const $fetch = companyScope.fetch;
   const queryClient = useQueryClient()
   const toast = useToast()
 
@@ -96,7 +104,7 @@ export function useExpenseMutations() {
   }
 
   const create = useMutation({
-    mutationFn: (e: any) => $fetch('/api/accounts/expenses', { method: 'POST', body: buildBody(e) }),
+    mutationFn: (e: any) => $fetch('/api/accounts/expenses', { method: 'POST', body: buildBody(e), headers: { 'x-company-id': e.companyId || companyScope.companyId.value } }),
     onMutate: async (e: any) => {
       const snap = await beginOptimistic()
       const tempRow = {
@@ -106,7 +114,7 @@ export function useExpenseMutations() {
         ...optimisticFields(e),
         __optimistic: true,
       }
-      patchLists((old) => ({ ...old, rows: [tempRow, ...old.rows], total: (old.total ?? 0) + 1 }))
+      queryClient.setQueriesData({ queryKey: LIST_KEY, predicate: q => { const ids = q.queryKey[3]; return Array.isArray(ids) && ids.includes(e.companyId || companyScope.companyId.value); } }, (old: any) => old ? ({ ...old, rows: [tempRow, ...old.rows], total: (old.total ?? 0) + 1 }) : old)
       return { snap }
     },
     onError: (err: any, _e, ctx: any) => {
@@ -123,7 +131,7 @@ export function useExpenseMutations() {
 
   const update = useMutation({
     mutationFn: (vars: { id: string; e: any }) =>
-      $fetch(`/api/accounts/expenses/${vars.id}`, { method: 'PUT', body: buildBody(vars.e) }),
+      $fetch(`/api/accounts/expenses/${vars.id}`, { method: 'PUT', body: buildBody(vars.e), headers: { 'x-company-id': vars.e.companyId || companyScope.companyId.value } }),
     onMutate: async (vars: { id: string; e: any }) => {
       const snap = await beginOptimistic()
       const fields = optimisticFields(vars.e)

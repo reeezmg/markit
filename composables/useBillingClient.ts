@@ -15,7 +15,10 @@ export function useBillingClient(
   isClientAddModelOpen: ReturnType<typeof ref>,
   onClientFound: () => void
 ) {
-  const useAuth = () => useNuxtApp().$auth
+  const companyScope = useCompanyScope();
+  const $fetch = companyScope.fetch;
+
+  const useAuth = () => companyScope.auth
   const redeeming = ref(false)
   const isClientLoading = ref(false)
   const companyClients = ref<any[]>([])

@@ -1,7 +1,8 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { pool } from '~/server/db'
 
 export default eventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const body = await readBody(event)
   const { companyId } = body
 
@@ -12,7 +13,6 @@ export default eventHandler(async (event) => {
   )
   const billCounter = res.rows[0]?.bill_counter
 
-  await session.update({ billCounter })
 
   return billCounter
 })

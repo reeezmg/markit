@@ -1,3 +1,5 @@
+import { assertSalaryManager, publicSalaryPayment } from '~/server/utils/salary-input'
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { recordPayment, type PayInput } from './_payment'
 
@@ -5,11 +7,12 @@ import { recordPayment, type PayInput } from './_payment'
  * Pay a single user (financial). See _payment.ts for the write logic.
  */
 export default defineEventHandler(async (event) => {
-    const session = await useAuthSession(event)
+    const session = await useCompanyRequestSession(event)
+    assertSalaryManager(session.data.role)
     const companyId = session.data?.companyId as string | undefined
     if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
-    const body = await readBody<PayInput>(event)
+    const body = publicSalaryPayment(await readBody(event))
     try {
         const res = await recordPayment(companyId, body)
         return { success: true, ...res }

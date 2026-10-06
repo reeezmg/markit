@@ -1,11 +1,14 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 import { Switch } from '@headlessui/vue';
 
 import { sub } from 'date-fns';
 import type { Period, Range } from '~/types';
 import AwsService from '~/composables/aws';
-import { useUpdateCategory, useUpdateManyCategory, useFindManyCategory, useCountCategory, useDeleteCategory, useDeleteManyCategory } from '~/lib/hooks/category';
-import { useDeleteProduct } from '~/lib/hooks/product';
+import { useUpdateCategory, useUpdateManyCategory, useFindManyCategory, useCountCategory, useDeleteCategory, useDeleteManyCategory } from '~/lib/company-hooks/category';
+import { useDeleteProduct } from '~/lib/company-hooks/product';
 const awsService = new AwsService();
 const DeleteCategory = useDeleteCategory({ optimisticUpdate: true });
 const DeleteManyCategory = useDeleteManyCategory({ optimisticUpdate: true });
@@ -13,7 +16,8 @@ const UpdateCategory = useUpdateCategory({ optimisticUpdate: true });
 const DeleteProduct = useDeleteProduct({ optimisticUpdate: true });
 const UpdateManyCategory = useUpdateManyCategory({ optimisticUpdate: true });
 const router = useRouter();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { forOwner } = useOrganizationActions();
 const toast = useToast();
 const isCategoryDeleteModalOpen = ref(false)
 const deletingCategoryRowIdentity = ref({})
@@ -77,7 +81,9 @@ const subcategorycolumns = [
 
 const selectedColumns = ref(columns);
 const columnsTable = computed(() =>
-    columns.filter((column) => selectedColumns.value.includes(column)),
+    useAuth().session.value?.allStores
+      ? [{ key: 'company.name', label: 'Store' }, ...columns.filter((column) => selectedColumns.value.includes(column))]
+      : columns.filter((column) => selectedColumns.value.includes(column)),
 );
 
 // Selected Rows
@@ -243,6 +249,8 @@ const queryArgs = reactive({
     take: pageCount.value,
     select: {
         id:true,
+        companyId: true,
+        company: { select: { name: true } },
         shortCut:true,
         name:true,
         status:true,
@@ -345,9 +353,9 @@ const tableRows = computed(() =>
 
 watchEffect(() => {
     queryArgs.where.AND[0].name = { contains: search.value, mode: 'insensitive' };
-    queryArgs.where.AND[0].OR = selectedStatus.value?.map((item) => {
-        return { status: item.value };
-    });
+    queryArgs.where.AND[2].OR = selectedStatus.value?.length
+        ? selectedStatus.value.map((item: any) => ({ status: item.value }))
+        : [{ status: true }, { status: false }];
     queryArgs.orderBy = {
         [sort.value.column]: sort.value.direction,
     };
@@ -474,6 +482,8 @@ const downloadReport = async () => {
         });
     }
 };
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 
 <template>
@@ -496,6 +506,7 @@ const downloadReport = async () => {
       <div class="flex flex-col sm:flex-row justify-between gap-3 px-4 py-3 w-full">
   <!-- Left side: Search + Status -->
   <div class="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <CompanyTableFilter />
     <UInput
       v-model="search"
       icon="i-heroicons-magnifying-glass-20-solid"
@@ -619,7 +630,7 @@ const downloadReport = async () => {
                 }"
             >
                 <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
+                    <UDropdown :items="forOwner(action(row), row.companyId)">
                         <UButton
                             color="gray"
                             variant="ghost"

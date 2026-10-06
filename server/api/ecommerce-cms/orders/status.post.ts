@@ -1,5 +1,6 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { setDocumentStatusContext } from '~/server/utils/document-status-context'
 import { ORDER_STATUS } from '~/utils/order-status'
 import { cancelEcommOrder, writeStatusHistory } from '~/server/utils/ecomm-order-cancel'
 
@@ -38,6 +39,7 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    await setDocumentStatusContext(event, client, 'order.manual')
 
     if (status === 'CANCELLED') {
       const result = await cancelEcommOrder(client, companyId, orderId, {

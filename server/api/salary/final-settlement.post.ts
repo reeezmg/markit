@@ -1,14 +1,19 @@
+import { assertSalaryManager, publicSalaryPayment } from '~/server/utils/salary-input'
+import { selectStaffPaymentAccount } from '~/server/utils/staff-payment-account'
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { insertSalaryPaymentInClient } from './_payment'
-import { ensureAccountLedgerSchema, moneyTransactionLedgerRows, rebuildAccountLedgerForSource, userCreditAccountLedgerRows } from '~/server/utils/account-ledger'
+
 import { upsertUserLedgerEntry } from '~/server/utils/user-ledger'
 
 const round2 = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
 export default defineEventHandler(async (event) => {
-    const session = await useAuthSession(event)
+    const session = await useCompanyRequestSession(event)
+    assertSalaryManager(session.data.role)
     const companyId = session.data?.companyId as string | undefined
     if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
@@ -28,16 +33,19 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'Amount must be zero or positive' })
     }
 
+    publicSalaryPayment({ userId: body.userId, amount: 1, paymentMode: body.paymentMode, bankAccountId: body.bankAccountId, paymentDate: body.settlementDate || undefined, note: body.note })
     const when = body.settlementDate ? new Date(body.settlementDate) : new Date()
     const client = await pool.connect()
 
     try {
-        await ensureAccountLedgerSchema(client)
+
         await client.query('BEGIN')
+    await lockCompanyRequest(event, client)
+    await client.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE', [companyId])
 
         const userRes = await client.query(
             `
-            SELECT company_id, user_id, name, status, deleted, opening_balance
+            SELECT company_id, user_id, name, role, status, deleted, opening_balance
             FROM company_users
             WHERE company_id = $1
               AND user_id = $2
@@ -51,6 +59,10 @@ export default defineEventHandler(async (event) => {
         if (!user) throw createError({ statusCode: 404, statusMessage: 'User not found' })
         if (!user.status) throw createError({ statusCode: 400, statusMessage: 'User is already inactive' })
 
+        if (user.role === 'admin') {
+            const admins = await client.query("SELECT count(*) FROM company_users WHERE company_id=$1 AND role='admin' AND status=true AND deleted=false", [companyId])
+            if (Number(admins.rows[0].count) <= 1) throw createError({ statusCode: 409, statusMessage: 'At least one active admin must remain in this company' })
+        }
         const latestRes = await client.query(
             `
             SELECT balance_after
@@ -105,7 +117,7 @@ export default defineEventHandler(async (event) => {
             })
             const moneyId = ledgerRow?.id || crypto.randomUUID()
             const paymentMode = body.paymentMode === 'BANK' || body.paymentMode === 'UPI' ? 'BANK' : 'CASH'
-            const accountId = paymentMode === 'BANK' ? body.bankAccountId || null : null
+            const accountId = null
 
             await client.query(
                 `
@@ -116,37 +128,9 @@ export default defineEventHandler(async (event) => {
                 `,
                 [moneyId, companyId, settlementAmount, paymentMode, accountId, note, when],
             )
-            await rebuildAccountLedgerForSource(client, {
-                companyId,
-                sourceType: 'MONEY_TRANSACTION',
-                sourceId: moneyId,
-                rows: moneyTransactionLedgerRows({
-                    id: moneyId,
-                    companyId,
-                    amount: settlementAmount,
-                    paymentMode,
-                    accountId,
-                    direction: 'RECEIVED',
-                    status: 'PAID',
-                    createdAt: when,
-                    note,
-                }),
-            })
-            await rebuildAccountLedgerForSource(client, {
-                companyId,
-                sourceType: 'USER_CREDIT',
-                sourceId: moneyId,
-                rows: userCreditAccountLedgerRows({
-                    id: moneyId,
-                    companyId,
-                    type: 'CREDIT_BILL_PAYMENT',
-                    sourceType: 'MANUAL',
-                    sourceId: ledgerRow?.id || null,
-                    amount: settlementAmount,
-                    createdAt: when,
-                    note,
-                }),
-            })
+
+
+            await selectStaffPaymentAccount(client, companyId, paymentMode, body.bankAccountId, moneyId)
             settlementType = 'CREDIT_BILL_PAYMENT'
             settlementId = moneyId
         }

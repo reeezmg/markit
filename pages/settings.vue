@@ -2,7 +2,8 @@
 definePageMeta({
     auth: true,
 });
-const links = [
+const { data: companyStructure } = await useFetch<{ parentCompanyId: string | null }>('/api/branches');
+const links = computed(() => [
     [
         {
             label: 'General',
@@ -15,11 +16,17 @@ const links = [
             icon: 'i-heroicons-banknotes',
             to: '/settings/store',
         },
+        ...(companyStructure.value?.parentCompanyId === null ? [{
+            label: 'Company & Branches',
+            icon: 'i-heroicons-building-office-2',
+            to: '/settings/branches',
+        }] : []),
         {
             label: 'Products',
             icon: 'i-heroicons-squares-2x2',
             to: '/settings/products',
         },
+        { label: 'Account', icon: 'i-heroicons-book-open', to: '/settings/account' },
         {
             label: 'Printer',
             icon: 'i-heroicons-printer',
@@ -36,7 +43,7 @@ const links = [
             to: '/settings/requests',
         }
     ],
-];
+]);
 </script>
 
 <template>

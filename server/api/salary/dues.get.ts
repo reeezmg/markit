@@ -1,3 +1,5 @@
+import { defineCompanyListHandler } from '~/server/utils/companyListHandler';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, createError } from 'h3'
 import { prisma } from '~/server/prisma'
 
@@ -9,8 +11,8 @@ import { prisma } from '~/server/prisma'
 
 const num = (v: any) => Number(v ?? 0)
 
-export default defineEventHandler(async (event) => {
-    const session = await useAuthSession(event)
+export default defineCompanyListHandler(async (event) => {
+    const session = await useCompanyRequestSession(event)
     const companyId = session.data?.companyId as string | undefined
     if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 

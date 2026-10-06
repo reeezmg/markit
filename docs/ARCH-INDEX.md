@@ -15,7 +15,7 @@ delivery and Express-server documentation remains under `docs/`.
 | `ARCH-schema.md` | DB tables, field definitions, relations for all models |
 | `ARCH-patterns.md` | Enums, layouts, storetools auth, DB access patterns, ZenStack hooks pattern |
 | `ARCH-pages-erp.md` | ERP pages: billing/POS, sales list, bill edit, expenses, B2B credit accounts |
-| `ARCH-pages-accounts.md` | Finance/Accounts: cash ledger, bank accounts, investments, transfers, transactions |
+| `ARCH-pages-accounts.md` | Existing finance ledgers and independent Accountant area: chart, journals, budgets, assets, controls and adoption |
 | `ARCH-pages-products.md` | Products list/add/edit, brands, categories, stocks |
 | `ARCH-pages-distributor.md` | Distributor list, credit/payment ledger, purchase orders, form |
 | `ARCH-pages-users.md` | Users/staff management, user report API, userStore |
@@ -99,6 +99,8 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | Barcode scanning (Quagga2, Capacitor) | `ARCH-pages-erp.md` (billing) |
 | Discount apply bulk API | `ARCH-pages-erp.md` |
 | Cash/bank ledger calculation | `ARCH-pages-accounts.md` |
+| Ecommerce accounting, COD/gateway clearing, delivery income, settlements, financial returns/refunds | `ARCH-pages-accounts.md` — Ecommerce connection |
+| Investors, ownership, shares, profit allocation and legacy investment import | `ARCH-pages-accounts.md` — Investors and ownership |
 | Distributor payment / credit | `ARCH-pages-distributor.md` |
 | Distributor AMOUNT credit (creates linked MoneyTransaction → cash/bank ledger) | `ARCH-pages-distributor.md` — Add Credit modal, `ARCH-schema.md` — DistributorCredit.moneyTransactionId |
 | Distributor transactions PDF/Excel (Date·No·Type·Remarks·Debit·Credit + opening/closing footer) | `ARCH-storetools-api.md` — `downloads/distributor-credits.{pdf,excel}` |
@@ -108,6 +110,7 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | Sales search rules (numeric → invoice OR phone, closingDate-gated invoice arm) | `ARCH-storetools-api.md` — billSale/findManyBills |
 | Coupon create/edit/list | `ARCH-pages-coupon.md` |
 | User/staff management | `ARCH-pages-users.md` |
+| Shift policies, paid breaks, overnight checkout, leave balances, compensatory leave | `ARCH-pages-users.md` — Shift policy scenarios; rollout: `../scripts/SHIFT-POLICY.md` |
 | User performance report API | `ARCH-pages-users.md` |
 | Client/CRM pipeline | `ARCH-pages-client.md` |
 | Settings (store/general/printer/numbering) | `ARCH-pages-settings.md` |
@@ -238,6 +241,14 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 
 | Location | Bug |
 |---|---|
+| `pages/client/index.vue` | **Fixed locally (2026-10-06):** bill deletion uses the full owner-scoped service to restore stock and reverse native journals. Client removal marks only its membership inactive, preserving client/bill/account links and financial history. |
+| `pages/accounts/bank/index.vue` | **Resolved by retirement:** bank mutation forms/handlers are removed; bank history is read-only. |
+| `server/api/billSale/updatePaymentMethod.post.ts` | **Resolved by retirement:** all source workflows leave old ledgers frozen and maintain native journals. |
+| `server/api/accounts/banks*`, `primary-bank`, `opening-balances` | **Retired:** scoped 410; bank/opening writes use Accountant. |
+| `server/utils/account-ledger.ts`, legacy bank create/edit | **Resolved for runtime:** old source writers disconnected; archive GETs perform no schema DDL. |
+| `pages/accounts/investment.vue`, legacy investment POST | **Retired:** legacy investment writes return 410; page is read-only and links to native Investments. |
+| `server/api/statement/_helpers.ts` | ISO dates can parse into the wrong accounting period; gap #6 remains deferred. Bank selection, amounts, partial batches and atomic replay are fixed locally; see `ARCH-ai-chat.md`. |
+| `pages/products/index.vue` | **FIXED** - product-list deletion bypassed PO/accounting recalculation through a model delete; now uses `/api/products/delete` with row company and cache invalidation. |
 | `storetools/server/api/applyPromoCode.post.ts` | Calls `prisma.promoCode` but model is `Coupon` — runtime error |
 | `server/` `authMiddleware.js` | `console.log("JWT verification error:", err)` fires on every request including valid ones |
 | `pages/erp/billing.vue` | `console.log` statements left in production |
@@ -263,7 +274,7 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | `pages/marketplace.vue` | `console.log(companies)` at module scope |
 | `pages/receipt/[id].vue` | `console.log('PRINT DATA:', res)` on every load |
 | `pages/saleshistory/[billId].vue` | `console.log(newData?.data)` on every load |
-| `storetools GET /api/getuser` | No auth check — accepts any `companyId` |
+| `storetools GET /api/getuser` | **FIXED** — `assertCompanyAccess` authorizes the requested company before listing active staff. |
 | `composables/aws.ts` | Worker URL and upload secret hardcoded in source |
 | `composables/firebase.ts` | Firebase API key and appId hardcoded in source |
 | `composables/usePushNotifications.ts` | VAPID key hardcoded in source |

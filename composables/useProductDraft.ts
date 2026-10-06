@@ -1,3 +1,4 @@
+import { companyStorageKey } from '~/utils/companyStorageKey';
 import { v4 as uuidv4 } from 'uuid'
 
 export const LOCAL_DRAFTS_KEY = 'product_drafts'
@@ -65,11 +66,11 @@ function makeDefaultDraft(draftNo = '1') {
   }
 }
 
-function readDrafts() {
+function readCompanyDrafts(companyId: string) {
   if (!process.client) return []
 
   try {
-    const parsed = JSON.parse(localStorage.getItem(LOCAL_DRAFTS_KEY) || '[]')
+    const parsed = JSON.parse(localStorage.getItem(LOCAL_DRAFTS_KEY + ':' + companyId) || '[]')
     return Array.isArray(parsed) ? parsed : []
   } catch (error) {
     console.error('Failed to parse product drafts:', error)
@@ -77,9 +78,9 @@ function readDrafts() {
   }
 }
 
-function writeDrafts(drafts: any[]) {
+function writeCompanyDrafts(drafts: any[], companyId: string) {
   if (!process.client) return
-  localStorage.setItem(LOCAL_DRAFTS_KEY, JSON.stringify(drafts))
+  localStorage.setItem(LOCAL_DRAFTS_KEY + ':' + companyId, JSON.stringify(drafts))
 }
 
 function sameJson(a: any, b: any) {
@@ -87,6 +88,12 @@ function sameJson(a: any, b: any) {
 }
 
 export function useProductDraft() {
+  const companyScope = useCompanyScope();
+  companyStorageKey(LOCAL_DRAFTS_KEY, companyScope.companyId.value, useNuxtApp().$auth.session.value?.companyId || '');
+  const $fetch = companyScope.fetch;
+  const readDrafts = () => readCompanyDrafts(companyScope.companyId.value);
+  const writeDrafts = (drafts: any[]) => writeCompanyDrafts(drafts, companyScope.companyId.value);
+
   const draftNo = ref('1')
   const poId = ref<string | null>(null)
   const productIds = ref<string[]>([])

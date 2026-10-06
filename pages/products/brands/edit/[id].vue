@@ -1,11 +1,16 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import AwsService from '~/composables/aws';
-import { useUpdateBrand, useFindUniqueBrand } from '~/lib/hooks/brand';
+import { useUpdateBrand, useFindUniqueBrand } from '~/lib/company-hooks/brand';
 
 const route = useRoute();
 const toast = useToast();
 const awsService = new AwsService();
 const UpdateBrand = useUpdateBrand();
+const { selectOwnerAndReload } = useOrganizationActions();
 
 interface ImageData {
   file?: File;
@@ -26,6 +31,7 @@ const bannerFile = ref<ImageData | null>(null);
 const { data: brand, refetch } = useFindUniqueBrand({
   where: { id: route.params.id as string },
 });
+watch(brand, (record) => { if (record?.companyId) void selectOwnerAndReload(record.companyId); }, { immediate: true });
 
 watchEffect(() => {
   if (brand.value) {
@@ -81,6 +87,7 @@ const saveBrand = async () => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+      <CompanyFormField />
     <UPageCard class="m-3">
       <div class="text-xl mb-4">Edit Brand</div>
       <hr class="h-px my-6 bg-gray-200 border-0 dark:bg-gray-700" />

@@ -1,10 +1,14 @@
+import { assertSalaryManager } from '~/server/utils/salary-input'
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, createError } from 'h3'
 import { pool } from '~/server/db'
-import { deleteAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 import { recalculateManyUserLedgerBalances } from '~/server/utils/user-ledger'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
+    assertSalaryManager(session.data.role)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
@@ -14,6 +18,8 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    await client.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE', [companyId])
+    await lockCompanyRequest(event, client)
 
     const cycleRes = await client.query(
       `
@@ -58,15 +64,12 @@ export default defineEventHandler(async (event) => {
       ],
     )
     for (const row of deletedLedger.rows) affectedUsers.add(row.user_id)
-    for (const row of deletedLedger.rows) {
-      if (row.type === 'CREDIT_BILL_PAYMENT') {
-        await deleteAccountLedgerForSource(client, {
-          companyId,
-          sourceType: 'USER_CREDIT',
-          sourceId: row.id,
-        })
-      }
-    }
+
+    // Reversing credit cuts leaves only actual cash payouts in the salary ledger.
+    await client.query(`UPDATE user_ledger_entries ule SET amount=sp.amount, updated_at=now()
+      FROM salary_payments sp WHERE sp.company_id=$1 AND sp.cycle_id=$2
+        AND ule.company_id=sp.company_id AND ule.source_type='SALARY_PAYMENT' AND ule.source_id=sp.id`, [companyId, cycleId])
+    await client.query('UPDATE salary_payments SET cycle_id=NULL, cycle_line_id=NULL WHERE company_id=$1 AND cycle_id=$2', [companyId, cycleId])
 
     await client.query(
       `

@@ -1,10 +1,12 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, getRouterParam, createError } from 'h3'
 import { prisma } from '~/server/prisma'
 
 export default defineEventHandler(async (event) => {
-    const session = await useAuthSession(event)
+    const session = await useCompanyRequestSession(event)
     const companyId = session.data?.companyId as string | undefined
     if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
+    if (!['admin', 'manager', 'accountant'].includes(session.data.role)) throw createError({ statusCode: 403, statusMessage: 'Leave management access required' })
 
     const id = getRouterParam(event, 'id')
     if (!id) throw createError({ statusCode: 400, statusMessage: 'Leave id is required' })

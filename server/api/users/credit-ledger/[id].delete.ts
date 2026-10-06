@@ -1,10 +1,14 @@
+import { assertCreditManager } from '~/server/utils/user-credit-input'
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, createError } from 'h3'
 import { pool } from '~/server/db'
-import { deleteAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 import { recalculateUserLedgerBalances } from '~/server/utils/user-ledger'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
+  assertCreditManager(session.data.role)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
@@ -14,6 +18,7 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    await lockCompanyRequest(event, client)
     const rowRes = await client.query(
       `
       DELETE FROM user_ledger_entries
@@ -29,16 +34,8 @@ export default defineEventHandler(async (event) => {
       throw createError({ statusCode: 404, statusMessage: 'Manual credit row not found' })
     }
 
-    await deleteAccountLedgerForSource(client, {
-      companyId,
-      sourceType: 'MONEY_TRANSACTION',
-      sourceId: id,
-    })
-    await deleteAccountLedgerForSource(client, {
-      companyId,
-      sourceType: 'USER_CREDIT',
-      sourceId: id,
-    })
+
+
 
     await client.query(
       `

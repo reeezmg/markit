@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { expenseTaxAmounts } from '~/utils/expense-tax';
+const companyScope = useCompanyScope('form');
+const $fetch = companyScope.fetch;
+
 const props = defineProps({
     expense: {
         type: Object,
@@ -13,6 +17,8 @@ const props = defineProps({
         default: 'Save',
     },
 });
+
+watch(() => props.expense, expense => { void companyScope.beginForm(expense?.companyId ? { model: 'Expense', id: expense.id, companyId: expense.companyId } : null); }, { immediate: true });
 
 const emit = defineEmits(['save', 'cancel']);
 const toast = useToast();
@@ -40,6 +46,8 @@ const expenseData = computed(() => ({
   user: props.expense?.user || null,
 
   amount: props.expense?.totalAmount || '',
+  taxAmount: props.expense?.taxAmount || 0,
+  recoverableTaxAmount: props.expense?.recoverableTaxAmount ?? null,
   status: props.expense?.status
   ? {
       label:
@@ -113,7 +121,10 @@ const saveForm = () => {
         return;
     }
 
+  try { expenseTaxAmounts(form.value.amount,form.value.taxAmount,form.value.recoverableTaxAmount); }
+  catch(e:any) { toast.add({title:e.message,color:'red'});return; }
     emit('save', {
+        companyId: companyScope.companyId.value,
         ...form.value,
         userId: form.value.user?.userId || null,
         categoryId: form.value.category?.id,
@@ -122,11 +133,13 @@ const saveForm = () => {
 
     });
 };
+watch(companyScope.companyId, () => { if (!companyScope.record.value) { form.value.category = null; form.value.user = null; } });
 </script>
 
 <template>
   <UCard class="p-6">
     <UForm :state="form" @submit="saveForm">
+      <CompanyFormField @transferred="emit('cancel')" />
       <div class="grid grid-cols-2 gap-4">
 
         <!-- Date -->
@@ -191,8 +204,9 @@ const saveForm = () => {
           </USelectMenu>
         </UFormGroup>
 
-        <!-- Amount -->
-        <UFormGroup label="Amount" required>
+        <ExpenseTaxFields v-model:tax="form.taxAmount" v-model:recoverable="form.recoverableTaxAmount" />
+      <!-- Amount -->
+        <UFormGroup label="Total amount (including tax)" required>
           <UInput v-model="form.amount" type="number" placeholder="0.00" />
         </UFormGroup>
 

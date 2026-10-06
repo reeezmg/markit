@@ -1,9 +1,12 @@
 <script setup lang="ts">
-import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
-import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/hooks/distributor-company';
-import { useCreateDistributorCredit, useUpdateDistributorCredit, useDeleteDistributorCredit } from '~/lib/hooks/distributor-credit';
-import { useDeletePurchaseOrder } from '~/lib/hooks/purchase-order';
-import { useDeletePurchaseReturn } from '~/lib/hooks/purchase-return';
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
+import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/company-hooks/distributor-company';
+import { useCreateDistributorCredit, useUpdateDistributorCredit, useDeleteDistributorCredit } from '~/lib/company-hooks/distributor-credit';
+import { useDeletePurchaseOrder } from '~/lib/company-hooks/purchase-order';
+import { useFindManyPurchaseOrder } from '~/lib/company-hooks/purchase-order';
+import { useDeletePurchaseReturn } from '~/lib/company-hooks/purchase-return';
 
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
@@ -12,7 +15,8 @@ import { exportToCSV } from '~/utils/export-csv'
 const toast = useToast()
 const { defaultSizeLabel } = useSizeLabel()
 const router = useRouter()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
+const { forOwner } = useOrganizationActions()
 
 // ─── Add distributor modal ───
 const openModal = ref(false)
@@ -33,11 +37,12 @@ const openForm = (supplier: any = null, dcRow: any = null) => {
 // ─── Split panel ───
 const selectedDistributor = ref<any>(null)
 const selectedDistributorId = useLocalStorage('dist:selectedDistributorId', '')
+const distributorKey = (row: any) => `${row.companyId}:${row.distributorId}`
 const activeTab = useLocalStorage('dist:activeTab', 0)
 
 const selectDistributor = (row: any) => {
   selectedDistributor.value = row
-  selectedDistributorId.value = row.distributorId
+  selectedDistributorId.value = distributorKey(row)
   poExpand.value = { openedRows: [], row: null }
 }
 
@@ -47,7 +52,7 @@ const closeDetail = () => {
 }
 
 const tabs = [
-  { label: 'Transactions', icon: 'i-heroicons-credit-card' },
+  { label: 'Accounts', icon: 'i-heroicons-credit-card' },
   { label: 'Purchase Orders', icon: 'i-heroicons-shopping-bag' },
   { label: 'Purchase Returns', icon: 'i-heroicons-arrow-uturn-left' },
   { label: 'Payments', icon: 'i-heroicons-banknotes' },
@@ -74,6 +79,8 @@ const isDetailsOpen = ref(false)
 const selectedDetailsRow = ref<any>(null)
 
 const selectedPayRow = ref<any>(null)
+const paymentAccountingAccounts = ref<Record<string,string>>({})
+const creditAccountingAccounts = ref<Record<string,string>>({})
 
 const payForm = ref({
   id: '',
@@ -86,8 +93,13 @@ const payForm = ref({
 })
 
 const poLinkSearch = ref('')
+const formDistributorId = ref('')
+const { data: formPurchaseOrders } = useFindManyPurchaseOrder(computed(() => ({
+  where: { companyId: companyScope.companyId.value, distributorId: formDistributorId.value || '__none__' },
+  orderBy: { createdAt: 'desc' as const },
+})), { companyScope: 'form' } as any)
 const poLinkOptions = computed(() => {
-  const pos = selectedDistributor.value?.purchaseOrders ?? []
+  const pos = formPurchaseOrders.value ?? []
   const q = poLinkSearch.value.trim().toLowerCase()
   const filtered = q ? pos.filter((po: any) => String(po.purchaseOrderNo ?? '').toLowerCase().includes(q)) : pos
   return filtered.slice(0, 5)
@@ -101,11 +113,13 @@ const creditForm = ref({
   date: new Date().toISOString().split('T')[0],
   creditKind: 'PRODUCT' as 'PRODUCT' | 'AMOUNT',
   paymentMode: 'CASH' as 'CASH' | 'BANK',
-  bankAccountId: '__PRIMARY__' as string,
   moneyTransactionId: '' as string,
 })
 
 const editingCreditKindLocked = ref(false)
+watch([companyScope.companyId, formDistributorId], () => {
+  if (!payForm.value.id) payForm.value.purchaseOrderId = ''
+})
 
 const resetPayForm = () => {
   payForm.value = { id: '', amount: 0, remarks: '', billNo: '', paymentType: 'CASH', date: new Date().toISOString().split('T')[0], purchaseOrderId: '' }
@@ -116,28 +130,11 @@ const resetCreditForm = () => {
   creditForm.value = {
     id: '', amount: 0, remarks: '', billNo: '',
     date: new Date().toISOString().split('T')[0],
-    creditKind: 'PRODUCT', paymentMode: 'CASH', bankAccountId: '__PRIMARY__',
+    creditKind: 'PRODUCT', paymentMode: 'CASH',
     moneyTransactionId: '',
   }
   editingCreditKindLocked.value = false
 }
-
-// ─── Bank accounts for AMOUNT credit ───
-const { data: bankAccountsData } = useFindManyBankAccount(() => ({
-  where: { companyId: useAuth().session.value?.companyId },
-}))
-
-const bankOptions = computed(() => [
-  { label: 'Primary', value: '__PRIMARY__' },
-  ...(bankAccountsData.value?.map((b: any) => ({
-    label: `${b.bankName || 'Bank'} • ${b.accountNo || '—'}`,
-    value: b.id,
-  })) ?? []),
-])
-
-watch(() => creditForm.value.paymentMode, v => {
-  if (v !== 'BANK') creditForm.value.bankAccountId = '__PRIMARY__'
-})
 
 // ─── Expand states for tab tables ───
 const poExpand = ref<any>({ openedRows: [], row: null })
@@ -176,7 +173,9 @@ const selectedColumns = computed({
   },
 })
 
-const columnsTable = computed(() => columns.filter(column => selectedColumnKeys.value.includes(column.key)))
+const columnsTable = computed(() => useAuth().session.value?.allStores
+  ? [{ key: 'company.name', label: 'Store' }, ...columns.filter(column => selectedColumnKeys.value.includes(column.key))]
+  : columns.filter(column => selectedColumnKeys.value.includes(column.key)))
 
 const poColumns = [
   { key: 'purchaseOrderNo', label: 'PO No.', sortable: true },
@@ -220,6 +219,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
   select: {
     distributorId: true,
     companyId: true,
+    company: { select: { name: true } },
     distributorNumber: true,
     openingDue: true,
     openingDueDate: true,
@@ -308,6 +308,23 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
 }))
 
 const { data, isLoading, refetch } = useFindManyDistributorCompany(queryArgs)
+const postedDues = ref<Record<string, number>>({})
+let dueRequest = 0
+watch([data, companyScope.readIds], async () => {
+  const request = ++dueRequest
+  postedDues.value = {}
+  if (!['admin', 'manager', 'accountant'].includes(companyScope.auth.session.value?.role || '')) return
+  const companies = [...new Set((data.value || []).map(row => row.companyId))]
+  const results = await Promise.allSettled(companies.map(async companyId => {
+    const balances = await $fetch<Record<string, number>>('/api/accountant/distributors/balances', {
+      headers: { 'x-company-id': companyId, 'x-company-filter': companyId },
+    })
+    return Object.entries(balances).map(([id, balance]) => [`${companyId}:${id}`, balance] as const)
+  }))
+  if (request !== dueRequest) return
+  postedDues.value = Object.fromEntries(results.flatMap(result => result.status === 'fulfilled' ? result.value : []))
+  if (results.some(result => result.status === 'rejected')) toast.add({title:'Could not refresh accounting dues',description:'Showing source balances for unavailable companies.',color:'red'})
+}, { immediate: true })
 
 onMounted(() => {
   refetch()
@@ -464,7 +481,7 @@ const distributors = computed(() =>
       totalAmount,
       paidAmount,
       returnAmount,
-      totalDue: Number(d.openingDue ?? 0) + totalAmount - paidAmount,
+      totalDue: postedDues.value[distributorKey(d)] ?? (Number(d.openingDue ?? 0) + totalAmount - paidAmount),
       ordersCount: purchaseOrders.length,
       purchaseOrders,
       transactions,
@@ -511,10 +528,10 @@ const pageTo = computed(() => Math.min(page.value * pageCount.value, pageTotal.v
 // Keep selected distributor in sync after refetch
 watch(distributors, val => {
   if (selectedDistributor.value) {
-    const fresh = val?.find(d => d.distributorId === selectedDistributor.value.distributorId)
+    const fresh = val?.find(d => distributorKey(d) === distributorKey(selectedDistributor.value))
     if (fresh) selectedDistributor.value = fresh
   } else if (selectedDistributorId.value) {
-    const saved = val?.find(d => d.distributorId === selectedDistributorId.value)
+    const saved = val?.find(d => distributorKey(d) === selectedDistributorId.value)
     if (saved) selectedDistributor.value = saved
   }
 })
@@ -576,6 +593,13 @@ const downloadDistributorList = () => {
 // ─── Tab data ───
 const selectedPOs = computed(() => selectedDistributor.value?.purchaseOrders ?? [])
 const selectedTransactions = computed(() => selectedDistributor.value?.transactions ?? [])
+const accountingSourceRow = (row: any) => {
+  const [kind, id] = (row.sourceKey || '').split(':')
+  return selectedTransactions.value.find((transaction: any) =>
+    kind === 'purchase' ? transaction.type === 'PURCHASE' && transaction.purchaseOrderId === id
+      : kind === 'credit' ? transaction.type === 'CREDIT' && transaction.id === id
+      : kind === 'payment' ? ['PAYMENT', 'PURCHASE RETURN'].includes(transaction.type) && transaction.id === id : false)
+}
 const selectedPayments = computed(() =>
   selectedTransactions.value.filter((row: any) => row.type === 'PAYMENT')
 )
@@ -827,14 +851,11 @@ const handleDelete = async () => {
     } else if (deletingRowIdentity.value.type === 'po') {
       await DeletePurchaseOrder.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
     } else if (deletingRowIdentity.value.type === 'credit') {
-      await DeleteDistributorCredit.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
-      if (deletingRowIdentity.value.moneyTransactionId) {
-        await $fetch(`/api/accounts/transactions/${deletingRowIdentity.value.moneyTransactionId}`, { method: 'DELETE' })
-      }
+      await $fetch(`/api/distributor/credits/${deletingRowIdentity.value.id}`, { method: 'DELETE' })
     } else if (deletingRowIdentity.value.type === 'payment') {
       await $fetch(`/api/distributor/payments/${deletingRowIdentity.value.id}`, { method: 'DELETE' })
     } else if (deletingRowIdentity.value.type === 'purchase-return') {
-      await DeletePurchaseReturn.mutateAsync({ where: { id: deletingRowIdentity.value.id } })
+      await $fetch(`/api/purchasereturn/${deletingRowIdentity.value.id}`, { method: 'DELETE' })
     }
     toast.add({ title: 'Deleted successfully', color: 'green' })
     refetch()
@@ -858,19 +879,27 @@ const handleAdd = async () => {
   }
 }
 
-const openPayModal = (poRow: any = null) => {
+const openPayModal = async (poRow: any = null) => {
+  await companyScope.beginForm();
+  if (poRow?.id) await companyScope.selectOwner(poRow.companyId || selectedDistributor.value.companyId)
+  formDistributorId.value = selectedDistributor.value?.distributorId || ''
   selectedPayRow.value = poRow
   resetPayForm()
   if (poRow?.id) payForm.value.purchaseOrderId = poRow.id
   isOpenPay.value = true
 }
 
-const openCreditModal = () => {
+const openCreditModal = async () => {
+  await companyScope.beginForm();
+  formDistributorId.value = selectedDistributor.value?.distributorId || ''
   resetCreditForm()
   isOpenCredit.value = true
 }
 
 const handlePay = async () => {
+  if (!payForm.value.id && !formDistributorId.value) {
+    toast.add({ title: 'Select a supplier for this company', color: 'red' }); return
+  }
   isSaving.value = true
   try {
     if (!payForm.value.amount) {
@@ -883,6 +912,7 @@ const handlePay = async () => {
         method: 'PUT',
         body: {
           amount: payForm.value.amount,
+          accountingAccounts: paymentAccountingAccounts.value,
           remarks: payForm.value.remarks,
           billNo: payForm.value.billNo || null,
           paymentType: payForm.value.paymentType,
@@ -902,13 +932,14 @@ const handlePay = async () => {
         method: 'POST',
         body: {
           paymentNo,
+          accountingAccounts: paymentAccountingAccounts.value,
           amount: payForm.value.amount,
           remarks: payForm.value.remarks || null,
           billNo: payForm.value.billNo || null,
           paymentType: payForm.value.paymentType,
           purchaseOrderId: payForm.value.purchaseOrderId || null,
           createdAt,
-          distributorId: selectedDistributor.value.distributorId,
+          distributorId: formDistributorId.value,
         },
       })
       toast.add({ title: 'Payment added', color: 'green' })
@@ -924,105 +955,32 @@ const handlePay = async () => {
 }
 
 const handleAddCredit = async () => {
+  if (!creditForm.value.id && !formDistributorId.value) {
+    toast.add({ title: 'Select a supplier for this company', color: 'red' }); return
+  }
   isSaving.value = true
   try {
-    if (!creditForm.value.amount) {
-      toast.add({ title: 'Please enter Amount', color: 'red' })
-      return
-    }
-    const createdAt = creditForm.value.date ? new Date(creditForm.value.date) : new Date()
-    const isAmountKind = creditForm.value.creditKind === 'AMOUNT'
-
-    if (creditForm.value.id) {
-      // ── EDIT ──
-      await UpdateDistributorCredit.mutateAsync({
-        where: { id: creditForm.value.id },
-        data: {
-          amount: creditForm.value.amount,
-          remarks: creditForm.value.remarks,
-          billNo: isAmountKind ? null : (creditForm.value.billNo || null),
-          createdAt,
-        },
-        select: { id: true },
-      })
-      // Sync linked MoneyTransaction for AMOUNT credits
-      if (creditForm.value.moneyTransactionId) {
-        await $fetch(`/api/accounts/transactions/${creditForm.value.moneyTransactionId}`, {
-          method: 'PUT',
-          body: {
-            amount: creditForm.value.amount,
-            partyType: 'SUPPLIER',
-            direction: 'RECEIVED',
-            status: 'PAID',
-            paymentMode: creditForm.value.paymentMode,
-            accountId: creditForm.value.paymentMode === 'BANK' && creditForm.value.bankAccountId !== '__PRIMARY__'
-              ? creditForm.value.bankAccountId
-              : null,
-            note: `Distributor credit from ${selectedDistributor.value.distributor?.name ?? ''}${creditForm.value.remarks ? ': ' + creditForm.value.remarks : ''}`,
-            createdAt,
-          },
-        })
-      }
-      toast.add({ title: 'Credit updated', color: 'green' })
-    } else {
-      // ── CREATE ──
-      const { number: creditNo } = await $fetch('/api/counter/increment', {
-        method: 'POST',
-        body: { entity: 'distributorCredit' },
-      })
-
-      let moneyTransactionId: string | null = null
-      if (isAmountKind) {
-        const mt = await $fetch<{ id: string }>('/api/accounts/transactions', {
-          method: 'POST',
-          body: {
-            partyType: 'SUPPLIER',
-            direction: 'RECEIVED',
-            status: 'PAID',
-            paymentMode: creditForm.value.paymentMode,
-            accountId: creditForm.value.paymentMode === 'BANK' && creditForm.value.bankAccountId !== '__PRIMARY__'
-              ? creditForm.value.bankAccountId
-              : null,
-            amount: creditForm.value.amount,
-            note: `Distributor credit from ${selectedDistributor.value.distributor?.name ?? ''}${creditForm.value.remarks ? ': ' + creditForm.value.remarks : ''}`,
-            createdAt,
-          },
-        })
-        moneyTransactionId = mt?.id ?? null
-      }
-
-      await CreateDistributorCredit.mutateAsync({
-        data: {
-          creditNo,
-          amount: creditForm.value.amount,
-          remarks: creditForm.value.remarks || undefined,
-          billNo: isAmountKind ? undefined : (creditForm.value.billNo || undefined),
-          createdAt,
-          distributorCompany: {
-            connect: {
-              distributorId_companyId: {
-                distributorId: selectedDistributor.value.distributorId,
-                companyId: companyId.value!,
-              },
-            },
-          },
-          ...(moneyTransactionId ? { moneyTransaction: { connect: { id: moneyTransactionId } } } : {}),
-        },
-        select: { id: true },
-      })
-      toast.add({ title: 'Credit added', color: 'green' })
-    }
+    await $fetch(creditForm.value.id ? `/api/distributor/credits/${creditForm.value.id}` : '/api/distributor/credits', {
+      method: creditForm.value.id ? 'PUT' : 'POST',
+      body: {
+        ...creditForm.value,
+        accountingAccounts: creditAccountingAccounts.value,
+        distributorId: formDistributorId.value,
+        createdAt: creditForm.value.date ? new Date(creditForm.value.date) : new Date(),
+      },
+    })
+    toast.add({ title: creditForm.value.id ? 'Credit updated' : 'Credit added', color: 'green' })
     isOpenCredit.value = false
     resetCreditForm()
     refetch()
   } catch (err: any) {
-    toast.add({ title: 'Error', color: 'red', description: err.message })
+    toast.add({ title: 'Error', color: 'red', description: err.data?.statusMessage || err.message })
   } finally {
     isSaving.value = false
   }
 }
 
-// ─── Download ───
+// Downloads
 const isDownloadingPo      = ref(false)
 const isDownloadingCredits = ref(false)
 const isDownloadingPayments = ref(false)
@@ -1043,6 +1001,7 @@ const downloadPo = async (format: 'excel' | 'pdf') => {
       method: 'GET',
       params: {
         distributorId: selectedDistributor.value.distributorId,
+        companyId: selectedDistributor.value.companyId,
         startDate:     startOfDay(poSelectedDate.value.start).toISOString(),
         endDate:       endOfDay(poSelectedDate.value.end).toISOString(),
         search:        poSearch.value || undefined,
@@ -1069,6 +1028,7 @@ const downloadCredits = async (format: 'excel' | 'pdf') => {
       method: 'GET',
       params: {
         distributorId: selectedDistributor.value.distributorId,
+        companyId: selectedDistributor.value.companyId,
         startDate:     startOfDay(creditSelectedDate.value.start).toISOString(),
         endDate:       endOfDay(creditSelectedDate.value.end).toISOString(),
         type:          creditTypeFilter.value !== 'ALL' ? creditTypeFilter.value : undefined,
@@ -1093,6 +1053,7 @@ const downloadPayments = async (format: 'excel' | 'pdf') => {
       method: 'GET',
       params: {
         distributorId: selectedDistributor.value.distributorId,
+        companyId: selectedDistributor.value.companyId,
         startDate: startOfDay(paymentSelectedDate.value.start).toISOString(),
         endDate: endOfDay(paymentSelectedDate.value.end).toISOString(),
         paymentType: paymentTypeFilter.value || undefined,
@@ -1115,7 +1076,7 @@ const downloadAllTransactions = async (row: any) => {
   try {
     const res = await $fetch.raw('/api/downloads/distributor-credits.pdf', {
       method: 'GET',
-      params: { distributorId: row.distributorId },
+      params: { distributorId: row.distributorId, companyId: row.companyId },
     })
     const distName = row.distributor?.name ?? 'distributor'
     await triggerDownload('', `transactions-${distName}.pdf`, new Blob([res._data as ArrayBuffer], { type: 'application/pdf' }))
@@ -1129,7 +1090,7 @@ const downloadPurchaseReturn = async (returnId: string) => {
   try {
     const res = await $fetch.raw('/api/downloads/purchase-return.pdf', {
       method: 'GET',
-      params: { purchaseReturnId: returnId },
+      params: { purchaseReturnId: returnId, companyId: selectedDistributor.value.companyId },
     })
     await triggerDownload('', `return-${returnId}.pdf`, new Blob([res._data as ArrayBuffer], { type: 'application/pdf' }))
   } catch (err: any) {
@@ -1262,10 +1223,12 @@ const transactionAction = (row: any) => {
     actions.push([{
       label: 'Edit',
       icon: 'i-heroicons-pencil-square-20-solid',
-      click: () => {
+      click: async () => {
         if (row.type === 'PURCHASE') {
           router.push(`/products/purchase?poId=${row.purchaseOrderId}&isEdit=true`)
         } else if (row.type === 'CREDIT') {
+          await companyScope.beginForm({ model: 'DistributorCredit', id: row.id, companyId: row.companyId });
+          formDistributorId.value = row.distributorId || selectedDistributor.value?.distributorId || '';
           const linked = row.moneyTransaction
           const kind: 'PRODUCT' | 'AMOUNT' = row.moneyTransactionId ? 'AMOUNT' : 'PRODUCT'
           creditForm.value = {
@@ -1276,12 +1239,13 @@ const transactionAction = (row: any) => {
             date: new Date(row.createdAt).toISOString().split('T')[0],
             creditKind: kind,
             paymentMode: (linked?.paymentMode === 'BANK' ? 'BANK' : 'CASH'),
-            bankAccountId: linked?.accountId ?? '__PRIMARY__',
             moneyTransactionId: row.moneyTransactionId || '',
           }
           editingCreditKindLocked.value = true
           isOpenCredit.value = true
         } else {
+          await companyScope.beginForm({ model: 'DistributorPayment', id: row.id, companyId: row.companyId });
+          formDistributorId.value = row.distributorId || selectedDistributor.value?.distributorId || '';
           payForm.value = {
             id: row.id,
             amount: row.amount,
@@ -1299,6 +1263,8 @@ const transactionAction = (row: any) => {
   }
   return actions
 }
+
+watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage.value = 1; paymentPage.value = 1; returnPage.value = 1; });
 </script>
 
 <template>
@@ -1309,7 +1275,7 @@ const transactionAction = (row: any) => {
       <div
         :class="[
           'flex flex-col border-r border-gray-200 dark:border-gray-700 overflow-hidden transition-all duration-300 ease-in-out',
-          selectedDistributor ? 'w-[30%] min-w-[240px]' : 'w-full',
+          selectedDistributor ? 'hidden md:flex md:w-60 xl:w-72 shrink-0' : 'w-full',
         ]"
       >
         <UCard
@@ -1323,6 +1289,7 @@ const transactionAction = (row: any) => {
           }"
         >
           <template #header>
+          <CompanyTableFilter class="mb-3" />
             <div class="flex flex-wrap items-center justify-between gap-3 w-full">
               <div class="flex" :class="[selectedDistributor ? 'w-full justify-between items-center' : 'gap-2']">
                 <UInput
@@ -1408,7 +1375,7 @@ const transactionAction = (row: any) => {
               </template>
               <template #actions-data="{ row }">
                 <div @click.stop>
-                  <UDropdown :items="mainAction(row)">
+                  <UDropdown :items="forOwner(mainAction(row), row.companyId)">
                     <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
                   </UDropdown>
                 </div>
@@ -1423,10 +1390,10 @@ const transactionAction = (row: any) => {
             <div v-else class="divide-y divide-gray-200 dark:divide-gray-700">
               <button
                 v-for="row in filteredDistributors"
-                :key="row.distributorId"
+                :key="distributorKey(row)"
                 type="button"
                 class="w-full px-4 py-3 text-left transition-colors hover:bg-gray-50 dark:hover:bg-gray-800/40"
-                :class="selectedDistributor?.distributorId === row.distributorId ? 'bg-primary-50 dark:bg-primary-900/20' : ''"
+                :class="selectedDistributor && distributorKey(selectedDistributor) === distributorKey(row) ? 'bg-primary-50 dark:bg-primary-900/20' : ''"
                 @click="selectDistributor(row)"
               >
                 <div class="flex items-start gap-3">
@@ -1434,18 +1401,19 @@ const transactionAction = (row: any) => {
                   <div class="min-w-0 flex-1">
                     <p
                       class="truncate text-sm"
-                      :class="selectedDistributor?.distributorId === row.distributorId
+                      :class="selectedDistributor && distributorKey(selectedDistributor) === distributorKey(row)
                         ? 'font-semibold text-primary-700 dark:text-primary-300'
                         : 'font-medium text-gray-900 dark:text-gray-100'"
                     >
                       {{ row.distributor?.name }}
+                      <span v-if="useAuth().session.value?.allStores" class="block text-xs text-gray-500">{{ row.company?.name }}</span>
                     </p>
                     <p class="mt-0.5 truncate text-xs" :class="(row.totalDue || 0) > 0 ? 'text-red-600' : (row.totalDue || 0) < 0 ? 'text-green-600' : 'text-gray-500'">
                       Due: ₹{{ (row.totalDue || 0).toFixed(2) }}
                     </p>
                   </div>
                   <div @click.stop>
-                    <UDropdown :items="mainAction(row)">
+                    <UDropdown :items="forOwner(mainAction(row), row.companyId)">
                       <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" size="xs" />
                     </UDropdown>
                   </div>
@@ -1482,7 +1450,7 @@ const transactionAction = (row: any) => {
         leave-from-class="opacity-100 translate-x-0"
         leave-to-class="opacity-0 translate-x-4"
       >
-        <div v-if="selectedDistributor" class="flex-1 flex flex-col overflow-hidden">
+        <div v-if="selectedDistributor" class="min-w-0 flex-1 flex flex-col overflow-hidden">
           <!-- Detail Header -->
           <div class="flex items-center justify-between px-4 py-3 border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50">
             <div class="flex items-center gap-3">
@@ -1500,14 +1468,17 @@ const transactionAction = (row: any) => {
                 </div>
               </div>
             </div>
-            <UButton icon="i-heroicons-x-mark" color="red" variant="soft" size="sm" @click="closeDetail" />
+            <div class="flex items-center gap-2">
+              
+              <UButton icon="i-heroicons-x-mark" color="red" variant="soft" size="sm" @click="closeDetail" />
+            </div>
           </div>
 
           <!-- Tabs -->
           <UTabs
             v-model="activeTab"
             :items="tabs"
-            class="flex-1 flex flex-col overflow-hidden"
+            class="min-w-0 flex-1 flex flex-col overflow-hidden"
             color="primary"
             :ui="{
               list: {
@@ -1631,7 +1602,7 @@ const transactionAction = (row: any) => {
                         <span v-else>-</span>
                       </template>
                       <template #actions-data="{ row }">
-                        <UDropdown :items="poAction(row)">
+                        <UDropdown :items="forOwner(poAction(row), selectedDistributor?.companyId)">
                           <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
                         </UDropdown>
                       </template>
@@ -1698,159 +1669,21 @@ const transactionAction = (row: any) => {
 
                 <!-- ─── Tab 0: Transactions ─── -->
                 <template v-if="index === 0">
-                  <UCard
-                    class="w-full"
-                    :ui="{
-                      base: '',
-                      ring: 'ring-1 ring-primary-200 dark:ring-primary-800',
-                      divide: 'divide-y divide-primary-100 dark:divide-primary-900/40',
-                      header: { padding: 'px-4 py-3' },
-                      body: { padding: '' },
-                      footer: { padding: 'px-4 py-3' },
-                    }"
+                  <DistributorAccountingTransactions
+                    :company-id="selectedDistributor.companyId"
+                    :distributor-id="selectedDistributor.distributorId"
+                    :revision="selectedDistributor"
                   >
-                    <template #header>
-                      <div class="flex items-center gap-1.5 flex-wrap">
-                        <!-- Date range picker -->
-                        <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
-                          <UButton icon="i-heroicons-calendar-days-20-solid" size="xs" color="gray" variant="outline" truncate class="max-w-[200px]">
-                            {{ format(creditSelectedDate.start, 'd MMM yy') }} – {{ format(creditSelectedDate.end, 'd MMM yy') }}
-                          </UButton>
-                          <template #panel="{ close }">
-                            <div class="flex items-center sm:divide-x divide-gray-200 dark:divide-gray-800">
-                              <div class="hidden sm:flex flex-col py-4">
-                                <UButton
-                                  v-for="(range, i) in ranges"
-                                  :key="i"
-                                  :label="range.label"
-                                  color="gray"
-                                  variant="ghost"
-                                  class="rounded-none px-6"
-                                  :class="isCreditRangeSelected(range.duration) ? 'bg-gray-100 dark:bg-gray-800' : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'"
-                                  truncate
-                                  @click="selectCreditRange(range.duration)"
-                                />
-                              </div>
-                              <DatePicker v-model="creditSelectedDate" @close="close" />
-                            </div>
-                          </template>
-                        </UPopover>
-
-                        <!-- Transaction type -->
-                        <USelect
-                          v-model="creditTypeFilter"
-                          :options="[
-                            { label: 'All', value: 'ALL' },
-                            { label: 'Purchase', value: 'PURCHASE' },
-                            { label: 'Payment', value: 'PAYMENT' },
-                            { label: 'Credit', value: 'CREDIT' },
-                            { label: 'Purchase Return', value: 'PURCHASE RETURN' },
-                          ]"
-                          option-attribute="label"
-                          value-attribute="value"
-                          size="xs"
-                          class="w-32"
-                        />
-
-                        <div class="flex items-center gap-1 ml-auto">
-                          <UButton
-                            icon="i-heroicons-banknotes-20-solid"
-                            size="xs"
-                            color="green"
-                            label="Pay"
-                            @click="openPayModal(null)"
-                          />
-                          <UButton
-                            icon="i-heroicons-plus"
-                            size="xs"
-                            color="primary"
-                            label="Add Credit"
-                            @click="openCreditModal"
-                          />
-                        </div>
-                      </div>
+                    <template #controls>
+                      <UButton label="Pay" size="xs" icon="i-heroicons-banknotes" color="green" @click="openPayModal(null)" />
+                      <UButton label="Add Credit" size="xs" icon="i-heroicons-plus" @click="openCreditModal" />
                     </template>
-
-                    <div class="flex items-center justify-between gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
-                      <div class="flex items-center gap-1.5">
-                        <span class="text-xs text-gray-500">Rows:</span>
-                        <USelect v-model="creditPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
-                      </div>
-                      <UDropdown :items="creditsDownloadItems">
-                        <UButton
-                          icon="i-heroicons-arrow-down-tray"
-                          size="xs"
-                          color="gray"
-                          variant="outline"
-                          :loading="isDownloadingCredits"
-                        />
+                    <template #actions="{ row }">
+                      <UDropdown v-if="accountingSourceRow(row)" :items="forOwner(transactionAction(accountingSourceRow(row)), selectedDistributor.companyId)">
+                        <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
                       </UDropdown>
-                    </div>
-
-                    <UTable
-                      :rows="paginatedTransactions"
-                      :columns="creditColumns"
-                      class="w-full"
-                    >
-                      <template #createdAt-data="{ row }">
-                        <span v-if="row.createdAt">{{ new Date(row.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) }}</span>
-                        <span v-else class="text-xs text-gray-400">-</span>
-                      </template>
-                      <template #no-data="{ row }">
-                        <span v-if="row.no" class="font-mono text-xs">{{ row.no }}</span>
-                        <span v-else class="text-xs text-gray-400">-</span>
-                      </template>
-                      <template #type-data="{ row }">
-                        <UBadge
-                          :color="row.isOpening ? 'gray' : row.type === 'PURCHASE' ? 'blue' : row.type === 'CREDIT' ? 'red' : row.type === 'PURCHASE RETURN' ? 'orange' : 'green'"
-                          variant="subtle"
-                          size="xs"
-                        >
-                          {{ row.type }}
-                        </UBadge>
-                      </template>
-                      <template #remarks-data="{ row }">
-                        <span class="block w-36 truncate text-xs text-gray-500" :title="row.remarks || ''">{{ row.remarks || '-' }}</span>
-                      </template>
-                      <template #debit-data="{ row }">
-                        <span v-if="row.debit > 0" class="font-semibold text-red-600">₹{{ row.debit.toFixed(2) }}</span>
-                        <span v-else class="text-xs text-gray-400">-</span>
-                      </template>
-                      <template #credit-data="{ row }">
-                        <span v-if="row.credit > 0" class="font-semibold text-green-600">₹{{ row.credit.toFixed(2) }}</span>
-                        <span v-else class="text-xs text-gray-400">-</span>
-                      </template>
-                      <template #due-data="{ row }">
-                        <span class="font-semibold" :class="row.due > 0 ? 'text-red-600' : row.due < 0 ? 'text-green-600' : 'text-gray-600'">
-                          {{ formatCurrency(row.due) }}
-                        </span>
-                      </template>
-                      <template #actions-data="{ row }">
-                        <UDropdown v-if="!row.isOpening" :items="transactionAction(row)">
-                          <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
-                        </UDropdown>
-                      </template>
-                    </UTable>
-
-                    <template #footer>
-                      <div class="flex flex-wrap justify-between items-center gap-2">
-                        <span class="text-xs text-gray-500">
-                          {{ filteredTransactions.length ? (creditPage - 1) * creditPageCount + 1 : 0 }}–{{ Math.min(creditPage * creditPageCount, filteredTransactions.length) }} of {{ filteredTransactions.length }}
-                          <span v-if="filteredTransactions.length !== selectedTransactions.length" class="text-gray-400">(filtered from {{ selectedTransactions.length }})</span>
-                        </span>
-                        <UPagination
-                          v-model="creditPage"
-                          :page-count="creditPageCount"
-                          :total="filteredTransactions.length"
-                          size="xs"
-                          :ui="{
-                            wrapper: 'flex items-center gap-1',
-                            rounded: '!rounded-full min-w-[28px] justify-center',
-                          }"
-                        />
-                      </div>
                     </template>
-                  </UCard>
+                  </DistributorAccountingTransactions>
                 </template>
 
                 <!-- ─── Tab 2: Purchase Returns ─── -->
@@ -2062,7 +1895,7 @@ const transactionAction = (row: any) => {
                         <span class="text-xs text-gray-500">{{ row.remarks || '-' }}</span>
                       </template>
                       <template #actions-data="{ row }">
-                        <UDropdown :items="transactionAction(row)">
+                        <UDropdown :items="forOwner(transactionAction(row), selectedDistributor?.companyId)">
                           <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
                         </UDropdown>
                       </template>
@@ -2097,7 +1930,7 @@ const transactionAction = (row: any) => {
 
     <!-- ─── Add/Edit Distributor Modal ─── -->
     <UModal v-model="openModal">
-      <DistributorForm
+      <DistributorForm @transferred="openModal = false"
         :selectedSupplier="selectedSupplier"
         :openingDue="selectedSupplierDcData?.openingDue ?? 0"
         :openingDueDate="selectedSupplierDcData?.openingDueDate ?? ''"
@@ -2181,6 +2014,9 @@ const transactionAction = (row: any) => {
     <UModal v-model="isOpenPay">
       <UCard>
         <div class="p-4 space-y-4">
+          <CompanyFormField @transferred="isOpenPay = false" />
+          <CompanySupplierField v-if="!payForm.id" v-model="formDistributorId" />
+          <DistributorAccountSelection v-if="formDistributorId" v-model="paymentAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="formDistributorId" :source-key="payForm.id ? `payment:${payForm.id}` : undefined" :roles="['payable', payForm.paymentType === 'CASH' ? 'cash' : 'bank']" />
           <UFormGroup label="Payment Date">
             <UInput type="date" v-model="payForm.date" />
           </UFormGroup>
@@ -2468,6 +2304,9 @@ const transactionAction = (row: any) => {
     <UModal v-model="isOpenCredit">
       <UCard>
         <div class="p-4 space-y-4">
+          <CompanyFormField @transferred="isOpenCredit = false" />
+          <CompanySupplierField v-if="!creditForm.id" v-model="formDistributorId" />
+          <DistributorAccountSelection v-if="formDistributorId" v-model="creditAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="formDistributorId" :source-key="creditForm.id ? `credit:${creditForm.id}` : undefined" :roles="['payable', creditForm.creditKind === 'PRODUCT' ? 'stock' : creditForm.paymentMode === 'CASH' ? 'cash' : 'bank']" />
           <UFormGroup label="Credit For">
             <USelect
               v-model="creditForm.creditKind"
@@ -2497,14 +2336,6 @@ const transactionAction = (row: any) => {
                   { label: 'Cash', value: 'CASH' },
                   { label: 'Bank', value: 'BANK' },
                 ]"
-                option-attribute="label"
-                value-attribute="value"
-              />
-            </UFormGroup>
-            <UFormGroup v-if="creditForm.paymentMode === 'BANK'" label="Bank Account">
-              <USelect
-                v-model="creditForm.bankAccountId"
-                :options="bankOptions"
                 option-attribute="label"
                 value-attribute="value"
               />

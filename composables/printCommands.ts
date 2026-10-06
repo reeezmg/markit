@@ -494,12 +494,19 @@ export function buildReportReceiptBytes(r: any): Uint8Array {
     .rule({ style: 'single' });
 
   // ── Selected Period Balance ──────────────────────────────────────────────
-  const hasClosing = (r.balances?.cashBalance || 0) + (r.balances?.bankBalance || 0) > 0;
+  if (r.moneyPosition) {
+    sectionHeader('CASH + BANK POSITION', encoder);
+    reportRow('Opening', r.moneyPosition.opening, encoder);
+    reportRow('Net Movement', r.moneyPosition.delta, encoder);
+    reportRow('Closing', r.moneyPosition.closing, encoder);
+    encoder.rule({ style: 'single' });
+  }
+  const hasClosing = !!r.balances;
   if (hasClosing) {
-    sectionHeader('SELECTED PERIOD BALANCE', encoder);
+    sectionHeader('POSTED CASH/BANK MOVEMENT', encoder);
     reportRow('Cash', r.balances?.cashBalance || 0, encoder);
     reportRow('Bank', r.balances?.bankBalance || 0, encoder);
-    reportRow('Total Balance', r.balances?.totalBalance || 0, encoder);
+    reportRow('Net Movement', r.balances?.totalBalance || 0, encoder);
     encoder.rule({ style: 'single' });
   }
 

@@ -1,4 +1,7 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
@@ -7,7 +10,8 @@ const billStore = useBillStore()
 const onlineTableStore = useOnlineTableStore()
 const toast = useToast()
 const router = useRouter()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
+const { forOwner } = useOrganizationActions()
 const isMobile = ref(false)
 
 const { printBill } = usePrint()
@@ -30,6 +34,7 @@ const getColumns = (isMobile) => {
     return [
       { key: 'orderNumber', label: 'Order#', sortable: true },
       { key: 'invoiceNumber', label: 'Inv#', sortable: true },
+      ...(useAuth().session.value?.allStores ? [{ key: 'companyName', label: 'Store', sortable: false }] : []),
       { key: 'createdAt', label: 'Date', sortable: true },
       { key: 'customer', label: 'Customer', sortable: true },
       { key: 'subtotal', label: 'Sub Total', sortable: true },
@@ -41,6 +46,7 @@ const getColumns = (isMobile) => {
   return [
     { key: 'orderNumber', label: 'Order#', sortable: true },
     { key: 'invoiceNumber', label: 'Inv#', sortable: true },
+    ...(useAuth().session.value?.allStores ? [{ key: 'companyName', label: 'Store', sortable: false }] : []),
     { key: 'grandTotal', label: 'Grand Total', sortable: true },
     { key: 'createdAt', label: 'Date', sortable: true },
     { key: 'customer', label: 'Customer', sortable: true },
@@ -376,6 +382,7 @@ const handleDownloadExcel = async () => {
       { header: 'Sub Total', key: 'subtotal', width: 14 },
       { header: 'Grand Total', key: 'grandTotal', width: 14 },
       { header: 'Notes', key: 'notes', width: 30 },
+      { header: 'Store', key: 'companyName', width: 24 },
     ]
     rows.forEach((row: any) => {
       worksheet.addRow({
@@ -387,6 +394,7 @@ const handleDownloadExcel = async () => {
         subtotal: Number(row.subtotal || 0),
         grandTotal: Number(row.grandTotal || 0),
         notes: row.notes ?? '',
+        companyName: row.companyName ?? '',
       })
     })
     const headerRow = worksheet.getRow(1)
@@ -481,6 +489,8 @@ const openBill = async (id) => {
   isPrintOpen.value = true
 }
 
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 
 
@@ -515,6 +525,7 @@ const openBill = async (id) => {
       <!-- Date + Search -->
       <template #header>
         <div class="flex items-center gap-3">
+                  <CompanyTableFilter />
           <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
             <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
               {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
@@ -582,7 +593,7 @@ const openBill = async (id) => {
         class="w-full"
       >
         <template #actions-data="{ row }">
-          <UDropdown :items="action(row)">
+          <UDropdown :items="forOwner(action(row), row.companyId)">
             <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" />
           </UDropdown>
         </template>

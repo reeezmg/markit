@@ -1,3 +1,5 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
@@ -9,7 +11,7 @@ import { recalculatePurchaseOrderTotals } from '~/server/utils/purchase-order-to
 // variants/items, upsert the rest. New items get barcodes from the set_item_barcode
 // BEFORE INSERT trigger; existing items keep theirs (ON CONFLICT DO UPDATE).
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'No company in session' })
 
@@ -77,6 +79,7 @@ export default defineEventHandler(async (event) => {
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
 
       const purchaseOrderRes = await client.query(
         `SELECT purchaseorder_id FROM products WHERE id = $1 AND company_id = $2`,

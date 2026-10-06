@@ -1,10 +1,13 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 import * as z from 'zod';
 import { useForm } from 'vee-validate';
 import { toTypedSchema } from '@vee-validate/zod';
 import { v4 as uuidv4 } from 'uuid';
 
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 
 const availableAudiences = computed(() => {
   const cat = useAuth().session.value?.category;

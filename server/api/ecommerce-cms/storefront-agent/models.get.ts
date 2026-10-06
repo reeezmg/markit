@@ -1,3 +1,4 @@
+import { storefrontUsesAws, storefrontTransport } from '~/server/utils/storefrontTransport'
 /**
  * The AI models a seller can pick from, for the chat dropdown.
  *
@@ -9,6 +10,14 @@
 export default defineEventHandler(async (event) => {
   const session = await requireAuthSession(event)
 
+  if (await storefrontUsesAws(session.data.companyId)) {
+    const { listAiProviders } = await import('~/server/utils/aiProviders')
+    const custom = await listAiProviders(session.data.companyId, true)
+    const builtIn = await storefrontTransport<{ default: string; configurationMessage?: string | null; models: { key: string; label: string; note: string; family: string; supportsImages?: boolean }[] }>('/agent/models', {}, session.data.companyId)
+    return { ...builtIn, default: builtIn.default || (custom[0] ? `byok:${custom[0].id}` : ''), models: [...builtIn.models, ...custom.map(item => ({
+      key: `byok:${item.id}`, label: item.name, note: item.modelId, family: item.provider, supportsImages: item.supportsImages,
+    }))], configurationRequired: builtIn.models.length + custom.length === 0 }
+  }
   try {
     const builtIn = await orchestratorRequest<{
       default: string

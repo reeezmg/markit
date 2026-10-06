@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 
 const route = useRoute()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 const toast = useToast()
 const companyId = computed(() => useAuth().session.value?.companyId)
 const cycleId = computed(() => route.params.id as string)
@@ -15,7 +18,7 @@ const {
     data: cycleDetail,
     pending: isLoading,
     refresh: refetchCycle,
-} = await useFetch(() => `/api/salary/payroll/cycle/${cycleId.value}`)
+} = await useCompanyFetch(() => `/api/salary/payroll/cycle/${cycleId.value}`)
 
 const cycle = computed(() => (cycleDetail.value as any)?.cycle ?? null)
 
@@ -96,13 +99,12 @@ const columns = [
 ]
 
 // ─── Bank/cash options ───
-const { data: bankAccounts } = useFindManyBankAccount(
-    computed(() => ({ where: { companyId: companyId.value } })),
-)
+const paymentAccounts = useSalaryPaymentAccounts(companyScope)
+const bankAccounts = paymentAccounts.banks
 const payModeOptions = computed(() => [
     { label: 'Cash', value: 'CASH:__primary__' },
-    { label: 'Bank (Primary)', value: 'BANK:__primary__' },
-    ...(bankAccounts.value ?? []).map((b: any) => ({ label: `Bank · ${b.bankName || 'Bank'} ${b.accountNo || ''}`.trim(), value: `BANK:${b.id}` })),
+    { label: 'Bank (account setting)', value: 'BANK:__primary__' },
+    ...(bankAccounts.value ?? []).map((b: any) => ({ label: `Bank · ${b.name}`, value: `BANK:${b.id}` })),
 ])
 function splitPayMode(v: string) {
     const [mode, acc] = v.split(':')
@@ -205,6 +207,7 @@ const submitClearAll = async () => {
 
 <template>
     <UDashboardPanelContent class="p-4">
+        <UAlert v-if="paymentAccounts.error.value" color="red" title="Could not load payment accounts" :description="paymentAccounts.error.value" class="mb-4" />
         <div class="mb-4 flex items-start justify-between gap-3">
             <div>
                 <div class="flex items-center gap-2">
@@ -309,7 +312,8 @@ const submitClearAll = async () => {
                         Credit reduction: <strong>{{ money(creditCutAmount) }}</strong> · remaining salary {{ money(modalOutstandingAfterCredit) }}
                     </p>
                     <UFormGroup label="Amount" hint="reduce for a partial payment"><UInput v-model.number="payAmount" type="number" min="0" /></UFormGroup>
-                    <UFormGroup label="Pay from"><USelect v-model="payMode" :options="payModeOptions" value-attribute="value" option-attribute="label" /></UFormGroup>
+                    <CompanyFormField locked />
+<UFormGroup label="Pay from"><USelect v-model="payMode" :options="payModeOptions" value-attribute="value" option-attribute="label" /></UFormGroup>
                 </div>
                 <template #footer>
                     <div class="flex justify-end gap-2">
@@ -326,7 +330,8 @@ const submitClearAll = async () => {
                 <template #header><h3 class="text-base font-semibold">Clear all outstanding</h3></template>
                 <div class="space-y-3">
                     <p class="text-sm text-gray-600 dark:text-gray-300">Pays every staff member's current outstanding including previous due ({{ money(totals.outstanding) }}) as salary.</p>
-                    <UFormGroup label="Pay from"><USelect v-model="clearMode" :options="payModeOptions" value-attribute="value" option-attribute="label" /></UFormGroup>
+                    <CompanyFormField locked />
+<UFormGroup label="Pay from"><USelect v-model="clearMode" :options="payModeOptions" value-attribute="value" option-attribute="label" /></UFormGroup>
                 </div>
                 <template #footer>
                     <div class="flex justify-end gap-2">

@@ -1,8 +1,10 @@
+import { defineCompanyListHandler } from '~/server/utils/companyListHandler';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, createError } from 'h3'
 import { pool } from '~/server/db'
 
-export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+export default defineCompanyListHandler(async (event) => {
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 

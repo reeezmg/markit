@@ -1,6 +1,7 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import { useAuthSession } from '~~/auth/server/utils/session'
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
 
 const SORT_COLUMN_MAP: Record<string, string> = {
   orderNumber: 'COALESCE(t.order_number, 0)',
@@ -11,13 +12,14 @@ const SORT_COLUMN_MAP: Record<string, string> = {
 }
 
 export default defineEventHandler(async (event) => {
-  const authSession = await useAuthSession(event)
+  const authSession = await useCompanyRequestSession(event)
+  const companyIds = await getReadCompanyIds(event)
   const cleanup = authSession.data.cleanup ?? false
 
   const body = await readBody(event)
 
   const {
-    companyId,
+    companyId: requestedCompanyId,
     search,
     selectedStatus,
     selectedPaymentMethods,
@@ -46,11 +48,11 @@ export default defineEventHandler(async (event) => {
     ? new Date(endDate as string)
     : new Date()
 
-  const queryClosingDate = closingDate
+  const queryClosingDate = !authSession.data.allStores && closingDate
     ? new Date(closingDate as string)
     : null
 
-  if (!companyId) {
+  if (!requestedCompanyId) {
     throw createError({
       statusCode: 400,
       statusMessage: 'companyId is required',
@@ -114,11 +116,11 @@ export default defineEventHandler(async (event) => {
       ? 'COALESCE(e.original_discount, e.discount)'
       : 'e.discount'
 
-    const values: any[] = [companyId]
+    const values: any[] = [companyIds]
     let idx = 2
 
     let whereSQL = `
-      b.company_id = $1
+      b.company_id = ANY($1::text[])
       AND b.deleted = false
       AND NOT EXISTS (
         SELECT 1
@@ -235,6 +237,9 @@ export default defineEventHandler(async (event) => {
     const query = `
       SELECT
         b.id,
+        b.company_id AS "companyId",
+        co.name AS "companyName",
+        co.bill_prefix AS "billPrefix",
         b.precedence,
         b.is_markit        AS "isMarkit",
         b.created_at       AS "createdAt",
@@ -277,6 +282,7 @@ export default defineEventHandler(async (event) => {
         COUNT(*) OVER() AS total_count
 
       FROM bills b
+      JOIN companies co ON co.id = b.company_id
       LEFT JOIN trynbuys t ON t.id = b.trynbuy_id
       LEFT JOIN clients c ON c.id = b.client_id
       LEFT JOIN entries e ON e.bill_id = b.id
@@ -284,7 +290,7 @@ export default defineEventHandler(async (event) => {
 
       WHERE ${whereSQL}
 
-      GROUP BY b.id, c.id, t.order_number
+      GROUP BY b.id, c.id, co.id, t.order_number
 
       ORDER BY ${orderByPrefix}${orderByColumn} ${orderByDirection}
       LIMIT $${idx} OFFSET $${idx + 1}

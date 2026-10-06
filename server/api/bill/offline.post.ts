@@ -1,21 +1,32 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { pool } from '~/server/db'
 import { readBody, defineEventHandler, createError, sendError } from 'h3'
+import { saveSourceRequest } from '~/server/utils/source-save-request'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
 
   const {
     items = [],
     returnedItems = [],
-    companyId,
+    companyId = session.data.companyId,
   } = body
+
+  if (companyId !== session.data.companyId) throw createError({statusCode:403,statusMessage:'Company access denied'})
+  for (const item of [...items,...returnedItems]) {
+    if (!item?.id || !Number.isSafeInteger(Number(item.qty)) || Number(item.qty)<=0) throw createError({statusCode:400,statusMessage:'Select an item and a positive whole quantity'})
+  }
 
   const client = await pool.connect()
 
   try {
     await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
 
+    const result = await saveSourceRequest(client, session.data.companyId, session.data.id || 'offline', 'offline-stock', body.requestId,
+      { items, returnedItems, companyId }, async () => {
     /* -------------------------------------------------
        1. SOLD ITEMS → decrement qty, increment soldQty
     -------------------------------------------------- */
@@ -56,9 +67,11 @@ export default defineEventHandler(async (event) => {
       )
     }
 
+    return { success: true }
+    })
     await client.query('COMMIT')
 
-    return { success: true }
+    return result
 
   } catch (error: any) {
     await client.query('ROLLBACK')
@@ -66,7 +79,7 @@ export default defineEventHandler(async (event) => {
     return sendError(
       event,
       createError({
-        statusCode: 500,
+        statusCode: error?.statusCode || 500,
         statusMessage: 'Failed to update stock',
         data: {
           message: error.message,

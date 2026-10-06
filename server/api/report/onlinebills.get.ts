@@ -1,16 +1,16 @@
+import {reportWindow} from '~/server/utils/report-accounting';
 // ~/server/api/report/bills.get.ts
 import { defineEventHandler, getQuery } from 'h3';
 import { pool } from '~/server/db';
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope';
 
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event);
-  const companyId = session.data.companyId;
+  const companyIds = await getReadCompanyIds(event);
   const cleanup = session.data.cleanup ?? false;
-  if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
 
   const query = getQuery(event);
-  const startDate = query.startDate ? new Date(JSON.parse(query.startDate)) : new Date(0);
-  const endDate = query.endDate ? new Date(JSON.parse(query.endDate)) : new Date();
+  const {from:startDate,to:endDate}=reportWindow(query);
   const markitOnly = query.markit === 'true'; // Check if markit filter is requested
 
   const client = await pool.connect();
@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
         ) AS client
       FROM bills b
       LEFT JOIN clients cl ON b.client_id = cl.id
-      WHERE b.company_id = $1
+      WHERE b.company_id = ANY($1::text[])
         AND b.deleted = false
         AND b.created_at BETWEEN $2 AND $3
         AND ($4 = true OR b.precedence IS NOT TRUE)
@@ -43,7 +43,7 @@ export default defineEventHandler(async (event) => {
 
     const res = await client.query(
       sqlQuery,
-      [companyId, startDate, endDate, cleanup]
+      [companyIds, startDate.toISOString(), endDate.toISOString(), cleanup]
     );
 
     return res.rows;

@@ -19,6 +19,23 @@ node storetools/scripts/check-db-meta.mjs
 
 Database change workflow: change `schema.zmodel`, generate the normal migration, regenerate this catalog, fill new entries in `dbExplanations.json`, update `ARCH-schema.md` and the owning topic, then run affected tests.
 
+For the new ecommerce Accountant connection, preview with
+`node scripts/apply-ecommerce-accounting.mjs` from Storetools, then use `--apply`
+to install only its status-history and ecommerce-accounting migrations. Existing
+Accountant/ERP/party-link migrations are prerequisites. Choose the company and
+activate under Accountant > Ecommerce accounting; this excludes existing orders.
+No historical imports, live activation or gateway money movements occur on install.
+
+Paid-date/status-history migration: from `storetools`, run
+`node scripts/apply-document-status-history.mjs` to preview, then add `--apply`
+to install only `20261001120000_document_status_history` against the configured database.
+The runner uses a transaction and migration checksum; it does not run unrelated pending
+migrations or backfill dates. Deploy this migration before the new history reader or
+regenerated Prisma client. Run normal ZenStack generation after schema changes (stop
+the local server first if Windows locks the Prisma engine DLL). `prisma db push`
+alone cannot install the tracking triggers. Test with `npm run test:document-status`;
+the database test uses an isolated schema and rolls everything back.
+
 `ecommerce-api/api/app/tables.py` contains compatibility/startup DDL. Compare it
 against `schema.zmodel` before changing either source. `ecomm_payment_intents`
 is mirrored by `EcommPaymentIntent` in the zmodel. Any remaining API-created tables

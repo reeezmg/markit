@@ -1,8 +1,6 @@
 <script setup lang="ts">
-import { useFindUniqueStatementBatch, useUpdateStatementBatch } from '~/lib/hooks/statement-batch'
-import { useUpdateStatementRow, useDeleteStatementRow } from '~/lib/hooks/statement-row'
-import { useFindManyBankAccount } from '~/lib/hooks/bank-account'
-import { useFindUniqueCompany } from '~/lib/hooks/company';
+import { useFindUniqueStatementBatch } from '~/lib/hooks/statement-batch'
+import { useDeleteStatementRow } from '~/lib/hooks/statement-row'
 
 definePageMeta({ auth: true })
 
@@ -21,55 +19,16 @@ const { data: batch, isLoading, refetch } = useFindUniqueStatementBatch({
 })
 
 // ─── Bank account select ───
-const { data: company } = useFindUniqueCompany({
-  where: { id: companyId.value },
-  select: { id: true, bankName: true, accountNo: true },
-})
-const { data: secondaryBanks } = useFindManyBankAccount({
-  where: { companyId: companyId.value },
-  select: { id: true, bankName: true, accountNo: true },
-})
-
-const bankOptions = computed(() => {
-  const opts: Array<{ label: string; value: string }> = []
-  if (company.value?.bankName) {
-    opts.push({ label: `${company.value.bankName}${company.value.accountNo ? ' (' + company.value.accountNo + ')' : ''} — Primary`, value: 'PRIMARY' })
-  }
-  for (const b of secondaryBanks.value ?? []) {
-    opts.push({ label: `${b.bankName || 'Bank'}${b.accountNo ? ' (' + b.accountNo + ')' : ''}`, value: b.id })
-  }
-  return opts
-})
-
 const selectedBankId = ref<string>('')
-const updateBatch = useUpdateStatementBatch()
-
-// Auto-fill from query param or batch data
-watch([batch, () => route.query.bankAccountId], () => {
-  if (selectedBankId.value) return
-  if (batch.value?.bankAccountId) {
-    selectedBankId.value = batch.value.bankAccountId
-  } else if (route.query.bankAccountId) {
-    selectedBankId.value = route.query.bankAccountId as string
-  }
-}, { immediate: true })
-
-async function saveBankAccount() {
-  if (!selectedBankId.value) return
-  try {
-    await updateBatch.mutateAsync({
-      where: { id: batchId.value },
-      data: { bankAccountId: selectedBankId.value === 'PRIMARY' ? null : selectedBankId.value },
-    })
-    toast.add({ title: 'Bank account saved', color: 'green' })
-  } catch (err: any) {
-    toast.add({ title: 'Error saving bank', color: 'red', description: err.message })
-  }
-}
-
-watch(selectedBankId, (val) => {
-  if (val && batch.value) saveBankAccount()
+const { data: banks } = await useFetch<Array<{id:string;name:string}>>('/api/statement/banks')
+const bankOptions = computed(() => (banks.value || []).map(bank => ({label:bank.name,value:bank.id})))
+const bankStorageKey = computed(() => 'statement-bank:' + companyId.value + ':' + batchId.value)
+onMounted(() => {
+  const saved = localStorage.getItem(bankStorageKey.value) || String(route.query.bankAccountId || '')
+  if (banks.value?.some(bank=>bank.id===saved)) selectedBankId.value=saved
 })
+watch(selectedBankId, value => { if (import.meta.client) localStorage.setItem(bankStorageKey.value,value) })
+const executionRequests = ref<Record<string,string>>({})
 
 const rows = computed(() => batch.value?.rows ?? [])
 
@@ -147,14 +106,22 @@ async function findOperation(rowId: string) {
 
 // ─── Execute a single row ───
 async function executeRow(rowId: string) {
+  if (executingRow.value[rowId]) return
+  const row = rows.value.find(row=>row.id===rowId)
+  const reexecute = !!row?.executed
+  const requestKey = bankStorageKey.value + ":retry:" + rowId
+  executionRequests.value[rowId] ||= localStorage.getItem(requestKey) || crypto.randomUUID()
+  localStorage.setItem(requestKey,executionRequests.value[rowId])
   if (!requireBank()) return
 
   executingRow.value[rowId] = true
   try {
     const result = await $fetch('/api/statement/execute-row', {
       method: 'POST',
-      body: { rowId, bankAccountId: selectedBankId.value },
+      body: { rowId, bankAccountId: selectedBankId.value, reexecute, requestId:executionRequests.value[rowId] },
     })
+    localStorage.removeItem(requestKey)
+    delete executionRequests.value[rowId]
     toast.add({ title: 'Row executed', color: 'green' })
     delete rowErrors.value[rowId]
     await refetch()
@@ -213,13 +180,12 @@ async function executeAll() {
 }
 
 // ─── Ignore a row (direct update, no AI) ───
-const updateRow = useUpdateStatementRow()
 async function ignoreRow(rowId: string) {
   findingRow.value[rowId] = true
   try {
-    await updateRow.mutateAsync({
-      where: { id: rowId },
-      data: { operation: 'IGNORE', operationLabel: 'Ignore', operationMeta: {}, userInput: 'ignore', executed: false, executionResult: null as any },
+    await $fetch(`/api/statement/row/${rowId}`, {
+      method: 'PUT',
+      body: { operation: 'IGNORE', operationLabel: 'Ignore', operationMeta: {}, userInput: 'ignore', reassign: true },
     })
     toast.add({ title: 'Marked as Ignore', color: 'gray' })
     delete rowErrors.value[rowId]

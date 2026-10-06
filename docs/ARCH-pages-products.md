@@ -1,5 +1,9 @@
 ### Products (`/products`)
 
+Head-office admins default to the active head office plus active direct branches. Each table uses `useCompanyScope('table')` and `CompanyTableFilter.vue`; filters remain local to the component and participate in query keys. `CompanyFormField.vue` is inside add/edit forms: new forms default to the active head office, while edits load the stored owner through `/api/organization/context`. Related quick-add fields inherit their enclosing form company. Product, brand, category, collection, dimension, and stock tables use the local scope. Product and purchase-order forms resolve the saved owner before initializing settings. Product drafts use company-specific storage keys. Requests use explicit company IDs without updating the authentication session or sidebar company. `useOrganizationActions.ts` resolves row ownership locally. Changing an existing record's company opens the transfer preview, requires explicit destination mappings and linked-record confirmation, then moves the saved record in a transaction. Save other form changes before confirming a transfer. See `ARCH-storetools-api.md` for transfer and authorization details.
+
+Company query composition uses `utils/companyWhere.ts` in both the generated-hook adapter and server authorization proxy. Existing `AND` clauses are appended as a flat array (never an array inside `AND`). The category list uses both statuses when its status filter is empty, avoiding `OR: []`. Product form category, collection, brand, and subcategory options react to the form company and remain scoped to that company.
+
 **Files:**
 - `pages/products/index.vue` — Product listing, search, barcode scan, quick image upload
 - `pages/products/add.vue` — Add new product with purchase order + distributor
@@ -22,11 +26,13 @@
 - `server/api/products/category-tax.get.ts` — Raw SQL category tax fields (`?id=`), replaces `useFindUniqueCategory` for tax recalc
 - `server/api/products/by-ids.post.ts` — Raw SQL product list by id array (with brand/category/subcategory + variants + items incl. `initialQty`), replaces `useFindManyProduct` for the draft table
 - `server/api/products/delete.post.ts` — Raw SQL product delete (`{ id }`, company-scoped; variants/items cascade), replaces `useDeleteProduct`
+- The Products list (`pages/products/index.vue`) also uses this delete endpoint so removing a purchased product recalculates its PO and linked accounting. It sends the row's company, lets the server clean up media, and invalidates product/stock/purchase query caches.
 - `server/api/products/save-batch.post.ts` — **Deferred batch save** (one transaction): all staged products + variants + items (batched multi-row), optional new PO (`po`) or link to existing (`poId`), PO-linked credit/payment; uses `INSERT ... RETURNING` for variants/items so trigger barcodes are returned without extra variant/item readback queries. O(1) round-trips regardless of product count
 - `server/api/purchaseorder/save.post.ts` — Raw SQL atomic PO create (counter-1 numbering, link products, PO-linked credit/payment); replaces the `handleSaveWithPO` ZenStack chain
 - `server/api/purchaseorder/update.post.ts` — Raw SQL atomic PO edit: the 6-branch credit/payment transition matrix (keyed by `purchase_order_id`) + PO row update; replaces `syncEditedPurchasePayment`
 - `server/api/purchaseorder/[id].get.ts` — Raw SQL PO read (PO + products + variants + items), replaces `useFindUniquePurchaseOrder`
 - `scripts/bench-product.mjs` / `bench-po.mjs` / `bench-save-batch.mjs` — rollback integrity+timing harnesses (BEGIN…ROLLBACK; nothing persists)
+- `npm run test:products-distributor-accounting:api` exercises real product/PO, return, distributor payment/receipt and billing handlers against installed accounting triggers. Assertions cover account movements and physical quantities; commits become savepoints and the entire run rolls back. PO model-delete cascading is checked directly in SQL; browser login/clicks are outside this harness.
 - `server/api/stock-aggregate.post.ts` — Stock aggregation by group
 - `server/api/options/categories.ts` — Filter options: active categories
 - `server/api/options/brands.ts` — Filter options: distinct brand names from active products
@@ -91,7 +97,7 @@ Multi-section form with purchase info at top.
 5. Add Product → `handleAdd` stages the product locally (`buildStagedProduct`) and resets the form for the next entry — no DB write
 6. Edit (`handleEdit`) replaces the staged entry in place; delete removes it from `draft.stagedProducts` — all local
 7. Save dispatcher `handleSave` → `handleSaveNoPO` (no PO) / `handleSaveWithPO` (creates PO via `save-batch` `po`) / `handleSaveEditedPurchaseOrder` (PO-edit → `save-batch` with `poId`); barcodes come from the endpoint response. Reset only on success.
-8. PO mode lives in `pages/products/purchase.vue` (`/products/purchase?poId=...`) and **still uses ZenStack** (`DistributorCredit`/`DistributorPayment`) — out of scope of the raw-SQL conversion
+8. PO mode lives in `pages/products/purchase.vue` (`/products/purchase?poId=...`). Its purchase/payment save now uses `/api/purchaseorder/update` atomically; product/variant editing still uses its existing hooks.
 
 **TopBar payment logic:**
 - `deliveryType` persisted to `localStorage` (key: `lastDeliveryType`) — restores last used on next open
@@ -222,4 +228,11 @@ Loads the brand by ID with `useFindUniqueBrand`; saves name, target audience, de
 
 ### `pages/products/purchase.vue`
 
-Purchase-order product entry/edit page. The route can receive `poId` and an edit flag from distributor pages. Unlike `pages/products/add.vue`, this page still imports ZenStack hooks for products, purchase orders, distributor credits/payments and categories. The form ties product/variant/item work to PO payment and distributor context. Do not assume the deferred `save-batch` model of `/products/add` applies here.
+Purchase-order product entry/edit page. The route can receive `poId` and an edit flag from distributor pages. Product/variant/item work still uses hooks; saving the purchase header and payment uses `/api/purchaseorder/update` in one transaction. Do not assume the deferred `save-batch` model of `/products/add` applies here.
+
+The purchase information `TopBar` includes `DistributorAccountSelection` for connected
+distributors. It emits `accountingAccounts` with payable/stock/tax/cash/bank choices.
+Both add and purchase pages send those choices to their save endpoint; the server's
+`selectDistributorAccounts` validates company and account type and saves the source
+snapshot inside the same transaction. Deferred distributor triggers post or reverse
+journals at commit. See `ARCH-pages-distributor.md` for import and reconciliation.

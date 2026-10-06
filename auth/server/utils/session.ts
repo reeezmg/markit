@@ -29,6 +29,10 @@ export type AuthSession = {
     email: string;
     image: string | null;
     companyId: string;
+    delegatedHeadOfficeId?: string;
+    allStores?: boolean;
+    organizationHeadOfficeId?: string;
+    readCompanyId?: string;
     companyType: string;
     companyName: string;
     storeUniqueName?: string;

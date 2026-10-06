@@ -4,11 +4,106 @@
 
 ## Server Utilities (`storetools/server/`)
 
+### Salary writes and historical rates
+
+- `GET /api/salary/payment-options?paymentId` requires salary-manager permission and company scope. It returns active native BANK accounts and the recorded native bank for an optional historical payment. Payout/edit `bankAccountId` now selects a native account, validated and snapshotted by `staff-payment-account.ts` in the source transaction; it is never written into legacy bank foreign-key columns.
+
+- All salary mutation routes require admin/manager/accountant and authorized company scope. Generated SalaryConfig, SalaryPayment, PayrollCycle, PayrollCycleLine and PayrollAdjustment mutations are denied.
+- `GET /api/salary/config?userId` returns the selected staff config and minimum effective date. POST appends a validated immutable rate version; dates must follow previous versions and saved payroll periods, and cannot precede today. `POST /api/salary/adjustment` creates validated pending additions/deductions or cancels/deletes pending records within the company.
+- `server/utils/salary-input.ts` validates public money/date/type/mode inputs. Public payment/edit requests reject internal ledgerAmount/cycle linkage overrides. Internal settlement writers validate company/user/cycle ownership before posting.
+- Payroll run and clear-cycle use one serializable Prisma transaction for ORM records and SQL ledger writes, through `server/utils/payroll-transaction.ts`. Company row locks coordinate salary writes. Reruns preserve line IDs and processed adjustments for that cycle; removing settled lines returns 409. Posting failure rolls back the cycle and all its postings.
+- `server/utils/salary-history.ts` resolves daily salary and sale-date commission versions while full-period attendance allowances remain intact. Legacy current rates provide a baseline, not recovery of previously overwritten values. Additive schema migration: `20260930120000_salary_rate_history`.
+- Cycle deletion preserves actual payments, clears their cycle links and normalizes their salary-ledger debit to actual cash after removing internal settlements. The UI requires confirmation.
+
+### Staff credit writes
+
+`POST /api/users/credit-ledger`, `PUT /api/users/credit-ledger/:id` and DELETE require admin/manager/accountant and authorized company scope. POST/PUT use `user-credit-input.ts`: userId, CREDIT/PAYMENT, finite positive amount (maximum 999999999, two decimals), CASH/BANK, real transactionDate YYYY-MM-DD (2000-2100), optional note up to 1000 characters. Source is always MANUAL with null sourceId and derived ledger/money directions. Custom direction, non-manual source, sourceId and createdAt overrides are rejected. PUT preserves staff identity and an unchanged transaction date's original timestamp. The database transactions retain the staff ledger and linked money source atomically with native Staff Accounting triggers. They no longer write the legacy account ledger. GET transaction rows include userId for editing.
+
+### Company holidays
+
+- `GET /api/users/holidays?year` validates an integer year from 2000 through 2100 and retains authorized company-list fanout.
+- POST creates a dated holiday; `PUT /api/users/holidays/:id` updates date/name within its authorized company; DELETE removes within that company. Mutations require admin/manager/accountant. `server/utils/holiday-settings.ts` validates real local calendar dates and optional names up to 120 trimmed characters. Duplicate company/date writes return 409; updates to missing or foreign-company records return 404.
+- POST no longer upserts, so adding a duplicate cannot silently erase an existing holiday name. The legacy `POST /api/users/holidays/bulk` returns 410 without writes; recurring weekly offs are configured through shifts.
+- Generated CompanyHoliday mutations are denied by the authoritative schema. Existing dates and payroll policy semantics remain unchanged.
+
+### Shift policies and leave
+
+- `POST /api/users/shifts` and `PUT /api/users/shifts/:id` validate `server/utils/shift-settings.ts`'s full shift payload, including `policy` and `effectiveFrom`. Creates default a missing effective date to today; edits require an explicit later version date. Edits append immutable JSON snapshots in a serializable transaction. Roles: admin/manager/accountant; all ownership comes from `useCompanyRequestSession`.
+- `POST /api/users/leaves`, `PUT /api/users/leaves/:id` and DELETE require management roles and company ownership. POST/PUT accept CASUAL/SICK/EARNED/OTHER/COMP_OFF, half-day increments, valid ranges and a decision status. Overlapping pending/approved applications are rejected within a serializable transaction. Reject/cancel remains available without deleting history.
+- `GET /api/users/leave-balances?userId&date` returns type allowances/usage and available compensatory days for the selected company. Users may read their own balance; managers may read others. Pending applications do not reserve entitlement.
+- `server/utils/shift-calendar.ts` replays effective-dated shifts, completed off-day attendance, company holidays and approved leave. `server/utils/payroll.ts` applies break pay, automatic classifications, missing-checkout rules, fractional paid/unpaid leave and extra holiday/weekly-off pay. The payroll runner reads historical inputs to preserve allowance usage across separate payroll periods and validates calculation before saving a cycle shell.
+- `POST /api/attendance/punch` can close the previous night's open shift within its grace period, or reuse the previous night attendance for a break return before shift end. The new log is timestamped now; ownership checks remain unchanged.
+- Schema/rollout: `scripts/SHIFT-POLICY.md`; additive migration `20260929160000_shift_policy_scenarios` is required before the new generated client is used against a database.
+
+### Attendance calendar and requests
+
+- `GET /api/attendance/calendar?year&month` uses authorized company-list fanout to return overlapping shift assignments (latest-effective first), holidays and approved leave date/duration metadata. It supplies monthly display context, not payroll calculations.
+- `POST /api/attendance/request` accepts optional id, userId, date, local dateAnchor, checkIn/checkOut, nextDay and reason. `DELETE /api/attendance/request` accepts id and records CANCELLED. Both use serializable transactions; only pending requests may change, staff identity is immutable on edit, and non-management staff can write only their own requests. Management roles are admin/manager/accountant. Generated AttendanceAdjustment mutations are denied.
+- `/api/attendance/import` enforces management role before reading the workbook. Existing overwrite semantics remain unchanged.
+
+### Attendance writes
+
+All new attendance endpoints resolve authorized company ownership through `useCompanyRequestSession`.
+
+| Endpoint | Contract |
+|---|---|
+| `POST /api/attendance/punch` | `{ userId, date, dayAnchor, type }`; `date` is YYYY-MM-DD, `dayAnchor` is local midnight with an explicit UTC offset, and `type` is CHECK_IN/CHECK_OUT. Only the current local day is accepted. Staff can punch themselves; admin/manager/accountant can punch others. Validates active company membership and alternating punches, then atomically updates attendance and creates the live log. |
+| `POST /api/attendance/manual` | Management roles; `{ id?, userId, date, dayAnchor, status, checkIn, checkOut, nextDay?, shiftId?, note? }`. HH:mm times, optional next-day checkout. Create rejects existing day entries; edit verifies the existing company/staff/day identity. Resolves an omitted shift from assignments. Updates summary and boundary logs in a serializable transaction, preserving intermediate breaks and rejecting conflicting boundaries. |
+| `DELETE /api/attendance/manual` | Management roles; `{ id }`. Deletes only an attendance owned by the selected authorized company; FK cascade removes logs. Adjustment requests remain. |
+| `POST /api/attendance/decision` | Management roles; `{ id, status: APPROVED or REJECTED, note? }`. Requires a pending company-owned request. Approval updates attendance, boundary logs and decision together in a serializable transaction; rejection updates only the decision. |
+
+`server/utils/attendance-write.ts` owns strict calendar/time validation, browser-local midnight parsing, company staff/shift checks and boundary-log correction. Existing generated request CRUD and biometric import are separate flows. No new persistence models were added. Attendance changes affect subsequent payroll calculations; existing payroll cycles require their normal recalculation flow.
+
+### Recurring expenses
+
+`/api/accounts/recurring-expenses` GET/POST lists or creates fixed monthly schedules
+for `useCompanyRequestSession`'s authorized company. `/:id` PUT edits future values and
+PATCH toggles `active` without overwriting dates/amounts. Both constrain writes by company.
+Categories are checked and locked within the save transaction; amounts use the shared
+expense-tax validator. POST `/process` generates due entries only for that company.
+GET `/api/cron/recurring-expenses` requires `CRON_SECRET` bearer authentication and
+processes active companies globally. It returns a 500 when any occurrence fails; successful
+occurrences stay committed. Both processors return created/failed/remaining counts
+(on cron failure these are in error data). `server/utils/recurring-expenses.ts` owns the
+bounded, atomic processor. See `ARCH-pages-erp.md` for scheduling, setup and retry semantics.
+
+### Independent Accountant API
+
+`server/api/accountant/[...path].ts` serves the new `/api/accountant/*` namespace.
+It resolves `useCompanyRequestSession`, restricts roles to admin/manager/accountant,
+and dispatches through the local route registry in `server/utils/accountant/router.ts`.
+The registry adapts the Contractor Accountant request/response handlers to Nitro;
+it does not mount an Express app. No legacy accounting endpoint is redirected.
+
+| Relative resource | Operations / owner |
+|---|---|
+| `accounting-accounts` | List/default chart, create, patch, delete unused accounts, `:id/status`, `:id/ledger`; `accounts.ts` |
+| `manual-journals` | List, next number, source lookup, detail, create/edit/delete draft, approve/publish/reverse; `journals.ts` |
+| `account-transfers` | List, next number, create/edit/delete with source journals; `transfers.ts` |
+| `money` | Receive/pay options, list, immediate journal posting and reversal; `money.ts` |
+| `investors` | GET list with `asOf`, GET options, GET `users` (active company memberships with existing investor links), GET company `ledger`, GET/PUT `share-settings` (totalShares; manager/admin writes), POST profile (`userId` or `newUser` identity; existing roles preserved, fresh users get investor role), GET/PUT `:id`, POST `:id/terms`, PUT/DELETE `:id/terms/:termId` (audited corrections/deletions before posted allocations; manager/admin only; company totals revalidated), POST `:id/events`, POST `:id/reverse/:eventId`; `investors.ts`. Dated agreements and approved profit allocations require manager/admin; other operations retain the Accountant role gate. |
+| `investor-profits` | GET `profit?periodFrom=&periodTo=`, POST `preview` (period + distributable), POST `approve` (period, distributable, date, previewHash, requestId, optional note), GET `history`, GET/PUT `settings` (accountId). Computes posted book profit and atomically allocates all active investor shares; `investor-profits.ts`. Approval/settings writes require manager/admin. Preview changes, missing/changing terms, overlapping periods and excessive amounts are rejected. This router has a 120-second transaction timeout for multi-investor batches. |
+| `parties`, `projects` | Independent directory list/create; `directories.ts` |
+| `accountant-management` | Bootstrap, details/sub-accounts/activity/credits, templates, recurring profiles/generate/toggle, budgets/actuals, locks/unlock, openings, assets/categories/depreciation/disposal, currency drafts/publish, year-end journals, preferences, engagements and bulk account updates; `management.ts` |
+
+`context.ts` resolves every model operation through request-local AsyncLocalStorage
+and the same Prisma transaction, injecting company predicates. All requests take a
+company advisory lock, including default/preference bootstrap reads that may create
+records. Mutation auditing commits with the operation. `posting.ts` validates balanced
+two-decimal lines, active account ownership, optional contact/project ownership,
+accounting periods and approvals. `reporting.ts` converts journal amounts to company
+base currency for reporting. Schema changes are exclusively the new `Accountant*`
+models in `schema.zmodel`; generated CRUD denies all access to these models.
+
+See `ARCH-pages-accounts.md` for rollout boundaries, UI behavior, operational setup
+and verification. Existing sales, expenses, purchases, payroll and statements do
+not call this API during the independent adoption phase.
+
 ### Prisma clients
 
 | File | Export | Notes |
 |---|---|---|
-| `server/prisma.ts` | `prisma` — bare `PrismaClient` | Imports `distributorPaymentMiddleware` but **never registers it** via `$use` — middleware is dead code |
+| `server/prisma.ts` | `prisma` - bare `PrismaClient` | No payment middleware is registered. The unused supplier-payment middleware was removed; it referenced the nonexistent `PurchaseOrder.paidAmount` field. |
 | `server/utils/prisma.ts` | `prisma` — `PrismaClient` with `$use` middleware | Auto-creates `Notification` rows on `Bill.create` (`ORDER_RECEIVED`) and `Expense.create` (`EXPENSE_CREATED`). Use this import when notifications should fire. |
 | `server/db.ts` | `pool` — `pg.Pool` | Shared raw SQL pool, `DATABASE_URL` env var. Used by most routes needing raw queries. |
 
@@ -29,7 +124,6 @@
 | `server/utils/mailer.ts` | `sendEmailWithOtp(to, otp)` | Sends OTP email via nodemailer using `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS`. Port 465 uses implicit TLS; the sender is `SMTP_USER`. |
 | `server/utils/generateSign.ts` | `generateSign(requestOption, app_secret)` | TikTok Shop HMAC-SHA256 request signing: sort params alphabetically → `{path}{params}{body}` → wrap with `app_secret` → HMAC-SHA256 hex. |
 | `server/utils/tiktokDB.ts` | `updateCompanyForTiktok(...)` | Updates `Company` row with TikTok OAuth tokens (`tiktokAccessToken`, `tiktokRefreshToken`, `tiktokCipher`, `tiktokStoreName`, expiry fields). Uses `server/prisma` (bare). |
-| `server/utils/distributorPayment.middleware.ts` | `distributorPaymentMiddleware` | Prisma middleware: after any `DistributorPayment` create/update/delete, recalculates `totalPaid` for the related `PurchaseOrder` and updates `paidAmount`. **Never registered** (see `server/prisma.ts` bug). Has `console.log(params)` on every call. |
 | `server/utils/cleanUpDel.ts` | `applyBillDeletionCleanup(opts)` | Hard-deletes bills and re-sequences invoice numbers. Renumbering is set-based raw SQL (`UPDATE ... FROM` with `ROW_NUMBER()`) so cleanup does not issue one update round-trip per remaining bill. Bug fixed: inner `prisma.bill.update` changed to `tx.bill.update` to correctly participate in the Prisma transaction. |
 | `server/utils/cleanUpGet.ts` | `previewBillsForReduction(opts)` | Dry-run: finds bills matching cleanup criteria. Returns the existing deletion plan plus `reductionPlan` / `reductionAmount` for exact amount-reduction cleanup. Reduce preview accepts repeatable `reductionRules[]` (`fromAmount`, `toAmount`, `reducePercent`); `toAmount = 0` means no upper limit, and each bill uses the first matching rule by bill total. Bug fixed: `timePref` was not used in `orderBy` — now applies `{ createdAt: timePref === 'oldest' ? 'asc' : 'desc' }`. Also adds `precedence: { not: true }` to exclude already-soft-deleted bills from candidates. |
 | `server/utils/cleanUpReduce.ts` | `applyBillReductionCleanup(opts)` | Cleanup amount-reduction utility. Ensures `original_*` columns exist, stores first real bill/entry amounts (`bills.original_subtotal`, `bills.original_grand_total`, `bills.original_discount`, `entries.original_rate`, `entries.original_value`, `entries.original_discount`), then lowers `entries.rate`, `entries.value`, `bills.subtotal`, and `bills.grand_total` from the preview `reductionPlan`, recalculates `entries.tax` from the linked category tax config using the reduced per-unit value (`value / qty`), and sets visible bill/entry discounts to `0`. Treats `0` snapshot values as missing so accidental zero originals are backfilled from the current real value before reduction. |
@@ -54,6 +148,23 @@ Used by: `useNotifications` composable (connects to `localhost:3003` in dev).
 All files under `storetools/server/api/`. These are Nuxt H3 route handlers, **distinct from the Express `server/` folder**.
 
 Auth: most routes call `useAuthSession(event)` and read `session.data.companyId`.
+
+### Branch management
+
+| Route | Method | Behavior |
+|---|---|---|
+| `branches` | GET | Returns the selected company and its direct branches. |
+| `branches/head-office` | POST | Checks active admin membership and marks a root company as a head office. |
+| `branches` | POST | Checks active head office admin membership and creates a branch company, owner membership, input defaults, expense category, and pipeline in one transaction. |
+
+`POST /api/auth/switch-company` is in the auth Nuxt layer; it checks active user membership or head-office admin access before rebuilding the company-scoped session.
+`GET /api/auth/accessible-companies` lists permitted companies. Only admins of the actual active head office receive direct active branch access. `POST /api/auth/switch-company` changes the actual sidebar/session company; `keepOrganization` is rejected. The obsolete `read-scope` and `view-scope` endpoints return 410.
+
+`useCompanyScope.ts` and `useCompanyFetch.ts` send `x-company-filter` (one ID or `*`) for table reads and `x-company-id` for form/row operations. `organizationReadScope.ts` expands `*` to authorized IDs. `organizationModelScope.ts` caps generated reads and included company-owned lists without broadening explicit filters. Generated writes validate ownership/relations inside a serializable transaction. `company-request.ts` checks custom SQL request relations; `lockCompanyRequest.ts` holds referenced ownership locks through writes. `companyRequestScope.ts` provides authorized request-local company settings without session updates. Accounts and Reports UI retain their existing company selection.
+
+`GET /api/organization/context` returns an authorized company settings whitelist; model/id lookup resolves existing form ownership from the database. `POST /api/organization/transfer` accepts a preview or confirmed transfer. `companyTransfer.ts` discovers dependent records from schema relationships and logical ledger source IDs, returns explicit destination mapping requirements, and fingerprints the preview. Confirmation locks company counters and affected records, checks the fingerprint/mappings, moves linked documents, allocates destination numbers, reuses supplier/customer identities through destination links, adjusts stock and customer points, and recalculates source/destination account and staff ledgers. Supplier invoice references are retained. Failures roll back the transaction; serialization/deadlock conflicts return 409 for a fresh preview. Transfer confirmation moves the saved record immediately; forms reload or close afterward.
+
+Verification: `npm run test:company-scope` exercises request filters/authorization and real PostgreSQL transfer fixtures, including missing mappings, insufficient-stock rollback, stale preview rejection, stock/ledger reconciliation, purchase-return stock reversal, and linked payment/expense create-update-delete handlers. Fixtures are rolled back. `scripts/check-company-scope.mjs` checks changed Vue/TypeScript syntax.
 DB: routes use either `pool` from `~/server/db` (raw SQL) or `prisma` from `~/server/prisma` / `~/server/utils/prisma`.
 
 ---
@@ -63,7 +174,7 @@ DB: routes use either `pool` from `~/server/db` (raw SQL) or `prisma` from `~/se
 | File | Purpose |
 |---|---|
 | `~/server/db.ts` | `pool` — `pg.Pool` for raw SQL (accounts/ledger/bill routes) |
-| `~/server/prisma.ts` | `prisma` — bare `PrismaClient`; `distributorPaymentMiddleware` is imported but **never registered** (bug) |
+| `~/server/prisma.ts` | `prisma` - bare `PrismaClient`; no payment middleware is registered |
 | `~/server/utils/prisma.ts` | `prisma` (separate instance) with `$use` auto-notification middleware: creates `Notification` on Bill.create (ORDER_RECEIVED) and Expense.create (EXPENSE_CREATED) |
 | `~/server/ws/server.ts` | Raw `ws` WebSocket on port 3003; `broadcastToCompany(companyId, notification)` used by notify.post.ts |
 | `~/server/middleware/cors.ts` | CORS: allows Capacitor + localhost origins; OPTIONS preflight |
@@ -80,7 +191,7 @@ Cash and bank ledger calculations. Auth via `useAuthSession`. Uses `pool` (raw S
 | `accounts/cashledger` | GET | Cash ledger: `?from=&to=`. Reads persisted `account_ledger_entries` for `accountType=CASH`, computes opening from rows before `from`, and returns `{ cash, from, to, ledger[], closingBalance }` with stored `balanceAfter`. |
 | `accounts/primaryledger` | GET | Primary bank ledger: `?from=&to=`. Reads persisted `account_ledger_entries` for `accountType=PRIMARY_BANK` and returns company bank metadata plus ledger rows. |
 | `accounts/secondaryledger` | GET | Secondary bank ledger: `?from=&bankId=&to=`. Reads persisted `account_ledger_entries` for `accountType=BANK` + `accountId=bankId`. |
-| `accounts/transactions*`, `accounts/transfers*`, `accounts/investments*`, `accounts/banks*`, `accounts/expenses*` | POST/PUT/DELETE | Ledger-aware account write APIs. Each source write rebuilds `account_ledger_entries` for that `sourceType/sourceId` and recalculates affected account balances from the changed date forward. |
+| `accounts/transactions*`, `accounts/transfers*`, `accounts/investments*`, `accounts/banks*`, `accounts/primary-bank`, `accounts/opening-balances` | POST/PUT/DELETE | Read-only archive: scoped HTTP 410; use native Accountant. Expense APIs remain active source writes and native ERP postings. |
 | `accounts/primary-bank` | PUT | Updates primary bank details/opening balance and rebuilds the primary-bank opening ledger row. |
 | `accounts/opening-balances` | PUT | Updates company cash + primary-bank opening balances/dates from settings and rebuilds both opening ledger rows. |
 | `accounts/cash-ledger.pdf` | GET | PDF export of cash ledger. Fetches `/api/accounts/cashledger` via `$fetch` then generates jsPDF A4 with autoTable. Returns `application/pdf` |
@@ -94,9 +205,10 @@ Billing (POS) operations. Core transaction routes.
 
 | Route | Method | Auth | Description |
 |---|---|---|---|
-| `bill/create` | POST | — | **Main bill creation transaction** now runs through lazily installed PL/pgSQL function `create_bill_plpgsql(jsonb)` via one steady-state route query (`SELECT create_bill_plpgsql($1::jsonb)`). Body: `{ payload, items, returnedItems, billPoints, clientId, companyId, couponId, uuid }`. The function inserts the bill row (including optional `account_id` for B2B credit or `credit_user_id` for staff credit), inserts entries set-wise from JSONB, updates stock with set-based JSONB deltas (`items.qty`, `items.sold_qty`), applies loyalty point mutations on save (`+billPoints`, `-redeemedPoints` when present), records coupon usage + increments `timesUsed`, creates earned GENERATE coupon vouchers in `coupon_clients` (single-use, `usage_limit = 1`), writes/recalculates staff credit `user_ledger_entries`, and writes/recalculates `account_ledger_entries` for the bill. **`invoice_number` is assigned by the DB trigger `trigger_generate_invoice_number` (BEFORE INSERT on `bills`), not by app code** — the insert passes `null` and reads the trigger value back via `RETURNING invoice_number`. Returns `{ success, billId, invoiceNumber, generatedCoupons }`. Retry on transient PG errors (up to 3×, exponential backoff). Logs failures to `save_error_requests` table. |
-| `bill/offline` | POST | session | Stock-only update for offline billing: `{ items, returnedItems, companyId }`. Decrements/increments `items.qty` and `sold_qty` in transaction. Uses `pool` from `~/server/db` |
+| `bill/create` | POST | — | **Main bill creation transaction** now runs through lazily installed PL/pgSQL function `create_bill_source_plpgsql(jsonb)` inside a request-receipt transaction (`SELECT create_bill_source_plpgsql($1::jsonb)`). Body: `{ payload, items, returnedItems, billPoints, clientId, companyId, couponId, uuid }`. The function inserts the bill row (including optional `account_id` for B2B credit or `credit_user_id` for staff credit), inserts entries set-wise from JSONB, updates stock with set-based JSONB deltas (`items.qty`, `items.sold_qty`), applies loyalty point mutations on save (`+billPoints`, `-redeemedPoints` when present), records coupon usage + increments `timesUsed`, creates earned GENERATE coupon vouchers in `coupon_clients` (single-use, `usage_limit = 1`), writes/recalculates staff credit `user_ledger_entries`, and leaves historical `account_ledger_entries` untouched; native deferred triggers post the financial source. **`invoice_number` is assigned by the DB trigger `trigger_generate_invoice_number` (BEFORE INSERT on `bills`), not by app code** — the insert passes `null` and reads the trigger value back via `RETURNING invoice_number`. Returns `{ success, billId, invoiceNumber, generatedCoupons }`. The company-specific draft keeps uuid on retry/reload; saveSourceRequest returns its saved result or rejects changed details (409), with source, receipt and journals committed together. Retry on transient PG errors (up to 3×, exponential backoff). Logs failures to `save_error_requests` table. |
+| `bill/offline` | POST | session | Stock-only update: `{ requestId, items, returnedItems, companyId }`. Changes `items.qty` and `sold_qty` in one transaction; enabled stock-control triggers post inventory adjustments. A durable request receipt prevents duplicate stock/native valuation on identical retries; changed details under the same ID return 409. Verified by rollback sidebar regression. Uses `pool` from `~/server/db` |
 | `bill/update` | POST | session | Full bill edit in a raw SQL / pg transaction. **Batched (O(1) round-trips):** one batched SELECT of old entries, one bulk entry `UPDATE … FROM unnest(...)`, one bulk stock `UPDATE`, one batched DELETE — instead of per-row queries. Creates new entries, updates existing, prunes removed, adjusts stock, updates bill header (including separate `account_id` and `credit_user_id` credit-party columns), syncs the linked `user_credit_transactions` BILL/CREDIT row when staff credit is present or removes it when staff credit is cleared, reconciles loyalty points, and creates earned GENERATE coupon vouchers (`coupon_clients`, single-use). Returns `{ success, generatedCoupons }`. |
+| `bill/status-history` | GET | session + authorized company read scope | `?id=&type=bill\|order\|checkout` (type defaults to bill). Returns `{ document: { id, companyId, paidAt } \| null, history }`. History includes sequence (string), field, previousStatus, status, changedAt, source and actorId; ordered by sequence. A deleted document can have retained history and a null document. Missing/out-of-scope records return 404; invalid type/id returns 400. Requires the document-status-history migration. |
 | `bill/createAccount` | POST | — | Creates B2B `accounts` record + optional `addresses` row in transaction. Body: `{ name, phone, address?, companyId }` |
 | `bill/findBillCounter` | POST | session | Atomically increments `companies.bill_counter`, stores in session, returns value. **DEPRECATED / no longer called** by `billing.vue` — invoice numbers now come from the `bills` BEFORE INSERT trigger (`trigger_generate_invoice_number`). Endpoint left in place but unused. |
 | `bill/by-barcode` | GET | session | Barcode lookup for billing page: `?barcode=`. Returns `{ id, size, qty, variant: { id, name, sprice, product: { name, categoryId } } }` or null. Uses raw SQL |
@@ -368,11 +480,12 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `whatsapp/send-pending-template` | POST | — | Send WhatsApp pending invoice reminder. Body: `{ phone, name, billName, amount, dueDate, receiptUrl, paymentUrl }`. Uses `pending_invoice_1` template via Facebook Graph API v25.0. Two URL buttons: receipt link + UPI payment link. Phone auto-prefixed with `91`. Env: `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN` |
 | `whatsapp/webhook` | GET/POST | — | WhatsApp webhook. GET: verification (hardcoded `VERIFY_TOKEN = 'markit123'`). POST: handles incoming text, voice note, image, and PDF messages, resolves sender phone to `CompanyUser`, routes the session through Gemini + MCP, and sends the AI reply back to WhatsApp. **Bug:** verify token hardcoded |
 | `statement/_helpers.ts` | — | — | Shared module: `fetchCompanyContext`, `classifyRow` (Gemini AI with DB context), `executeOperation` (INSERT using meta UUIDs), `deleteExecutedRecord`, `upsertMapping`, `parseMeta` |
+| `statement/banks.get` | GET | session | Lists active native BANK accounts owned by the authenticated company. Statement selection never writes a native ID to the legacy batch bank foreign key. |
 | `statement/upload.post` | POST | session | Upload bank statement (base64 PDF/image). Extracts rows via Gemini `gemini-3-flash-preview`, saves batch + rows, auto-matches mappings (30% keyword overlap). Body: `{file, mimeType, fileName?, bankAccountId?}`. Returns `{batchId, rowCount, matched, unmatched}` |
 | `statement/find-operation.post` | POST | session | AI-classify a statement row. Uses `classifyRow` with full DB context (categories, users, distributors, bank accounts with IDs). Saves operation+meta+userInput to row + upserts mapping. Resets `executed=false` on re-assign. Body: `{rowId, userInput, bankAccountId}` |
-| `statement/execute-row.post` | POST | session | Execute a single assigned row — creates actual DB record using meta UUIDs. Handles re-execution (deletes old record first). Returns `{success, operationId, operation, meta, insertedData}`. Body: `{rowId, bankAccountId}` |
-| `statement/execute.post` | POST | session | Batch execute all assigned rows in a batch. Marks batch EXECUTED. Posts summary to AI chat if chatId. Body: `{batchId, bankAccountId}` |
-| `statement/row/[id].put` | PUT | session | Manual update of a row's operation/meta/label/userInput. Upserts mapping. |
+| `statement/execute-row.post` | POST | session | Creates/replaces expense or supplier sources using the selected native bank snapshot. Source, postings and completion commit together. Completed rows replay; explicit replacement uses a durable request receipt. Returns `{success, operationId, operation, meta, insertedData, bankAccountId}`. Body: `{rowId, bankAccountId, requestId?, reexecute?}`; replacement requires requestId. |
+| `statement/execute.post` | POST | session | Resumable batch execution: retries failed rows, skips completed rows and marks EXECUTED only when all rows finish. Returns per-row failures and posts a noncritical AI chat summary. Body: `{batchId, bankAccountId}`. |
+| `statement/row/[id].put` | PUT | session | Locked company/batch/row assignment updates operation/meta/label/userInput and mapping, retaining the prior source receipt. Reopens the batch. Explicit `reassign:true` permits editing a completed row; Ignore uses this endpoint. |
 
 ---
 
@@ -380,6 +493,8 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 
 | File | Bug |
 |---|---|
+| `statement/_helpers.ts` | ISO dates still parse as day-first substrings (deferred gap #6). Source/receipt atomicity, selected banks, positive credit when debit is zero, and partial batch retry are fixed locally. Old ledger writes and statement transfer/money/investment execution remain retired. |
+| `billSale/updatePaymentMethod.post.ts` | Legacy ledger disconnection is intentional; native ERP journals follow the changed source. |
 | `bill/findBillCounter.post.ts` | `console.log('res', res?.billCounter)`; also now-unused (invoice numbering moved to DB trigger) |
 | `billSale/receipt.get.ts` | `console.log('SALE ENTRIES:', sale.entries)` on every receipt load |
 | `cart/update.post.ts` | `console.log('Cart updated:', cart)` on every update |
@@ -388,7 +503,7 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `notifications/index.get.ts` | `console.log(userId)` on every request |
 | `notifications/notify.post.ts` | Imports `broadcastToCompany` but calls `http://localhost:3004/broadcast` HTTP instead — duplicate/inconsistent |
 | `purchaseorder/create.post.ts` | `console.log('res', res)` |
-| `getuser.get.ts` | No auth check — any caller can enumerate company users by `companyId` |
+| `getuser.get.ts` | **FIXED** — calls `assertCompanyAccess` before returning active staff in the requested company. |
 | `item.post.ts` | `console.log(res)` after createMany |
 | `items/findFirst.get.ts` | `console.log('Query:', query)` on every barcode lookup |
 | `stock-aggregate.post.ts` | Full category breakdown `console.log` on every request |
@@ -396,6 +511,5 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `tiktok/getToken.post.ts` | `app_key`/`app_secret` hardcoded in source; hardcoded `x-tts-access-token` header (expired token) |
 | `tiktok/getShopName.get.ts` | Same hardcoded credentials; `generateSign` called with wrong args (object instead of path string) |
 | `whatsapp/webhook.ts` | `VERIFY_TOKEN = 'markit123'` hardcoded (should be env var); inbound WhatsApp AI reply flow still depends on this token being configured in Meta webhook settings |
-| `~/server/prisma.ts` | Imports `distributorPaymentMiddleware` but never calls `prisma.$use()` — middleware never activates |
 | `accounts/primaryledger.get.ts` | `console.log({...openingBalance breakdown})` on every request |
 | `shopifyRegister.post.ts` | References `shopifyLogin` which is not imported |

@@ -1,3 +1,4 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
@@ -47,6 +48,7 @@ export default defineEventHandler(async (event) => {
 
     try {
       await client.query("BEGIN")
+      await lockCompanyRequest(event, client);
 
       // =============================
       //  1️⃣ INSERT PRODUCT

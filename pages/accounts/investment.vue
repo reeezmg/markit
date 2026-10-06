@@ -2,90 +2,8 @@
 import { ref, computed } from 'vue'
 import { format } from 'date-fns'
 
-import { useQueryClient } from '@tanstack/vue-query'
-import InvestmentForm from '~/components/Investment/Form.vue'
-import { useFindManyInvestment } from '~/lib/hooks/investment';
-
-/* ---------------------------------------------------
-   EMITS
---------------------------------------------------- */
-const emit = defineEmits(['open'])
-
-const toast = useToast()
+import { useFindManyInvestment } from '~/lib/hooks/investment'
 const useAuth = () => useNuxtApp().$auth
-const queryClient = useQueryClient()
-
-const refreshInvestments = () =>
-  queryClient.invalidateQueries({ queryKey: ['zenstack', 'Investment'] })
-
-/* ---------------------------------------------------
-   MODAL STATE
---------------------------------------------------- */
-const showInvestmentForm = ref(false)
-const selectedInvestment = ref<any | null>(null)
-const isDeleteModalOpen = ref(false)
-const deletingRow = ref<any>(null)
-const isSaving = ref(false)
-const isDeleting = ref(false)
-
-/* ---------------------------------------------------
-   OPEN / CLOSE
---------------------------------------------------- */
-const openInvestmentForm = (row = null) => {
-  selectedInvestment.value = row
-  showInvestmentForm.value = true
-}
-
-const closeInvestmentForm = () => {
-  showInvestmentForm.value = false
-  selectedInvestment.value = null
-}
-
-/* ---------------------------------------------------
-   SAVE
---------------------------------------------------- */
-const saveInvestment = async (form: any) => {
-  if (isSaving.value) return
-  isSaving.value = true
-  try {
-    if (selectedInvestment.value) {
-      await $fetch(`/api/accounts/investments/${selectedInvestment.value.id}`, { method: 'PUT', body: form })
-      toast.add({ title: 'Investment updated', color: 'green' })
-    } else {
-      await $fetch('/api/accounts/investments', { method: 'POST', body: { ...form, status: form.status || 'COMPLETED' } })
-      toast.add({ title: 'Investment added', color: 'green' })
-    }
-
-    await refreshInvestments()
-    closeInvestmentForm()
-  } catch (err: any) {
-    toast.add({ title: err?.statusMessage || err?.data?.statusMessage || 'Failed to save investment', color: 'red' })
-  } finally {
-    isSaving.value = false
-  }
-}
-
-/* ---------------------------------------------------
-   DELETE
---------------------------------------------------- */
-const confirmDelete = async () => {
-  if (isDeleting.value) return
-  isDeleting.value = true
-  try {
-    await $fetch(`/api/accounts/investments/${deletingRow.value.id}`, { method: 'DELETE' })
-    toast.add({ title: 'Investment deleted', color: 'green' })
-    await refreshInvestments()
-    isDeleteModalOpen.value = false
-  } catch (err: any) {
-    toast.add({ title: err?.statusMessage || err?.data?.statusMessage || 'Failed to delete investment', color: 'red' })
-  } finally {
-    isDeleting.value = false
-  }
-}
-
-/* ---------------------------------------------------
-   TABLE STATE
---------------------------------------------------- */
 const page = ref(1)
 const pageCount = ref('10')
 
@@ -138,32 +56,12 @@ const formatCurrency = (v: number) =>
     currency: 'INR',
   }).format(v ?? 0)
 
-/* ---------------------------------------------------
-   ACTION DROPDOWN
---------------------------------------------------- */
-const actionItems = (row: any) => [
-  [
-    {
-      label: 'Edit',
-      icon: 'i-heroicons-pencil-square-20-solid',
-      click: () => openInvestmentForm(row.raw),
-    },
-  ],
-  [
-    {
-      label: 'Delete',
-      icon: 'i-heroicons-trash-20-solid',
-      click: () => {
-        deletingRow.value = row
-        isDeleteModalOpen.value = true
-      },
-    },
-  ],
-]
 </script>
 
 <template>
   <UDashboardPanelContent class="pb-24">
+    <UAlert class="mb-4" title="Legacy investment history" description="Use Investors & ownership in Accountant for capital, shares and profit payouts. All legacy rows are read-only here." />
+    <UButton class="mb-4" to="/investments/investors" icon="i-heroicons-arrow-top-right-on-square">Open Investments</UButton>
 
     <!-- SUMMARY -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">
@@ -195,16 +93,6 @@ const actionItems = (row: any) => [
                 footer: { padding: 'p-4' },
             }"
         >
-      <!-- HEADER -->
-      <template #header>
-        <div class="flex justify-between items-center">
-          <h3 class="font-semibold"></h3>
-          <UButton color="primary" @click="openInvestmentForm()">
-            Add Investment
-          </UButton>
-        </div>
-      </template>
-
       <!-- TOP BAR -->
       <div class="flex justify-between items-center px-4 py-3">
         <div class="flex items-center gap-2">
@@ -228,7 +116,6 @@ const actionItems = (row: any) => [
           { key: 'user', label: 'User' },
           { key: 'amount', label: 'Amount' },
           { key: 'note', label: 'Note' },
-          { key: 'actions', label: 'Actions' },
         ]"
       >
         <template #date-data="{ row }">
@@ -239,15 +126,6 @@ const actionItems = (row: any) => [
           {{ formatCurrency(row.amount) }}
         </template>
 
-        <template #actions-data="{ row }">
-          <UDropdown :items="actionItems(row)">
-            <UButton
-              icon="i-heroicons-ellipsis-horizontal-20-solid"
-              variant="ghost"
-              color="gray"
-            />
-          </UDropdown>
-        </template>
       </UTable>
 
       <!-- FOOTER -->
@@ -284,29 +162,5 @@ const actionItems = (row: any) => [
             </template>
     </UCard>
 
-    <!-- DELETE MODAL -->
-    <UDashboardModal
-      v-model="isDeleteModalOpen"
-      title="Delete Investment"
-      description="Are you sure you want to delete this investment?"
-      icon="i-heroicons-exclamation-circle"
-      prevent-close
-      :close-button="null"
-    >
-      <template #footer>
-        <UButton color="red" label="Delete" :loading="isDeleting" @click="confirmDelete" />
-        <UButton color="gray" label="Cancel" :disabled="isDeleting" @click="isDeleteModalOpen = false" />
-      </template>
-    </UDashboardModal>
-
-    <!-- FORM MODAL -->
-    <UModal v-model="showInvestmentForm">
-      <InvestmentForm
-        :investment="selectedInvestment"
-        :loading="isSaving"
-        @save="saveInvestment"
-        @cancel="closeInvestmentForm"
-      />
-    </UModal>
   </UDashboardPanelContent>
 </template>

@@ -42,6 +42,7 @@ const totalBalance = computed(() =>
 
 const fetchReport = async () => {
   loading.value = true
+  report.value=null
   try {
     report.value = await $fetch('/api/report/online', {
       method: 'GET',
@@ -127,6 +128,7 @@ const categoryRows = computed(() => {
 
 <template>
   <UDashboardPanelContent>
+    <ReportsBasis kind="source" detail="Marketplace bills and collections. These are operational totals, not posted accounting income." />
     <div ref="scrollContainer" class="scroll-container">
       <div class="space-y-6 p-4 md:p-6">
 

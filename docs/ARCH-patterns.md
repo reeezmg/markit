@@ -46,12 +46,14 @@ The sidebar has ERP and Storefront tabs in both expanded and collapsed modes. Th
 **`baseLinks` structure (pro plan):**
 | Section | Sub-pages |
 |---|---|
-| ERP | Billing, Sales, Expenses, Accounts |
+| ERP | Billing, Sales, Online, Accounts |
+| Expense (all plans) | Daily Expense (`/erp/expenses`), Recurring Expense (`/erp/recurring-expenses`) |
 | Reports | Sales *(admin+manager)*, Profit *(admin only)*, Accounts Report *(admin only)*, Online, Users *(only if `isUserTrackIncluded`)* |
 | Products | All Products, Categories, Brands, Stocks |
 | Distributor | All Distributors, Purchase Order *(Credit link commented out — merged into distributor index)* |
 | Orders | Try N Buy, Bookings *(only if companyType = seller or buyer)* |
-| Accounts | Banks, Cash, Investments, Transfers, Transactions |
+| Account (all plans; admin, manager, accountant) | Grouped new accounting pages from `utils/accountant-navigation.ts`: Accounts, Journals, Planning and controls, Fixed assets, Setup. Legacy Accounts is hidden. |
+| Investments (all plans) | Investment pages; appears immediately below Account when that group is available. |
 | Users | — |
 | Client | — |
 | Coupons | — |

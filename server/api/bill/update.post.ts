@@ -1,9 +1,12 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { setDocumentStatusContext } from '~/server/utils/document-status-context'
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
 import { createError } from 'h3'
 import { pool } from '~/server/db'
 import { generateCouponsForBill } from '~/server/utils/generatedCoupons'
 import { creditAmountFromBill, deleteUserLedgerEntryForSource, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
-import { billLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 
 // One-time `bills.discount_type` column add — gated to run once per process.
 let billDiscountTypeReady = false
@@ -64,7 +67,7 @@ async function applyPointsDelta(
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  await useAuthSession(event)
+  await useCompanyRequestSession(event)
 
   const {
     items = [],
@@ -76,13 +79,14 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
-    // Gated one-time column add (used to run on every update). The account-ledger
-    // schema is ensured lazily inside rebuildAccountLedgerForSource below.
+    // Gated one-time source column setup.
     if (!billDiscountTypeReady) {
       await client.query(`ALTER TABLE bills ADD COLUMN IF NOT EXISTS discount_type TEXT DEFAULT 'percentage'`)
       billDiscountTypeReady = true
     }
     await client.query('BEGIN')
+    await setDocumentStatusContext(event, client, 'bill.update')
+      await lockCompanyRequest(event, client);
 
     const billResult = await client.query(
       `
@@ -103,6 +107,10 @@ export default defineEventHandler(async (event) => {
     const oldBillPoints = toNumber(existingBill.bill_points)
     const oldRedeemedPoints = toNumber(existingBill.redeemed_points)
     const resolvedCompanyId = billData.companyId || existingBill.company_id
+    const requestCompany = (await useCompanyRequestSession(event)).data.companyId;
+    if (existingBill.company_id !== requestCompany || resolvedCompanyId !== requestCompany) {
+      throw createError({ statusCode: 409, statusMessage: 'Preview and confirm the company transfer first' });
+    }
 
     let resolvedClientId = billData.clientId || null
     if (resolvedClientId) {
@@ -188,23 +196,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await rebuildAccountLedgerForSource(client, {
-      companyId: resolvedCompanyId,
-      sourceType: 'BILL',
-      sourceId: billData.id,
-      rows: billLedgerRows({
-        id: billData.id,
-        companyId: resolvedCompanyId,
-        paymentMethod: billData.paymentMethod || 'Cash',
-        paymentStatus: billData.paymentStatus || 'PAID',
-        splitPayments: billData.splitPayments,
-        grandTotal: billData.grandTotal || 0,
-        createdAt: billData.date,
-        deleted: false,
-        isMarkit: false,
-        invoiceNumber: existingBill.invoice_number,
-      }),
-    })
+
 
     // Snapshot the pre-edit state of every edited entry in ONE query
     // (was one SELECT per edited row). Entries are still pre-edit here, which

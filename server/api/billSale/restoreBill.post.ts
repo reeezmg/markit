@@ -1,7 +1,7 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { creditAmountFromBill, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
-import { billLedgerRows, ensureAccountLedgerSchema, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 
 export default defineEventHandler(async (event) => {
   const { billId, companyId } = await readBody(event)
@@ -16,7 +16,7 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
-    await ensureAccountLedgerSchema(client)
+
     await client.query('BEGIN')
 
     const billRes = await client.query(
@@ -154,23 +154,7 @@ export default defineEventHandler(async (event) => {
       })
     }
 
-    await rebuildAccountLedgerForSource(client, {
-      companyId,
-      sourceType: 'BILL',
-      sourceId: billId,
-      rows: billLedgerRows({
-        id: billId,
-        companyId,
-        paymentMethod: bill.payment_method,
-        paymentStatus: bill.payment_status,
-        splitPayments: bill.split_payments,
-        grandTotal: bill.grand_total,
-        createdAt: bill.created_at,
-        deleted: false,
-        isMarkit: false,
-        invoiceNumber: bill.invoice_number,
-      }),
-    })
+
 
     await client.query('COMMIT')
 

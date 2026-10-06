@@ -1,9 +1,11 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, createError } from 'h3'
 import { pool } from '~/server/db'
-import { deleteAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
   const id = event.context.params?.id
@@ -11,7 +13,8 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
-    await deleteAccountLedgerForSource(client, { companyId, sourceType: 'EXPENSE', sourceId: id })
+      await lockCompanyRequest(event, client);
+
     const res = await client.query(`DELETE FROM expenses WHERE id = $1 AND company_id = $2`, [id, companyId])
     if (!res.rowCount) throw createError({ statusCode: 404, statusMessage: 'Expense not found' })
     await client.query('COMMIT')

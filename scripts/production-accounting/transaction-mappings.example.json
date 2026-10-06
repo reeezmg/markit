@@ -1,0 +1,14 @@
+{
+  "COMPANY_ID": {
+    "banks": {
+      "OLD_BANK_ID": "NEW_BANK_ACCOUNT_ID"
+    },
+    "money": {
+      "CASH": "NEW_CASH_ACCOUNT_ID",
+      "BANK": "NEW_PRIMARY_BANK_ACCOUNT_ID"
+    },
+    "purposes": {
+      "OLD_TRANSACTION_ID": "NEW_COUNTERPART_ACCOUNT_ID"
+    }
+  }
+}

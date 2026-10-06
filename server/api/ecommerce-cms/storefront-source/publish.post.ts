@@ -1,3 +1,5 @@
+import { storefrontUsesAws } from '~/server/utils/storefrontTransport'
+import { awsStorefrontRequest } from '~/server/utils/awsStorefront'
 import { pool } from '~/server/db'
 import {
   deploymentState,
@@ -14,6 +16,8 @@ export default defineEventHandler(async (event) => {
   const companyId = session.data.companyId
   const runtime = useRuntimeConfig(event)
   await ensureStorefrontSourcesTable()
+
+  if (await storefrontUsesAws(companyId)) return awsStorefrontRequest('publish', companyId, {})
 
   const { rows } = await pool.query<{
     repositoryFullName: string | null

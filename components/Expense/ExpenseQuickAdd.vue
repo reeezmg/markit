@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { expenseTaxAmounts } from '~/utils/expense-tax';
+const companyScope = useCompanyScope('form');
+const $fetch = companyScope.fetch;
+
 /**
  * Inline quick-add bar rendered below the KPI cards, above the expense table.
  * Replaces the old "Add Expense" modal for creating expenses (the modal is now
@@ -58,6 +62,8 @@ const makeDefaultForm = () => ({
   category: [] as any[],
   user: [] as any[],
   amount: '' as string | number,
+  taxAmount: 0,
+  recoverableTaxAmount: null as number | null,
   paymentMode: [paymentModeOptions[0]] as any[],
   status: [statusOptions[0]] as any[],
   note: '',
@@ -145,7 +151,10 @@ const submit = () => {
     nextTick(() => (statusSelectRef.value?.querySelector('button') as HTMLElement | null)?.focus());
     return;
   }
+  try { expenseTaxAmounts(form.value.amount,form.value.taxAmount,form.value.recoverableTaxAmount); }
+  catch(e:any) { toast.add({title:e.message,color:'red'});return; }
   emit('create', {
+        companyId: companyScope.companyId.value,
     ...form.value,
     category, // single object for optimistic display
     user: form.value.user?.[0] || null,
@@ -375,10 +384,12 @@ const reset = async () => {
 };
 
 defineExpose({ reset });
+watch(companyScope.companyId, () => { if (!companyScope.record.value) { form.value.category = []; form.value.user = []; } });
 </script>
 
 <template>
   <UCard class="mb-4" :ui="{ body: { padding: 'px-4 py-3' } }">
+      <CompanyFormField />
     <div ref="barRef" class="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end" @keydown.capture="onBarKeydown">
       <UFormGroup label="Date">
         <UInput v-model="form.date" type="date" size="sm" @keydown.enter.prevent="onInputEnter" />
@@ -449,7 +460,7 @@ defineExpose({ reset });
         </div>
       </UFormGroup>
 
-      <UFormGroup label="Amount" required>
+      <UFormGroup label="Total amount (including tax)" required>
         <UInput
           v-model="form.amount"
           type="number"
@@ -459,6 +470,7 @@ defineExpose({ reset });
         />
       </UFormGroup>
 
+      <ExpenseTaxFields v-model:tax="form.taxAmount" v-model:recoverable="form.recoverableTaxAmount" />
       <UFormGroup label="Payment">
         <div ref="paymentSelectRef">
           <USelectMenu

@@ -19,7 +19,7 @@ Covers: `storetools/auth/` (Nuxt layer for session management) and `storetools/n
 
 ### `AuthSession` — `auth/server/utils/session.ts`
 
-Full seller/staff session. Populated on login from `user.companies[0]`.
+Full seller/staff session. Login selects an active direct company membership first; a delegated branch membership is used only if its head-office admin access remains valid.
 
 | Field | Type | Source |
 |---|---|---|
@@ -30,11 +30,15 @@ Full seller/staff session. Populated on login from `user.companies[0]`.
 | `cleanup` | `boolean` | `user.cleanup` |
 | `cleanupCode?` | `string` | `user.cleanupCode` |
 | `companyId` | `string` | `CompanyUser.companyId` |
+| `allStores?` | `boolean` | Head-office combined data scope; enabled automatically for head-office admins |
+| `organizationHeadOfficeId?` | `string` | Deprecated legacy field; cleared by session refresh/login/switch |
+| `readCompanyId?` | `string` | Deprecated legacy field; table filters are now component-local and sent per request |
+| `delegatedHeadOfficeId?` | `string` | Head office authorizing access to the selected branch |
 | `companyName` | `string` | `Company.name` |
 | `companyType` | `string` | `Company.type` |
 | `companyPhone?` | `string` | `Company.phone` |
 | `storeUniqueName?` | `string` | `Company.storeUniqueName` |
-| `role` | `string` | `CompanyUser.role` (`'admin'` or `'user'`) |
+| `role` | `string` | `CompanyUser.role` (`admin`, `manager`, `biller`, `accountant`, `investor`, or `user`) |
 | `type` | `string` | Alias for `role` |
 | `code` | `string` | `CompanyUser.code` |
 | `plan` | `string` | `Company.plan` (`'free'`, `'lite'`, `'pro'`) |
@@ -79,6 +83,8 @@ Full seller/staff session. Populated on login from `user.companies[0]`.
 | `authSessionVersion` | `string` | `process.env.AUTH_SESSION_VERSION` |
 
 **Auth check:** `requireAuthSession` throws 401 if `session.data.email` is empty.
+
+Company switching in `TeamsDropdown` calls `POST /api/auth/switch-company`. The server verifies an active `CompanyUser` membership, loads the destination company and its settings, and rebuilds the company-specific session fields. The general session PUT route rejects changes to `companyId`.
 
 **Session config:**
 - Cookie name: `NUXT_AUTH_PASSWORD` env var (warns and uses fallback secret if missing)

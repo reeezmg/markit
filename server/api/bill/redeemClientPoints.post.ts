@@ -1,3 +1,4 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 
@@ -28,6 +29,7 @@ if (
 
   try {
     await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
 
     const query =
       mode === 'redeem'

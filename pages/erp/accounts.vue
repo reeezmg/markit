@@ -1,7 +1,10 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 import { Switch } from '@headlessui/vue';
-import { useFindManyAccount, useCreateAccount, useUpdateAccount, useDeleteAccount, useCountAccount } from '~/lib/hooks/account';
-import { useUpdateBill } from '~/lib/hooks/bill';
+import { useFindManyAccount, useCreateAccount, useUpdateAccount, useDeleteAccount, useCountAccount } from '~/lib/company-hooks/account';
+import { useUpdateBill } from '~/lib/company-hooks/bill';
 import type { Prisma } from '@prisma/client'
 import { format } from 'date-fns'
 const toast = useToast();
@@ -10,7 +13,8 @@ const CreateAccount = useCreateAccount({ optimisticUpdate: true });
 const UpdateAccount = useUpdateAccount({ optimisticUpdate: true });
 const DeleteAccount = useDeleteAccount({ optimisticUpdate: true });
 const router = useRouter();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { forOwner } = useOrganizationActions();
 const accountsTableStore = useAccountsTableStore()
 const isSavingAcc = ref(false);
 const isOpen = ref(false);
@@ -88,7 +92,10 @@ const allColumns = computed(() => isMobile.value ? mobileColumns : desktopColumn
 const selectedColumns = ref([...desktopColumns])
 const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
 const columnsTable = computed(() =>
-  allColumns.value.filter(c => selectedColumns.value.some((s: any) => s.key === c.key))
+  [
+    ...(useAuth().session.value?.allStores ? [{ key: 'company.name', label: 'Store' }] : []),
+    ...allColumns.value.filter(c => selectedColumns.value.some((s: any) => s.key === c.key)),
+  ]
 )
 watch(allColumns, cols => { selectedColumns.value = [...cols] })
 
@@ -107,7 +114,7 @@ const action = (row:any) => [
             icon: 'i-heroicons-trash-20-solid',
              click: () => {
                 isDeleteBillModalOpen.value = true
-                deletingBillRowIdentity.value = {name:row.invoiceNumber,id:row.id}
+                deletingBillRowIdentity.value = {name:row.invoiceNumber,id:row.id,companyId:row.companyId}
             }
         },
     ],
@@ -201,6 +208,8 @@ const queryArgs = computed<Prisma.AccountFindManyArgs>(() => {
     },
     select: {
       id: true,
+      companyId: true,
+      company: { select: { name: true } },
       accountNumber: true,
       name: true,
       phone: true,
@@ -375,24 +384,22 @@ onMounted(() => {
 
 
 
-const deleteBillRow = () => {
+const deleteBillRow = async () => {
     try{
-        updateBill.mutate({
-        where:{
-            id: deletingBillRowIdentity.value.id
-        },
-        data:{
-            deleted:true
-        }
-    })
+        const { id: billId, companyId } = deletingBillRowIdentity.value;
+        await $fetch('/api/billSale/deleteBill', {
+            method: 'POST', headers: { 'x-company-id': companyId },
+            body: { billId, companyId },
+        });
+        await refetch();
      toast.add({
             title: `Bill No ${deletingBillRowIdentity.value.name} deleted successfully!`,
             color: 'green',
         });
-    }catch(err){
+    }catch(err:any){
         toast.add({
           title: 'Error while deleting the bill entries',
-          description: error.message,
+          description: err?.data?.statusMessage || err.message,
           color: 'red',
         });
     }finally{
@@ -421,29 +428,22 @@ const handleChange = (value:string, row:any) => {
 
 const onPaymentStatusChange = async (id:string, status:string, billNo, paymentMethod?: 'Cash' | 'UPI' | 'Card') => {
     try{
-    const res = await UpdateBill.mutateAsync({
-        where:{
-            id
-        },
-        data:{
-            paymentStatus:status,
-            ...(status === 'PAID' && paymentMethod && {
-                paymentMethod
-            }),
-            ...(status === 'PAID' && {
-                createdAt: new Date().toISOString()
-            })
-        }
-    })
+    const row = accounts.value?.find((a:any)=>a.bill?.some((b:any)=>b.id===id));
+    const companyId = row?.companyId || companyScope.readIds.value[0];
+    await $fetch('/api/billSale/updatePaymentStatus', {method:'POST', headers:{'x-company-id':companyId}, body:{billId:id,companyId,status,paymentMethod}});
+    await refetch();
      toast.add({
           title: `Bill ${billNo} status changed to ${status}`,
           color: 'green',
         });
-    }catch(err){
+    return true;
+    }catch(err:any){
          toast.add({
           title: 'Error while changing the bill status',
+          description: err.data?.statusMessage || err.message,
           color: 'red',
         });
+    return false;
     }
 }
 
@@ -500,7 +500,6 @@ const sendPendingWhatsappApi = async (row: any) => {
 const handlePaymentStatusSelect = (row: any, status: string) => {
   if (status === 'PAID') {
     // Keep row stable until user confirms payment method.
-    row.paymentStatus = 'PENDING'
     paymentMethodForPaid.value = ['Cash', 'UPI', 'Card'].includes(row.paymentMethod)
       ? row.paymentMethod
       : 'Cash'
@@ -519,17 +518,14 @@ const handlePaymentStatusSelect = (row: any, status: string) => {
 const confirmPaidWithMethod = async () => {
   if (!paymentMethodBillCtx.value) return
 
-  await onPaymentStatusChange(
+  const saved = await onPaymentStatusChange(
     paymentMethodBillCtx.value.id,
     'PAID',
     paymentMethodBillCtx.value.billNo,
     paymentMethodForPaid.value
   )
 
-  if (paymentMethodBillCtx.value.row) {
-    paymentMethodBillCtx.value.row.paymentStatus = 'PAID'
-    paymentMethodBillCtx.value.row.paymentMethod = paymentMethodForPaid.value
-  }
+  if (!saved) return;
 
   isPaymentMethodModalOpen.value = false
   paymentMethodBillCtx.value = null
@@ -540,7 +536,8 @@ const cancelPaidWithMethod = () => {
   paymentMethodBillCtx.value = null
 }
 
-const openEditModal = (row:any) => {
+const openEditModal = async (row:any) => {
+    await companyScope.beginForm({ model: 'Account', id: row.id, companyId: row.companyId });
     account.value = {
         id: row.id,
         name: row.name,
@@ -653,6 +650,8 @@ const deleteAccountRow = async () => {
 
 
 
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 <template>
     <UDashboardPanelContent class="pb-24">
@@ -673,10 +672,12 @@ const deleteAccountRow = async () => {
             <template #header>
             <div class="flex justify-between items-center gap-3 w-full flex-wrap">
                 <div class="flex items-center gap-3 flex-wrap">
+                  <CompanyTableFilter />
+                  
                   <UInput v-model="search" icon="i-heroicons-magnifying-glass-20-solid"
                     placeholder="Search..." size="sm" class="w-full sm:w-48" />
                 </div>
-                <UButton icon="i-heroicons-plus" size="sm" color="primary" label="Add Account" @click="isOpen = true" />
+                <UButton icon="i-heroicons-plus" size="sm" color="primary" label="Add Account" @click="async () => { await companyScope.beginForm(); account = { name: '', phone: '', street: '', locality: '', city: '', state: '', pincode: '' }; isOpen = true; }" />
             </div>
         </template>
 
@@ -741,7 +742,7 @@ const deleteAccountRow = async () => {
 
 
                 <template #actions-data="{ row }">
-                <UDropdown :items="actionAccount(row)">
+                <UDropdown :items="forOwner(actionAccount(row), row.companyId)">
                     <UButton
                         color="gray"
                         variant="ghost"
@@ -751,12 +752,13 @@ const deleteAccountRow = async () => {
             </template>
 
                 <template #expand="{ row: accountRow }">
+                    <AccountantCustomerLedger :company-id="accountRow.companyId" :account-id="accountRow.id" />
                     <UTable 
                         :rows="accountRow.bill" 
                         :columns="billColumns"
                     >
                         <template #actions-data="{ row }">
-                            <UDropdown :items="action({ ...row, account: { name: accountRow.name, phone: accountRow.phone } })">
+                            <UDropdown :items="forOwner(action({ ...row, companyId: accountRow.companyId, account: { name: accountRow.name, phone: accountRow.phone } }), accountRow.companyId)">
                                 <UButton
                                     color="gray"
                                     variant="ghost"
@@ -796,7 +798,7 @@ const deleteAccountRow = async () => {
 
                         <template #paymentStatus-data="{ row }">
                             <USelect
-                                v-model="row.paymentStatus"
+                                :model-value="row.paymentStatus"
                                 :options="['PAID', 'PENDING']"
                                 @update:model-value="status => handlePaymentStatusSelect(row, status)"
                                 size="xs"
@@ -874,6 +876,7 @@ const deleteAccountRow = async () => {
         
   <UModal v-model="isOpen">
         <div class="p-4 space-y-4">
+          <CompanyFormField @transferred="isOpen = false" />
           <h2 class="text-lg font-semibold">Enter Account Details</h2>
 
           <!-- Name -->

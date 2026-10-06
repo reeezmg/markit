@@ -17,6 +17,9 @@ export function useBillingCoupons(
   redeemedAmt: ReturnType<typeof ref>,
   couponValue: ReturnType<typeof ref>
 ) {
+  const companyScope = useCompanyScope();
+  const $fetch = companyScope.fetch;
+
   const allCoupons = ref<any[]>([])
   const selectedCouponId = ref<any>(null)
 
@@ -31,7 +34,7 @@ export function useBillingCoupons(
 
   const couponRefetch = async () => {
     try {
-      const companyId = useNuxtApp().$auth.session.value?.companyId
+      const companyId = companyScope.auth.session.value?.companyId
       if (!companyId) return []
 
       const data = await $fetch('/api/bill/findManyCoupon', {

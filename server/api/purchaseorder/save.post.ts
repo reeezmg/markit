@@ -1,7 +1,10 @@
+import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import { distributorPaymentLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 
 // Raw-SQL atomic replacement for add.vue's handleSaveWithPO (create flow):
 // increment purchase_counter, create the PO (app-owned number = counter-1, matching
@@ -10,7 +13,7 @@ import { distributorPaymentLedgerRows, rebuildAccountLedgerForSource } from '~/s
 // DistributorCredit (CREDIT) or DistributorPayment (other types). PO-linked rows
 // carry no money_transaction, so there is no cash/bank ledger cascade here.
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'No company in session' })
 
@@ -29,6 +32,7 @@ export default defineEventHandler(async (event) => {
     const poId = crypto.randomUUID()
     try {
       await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
 
       // app-owned PO number (matches add.vue: increment then use counter-1)
       const counterRes = await client.query(
@@ -71,22 +75,15 @@ export default defineEventHandler(async (event) => {
              VALUES ($1,$2,$3,$4,$5,$6,$7)`,
             [paymentId, createdAtDate, totalAmount || 0, paymentType, distributorId, companyId, poId],
           )
-          await rebuildAccountLedgerForSource(client, {
-            companyId,
-            sourceType: 'DISTRIBUTOR_PAYMENT',
-            sourceId: paymentId,
-            rows: distributorPaymentLedgerRows({
-              id: paymentId,
-              companyId,
-              amount: totalAmount || 0,
-              paymentType,
-              createdAt: createdAtDate,
-              remarks: `Purchase order ${purchaseOrderNo}`,
-            }),
-          })
+
         }
       }
 
+      if (payment?.distributorId) {
+        await selectDistributorAccounts(client,companyId,payment.distributorId,`purchase:${poId}`,payment.accountingAccounts);
+        const linked = await client.query('SELECT id FROM distributor_payments WHERE company_id=$1 AND purchase_order_id=$2',[companyId,poId]);
+        for(const row of linked.rows) await selectDistributorAccounts(client,companyId,payment.distributorId,`payment:${row.id}`,payment.accountingAccounts);
+      }
       await client.query('COMMIT')
       client.release()
       return { success: true, poId, purchaseOrderNo }

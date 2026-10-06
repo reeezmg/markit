@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, computed } from 'vue'
-import { format, startOfDay, endOfDay, isSameDay, endOfMonth, sub } from 'date-fns'
+import { format, startOfDay, endOfDay, isSameDay, endOfMonth, sub, type Duration } from 'date-fns'
 import CategoryRevenuePie from '@/components/dashboard/CategoryRevenuePie.vue'
 /* -----------------------------
   STATE
 ------------------------------ */
+const toast = useToast()
+const companyScope=useCompanyScope('table')
+const $fetch=companyScope.fetch
 const loading = ref(true)
 const report = ref<any>(null)
 
@@ -92,16 +95,14 @@ const downloadPDF = async () => {
 /* -----------------------------
   FETCH
 ------------------------------ */
+let fetchVersion=0;
 const fetchReport = async () => {
-  loading.value = true
-  report.value = await $fetch('/api/report/profit', {
-   query: {
-    startDate: startOfDay(selectedDate.value.start).toISOString(),
-    endDate: endOfDay(selectedDate.value.end).toISOString()
-  }
-  })
-  loading.value = false
+ const version=++fetchVersion;loading.value=true;report.value=null;
+ try{const data=await $fetch('/api/report/profit',{query:{startDate:startOfDay(selectedDate.value.start).toISOString(),endDate:endOfDay(selectedDate.value.end).toISOString()}});if(version===fetchVersion)report.value=data;}
+ catch(e:any){if(version===fetchVersion)toast.add({title:'Could not load profit report',description:e.data?.statusMessage||e.message,color:'red'});}
+ finally{if(version===fetchVersion)loading.value=false;}
 }
+watch(companyScope.readIds,fetchReport)
 
 onMounted(fetchReport)
 watch(selectedDate, fetchReport)
@@ -159,6 +160,7 @@ const formatCurrency = (v: number) =>
 
 <template>
   <UDashboardPanelContent>
+    <ReportsBasis kind="accounting" detail="Published journals including credit sales and reversals. Unposted history is excluded. Bill and category detail covers posted ERP bills; other journals remain in the totals." />
       <div v-if="loading" class="w-full flex justify-center items-center py-20">
       <UIcon
         name="i-heroicons-arrow-path-20-solid"
@@ -222,10 +224,11 @@ const formatCurrency = (v: number) =>
                       </UDropdown>
       </div>
 
+      <CompanyTableFilter />
       <!-- SUMMARY -->
-      <div v-if="report" class="grid grid-cols-1 sm:grid-cols-5 gap-4">
+      <div v-if="report" class="grid grid-cols-1 sm:grid-cols-6 gap-4">
         <UCard>
-          <div class="text-sm text-gray-500">Total Sales</div>
+          <div class="text-sm text-gray-500">Sales income (excluding tax)</div>
           <div class="text-xl font-semibold">
             {{ formatCurrency(report.summary.totalSales) }}
           </div>
@@ -237,7 +240,7 @@ const formatCurrency = (v: number) =>
           </div>
         </UCard>
         <UCard>
-          <div class="text-sm text-gray-500">Profit</div>
+          <div class="text-sm text-gray-500">Gross profit</div>
           <div class="text-xl font-semibold text-green-600">
             {{ formatCurrency(report.summary.totalProfitBeforeExpense) }}
           </div>
@@ -259,6 +262,7 @@ const formatCurrency = (v: number) =>
         </UCard>
       </div>
 
+      <UCard v-if="report"><div class="text-sm text-gray-500">Other income</div><div class="text-xl font-semibold">{{ formatCurrency(report.summary.otherIncome) }}</div></UCard>
       <!-- TABLE -->
         <UCard
             class="w-full h-[400px] overflow-y-scroll"

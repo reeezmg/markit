@@ -1,10 +1,9 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
+import { getAuthorizedCompanyIds } from '~/server/utils/organizationReadScope'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
-  const companyId = session.data.companyId
-  if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  const companyIds = await getAuthorizedCompanyIds(event)
 
   const id = event.context.params?.id as string
   if (!id) throw createError({ statusCode: 400, statusMessage: 'id required' })
@@ -13,15 +12,15 @@ export default defineEventHandler(async (event) => {
   try {
     const headerRes = await client.query(
       `SELECT
-         pr.id, pr.return_no, pr.created_at, pr.subtotal_amount, pr.tax_amount,
+         pr.id, pr.company_id, pr.return_no, pr.created_at, pr.subtotal_amount, pr.tax_amount,
          pr.total_amount, pr.remarks, pr.purchase_order_id, pr.distributor_id,
          po.purchase_order_no,
          d.name AS distributor_name
        FROM purchase_returns pr
        LEFT JOIN purchase_orders po ON po.id = pr.purchase_order_id
        JOIN distributors d          ON d.id  = pr.distributor_id
-       WHERE pr.id = $1 AND pr.company_id = $2`,
-      [id, companyId]
+       WHERE pr.id = $1 AND pr.company_id = ANY($2::text[])`,
+      [id, companyIds]
     )
     if (headerRes.rows.length === 0)
       throw createError({ statusCode: 404, statusMessage: 'Purchase return not found' })
@@ -42,7 +41,9 @@ export default defineEventHandler(async (event) => {
     )
 
     return {
+      paymentId: (await client.query('SELECT id FROM distributor_payments WHERE purchase_return_id=$1 AND company_id=$2',[id,h.company_id])).rows[0]?.id,
       id: h.id,
+      companyId: h.company_id,
       returnNo: h.return_no,
       createdAt: h.created_at,
       subTotalAmount: Number(h.subtotal_amount),

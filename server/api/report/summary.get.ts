@@ -1,9 +1,10 @@
+import {getReadCompanyId} from '~/server/utils/organizationReadScope'
 import { createError, defineEventHandler, getQuery } from 'h3'
 import { gatherSummary } from '~/server/utils/reportSummary'
 
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
-  const companyId = session.data.companyId
+  const companyId = await getReadCompanyId(event)
 
   if (!companyId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })

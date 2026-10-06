@@ -1,7 +1,8 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { prisma } from '~/server/prisma';
 
 export default defineEventHandler(async (event) => {
-  const session = await requireAuthSession(event);
+  const session = await useCompanyRequestSession(event);
 
   const company = await prisma.company.findUnique({
     where: { id: session.data.companyId },

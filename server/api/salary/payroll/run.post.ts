@@ -1,8 +1,14 @@
+import { assertSalaryManager } from '~/server/utils/salary-input'
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { prisma } from '~/server/prisma'
-import { computeUserLine, round2, type DayInput, type SalaryCfgLike } from '~/server/utils/payroll'
+import { computeUserLine, round2, type SalaryCfgLike } from '~/server/utils/payroll'
 import { calculateNetSalesByKey } from '~/server/utils/user-sales'
-import { pool } from '~/server/db'
+import { buildShiftCalendar } from '~/server/utils/shift-calendar'
+import { payrollSql } from '~/server/utils/payroll-transaction'
+import { salaryDate } from '~/server/utils/salary-input'
+import { historicalSalaryTotals, salaryRateOn } from '~/server/utils/salary-history'
 import { recalculateManyUserLedgerBalances, recalculateUserLedgerBalances, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
 
 /**
@@ -32,12 +38,6 @@ const MS_DAY = 86400000
 const dKey = (d: Date) =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
 const dateOnly = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate())
-const weekDays = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
-const defaultWorkDays = ['MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY']
-const isShiftWorkDay = (shift: { workDays?: string[] | null } | null | undefined, day: Date) => {
-    const workDays = Array.isArray(shift?.workDays) && shift.workDays.length ? shift.workDays : defaultWorkDays
-    return workDays.includes(weekDays[day.getDay()])
-}
 
 function monthlySalarySegments(start: Date, end: Date): { days: number; daysInMonth: number }[] {
     const segments: { days: number; daysInMonth: number }[] = []
@@ -59,7 +59,8 @@ function monthlySalarySegments(start: Date, end: Date): { days: number; daysInMo
 }
 
 export default defineEventHandler(async (event) => {
-    const session = await useAuthSession(event)
+    const session = await useCompanyRequestSession(event)
+    assertSalaryManager(session.data.role)
     const companyId = session.data?.companyId as string | undefined
     if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
@@ -68,16 +69,17 @@ export default defineEventHandler(async (event) => {
         throw createError({ statusCode: 400, statusMessage: 'paymentDate, periodStart and periodEnd are required' })
     }
 
-    const periodStart = new Date(body.periodStart)
-    const periodEnd = new Date(body.periodEnd)
+    const periodStart = salaryDate(body.periodStart)
+    const periodEnd = salaryDate(body.periodEnd)
     if (isNaN(periodStart.getTime()) || isNaN(periodEnd.getTime()) || periodEnd < periodStart) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid pay period' })
     }
-    const cycleMonth = Number(body.month ?? (periodStart.getMonth() + 1))
-    const cycleYear = Number(body.year ?? periodStart.getFullYear())
+    const cycleMonth = periodStart.getUTCMonth() + 1
+    const cycleYear = periodStart.getUTCFullYear()
     if (!cycleMonth || !cycleYear) {
         throw createError({ statusCode: 400, statusMessage: 'Invalid cycle month/year' })
     }
+    if ([body.includeUserIds, body.excludeUserIds].some(ids => ids != null && (!Array.isArray(ids) || ids.some(id => typeof id !== 'string')))) throw createError({ statusCode: 400, statusMessage: 'Invalid staff filter' })
     const include = body.includeUserIds ?? []
     const exclude = body.excludeUserIds ?? []
     const totalDays = Math.floor((periodEnd.getTime() - periodStart.getTime()) / MS_DAY) + 1
@@ -90,19 +92,22 @@ export default defineEventHandler(async (event) => {
         name: body.name ?? null,
         month: cycleMonth,
         year: cycleYear,
-        paymentDate: new Date(body.paymentDate),
+        paymentDate: salaryDate(body.paymentDate),
         periodStart,
         periodEnd,
         includeUserIds: include,
         excludeUserIds: exclude,
         status: 'CALCULATED' as const,
     }
-    const cycle = body.cycleId
-        ? await prisma.payrollCycle.update({ where: { id: body.cycleId }, data: cycleData })
-        : await prisma.payrollCycle.create({ data: { companyId, ...cycleData } })
+    return prisma.$transaction(async tx => {
+    const client = payrollSql(tx)
+    await client.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE', [companyId])
+    await lockCompanyRequest(event, client)
+    if (body.cycleId && !await tx.payrollCycle.findFirst({ where: { id: body.cycleId, companyId } }))
+        throw createError({ statusCode: 404, statusMessage: 'Payroll cycle not found' })
 
     // ─── Eligible users: shift-assigned, overlapping period, with a salary config ───
-    const assignments = await prisma.shiftAssignment.findMany({
+    const assignments = await tx.shiftAssignment.findMany({
         where: {
             companyId,
             effectiveFrom: { lte: periodEnd },
@@ -115,26 +120,28 @@ export default defineEventHandler(async (event) => {
     if (include.length) userIds = userIds.filter((id) => include.includes(id))
     if (exclude.length) userIds = userIds.filter((id) => !exclude.includes(id))
 
-    const configs = await prisma.salaryConfig.findMany({ where: { companyId, userId: { in: userIds } } })
+    const configs = await tx.salaryConfig.findMany({ where: { companyId, userId: { in: userIds } } })
     const configByUser = new Map(configs.map((c) => [c.userId, c]))
     userIds = userIds.filter((id) => configByUser.has(id))
 
     // Attendance for the whole period (with logs + shift), grouped per user/day
-    const attendances = await prisma.attendance.findMany({
-        where: { companyId, userId: { in: userIds }, date: { gte: periodStart, lte: new Date(periodEnd.getTime() + MS_DAY - 1) } },
+    const attendances = await tx.attendance.findMany({
+        where: { companyId, userId: { in: userIds }, date: { lte: new Date(periodEnd.getTime() + MS_DAY - 1) } },
         include: { logs: true, shift: true },
     })
-    const holidays = await prisma.companyHoliday.findMany({
-        where: { companyId, date: { gte: periodStart, lte: periodEndInclusive } },
+    const holidays = await tx.companyHoliday.findMany({
+        where: { companyId, date: { lte: periodEndInclusive } },
         select: { date: true },
     })
+    const historyAssignments = await tx.shiftAssignment.findMany({ where: { companyId, userId: { in: userIds }, effectiveFrom: { lte: periodEndInclusive } }, include: { shift: true } })
+    const leaves = await tx.leaveApplication.findMany({ where: { companyId, userId: { in: userIds }, status: 'APPROVED', startDate: { lte: periodEndInclusive } } })
     const holidayKeys = new Set(holidays.map((h) => dKey(new Date(h.date))))
 
-    const adjustments = await prisma.payrollAdjustment.findMany({
-        where: { companyId, userId: { in: userIds }, month: cycleMonth, year: cycleYear, status: 'PENDING' },
+    const adjustments = await tx.payrollAdjustment.findMany({
+        where: { companyId, userId: { in: userIds }, month: cycleMonth, year: cycleYear, OR: [{ status: 'PENDING' }, ...(body.cycleId ? [{ status: 'PROCESSED' as const, cycleId: body.cycleId }] : [])] },
     })
 
-    const salesEntries = await prisma.entry.findMany({
+    const salesEntries = await tx.entry.findMany({
         where: {
             companyId,
             userId: { in: userIds },
@@ -150,10 +157,13 @@ export default defineEventHandler(async (event) => {
             value: true,
             return: true,
             userId: true,
-            bill: { select: { discount: true } },
+            bill: { select: { discount: true, createdAt: true } },
         },
     })
-    const salesByUser = calculateNetSalesByKey(salesEntries, (entry) => entry.userId)
+    const salesByUser = calculateNetSalesByKey(
+        salesEntries.flatMap(entry => entry.billId && entry.userId ? [{ ...entry, billId: entry.billId, userId: entry.userId }] : []),
+        entry => entry.userId,
+    )
 
     // ─── Compute each user's line ───
     const lines: any[] = []
@@ -161,41 +171,32 @@ export default defineEventHandler(async (event) => {
 
     for (const userId of userIds) {
         const cfg = configByUser.get(userId)!
-        const userAssignments = assignments.filter((a) => a.userId === userId)
-        const userAtt = attendances.filter((a) => a.userId === userId)
-        const attByDay = new Map(userAtt.map((a) => [dKey(new Date(a.date)), a]))
-
-        // Build the list of shift-covered ("expected") days with resolved shift + attendance.
-        const days: DayInput[] = []
-        for (let t = periodStart.getTime(); t <= periodEnd.getTime(); t += MS_DAY) {
-            const day = new Date(t)
-            const cover = userAssignments.find(
-                (a) => new Date(a.effectiveFrom) <= day && (!a.effectiveTo || new Date(a.effectiveTo) >= day),
-            )
-            if (!cover) continue
-            if (!isShiftWorkDay(cover.shift as any, day)) continue
-            const att = attByDay.get(dKey(day))
-            days.push({
-                shift: (att?.shift ?? cover.shift) as any,
-                status: (att?.status ?? null) as any,
-                logs: (att?.logs ?? []) as any,
-                checkInAt: att?.checkInAt ?? null,
-                checkOutAt: att?.checkOutAt ?? null,
-                isHoliday: holidayKeys.has(dKey(day)),
-            })
-        }
+        const calendar = buildShiftCalendar({
+            assignments: historyAssignments.filter(a => a.userId === userId),
+            attendances: attendances.filter(a => a.userId === userId),
+            leaves: leaves.filter(a => a.userId === userId), holidays: holidayKeys,
+            from: periodStart, to: periodEnd,
+        })
+        const days = calendar.days.filter(day => salaryRateOn(cfg, day.date!))
 
         const adjustmentTotal = adjustments
             .filter((a) => a.userId === userId)
             .reduce((s, a) => s + (a.kind === 'ADDITION' ? 1 : -1) * Number(a.amount ?? 0), 0)
         const commissionSales = round2(salesByUser[userId]?.total ?? 0)
 
-        const r = computeUserLine(cfg as unknown as SalaryCfgLike, days, { totalDays, monthlySegments, adjustmentTotal, commissionSales })
+        let r: ReturnType<typeof computeUserLine>
+        try {
+            const salaryTotals = historicalSalaryTotals(cfg, periodStart, periodEnd, days,
+                (salesByUser[userId]?.entries ?? []).map(({ entry, netValue }) => ({ date: dKey(new Date(entry.bill!.createdAt)), netValue })))
+            r = computeUserLine(cfg as unknown as SalaryCfgLike, days, { totalDays, monthlySegments, adjustmentTotal, commissionSales,
+                baseSalaryOverride: salaryTotals.baseSalary, commissionAmountOverride: salaryTotals.commissionAmount })
+        }
+        catch (error: any) { throw createError({ statusCode: 400, statusMessage: error.message }) }
         totalNet += r.netPay
 
         lines.push({
             companyId,
-            cycleId: cycle.id,
+            cycleId: '',
             userId,
             baseSalary: r.baseSalary,
             expectedDays: r.expectedDays,
@@ -215,27 +216,35 @@ export default defineEventHandler(async (event) => {
         })
     }
 
-    const oldCycleLines = await prisma.payrollCycleLine.findMany({
+    const cycle = body.cycleId
+        ? await tx.payrollCycle.update({ where: { id: body.cycleId }, data: cycleData })
+        : await tx.payrollCycle.create({ data: { companyId, ...cycleData } })
+    for (const line of lines) line.cycleId = cycle.id
+
+    const oldCycleLines = await tx.payrollCycleLine.findMany({
         where: { companyId, cycleId: cycle.id },
         select: { id: true, userId: true },
     })
 
     // ─── Replace lines atomically ───
-    await prisma.$transaction([
-        prisma.payrollCycleLine.deleteMany({ where: { cycleId: cycle.id } }),
-        ...(lines.length ? [prisma.payrollCycleLine.createMany({ data: lines })] : []),
-        prisma.payrollCycle.update({ where: { id: cycle.id }, data: { totalNet: round2(totalNet) } }),
-    ])
+    // Keep IDs for retained staff so existing settlements stay linked.
+    const retainedUsers = lines.map(line => line.userId)
+    const removed = oldCycleLines.filter(line => !retainedUsers.includes(line.userId))
+    for (const line of removed) {
+        const linked = await client.query(`SELECT id FROM salary_payments WHERE company_id=$1 AND cycle_line_id=$2
+            UNION ALL SELECT id FROM user_ledger_entries WHERE company_id=$1 AND source_type='PAYROLL' AND (source_id=$2 OR source_id=$3)`, [companyId, line.id, `${line.id}:salary-settlement`])
+        if (linked.rowCount) throw createError({ statusCode: 409, statusMessage: 'Cannot remove staff with existing payroll settlements. Reverse the settlement first.' })
+    }
+    await tx.payrollCycleLine.deleteMany({ where: { companyId, cycleId: cycle.id, userId: { notIn: retainedUsers } } })
+    for (const line of lines) await tx.payrollCycleLine.upsert({ where: { cycleId_userId: { cycleId: cycle.id, userId: line.userId } }, create: line, update: line })
+    await tx.payrollCycle.update({ where: { id: cycle.id }, data: { totalNet: round2(totalNet) } })
 
-    const newCycleLines = await prisma.payrollCycleLine.findMany({
+    const newCycleLines = await tx.payrollCycleLine.findMany({
         where: { companyId, cycleId: cycle.id },
         select: { id: true, userId: true },
     })
     const newLineByUser = new Map(newCycleLines.map((line) => [line.userId, line.id]))
 
-    const client = await pool.connect()
-    try {
-        await client.query('BEGIN')
         const usersToRecalc = new Set<string>(oldCycleLines.map((line) => line.userId))
 
         for (const oldLine of oldCycleLines) {
@@ -319,8 +328,8 @@ export default defineEventHandler(async (event) => {
                 companyId,
                 userId: line.userId,
                 type: 'PAYROLL_ACCRUAL',
-                direction: 'CREDIT',
-                amount: line.netPay,
+                direction: line.netPay < 0 ? 'DEBIT' : 'CREDIT',
+                amount: Math.abs(line.netPay),
                 sourceType: 'PAYROLL_CYCLE',
                 sourceId: `${cycle.id}:${line.userId}`,
                 note: `Payroll accrual ${cycleMonth}/${cycleYear}`,
@@ -330,13 +339,6 @@ export default defineEventHandler(async (event) => {
         }
 
         await recalculateManyUserLedgerBalances(client, companyId, usersToRecalc)
-        await client.query('COMMIT')
-    } catch (error) {
-        await client.query('ROLLBACK')
-        throw error
-    } finally {
-        client.release()
-    }
-
     return { cycleId: cycle.id, users: lines.length, totalNet: round2(totalNet) }
+    }, { isolationLevel: 'Serializable', maxWait: 10000, timeout: 120000 })
 })

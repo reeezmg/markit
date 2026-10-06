@@ -260,7 +260,7 @@ Two entry points for uploading bank statements:
 ### Two-Step Flow: Assign → Execute
 
 1. **Assign** (`POST /api/statement/find-operation`): User types instruction → AI classifies with full DB context → saves operation+meta+userInput to row → saves mapping. Does NOT create any actual record.
-2. **Execute** (`POST /api/statement/execute-row`): Uses saved meta UUIDs to INSERT into correct table (expenses, account_transfers, money_transactions, distributor_payments, investments). Marks row executed.
+2. **Execute** (`POST /api/statement/execute-row`): Uses saved meta UUIDs to create expense or supplier-payment sources. TRANSFER, TRANSACTION and INVESTMENT are retired and rejected; use native Accountant/Investments. Marks row executed.
 3. **Execute All** (`POST /api/statement/execute`): Batch executes all assigned-but-not-executed rows.
 
 ### Operation Meta Format (AI returns real DB UUIDs)
@@ -314,3 +314,30 @@ The AI chat supports prefix-triggered specialized modes that filter which MCP to
 Located in `server/utils/aiChat.ts`. Key instructions:
 - Product creation flow: create PO first → use same `purchaseOrderId` for all products → ask if more products after each
 - Never mention `companyId` to user (injected automatically)
+
+Legacy accounting disconnection (2026-10-06): statement helpers never maintain the old
+ledger. Expense/supplier source operations remain; legacy transfer, Receive/Pay and
+investment execution and deletion for re-execution are rejected. Old bank history
+no longer exposes statement upload/execution controls. Historical statement rows and
+source documents remain intact.
+
+
+Statement execution fixes (2026-10-06): `/api/statement/banks` and classification
+context list active native BANK accounts for the authenticated company. The page
+stores its native choice under a company/batch browser key; it never writes a
+native ID into the legacy `StatementBatch.bankAccountId` foreign key. Expense and
+supplier source snapshots carry the selected native bank before deferred posting.
+Zero debit uses a positive credit; invalid/ambiguous amounts reject execution.
+`statement-execution.ts` serializes company/batch/row access. Source creation or
+replacement, accounting posting, the full completion receipt and batch status
+commit together. Completed rows replay; explicit replacement has a durable request
+receipt and preserves the old source if any step fails. Classification/assignment
+retain the old receipt until replacement succeeds and reopen the batch. A batch
+becomes EXECUTED only when every row is complete. Partial failures remain retryable.
+Failed unexecuted rows retain reload-visible errors without clearing their previous
+source receipt. Failure metadata is recorded after financial rollback, under the
+same company/batch/row locking order; completed rows are not overwritten.
+ISO date parsing gap #6 remains intentionally unchanged. The maintained statement
+probe now imports `tests/statement-accounting.integration.test.ts`, exercising
+native posting, selected banks, failure rollback and concurrent replay in a
+disposable schema without touching production source history.

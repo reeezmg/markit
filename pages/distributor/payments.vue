@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { useFindManyDistributorCompany } from '~/lib/hooks/distributor-company';
-import { useFindManyDistributorPayment, useCountDistributorPayment, useCreateDistributorPayment } from '~/lib/hooks/distributor-payment';
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
+import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company';
+import { useFindManyDistributorPayment, useCountDistributorPayment } from '~/lib/company-hooks/distributor-payment';
 
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
 const toast = useToast()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
+const { forOwner } = useOrganizationActions()
 
 // -------------------------------------
 // COMPUTED
@@ -44,6 +48,9 @@ const columns = [
   { key: 'remarks', label: 'Remarks' },
   { key: 'actions', label: 'Actions' },
 ]
+const displayColumns = computed(() => useAuth().session.value?.allStores
+  ? [{ key: 'distributorCompany.company.name', label: 'Store' }, ...columns]
+  : columns)
 
 // -------------------------------------
 // FILTERS & PAGINATION
@@ -183,6 +190,7 @@ const queryArgs = computed(() => ({
 
     distributorCompany: {
       select: {
+        company: { select: { name: true } },
         distributor: {
           select: {
             name: true,
@@ -302,10 +310,16 @@ const resetAddForm = () => {
     date: new Date().toISOString().split('T')[0],
   }
 }
+watch(companyScope.companyId, () => {
+  if (!editingPaymentId.value) {
+    addForm.value.distributorId = ''
+    addForm.value.purchaseOrderId = ''
+  }
+})
 
 // distributor options for the Add Payment modal
 const distributorQueryArgs = computed(() => ({
-  where: { companyId: companyId.value },
+  where: { companyId: { in: companyId.value ? [companyId.value] : [] } },
   select: {
     distributorId: true,
     distributor: { select: { name: true } },
@@ -325,7 +339,7 @@ const distributorQueryArgs = computed(() => ({
 const {
   data: distributorCompanies,
   refetch: refetchDistributorCompanies,
-} = useFindManyDistributorCompany(distributorQueryArgs)
+} = useFindManyDistributorCompany(distributorQueryArgs, { companyScope: 'form' } as any)
 
 onMounted(() => {
   refetch()
@@ -356,14 +370,16 @@ const selectDistributor = (distributorId: string) => {
   addForm.value.purchaseOrderId = ''
 }
 
-const openAddModal = () => {
+const openAddModal = async () => {
+  await companyScope.beginForm();
   resetAddForm()
   editingPaymentId.value = null
   paymentToEdit.value = null
   isAddOpen.value = true
 }
 
-const openEditModal = (row: any) => {
+const openEditModal = async (row: any) => {
+  await companyScope.beginForm({ model: 'DistributorPayment', id: row.id, companyId: row.companyId });
   editingPaymentId.value = row.id
   paymentToEdit.value = row
   addForm.value = {
@@ -404,7 +420,6 @@ const paymentActions = (row: any) => [[
   { label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDeletePayment(row) },
 ]]
 
-const CreateDistributorPayment = useCreateDistributorPayment()
 
 const handleAddPayment = async () => {
   isSaving.value = true
@@ -445,49 +460,14 @@ const handleAddPayment = async () => {
       return
     }
 
-    const expenseData = {
-      totalAmount: addForm.value.amount,
-      note: addForm.value.remarks || null,
-      paymentMode: addForm.value.paymentType,
-      status: 'Paid',
-      companyId: companyId.value,
-      userId: useAuth().session.value?.userId,
-      expensecategoryId: useAuth().session.value?.purchaseExpenseCategoryId,
-      createdAt: createdAtDate,
-    }
-
-    await CreateDistributorPayment.mutateAsync({
-      data: {
-        amount: addForm.value.amount,
-        paymentType: addForm.value.paymentType,
-        createdAt: createdAtDate,
-
-        ...(addForm.value.remarks
-          ? { remarks: addForm.value.remarks }
-          : {}),
-
-        distributorCompany: {
-          connect: {
-            distributorId_companyId: {
-              distributorId: addForm.value.distributorId,
-              companyId: companyId.value,
-            },
-          },
-        },
-
-        ...(addForm.value.purchaseOrderId
-          ? {
-              purchaseOrder: {
-                connect: { id: addForm.value.purchaseOrderId },
-              },
-            }
-          : {}),
-
-        expense: {
-          create: expenseData,
-        },
+    await $fetch('/api/distributor/payments', {
+      method: 'POST',
+      body: {
+        companyId: companyId.value, createExpense: true,
+        amount: addForm.value.amount, remarks: addForm.value.remarks,
+        paymentType: addForm.value.paymentType, distributorId: addForm.value.distributorId,
+        purchaseOrderId: addForm.value.purchaseOrderId || null, createdAt: createdAtDate,
       },
-      select: { id: true },
     })
 
     showToast('Payment added successfully', 'green')
@@ -500,6 +480,8 @@ const handleAddPayment = async () => {
     isSaving.value = false
   }
 }
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 
 <template>
@@ -518,6 +500,7 @@ const handleAddPayment = async () => {
       <template #header>
         <div class="flex flex-col sm:flex-row justify-between gap-3 w-full">
           <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <CompanyTableFilter />
             <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
               <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
                 {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
@@ -613,7 +596,7 @@ const handleAddPayment = async () => {
       <UTable
         v-model:sort="sort"
         :rows="rows"
-        :columns="columns"
+        :columns="displayColumns"
         :loading="isLoading"
         sort-asc-icon="i-heroicons-arrow-up"
         sort-desc-icon="i-heroicons-arrow-down"
@@ -664,7 +647,7 @@ const handleAddPayment = async () => {
         </template>
 
         <template #actions-data="{ row }">
-          <UDropdown :items="paymentActions(row)">
+          <UDropdown :items="forOwner(paymentActions(row), row.companyId)">
             <UButton
               color="gray"
               variant="ghost"
@@ -711,6 +694,7 @@ const handleAddPayment = async () => {
 
         <div class="space-y-4">
           <!-- DISTRIBUTOR -->
+          <CompanyFormField @transferred="isAddOpen = false" />
           <UFormGroup label="Distributor" required>
             <USelectMenu
               :model-value="addForm.distributorId"

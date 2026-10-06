@@ -41,6 +41,7 @@
     >
       <!-- Filters -->
       <div class="grid sm:grid-cols-3 grid-cols-2 gap-4 px-4 py-3">
+        <CompanyTableFilter />
         <USelect v-model="filters.category" :options="categories" option-attribute="name" value-attribute="id" placeholder="Filter by Category" />
         <USelect v-model="filters.brand" :options="brands" placeholder="Filter by Brand" />
         <USelect v-model="filters.rating" :options="ratings" placeholder="Filter by Rating" />
@@ -78,7 +79,10 @@
 </template>
 
 <script setup lang="ts">
-const useAuth = () => useNuxtApp().$auth;
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
+const useAuth = () => companyScope.auth;
 
 // SESSION + COMPANY ID
 const auth = useAuth()
@@ -123,7 +127,7 @@ function resetFilters() {
 
 // API CALL: RUN ONLY WHEN companyId EXISTS
 const { data: stockData, pending, refresh } = await useLazyAsyncData(
-  'stock-aggregate',
+  computed(() => 'stock-aggregate:' + companyScope.readIds.value.join(',')),
   () =>
     $fetch('/api/stock-aggregate', {
       method: 'POST',
@@ -187,8 +191,10 @@ const columns = computed(() => [
 ])
 
 // FETCH FILTER OPTIONS
-const { data: categories } = await useFetch('/api/options/categories')
-const { data: brands } = await useFetch('/api/options/brands')
-const { data: ratings } = await useFetch('/api/options/ratings')
-const { data: distributors } = await useFetch('/api/options/distributors')
+const { data: categories } = await useCompanyFetch('/api/options/categories')
+const { data: brands } = await useCompanyFetch('/api/options/brands')
+const { data: ratings } = await useCompanyFetch('/api/options/ratings')
+const { data: distributors } = await useCompanyFetch('/api/options/distributors')
+
+watch(companyScope.readIds, () => { void refresh(); });
 </script>

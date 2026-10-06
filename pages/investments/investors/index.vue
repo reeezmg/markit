@@ -1,0 +1,1 @@
+<template><InvestmentsDirectoryPage /></template>

@@ -11,7 +11,9 @@ import {
 //   • when only one label is configured the product form hides the picker and
 //     applies that label silently (`showSizeLabelSelect === false`)
 export const useSizeLabel = () => {
-  const auth = useNuxtApp().$auth as any
+  const companyScope = useCompanyScope();
+  const $fetch = companyScope.fetch;
+  const auth = companyScope.auth as any
 
   const sizeLabels = computed<string[]>(() =>
     normalizeSizeLabels(auth?.session?.value?.variantInputs?.sizeLabels),

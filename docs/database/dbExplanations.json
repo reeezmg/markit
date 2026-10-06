@@ -26,7 +26,40 @@
       "purpose": "Defines a tenant store, its settings, numbering counters, and operational configuration.",
       "fields": {
         "id": "Primary key identifying this Company record.",
+        "recurringExpenses": "Fixed monthly expense schedules owned by this company.",
+        "accountantStockControl": "Optional company stock reconciliation configuration and current valuation snapshot.",
+        "accountantUserSettings": "Optional staff accounting configuration.",
+        "accountantUserSources": "Staff salary and credit accounting sources and historical baselines.",
+        "accountantErpSettings": "",
+        "accountantEcommerceSettings": "Company-owned opt-in ecommerce accounting mappings and activation baseline.",
+        "accountantErpSources": "",
+        "accountantDistributorSettings": "",
+        "accountantDistributorSources": "",
+        "accountantAccountingAccountRows": "",
+        "accountantManualJournalRows": "",
+        "accountantManualJournalLineRows": "",
+        "accountantJournalTemplateRows": "",
+        "accountantRecurringJournalProfileRows": "",
+        "accountantAccountingBudgetRows": "",
+        "accountantTransactionLockRows": "",
+        "accountantAccountOpeningBalanceRows": "",
+        "accountantFixedAssetCategoryRows": "",
+        "accountantFixedAssetRows": "",
+        "accountantAssetDepreciationRows": "",
+        "accountantAssetDisposalRows": "",
+        "accountantCurrencyAdjustmentRows": "",
+        "accountantPreferenceRows": "",
+        "accountantClientRows": "",
+        "accountantAccountTransferRows": "",
+        "accountantContactRows": "",
+        "accountantInvestorRows": "Investor profiles owned by this company.",
+        "accountantProjectRows": "",
+        "accountantAuditRows": "",
         "name": "Human-readable name of this Company record.",
+        "isHeadOffice": "True when this company can create and manage direct branches.",
+        "parentCompanyId": "Head office company ID for a branch; null for standalone companies and head offices.",
+        "parentCompany": "The head office of this branch, when one is linked.",
+        "branches": "Direct branch companies owned by this head office.",
         "storecode": "Incrementing store number assigned when a company is created.",
         "storeUniqueName": "Unique public name used to identify the store.",
         "logo": "Logo shown for the company.",
@@ -339,6 +372,9 @@
       "purpose": "Stores supplier identity and company-specific contact details.",
       "fields": {
         "id": "Primary key identifying this Distributor record.",
+        "accountantSettings": "",
+        "accountantSources": "",
+        "accountantLines": "",
         "name": "Human-readable name of this Distributor record.",
         "images": "Image references attached to this Distributor record.",
         "companies": "Links this Distributor record to DistributorCompany.",
@@ -580,7 +616,7 @@
         "deliveryFeesCustomer": "Delivery fee charged to the customer.",
         "waitingFeesStore": "Waiting fee charged to the store.",
         "deliveryFeesStore": "Delivery fee charged to the store.",
-        "companyDistances": "Multi-stop tour decomposition. Current shape: { _model: 'tour-segments', [companyId]: { forward: meters, backward: meters } } where each store's `forward` = tour segment LEAVING this store, and `backward` = tour segment ARRIVING at this store on the return path. Î£ forwards = full forward tour, Î£ backwards = full backward tour. Legacy shapes (no _model marker): per-store independent distances, or a single point-to-point number. Readers in server/routes/checkout.js skip the return-leg deduction for legacy rows.",
+        "companyDistances": "Multi-stop tour decomposition. Current shape: { _model: 'tour-segments', [companyId]: { forward: meters, backward: meters } } where each store's `forward` = tour segment LEAVING this store, and `backward` = tour segment ARRIVING at this store on the return path. ÃŽÂ£ forwards = full forward tour, ÃŽÂ£ backwards = full backward tour. Legacy shapes (no _model marker): per-store independent distances, or a single point-to-point number. Readers in server/routes/checkout.js skip the return-leg deduction for legacy rows.",
         "forwardMeters": "Distance in meters of the multi-stop outward delivery route.",
         "backwardMeters": "Distance measured for the return leg of delivery.",
         "waitingStartedAt": "Time waiting began for this delivery.",
@@ -1027,7 +1063,7 @@
         "name": "Display name of this sellable variation.",
         "code": "Company-specific variant code.",
         "unit": "Unit in which this variant is sold.",
-        "sizeLabel": "What `Item.size` actually means for this variant — it names the attribute, it does NOT hold the value. `Item.size` keeps storing the value (\"M\", \"Red\", \"2mm\"); `sizeLabel` is the word shown above it in the UI, on barcode labels and on receipts. Defaults to \"Size\", so existing variants read exactly as they do today; a seller can set it to \"Shade\", \"Thickness\", \"Length\", \"Grade\", etc. Same idea as `unit` is for `qty`.",
+        "sizeLabel": "What `Item.size` actually means for this variant â€” it names the attribute, it does NOT hold the value. `Item.size` keeps storing the value (\"M\", \"Red\", \"2mm\"); `sizeLabel` is the word shown above it in the UI, on barcode labels and on receipts. Defaults to \"Size\", so existing variants read exactly as they do today; a seller can set it to \"Shade\", \"Thickness\", \"Length\", \"Grade\", etc. Same idea as `unit` is for `qty`.",
         "status": "Current workflow state of this Variant record.",
         "sprice": "Selling price of the variant.",
         "pprice": "Purchase cost of the variant.",
@@ -1109,6 +1145,7 @@
       "purpose": "Records a sale and its financial totals.",
       "fields": {
         "id": "Primary key identifying this Bill record.",
+        "paidAt": "First observed PAID insertion or transition, set by a database trigger; immutable thereafter. Existing paid records remain null without historical evidence.",
         "createdAt": "Time this Bill record was created.",
         "updatedAt": "Time this Bill record was last updated.",
         "invoiceNumber": "Company-local invoice number shown on the bill.",
@@ -1286,6 +1323,7 @@
       "purpose": "Records a storefront checkout and its payment state.",
       "fields": {
         "id": "Primary key identifying this EcommCheckout record.",
+        "paidAt": "First observed PAID insertion or transition, set by a database trigger; immutable thereafter. Existing paid records remain null without historical evidence.",
         "createdAt": "Time this EcommCheckout record was created.",
         "updatedAt": "Time this EcommCheckout record was last updated.",
         "status": "Current workflow state of this EcommCheckout record.",
@@ -1308,7 +1346,7 @@
         "clientId": "Customer associated with this EcommCheckout record.",
         "bill": "Links this EcommCheckout record to Bill through billId.",
         "billId": "Bill associated with this EcommCheckout record.",
-        "idempotencyKey": "custom-api's double-submit guard: the storefront sends a key per checkout attempt and the unique index below is what actually stops a double-click becoming two orders (an application-level check can be raced). storetools never writes this, but it MUST stay declared here — the column only survives a `zenstack generate` + `prisma db push` if the zmodel knows about it, and dropping it breaks storefront checkout outright.",
+        "idempotencyKey": "custom-api's double-submit guard: the storefront sends a key per checkout attempt and the unique index below is what actually stops a double-click becoming two orders (an application-level check can be raced). storetools never writes this, but it MUST stay declared here â€” the column only survives a `zenstack generate` + `prisma db push` if the zmodel knows about it, and dropping it breaks storefront checkout outright.",
         "order": "Links this EcommCheckout record to EcommOrder."
       }
     },
@@ -1316,6 +1354,7 @@
       "purpose": "Stores the customer-facing order and purchase-time item snapshot.",
       "fields": {
         "id": "Primary key identifying this EcommOrder record.",
+        "paidAt": "First observed PAID insertion or transition, set by a database trigger; immutable thereafter. Existing paid records remain null without historical evidence.",
         "createdAt": "Time this EcommOrder record was created.",
         "updatedAt": "Time this EcommOrder record was last updated.",
         "orderNumber": "Customer-visible order number.",
@@ -1525,6 +1564,22 @@
         "return": "Marks or counts a returned bill line."
       }
     },
+    "DocumentStatusHistory": {
+      "purpose": "Database-trigger audit of bill, ecommerce order and checkout status/payment-status changes; survives document deletion and is read only through a tenant-scoped API.",
+      "fields": {
+        "id": "Unique audit event identifier.",
+        "sequence": "Monotonic sequence for ordering changes with equal timestamps; gaps are allowed.",
+        "companyId": "Company owning the changed document; used for read authorization.",
+        "entityType": "Source table: bills, ecomm_orders or ecomm_checkouts.",
+        "entityId": "Source record identifier, retained after hard deletion.",
+        "field": "Changed field: status or payment_status.",
+        "previousStatus": "Previous value; null for initial status or a previously null field.",
+        "status": "New value, including null when a status is cleared.",
+        "changedAt": "Database transaction timestamp when the change was observed.",
+        "source": "Transaction-local writer source; database when not supplied.",
+        "actorId": "Optional user:<id> or client:<id>; null for unknown/system actor."
+      }
+    },
     "BillHistory": {
       "purpose": "Records a historical change to a bill.",
       "fields": {
@@ -1577,6 +1632,7 @@
       "purpose": "Classifies company expenses.",
       "fields": {
         "id": "Primary key identifying this ExpenseCategory record.",
+        "recurringExpenses": "Monthly schedules using this expense category; referenced categories cannot be deleted.",
         "name": "Human-readable name of this ExpenseCategory record.",
         "status": "Current workflow state of this ExpenseCategory record.",
         "createdAt": "Time this ExpenseCategory record was created.",
@@ -1590,6 +1646,8 @@
       "purpose": "Records a company expense.",
       "fields": {
         "id": "Primary key identifying this Expense record.",
+        "recurringOccurrence": "Optional schedule occurrence that generated this expense; the occurrence survives expense deletion.",
+        "recoverableTaxAmount": "Explicit recoverable part of taxAmount, included in totalAmount; only this amount posts to Input GST. Defaults to zero for new raw records.",
         "expenseNumber": "Company-local expense number.",
         "expenseDate": "Date the expense was incurred.",
         "note": "Additional note attached to this Expense record.",
@@ -1609,6 +1667,40 @@
         "user": "Links this Expense record to CompanyUser through companyId, userId.",
         "userId": "Staff or user associated with this Expense record.",
         "distributorPayment": "Links this Expense record to DistributorPayment."
+      }
+    },
+    "RecurringExpense": {
+      "purpose": "Company-owned fixed monthly expense schedule processed by scoped APIs and the authenticated Vercel cron.",
+      "fields": {
+        "id": "Unique schedule identifier.",
+        "companyId": "Owning company; all user requests authorize this tenant.",
+        "company": "Company owning this schedule.",
+        "categoryId": "Expense category checked against the owning company during save and generation.",
+        "category": "Category assigned to generated expenses.",
+        "name": "Short schedule name included in each generated expense note.",
+        "note": "Optional additional note copied into generated expenses.",
+        "totalAmount": "Fixed monthly tax-inclusive amount; must be positive with at most two decimals.",
+        "taxAmount": "Tax included in the monthly total.",
+        "recoverableTaxAmount": "Explicit recoverable portion of included tax, copied to each generated expense.",
+        "nextDueDate": "Next occurrence date, compared with the India calendar date; advances only on successful commit.",
+        "dayOfMonth": "Original monthly day from 1 to 31; shorter months use their last day without changing this anchor.",
+        "active": "Whether the daily processor may generate due occurrences.",
+        "lastError": "Safe user-facing generation error; cleared by successful generation or schedule edit.",
+        "createdAt": "Schedule creation time.",
+        "updatedAt": "Last schedule edit or processing time.",
+        "occurrences": "Durable schedule/date receipts preventing duplicate generated expenses."
+      }
+    },
+    "RecurringExpenseOccurrence": {
+      "purpose": "Unique schedule/date receipt committed atomically with a pending expense and retained after expense deletion.",
+      "fields": {
+        "id": "Unique occurrence identifier.",
+        "scheduleId": "Owning recurring expense schedule.",
+        "schedule": "Schedule that generated this occurrence.",
+        "dueDate": "Original scheduled date; unique together with scheduleId.",
+        "expenseId": "Generated expense identifier; set to null if that expense is deleted.",
+        "expense": "Generated pending expense, subsequently managed on Daily Expense.",
+        "createdAt": "Time the occurrence was generated."
       }
     },
     "Payment": {
@@ -1714,6 +1806,7 @@
         "company": "Links this CompanyUser record to Company through companyId.",
         "userId": "Staff or user associated with this CompanyUser record.",
         "user": "Links this CompanyUser record to User through userId.",
+        "delegatedHeadOfficeId": "Head office whose administrator received temporary access to this branch membership",
         "code": "Short code identifying this CompanyUser record.",
         "phone": "Phone number associated with this CompanyUser record.",
         "name": "Human-readable name of this CompanyUser record.",
@@ -2385,6 +2478,8 @@
         "earlyExitFine": "Fine applied for leaving early.",
         "status": "Current workflow state of this Shift record.",
         "deleted": "Whether this Shift record has been marked deleted.",
+        "policy": "Validated break, off-day compensation, attendance threshold, missing checkout, overnight and typed-leave rules. Null uses legacy defaults.",
+        "policyHistory": "Immutable effective-date snapshots of shift settings. New versions apply prospectively; payroll resolves the snapshot for each attendance date.",
         "assignments": "Links this Shift record to ShiftAssignment.",
         "attendances": "Links this Shift record to Attendance."
       }
@@ -2507,7 +2602,8 @@
         "period": "period state of this SalaryConfig record; see SalaryPeriod enum for allowed values.",
         "amount": "Salary amount payable for the configured pay period.",
         "commissionPercentage": "Sales commission percentage configured for this employee.",
-        "effectiveFrom": "Date on which this assignment or configuration starts."
+        "rateHistory": "Immutable effective-date salary period, amount and commission snapshots used by historical payroll. Legacy null history resolves to the current rate baseline.",
+        "effectiveFrom": "Effective date of the latest configured rate; API changes must follow previous versions and saved payroll periods and cannot precede today."
       }
     },
     "PayrollAdjustment": {
@@ -2703,6 +2799,7 @@
     "StorefrontAgentSession": {
       "purpose": "Tracks a storefront coding-agent session.",
       "fields": {
+        "runtimeResult": "Durable completed-turn response replayed after the Fargate task stops.",
         "id": "Primary key identifying this StorefrontAgentSession record.",
         "conversationId": "Conversation associated with this StorefrontAgentSession record.",
         "userId": "Staff or user associated with this StorefrontAgentSession record.",
@@ -2736,8 +2833,15 @@
       }
     },
     "StorefrontSource": {
-      "purpose": "Records source material made available to a storefront agent.",
+      "purpose": "Company-owned repository and hosting provider assignment with durable provisioning and deployment state.",
       "fields": {
+        "repositoryProvider": "Repository adapter: github for existing stores, codecommit for new AWS stores.",
+        "hostingProvider": "Hosting adapter: vercel for existing stores, amplify for AWS stores.",
+        "repositoryArn": "Company-owned CodeCommit repository ARN, persisted immediately after creation.",
+        "amplifyAppId": "Company-owned Amplify application ID, recovered by verified ownership tags on retry.",
+        "sandboxRoleArn": "Company-scoped ECS task role permitting its repository and S3 session prefix.",
+        "templateDigest": "SHA-256 digest of the versioned starter snapshot used to seed this company.",
+        "provisioningStage": "Durable provisioning checkpoint used to resume interrupted AWS setup.",
         "id": "Primary key identifying this StorefrontSource record.",
         "repositoryId": "Git repository identifier for the storefront source.",
         "repositoryFullName": "Owner and repository name of the storefront source.",
@@ -2815,8 +2919,13 @@
     "EditEnvironment": {
       "purpose": "Tracks an editing runtime environment.",
       "fields": {
+        "computeProvider": "Runtime adapter: gcp for existing pool slots, aws for company-bound Fargate tasks.",
+        "taskArn": "Current ECS task ARN, retained through task shutdown and cleared after reconciliation.",
+        "taskToken": "Idempotent ECS launch token and input to per-task sandbox authentication.",
+        "lifecycleState": "Fargate lifecycle: stopped, starting, running or stopping; all except stopped consume capacity.",
+        "lifecycleError": "Operational persistence or task shutdown error retained for investigation.",
         "id": "Primary key identifying this EditEnvironment record.",
-        "url": "External URL associated with this EditEnvironment record.",
+        "url": "Private editing endpoint: Cloud Run slot URL for GCP or task address for AWS.",
         "state": "Current state of this operation.",
         "session": "Links this EditEnvironment record to EditSession through sessionId.",
         "sessionId": "Editing or agent session associated with this EditEnvironment record.",
@@ -2858,8 +2967,559 @@
         "turnId": "Editing turn to which this message belongs.",
         "messageId": "Identifier of the message within the session.",
         "role": "Role assigned to this user in this context.",
-        "payload": "Full file contents and diffs. Never return raw to a seller — the orchestrator's redactMessage() filters it on the history path.",
+        "payload": "Full file contents and diffs. Never return raw to a seller â€” the orchestrator's redactMessage() filters it on the history path.",
         "createdAt": "Time this EditSessionMessage record was created."
+      }
+    },
+    "AccountantAccountingAccount": {
+      "purpose": "Independent Accountant books: categorized chart, parent hierarchy, bank metadata, status and dashboard flag. Stored separately from the existing finance system.",
+      "fields": {
+        "distributorMappings": "",
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "parentId": "",
+        "parent": "",
+        "children": "",
+        "journalLines": "",
+        "category": "",
+        "accountType": "",
+        "name": "",
+        "code": "",
+        "currency": "",
+        "description": "",
+        "showOnDashboard": "",
+        "isSystem": "",
+        "isActive": "",
+        "bankName": "",
+        "accountNumber": "",
+        "routingNumber": "",
+        "isPrimary": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantManualJournal": {
+      "purpose": "Independent Accountant books: draft/published journal header, source identity, reversal, creator and approval records. Stored separately from the existing finance system.",
+      "fields": {
+        "distributorSources": "",
+        "createdById": "Session user who created this journal; used to enforce self-approval rules.",
+        "approvals": "Distinct approver user IDs and approval dates; cleared when a draft is edited.",
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "entryNumber": "",
+        "journalDate": "",
+        "referenceNumber": "",
+        "notes": "",
+        "currency": "",
+        "exchangeRate": "",
+        "journalType": "",
+        "status": "",
+        "total": "",
+        "reversalDate": "",
+        "reversedFromId": "",
+        "reversedFrom": "",
+        "reversals": "",
+        "publishedAt": "",
+        "isSystemGenerated": "",
+        "sourceType": "",
+        "sourceId": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible.",
+        "lines": ""
+      }
+    },
+    "AccountantManualJournalLine": {
+      "purpose": "Independent Accountant books: debit/credit amounts linked to journal and account. Stored separately from the existing finance system.",
+      "fields": {
+        "distributorId": "Optional distributor identity on integrated source postings and their reversals.",
+        "distributor": "Shared distributor relation for the payable subledger.",
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "journalId": "",
+        "journal": "",
+        "accountId": "",
+        "account": "",
+        "side": "",
+        "amount": "",
+        "description": "",
+        "sourceParties": "Optional ERP source client, staff user and credit-user ID/name snapshots, scoped to the company and retained on reversals.",
+        "partyId": "",
+        "projectId": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantJournalTemplate": {
+      "purpose": "Independent Accountant books: reusable JSON lines with amount/percentage mode. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "name": "",
+        "referenceNumber": "",
+        "notes": "",
+        "journalType": "",
+        "currency": "",
+        "exchangeRate": "",
+        "templateMode": "",
+        "lines": "",
+        "isActive": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantRecurringJournalProfile": {
+      "purpose": "Independent Accountant books: schedule, next run and child posting status. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "profileName": "",
+        "frequency": "",
+        "repeatEvery": "",
+        "startDate": "",
+        "endDate": "",
+        "nextRunDate": "",
+        "lastRunDate": "",
+        "status": "",
+        "childStatus": "",
+        "referenceNumber": "",
+        "notes": "",
+        "journalType": "",
+        "currency": "",
+        "exchangeRate": "",
+        "lines": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantAccountingBudget": {
+      "purpose": "Independent Accountant books: fiscal-year JSON account allocations. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "name": "",
+        "fiscalYear": "",
+        "periodType": "",
+        "status": "",
+        "allocations": "",
+        "notes": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantTransactionLock": {
+      "purpose": "Independent Accountant books: cutoff, module, lock/unlock actor and reason. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "module": "",
+        "lockDate": "",
+        "reason": "",
+        "isLocked": "",
+        "lockedById": "",
+        "unlockedById": "",
+        "unlockedAt": "",
+        "unlockReason": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantAccountOpeningBalance": {
+      "purpose": "Independent Accountant books: one opening record per company/account linked to the shared opening journal. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "accountId": "",
+        "asOfDate": "",
+        "side": "",
+        "amount": "",
+        "currency": "",
+        "exchangeRate": "",
+        "journalId": "",
+        "notes": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantFixedAssetCategory": {
+      "purpose": "Independent Accountant books: depreciation policy and asset/expense/accumulated accounts. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "name": "",
+        "assetAccountId": "",
+        "accumulatedDepAccountId": "",
+        "depreciationExpenseAccountId": "",
+        "depreciationMethod": "",
+        "usefulLifeMonths": "",
+        "salvagePercentage": "",
+        "isActive": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantFixedAsset": {
+      "purpose": "Independent Accountant books: acquisition metadata, carrying value, depreciation/disposal status. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "categoryId": "",
+        "assetNumber": "",
+        "name": "",
+        "description": "",
+        "purchaseDate": "",
+        "availableForUseDate": "",
+        "purchaseCost": "",
+        "salvageValue": "",
+        "usefulLifeMonths": "",
+        "depreciationMethod": "",
+        "status": "",
+        "serialNumber": "",
+        "location": "",
+        "vendorId": "",
+        "accumulatedDepreciation": "",
+        "bookValue": "",
+        "lastDepreciationDate": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantAssetDepreciation": {
+      "purpose": "Independent Accountant books: dated journal-linked depreciation history. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "assetId": "",
+        "depreciationDate": "",
+        "amount": "",
+        "accumulatedAfter": "",
+        "bookValueAfter": "",
+        "status": "",
+        "journalId": "",
+        "createdAt": "Time this record was created.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantAssetDisposal": {
+      "purpose": "Independent Accountant books: disposal proceeds, gain/loss and journal link. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "assetId": "",
+        "disposalDate": "",
+        "disposalMethod": "",
+        "proceeds": "",
+        "proceedsAccountId": "",
+        "gainLoss": "",
+        "gainLossAccountId": "",
+        "journalId": "",
+        "notes": "",
+        "createdAt": "Time this record was created.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantCurrencyAdjustment": {
+      "purpose": "Independent Accountant books: foreign/base balances, rate, adjustment status and journal. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "adjustmentNumber": "",
+        "adjustmentDate": "",
+        "adjustmentType": "",
+        "currency": "",
+        "exchangeRate": "",
+        "accountId": "",
+        "gainLossAccountId": "",
+        "foreignBalance": "",
+        "baseBalanceBefore": "",
+        "baseBalanceAfter": "",
+        "gainLoss": "",
+        "status": "",
+        "journalId": "",
+        "notes": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantPreference": {
+      "purpose": "Independent Accountant books: one company preference record, fiscal start, approvals and gain/loss settings. Stored separately from the existing finance system.",
+      "fields": {
+        "fyStartMonth": "First fiscal month, numbered 1 through 12; defaults to April.",
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "recurringChildStatus": "",
+        "allowThirteenthMonth": "",
+        "journalApprovalType": "",
+        "allowSelfApproval": "",
+        "unrealizedGainAccountId": "",
+        "unrealizedLossAccountId": "",
+        "journalCustomFields": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantClient": {
+      "purpose": "Independent Accountant books: new-book contact engagement metadata. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "partyId": "",
+        "serviceType": "",
+        "engagementStatus": "",
+        "accessLevel": "",
+        "fiscalYearEndMonth": "",
+        "notes": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantAccountTransfer": {
+      "purpose": "Independent Accountant books: movement between new cash/bank/card/clearing accounts. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "transferNumber": "",
+        "transferDate": "",
+        "fromAccountId": "",
+        "toAccountId": "",
+        "amount": "",
+        "currency": "",
+        "exchangeRate": "",
+        "referenceNumber": "",
+        "description": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantDistributorSettings": {
+      "purpose": "Company-specific distributor connection to the new Accountant books and vendor contact.",
+      "fields": {
+        "companyId": "Company owning the connection.",
+        "company": "Owning company.",
+        "distributorId": "Shared distributor linked to these books.",
+        "distributor": "Shared distributor relation.",
+        "contactId": "Company-specific VENDOR contact retained on journal lines.",
+        "contact": "Accounting vendor contact.",
+        "enabled": "Enables transactional source posting after successful history import.",
+        "mappings": "Default accounts by posting role.",
+        "createdAt": "Connection creation time.",
+        "updatedAt": "Last configuration change."
+      }
+    },
+    "AccountantDistributorMapping": {
+      "purpose": "Selects the general-ledger account used for one distributor posting role.",
+      "fields": {
+        "companyId": "Company owning the mapping.",
+        "distributorId": "Distributor whose default is configured.",
+        "settings": "Parent company/distributor connection.",
+        "role": "payable, stock, cash, bank, tax, opening or bank:<legacy bank ID>.",
+        "accountId": "Active company account validated against the role type.",
+        "account": "Mapped new Accountant chart account."
+      }
+    },
+    "AccountantDistributorSource": {
+      "purpose": "Idempotent snapshot and revision of a distributor source posting; retained after deletion for reversal history.",
+      "fields": {
+        "companyId": "Company whose source was posted.",
+        "company": "Owning company.",
+        "distributorId": "Distributor retained for subledger reconciliation.",
+        "distributor": "Shared distributor relation.",
+        "sourceKey": "purchase:<PO ID>, credit:<credit ID>, payment:<payment ID> or opening.",
+        "signature": "Normalized source data from the event projection; used to detect changes.",
+        "accounts": "Account choices frozen at first posting or replaced by an explicit transaction override.",
+        "revision": "Incremented for each posting, correction or deletion.",
+        "journalId": "Current published journal, null after source deletion.",
+        "journal": "Current source journal; prior revisions remain in journal history."
+      }
+    },
+    "AccountantInvestor": {
+      "purpose": "Company investor profile with dedicated capital, profit-payable and loan chart accounts.",
+      "fields": {
+        "id": "Investor identifier.",
+        "companyId": "Owning company.",
+        "company": "Owning company relation.",
+        "terms": "Dated immutable agreements.",
+        "events": "Capital, profit and loan movements.",
+        "name": "Display name.",
+        "legacyUserId": "Original company-user ID for idempotent legacy grouping; no ownership inferred.",
+        "profile": "Contact, status, notes and HTTP/HTTPS document links.",
+        "accounts": "IDs of capital equity, profit payable and loan liability chart accounts.",
+        "createdAt": "Profile creation timestamp."
+      }
+    },
+    "AccountantInvestorTerm": {
+      "purpose": "Immutable effective-dated ownership and profit-sharing agreement.",
+      "fields": {
+        "id": "Agreement identifier.",
+        "companyId": "Owning company; part of the investor foreign key.",
+        "investorId": "Investor within this company.",
+        "investor": "Company-scoped investor relation.",
+        "effectiveDate": "First date this agreement applies.",
+        "terms": "Ownership and profit percentages, share counts/class and agreement note.",
+        "createdAt": "Agreement recording timestamp."
+      }
+    },
+    "AccountantInvestorEvent": {
+      "purpose": "Immutable investor subledger movement tied to a system journal, or an unposted pending legacy snapshot.",
+      "fields": {
+        "id": "Movement identifier.",
+        "companyId": "Owning company.",
+        "investorId": "Investor within this company.",
+        "investor": "Company-scoped investor relation.",
+        "eventDate": "Accounting date.",
+        "kind": "CAPITAL_IN/OUT, PROFIT_ALLOCATE/PAY, LOAN_IN/OUT or REVERSAL.",
+        "amount": "Positive two-decimal amount; reversal direction is determined by its original kind.",
+        "journalId": "Published system journal ID; null for pending imported history.",
+        "legacyId": "Original investment ID, unique within company.",
+        "requestId": "Retry key, unique within company.",
+        "reversedId": "Original investor event ID for a reversal; unique within company.",
+        "details": "Canonical request, allocation agreement snapshot, or immutable source fingerprint and import mapping.",
+        "createdAt": "Recording timestamp."
+      }
+    },
+    "AccountantContact": {
+      "purpose": "Independent Accountant books: independent client/vendor/other directory. Stored separately from the existing finance system.",
+      "fields": {
+        "distributorSettings": "",
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "name": "",
+        "type": "",
+        "email": "",
+        "phone": "",
+        "isActive": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantProject": {
+      "purpose": "Independent Accountant books: independent journal project directory. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "name": "",
+        "description": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantAudit": {
+      "purpose": "Independent Accountant books: API actor, action, resource and metadata. Stored separately from the existing finance system.",
+      "fields": {
+        "id": "Primary key of this new Accountant record.",
+        "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
+        "company": "Owning Company relation.",
+        "userId": "",
+        "action": "",
+        "resource": "",
+        "resourceId": "",
+        "after": "",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time this record was last updated.",
+        "deletedAt": "Soft-delete timestamp; null means the record is visible."
+      }
+    },
+    "AccountantEcommerceSettings": {
+      "purpose": "Opt-in company ecommerce posting connection for new orders; account roles, activation time and exclusion baseline prevent accidental historical posting.",
+      "fields": {
+        "companyId": "Owning company identifier and primary key.",
+        "company": "Company owning this accounting configuration.",
+        "enabled": "Whether new ecommerce source writes post journals.",
+        "activatedAt": "Prospective activation timestamp; existing orders are explicitly excluded.",
+        "accounts": "Validated separate company account IDs for sales/tax/inventory/rewards/receivables/clearing/refunds/fees and money."
+      }
+    },
+    "AccountantErpSettings": {
+      "purpose": "Company-level ERP posting activation and default account-role selections.",
+      "fields": {
+        "companyId": "Owning company.",
+        "company": "Owning company relation.",
+        "enabled": "Automatic ERP posting enabled.",
+        "activatedAt": "Activation timestamp for new source eligibility.",
+        "accounts": "Default role-to-account mapping, or frozen source mapping."
+      }
+    },
+    "AccountantErpSource": {
+      "purpose": "ERP source posting snapshots and excluded history baseline; supports idempotent reversals and replacement journals.",
+      "fields": {
+        "companyId": "Owning company.",
+        "company": "Owning company relation.",
+        "sourceKey": "bill:<id> or expense:<id>.",
+        "signature": "Posted date, reference, signed lines, cost snapshot and mappings; excluded=true marks pre-activation history.",
+        "accounts": "Default role-to-account mapping, or frozen source mapping.",
+        "revision": "Posting replacement revision.",
+        "journalId": "Current journal ID; null when no active posting."
+      }
+    },
+    "AccountantStockControl": {
+      "purpose": "Opt-in company inventory control that reconciles posted Stock to current product quantities and purchase costs.",
+      "fields": {
+        "companyId": "Company that owns the inventory control and source snapshot.",
+        "company": "Owning company relation.",
+        "stockAccountId": "Default Stock account for products without a posted purchase Stock mapping.",
+        "openingAccountId": "Equity account offsetting the first inventory reconciliation.",
+        "adjustmentAccountId": "Expense account offsetting subsequent inventory valuation differences.",
+        "enabled": "Enables deferred synchronization from source inventory and accounting journals.",
+        "initializedAt": "Time the opening reconciliation completed, including a zero-difference reconciliation.",
+        "revision": "Monotonic sequence used for immutable stock adjustment journals.",
+        "sourceSnapshot": "Product and PO IDs with item quantities, current unit costs, assigned Stock accounts and values.",
+        "updatedAt": "Last change to the inventory snapshot or reconciliation state."
+      }
+    },
+    "AccountantUserSettings": {
+      "purpose": "Company account choices and activation for new salary and staff-credit postings.",
+      "fields": {
+        "companyId": "Company owning the staff accounting configuration.",
+        "company": "Owning company relation.",
+        "enabled": "Enables deferred source posting for staff ledger changes.",
+        "accounts": "Salary expense/payable, staff receivable, cash, bank and balance adjustment role mappings, including named banks.",
+        "activatedAt": "Time posting was enabled; existing logical sources are separately baselined to exclude history."
+      }
+    },
+    "AccountantUserSource": {
+      "purpose": "Stable staff source identity, frozen account choices and current double-entry journal, including excluded historical baselines.",
+      "fields": {
+        "companyId": "Company owning the staff source.",
+        "company": "Owning company relation.",
+        "sourceKey": "Ledger type, source type and source ID; manual sources without source IDs use the ledger ID.",
+        "ledgerId": "Most recently associated operational staff ledger row.",
+        "signature": "Posting date, signed role amounts, employee identity and reason, or historical exclusion; cumulative old payroll deductions retain their baseline amount.",
+        "accounts": "Frozen account role mappings for this logical source.",
+        "revision": "Increases when the source posting changes, supporting deterministic journals and reversals.",
+        "journalId": "Current published staff journal, nullable for exclusions and non-posting sources."
       }
     }
   },

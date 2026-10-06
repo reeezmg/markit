@@ -1,3 +1,4 @@
+import { awsStorefrontRequest } from '~/server/utils/awsStorefront'
 import { pool } from '~/server/db'
 import {
   createPrivateStorefrontRepository,
@@ -20,6 +21,20 @@ export default defineEventHandler(async (event) => {
   const session = await requireAuthSession(event)
   const companyId = session.data.companyId
   await ensureStorefrontSourcesTable()
+
+  const existing = await pool.query('SELECT repository_provider FROM storefront_sources WHERE company_id=$1', [companyId])
+  const useAws = existing.rows[0]?.repository_provider === 'codecommit'
+    || (!existing.rowCount && process.env.STOREFRONT_NEW_PROVIDER === 'aws')
+  if (useAws) {
+    if (!process.env.EDIT_AWS_ORCHESTRATOR_URL?.startsWith('https://')) {
+      throw createError({ statusCode: 503, statusMessage: 'AWS storefront service is not ready.' })
+    }
+    const company = await pool.query('SELECT store_unique_name FROM companies WHERE id=$1', [companyId])
+    if (!company.rows[0]?.store_unique_name?.trim()) throw createError({ statusCode: 409, statusMessage: 'Your store address must be configured first' })
+    await pool.query(`INSERT INTO storefront_sources(company_id,status,repository_provider,hosting_provider)
+      VALUES($1,'CREATING','codecommit','amplify') ON CONFLICT(company_id) DO NOTHING`, [companyId])
+    return awsStorefrontRequest('provision', companyId, {})
+  }
 
   const lockClient = await pool.connect()
   const lockKey = `storefront-source:${companyId}`

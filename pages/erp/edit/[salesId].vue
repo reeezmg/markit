@@ -1,5 +1,9 @@
 
 <script setup>
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
 import Quagga from '@ericblade/quagga2'
@@ -10,7 +14,8 @@ import {
 import { Capacitor } from '@capacitor/core';
 const queryClient = useQueryClient();
 const currentRequestIds = ref({});
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { selectOwnerAndReload } = useOrganizationActions();
 const route = useRoute();
 const toast = useToast();
 const { printBill } = usePrint();
@@ -736,13 +741,15 @@ const bill = ref(null)
 const fetchBill = async () => {
   dataLoading.value = true
   try {
-    bill.value = await $fetch('/api/billEdit/findUniqueBill', {
+    const record = await $fetch('/api/billEdit/findUniqueBill', {
       method: 'GET',
       query: {
         billId: route.params.salesId,
         companyId: useAuth().session.value?.companyId
       }
     })
+    if (!await selectOwnerAndReload(record.companyId)) return
+    bill.value = record
   } finally {
     dataLoading.value = false
   }
@@ -751,8 +758,8 @@ const fetchBill = async () => {
 
 
 onMounted(async () => {
-    await getCategories()
     await fetchBill()
+    await getCategories()
 });
 const dataLoading = ref(true)
 watch(bill, async (newBill) => {
@@ -2082,11 +2089,13 @@ const couponModel = computed({
 })
 
 
+watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isUserTrackIncluded.value = value; });
 </script>
 
 <template>
 
   <UDashboardPanelContent class="p-1">
+      <CompanyFormField />
     <div v-if="dataLoading" class="w-full flex justify-center items-center py-20">
           <UIcon
             name="i-heroicons-arrow-path-20-solid"

@@ -1,3 +1,5 @@
+import { assertAttendanceManager } from '~/server/utils/attendance-request'
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { prisma } from '~/server/prisma'
 import { createRequire } from 'node:module'
@@ -31,7 +33,8 @@ interface ImportBody {
 }
 
 export default defineEventHandler(async (event) => {
-    const session = await useAuthSession(event)
+    const session = await useCompanyRequestSession(event)
+    assertAttendanceManager(session.data.role)
     const companyId = session.data?.companyId as string | undefined
     if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
@@ -44,7 +47,7 @@ export default defineEventHandler(async (event) => {
     // ─── Parse workbook ───
     let rows: any[][]
     try {
-        const XLSX = require(xlsxModuleName)
+        const XLSX: typeof import('xlsx') = require(xlsxModuleName)
         const buffer = Buffer.from(body.file, 'base64')
         const wb = XLSX.read(buffer, { type: 'buffer' })
         const ws = wb.Sheets[wb.SheetNames[0]]

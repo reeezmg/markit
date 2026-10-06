@@ -1,4 +1,5 @@
 <script setup lang="ts">
+const accountingScope = useCompanyScope('form');
 import { ref } from 'vue'
 import ExpenseForm from '~/components/Expense/ExpenseForm.vue'
 import ExpenseQuickAdd from '~/components/Expense/ExpenseQuickAdd.vue'
@@ -44,6 +45,7 @@ const saveExpense = async (form: any) => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+    <div class="flex items-center justify-between gap-3"><CompanyFormField /></div>
     <div>
       <ExpenseList
         @edit="openForm"

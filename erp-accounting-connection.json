@@ -1,0 +1,74 @@
+{
+  "applied": true,
+  "historyImported": false,
+  "report": [
+    {
+      "companyId": "02856c86-60b8-41a4-ba18-79dbd55bf016",
+      "company": "Markit",
+      "enabled": true,
+      "mappings": {
+        "bank": "cmujmn0gh000k10hvc72g30cs",
+        "cash": "cmujm9rc000021zuc5rbsml9f",
+        "cogs": "cmujm9rc1000i1zucoifna5gp",
+        "sales": "cmujm9rc0000d1zuc8ssb0n6y",
+        "stock": "cmujm9rc000051zucol1gl3h6",
+        "expense": "cmujm9rc0000h1zucge1w5lu5",
+        "inputTax": "cmujm9rc000061zucgauczhrp",
+        "outputTax": "cmujm9rc0000f1zuch7f2dv1i",
+        "receivable": "cmujm9rc000011zucm7v1qpua",
+        "expensePayable": "cmujt21y1000jq35mosybywti"
+      }
+    },
+    {
+      "companyId": "3c431903-0d62-4f8d-89aa-b8b456c179f3",
+      "company": "Ubar Mobiles",
+      "enabled": true,
+      "mappings": {
+        "bank": "cmujmnrgy005u10hvzzy7byk9",
+        "cash": "cmujm9urx00141zuc2nw3klxy",
+        "cogs": "cmujm9ury001k1zucqryyuik6",
+        "sales": "cmujm9ury001f1zucesmuzwr1",
+        "stock": "cmujm9ury00171zucx3rczw4f",
+        "expense": "cmujm9ury001j1zuc0g65cu2s",
+        "inputTax": "cmujm9ury00181zucwkzuh8qq",
+        "outputTax": "cmujm9ury001h1zuc4ucov4tr",
+        "receivable": "cmujm9urx00131zuc4098s53a",
+        "expensePayable": "cmujt24d40025q35mxfkxr7ja"
+      }
+    },
+    {
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "company": "reezc",
+      "enabled": true,
+      "mappings": {
+        "bank": "cmujmoiog00dn10hvj2ikxi6c",
+        "cash": "cmujj2907000210el5xemzhdq",
+        "cogs": "cmujj2909000i10ely47zkijl",
+        "sales": "cmujj2909000d10eltzbtpzmj",
+        "stock": "cmujj2909000510elj1qm2gdt",
+        "expense": "cmujj2909000h10elouhvp952",
+        "inputTax": "cmujj2909000610elttd1n0eg",
+        "outputTax": "cmujj2909000f10elksc19xci",
+        "receivable": "cmujj2906000110el8l0ls8kj",
+        "expensePayable": "cmujt26qh003rq35mnvs6l49e"
+      }
+    },
+    {
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "company": "ORIGINALS CLOTHING",
+      "enabled": true,
+      "mappings": {
+        "bank": "cmujmot8b00ga10hv36n32efa",
+        "cash": "cmujk8pon002x10elczamrss3",
+        "cogs": "cmujk8pon003d10el32knmauk",
+        "sales": "cmujk8pon003810ellkow1k32",
+        "stock": "cmujk8pon003010elc74mn8kf",
+        "expense": "cmujk8pon003c10elxxkcgea7",
+        "inputTax": "cmujk8pon003110el1ezc6wxp",
+        "outputTax": "cmujk8pon003a10elp55sf7ov",
+        "receivable": "cmujk8pom002w10el7x4q4n0d",
+        "expensePayable": "cmujt2b77005dq35m55rxbopg"
+      }
+    }
+  ]
+}

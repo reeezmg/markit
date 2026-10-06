@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/hooks/distributor-company';
-import { useCreateDistributorCredit, useUpdateDistributorCredit, useDeleteDistributorCredit } from '~/lib/hooks/distributor-credit';
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
+import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/company-hooks/distributor-company';
+import { useCreateDistributorCredit, useUpdateDistributorCredit, useDeleteDistributorCredit } from '~/lib/company-hooks/distributor-credit';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
 const toast = useToast();
@@ -10,7 +13,8 @@ const UpdateDistributorCredit = useUpdateDistributorCredit();
 const DeleteDistributorCredit = useDeleteDistributorCredit();
 
 const DeleteDistributorCompany = useDeleteDistributorCompany()
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { forOwner } = useOrganizationActions();
 const isSaving = ref(false)
 const router = useRouter();
 const sort = useLocalStorage('dist:credit-page:sort', { column: 'distributor.name', direction: 'asc' as const });
@@ -77,7 +81,7 @@ const action = (row:any) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => emit('edit', row.distributor),
+            click: () => emit('edit', { ...row.distributor, companyId: row.companyId }),
         },
     
         {
@@ -120,6 +124,7 @@ const deleteDistributor = async(id:string) => {
 )};
 
 const formEdit = async(row:any) => {
+  await companyScope.beginForm({ model: row.type === 'CREDIT' ? 'DistributorCredit' : 'DistributorPayment', id: row.id, companyId: row.companyId || companyId.value || companyScope.companyId.value });
   form.value = {...row, date: new Date(row.createdAt).toISOString().split('T')[0]} as any;
   if(form.value.type === 'CREDIT'){
     if(form.value.purchaseOrderId){
@@ -385,7 +390,7 @@ const handleAddCredit = async () => {
             connect: {
               distributorId_companyId: {
                 distributorId: distributorId.value,
-                companyId: companyId.value,
+                companyId: companyScope.companyId.value,
               }
             }
           }
@@ -423,12 +428,16 @@ const selectedDistributor = computed(() => {
 });
 
 
-const handleOpenPayForm = (row) => {
+const handleOpenPayForm = async (row: any) => {
+  resetForm();
+  await companyScope.beginForm();
   isOpenPay.value = true;
   distributorId.value = row.distributorId;
   companyId.value = row.companyId;
 };
-const handleOpenCreditForm = (row) => {
+const handleOpenCreditForm = async (row: any) => {
+  resetForm();
+  await companyScope.beginForm();
   isOpenCredit.value = true;
   distributorId.value = row.distributorId;
   companyId.value = row.companyId;
@@ -436,6 +445,8 @@ const handleOpenCreditForm = (row) => {
 
 
 
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 
 <template>
@@ -457,6 +468,7 @@ const handleOpenCreditForm = (row) => {
         <template #header>
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
                     <div class="flex flex-row">
+                  <CompanyTableFilter />
     
                     </div>
                     <UButton color="primary" @click=" emit('modal-open')" block class="w-full sm:w-40">
@@ -477,7 +489,7 @@ const handleOpenCreditForm = (row) => {
                 >
 
                     <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
+                    <UDropdown :items="forOwner(action(row), row.companyId)">
                         <UButton
                         color="gray"
                         variant="ghost"
@@ -502,7 +514,7 @@ const handleOpenCreditForm = (row) => {
                         </template>
 
                         <template #actions-data="{ row }">
-                    <UDropdown :items="subaction(row)">
+                    <UDropdown :items="forOwner(subaction(row), row.companyId || companyId)">
                         <UButton
                         color="gray"
                         variant="ghost"
@@ -559,6 +571,8 @@ const handleOpenCreditForm = (row) => {
     <div class="p-4 space-y-4">
       
           <!-- PAYMENT DATE -->
+          <CompanyFormField @transferred="isOpenPay = false" />
+          <CompanySupplierField v-if="!form.id" v-model="distributorId" />
           <UFormGroup label="Payment Date">
             <UInput
               type="date"
@@ -606,6 +620,8 @@ const handleOpenCreditForm = (row) => {
   <UCard>
     <div class="p-4 space-y-4">
 
+          <CompanyFormField @transferred="isOpenCredit = false" />
+          <CompanySupplierField v-if="!form.id" v-model="distributorId" />
           <UFormGroup label="Payment Date">
             <UInput
               type="date"

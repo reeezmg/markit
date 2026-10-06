@@ -1,9 +1,11 @@
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope';
+
 export default defineEventHandler(async (event) => {
-    const session = await useAuthSession(event);
+  const companyIds = await getReadCompanyIds(event);
   const brands = await prisma.product.findMany({
     where: { 
       status: true,
-      companyId: session.data.companyId, 
+      companyId: { in: companyIds },
     },
     select: { brand: true },
     distinct: ['brand'],

@@ -42,6 +42,7 @@
   <UModal v-model="isPurchaseInfoOpen" :prevent-close="isPurchaseInfoDoneLoading">
     <div class="p-4 space-y-4">
       <h2 class="text-lg font-semibold">Purchase Information</h2>
+      <DistributorAccountSelection v-if="selected?.id" v-model="accountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="selected.id" :source-key="accountingSourceKey" :roles="['payable','stock',...(Number(taxPercent) ? ['tax'] : []),...(paymentType && paymentType !== 'CREDIT' ? [paymentType === 'CASH' ? 'cash' : 'bank'] : [])]" />
            <!-- 🆕 BILL DATE -->
       <UFormGroup label="Bill Date">
         <UInput
@@ -208,7 +209,13 @@
 </template>
 
 <script setup lang="ts">
-import { useCreateDistributor, useFindManyDistributor } from '~/lib/hooks/distributor';
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+const accountingAccounts = ref<Record<string,string>>({});
+const accountingRoute = useRoute();
+const accountingSourceKey = computed(()=>typeof accountingRoute.query.poId==='string' ? `purchase:${accountingRoute.query.poId}` : undefined);
+
+import { useCreateDistributor, useFindManyDistributor } from '~/lib/company-hooks/distributor';
 
 /* ------------------------------------
    PROPS (DB STATE)
@@ -245,7 +252,7 @@ const props = withDefaults(defineProps<{
    GLOBAL
 ------------------------------------ */
 const toast = useToast()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 
 const isPurchaseInfoOpen = ref(false)
 const isDistributorOpen = ref(false)
@@ -442,6 +449,7 @@ const emit = defineEmits(['update', 'submit'])
 watch(
   [
     selected,
+    accountingAccounts,
     paymentType,
     billNo,
     billDate,
@@ -454,6 +462,7 @@ watch(
   () => {
     emit('update', {
       distributorId: selected.value?.id || null,
+      accountingAccounts: accountingAccounts.value,
 
       // payment state
       oldPaymentType: oldPaymentType.value,
@@ -483,7 +492,7 @@ watch(
 const { data: distributors } = useFindManyDistributor({
   where: {
     companies: {
-      some: { companyId: useAuth().session.value?.companyId },
+      some: { companyId: { in: useAuth().session.value?.companyId ? [useAuth().session.value!.companyId] : [] } },
     },
   },
 })

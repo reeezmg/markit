@@ -23,7 +23,7 @@ const closeForm = () => {
             <div>
                 <DistributorList @modal-open="openForm" @edit="openForm"/>
                 <UModal v-model="openModal">
-                   <DistributorForm :selectedSupplier = "selectedSupplier"/>
+                   <DistributorForm @transferred="openModal = false" :selectedSupplier = "selectedSupplier"/>
                 </UModal>
                
             </div>

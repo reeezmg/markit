@@ -1,6 +1,9 @@
 <script setup lang="ts">
-import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/hooks/distributor-company';
-import { useDeletePurchaseOrder } from '~/lib/hooks/purchase-order';
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
+import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/company-hooks/distributor-company';
+import { useDeletePurchaseOrder } from '~/lib/company-hooks/purchase-order';
 import type { Prisma } from '@prisma/client';
 import QrcodeVue from 'qrcode.vue'
 const toast = useToast();
@@ -8,7 +11,8 @@ const emit = defineEmits(['modal-open','edit']);
 const router = useRouter();
 const DeleteDistributorCompany = useDeleteDistributorCompany({ optimisticUpdate: true })
 const DeletePurchaseOrder = useDeletePurchaseOrder({ optimisticUpdate: true })
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { forOwner } = useOrganizationActions();
 const isSaving = ref(false)
 
 const sort = ref({ column: 'distributor.name', direction: 'asc' as const });
@@ -60,7 +64,7 @@ const action = (row:any) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => emit('edit', row.distributor),
+            click: () => emit('edit', { ...row.distributor, companyId: row.companyId }),
         },
     
         {
@@ -298,6 +302,8 @@ const selectedDistributor = computed(() => {
 
 
 
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 
 <template>
@@ -319,6 +325,7 @@ const selectedDistributor = computed(() => {
         <template #header>
                 <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
                     <div class="flex flex-row">
+                  <CompanyTableFilter />
     
                     </div>
                     <UButton color="primary" @click=" emit('modal-open')" block class="w-full sm:w-40">
@@ -339,7 +346,7 @@ const selectedDistributor = computed(() => {
                 >
 
                     <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
+                    <UDropdown :items="forOwner(action(row), row.companyId)">
                         <UButton
                         color="gray"
                         variant="ghost"
@@ -364,7 +371,7 @@ const selectedDistributor = computed(() => {
                     </template>
 
                     <template #actions-data="{ row }">
-                    <UDropdown :items="purchaseOrderAction(row)">
+                    <UDropdown :items="forOwner(purchaseOrderAction(row), row.companyId || companyId)">
                         <UButton
                         color="gray"
                         variant="ghost"

@@ -1,10 +1,16 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+const toast = useToast();
+const editingClient = ref<any>(null);
+const isEditOpen = ref(false);
+const { forOwner } = useOrganizationActions();
 import { Switch } from '@headlessui/vue';
 import type { Prisma } from '@prisma/client'
 import { BillingAddClient } from '#components';
 
 import { useUpdateBill } from '~/lib/hooks/bill';
-import { useFindManyClient, useCountClient } from '~/lib/hooks/client';
+import { useFindManyCompanyClient, useCountCompanyClient } from '~/lib/company-hooks/company-client';
 import { useUpdateCompanyClient, useUpdateManyCompanyClient } from '~/lib/hooks/company-client';
 import { useUpdatePipeline } from '~/lib/hooks/pipeline';
 
@@ -15,7 +21,7 @@ const UpdateManyCompanyClient = useUpdateManyCompanyClient({ optimisticUpdate: t
 const UpdateBill = useUpdateBill({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 const isClientAddModelOpen = ref(false);
 const phoneNo = ref('');
 const notes = ref<Record<string, string>>({});
@@ -93,7 +99,7 @@ const billColumns = [
 
 const selectedColumns = ref(columns);
 const columnsTable = computed(() =>
-    columns.filter((column) => selectedColumns.value.includes(column)),
+    [...(companyScope.enabled.value ? [{ key: 'companyName', label: 'Company / branch' }] : []), ...columns.filter((column) => selectedColumns.value.includes(column))],
 );
 
 // Selected Rows
@@ -143,13 +149,14 @@ const action = (row) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`products/edit/${row.id}`),
+            click: () => editClient(row),
         },
     ],
     [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
+            click: () => removeClient(row),
         },
     ],
 ];
@@ -159,14 +166,14 @@ const billAction = (row:any) => [
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => router.push(`./edit/${row.id}`),
+            click: () => router.push(`/erp/edit/${row.id}`),
         },
     ],
     [
         {
             label: 'Delete',
             icon: 'i-heroicons-trash-20-solid',
-            click: () => deleteBill(row.id),
+            click: () => deleteBill(row),
         },
     ],
 ];
@@ -179,7 +186,7 @@ const pipelineStatus = (row) => [
         {
             label: 'new',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'new',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'new',row.clientId),
         },
     ],
     
@@ -187,7 +194,7 @@ const pipelineStatus = (row) => [
         {
             label: 'prospect',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'prospect',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'prospect',row.clientId),
         },
     ],
     
@@ -195,7 +202,7 @@ const pipelineStatus = (row) => [
         {
             label: 'viewing',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'viewing',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'viewing',row.clientId),
         },
     ],
     
@@ -203,7 +210,7 @@ const pipelineStatus = (row) => [
         {
             label: 'reject',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'reject',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'reject',row.clientId),
         },
     ],
     
@@ -211,67 +218,33 @@ const pipelineStatus = (row) => [
         {
             label: 'close',
             icon: 'i-heroicons-pencil-square-20-solid',
-            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'close',row.id),
+            click: () => changePipeline(useAuth().session.value?.pipelineId,row.companies?.[0]?.pipelineStatus,'close',row.clientId),
         },
     ],
     
 ];
 
 
-const deleteBill = async (id:string) => {
-    const res = await UpdateBill.mutateAsync({
-        where:{
-            id
-        },
-        data:{
-            deleted:true
-        }
-    })
+const deleteBill = async (row: any) => {
+    if (!window.confirm(`Delete invoice #${row.invoiceNumber}?`)) return;
+    try {
+        await $fetch('/api/billSale/deleteBill', {
+            method: 'POST',
+            headers: { 'x-company-id': row.companyId },
+            body: { billId: row.id, companyId: row.companyId },
+        });
+        await refetch();
+    } catch (error: any) {
+        toast.add({ title: 'Could not delete bill', description: error.message, color: 'red' });
+    }
 };
 
 
 
-const changePipeline = async(pipelineId:string | undefined,fromPipeline:string | undefined,toPipeline:string,clientId:string) => {
-    const companyId = useAuth().session.value?.companyId;
-    if (!companyId) return;
-
-    if (pipelineId && fromPipeline) {
-      const res = await UpdatePipeline.mutateAsync({
-        where: { id: pipelineId },
-        data: {
-          [`${fromPipeline}Clients`]: {
-            disconnect: { id: clientId },
-          },
-        },
-      });
-
-      if(res){
-        await UpdatePipeline.mutateAsync({
-          where: { id: pipelineId },
-          data: {
-            [`${toPipeline}Clients`]: {
-              connect: { id: clientId },
-            },
-          },
-        });
-      }
-    }
-
-    await UpdateCompanyClient.mutateAsync({
-      where: {
-        companyId_clientId: {
-          companyId,
-          clientId,
-        },
-      },
-      data: {
-        pipelineStatus:toPipeline
-      },
-    });
-  
-  
-
-}
+const changePipeline = async (_pipelineId: any, _from: any, stage: string, clientId: string) => {
+  await $fetch('/api/clients/pipeline', { method: 'PUT', body: { clientId, stage, companyId: companyScope.companyId.value } });
+  await refetch();
+};
 
 // Filters
 const todoStatus = [
@@ -311,115 +284,39 @@ const pageTo = computed(() =>
 );
 
 // Data
-const queryArgs = computed<Prisma.ClientFindManyArgs>(() => {
-  const companyId = useAuth().session.value?.companyId
-  const searchTerm = search.value?.trim()
-
-  const selectedStatusCondition =
-    selectedStatus.value.length > 0
-      ? {
-          OR: selectedStatus.value.map(item => ({
-            companies: {
-              some: {
-                companyId,
-                status: item.value,
-              },
-            },
-          })),
-        }
-      : {}
-
-  return {
-    where: {
-      AND: [
-        // client must belong to current company
-        {
-          companies: {
-            some: {
-              companyId,
-            },
-          },
-        },
-
-        // search
-        ...(searchTerm
-          ? [{
-              OR: [
-                {
-                  name: {
-                    contains: searchTerm,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  email: {
-                    contains: searchTerm,
-                    mode: 'insensitive',
-                  },
-                },
-                {
-                  phone: {
-                    contains: searchTerm,
-                  },
-                },
-              ],
-            }]
-          : []),
-
-        selectedStatusCondition,
-      ],
-    },
-
-    orderBy: {
-      [sort.value.column === 'status' || sort.value.column === 'points' ? 'name' : sort.value.column]: sort.value.direction,
-    },
-
-    skip: (page.value - 1) * Number(pageCount.value),
-    take: Number(pageCount.value),
-
-    include: {
-      // 🔥 THIS is where points come from
-      companies: {
-        where: {
-          companyId,
-        },
-        select: {
-          clientNumber: true,
-          points: true,
-          status: true,
-          pipelineStatus: true,
-        },
-      },
-
-      bills: {
-        include: {
-          entries: true,
-        },
-      },
-    },
-  }
-})
-
-const countArgs = computed(() => ({
-  where: queryArgs.value.where,
+const queryArgs = computed(() => ({
+  where: {
+    companyId: { in: companyScope.readIds.value },
+    ...(selectedStatus.value.length ? { status: { in: selectedStatus.value.map((item: any) => item.value) } } : {}),
+    client: { OR: ['name', 'email', 'phone'].map(field => ({ [field]: { contains: search.value.trim(), mode: 'insensitive' } })) },
+  },
+  orderBy: ['status', 'points'].includes(sort.value.column)
+    ? { [sort.value.column]: sort.value.direction }
+    : { client: { [sort.value.column]: sort.value.direction } },
+  skip: (page.value - 1) * Number(pageCount.value), take: Number(pageCount.value),
+  include: { company: { select: { name: true } }, client: { include: { bills: { where: { companyId: { in: companyScope.readIds.value } }, include: { entries: true } } } } },
 }));
-
-const {
-    data: clients,
-    isLoading,
-    error,
-    refetch,
-} = useFindManyClient(queryArgs);
-
-const { data: pageTotal } = useCountClient(countArgs);
-
+const { data: memberships, isLoading, error, refetch } = useFindManyCompanyClient(queryArgs as any);
+const { data: pageTotal } = useCountCompanyClient(computed(() => ({ where: queryArgs.value.where })) as any);
+const clients = computed(() => (memberships.value ?? []).map((link: any) => ({
+  ...link.client, id: `${link.companyId}:${link.clientId}`, clientId: link.clientId,
+  companyId: link.companyId, companyName: link.company.name, companies: [link],
+  bills: (link.client.bills ?? []).filter((bill: any) => bill.companyId === link.companyId),
+})));
+watch([companyScope.readIds, search, selectedStatus, pageCount], () => { page.value = 1; selectedRows.value = []; expand.value = { openedRows: [], row: null }; }, { deep: true });
+async function editClient(row: any) { editingClient.value = row; isEditOpen.value = true; }
+async function removeClient(row: any) {
+  if (!window.confirm(`Make ${row.name} inactive in ${row.companyName}? Bills and account history will remain linked to this client.`)) return;
+  // Soft removal uses the existing membership status. Keep the shared identity,
+  // company link, points and historical financial documents available.
+  try { await UpdateCompanyClient.mutateAsync({ where: { companyId_clientId: { companyId: row.companyId, clientId: row.clientId } }, data: { status: false } }); await refetch(); }
+  catch (error: any) { toast.add({ title: 'Could not remove client', description: error.message, color: 'red' }); }
+}
 const handleEnterPhone = async() => {
   
 }
 
-const handleClientAdded = (id,name) => {
- 
-};
+const handleClientAdded = async () => { await refetch(); };
 
 
 async function multiToggle(ids, status: boolean) {
@@ -429,8 +326,7 @@ async function multiToggle(ids, status: boolean) {
     try {
         await UpdateManyCompanyClient.mutateAsync({
             where: {
-                companyId,
-                clientId: { in: ids },
+                OR: clients.value.filter((row: any) => ids.includes(row.id)).map((row: any) => ({ companyId: row.companyId, clientId: row.clientId })),
             },
             data: { status: status },
         });
@@ -440,9 +336,6 @@ async function multiToggle(ids, status: boolean) {
 }
 
 async function toggleStatus(id: string) {
-    const companyId = useAuth().session.value?.companyId;
-    if (!companyId) return;
-
     if (clients.value) {
         const clientToUpdate = clients.value.find((item) => item.id === id);
         if (!clientToUpdate) return;
@@ -456,8 +349,8 @@ async function toggleStatus(id: string) {
             await UpdateCompanyClient.mutateAsync({
                 where: {
                     companyId_clientId: {
-                        companyId,
-                        clientId: id,
+                        companyId: clientToUpdate.companyId,
+                        clientId: clientToUpdate.clientId,
                     },
                 },
                 data: { status: updatedStatus },
@@ -541,6 +434,7 @@ const downloadClientsAsVCF = () => {
            <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 w-full">
                 <!-- Left side: Search + Status -->
                 <div class="flex flex-row gap-3 w-full sm:w-auto">
+                  <CompanyTableFilter />
                 <UInput
                     v-model="search"
                     icon="i-heroicons-magnifying-glass-20-solid"
@@ -735,7 +629,7 @@ const downloadClientsAsVCF = () => {
                         :columns="billColumns"
                     >
                       <template #actions-data="{ row }">
-                    <UDropdown :items="billAction(row)">
+                    <UDropdown :items="forOwner(billAction(row), row.companyId)">
                         <UButton
                             color="gray"
                             variant="ghost"
@@ -826,7 +720,9 @@ const downloadClientsAsVCF = () => {
             </template>
         </UCard>
 
+<UModal v-model="isEditOpen"><ClientMembershipForm :record="editingClient" @close="isEditOpen = false" @saved="isEditOpen = false; refetch()" /></UModal>
 <BillingAddClient
+  :allow-company-selection="true"
   v-model:model="isClientAddModelOpen"
   v-model:phoneNo="phoneNo"
   :onVerify="handleEnterPhone"

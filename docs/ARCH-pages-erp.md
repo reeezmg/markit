@@ -1,5 +1,85 @@
 ### ERP (`/erp`)
 
+#### New Accountant posting
+
+Operational source writes no longer maintain the old Accounts ledger (2026-10-06).
+The source documents, stock effects and native deferred posting transactions remain.
+Legacy historical ledger rows are preserved; see `ARCH-pages-accounts.md`.
+
+Billing, Sales and Expenses use company-scoped defaults configured under
+Settings → Account; their Accounting buttons have been removed.
+`/api/accountant/erp` GET/PUT and POST `/enable` are implemented by
+`server/utils/accountant/erp.ts`. Setup requires admin/manager/accountant access.
+Enabling records existing bills/expenses as excluded; only new documents auto-post.
+Billing and Sales share one bill source, not separate journals.
+Ordinary ERP posting requires bill `type = BILL` (null defaults to BILL). A linked
+ecommerce invoice with `type = STANDARD` does not post through ordinary ERP history.
+Its accounting belongs to the separate ecommerce connection; disabled connections
+and excluded historical orders require their own history review. Enabling that
+connection does not silently backfill old orders.
+`20260927170000_erp_party_links` stores `sourceParties` ID/name snapshots on every
+ERP journal line: bill client, bill staff user, bill credit recipient, and expense
+selected user (`from_id`). `20260930140000_customer_account_links` additionally
+snapshots the bill's company-scoped B2B `account_id` as `creditAccount` (ID/name).
+This customer identity can coexist with client/staff dimensions on the shared
+receivable account. `/api/accountant/erp/customers/:id` sums published receivable
+lines tagged with that identity, including reversals, to return its due balance.
+Company membership is validated for new/changed links.
+These dimensions do not create separate accounts or turn a staff user into a debtor.
+Party changes reverse/repost; reversals retain the original snapshots. Current posted
+sources are enriched by migration without changing balances; superseded journals
+are not assigned unverified historical identities. Journal details and account
+transaction rows display these labels. Excluded history remains excluded.
+
+
+`20260927150000_erp_accounting` adds settings/source snapshots and deferred triggers
+on bills, entries, expenses and distributor-payment links. Writes and journals commit
+together; edits/deletions reverse previous journals, and restored documents re-post.
+Accounts are frozen per source. Company/date locks and balanced journals are enforced.
+Cash/bank/credit/split bills post sales and output tax; entry tax is extracted from
+tax-inclusive values and allocated proportionately to invoice totals. COGS uses the
+variant purchase price captured per entry/variant on first posting, including returns;
+unknown purchase prices contribute zero. This is not FIFO inventory valuation.
+Only non-Markit `BILL` documents in PAID/PENDING state post. Other states reverse them.
+Paid expenses credit cash/bank; pending/unpaid expenses credit accrued expenses.
+Expense quick-add and edit forms capture total inclusive of tax, included tax and
+an explicit full/none/partial recovery choice. `Expense.recoverableTaxAmount` alone
+posts to Input GST; the remaining total posts to expense. POST/PUT validate finite
+two-decimal amounts and require a choice for positive tax. Existing expense tax
+treatment is preserved by `20260927160000_expense_tax_recovery`; new raw expenses
+default to zero recoverable tax. Recording the choice does not verify eligibility.
+Expenses linked to distributor payments never post a second expense journal.
+
+Install with `npm run db:erp-accounting`. From Storetools, preview setup with
+`npx tsx scripts/connect-erp-accounting.ts --company=<id>`; add `--apply` to connect.
+Repeat company arguments for several companies. Preview rolls back database changes.
+No existing history or cash/bank opening balances are imported by this command.
+
+Explicit historical adoption uses `scripts/import-erp-history.mjs` with selected
+enabled companies, `--through=YYYY-MM-DD` and optional `--apply`. It force-imports
+bill/expense sources, reverses prior source-matched cash migration journals (including
+their clearing counterpart), and retains those originals for audit. Existing stock
+quantities and source documents are not replayed. Exact source errors block the batch;
+current journal/account amounts, balance and repeat no-op checks run before commit.
+Historical client snapshots may retain the bill's recorded client when current
+membership is absent, with an audit entry. See `scripts/ERP-HISTORY-IMPORT.md`.
+
+Verification: `npm run test:erp-accounting` creates an isolated schema and checks
+posting, reversals, party snapshots, company isolation and Accountant read responses.
+`npm run test:erp-accounting:api` exercises actual billing/expense handlers against
+installed database functions with test authentication. It wraps handler commits in
+savepoints and flushes deferred triggers, then rolls back all test records, counters
+and journals. It requires an enabled company with staff, a client and categories.
+It does not test browser login. `node scripts/verify-erp-accounting.mjs` verifies
+existing postings inside a rolled-back transaction.
+
+`npm run test:products-distributor-accounting:api` additionally exercises the combined
+purchase-to-sale lifecycle, including purchased stock, COGS and sale quantity changes,
+using actual handlers with rollback-only fixtures.
+
+
+Head-office admins default to the active head office plus active direct branches. Each table uses `useCompanyScope('table')` and `CompanyTableFilter.vue`; filters remain local to the component and participate in query keys. `CompanyFormField.vue` is inside add/edit forms: new forms default to the active head office, while edits load the stored owner through `/api/organization/context`. Related quick-add fields inherit their enclosing form company. Sales, online sales, B2B accounts, and expense tables use the local scope. Expense forms load categories and staff for their selected company. Billing drafts use company-specific storage keys. Requests use explicit company IDs without updating the authentication session or sidebar company. `useOrganizationActions.ts` resolves row ownership locally. Changing an existing record's company opens the transfer preview, requires explicit destination mappings and linked-record confirmation, then moves the saved record in a transaction. Save other form changes before confirming a transfer. See `ARCH-storetools-api.md` for transfer and authorization details.
+
 **Files:**
  - `pages/erp.vue` — Parent ERP shell with `UDashboardPage`/`UDashboardPanel`; exact `/erp` path redirects to `/erp/billing`
 - `pages/erp/billing.vue` — Main POS billing page (~1,700 lines; coordination layer only)
@@ -25,8 +105,8 @@
 
 | Route | Method | Implementation | Purpose |
 |---|---|---|---|
-| `/api/bill/findBillCounter` | POST | Raw SQL (pg pool) | Atomically increment and return `bill_counter` (`UPDATE … RETURNING`). Called before save so invoice# is available for instant print. Uses shared `~/server/db` pool. |
-| `/api/bill/create` | POST | PostgreSQL `create_bill_plpgsql(jsonb)` function via shared `pg` pool | Create bill. The endpoint ensures the function exists and calls `SELECT create_bill_plpgsql($1::jsonb)`; invoice number is pre-reserved by `findBillCounter`. |
+| `/api/bill/findBillCounter` | POST | Raw SQL (pg pool) | Deprecated for billing saves. Invoice numbering belongs to the bill INSERT trigger. |
+| `/api/bill/create` | POST | PostgreSQL `create_bill_source_plpgsql(jsonb)` function via shared `pg` pool | Creates the source, stock and staff-credit effects; native deferred triggers post financial entries. Invoice number is assigned by the INSERT trigger. No legacy ledger writes. |
 | `/api/bill/update` | POST | Raw SQL / pg transaction | Edit bill entries |
 | `/api/bill/offline` | POST | Raw SQL (pg pool) | Offline stock updates (qty/soldQty sync) |
 | `/api/bill/findUniqueClient` | GET | Prisma | Look up client by phone |
@@ -50,10 +130,10 @@
 | `/api/billEdit/updatePaymentStatus` | POST | — | Update payment status |
 | `/api/discount/apply` | POST | Raw SQL (pg pool) | Bulk apply discount% to variants |
 | `/api/accounts/expenses` | GET | Raw SQL (pg pool) | List expenses with search (note/category/user name via JOINs), status/paymentMode/category/user/amount/date filters, whitelisted sort columns (incl. nested `expensecategory.name`/`user.name`), pagination. Returns `{ rows, total }`. Rows shaped with nested `expensecategory {id,name}` + `user {userId,name,phone}` and `createdAt`. |
-| `/api/accounts/expenses` | POST | plpgsql function (pg pool) | Create expense via a `create_expense(...)` plpgsql function called in **one round-trip** (`SELECT create_expense(...)`). The function bumps `companies.expense_counter`, inserts the expense (gap-free — single statement = single implicit txn), and for **PAID** expenses inserts the account-ledger DEBIT + recomputes that account's running `balance_after`. The function is created lazily once per server process (`ensureCreateExpenseFn` + an in-memory `fnReady` flag; `ensureAccountLedgerSchema` guarantees the ledger types/table). **Duplicates** the ledger logic from `server/utils/account-ledger.ts` (`expenseLedgerRows` + `rebuildAccountLedgerForSource` for a fresh source) — keep in sync. No `/api/counter/increment` call and no session-counter write (`expenses/next-number.get.ts` reads the counter from the DB). Returns `{ success, id, expenseNumber }`. |
-| `/api/accounts/expenses/[id]` | PUT | Raw SQL (pg pool, transaction) | Update expense + rebuild account ledger for the source |
-| `/api/accounts/expenses/[id]` | DELETE | Raw SQL (pg pool, transaction) | Delete expense + remove its account-ledger entries |
-| `/api/accounts/expenses/status` | POST | Raw SQL (pg pool, transaction) | Bulk "Mark as" status update for `{ ids, status }`; rebuilds the account ledger per touched row (status drives ledger inclusion). Replaces the old `useUpdateManyExpense`, which never updated the ledger. |
+| `/api/accounts/expenses` | POST | Raw SQL CTE (pg pool, transaction) | Validates amounts/tax recovery, locks company references, reserves the expense counter and inserts the source including recoverable tax in one CTE. Native deferred triggers post at commit. No legacy ledger or runtime function/schema setup. Returns `{ success, id, expenseNumber }`. |
+| `/api/accounts/expenses/[id]` | PUT | Raw SQL (pg pool, transaction) | Update expense; native ERP trigger reverses/reposts the source |
+| `/api/accounts/expenses/[id]` | DELETE | Raw SQL (pg pool, transaction) | Delete expense; native ERP trigger reverses its journal and retains old ledger history |
+| `/api/accounts/expenses/status` | POST | Raw SQL (pg pool, transaction) | Bulk "Mark as" update for `{ ids, status }`; native ERP triggers update paid/unpaid postings in the same transaction. Old ledger rows stay unchanged. |
 | `/api/accounts/expense-categories` | GET | Raw SQL (pg pool) | List `{id,name}` categories for the company |
 | `/api/accounts/expense-categories` | POST | Raw SQL (pg pool) | Create a category; returns `{id,name}` |
 | `/api/accounts/expense-categories/[id]` | DELETE | Raw SQL (pg pool) | Delete a category; maps PG FK error `23503` → HTTP 409 "used in expenses" |
@@ -190,7 +270,7 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 1. Guard: reject if `isSaving` or any barcode fetch in flight (`currentRequestIds`)
 2. `await nextTick()` - flush reactive updates so `item.value` is fully calculated
 3. `validateBillEntries()` - filter + validate items, throw on missing category/qty/rate
-4. `POST /api/bill/findBillCounter` - get invoice number
+4. The bill INSERT trigger assigns the invoice number returned by `/api/bill/create`
 5. `buildEntriesData()` - map items to Prisma entry shape
 6. `buildBillPayload()` - pure function, assembles full bill payload
 7. `buildPrintData()` - pure function, assembles thermal receipt data
@@ -223,13 +303,13 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 ---
 
 #### `POST /api/bill/create` — Bill Creation (PL/pgSQL)
-Bill creation uses the shared `pg` pool and lazily installs/calls `create_bill_plpgsql(jsonb)` — NOT Prisma. After first-process setup (`ensureAccountLedgerSchema`, `bills.discount_type` DDL, `CREATE OR REPLACE FUNCTION`), the steady-state save path is one SQL call: `SELECT create_bill_plpgsql($1::jsonb)`.
+Bill creation uses the shared `pg` pool and lazily installs/calls the source-only `create_bill_source_plpgsql(jsonb)`. First-process setup ensures `bills.discount_type` and the function; it does not install the old ledger schema. The save calls `SELECT create_bill_source_plpgsql($1::jsonb)` inside the source transaction. The distinct function name prevents older server processes from replacing this source-only definition.
 
 **Function flow:**
 1. INSERT bill into `bills`; `trigger_generate_invoice_number` assigns `invoice_number`
 2. INSERT all entries into `entries` from `payload.entries.create` JSONB
 3. Update staff credit `user_ledger_entries` and recalculate balances when `credit_user_id` is present
-4. Insert/rebuild `account_ledger_entries` for Cash/UPI/Card/Credit/Split payments and recalculate running balances
+4. Deferred native accounting triggers post Cash/UPI/Card/Credit/Split sources; old ledger rows are untouched
 5. Apply `company_clients.points += billPoints - redeemedPoints` when a valid client exists
 6. Update `items.qty` + `items.sold_qty` through set-based JSONB stock deltas for sold and returned items
 7. Apply coupon usage, decrement generated-voucher usage when applicable, increment `coupons.times_used`, and create earned GENERATE vouchers in `coupon_clients`
@@ -282,7 +362,44 @@ Bill creation uses the shared `pg` pool and lazily installs/calls `create_bill_p
 
 ---
 
-#### `pages/erp/expenses.vue` — Expenses
+#### `pages/erp/recurring-expenses.vue` — Recurring Expense
+
+The sidebar's Expense group contains Daily Expense (the existing `/erp/expenses`
+page) and Recurring Expense. Both links are available in the ERP sidebar on all plans.
+Recurring Expense uses a form company scope, scoped raw-pg APIs and existing category,
+tax-recovery and Accountant-connection components. Users can add/edit fixed monthly
+schedules, pause/resume them, and generate due entries for the selected company.
+Existing expenses are edited/paid on Daily Expense. Variable bills are entered there
+manually; recurring schedules require a fixed positive amount. There is no automatic payment.
+
+`server/utils/recurring-expenses.ts` runs one occurrence per transaction with row locks,
+`SKIP LOCKED`, and a unique schedule/date receipt. It reserves the expense counter,
+inserts a Pending expense including tax recovery and company currency, links the receipt,
+and advances the date atomically with existing deferred accounting triggers. No cash
+ledger movement occurs until paid. Accountant accruals require ERP integration enabled.
+Failed accounting/category checks retain the due date and show an error; other schedules
+continue. The original day survives short months (Jan 31 -> Feb 28 -> Mar 31).
+Resuming catches up missed dates; editing the next date intentionally skips periods.
+Dates cannot be edited to/before the latest generated occurrence.
+
+Vercel calls `GET /api/cron/recurring-expenses` daily at `30 0 * * *` (06:00 India time).
+Due-date comparisons use Asia/Kolkata's UTC+05:30 calendar. The handler requires a
+`CRON_SECRET` of at least 16 characters and bearer authentication; responses are not cached.
+Each run handles at most 200 occurrences, with a 40-second loop budget and SQL/lock
+timeouts. Nitro's Vercel function duration is 60 seconds. Remaining work catches up on
+later runs or via Generate due expenses. The existing five-minute marketing cron remains.
+
+Setup: the owner pushes the updated schema to the development database, then to
+production when ready. There is no separate recurring-expense installer command.
+Configure the production `CRON_SECRET`, then
+deploy with Storetools as the Vercel root. Do not replace an existing marketing secret.
+Vercel scheduling/authentication reference: https://vercel.com/docs/cron-jobs/manage-cron-jobs.
+The existing marketing schedule requires a plan supporting more-than-daily runs.
+Tests: `npm run test:recurring-expenses` validates dates/money and tests concurrent runs,
+catch-up, deleted occurrences, deferred-commit rollback, company boundaries, CRUD handlers
+and cron authentication in a temporary database schema. No production records are changed.
+
+#### `pages/erp/expenses.vue` — Daily Expense
 
 **Fully raw-pg endpoints + TanStack Query on the client — no ZenStack hooks.** All reads/writes go through `/api/accounts/expense*` + `/api/accounts/company-users` (see API table above), but the list is cached and the writes are optimistic via `composables/useExpenses.ts` (`@tanstack/vue-query`).
 
@@ -322,6 +439,10 @@ Lists `Account` records (B2B customers with deferred payment) with their bills.
 - Filter: name/phone search + payment status filter (applied at Account → Bill level)
 - Expandable rows show bills per account; bills further expand to show entries
 - Actions: Edit account, Delete account, Edit bill (→ `edit/[salesId].vue`), Delete bill (soft delete), Update payment status, **Send Reminder** (WhatsApp pending invoice notification)
+- Bill deletion awaits the scoped `billSale/deleteBill` service, then refreshes the
+  table. It restores stock/loyalty and reverses connected staff/native journals;
+  historical old-ledger rows remain frozen. Nested bill actions retain the parent
+  customer's company ID.
 - Create account inline: name, phone, address (street/locality/city/state/pincode)
 - `pending` amount = sum of bills where `paymentStatus = PENDING`; for Split bills, only the Credit portion is counted
 - **Payment method on mark PAID:** when changing a bill status to PAID, a modal prompts for payment method (Cash/UPI/Card), which is saved on the bill
@@ -345,6 +466,15 @@ Bulk-applies a discount percentage to variants using raw SQL (`pg` pool).
 
 > **Moved to dedicated file:** See `ARCH-pages-accounts.md` for full accounts/finance documentation (cash ledger, bank, investment, transfers, transactions).
 
+Verified retry/owner fixes (2026-10-06): Billing saves its request UUID in the
+company-specific draft through `useBillingDraft`. Unchanged retries reuse it,
+including draft reloads. `bill/create.post.ts` uses `saveSourceRequest` inside the
+source transaction: a durable audit receipt returns the original result and a
+changed payload with the same ID returns 409. Source, receipt and postings commit
+together. Sales inline payment status and its paid modal explicitly send the
+bill's company in body/header; dropdown owner scoping remains supported.
+Payment-method changes still replace the native journal and preserve the archive.
+
 ---
 ## Online sales pages
 
@@ -355,3 +485,21 @@ Online bill/sales list. Fetches report data through `/api/report/online` and bil
 ### `pages/erp/online/[salesId].vue`
 
 Online sale detail and bill-edit screen for the selected sales ID. Loads bill and entry data, allows supported bill edits through `/api/billEdit/*` and `/api/bill/update`, and includes notification/WhatsApp-related actions. The page checks `bill.isMarkit` to disable certain editing actions for Markit-origin bills. Review the route's validation and server APIs before assuming all fields are editable.
+
+### Customer credit accounts in Accountant
+
+`pages/erp/accounts.vue` embeds the per-customer
+`Accountant/CustomerLedger.vue`. GET `/api/accountant/erp/customers/:id` shows posted
+receivable lines and their net balance for that company-owned B2B `Account`.
+`20260930140000_customer_account_links` extends ERP source snapshots with
+`sourceParties.creditAccount` (ID/name). Current journal lines are enriched without
+changing balances; new/changed source links validate company ownership. Customers
+share the configured receivable account while retaining separate identities.
+
+Mark paid now uses the scoped `billSale/updatePaymentStatus` API instead of generated
+Bill updates. It preserves invoice `createdAt`, validates payment methods and changes
+only Credit portions of split payments. API failure leaves the modal open. Changing
+a fully paid split bill back to pending requires editing its unpaid split explicitly.
+This retains the existing ERP reverse/repost model at the invoice date; it is not a
+separate dated customer-receipt allocation system. Journal detail/account ledgers
+show the B2B customer identity. Previously excluded source history stays excluded.

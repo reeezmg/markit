@@ -1,3 +1,4 @@
+import {getReadCompanyId} from '~/server/utils/organizationReadScope'
 import { GoogleGenAI } from '@google/genai'
 import { createError, defineEventHandler, getQuery, setHeader } from 'h3'
 import { jsPDF } from 'jspdf'
@@ -7,7 +8,7 @@ import { pool } from '~/server/db'
 
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
-  const companyId = session.data.companyId
+  const companyId = await getReadCompanyId(event)
 
   if (!companyId) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
@@ -77,14 +78,15 @@ export default defineEventHandler(async (event) => {
       title: 'KPI Summary',
       head: [['Metric', 'Value']],
       body: [
+        ['Basis', 'Financial totals: posted accounting; other details: source records'],
         ['Opening Balance', rs(summary.balances.total.opening)],
         ['  • Cash', rs(summary.balances.cash.opening)],
         ['  • Bank', rs(summary.balances.bank.opening)],
         ['Total Sales', rs(summary.sales.total)],
         ['Discount', rs(summary.sales.discount)],
-        ['Tax Collected', rs(summary.sales.tax)],
+        ['Invoice tax', rs(summary.sales.tax)],
         ['Net Profit', rs(summary.profit.netProfit)],
-        ['Total Expense', rs(summary.expenses.total)],
+        ['Posted Expenses', rs(summary.profit.totalExpenses)],
         ['Stock Value (MRP)', rs(summary.stock.atMrp)],
         ['Stock Value (Cost)', rs(summary.stock.atCost)],
         ['Closing Balance', rs(summary.balances.total.closing)],
@@ -128,14 +130,14 @@ export default defineEventHandler(async (event) => {
       title: 'Cash Flow',
       head: [['Bucket', 'Component', 'Amount']],
       body: [
-        ['Cash in', 'Sales', rs(summary.cashFlow.inflows.sales)],
-        ['Cash in', 'Money received', rs(summary.cashFlow.inflows.moneyReceived)],
-        ['Cash in', 'Investments in', rs(summary.cashFlow.inflows.investmentsIn)],
+
+        ['Cash in', 'Posted receipts', rs(summary.cashFlow.inflows.moneyReceived)],
+
         ['Cash in', 'Total inflows', rs(summary.cashFlow.inflows.total)],
-        ['Cash out', 'Expenses', rs(summary.cashFlow.outflows.expenses)],
-        ['Cash out', 'Distributor payments', rs(summary.cashFlow.outflows.distributorPayments)],
-        ['Cash out', 'Money given', rs(summary.cashFlow.outflows.moneyGiven)],
-        ['Cash out', 'Investments out', rs(summary.cashFlow.outflows.investmentsOut)],
+
+
+        ['Cash out', 'Posted payments', rs(summary.cashFlow.outflows.moneyGiven)],
+
         ['Cash out', 'Total outflows', rs(summary.cashFlow.outflows.total)],
         ['Net', 'Net change (closing − opening)', rs(summary.cashFlow.netChange)],
       ],

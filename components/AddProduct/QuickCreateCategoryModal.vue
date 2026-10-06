@@ -1,8 +1,11 @@
 <script setup lang="ts">
-import AwsService from '~/composables/aws'
-import { useCreateCategory } from '~/lib/hooks/category';
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
 
-const useAuth = () => useNuxtApp().$auth
+import AwsService from '~/composables/aws'
+import { useCreateCategory } from '~/lib/company-hooks/category';
+
+const useAuth = () => companyScope.auth
 
 const props = defineProps<{
   modelValue: boolean
@@ -150,6 +153,7 @@ const createCategory = async () => {
     title="Add Category"
       prevent-close
   >
+    <CompanyFormField locked />
     <AddCategoryCreate
       :edit-name="presetName"
       @update="updateForm"

@@ -122,9 +122,15 @@ Missing vs billing.vue: no `discount`, `tax`, `value`, `user`, `userCode`, `user
 1. Validates: items not empty, each item has a category
 2. POSTs to `POST /api/bill/offline` (non-blocking `.then()/.catch()`)
 3. On success: `queryClient.invalidateQueries(['zenstack', 'Product', 'findMany'])` + `reset()`
-4. On error: `reconstructBill(error.data.data)` — repopulates items from error response
+4. On error: keep the draft/request ID and show the server error; do not rebuild an unchanged draft.
 
 **No payment captured** — purely a stock deduction tool.
+
+Verified retry regression (2026-10-06): `bill/offline.post.ts` saves a request
+receipt in the source transaction. Identical retries return that receipt without
+another stock or native inventory movement. `scripts/probe-erp-sidebar-accounting.ts`
+checks this through the actual handler and installed stock-control triggers inside
+an outer rollback, asserting quantities and account totals do not change twice.
 
 **Stock Return:** `BillingStockReturn` component (same as billing.vue). Returned items appended to `items` with `return: true`.
 
@@ -143,3 +149,11 @@ Missing vs billing.vue: no `discount`, `tax`, `value`, `user`, `userCode`, `user
 **ZenStack hooks:** `useFindFirstItem`, `useFindManyCategory`
 
 ---
+
+
+Offline stock retry fix (2026-10-06): `pages/offline/index.vue` persists a request
+ID with its draft, waits for storage synchronization and disables overlapping Saves.
+`bill/offline.post.ts` validates company/quantity and uses `saveSourceRequest`
+inside the stock transaction. The same payload returns its saved receipt without
+moving quantities or native valuation twice; a changed payload under that ID
+requires review (409). This does not change the paused ElectricSQL/offline stack.

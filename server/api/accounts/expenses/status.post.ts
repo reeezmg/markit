@@ -1,9 +1,11 @@
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import { expenseLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
@@ -16,6 +18,7 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
     const updated = await client.query(
       `
       UPDATE expenses
@@ -25,25 +28,6 @@ export default defineEventHandler(async (event) => {
       `,
       [status, companyId, ids],
     )
-
-    // Status drives whether an expense contributes to the account ledger
-    // (only PAID expenses do), so rebuild the ledger for each touched row.
-    for (const row of updated.rows) {
-      await rebuildAccountLedgerForSource(client, {
-        companyId,
-        sourceType: 'EXPENSE',
-        sourceId: row.id,
-        rows: expenseLedgerRows({
-          id: row.id,
-          companyId,
-          totalAmount: row.totalAmount,
-          paymentMode: row.paymentMode,
-          status: row.status,
-          expenseDate: row.expenseDate,
-          note: row.note,
-        }),
-      })
-    }
 
     await client.query('COMMIT')
     return { success: true, count: updated.rowCount }

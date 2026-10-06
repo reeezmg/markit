@@ -1,0 +1,101 @@
+{
+  "at": "2026-09-29T10:34:39.917Z",
+  "groups": [
+    {
+      "name": "Markit",
+      "orders": 5,
+      "products": 5,
+      "value": "6000.00",
+      "supplier": "Distributor present",
+      "payment_type": "CASH"
+    },
+    {
+      "name": "Markit",
+      "orders": 3,
+      "products": 3,
+      "value": "4380.00",
+      "supplier": "Distributor present",
+      "payment_type": "CREDIT"
+    },
+    {
+      "name": "Markit",
+      "orders": 2,
+      "products": 2,
+      "value": "5000.00",
+      "supplier": "No distributor on PO",
+      "payment_type": "CASH"
+    },
+    {
+      "name": "Markit",
+      "orders": 10,
+      "products": 12,
+      "value": "24170.00",
+      "supplier": "No distributor on PO",
+      "payment_type": "No payment type"
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "orders": 12,
+      "products": 12,
+      "value": "116237.00",
+      "supplier": "Distributor present",
+      "payment_type": "CREDIT"
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "orders": 3,
+      "products": 5,
+      "value": "21280.00",
+      "supplier": "Distributor present",
+      "payment_type": "No payment type"
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "orders": 1,
+      "products": 1,
+      "value": "13950.00",
+      "supplier": "No distributor on PO",
+      "payment_type": "CREDIT"
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "orders": 102,
+      "products": 299,
+      "value": "629590.00",
+      "supplier": "No distributor on PO",
+      "payment_type": "No payment type"
+    },
+    {
+      "name": "Ubar Mobiles",
+      "orders": 1,
+      "products": 1,
+      "value": "160.00",
+      "supplier": "Distributor present",
+      "payment_type": "CASH"
+    },
+    {
+      "name": "Ubar Mobiles",
+      "orders": 351,
+      "products": 423,
+      "value": "667776.00",
+      "supplier": "No distributor on PO",
+      "payment_type": "No payment type"
+    },
+    {
+      "name": "reezc",
+      "orders": 1,
+      "products": 1,
+      "value": "0.00",
+      "supplier": "No distributor on PO",
+      "payment_type": "CASH"
+    },
+    {
+      "name": "reezc",
+      "orders": 13,
+      "products": 13,
+      "value": "100975.01",
+      "supplier": "No distributor on PO",
+      "payment_type": "No payment type"
+    }
+  ]
+}

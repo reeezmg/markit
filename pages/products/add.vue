@@ -1,4 +1,8 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import AwsService from '~/composables/aws';
 import { v4 as uuidv4 } from 'uuid';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
@@ -6,7 +10,8 @@ const { printLabel } = usePrint();
 const router = useRouter();
 const route = useRoute();
 const toast = useToast();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { selectOwnerAndReload } = useOrganizationActions();
 const draft = useProductDraft();
 const { invalidateModels } = useModelCache();
 const draftProductIds = computed({
@@ -159,7 +164,9 @@ const refetchEditPurchaseOrder = async () => {
     return { data: null }
   }
   try {
-    editPurchaseOrder.value = await $fetch(`/api/purchaseorder/${editPurchaseOrderId.value}`)
+    const purchaseOrder: any = await $fetch(`/api/purchaseorder/${editPurchaseOrderId.value}`)
+    if (!await selectOwnerAndReload(purchaseOrder.companyId)) return { data: null }
+    editPurchaseOrder.value = purchaseOrder
   } catch (e) {
     console.error('Failed to load purchase order', e)
     editPurchaseOrder.value = null
@@ -471,7 +478,9 @@ const handleProductSelected = (product:any) => {
   persistDraftForm();
 };
 
+const purchaseAccountingAccounts = ref<Record<string,string>>({});
 const handleDistributorValue = (data:any) => {
+  purchaseAccountingAccounts.value = data.accountingAccounts || {};
   console.log('Distributor data received:', data);
   distributorId.value = data.distributorId;
   paymentType.value = data.paymentType;
@@ -1344,6 +1353,7 @@ const saveEditedPurchaseInfo = async () => {
       body: {
         poId: activePoId,
         payment: {
+          accountingAccounts: purchaseAccountingAccounts.value,
           paymentType: paymentType.value || null,
           oldPaymentType: oldPaymentType.value || null,
           billNo: billNo.value || null,
@@ -1391,6 +1401,7 @@ const handleSaveWithPO = async () => {
       body: {
         products: stagedProductsForSave(),
         po: {
+          accountingAccounts: purchaseAccountingAccounts.value,
           paymentType: paymentType.value || null,
           billNo: billNo.value || null,
           distributorId: distributorId.value || null,
@@ -1524,10 +1535,12 @@ const onDeleteDraft = (no: string) => {
 
 
 
+watch(() => companyScope.auth.session.value?.variantInputs, value => { variantInputs.value = value; });
 </script>
 
 <template>
     <UDashboardPanelContent>
+      <CompanyFormField />
           <AddProductTopBar
             ref="addProductTopBarRef"
             @update="handleDistributorValue"

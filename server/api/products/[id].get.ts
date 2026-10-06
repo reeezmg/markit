@@ -1,13 +1,12 @@
 import { defineEventHandler, getRouterParam, createError } from 'h3'
 import { pool } from '~/server/db'
+import { getAuthorizedCompanyIds } from '~/server/utils/organizationReadScope'
 
 // Raw-SQL replacement for useFindUniqueProduct on the edit page.
 // Returns the product with brand/category/subcategory + variants + items,
 // mapped to the camelCase shape the page expects from ZenStack.
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
-  const companyId = session.data?.companyId
-  if (!companyId) throw createError({ statusCode: 401, statusMessage: 'No company in session' })
+  const companyIds = await getAuthorizedCompanyIds(event)
 
   const id = getRouterParam(event, 'id')
   if (!id) throw createError({ statusCode: 400, statusMessage: 'Missing product id' })
@@ -15,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     const productRes = await client.query(
-      `SELECT p.id, p.updated_at, p.name, p.description, p.status,
+      `SELECT p.id, p.company_id, p.updated_at, p.name, p.description, p.status,
               p.category_id, p.subcategory_id, p.brand_id, p.collection_id, p.custom_fields,
               p.dimension_id,
               c.name AS category_name, c.target_audience AS category_target_audience,
@@ -27,8 +26,8 @@ export default defineEventHandler(async (event) => {
        LEFT JOIN brands b ON b.id = p.brand_id
        LEFT JOIN subcategories s ON s.id = p.subcategory_id
        LEFT JOIN collections col ON col.id = p.collection_id
-       WHERE p.id = $1 AND p.company_id = $2`,
-      [id, companyId],
+       WHERE p.id = $1 AND p.company_id = ANY($2::text[])`,
+      [id, companyIds],
     )
     if (!productRes.rowCount) throw createError({ statusCode: 404, statusMessage: 'Product not found' })
     const p = productRes.rows[0]
@@ -56,6 +55,7 @@ export default defineEventHandler(async (event) => {
 
     return {
       id: p.id,
+      companyId: p.company_id,
       updatedAt: p.updated_at,
       name: p.name,
       description: p.description,

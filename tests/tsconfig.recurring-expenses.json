@@ -1,0 +1,14 @@
+{
+  "extends": "../.nuxt/tsconfig.json",
+  "compilerOptions": { "noEmit": true, "skipLibCheck": true },
+  "include": [
+    "../.nuxt/**/*.d.ts",
+    "../layouts/default.vue",
+    "../pages/erp/recurring-expenses.vue",
+    "../utils/recurring-expenses.ts",
+    "../server/utils/recurring-expenses.ts",
+    "../server/api/accounts/recurring-expenses/**/*.ts",
+    "../server/api/cron/recurring-expenses.get.ts",
+    "./recurring-expenses*.ts"
+  ]
+}

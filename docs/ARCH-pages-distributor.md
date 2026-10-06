@@ -1,5 +1,96 @@
 ### Distributor (`/distributor`)
 
+#### Accountant integration (2026-09-27)
+
+Legacy bank disconnection (2026-10-06): supplier credit forms use only native
+`AccountSelection` cash/bank choices. The old BankAccount hook and duplicate bank
+selector are removed. Credit writes validate `accountingAccounts` against active
+same-company native accounts and leave linked MoneyTransaction.account_id null.
+Historical credits resolve recorded `bank:<id>` mappings to the native bank picker
+before editing; runtime setup derives historical role IDs from source records and
+saved mappings without querying the archived bank table.
+
+The main distributor page's Accounts tab replaces the legacy Transactions table with
+`AccountingTransactions.vue`. It groups published journal lines by journal, computes
+running payable from Accounts Payable lines before filtering, and includes reversal
+journals. Date/type/text filters, CSV export, debit/credit details and journal links
+use accounting data. Pay/Add Credit and mapped source edit/delete actions still write
+the original documents. Source refetches refresh the accounting view. Unconnected
+suppliers show an import/setup notice; existing source tables remain in use.
+
+`components/Distributor/Accounting.vue` is embedded in Settings → Account → Purchase
+for the selected distributor's company-scoped account choices, import preview,
+reconciliation and journal lines. Supplier page Accounting buttons are removed.
+Company purchase defaults prefill new transaction choices, while saved source
+snapshots take precedence on edits. `AccountSelection.vue`
+provides transaction overrides in payment/credit forms, the purchase information form
+and purchase-return forms. All compatible active accounts are selectable, including
+Accounts Payable subaccounts. `server/utils/accountant/distributors.ts` owns the
+authenticated `/api/accountant/distributors/:id` GET/PUT and `/:id/import` POST.
+Accountant roles and company authorization apply to configuration and import.
+
+For new sources, company purchase defaults overlay supplier mappings for identical
+roles, and explicit transaction choices overlay both. The company `opening`
+default is now suggested by embedded supplier setup and snapshotted for first
+opening postings during import. Additive migration
+`20261006120000_supplier_opening_account_default` covers generated opening writes
+without replacing the installed posting function. It is tested locally but awaits
+deployment; existing source account snapshots stay frozen.
+
+Four migrations (`20260927120000_distributor_accounting`,
+`20260927123000_distributor_history_projection`, `20260927130000_distributor_purchase_tax`,
+`20260927133000_distributor_receipt_consistency`)
+create mappings/source snapshots, the source projection and deferred triggers. They
+cover SQL and generated Prisma writes to credits, payments, POs, returns, opening dues
+and linked money transactions. A source change and its journals commit or roll back
+together. Changes/deletions reverse the previous journal at its original date before
+posting a replacement; ALL/ACCOUNTS and relevant BANKING locks are enforced. Source
+signatures prevent duplicate imports. Posted lines retain both a distributor ID and
+a company-specific VENDOR contact. Defaults change future sources; an explicit
+transaction account override reverses/reposts the affected source. Audit rows retain
+the source, revision and previous/new journal IDs.
+
+Purchase credits linked to the same PO are grouped by company/distributor. Their
+actual amounts and distributor ownership take precedence over inconsistent historical
+PO headers; the preview lists mismatches. A paid PO with linked payment(s) and no
+credit gets a purchase-side journal. This is disclosed as a difference from legacy
+due, whose calculation only sums credits less payments plus opening due. A PO without
+a credit or payment does not post. PurchaseOrder.tax is a percentage: input tax is
+computed from subtotal less percentage/fixed discount, matching purchase totals.
+When credited amount disagrees with the PO, no unsupported tax split is inferred.
+Standalone product credits debit Stock; amount credits debit the mapped cash/bank.
+Payments debit Payable and credit cash/bank; returns debit Payable and credit stock
+and recorded return tax. Opening due offsets the selected opening account; a missing
+opening date falls immediately before the earliest transaction (1970-01-01 when none).
+Historical import never changes item quantities and does not import bank/cash openings
+or sales/COGS: the new books are not a complete inventory valuation until those other
+workflows/openings are adopted.
+
+Credit writes in the main distributor page now use `/api/distributor/credits` and
+`/api/distributor/credits/:id`, atomically maintaining the linked money transaction
+and new native settlement journals; legacy ledger rows are no longer rebuilt. Deferred receipt checks reject amount/company/status/
+direction changes that would separate a connected credit from its money transaction;
+direct deletion requires removing the credit first. Purchase editing uses `/api/purchaseorder/update`;
+the server reads the stored payment method and rejects unsafe payment-method changes
+with existing settlements. Return deletion uses `DELETE /api/purchasereturn/:id`,
+restores quantities and removes return/payment rows atomically, triggering reversal.
+
+Apply with `npm run db:distributor-accounting`. The explicit-company import CLI is
+`tsx scripts/import-distributor-accounting.ts --company=<id> [--company=<id> ...]`;
+add `--apply` to import and enable posting. It selects standard accounts by code,
+uses Petty Cash for legacy CASH, creates bank mappings without opening amounts,
+and writes `distributor-accounting-preview.json` / `distributor-accounting-import.json`.
+The import preserves existing configured mappings and checks expected versus posted
+payable per distributor, balanced journals and a no-change second sync. Dry runs roll
+back default chart creation as well as other database changes. JSON reports retain
+source conflicts and reconstructed purchases; migration warnings are not rendered in
+the distributor UI. See `scripts/DISTRIBUTOR-ACCOUNTING.md` for operational steps.
+Integration tests run in a temporary isolated schema.
+
+Head-office admins default to the active head office plus active direct branches. Each table uses `useCompanyScope('table')` and `CompanyTableFilter.vue`; filters remain local to the component and participate in query keys. `CompanyFormField.vue` is inside add/edit forms: new forms default to the active head office, while edits load the stored owner through `/api/organization/context`. Related quick-add fields inherit their enclosing form company. Supplier, purchase-order, payment, credit, and purchase-return tables use the local scope. Shared suppliers are selected through company/distributor links. Scoped requests also drive PDF and Excel exports. Requests use explicit company IDs without updating the authentication session or sidebar company. `useOrganizationActions.ts` resolves row ownership locally. Changing an existing record's company opens the transfer preview, requires explicit destination mappings and linked-record confirmation, then moves the saved record in a transaction. Save other form changes before confirming a transfer. See `ARCH-storetools-api.md` for transfer and authorization details.
+
+Payment creation from the payment and PO forms calls `/api/distributor/payments` with `createExpense: true`. This allocates payment/expense numbers and writes the linked source expense in one transaction. Payment edit/delete keeps that source synchronized; native supplier triggers post the payment once and suppress a duplicate ERP expense journal. No old account-ledger rows are created or rebuilt. `CompanySupplierField.vue` and purchase-order options follow the selected form company.
+
 **Files:**
 - `pages/distributor/index.vue` — Distributor list with two-pane split layout (PO + credit tabs)
 - `pages/distributor/credit.vue` — Distributor credit/payment ledger per distributor (legacy — functionality now also in index.vue)
@@ -56,7 +147,7 @@ Fetches `DistributorCompany` records with distributor info + purchase orders + c
 - **Pay flow:** inline modal with date, amount, paymentType (CASH/BANK/UPI/CARD/CHEQUE), remarks. Uses `useCreateDistributorPayment` / `useUpdateDistributorPayment`. UPI QR code shown when paymentType = UPI. Optional PO link search.
 - **Add Credit flow** — modal with **Credit For** select (`PRODUCT` / `AMOUNT`) at top:
   - **PRODUCT** (default): inserts only a `DistributorCredit` row (date, billNo, amount, remarks). Same as legacy behavior.
-  - **AMOUNT**: shows `Payment Mode` (CASH/BANK) and (if BANK) a `Bank Account` select populated from `useFindManyBankAccount` + a `__PRIMARY__` sentinel option. On submit, creates a `MoneyTransaction` through `POST /api/accounts/transactions` (`partyType=SUPPLIER`, `direction=RECEIVED`, `status=PAID`, selected payment account) **then** creates the linked `DistributorCredit`. The transactions endpoint rebuilds the relevant persisted `account_ledger_entries`; the ledger read APIs do not query `money_transactions` directly. Bill No is hidden in AMOUNT mode.
+  - **AMOUNT**: selects CASH/BANK and an optional existing bank identity. `POST /api/distributor/credits` atomically creates the linked MoneyTransaction and DistributorCredit through `distributor-credit-write.ts`; PUT/DELETE maintain both. New supplier triggers post the receipt, with source account selection retained. The retired standalone `/api/accounts/transactions` endpoint is not used; no legacy account-ledger rows are written. Bill No is hidden.
   - Edit also syncs the linked MoneyTransaction's amount/paymentMode/accountId/createdAt when editing an AMOUNT credit.
 - **Delete:**
   - PO → `useDeletePurchaseOrder`.
@@ -107,7 +198,7 @@ A company-wide list of all purchase orders (not grouped by distributor).
 **Pay flow (inline modal for PO):**
 - `useCreateDistributorPayment` with: `purchaseOrder.connect`, `distributorCompany.connect`, and a nested `expense.create`
 - Expense created with: `expensecategoryId = session.purchaseExpenseCategoryId` (the "Purchase" category created at registration), `paymentMode = form.paymentType`, `status = 'Paid'`
-- This means **every distributor payment from the PO page auto-creates an Expense record** — tracked in the accounts ledger
+- PO-page payments create a linked expense source; native supplier settlement posts once while the ERP expense trigger suppresses duplicate posting.
 
 **Expandable rows:** show payment history for that PO (date, type, amount, remarks)
 

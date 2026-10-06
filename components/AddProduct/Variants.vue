@@ -1,4 +1,7 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 import * as z from 'zod';
 import { useForm } from 'vee-validate';
 import { toTypedSchema } from '@vee-validate/zod';
@@ -158,9 +161,9 @@ watch(defaultSizeLabel, (newDefault) => {
   if (!props.editSizeLabel) sizeLabel.value = newDefault;
 });
 
-const variantInputs = ref(useAuth().session.value?.variantInputs)
+const variantInputs = ref(companyScope.auth.session.value?.variantInputs)
 const availableUnits = computed(() => {
-  const units = useAuth().session.value?.variantInputs?.unit
+  const units = companyScope.auth.session.value?.variantInputs?.unit
   return normalizeBillingUnits(units)
 })
 

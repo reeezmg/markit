@@ -30,7 +30,6 @@ const isTimeChanged = ref(false);
 const isAccountStateChanged = ref(false);
 const isAddressStateChanged = ref(false);
 const isDeliveryTypeChanged =ref(false)
-const isOpeningBalanceChanged = ref(false);
 
 const selectedFile = ref<ImageData | null>(null);
 
@@ -45,7 +44,6 @@ const isUpdatingCategory = ref(false);
 const isUpdatingPrinterLabelSize = ref(false);
 const isUpdatingDeliveryConfig = ref(false);
 const isUpdatingDeliveryType = ref(false);
-const isUpdatingOpeningBalance = ref(false);
 
 
 const category = ['Men','Women','Girl','Boy']
@@ -210,11 +208,7 @@ const toDateInputValue = (value?: string | Date | null) => {
   return `${year}-${month}-${day}`;
 };
 
-const toLocalMidnightDate = (value?: string) => {
-  if (!value) return null;
-  const date = new Date(`${value}T00:00:00`);
-  return Number.isNaN(date.getTime()) ? null : date;
-};
+
 
 
 watch(() => storeUniqueName.value, (newName) => {
@@ -276,13 +270,7 @@ watch(accstate, (newState) => {
     newState.gstin !== (useAuth().session.value?.gstin || '');
 }, { deep: true, immediate: true });
 
-watch(openingBalance, (newBalance) => {
-  isOpeningBalanceChanged.value = 
-    newBalance.cash !== (useAuth().session.value?.cash ) ||
-    newBalance.bank !== (useAuth().session.value?.bank ) ||
-    newBalance.openingCashDate !== toDateInputValue(useAuth().session.value?.openingCashDate) ||
-    newBalance.openingBankDate !== toDateInputValue(useAuth().session.value?.openingBankDate);
-}, { deep: true, immediate: true });
+
 
 watch(addstate, (newState) => {
   isAddressStateChanged.value = 
@@ -936,34 +924,6 @@ const onDeliveryTypeChange = () => {
   }
 };
 
-const onOpeningBalanceChange = async () => {
-  isUpdatingOpeningBalance.value = true;
-  try {
-      if (!navigator.onLine) {
-    throw createError({
-      statusCode: 0,
-      statusMessage: 'No internet connection',
-    })
-  }
-   await $fetch('/api/accounts/opening-balances', {
-      method: 'PUT',
-      body: {
-        bank: openingBalance.bank,
-        cash: openingBalance.cash,
-        openingCashDate: toLocalMidnightDate(openingBalance.openingCashDate),
-        openingBankDate: toLocalMidnightDate(openingBalance.openingBankDate),
-      },
-    });
-    updateOpeningBalance(openingBalance);
-    toast.add({ title: 'Opening Balance updated', icon: 'i-heroicons-check-circle' });
-  } catch (error) {
-    console.error(error);
-    toast.add({ title: 'Error updating Opening Balance',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
-  } finally {
-    isUpdatingOpeningBalance.value = false;
-  }
-};
-
 const isStoreIdentityChanged = computed(() => isNameChanged.value || isImageChanged.value || isCategoryChanged.value);
 const isUpdatingStoreIdentity = ref(false);
 
@@ -1549,7 +1509,7 @@ const onAllDeliverySave = () => {
       <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
         <div class="mb-4">
           <h3 class="text-base font-semibold text-gray-900 dark:text-white">Opening Balance</h3>
-          <p class="text-sm text-gray-500 dark:text-gray-400">Your store opening balance details.</p>
+          <p class="text-sm text-gray-500 dark:text-gray-400">Legacy opening balances are read-only. Manage openings in Accountant.</p>
         </div>
         <div class="grid gap-4 md:grid-cols-2">
           <div class="rounded-lg border border-gray-200 p-4 dark:border-gray-700">
@@ -1558,7 +1518,7 @@ const onAllDeliverySave = () => {
               <div class="space-y-2">
                 <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Amount</div>
                 <UInput
-                  v-model="openingBalance.cash"
+                  v-model="openingBalance.cash" disabled
                   type="number"
                   size="md"
                   placeholder="Enter cash amount"
@@ -1567,7 +1527,7 @@ const onAllDeliverySave = () => {
               <div class="space-y-2">
                 <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Date</div>
                 <UInput
-                  v-model="openingBalance.openingCashDate"
+                  v-model="openingBalance.openingCashDate" disabled
                   type="date"
                   size="md"
                   placeholder="Cash opening date"
@@ -1582,7 +1542,7 @@ const onAllDeliverySave = () => {
               <div class="space-y-2">
                 <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Amount</div>
                 <UInput
-                  v-model="openingBalance.bank"
+                  v-model="openingBalance.bank" disabled
                   type="number"
                   size="md"
                   placeholder="Enter bank amount"
@@ -1591,7 +1551,7 @@ const onAllDeliverySave = () => {
               <div class="space-y-2">
                 <div class="text-sm font-medium text-gray-700 dark:text-gray-300">Date</div>
                 <UInput
-                  v-model="openingBalance.openingBankDate"
+                  v-model="openingBalance.openingBankDate" disabled
                   type="date"
                   size="md"
                   placeholder="Bank opening date"
@@ -1604,11 +1564,9 @@ const onAllDeliverySave = () => {
 
       <div class="my-4 flex w-full justify-end">
         <UButton
-            label="Update Opening Balance"
+            label="Manage Opening Balances"
+            to="/accountant/opening-balances"
             size="md"
-            :loading="isUpdatingOpeningBalance"
-            :disabled="!isOpeningBalanceChanged"
-            @click="onOpeningBalanceChange"
           />
       </div>
     </div>

@@ -1,0 +1,1071 @@
+{
+  "version": 1,
+  "applied": false,
+  "mode": "full-history",
+  "counterpartPolicy": "Explicit migration offset for missing cash/bank movements; this is not a complete income/expense history import.",
+  "companies": [
+    {
+      "company": "Markit",
+      "companyId": "02856c86-60b8-41a4-ba18-79dbd55bf016",
+      "accounts": {
+        "cash": {
+          "id": "cmujm9rc000021zuc5rbsml9f",
+          "name": "Petty Cash",
+          "code": "1001",
+          "account_type": "CASH",
+          "is_primary": false,
+          "category": "ASSET"
+        },
+        "bank": {
+          "id": "cmujmn0gh000k10hvc72g30cs",
+          "name": "Primary Bank",
+          "code": null,
+          "account_type": "BANK",
+          "is_primary": true,
+          "category": "ASSET"
+        },
+        "offset": {
+          "id": "c1506ad740e0e116110ffbf5f",
+          "name": "Legacy cash/bank migration clearing",
+          "code": "LCB-CLEARING",
+          "account_type": "EQUITY",
+          "is_primary": false,
+          "category": "EQUITY"
+        }
+      },
+      "legacyRows": 67,
+      "missingJournals": 0,
+      "reusedSources": 13,
+      "unchangedImports": 54,
+      "storeOpenings": [
+        {
+          "account": "CASH",
+          "amount": "0",
+          "date": null,
+          "accountId": "cmujm9rc000021zuc5rbsml9f",
+          "offsetAccountId": "cmujm9rc0000a1zucgh2ii1pt"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "amount": "0",
+          "date": null,
+          "accountId": "cmujmn0gh000k10hvc72g30cs",
+          "offsetAccountId": "cmujm9rc0000a1zucgh2ii1pt"
+        }
+      ],
+      "offsetRequired": false,
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujm9rc000021zuc5rbsml9f",
+          "oldBalance": "-89513.00",
+          "newBalanceBefore": "-88963.00",
+          "toImport": "0.00",
+          "newBalanceAfter": "-88963.00",
+          "difference": "550.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmn0gh000k10hvc72g30cs",
+          "oldBalance": "230.00",
+          "newBalanceBefore": "230.00",
+          "toImport": "0.00",
+          "newBalanceAfter": "230.00",
+          "difference": "0.00"
+        }
+      ],
+      "conflicts": [],
+      "acceptedConflicts": [
+        {
+          "source": "EXPENSE:7a4520f8-f7c4-45fd-82c9-2c6c49ec973a",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "DISTRIBUTOR_PAYMENT:1f2c566f-5993-4ede-ac99-30ad1b6a42fa",
+          "journalId": "cf8b874f12e4340816aaf520b"
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:ae7b0123-50aa-47b0-abb2-fb003d0c7ea7",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "EXPENSE:8da4605d-5cc2-4860-8224-fbf645f17b76",
+          "journalId": "c51ed5be9838e690c646aa1a2"
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:9d1003df-7846-4e3e-b888-ded08d8ffd17",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "EXPENSE:be184ec1-9517-4ab4-b736-a610b81fd7f5",
+          "journalId": "c3c57198b578f0692b30210a2"
+        },
+        {
+          "source": "EXPENSE:52204eed-59f1-4376-b9d3-7e541abd201b",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "DISTRIBUTOR_PAYMENT:c5677bec-2443-45c4-8891-1d60446b026d",
+          "journalId": "c601d9e3389a4349eb30c4fb7"
+        },
+        {
+          "account": "CASH",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "550.00"
+        }
+      ],
+      "entries": [],
+      "reused": [
+        {
+          "source": "DISTRIBUTOR_PAYMENT:3b649029-f071-48a8-ace0-e413948d065a",
+          "journalIds": [
+            "c8b0369aa04fdcfa6c78fe29b"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:c1997378-f6cf-4cf9-af21-3f5baf4c5d2b",
+          "journalIds": [
+            "c91ad4fb35cde19a476760409"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:f66597ec-ac69-447d-85e4-c8a7f5455a28",
+          "journalIds": [
+            "cd3fe0ec09e8ff2d4f16ef204"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:0bce2676-8a0f-441d-bd43-5ab130f18d1c",
+          "journalIds": [
+            "c1e3936981b9b5dce58802c14"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:09388a6f-4a74-45dd-a09a-1ac43aa2b111",
+          "journalIds": [
+            "cd586095d8d34fd0f3666b1d4"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:1f2c566f-5993-4ede-ac99-30ad1b6a42fa",
+          "journalIds": [
+            "cf8b874f12e4340816aaf520b"
+          ]
+        },
+        {
+          "source": "EXPENSE:7a4520f8-f7c4-45fd-82c9-2c6c49ec973a",
+          "journalIds": [
+            "cf8b874f12e4340816aaf520b"
+          ]
+        },
+        {
+          "source": "EXPENSE:8da4605d-5cc2-4860-8224-fbf645f17b76",
+          "journalIds": [
+            "c51ed5be9838e690c646aa1a2"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:ae7b0123-50aa-47b0-abb2-fb003d0c7ea7",
+          "journalIds": [
+            "c51ed5be9838e690c646aa1a2"
+          ]
+        },
+        {
+          "source": "EXPENSE:be184ec1-9517-4ab4-b736-a610b81fd7f5",
+          "journalIds": [
+            "c3c57198b578f0692b30210a2"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:9d1003df-7846-4e3e-b888-ded08d8ffd17",
+          "journalIds": [
+            "c3c57198b578f0692b30210a2"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:c5677bec-2443-45c4-8891-1d60446b026d",
+          "journalIds": [
+            "c601d9e3389a4349eb30c4fb7"
+          ]
+        },
+        {
+          "source": "EXPENSE:52204eed-59f1-4376-b9d3-7e541abd201b",
+          "journalIds": [
+            "c601d9e3389a4349eb30c4fb7"
+          ]
+        }
+      ]
+    },
+    {
+      "company": "Ubar Mobiles",
+      "companyId": "3c431903-0d62-4f8d-89aa-b8b456c179f3",
+      "accounts": {
+        "cash": {
+          "id": "cmujm9urx00141zuc2nw3klxy",
+          "name": "Petty Cash",
+          "code": "1001",
+          "account_type": "CASH",
+          "is_primary": false,
+          "category": "ASSET"
+        },
+        "bank": {
+          "id": "cmujmnrgy005u10hvzzy7byk9",
+          "name": "Primary Bank",
+          "code": null,
+          "account_type": "BANK",
+          "is_primary": true,
+          "category": "ASSET"
+        },
+        "offset": {
+          "id": "c7d15c96a5897787f4f3db365",
+          "name": "Legacy cash/bank migration clearing",
+          "code": "LCB-CLEARING",
+          "account_type": "EQUITY",
+          "is_primary": false,
+          "category": "EQUITY"
+        }
+      },
+      "legacyRows": 289,
+      "missingJournals": 0,
+      "reusedSources": 2,
+      "unchangedImports": 287,
+      "storeOpenings": [
+        {
+          "account": "CASH",
+          "amount": "0",
+          "date": null,
+          "accountId": "cmujm9urx00141zuc2nw3klxy",
+          "offsetAccountId": "cmujm9ury001c1zucnqcfpin2"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "amount": "0",
+          "date": null,
+          "accountId": "cmujmnrgy005u10hvzzy7byk9",
+          "offsetAccountId": "cmujm9ury001c1zucnqcfpin2"
+        }
+      ],
+      "offsetRequired": false,
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujm9urx00141zuc2nw3klxy",
+          "oldBalance": "134881.10",
+          "newBalanceBefore": "134881.10",
+          "toImport": "0.00",
+          "newBalanceAfter": "134881.10",
+          "difference": "0.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmnrgy005u10hvzzy7byk9",
+          "oldBalance": "3364.99",
+          "newBalanceBefore": "3364.99",
+          "toImport": "0.00",
+          "newBalanceAfter": "3364.99",
+          "difference": "0.00"
+        }
+      ],
+      "conflicts": [],
+      "acceptedConflicts": [],
+      "entries": [],
+      "reused": [
+        {
+          "source": "DISTRIBUTOR_PAYMENT:36b3af14-db93-4585-a50d-6fd534e0f5c9",
+          "journalIds": [
+            "c245fc5f2e2f8df1d66a53106"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:d7eabc2b-1f2b-49c8-87e3-e9b3d19474bc",
+          "journalIds": [
+            "c4af4ffbda182ea62b4489585"
+          ]
+        }
+      ]
+    },
+    {
+      "company": "reezc",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "accounts": {
+        "cash": {
+          "id": "cmujj2907000210el5xemzhdq",
+          "name": "Petty Cash",
+          "code": "1001",
+          "account_type": "CASH",
+          "is_primary": false,
+          "category": "ASSET"
+        },
+        "bank": {
+          "id": "cmujmoiog00dn10hvj2ikxi6c",
+          "name": "Primary Bank",
+          "code": null,
+          "account_type": "BANK",
+          "is_primary": true,
+          "category": "ASSET"
+        },
+        "offset": {
+          "id": "c51a769cd872be4e2bd072537",
+          "name": "Legacy cash/bank migration clearing",
+          "code": "LCB-CLEARING",
+          "account_type": "EQUITY",
+          "is_primary": false,
+          "category": "EQUITY"
+        }
+      },
+      "legacyRows": 217,
+      "missingJournals": 0,
+      "reusedSources": 2,
+      "unchangedImports": 213,
+      "storeOpenings": [
+        {
+          "account": "CASH",
+          "amount": "0",
+          "date": null,
+          "accountId": "cmujj2907000210el5xemzhdq",
+          "offsetAccountId": "cmujj2909000a10ell3mfi6f5"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "amount": "0",
+          "date": null,
+          "accountId": "cmujmoiog00dn10hvj2ikxi6c",
+          "offsetAccountId": "cmujj2909000a10ell3mfi6f5"
+        }
+      ],
+      "offsetRequired": false,
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujj2907000210el5xemzhdq",
+          "oldBalance": "167534.80",
+          "newBalanceBefore": "167534.80",
+          "toImport": "0.00",
+          "newBalanceAfter": "167534.80",
+          "difference": "0.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmoiog00dn10hvj2ikxi6c",
+          "oldBalance": "3291.00",
+          "newBalanceBefore": "3891.00",
+          "toImport": "0.00",
+          "newBalanceAfter": "3891.00",
+          "difference": "600.00"
+        }
+      ],
+      "conflicts": [],
+      "acceptedConflicts": [
+        {
+          "source": "DISTRIBUTOR_PAYMENT:6d88bb54-75ea-4e25-b498-409d8c70cee3",
+          "reason": "Existing source posting differs in account, date or amount",
+          "legacy": [
+            [
+              "cmujmoiog00dn10hvj2ikxi6c|2026-05-08 06:13:26.1",
+              "-600.00"
+            ]
+          ],
+          "posted": []
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "600.00"
+        }
+      ],
+      "entries": [],
+      "reused": [
+        {
+          "source": "DISTRIBUTOR_PAYMENT:f6aad52a-4025-4fef-8bc0-da0bc2b91872",
+          "journalIds": [
+            "c5424bed1bf92028ffd321ded"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:6d88bb54-75ea-4e25-b498-409d8c70cee3",
+          "journalIds": [
+            "cebc06d91c5f74e493b53e902"
+          ]
+        }
+      ]
+    },
+    {
+      "company": "ORIGINALS CLOTHING",
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "accounts": {
+        "cash": {
+          "id": "cmujk8pon002x10elczamrss3",
+          "name": "Petty Cash",
+          "code": "1001",
+          "account_type": "CASH",
+          "is_primary": false,
+          "category": "ASSET"
+        },
+        "bank": {
+          "id": "cmujmot8b00ga10hv36n32efa",
+          "name": "Primary Bank",
+          "code": null,
+          "account_type": "BANK",
+          "is_primary": true,
+          "category": "ASSET"
+        },
+        "offset": {
+          "id": "c58536acf0605b6a0a02c4ff2",
+          "name": "Legacy cash/bank migration clearing",
+          "code": "LCB-CLEARING",
+          "account_type": "EQUITY",
+          "is_primary": false,
+          "category": "EQUITY"
+        }
+      },
+      "legacyRows": 1889,
+      "missingJournals": 0,
+      "reusedSources": 72,
+      "unchangedImports": 1698,
+      "storeOpenings": [
+        {
+          "account": "CASH",
+          "amount": "18032",
+          "date": "2025-11-30 00:00:00",
+          "accountId": "cmujk8pon002x10elczamrss3",
+          "offsetAccountId": "cmujk8pon003510elkghes3yp"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "amount": "73243.6",
+          "date": "2025-11-30 00:00:00",
+          "accountId": "cmujmot8b00ga10hv36n32efa",
+          "offsetAccountId": "cmujk8pon003510elkghes3yp"
+        }
+      ],
+      "offsetRequired": false,
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujk8pon002x10elczamrss3",
+          "oldBalance": "-573562.65",
+          "newBalanceBefore": "-601002.65",
+          "toImport": "0.00",
+          "newBalanceAfter": "-601002.65",
+          "difference": "-27440.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmot8b00ga10hv36n32efa",
+          "oldBalance": "533399.81",
+          "newBalanceBefore": "284157.81",
+          "toImport": "0.00",
+          "newBalanceAfter": "284157.81",
+          "difference": "-249242.00"
+        }
+      ],
+      "conflicts": [],
+      "acceptedConflicts": [
+        {
+          "account": "CASH",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "-27440.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "-249242.00"
+        }
+      ],
+      "entries": [],
+      "reused": [
+        {
+          "source": "OPENING:6980e6e4-7d5d-413c-9554-24f385c9b853:CASH",
+          "journalIds": [
+            "ce9c3de5b9518af6a2de822a9"
+          ]
+        },
+        {
+          "source": "OPENING:6980e6e4-7d5d-413c-9554-24f385c9b853:PRIMARY_BANK",
+          "journalIds": [
+            "c246c94ed0871a1e9f0f2ecce"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:2f30b72c-423e-493b-a698-1420c7db05a3",
+          "journalIds": [
+            "ce96d19fa4ba77ee0786b478d"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:a50aa8d9-61e0-4e2b-bf99-c424fb2d1554",
+          "journalIds": [
+            "c566af74c2c201a91f23431cd"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:59d3f449-7da5-4fda-b649-2b9dc41da6ea",
+          "journalIds": [
+            "ca6cd2a4b3809cecc10381616"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:df6a2bfb-2111-4d0b-b395-9771bda89cc4",
+          "journalIds": [
+            "cc5ae76b032d02507e654f44b"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:dd427926-7427-402d-ac1f-51cbe38af4fc",
+          "journalIds": [
+            "c0d6c7cf07421a08528752876"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:0bdd3b5f-e94a-4acb-a1b9-cc5180616abb",
+          "journalIds": [
+            "c5eb369425e87bb30dfbe2c7b"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:dc7389b4-6fee-4284-9be4-a2770895fcf5",
+          "journalIds": [
+            "cf7bd02f1399ce8f9dbaf5507"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:96647607-83a9-4419-95a5-d639baf9abb3",
+          "journalIds": [
+            "cea3bced67e6e7c393a41abc1"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:257343e0-af5f-44a4-8219-d09a041ad9f6",
+          "journalIds": [
+            "c94b6b39faec0028ac4e89732"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:17ca4684-a55f-4264-b848-f1b59a909e34",
+          "journalIds": [
+            "c3bfeca08795e413bfc8c1910"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:fa5e9091-b516-4a77-9ef5-fdca2247cbc3",
+          "journalIds": [
+            "cf01c202c54b4f346bf1009fb"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:9c5d0116-3e31-431e-8383-1aeb194cb3d4",
+          "journalIds": [
+            "c68a840fbb0668fa2d63189c1"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:a1dea4e5-b337-4b50-882a-20c8fba142f7",
+          "journalIds": [
+            "cc2788f2c55b37362ed022bce"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:abbc65d8-a373-4942-a00c-5b5e270a32d3",
+          "journalIds": [
+            "c345c4b5d19aadc2b9e606862"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:1f605e32-1c54-4922-8a92-1b536924667a",
+          "journalIds": [
+            "cbce7794d3de6d7974df81cd6"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:bea0b866-e6ac-4a43-8449-eaa13b2b7601",
+          "journalIds": [
+            "c1a8f329ac7f371f575468454"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:d3a0ae50-c7c1-4ea3-aaaa-2810b1725f1d",
+          "journalIds": [
+            "c359961b1befd53d9ec655889"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:2e81073d-c304-44bc-a4bd-e47a66bd59cc",
+          "journalIds": [
+            "c88f3361db9216898d08d35f1"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:4d7df4ec-29a1-4a63-a1d0-d4a6baf24b8e",
+          "journalIds": [
+            "cba923a86dc96d858f2c2151f"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:e96d72f1-c77b-4fde-a31d-d1aaed2965b6",
+          "journalIds": [
+            "c4f85049aa90521222a0addfe"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:f6306f12-6211-4234-b40e-5201f0b20373",
+          "journalIds": [
+            "c278f296eb1f3347e99793b1c"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:6714795b-0f4b-409d-8cb0-d029c1aeb3fa",
+          "journalIds": [
+            "ca262cbc424edafa18ec5cdd8"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:fcd59081-f9b1-4d3f-8338-158225f54cc4",
+          "journalIds": [
+            "c7ef283b5158e93eab10ba227"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:1e4503df-f044-4b71-8d4a-4f2955648dcd",
+          "journalIds": [
+            "ce54364433e1dc5cd9d1c0bcf"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:885ce2be-c549-469f-bb6d-8758d504a9db",
+          "journalIds": [
+            "c98eabfe223871e93fcc56c2e"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:12650327-f937-4a7e-bef6-034429875203",
+          "journalIds": [
+            "c706af7567e1f84f87f389ede"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:bf17c264-c55d-4c5d-9ffa-7cef5a1f63d0",
+          "journalIds": [
+            "c66e6401aa82bf255a8f1c085"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:711fe6d5-057a-42f7-a3da-56ac932fd58d",
+          "journalIds": [
+            "c14363521cebd3eabca078f0f"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:acc167ae-08b8-44f4-a5da-afc552398958",
+          "journalIds": [
+            "ccd954952042155e8ee809776"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:8d08ce55-6a07-4b78-ad5d-368fe3cc6a0d",
+          "journalIds": [
+            "ca712f98aa3c4988eb46b929d"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:c4483890-ac32-4599-b6d9-37842691475e",
+          "journalIds": [
+            "c10a15f35f632db2864abe73a"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:80fdd299-bf4d-436b-85a2-cdbea6f0874f",
+          "journalIds": [
+            "c7dc2640834a70606e4786316"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:99e4f78b-048b-45cb-a47e-59ba10ff58b2",
+          "journalIds": [
+            "c2e3bd61b0fa98c0df2dd01b2"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:c84e0753-6071-4cb8-a5c8-1d53d923a712",
+          "journalIds": [
+            "ce6be0785106167b49ae82f89"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:b6ff5e55-3fcf-45c2-8d59-06a6f17fe231",
+          "journalIds": [
+            "c838342ab4387fd8e591ecb6a"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:35e962ca-0412-48e2-bd81-4ecb38c312bb",
+          "journalIds": [
+            "cdc4b54ce159998cffa56e5be"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:9fc7214f-0ace-41b1-a663-1b5cd770622d",
+          "journalIds": [
+            "ca42d02776a8bef445f373920"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:e859d11d-5959-4e34-b093-f5eaa2aa1545",
+          "journalIds": [
+            "ceb785ded4bce74ed1ba1d063"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:f026ad7e-d424-44f1-875c-8d39a646e0bf",
+          "journalIds": [
+            "c979f78f3eae465d446177217"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:70bb485c-51c4-4505-b844-284f26b869f3",
+          "journalIds": [
+            "c2eb6d54a930869a493f61398"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:fd8ac101-8c40-4ae0-8fd4-5cb469ab2399",
+          "journalIds": [
+            "cd64b245d57ef95d5ae02c475"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:f4c0a72b-dd2b-481e-a6ae-a6c7c00291f5",
+          "journalIds": [
+            "c5bb29ce7b74460099a24e2d9"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:7f9102c7-3f5a-4979-aa5c-6532e3e0cc47",
+          "journalIds": [
+            "cfce3a9a83888be701a4be075"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:8e31c882-24a0-41e9-8388-3c3e475a1269",
+          "journalIds": [
+            "cad7e724234ca036f64565458"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:06b95430-0dcb-4cf1-bddb-a74940b490ee",
+          "journalIds": [
+            "c2f9d01d340e7cb78c7a11430"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:08d458c9-7504-411e-acd1-976379009f15",
+          "journalIds": [
+            "c179336e0ffda5c6f977db39f"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:791017fe-d732-4d34-bcfa-2e6c9c05ee51",
+          "journalIds": [
+            "cd93639e8cb273bbd584077a0"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:30d1c9c0-7532-442d-8bfc-1007f9769f25",
+          "journalIds": [
+            "cba62031357415e3e286cfa88"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:828471ef-e482-43d8-8f62-86f700520d5d",
+          "journalIds": [
+            "c69d509b842d14e1b169bcd11"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:d2fb5736-2c5e-40d4-819a-1f69023d8950",
+          "journalIds": [
+            "c8bb6a319fc1f3813aedb96c6"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:be9af736-ca5f-4f16-a5db-63c6a356ce30",
+          "journalIds": [
+            "cc4c5f371785bbfd5fa9e357e"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:28ec1621-ad83-43eb-9acd-d6b1d72f2c31",
+          "journalIds": [
+            "cba0020aacc8bbb8d395a4631"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:becac701-c008-4771-84d9-bae074203bcb",
+          "journalIds": [
+            "cb4603c0115b1834c95422aab"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:1a15f60a-2401-436e-95dc-a0e26ff70aec",
+          "journalIds": [
+            "c19ba262782465966dafd180e"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:ddc4aa0d-e46c-41fd-853a-966df23fcb70",
+          "journalIds": [
+            "cdd194fe5779ceb47e0db8e90"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:a612a52e-c64d-46b7-9146-e3662ef460c9",
+          "journalIds": [
+            "c66c9597224b67e29b45f74a8"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:536ebe60-d3c7-46ec-a55a-107aef892152",
+          "journalIds": [
+            "c0d5442743a4d7d260b35549a"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:ce75f99a-bb2c-4cca-aa54-e7ea8719da5d",
+          "journalIds": [
+            "c71f3fad4d05384636d853420"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:7c15d9b8-ffca-4952-b55a-0d4d4c2213de",
+          "journalIds": [
+            "cb89f6875880518533ebed6dc"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:5a456418-829c-4e37-94a7-b2fabfcb489f",
+          "journalIds": [
+            "c608429333935b7d035c58882"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:679e8c6b-2c5c-4f75-bf5f-c5027ed17a11",
+          "journalIds": [
+            "c9567c335376dfcb03c6103e0"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:45ffc622-cfbb-48cc-af45-7f3ff51dada7",
+          "journalIds": [
+            "c2777999b0e8a25422ccf4bb3"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:deb72bc6-3f22-4217-8bed-ca1fca7c2b2b",
+          "journalIds": [
+            "cd3d7ee63b20cded7b514d258"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:13f7b269-281b-4f69-81e2-0bd2c544c145",
+          "journalIds": [
+            "c4dc5414ac44042413e2aeac3"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:9d4fc7a8-cd17-43be-8c67-3666f9cde809",
+          "journalIds": [
+            "cd3652932675f7603de47bdb0"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:ec363af7-a8f8-4c9a-a5d0-e0942e7238c4",
+          "journalIds": [
+            "c798e541bd93a2dff7ae78e97"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:3cb41903-76a2-4937-98d2-574e6aac4692",
+          "journalIds": [
+            "cbd477ba4530d2e53d7b393d8"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:39a30be0-7358-4854-a9cd-71248842634a",
+          "journalIds": [
+            "c34835e1b4852f1ad36214e61"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:393d62fe-cd26-48cd-937a-fee8237953cf",
+          "journalIds": [
+            "cf2df70d40d46ff5d5eefb39f"
+          ]
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:92280a53-a263-47e9-881d-953e0c3529fa",
+          "journalIds": [
+            "c3d8e7f4a7675f4f77924e563"
+          ]
+        }
+      ]
+    }
+  ],
+  "through": "2026-09-29 23:59:59.999",
+  "review": {
+    "version": 1,
+    "through": "2026-09-29 23:59:59.999",
+    "decision": "User confirmed new accounting is authoritative; preserve current postings and accept traced differences.",
+    "companies": [
+      {
+        "companyId": "02856c86-60b8-41a4-ba18-79dbd55bf016",
+        "company": "Markit",
+        "conflicts": [
+          {
+            "source": "EXPENSE:7a4520f8-f7c4-45fd-82c9-2c6c49ec973a",
+            "reason": "Two legacy sources refer to the same posted journal",
+            "also": "DISTRIBUTOR_PAYMENT:1f2c566f-5993-4ede-ac99-30ad1b6a42fa",
+            "journalId": "cf8b874f12e4340816aaf520b"
+          },
+          {
+            "source": "DISTRIBUTOR_PAYMENT:ae7b0123-50aa-47b0-abb2-fb003d0c7ea7",
+            "reason": "Two legacy sources refer to the same posted journal",
+            "also": "EXPENSE:8da4605d-5cc2-4860-8224-fbf645f17b76",
+            "journalId": "c51ed5be9838e690c646aa1a2"
+          },
+          {
+            "source": "DISTRIBUTOR_PAYMENT:9d1003df-7846-4e3e-b888-ded08d8ffd17",
+            "reason": "Two legacy sources refer to the same posted journal",
+            "also": "EXPENSE:be184ec1-9517-4ab4-b736-a610b81fd7f5",
+            "journalId": "c3c57198b578f0692b30210a2"
+          },
+          {
+            "source": "EXPENSE:52204eed-59f1-4376-b9d3-7e541abd201b",
+            "reason": "Two legacy sources refer to the same posted journal",
+            "also": "DISTRIBUTOR_PAYMENT:c5677bec-2443-45c4-8891-1d60446b026d",
+            "journalId": "c601d9e3389a4349eb30c4fb7"
+          },
+          {
+            "account": "CASH",
+            "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+            "difference": "550.00"
+          }
+        ],
+        "reconciliation": [
+          {
+            "account": "CASH",
+            "accountId": "cmujm9rc000021zuc5rbsml9f",
+            "oldBalance": "-89513.00",
+            "newBalanceBefore": "-6050.00",
+            "toImport": "-82913.00",
+            "newBalanceAfter": "-88963.00",
+            "difference": "550.00"
+          },
+          {
+            "account": "PRIMARY_BANK",
+            "accountId": "cmujmn0gh000k10hvc72g30cs",
+            "oldBalance": "230.00",
+            "newBalanceBefore": "0.00",
+            "toImport": "230.00",
+            "newBalanceAfter": "230.00",
+            "difference": "0.00"
+          }
+        ]
+      },
+      {
+        "companyId": "3c431903-0d62-4f8d-89aa-b8b456c179f3",
+        "company": "Ubar Mobiles",
+        "conflicts": [],
+        "reconciliation": [
+          {
+            "account": "CASH",
+            "accountId": "cmujm9urx00141zuc2nw3klxy",
+            "oldBalance": "134881.10",
+            "newBalanceBefore": "-21500.00",
+            "toImport": "156381.10",
+            "newBalanceAfter": "134881.10",
+            "difference": "0.00"
+          },
+          {
+            "account": "PRIMARY_BANK",
+            "accountId": "cmujmnrgy005u10hvzzy7byk9",
+            "oldBalance": "3364.99",
+            "newBalanceBefore": "0.00",
+            "toImport": "3364.99",
+            "newBalanceAfter": "3364.99",
+            "difference": "0.00"
+          }
+        ]
+      },
+      {
+        "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+        "company": "reezc",
+        "conflicts": [
+          {
+            "source": "DISTRIBUTOR_PAYMENT:6d88bb54-75ea-4e25-b498-409d8c70cee3",
+            "reason": "Existing source posting differs in account, date or amount",
+            "legacy": [
+              [
+                "cmujmoiog00dn10hvj2ikxi6c|2026-05-08 06:13:26.1",
+                "-600.00"
+              ]
+            ],
+            "posted": []
+          },
+          {
+            "account": "PRIMARY_BANK",
+            "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+            "difference": "600.00"
+          }
+        ],
+        "reconciliation": [
+          {
+            "account": "CASH",
+            "accountId": "cmujj2907000210el5xemzhdq",
+            "oldBalance": "167534.80",
+            "newBalanceBefore": "-200.00",
+            "toImport": "167734.80",
+            "newBalanceAfter": "167534.80",
+            "difference": "0.00"
+          },
+          {
+            "account": "PRIMARY_BANK",
+            "accountId": "cmujmoiog00dn10hvj2ikxi6c",
+            "oldBalance": "3291.00",
+            "newBalanceBefore": "0.00",
+            "toImport": "3891.00",
+            "newBalanceAfter": "3891.00",
+            "difference": "600.00"
+          }
+        ]
+      },
+      {
+        "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+        "company": "ORIGINALS CLOTHING",
+        "conflicts": [
+          {
+            "account": "CASH",
+            "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+            "difference": "-27440.00"
+          },
+          {
+            "account": "PRIMARY_BANK",
+            "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+            "difference": "-249242.00"
+          }
+        ],
+        "reconciliation": [
+          {
+            "account": "CASH",
+            "accountId": "cmujk8pon002x10elczamrss3",
+            "oldBalance": "-573562.65",
+            "newBalanceBefore": "-710881.00",
+            "toImport": "109878.35",
+            "newBalanceAfter": "-601002.65",
+            "difference": "-27440.00"
+          },
+          {
+            "account": "PRIMARY_BANK",
+            "accountId": "cmujmot8b00ga10hv36n32efa",
+            "oldBalance": "533399.81",
+            "newBalanceBefore": "-2111292.00",
+            "toImport": "2395449.81",
+            "newBalanceAfter": "284157.81",
+            "difference": "-249242.00"
+          }
+        ]
+      }
+    ]
+  },
+  "blocked": false
+}

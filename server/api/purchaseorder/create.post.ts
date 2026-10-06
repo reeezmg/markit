@@ -1,7 +1,8 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { prisma } from '~/server/prisma';
 
 export default eventHandler(async (event) => {
-    const session = await useAuthSession(event);
+    const session = await useCompanyRequestSession(event);
 
       const res = await prisma.purchaseOrder.create({        
        data:{

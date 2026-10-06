@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { useFindManyCompanyUser } from '~/lib/hooks/company-user';
-import { useFindManyShift, useDeleteShift } from '~/lib/hooks/shift';
-import { useFindManyShiftAssignment, useCreateShiftAssignment, useDeleteShiftAssignment } from '~/lib/hooks/shift-assignment';
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
 
-const useAuth = () => useNuxtApp().$auth
+import { defaultShiftPolicy, shiftPolicy, localDateKey } from '~/utils/shift-policy'
+import { useFindManyCompanyUser } from '~/lib/company-hooks/company-user';
+import { useFindManyShift, useDeleteShift } from '~/lib/company-hooks/shift';
+import { useFindManyShiftAssignment, useCreateShiftAssignment, useDeleteShiftAssignment } from '~/lib/company-hooks/shift-assignment';
+
+const useAuth = () => companyScope.auth
 const toast = useToast()
 const companyId = computed(() => useAuth().session.value?.companyId)
 const money = (v: any) => `â‚¹${Number(v ?? 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
@@ -35,10 +39,29 @@ const shiftColumns = [
 ]
 
 // ─── Create / edit shift ───
+const shiftEditorBody = ref<HTMLElement | null>(null)
+function scrollShiftSection(id: string) {
+    shiftEditorBody.value?.querySelector('#shift-section-' + id)?.scrollIntoView({ block: 'start', behavior: 'auto' })
+}
+const missingCheckoutHelp: Record<string, string> = {
+    LEGACY: 'Use recorded complete work periods as before. An unfinished check-in adds no work time; short-hours deductions may still apply.',
+    REVIEW: 'Stop the payroll run until this missing checkout is corrected. No end time is guessed.',
+    ABSENT: 'Treat the day as absent in payroll and apply the configured absence or paid-leave rules.',
+    HALF_DAY: 'Treat the day as half-day in payroll and apply the configured half-day deduction.',
+    SHIFT_END: 'For payroll only, assume the employee left at the scheduled shift end. The original punch record is not changed.',
+}
+const leaveHelp: Record<string, string> = {
+    casual: 'Paid days for approved personal or occasional leave. Example: 1 day every month.',
+    sick: 'Paid days for approved illness-related leave. Example: 6 days every year.',
+    earned: 'The paid allowance for approved earned leave. This is a fixed allowance per period, not automatic accrual from days worked.',
+    other: 'Paid days for other approved leave categories. Set 0 if these should be unpaid.',
+}
 const shiftModalOpen = ref(false)
 const isSaving = ref(false)
 const editingShift = ref<any>(null)
 const shiftForm = reactive({
+    policy: { ...defaultShiftPolicy },
+    effectiveFrom: localDateKey(new Date()),
     name: '',
     startTime: '09:30',
     endTime: '18:00',
@@ -66,8 +89,10 @@ const shiftForm = reactive({
     earlyExitGraceMinutes: 0 as number,
     earlyExitFine: 0 as number,
 })
-const overtimeModeOptions = ['NONE', 'HOURLY', 'DAILY']
-const leavePeriodOptions = ['WEEKLY', 'MONTHLY', 'YEARLY']
+const compensationOptions = [{label:'None',value:'NONE'},{label:'Extra pay',value:'PAY'},{label:'Compensatory leave',value:'COMP_OFF'},{label:'Pay and compensatory leave',value:'BOTH'}]
+const missingCheckoutOptions = [{label:'Keep recorded-hours behavior',value:'LEGACY'},{label:'Require correction before payroll',value:'REVIEW'},{label:'Count as absent',value:'ABSENT'},{label:'Count as half-day',value:'HALF_DAY'},{label:'Assume scheduled shift end',value:'SHIFT_END'}]
+const overtimeModeOptions = [{ label: 'No overtime pay', value: 'NONE' }, { label: 'Pay per overtime hour', value: 'HOURLY' }, { label: 'Fixed extra pay for the day', value: 'DAILY' }]
+const leavePeriodOptions = [{ label: 'Every week', value: 'WEEKLY' }, { label: 'Every month', value: 'MONTHLY' }, { label: 'Every year', value: 'YEARLY' }]
 const leavePolicyRows = [
     { key: 'casual', label: 'Casual Leave (CL)', days: 'casualLeaveDays', period: 'casualLeavePeriod' },
     { key: 'sick', label: 'Sick Leave (SL)', days: 'sickLeaveDays', period: 'sickLeavePeriod' },
@@ -94,8 +119,11 @@ const toggleWorkDay = (day: string, checked: boolean) => {
 
 const DeleteShift = useDeleteShift()
 
-const openCreateShift = () => {
+const openCreateShift = async () => {
+    await companyScope.beginForm();
     editingShift.value = null
+    shiftForm.policy = { ...defaultShiftPolicy }
+    shiftForm.effectiveFrom = localDateKey(new Date())
     shiftForm.name = ''
     shiftForm.startTime = '09:30'
     shiftForm.endTime = '18:00'
@@ -125,8 +153,14 @@ const openCreateShift = () => {
     shiftModalOpen.value = true
 }
 
-const openEditShift = (shift: any) => {
+const openEditShift = async (shift: any) => {
+    await companyScope.beginForm(shift?.id ? { model: 'Shift', id: shift.id, companyId: shift.companyId } : null);
     editingShift.value = shift
+    shiftForm.policy = shiftPolicy(shift)
+    const latest = Array.isArray(shift.policyHistory) ? shift.policyHistory.at(-1)?.effectiveFrom : null
+    const next = latest && latest >= localDateKey(new Date()) ? new Date(latest + 'T00:00:00') : null
+    if (next) next.setDate(next.getDate() + 1)
+    shiftForm.effectiveFrom = localDateKey(next || new Date())
     shiftForm.name = shift.name
     shiftForm.startTime = shift.startTime
     shiftForm.endTime = shift.endTime
@@ -157,6 +191,7 @@ const openEditShift = (shift: any) => {
 }
 
 const submitShift = async () => {
+    if (isSaving.value) return
     if (!shiftForm.name.trim()) {
         toast.add({ title: 'Shift name is required', color: 'red' })
         return
@@ -170,6 +205,8 @@ const submitShift = async () => {
     isSaving.value = true
     try {
         const data = {
+            policy: { ...shiftForm.policy },
+            effectiveFrom: shiftForm.effectiveFrom,
             name: shiftForm.name.trim(),
             startTime: shiftForm.startTime,
             endTime: shiftForm.endTime,
@@ -210,7 +247,7 @@ const submitShift = async () => {
         shiftModalOpen.value = false
         await refetchShifts()
     } catch (err: any) {
-        toast.add({ title: 'Could not save shift', description: err?.message, color: 'red' })
+        toast.add({ title: 'Could not save shift', description: err?.data?.statusMessage || err?.message, color: 'red' })
     } finally {
         isSaving.value = false
     }
@@ -275,11 +312,11 @@ const { data: staff } = useFindManyCompanyUser(
         where: { companyId: companyId.value, deleted: false, status: true },
         include: { user: true },
         orderBy: { name: 'asc' as const },
-    })),
+    })), { companyScope: 'form' } as any
 )
 
 const staffOptions = computed(() =>
-    (staff.value ?? []).map((u: any) => ({
+    (staff.value ?? []).filter((u: any) => u.companyId === companyScope.companyId.value).map((u: any) => ({
         id: u.userId,
         label: u.name || u.user?.email || u.userId,
     })),
@@ -297,7 +334,8 @@ const assignForm = reactive({
 const CreateAssignment = useCreateShiftAssignment()
 const DeleteAssignment = useDeleteShiftAssignment()
 
-const openAssign = () => {
+const openAssign = async () => {
+    companyScope.record.value = null; await companyScope.selectOwner(selectedShift.value?.companyId);
     assignForm.userId = null
     assignForm.effectiveFrom = new Date().toISOString().slice(0, 10)
     assignForm.effectiveTo = ''
@@ -347,10 +385,12 @@ const endAssignment = async (assignment: any) => {
 
 const fmtDate = (value?: string | Date | null) =>
     value ? new Date(value).toLocaleDateString('en-IN') : '—'
+watch(companyScope.readIds, () => { selectedShift.value = null; });
 </script>
 
 <template>
     <UDashboardPanelContent class="p-4">
+
         <div class="flex border border-gray-200 dark:border-gray-700 rounded-md">
             <!-- ─── Left: Shift list ─── -->
             <div
@@ -384,6 +424,7 @@ const fmtDate = (value?: string | Date | null) =>
                     </template>
 
                     <div class="p-3">
+                        <CompanyTableFilter class="mb-3" />
                         <UInput
                             v-model="search"
                             icon="i-heroicons-magnifying-glass-20-solid"
@@ -394,13 +435,14 @@ const fmtDate = (value?: string | Date | null) =>
 
                     <UTable
                         :rows="shifts || []"
-                        :columns="shiftColumns"
+                        :columns="companyScope.columns(shiftColumns)"
                         :loading="shiftsLoading"
                         class="w-full"
                         :ui="{ td: { base: 'max-w-[0] truncate' }, tr: { base: 'cursor-pointer' } }"
                         @select="(row) => (selectedShift = row)"
                     >
-                        <template #name-data="{ row }">
+                        <template #companyId-data="{ row }">{{ companyScope.companyName(row.companyId) }}</template>
+<template #name-data="{ row }">
                             <div class="font-medium">{{ row.name }}</div>
                         </template>
                         <template #timing-data="{ row }">
@@ -520,10 +562,10 @@ const fmtDate = (value?: string | Date | null) =>
                     <div class="text-sm font-medium mb-2">Assigned staff</div>
                     <UTable
                         :rows="assignments || []"
-                        :columns="assignmentColumns"
+                        :columns="companyScope.columns(assignmentColumns)"
                         :loading="assignmentsLoading"
                         class="w-full"
-                    >
+                    ><template #companyId-data="{ row }">{{ companyScope.companyName(row.companyId) }}</template>
                         <template #name-data="{ row }">
                             <div class="font-medium">{{ row.user?.name || '—' }}</div>
                             <div class="text-xs text-gray-500">{{ row.user?.phone || '' }}</div>
@@ -554,29 +596,42 @@ const fmtDate = (value?: string | Date | null) =>
         </div>
 
         <!-- ─── Create / Edit shift modal ─── -->
-        <UModal v-model="shiftModalOpen" :ui="{ width: 'sm:max-w-xl' }">
-            <UCard :ui="{ header: { padding: 'px-4 py-4' } }">
-                <template #header>
-                    <h3 class="text-base font-semibold">
-                        {{ editingShift ? 'Edit shift' : 'New shift' }}
-                    </h3>
-                </template>
-                <div class="space-y-4">
-                    <UFormGroup label="Name" required>
+        <UModal v-model="shiftModalOpen" fullscreen :prevent-close="isSaving" aria-labelledby="shift-editor-title">
+            <div class="flex h-[100dvh] min-h-0 flex-col bg-gray-50 dark:bg-gray-950">
+                <header class="flex shrink-0 items-start justify-between gap-4 border-b border-gray-200 bg-white px-5 py-4 dark:border-gray-800 dark:bg-gray-900 sm:px-8">
+                    <div><h2 id="shift-editor-title" class="text-xl font-semibold">{{ editingShift ? 'Edit shift' : 'Add shift' }}</h2><p class="mt-1 text-sm text-gray-500">Start with the schedule. Then choose how attendance affects pay. Every field below includes an explanation.</p></div>
+                    <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark" aria-label="Close shift form" :disabled="isSaving" @click="shiftModalOpen = false" />
+                </header>
+                <div class="flex min-h-0 flex-1 flex-col lg:flex-row">
+                    <nav aria-label="Shift form sections" class="flex shrink-0 gap-1 overflow-x-auto border-b border-gray-200 bg-white p-3 dark:border-gray-800 dark:bg-gray-900 lg:w-64 lg:flex-col lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-4"><button type="button" class="shrink-0 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:bg-gray-800 lg:w-full" @click="scrollShiftSection('basics')">1. Shift basics</button>
+<button type="button" class="shrink-0 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:bg-gray-800 lg:w-full" @click="scrollShiftSection('breaks')">2. Breaks and paid time</button>
+<button type="button" class="shrink-0 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:bg-gray-800 lg:w-full" @click="scrollShiftSection('attendance')">3. Attendance and night shifts</button>
+<button type="button" class="shrink-0 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:bg-gray-800 lg:w-full" @click="scrollShiftSection('overtime')">4. Overtime on normal work days</button>
+<button type="button" class="shrink-0 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:bg-gray-800 lg:w-full" @click="scrollShiftSection('holidays')">5. Holidays and weekly days off</button>
+<button type="button" class="shrink-0 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:bg-gray-800 lg:w-full" @click="scrollShiftSection('leave')">6. Paid leave allowances</button>
+<button type="button" class="shrink-0 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:bg-gray-800 lg:w-full" @click="scrollShiftSection('deductions')">7. Absence and short-hours deductions</button>
+<button type="button" class="shrink-0 rounded-lg px-3 py-2 text-left text-sm text-gray-600 hover:bg-gray-100 focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500 dark:text-gray-300 dark:hover:bg-gray-800 lg:w-full" @click="scrollShiftSection('fines')">8. Late arrival and early leaving</button></nav>
+                    <main ref="shiftEditorBody" class="min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-8">
+                        <div class="mx-auto max-w-5xl space-y-6">
+                            <div class="rounded-lg bg-blue-50 px-4 py-3 text-sm text-blue-800 dark:bg-blue-950 dark:text-blue-200">Time guide: 60 minutes = 1 hour; 240 = 4 hours; 480 = 8 hours. Pay and deduction fields use your company's currency. Enter 0 for no monetary charge.</div>
+                            <section id="shift-section-basics" class="scroll-mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 sm:p-7" aria-labelledby="shift-heading-basics">
+ <div class="mb-6 flex gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">1</span><div><h3 id="shift-heading-basics" class="text-lg font-semibold">Shift basics</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Set the work schedule and the date these rules start.</p></div></div>
+ <div class="space-y-5">
+                    <CompanyFormField @transferred="shiftModalOpen = false" /><p v-if="companyScope.enabled.value" class="text-sm text-gray-500">Select the company or branch that owns this shift. Employees are assigned within that company.</p>
+
+                    <UFormGroup label="Policy effective from" required help="The date these settings start applying. Older payroll keeps the previous rules. For an edit, choose a date after the last saved version."><UInput v-model="shiftForm.effectiveFrom" type="date" :min="localDateKey(new Date())" /></UFormGroup>
+                    <UFormGroup label="Name" required help="A name you will recognize when assigning employees, such as Morning shift or Shop staff.">
                         <UInput v-model="shiftForm.name" placeholder="e.g. Morning" />
                     </UFormGroup>
-                    <div class="grid grid-cols-2 gap-3">
-                        <UFormGroup label="Start time" required>
+                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <UFormGroup label="Start time" required help="When employees are expected to begin work. Late-arrival rules compare check-in with this time.">
                             <UInput v-model="shiftForm.startTime" type="time" />
                         </UFormGroup>
-                        <UFormGroup label="End time" required>
+                        <UFormGroup label="End time" required help="When work normally ends. An end time earlier than the start means the shift ends the next day, for example 10 PM to 6 AM.">
                             <UInput v-model="shiftForm.endTime" type="time" />
                         </UFormGroup>
                     </div>
-                    <UFormGroup label="Break (minutes)">
-                        <UInput v-model.number="shiftForm.breakMinutes" type="number" min="0" placeholder="Optional" />
-                    </UFormGroup>
-                    <UFormGroup label="Work days">
+                    <UFormGroup label="Work days" help="Select the usual working days. Unchecked days are weekly days off. Assign employees to this shift after saving.">
                         <div class="flex flex-wrap gap-x-4 gap-y-2">
                             <UCheckbox
                                 v-for="day in workDayOptions"
@@ -587,62 +642,119 @@ const fmtDate = (value?: string | Date | null) =>
                             />
                         </div>
                     </UFormGroup>
-                    <div class="border-t border-gray-100 dark:border-gray-800 pt-3 space-y-3">
-                        <div class="text-xs font-semibold uppercase text-gray-500">Overtime</div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <UFormGroup label="Overtime mode"><USelect v-model="shiftForm.overtimeMode" :options="overtimeModeOptions" /></UFormGroup>
-                            <UFormGroup :label="shiftForm.overtimeMode === 'DAILY' ? 'OT rate / day' : 'OT rate / hour'">
+</div>
+ </section>
+<section id="shift-section-breaks" class="scroll-mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 sm:p-7" aria-labelledby="shift-heading-breaks">
+ <div class="mb-6 flex gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">2</span><div><h3 id="shift-heading-breaks" class="text-lg font-semibold">Breaks and paid time</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Decide how lunch and other breaks affect paid working hours.</p></div></div>
+ <div class="space-y-5"><UFormGroup label="Break (minutes)" help="Total break allowance during the shift. Example: 60 means one hour. A 9 AM to 6 PM shift with a 60-minute unpaid break expects 8 working hours.">
+                        <UInput v-model.number="shiftForm.breakMinutes" type="number" min="0" placeholder="Optional" />
+                    </UFormGroup>
+                    <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                        <UFormGroup label="Break pay" help="Unpaid breaks reduce expected work hours. Paid breaks count recorded break time as paid time, up to your break allowance."><USelect v-model="shiftForm.policy.breakPay" :options="[{label:'Unpaid',value:'UNPAID'},{label:'Paid up to allowance',value:'PAID'}]" /></UFormGroup>
+                        <UFormGroup v-if="shiftForm.policy.breakPay === 'UNPAID'" label="Break deduction" help="Recorded breaks use check-out/check-in gaps. Automatic minimum break also deducts any missing part of the allowance when staff do not record enough break time."><USelect v-model="shiftForm.policy.breakDeduction" :options="[{label:'Recorded punch breaks',value:'RECORDED'},{label:'Automatic minimum break',value:'AUTOMATIC'}]" /></UFormGroup>
+                        <UFormGroup v-if="shiftForm.policy.breakPay === 'UNPAID' && shiftForm.policy.breakDeduction === 'AUTOMATIC'" label="Auto deduct after worked minutes" help="Only apply the automatic break after this much recorded work. Example: 360 means after 6 hours. Zero applies it whenever work is recorded; recorded breaks are not deducted twice."><UInput v-model.number="shiftForm.policy.breakAfterMinutes" type="number" min="0" max="1440" /></UFormGroup>
+                    </div>
+                    </div>
+ </section>
+<section id="shift-section-attendance" class="scroll-mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 sm:p-7" aria-labelledby="shift-heading-attendance">
+ <div class="mb-6 flex gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">3</span><div><h3 id="shift-heading-attendance" class="text-lg font-semibold">Attendance and night shifts</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose how work hours and forgotten checkouts affect payroll.</p></div></div>
+ <div class="space-y-5">
+
+                        <UCheckbox v-model="shiftForm.policy.autoClassify" label="Use worked hours to decide full day, half day or absence" />
+                        <p class="text-sm text-gray-500">When enabled, payroll classifies records marked present using the limits below. Explicit manual statuses remain unchanged. Turn it off to keep recorded attendance status.</p><div v-if="shiftForm.policy.autoClassify" class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <UFormGroup label="Full-day minimum minutes" help="At least this much paid work counts as a full day in payroll. Example: 480 means 8 hours. This cannot exceed the paid shift duration."><UInput v-model.number="shiftForm.policy.fullDayMinutes" type="number" min="1" max="1440" /></UFormGroup>
+                            <UFormGroup label="Half-day minimum minutes" help="At least this much paid work, but less than the full-day minimum, counts as half a day. Less than this counts as absent. Example: 240 means 4 hours."><UInput v-model.number="shiftForm.policy.halfDayMinutes" type="number" min="1" max="1440" /></UFormGroup>
+                        </div>
+                        <UFormGroup label="When an employee forgets checkout" :help="missingCheckoutHelp[shiftForm.policy.missingCheckout]"><USelect v-model="shiftForm.policy.missingCheckout" :options="missingCheckoutOptions" /></UFormGroup>
+                        <UFormGroup label="Overnight checkout grace (hours)" help="How long after a night shift ends an employee can close the previous night's attendance. Example: a 6 AM finish plus 2 hours allows checkout until 8 AM. This is not extra paid time by itself."><UInput v-model.number="shiftForm.policy.overnightCheckoutHours" type="number" min="0" max="12" step="0.5" /></UFormGroup>
+                    </div>
+ </section>
+<section id="shift-section-overtime" class="scroll-mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 sm:p-7" aria-labelledby="shift-heading-overtime">
+ <div class="mb-6 flex gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">4</span><div><h3 id="shift-heading-overtime" class="text-lg font-semibold">Overtime on normal work days</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Set extra pay for work beyond the expected shift hours.</p></div></div>
+ <div class="space-y-5">
+
+                        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <UFormGroup label="Overtime mode" help="Choose whether extra work beyond the expected shift hours earns no extra pay, pay per hour, or one fixed amount for that day."><USelect v-model="shiftForm.overtimeMode" :options="overtimeModeOptions" /></UFormGroup>
+                            <UFormGroup :label="shiftForm.overtimeMode === 'DAILY' ? 'Extra pay for the day' : 'Extra pay per overtime hour'" help="Enter the money amount, not a percentage. Hourly mode pays for calculated overtime hours; daily mode pays this amount once after the threshold is met.">
                                 <UInput v-model.number="shiftForm.overtimeRate" type="number" min="0" :disabled="shiftForm.overtimeMode === 'NONE'" />
                             </UFormGroup>
                         </div>
-                        <UFormGroup v-if="shiftForm.overtimeMode === 'DAILY'" label="Daily OT threshold (minutes)" hint="OT only counts after this many minutes that day">
+                        <UFormGroup v-if="shiftForm.overtimeMode === 'DAILY'" label="Daily OT threshold (minutes)" help="Minimum extra work before the fixed daily overtime amount is paid. Example: 30 means the employee must work at least 30 minutes extra.">
                             <UInput v-model.number="shiftForm.otDailyThresholdMinutes" type="number" min="0" />
                         </UFormGroup>
-                        <UFormGroup v-if="shiftForm.overtimeMode === 'HOURLY'" label="Hourly round-up (minutes)" hint="round up to a full hour when the extra minutes reach this">
+                        <UFormGroup v-if="shiftForm.overtimeMode === 'HOURLY'" label="Hourly round-up (minutes)" help="How leftover overtime minutes become a full paid hour. With 30: 1 hour 30 minutes pays 2 hours, but 1 hour 20 minutes pays 1. Zero always drops leftover minutes.">
                             <UInput v-model.number="shiftForm.otHourlyRoundMinutes" type="number" min="0" />
                         </UFormGroup>
                     </div>
-                    <div class="border-t border-gray-100 dark:border-gray-800 pt-3 space-y-3">
-                        <div class="text-xs font-semibold uppercase text-gray-500">Leave / absence cuts</div>
-                        <div class="grid grid-cols-3 gap-3">
-                            <UFormGroup label="Full day"><UInput v-model.number="shiftForm.leaveCutFullDay" type="number" min="0" /></UFormGroup>
-                            <UFormGroup label="Half day"><UInput v-model.number="shiftForm.leaveCutHalfDay" type="number" min="0" /></UFormGroup>
-                            <UFormGroup label="Per hour"><UInput v-model.number="shiftForm.leaveCutPerHour" type="number" min="0" /></UFormGroup>
-                        </div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <UFormGroup label="No. of paid leaves" hint="per payroll cycle">
-                                <UInput v-model.number="shiftForm.paidLeaveDays" type="number" min="0" />
-                            </UFormGroup>
-                            <UFormGroup label="Holiday paid">
-                                <UToggle v-model="shiftForm.holidayPaid" />
-                            </UFormGroup>
+ </section>
+<section id="shift-section-holidays" class="scroll-mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 sm:p-7" aria-labelledby="shift-heading-holidays">
+ <div class="mb-6 flex gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">5</span><div><h3 id="shift-heading-holidays" class="text-lg font-semibold">Holidays and weekly days off</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Decide whether working on a day off earns extra money, a paid day off later, or both.</p></div></div>
+ <div class="space-y-5"><UFormGroup label="Pay employees on scheduled holidays" help="When enabled, a company holiday on a scheduled work day is paid even if the employee does not work. Extra pay for actually working that day is set separately below."><UToggle v-model="shiftForm.holidayPaid" /></UFormGroup>
+
+                        <p class="text-xs text-gray-500">Extra hourly pay is added to normal salary. Holiday rules take priority when a holiday falls on a weekly off. Each eligible day can earn one compensatory leave day.</p>
+                        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <UFormGroup label="Weekly-off compensation" help="What employees receive for working on an unchecked work day: nothing extra, money, one paid day off later, or both."><USelect v-model="shiftForm.policy.weeklyOffMode" :options="compensationOptions" /></UFormGroup>
+                            <UFormGroup label="Holiday-work compensation" help="What employees receive for working on a company holiday. This rule takes priority if the holiday is also a weekly day off."><USelect v-model="shiftForm.policy.holidayWorkMode" :options="compensationOptions" /></UFormGroup>
+                            <UFormGroup v-if="['PAY','BOTH'].includes(shiftForm.policy.weeklyOffMode)" label="Weekly-off extra pay / hour" help="Extra money for each paid working hour on a weekly day off, added to normal salary. Example: 100 per hour for 5 hours adds 500."><UInput v-model.number="shiftForm.policy.weeklyOffHourlyRate" type="number" min="0" step="0.01" /></UFormGroup>
+                            <UFormGroup v-if="['PAY','BOTH'].includes(shiftForm.policy.holidayWorkMode)" label="Holiday extra pay / hour" help="Extra money for each paid working hour on a holiday. This replaces the usual overtime calculation for that holiday."><UInput v-model.number="shiftForm.policy.holidayHourlyRate" type="number" min="0" step="0.01" /></UFormGroup>
+                            <UFormGroup v-if="[shiftForm.policy.weeklyOffMode, shiftForm.policy.holidayWorkMode].some(mode => ['COMP_OFF', 'BOTH'].includes(mode))" label="Minutes to earn compensatory leave" help="Minimum paid work needed on a qualifying holiday or weekly day off to earn one paid leave day. Example: 240 means 4 hours. Requires complete check-in/out punches."><UInput v-model.number="shiftForm.policy.compOffMinMinutes" type="number" min="1" max="1440" /></UFormGroup>
+                            <UFormGroup v-if="[shiftForm.policy.weeklyOffMode, shiftForm.policy.holidayWorkMode].some(mode => ['COMP_OFF', 'BOTH'].includes(mode))" label="Compensatory leave expires after days" help="How long the earned day off remains available. Example: 90 means use it within 90 days. Zero means it never expires; it cannot be used on the day it is earned."><UInput v-model.number="shiftForm.policy.compOffExpiryDays" type="number" min="0" /></UFormGroup>
                         </div>
                     </div>
-                    <div class="border-t border-gray-100 dark:border-gray-800 pt-3 space-y-3">
-                        <div class="text-xs font-semibold uppercase text-gray-500">Late / early fines</div>
-                        <div class="grid grid-cols-2 gap-3">
-                            <UFormGroup label="Late after minutes">
+ </section>
+<section id="shift-section-leave" class="scroll-mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 sm:p-7" aria-labelledby="shift-heading-leave">
+ <div class="mb-6 flex gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">6</span><div><h3 id="shift-heading-leave" class="text-lg font-semibold">Paid leave allowances</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Choose automatic paid days or approved leave with separate allowances.</p></div></div>
+ <div class="space-y-5">
+
+                        <UCheckbox v-model="shiftForm.policy.typedLeaveEnabled" label="Set separate paid allowances for each leave type" />
+                        <p class="text-xs text-gray-500">Turn this on to require approved leave applications and use the separate allowances below. Each allowance resets every selected week, month or year. Unused days do not carry forward. Leave beyond the allowance is unpaid.</p>
+                        <div v-if="shiftForm.policy.typedLeaveEnabled" v-for="leave in leavePolicyRows" :key="leave.key" class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <UFormGroup :label="leave.label + ' days'" :help="leaveHelp[leave.key]"><UInput v-model.number="(shiftForm as any)[leave.days]" type="number" min="0" max="366" /></UFormGroup>
+                            <UFormGroup label="Allowance period" help="How often this allowance resets: each calendar week (Monday start), month, or year. Unused days do not carry forward."><USelect v-model="(shiftForm as any)[leave.period]" :options="leavePeriodOptions" /></UFormGroup>
+                        </div>
+                        <UButton to="/users/leaves" color="gray" variant="soft">Leave applications and balances</UButton>
+                    <UFormGroup v-if="!shiftForm.policy.typedLeaveEnabled" label="Automatic paid days per payroll run" help="Without leave applications, this automatically pays up to this many absent, leave or missing-attendance days in each payroll run. Set 0 to disable it."><UInput v-model.number="shiftForm.paidLeaveDays" type="number" min="0" /></UFormGroup></div>
+ </section>
+<section id="shift-section-deductions" class="scroll-mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 sm:p-7" aria-labelledby="shift-heading-deductions">
+ <div class="mb-6 flex gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">7</span><div><h3 id="shift-heading-deductions" class="text-lg font-semibold">Absence and short-hours deductions</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Set the money deducted when unpaid work time is missed.</p></div></div>
+ <div class="space-y-5">
+
+                        <div class="grid grid-cols-1 gap-5 md:grid-cols-3">
+                            <UFormGroup label="Full day" help="Money deducted for one unpaid absent day. Zero means no full-day absence deduction."><UInput v-model.number="shiftForm.leaveCutFullDay" type="number" min="0" /></UFormGroup>
+                            <UFormGroup label="Half day" help="Money deducted for a half-day absence when the per-hour deduction below is zero. If per-hour is set, half the expected shift hours times that rate is used instead."><UInput v-model.number="shiftForm.leaveCutHalfDay" type="number" min="0" /></UFormGroup>
+                            <UFormGroup label="Per hour" help="Money deducted for each hour short of the expected work duration. Example: 100 per hour and 2 hours short deducts 200. Zero disables this hourly deduction."><UInput v-model.number="shiftForm.leaveCutPerHour" type="number" min="0" /></UFormGroup>
+                        </div>
+                        </div>
+ </section>
+<section id="shift-section-fines" class="scroll-mt-6 rounded-xl border border-gray-200 bg-white p-5 dark:border-gray-800 dark:bg-gray-900 sm:p-7" aria-labelledby="shift-heading-fines">
+ <div class="mb-6 flex gap-3"><span class="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-50 text-sm font-semibold text-primary-700 dark:bg-primary-950 dark:text-primary-300">8</span><div><h3 id="shift-heading-fines" class="text-lg font-semibold">Late arrival and early leaving</h3><p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Set allowed delays and optional fixed fines.</p></div></div>
+ <div class="space-y-5">
+
+                        <UAlert color="amber" variant="subtle" title="Fines and hourly deductions can both apply" description="An employee who arrives late or leaves early can receive the fixed fine as well as the short-hours deduction from the previous section." />
+<div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
+                            <UFormGroup label="Late after minutes" help="Allowed delay after shift start before the late fine applies. Example: 10 allows arrival up to 10 minutes late; the fine starts beyond that.">
                                 <UInput v-model.number="shiftForm.lateEntryGraceMinutes" type="number" min="0" />
                             </UFormGroup>
-                            <UFormGroup label="Late fine">
+                            <UFormGroup label="Late fine" help="One fixed deduction for a day when arrival exceeds the allowed delay. It is not a per-minute charge. Zero disables it.">
                                 <UInput v-model.number="shiftForm.lateEntryFine" type="number" min="0" />
                             </UFormGroup>
-                            <UFormGroup label="Early exit before minutes">
+                            <UFormGroup label="Early exit before minutes" help="Allowed early departure before shift end. Example: 10 allows leaving up to 10 minutes early; the fine starts beyond that.">
                                 <UInput v-model.number="shiftForm.earlyExitGraceMinutes" type="number" min="0" />
                             </UFormGroup>
-                            <UFormGroup label="Early exit fine">
+                            <UFormGroup label="Early exit fine" help="One fixed deduction for a day when checkout is earlier than the allowed limit. Zero disables it.">
                                 <UInput v-model.number="shiftForm.earlyExitFine" type="number" min="0" />
                             </UFormGroup>
                         </div>
                     </div>
+ </section>
+                        </div>
+                    </main>
                 </div>
-                <template #footer>
-                    <div class="flex justify-end gap-2">
-                        <UButton color="gray" variant="ghost" label="Cancel" @click="shiftModalOpen = false" />
-                        <UButton :loading="isSaving" label="Save" @click="submitShift" />
-                    </div>
-                </template>
-            </UCard>
+                <footer class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-gray-200 bg-white px-5 py-4 dark:border-gray-800 dark:bg-gray-900 sm:px-8">
+                    <p class="text-sm text-gray-500">{{ editingShift ? 'Changes use the effective date you selected.' : 'After saving, assign employees to this shift.' }}</p>
+                    <div class="flex gap-2"><UButton color="gray" variant="ghost" label="Cancel" :disabled="isSaving" @click="shiftModalOpen = false" /><UButton :loading="isSaving" :disabled="companyScope.busy.value" label="Save shift" @click="submitShift" /></div>
+                </footer>
+            </div>
         </UModal>
 
         <!-- ─── Assign staff modal ─── -->
@@ -652,6 +764,7 @@ const fmtDate = (value?: string | Date | null) =>
                     <h3 class="text-base font-semibold">Assign staff to {{ selectedShift?.name }}</h3>
                 </template>
                 <div class="space-y-4">
+                    <CompanyFormField locked @transferred="assignModalOpen = false" />
                     <UFormGroup label="Staff member" required>
                         <USelectMenu
                             v-model="assignForm.userId"

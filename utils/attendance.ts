@@ -109,6 +109,14 @@ export function shiftWindow(entry: AttendanceEntry): { start: Date; end: Date } 
 }
 
 export function shiftHours(entry: AttendanceEntry): number {
+    // The timeline window may extend past the scheduled end to display a late
+    // checkout. Overtime must still compare worked time with the actual shift.
+    if (entry.shift) {
+        const start = parseShiftBoundary(entry.date, entry.shift.startTime)
+        let end = parseShiftBoundary(entry.date, entry.shift.endTime)
+        if (end <= start) end = parseShiftBoundary(entry.date, entry.shift.endTime, true)
+        return Math.max(0, (end.getTime() - start.getTime()) / 36e5)
+    }
     const window = shiftWindow(entry)
     if (!window) return 0
     return Math.max(0, (window.end.getTime() - window.start.getTime()) / 36e5)

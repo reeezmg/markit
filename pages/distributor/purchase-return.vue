@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { useFindManyPurchaseReturn, useDeletePurchaseReturn } from '~/lib/hooks/purchase-return';
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
+import { useFindManyPurchaseReturn, useDeletePurchaseReturn } from '~/lib/company-hooks/purchase-return';
 
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
 const toast     = useToast()
 const router    = useRouter()
-const useAuth   = () => useNuxtApp().$auth
+const useAuth   = () => companyScope.auth
+const { forOwner } = useOrganizationActions()
 const companyId = computed(() => useAuth().session.value?.companyId)
 
 const purchaseReturnTableStore = usePurchaseReturnTableStore()
@@ -107,7 +111,9 @@ const allColumns = computed(() => isMobile.value ? mobileColumns : desktopColumn
 
 const selectedColumns = ref([...desktopColumns])
 const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
-const columnsTable = computed(() => allColumns.value.filter(c => selectedColumns.value.some((s: any) => s.key === c.key)))
+const columnsTable = computed(() => useAuth().session.value?.allStores
+  ? [{ key: 'distributorCompany.company.name', label: 'Store', sortable: false }, ...allColumns.value.filter(c => selectedColumns.value.some((s: any) => s.key === c.key))]
+  : allColumns.value.filter(c => selectedColumns.value.some((s: any) => s.key === c.key)))
 
 watch(allColumns, (cols) => { selectedColumns.value = [...cols] })
 
@@ -122,6 +128,7 @@ const queryArgs = computed<Prisma.PurchaseReturnFindManyArgs>(() => ({
   },
   select: {
     id: true,
+    companyId: true,
     returnNo: true,
     createdAt: true,
     totalAmount: true,
@@ -129,7 +136,7 @@ const queryArgs = computed<Prisma.PurchaseReturnFindManyArgs>(() => ({
     taxAmount: true,
     remarks: true,
     distributorCompany: {
-      select: { distributor: { select: { name: true } } },
+      select: { distributor: { select: { name: true } }, company: { select: { name: true } } },
     },
     purchaseOrder: { select: { purchaseOrderNo: true } },
     items: {
@@ -196,7 +203,8 @@ const confirmDelete = (row: any) => { deletingRow.value = row; isDeleteOpen.valu
 const handleDelete = async () => {
   isDeleting.value = true
   try {
-    await DeleteReturn.mutateAsync({ where: { id: deletingRow.value.id } })
+    await $fetch(`/api/purchasereturn/${deletingRow.value.id}`, { method: 'DELETE', headers: { 'x-company-id': deletingRow.value.companyId } })
+    await refetch()
     toast.add({ title: 'Deleted', color: 'green' })
     isDeleteOpen.value = false
   } catch (err: any) {
@@ -209,12 +217,12 @@ const handleDelete = async () => {
 // ─── Download PDF ─────────────────────────────────────────────────────────────
 const isDownloading = ref(false)
 
-const downloadPdf = async (id: string, returnNo: number | null) => {
+const downloadPdf = async (id: string, returnNo: number | null, sourceCompanyId: string) => {
   isDownloading.value = true
   try {
     const res = await $fetch.raw('/api/downloads/purchase-return.pdf', {
       method: 'GET',
-      params: { purchaseReturnId: id },
+      params: { purchaseReturnId: id, companyId: sourceCompanyId },
     })
     const url = URL.createObjectURL(new Blob([res._data as ArrayBuffer], { type: 'application/pdf' }))
     const a = document.createElement('a')
@@ -248,6 +256,7 @@ const handleDownloadExcel = async () => {
       { header: 'Return #',    key: 'returnNo',    width: 12 },
       { header: 'Date',        key: 'createdAt',   width: 20 },
       { header: 'Distributor', key: 'distributor', width: 24 },
+      { header: 'Store',       key: 'company',     width: 24 },
       { header: 'PO No',       key: 'poNo',        width: 12 },
       { header: 'Items',       key: 'items',       width: 8  },
       { header: 'Subtotal',    key: 'subTotal',    width: 12 },
@@ -261,6 +270,7 @@ const handleDownloadExcel = async () => {
         returnNo:    r.returnNo ?? '',
         createdAt:   r.createdAt ? new Date(r.createdAt).toLocaleString() : '',
         distributor: (r.distributorCompany as any)?.distributor?.name ?? '',
+        company:     (r.distributorCompany as any)?.company?.name ?? '',
         poNo:        r.purchaseOrder?.purchaseOrderNo ?? '',
         items:       (r.items as any[]).length,
         subTotal:    Number(r.subTotalAmount || 0),
@@ -288,7 +298,7 @@ const handleDownloadExcel = async () => {
 const rowAction = (row: any) => [
   [
     { label: 'Edit',         icon: 'i-heroicons-pencil-square-20-solid', click: () => router.push(`/distributor/edit-purchase-return/${row.id}`) },
-    { label: 'Download PDF', icon: 'i-heroicons-document-text',          click: () => downloadPdf(row.id, row.returnNo) },
+    { label: 'Download PDF', icon: 'i-heroicons-document-text',          click: () => downloadPdf(row.id, row.returnNo, row.companyId) },
   ],
   [{ label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDelete(row) }],
 ]
@@ -332,6 +342,8 @@ onMounted(() => {
     }
   }
 })
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 
 <template>
@@ -349,6 +361,7 @@ onMounted(() => {
       <template #header>
         <div class="flex justify-between items-center gap-3 w-full flex-wrap">
           <div class="flex items-center gap-3 flex-wrap">
+                  <CompanyTableFilter />
             <!-- Date range picker -->
             <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
               <UButton icon="i-heroicons-calendar-days-20-solid" color="gray" variant="outline" size="sm">
@@ -465,7 +478,7 @@ onMounted(() => {
         </template>
 
         <template #actions-data="{ row }">
-          <UDropdown :items="rowAction(row)">
+          <UDropdown :items="forOwner(rowAction(row), row.companyId)">
             <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" size="xs" />
           </UDropdown>
         </template>

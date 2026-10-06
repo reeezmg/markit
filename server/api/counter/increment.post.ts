@@ -1,3 +1,4 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { pool } from '~/server/db'
 
 const VALID_COUNTERS: Record<string, { column: string; sessionKey: string }> = {
@@ -11,7 +12,7 @@ const VALID_COUNTERS: Record<string, { column: string; sessionKey: string }> = {
 }
 
 export default eventHandler(async (event) => {
-  const session = await requireAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const body = await readBody(event)
   const { entity } = body
 
@@ -31,8 +32,6 @@ export default eventHandler(async (event) => {
   const assignedNumber = res.rows[0]?.num
   const newCounter = res.rows[0]?.[config.column.replace(/_/g, '')]  // camelCase doesn't matter, pg returns snake
 
-  // Update session with new counter value
-  await session.update({ [config.sessionKey]: res.rows[0]?.[config.column] })
 
   return { number: assignedNumber }
 })

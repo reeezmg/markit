@@ -1,8 +1,11 @@
+import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { pool } from '~/server/db'
 import crypto from 'crypto'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const sessionCompanyId = session.data.companyId
   if (!sessionCompanyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
@@ -12,6 +15,7 @@ export default defineEventHandler(async (event) => {
     companyId,
     purchaseOrderId,
     remarks,
+    returnDate,
     subTotalAmount,
     taxAmount,
     totalAmount,
@@ -23,6 +27,8 @@ export default defineEventHandler(async (event) => {
 
   if (!distributorId || !items?.length)
     throw createError({ statusCode: 400, statusMessage: 'distributorId and items are required' })
+  const accountingDate = returnDate ? new Date(returnDate) : new Date();
+  if (!Number.isFinite(accountingDate.getTime())) throw createError({statusCode:400,statusMessage:'Invalid return date'});
 
   const TRANSIENT_ERROR_CODES = [
     '40001', '40P01', '53300', '57P01', '55006', '08006', '08003', 'P1001',
@@ -47,6 +53,7 @@ export default defineEventHandler(async (event) => {
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
 
       const returnId = crypto.randomUUID()
 
@@ -62,8 +69,8 @@ export default defineEventHandler(async (event) => {
       await client.query(
         `INSERT INTO purchase_returns (
            id, return_no, subtotal_amount, tax_amount, total_amount, remarks,
-           purchase_order_id, distributor_id, company_id, updated_at
-         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())`,
+           purchase_order_id, distributor_id, company_id, created_at, updated_at
+         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, now())`,
         [
           returnId,
           returnNo,
@@ -74,6 +81,7 @@ export default defineEventHandler(async (event) => {
           purchaseOrderId || null,
           distributorId,
           companyId,
+          accountingDate,
         ]
       )
 
@@ -120,8 +128,8 @@ export default defineEventHandler(async (event) => {
       /* 4. Insert distributor_payments with RETURN type to reduce totalDue */
       await client.query(
         `INSERT INTO distributor_payments (
-           id, payment_type, amount, remarks, distributor_id, company_id, purchase_return_id
-         ) VALUES ($1, 'RETURN', $2, $3, $4, $5, $6)`,
+           id, payment_type, amount, remarks, distributor_id, company_id, purchase_return_id, created_at
+         ) VALUES ($1, 'RETURN', $2, $3, $4, $5, $6, $7)`,
         [
           crypto.randomUUID(),
           totalAmount || 0,
@@ -129,9 +137,12 @@ export default defineEventHandler(async (event) => {
           distributorId,
           companyId,
           returnId,
+          accountingDate,
         ]
       )
 
+      const linkedPayment = (await client.query('SELECT id FROM distributor_payments WHERE purchase_return_id=$1 AND company_id=$2', [returnId,companyId])).rows[0];
+      if (linkedPayment) await selectDistributorAccounts(client,companyId,distributorId,`payment:${linkedPayment.id}`,body.accountingAccounts);
       await client.query('COMMIT')
       client.release()
       return { success: true, purchaseReturnId: returnId }

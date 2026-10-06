@@ -1,14 +1,19 @@
 <script setup lang="ts">
+const props = defineProps(['onVerify', 'clientAdded', 'allowCompanySelection']);
+const companyScope = useCompanyScope(props.allowCompanySelection ? 'form' : undefined);
+const $fetch = companyScope.fetch;
+
 import { reactive, ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { useFindUniqueClient, useCreateClient, useUpdateClient } from '~/lib/hooks/client';
+import { useFindUniqueClient, useCreateClient, useUpdateClient } from '~/lib/company-hooks/client';
 
 import { v4 as uuidv4 } from 'uuid'
 
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 
-const model = defineModel('model')
-const phoneNo = defineModel('phoneNo')
-const props = defineProps(['onVerify', 'clientAdded'])
+const model = defineModel<boolean>('model')
+const phoneNo = defineModel<string>('phoneNo')
+watch(model, open => { if (open && props.allowCompanySelection) void companyScope.beginForm(); });
+
 
 const phoneRef = ref<any>(null)
 const nameRef = ref<any>(null)
@@ -323,6 +328,7 @@ const login = async () => {
         @submit.prevent="login"
         class="space-y-4 flex flex-col items-center justify-center w-full"
       >
+        <CompanyFormField :locked="!allowCompanySelection" />
         <div class="w-full max-w-md">
           <UFormGroup label="Phone Number">
             <UInput

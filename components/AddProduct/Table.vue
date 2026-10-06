@@ -1,4 +1,7 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 import { ref, computed, watch } from 'vue';
 const emit = defineEmits(['product-selected','clicked','total-amount', 'product-deleted']);
 const props = defineProps<{

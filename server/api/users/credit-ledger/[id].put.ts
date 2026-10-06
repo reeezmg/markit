@@ -1,49 +1,33 @@
+import { assertCreditManager, validateUserCredit } from '~/server/utils/user-credit-input'
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import { ensureAccountLedgerSchema, moneyTransactionLedgerRows, rebuildAccountLedgerForSource, userCreditAccountLedgerRows } from '~/server/utils/account-ledger'
-import { recalculateManyUserLedgerBalances, type UserLedgerEntryType, type UserLedgerDirection } from '~/server/utils/user-ledger'
+
+import { recalculateManyUserLedgerBalances } from '~/server/utils/user-ledger'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
+  assertCreditManager(session.data.role)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
   const id = event.context.params?.id
   if (!id) throw createError({ statusCode: 400, statusMessage: 'ledger id is required' })
 
-  const body = await readBody<{
-    userId?: string
-    type?: 'CREDIT' | 'PAYMENT' | UserLedgerEntryType
-    amount?: number
-    note?: string | null
-    paymentMode?: 'CASH' | 'BANK' | 'UPI'
-    transactionDate?: string | null
-    createdAt?: string | null
-  }>(event)
-
-  const amount = Number(body.amount || 0)
-  if (!body.userId) throw createError({ statusCode: 400, statusMessage: 'User is required' })
-  if (!amount || amount <= 0) throw createError({ statusCode: 400, statusMessage: 'Amount must be positive' })
-
-  const type: UserLedgerEntryType =
-    body.type === 'PAYMENT'
-      ? 'CREDIT_BILL_PAYMENT'
-      : body.type === 'CREDIT'
-        ? 'USER_CREDIT_BILL'
-        : (body.type as UserLedgerEntryType) || 'USER_CREDIT_BILL'
-  const direction: UserLedgerDirection = type === 'CREDIT_BILL_PAYMENT' ? 'CREDIT' : 'DEBIT'
-  const when = body.createdAt || body.transactionDate ? new Date((body.createdAt || body.transactionDate) as string) : new Date()
-  const paymentMode = body.paymentMode === 'BANK' || body.paymentMode === 'UPI' ? 'BANK' : 'CASH'
-  const moneyDirection = type === 'CREDIT_BILL_PAYMENT' ? 'RECEIVED' : 'GIVEN'
+  const body = validateUserCredit(await readBody(event))
+  const { amount, type, direction, paymentMode, moneyDirection } = body
+  let when = body.when
 
   const client = await pool.connect()
   try {
-    await ensureAccountLedgerSchema(client)
+
     await client.query('BEGIN')
+    await lockCompanyRequest(event, client)
 
     const existingRes = await client.query(
       `
-      SELECT user_id
+      SELECT user_id, created_at
       FROM user_ledger_entries
       WHERE id = $1
         AND company_id = $2
@@ -55,6 +39,9 @@ export default defineEventHandler(async (event) => {
     )
     if (!existingRes.rowCount) throw createError({ statusCode: 404, statusMessage: 'Manual credit row not found' })
     const oldUserId = existingRes.rows[0].user_id
+    if (body.userId !== oldUserId) throw createError({ statusCode: 400, statusMessage: 'Staff member cannot be changed on an existing credit entry' })
+    const originalDate = new Date(existingRes.rows[0].created_at)
+    if (originalDate.toISOString().slice(0, 10) === when.toISOString().slice(0, 10)) when = originalDate
 
     const userRes = await client.query(
       `
@@ -110,37 +97,8 @@ export default defineEventHandler(async (event) => {
         when,
       ],
     )
-    await rebuildAccountLedgerForSource(client, {
-      companyId,
-      sourceType: 'MONEY_TRANSACTION',
-      sourceId: id,
-      rows: moneyTransactionLedgerRows({
-        id,
-        companyId,
-        amount,
-        paymentMode,
-        accountId: null,
-        direction: moneyDirection,
-        status: 'PAID',
-        createdAt: when,
-        note: body.note || (type === 'CREDIT_BILL_PAYMENT' ? 'User credit received' : 'User credit given'),
-      }),
-    })
-    await rebuildAccountLedgerForSource(client, {
-      companyId,
-      sourceType: 'USER_CREDIT',
-      sourceId: id,
-      rows: userCreditAccountLedgerRows({
-        id,
-        companyId,
-        type,
-        sourceType: 'MANUAL',
-        sourceId: null,
-        amount,
-        createdAt: when,
-        note: body.note || (type === 'CREDIT_BILL_PAYMENT' ? 'User credit received' : 'User credit given'),
-      }),
-    })
+
+
 
     await recalculateManyUserLedgerBalances(client, companyId, [oldUserId, body.userId])
     await client.query('COMMIT')

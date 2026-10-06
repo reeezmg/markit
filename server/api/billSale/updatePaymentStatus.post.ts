@@ -1,15 +1,15 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope'
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest'
+import { settleCreditPayment } from '~/utils/credit-payment'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import crypto from 'crypto'
-import {
-  billLedgerRows,
-  ensureAccountLedgerSchema,
-  rebuildAccountLedgerForSource,
-  type AccountLedgerRowInput,
-} from '~/server/utils/account-ledger'
+
 
 export default defineEventHandler(async (event) => {
-  const { billId, companyId, status, paymentMethod } = await readBody(event)
+  const session = await useCompanyRequestSession(event)
+  const { billId, companyId = session.data.companyId, status, paymentMethod } = await readBody(event)
+  if (companyId !== session.data.companyId) throw createError({statusCode:403,statusMessage:'Company access denied'})
+  if (!['PAID','PENDING','APPROVED','REJECTED','COMPLETED','FAILED'].includes(status)) throw createError({statusCode:400,statusMessage:'Invalid payment status'})
 
   if (!billId || !companyId || !status) {
     throw createError({
@@ -21,8 +21,9 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
 
   try {
-    await ensureAccountLedgerSchema(client)
+
     await client.query('BEGIN')
+    await lockCompanyRequest(event, client)
 
     const existingRes = await client.query(
       `
@@ -45,12 +46,16 @@ export default defineEventHandler(async (event) => {
     }
 
     const existingBill = existingRes.rows[0]
+    let payment
+    try { payment = settleCreditPayment(existingBill, status, paymentMethod) }
+    catch (e: any) { throw createError({statusCode:400,statusMessage:e.message}) }
     const res = await client.query(
       `
       UPDATE bills
       SET
         payment_status = $3::"PaymentStatus",
         payment_method = $4,
+        split_payments = $5::jsonb,
         updated_at = now()
       WHERE id = $1
         AND company_id = $2
@@ -61,7 +66,8 @@ export default defineEventHandler(async (event) => {
         billId,
         companyId,
         status, // string like 'PAID'
-        status === 'PAID' ? paymentMethod : 'Credit',
+        payment.method,
+        JSON.stringify(payment.splits),
       ]
     )
 
@@ -94,25 +100,6 @@ export default defineEventHandler(async (event) => {
         )
       }
     }
-    const adjustmentRows = paymentMethodChangeRows(
-      billId,
-      companyId,
-      existingBill,
-      bill,
-    )
-
-    if (adjustmentRows.length) {
-      const adjustmentSourceId = `${billId}:payment-change:${crypto.randomUUID()}`
-      await rebuildAccountLedgerForSource(client, {
-        companyId,
-        sourceType: 'BILL',
-        sourceId: adjustmentSourceId,
-        rows: adjustmentRows.map(row => ({
-          ...row,
-          sourceId: adjustmentSourceId,
-        })),
-      })
-    }
     await client.query('COMMIT')
 
     return {
@@ -127,62 +114,3 @@ export default defineEventHandler(async (event) => {
     client.release()
   }
 })
-
-function paymentMethodChangeRows(
-  billId: string,
-  companyId: string,
-  oldBill: any,
-  newBill: any,
-) {
-  const oldRows = billLedgerRows({
-    id: billId,
-    companyId,
-    paymentMethod: oldBill.payment_method,
-    paymentStatus: oldBill.payment_status,
-    splitPayments: oldBill.split_payments,
-    grandTotal: oldBill.grand_total,
-    createdAt: oldBill.created_at,
-    deleted: oldBill.deleted,
-    isMarkit: oldBill.is_markit,
-    invoiceNumber: oldBill.invoice_number,
-  })
-
-  const newRows = billLedgerRows({
-    id: billId,
-    companyId,
-    paymentMethod: newBill.payment_method,
-    paymentStatus: newBill.payment_status,
-    splitPayments: newBill.split_payments,
-    grandTotal: newBill.grand_total,
-    createdAt: newBill.created_at,
-    deleted: newBill.deleted,
-    isMarkit: newBill.is_markit,
-    invoiceNumber: newBill.invoice_number,
-  })
-
-  const deltas = new Map<string, { row: AccountLedgerRowInput; amount: number }>()
-  const keyFor = (row: AccountLedgerRowInput) => `${row.accountType}|${row.accountId || ''}`
-  const addDelta = (row: AccountLedgerRowInput, amount: number) => {
-    const key = keyFor(row)
-    const existing = deltas.get(key)
-    if (existing) existing.amount += amount
-    else deltas.set(key, { row, amount })
-  }
-
-  for (const row of oldRows) addDelta(row, -Number(row.amount || 0))
-  for (const row of newRows) addDelta(row, Number(row.amount || 0))
-
-  const note = newBill.invoice_number
-    ? `Payment change Sale #${newBill.invoice_number}`
-    : 'Payment change'
-
-  return [...deltas.values()]
-    .filter(({ amount }) => Math.abs(amount) > 0.009)
-    .map(({ row, amount }) => ({
-      ...row,
-      direction: amount > 0 ? 'CREDIT' as const : 'DEBIT' as const,
-      amount: Math.abs(amount),
-      entryDate: new Date(),
-      note,
-    }))
-}

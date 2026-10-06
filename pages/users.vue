@@ -15,7 +15,7 @@ definePageMeta({
 
             </UDashboardNavbar>
 
-            <NuxtPage />
+            <NuxtPage :key="auth.session.value?.companyId" />
         </UDashboardPanel>
     </UDashboardPage>
 </template>

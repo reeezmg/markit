@@ -1,22 +1,23 @@
 <script setup lang="ts">
-import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
-import { useFindManyCompanyUser } from '~/lib/hooks/company-user';
-import { useFindManyPayrollAdjustment, useCreatePayrollAdjustment, useUpdatePayrollAdjustment, useDeletePayrollAdjustment } from '~/lib/hooks/payroll-adjustment';
-import { useFindManyPayrollCycle } from '~/lib/hooks/payroll-cycle';
-import { useFindManySalaryConfig, useUpsertSalaryConfig } from '~/lib/hooks/salary-config';
-import { useFindManySalaryPayment } from '~/lib/hooks/salary-payment';
-import { useFindManyShiftAssignment } from '~/lib/hooks/shift-assignment';
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
 
-const useAuth = () => useNuxtApp().$auth
+import { useFindManyCompanyUser } from '~/lib/company-hooks/company-user';
+import { useFindManyPayrollAdjustment } from '~/lib/company-hooks/payroll-adjustment';
+import { useFindManyPayrollCycle } from '~/lib/company-hooks/payroll-cycle';
+import { useFindManySalaryPayment } from '~/lib/company-hooks/salary-payment';
+import { useFindManyShiftAssignment } from '~/lib/company-hooks/shift-assignment';
+
+const useAuth = () => companyScope.auth
 const toast = useToast()
 const route = useRoute()
-const companyId = computed(() => useAuth().session.value?.companyId)
+const companyId = companyScope.companyId
+const canManageSalary = computed(() => ['admin', 'manager', 'accountant'].includes(useAuth().session.value?.role || ''))
 const now = new Date()
 const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
 const tabs = [
     { key: 'pay', label: 'Pay', icon: 'i-heroicons-banknotes' },
-    { key: 'settings', label: 'Settings', icon: 'i-heroicons-cog-6-tooth' },
     { key: 'adjustments', label: 'Adjustments', icon: 'i-heroicons-plus-circle' },
     { key: 'payroll', label: 'Run Payroll', icon: 'i-heroicons-calculator' },
     { key: 'fnf', label: 'F & F', icon: 'i-heroicons-archive-box-arrow-down' },
@@ -42,14 +43,16 @@ const { data: assignments } = useFindManyShiftAssignment(
 )
 const shiftStaff = computed(() => {
     const seen = new Map<string, any>()
-    for (const a of assignments.value ?? []) if (!seen.has(a.userId)) seen.set(a.userId, a.user)
-    return Array.from(seen.entries()).map(([userId, user]) => ({ userId, user }))
+    for (const a of assignments.value ?? []) seen.set(`${a.companyId}:${a.userId}`, { companyId: a.companyId, userId: a.userId, user: a.user })
+    return Array.from(seen.values())
 })
+const { data: formAssignments } = useFindManyShiftAssignment(computed(() => ({ where: { companyId: companyId.value, OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }] }, include: { user: true } })), { companyScope: 'form' } as any)
 const staffOptions = computed(() =>
-    shiftStaff.value.map((s) => ({ id: s.userId, label: s.user?.name || s.userId })),
+    Array.from(new Map((formAssignments.value ?? []).map(s => [s.userId, s])).values()).map((s) => ({ id: s.userId, label: s.user?.name || s.userId })),
 )
-const staffName = (userId: string) =>
-    shiftStaff.value.find((s) => s.userId === userId)?.user?.name || userId
+const allStaffOptions = computed(() => Array.from(new Map(shiftStaff.value.map(s => [s.userId, { id: s.userId, label: s.user?.name || s.userId }])).values()))
+const staffName = (userId: string, ownerId = companyId.value) =>
+    shiftStaff.value.find((s) => s.userId === userId && s.companyId === ownerId)?.user?.name || userId
 
 const { data: activeUsers, isLoading: fnfLoading, refetch: refetchActiveUsers } = useFindManyCompanyUser(
     computed(() => ({
@@ -66,23 +69,24 @@ const { data: activeUsers, isLoading: fnfLoading, refetch: refetchActiveUsers } 
 
 // ─── Dues (per-user) ───
 const dues = ref<Record<string, any>>({})
+let duesVersion = 0;
 const refreshDues = async () => {
+    const version = ++duesVersion;
     try {
         const res: any = await $fetch('/api/salary/dues')
-        dues.value = Object.fromEntries((res.dues ?? []).map((d: any) => [d.userId, d]))
+        if (version === duesVersion) dues.value = Object.fromEntries((res.dues ?? []).map((d: any) => [`${d.companyId}:${d.userId}`, d]))
     } catch { /* non-critical */ }
 }
 onMounted(refreshDues)
 
 // ─── Bank/Cash options for payouts ───
-const { data: bankAccounts } = useFindManyBankAccount(
-    computed(() => ({ where: { companyId: companyId.value } })),
-)
+const paymentAccounts = useSalaryPaymentAccounts(companyScope)
+const bankAccounts = paymentAccounts.banks
 const payModeOptions = computed(() => [
     { label: 'Cash', value: 'CASH:__primary__' },
-    { label: 'Bank (Primary)', value: 'BANK:__primary__' },
+    { label: 'Bank (account setting)', value: 'BANK:__primary__' },
     ...(bankAccounts.value ?? []).map((b: any) => ({
-        label: `Bank · ${b.bankName || 'Bank'} ${b.accountNo || ''}`.trim(),
+        label: `Bank · ${b.name}`,
         value: `BANK:${b.id}`,
     })),
 ])
@@ -105,10 +109,11 @@ const payForm = reactive({
 const isPaying = ref(false)
 const payTypeOptions = ['SALARY', 'ADVANCE']
 
-const selectedDue = computed(() => (payForm.userId ? dues.value[payForm.userId]?.due ?? 0 : null))
-const selectedCreditBills = computed(() => (payForm.userId ? dues.value[payForm.userId]?.creditBills ?? 0 : 0))
+const selectedDue = computed(() => (payForm.userId ? dues.value[`${companyId.value}:${payForm.userId}`]?.due ?? 0 : null))
+const selectedCreditBills = computed(() => (payForm.userId ? dues.value[`${companyId.value}:${payForm.userId}`]?.creditBills ?? 0 : 0))
 
 const submitPay = async () => {
+    if (isPaying.value || companyScope.busy.value) return
     if (!payForm.userId) return toast.add({ title: 'Pick a staff member', color: 'red' })
     if (!payForm.amount || payForm.amount <= 0) return toast.add({ title: 'Enter an amount', color: 'red' })
     isPaying.value = true
@@ -173,13 +178,20 @@ const paymentEditForm = reactive({
     note: '',
 })
 
-const openEditPayment = (row: any) => {
+const openEditPayment = async (row: any) => {
+    await companyScope.beginForm(row?.id ? { model: 'SalaryPayment', id: row.id, companyId: row.companyId } : null);
+    let selectedBank: string | null
+    try { selectedBank = await paymentAccounts.load(row.id) }
+    catch (err: any) {
+        toast.add({ title: 'Could not load payment accounts', description: err?.data?.statusMessage || err?.message, color: 'red' })
+        return
+    }
     editingPayment.value = row
     paymentEditForm.userId = row.userId
     paymentEditForm.amount = Number(row.amount || 0)
     paymentEditForm.type = row.type || 'SALARY'
-    paymentEditForm.payMode = row.paymentMode === 'BANK'
-        ? `BANK:${row.bankAccountId || '__primary__'}`
+    paymentEditForm.payMode = ['BANK','UPI'].includes(row.paymentMode)
+        ? `BANK:${selectedBank || '__primary__'}`
         : 'CASH:__primary__'
     paymentEditForm.date = row.paymentDate ? new Date(row.paymentDate).toISOString().slice(0, 10) : todayKey
     paymentEditForm.note = row.note || ''
@@ -217,7 +229,7 @@ const submitEditPayment = async () => {
 
 const deletePaymentRow = async (row: any) => {
     try {
-        await $fetch(`/api/salary/payment/${row.id}`, { method: 'DELETE' })
+        await $fetch(`/api/salary/payment/${row.id}`, { method: 'DELETE', headers: { 'x-company-id': row.companyId } })
         toast.add({ title: 'Payment deleted', color: 'green' })
         await Promise.all([refreshDues(), refetchPayments(), refetchCycles()])
     } catch (err: any) {
@@ -227,71 +239,6 @@ const deletePaymentRow = async (row: any) => {
 
 // ════════════════════════════════════════════════════════════
 //  TAB 2 — Settings (salary config per user)
-// ════════════════════════════════════════════════════════════
-const { data: configs, isLoading: configsLoading, refetch: refetchConfigs } = useFindManySalaryConfig(
-    computed(() => ({ where: { companyId: companyId.value } })),
-)
-const configByUser = computed(() => Object.fromEntries((configs.value ?? []).map((c: any) => [c.userId, c])))
-
-const settingsRows = computed(() =>
-    shiftStaff.value.map((s) => ({ userId: s.userId, name: s.user?.name || s.userId, config: configByUser.value[s.userId] ?? null })),
-)
-const settingsColumns = [
-    { key: 'name', label: 'Staff' },
-    { key: 'period', label: 'Period' },
-    { key: 'amount', label: 'Salary' },
-    { key: 'commission', label: 'Commission' },
-    { key: 'actions', label: '' },
-]
-
-const UpsertConfig = useUpsertSalaryConfig()
-const configModalOpen = ref(false)
-const isSavingConfig = ref(false)
-const periodOptions = ['MONTHLY', 'WEEKLY', 'DAILY', 'HOURLY']
-const configForm = reactive({
-    userId: '' as string,
-    period: 'MONTHLY',
-    amount: 0 as number,
-    commissionPercentage: 0 as number,
-})
-const openConfig = (row: any) => {
-    const c = row.config
-    configForm.userId = row.userId
-    configForm.period = c?.period ?? 'MONTHLY'
-    configForm.amount = Number(c?.amount ?? 0)
-    configForm.commissionPercentage = Number(c?.commissionPercentage ?? 0)
-    configModalOpen.value = true
-}
-const submitConfig = async () => {
-    if (!companyId.value) return
-    isSavingConfig.value = true
-    try {
-        const data = {
-            period: configForm.period,
-            amount: Number(configForm.amount) || 0,
-            commissionPercentage: Number(configForm.commissionPercentage) || 0,
-        }
-        await UpsertConfig.mutateAsync({
-            where: { companyId_userId: { companyId: companyId.value, userId: configForm.userId } },
-            create: {
-                ...data,
-                company: { connect: { id: companyId.value } },
-                user: { connect: { companyId_userId: { companyId: companyId.value, userId: configForm.userId } } },
-            },
-            update: data,
-        })
-        toast.add({ title: 'Salary settings saved', color: 'green' })
-        configModalOpen.value = false
-        await refetchConfigs()
-    } catch (err: any) {
-        toast.add({ title: 'Could not save', description: err?.message, color: 'red' })
-    } finally {
-        isSavingConfig.value = false
-    }
-}
-
-// ════════════════════════════════════════════════════════════
-//  TAB 3 — Adjustments
 // ════════════════════════════════════════════════════════════
 const showAdjHistory = ref(false)
 const { data: adjustments, isLoading: adjLoading, refetch: refetchAdjustments } = useFindManyPayrollAdjustment(
@@ -313,9 +260,6 @@ const adjColumns = [
     { key: 'status', label: 'Status' },
     { key: 'actions', label: '' },
 ]
-const CreateAdj = useCreatePayrollAdjustment()
-const UpdateAdj = useUpdatePayrollAdjustment()
-const DeleteAdj = useDeletePayrollAdjustment()
 const adjForm = reactive({
     userId: null as string | null,
     kind: 'ADDITION',
@@ -353,25 +297,14 @@ watch(() => adjForm.kind, () => {
 })
 const isSavingAdj = ref(false)
 const submitAdj = async () => {
+    if (isSavingAdj.value || companyScope.busy.value) return
     if (!adjForm.userId) return toast.add({ title: 'Pick a staff member', color: 'red' })
     if (!adjForm.label.trim()) return toast.add({ title: 'Enter a label', color: 'red' })
     if (!adjForm.amount || adjForm.amount <= 0) return toast.add({ title: 'Enter an amount', color: 'red' })
     if (!companyId.value) return
     isSavingAdj.value = true
     try {
-        await CreateAdj.mutateAsync({
-            data: {
-                kind: adjForm.kind,
-                label: adjForm.label.trim(),
-                amount: Number(adjForm.amount),
-                reason: adjForm.reason || null,
-                month: Number(adjForm.month),
-                year: Number(adjForm.year),
-                status: 'PENDING',
-                company: { connect: { id: companyId.value } },
-                user: { connect: { companyId_userId: { companyId: companyId.value, userId: adjForm.userId } } },
-            },
-        })
+        await $fetch('/api/salary/adjustment', { method: 'POST', body: { ...adjForm, month: Number(adjForm.month), year: Number(adjForm.year), amount: Number(adjForm.amount) } })
         toast.add({ title: 'Adjustment added', color: 'green' })
         adjForm.label = ''
         adjForm.amount = null
@@ -385,7 +318,7 @@ const submitAdj = async () => {
 }
 const cancelAdj = async (row: any) => {
     try {
-        await UpdateAdj.mutateAsync({ where: { id: row.id }, data: { status: 'CANCELLED' } })
+        await $fetch('/api/salary/adjustment', { method: 'POST', headers: { 'x-company-id': row.companyId }, body: { action: 'cancel', id: row.id } })
         toast.add({ title: 'Adjustment cancelled', color: 'green' })
         await refetchAdjustments()
     } catch (err: any) {
@@ -394,7 +327,7 @@ const cancelAdj = async (row: any) => {
 }
 const deleteAdj = async (row: any) => {
     try {
-        await DeleteAdj.mutateAsync({ where: { id: row.id } })
+        await $fetch('/api/salary/adjustment', { method: 'POST', headers: { 'x-company-id': row.companyId }, body: { action: 'delete', id: row.id } })
         toast.add({ title: 'Adjustment deleted', color: 'green' })
         await refetchAdjustments()
     } catch (err: any) {
@@ -447,7 +380,8 @@ const cycleMonthYearFromStart = () => {
     }
 }
 const cycleNameFromPeriod = () => `${fmtDate(cycleForm.periodStart)} - ${fmtDate(cycleForm.periodEnd)}`
-const openCreateCycle = () => {
+const openCreateCycle = async () => {
+    await companyScope.beginForm();
     editingCycle.value = null
     const m = now.getMonth() + 1
     cycleForm.paymentDate = todayKey
@@ -457,7 +391,8 @@ const openCreateCycle = () => {
     cycleForm.excludeUserIds = []
     cycleModalOpen.value = true
 }
-const openEditCycle = (row: any) => {
+const openEditCycle = async (row: any) => {
+    await companyScope.beginForm(row?.id ? { model: 'PayrollCycle', id: row.id, companyId: row.companyId } : null);
     editingCycle.value = row
     cycleForm.paymentDate = new Date(row.paymentDate).toISOString().slice(0, 10)
     cycleForm.periodStart = new Date(row.periodStart).toISOString().slice(0, 10)
@@ -467,6 +402,7 @@ const openEditCycle = (row: any) => {
     cycleModalOpen.value = true
 }
 const submitCycle = async () => {
+    if (isRunningCycle.value || companyScope.busy.value) return
     isRunningCycle.value = true
     try {
         const { month, year } = cycleMonthYearFromStart()
@@ -498,7 +434,7 @@ const rerunCycle = async (row: any) => {
     try {
         const periodStart = new Date(row.periodStart)
         await $fetch('/api/salary/payroll/run', {
-            method: 'POST',
+            method: 'POST', headers: { 'x-company-id': row.companyId },
             body: {
                 cycleId: row.id,
                 name: row.name,
@@ -519,14 +455,22 @@ const rerunCycle = async (row: any) => {
         isRunningCycle.value = false
     }
 }
-const deleteCycle = async (row: any) => {
+const deletingCycle = ref(false)
+const cycleDeleteOpen = ref(false)
+const cycleDeleteTarget = ref<any>(null)
+const confirmDeleteCycle = (row: any) => { cycleDeleteTarget.value = row; cycleDeleteOpen.value = true }
+const deleteCycle = async () => {
+    if (deletingCycle.value || !cycleDeleteTarget.value) return
+    const row = cycleDeleteTarget.value
+    deletingCycle.value = true
     try {
-        await $fetch(`/api/salary/payroll/cycle/${row.id}`, { method: 'DELETE' })
+        await $fetch(`/api/salary/payroll/cycle/${row.id}`, { method: 'DELETE', headers: { 'x-company-id': row.companyId } })
+        cycleDeleteOpen.value = false
         toast.add({ title: 'Cycle deleted', color: 'green' })
         await refetchCycles()
     } catch (err: any) {
         toast.add({ title: 'Could not delete', description: err?.message, color: 'red' })
-    }
+    } finally { deletingCycle.value = false }
 }
 
 // Full and final settlement
@@ -542,9 +486,9 @@ const fnfColumns = [
 ]
 const fnfRows = computed(() =>
     (activeUsers.value ?? []).map((u: any) => {
-        const due = dues.value[u.userId] ?? {}
+        const due = dues.value[`${u.companyId}:${u.userId}`] ?? {}
         return {
-            ...u,
+            ...u, id: `${u.companyId}:${u.userId}`,
             accrued: Number(due.accrued ?? 0),
             paid: Number(due.paid ?? 0),
             creditDue: Number(due.creditDue ?? 0),
@@ -567,7 +511,8 @@ const fnfActionLabel = computed(() => {
     if (due < -0.009) return 'Receive credit and deactivate'
     return 'Deactivate'
 })
-const openFnf = (row: any) => {
+const openFnf = async (row: any) => {
+    companyScope.record.value = null; await companyScope.selectOwner(row?.companyId);
     fnfUser.value = row
     fnfForm.amount = Math.abs(Number(row.due ?? 0))
     fnfForm.payMode = 'CASH:__primary__'
@@ -614,7 +559,8 @@ const clearModalOpen = ref(false)
 const clearingCycle = ref<any>(null)
 const clearPayMode = ref('CASH:__primary__')
 const isClearing = ref(false)
-const openClear = (row: any) => {
+const openClear = async (row: any) => {
+    companyScope.record.value = null; await companyScope.selectOwner(row?.companyId);
     clearingCycle.value = row
     clearPayMode.value = 'CASH:__primary__'
     clearModalOpen.value = true
@@ -648,30 +594,42 @@ const cycleActions = (row: any) => [
         { label: 'Clear payment', icon: 'i-heroicons-banknotes', click: () => openClear(row) },
     ],
     [
-        { label: 'Delete', icon: 'i-heroicons-trash', click: () => deleteCycle(row) },
+        { label: 'Delete', icon: 'i-heroicons-trash', click: () => confirmDeleteCycle(row) },
     ],
 ]
 
 const cycleStatusColor = (s: string) => (s === 'PAID' ? 'green' : s === 'CALCULATED' ? 'blue' : 'gray')
 const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' : 'gray')
+watch([paymentEditOpen, fnfModalOpen, cycleModalOpen, clearModalOpen], (open) => { if (!open.some(Boolean)) companyScope.beginForm(); })
+watch(companyScope.readIds, refreshDues)
+watch(activeTab, () => companyScope.beginForm())
+watch(companyScope.companyId, () => {
+    payForm.userId = null; payForm.payMode = 'CASH:__primary__'; adjForm.userId = null;
+    if (!cycleModalOpen.value) { cycleForm.includeUserIds = []; cycleForm.excludeUserIds = []; }
+})
 </script>
 
 <template>
     <NuxtPage v-if="isCycleDetailRoute" />
     <UDashboardPanelContent v-else class="p-4">
+        <UAlert v-if="paymentAccounts.error.value" color="red" title="Could not load payment accounts" :description="paymentAccounts.error.value" class="mb-4" />
+
         <div class="mb-4">
             <h1 class="text-xl font-bold">Salary</h1>
-            <p class="text-sm text-gray-500">Pay staff, configure salaries, adjustments, and run payroll.</p>
+            <UButton to="/users" color="gray" variant="link" label="Salary settings: Users > Actions" />
+            <p class="text-sm text-gray-500">Pay staff, manage adjustments, and run payroll. Salary settings are in Users > Actions.</p>
         </div>
 
-        <UTabs v-model="activeTab" :items="tabs" class="w-full">
+        <UAlert v-if="!canManageSalary" title="Salary management access required" description="Ask an admin, manager or accountant to manage payroll." />
+        <UTabs v-if="canManageSalary" v-model="activeTab" :items="tabs" class="w-full">
             <template #item="{ item, index }">
                 <!-- ══════════ PAY ══════════ -->
                 <div v-if="index === 0" class="pt-4 space-y-4">
                     <UCard :ui="{ header: { padding: 'px-4 py-3' } }">
                         <template #header><h3 class="text-base font-semibold">Pay a staff member</h3></template>
                         <div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-                            <UFormGroup label="Staff" required>
+                            <CompanyFormField />
+<UFormGroup label="Staff" required>
                                 <USelectMenu v-model="payForm.userId" :options="staffOptions" value-attribute="id" option-attribute="label" searchable placeholder="Select staff" />
                             </UFormGroup>
                             <UFormGroup label="Amount" required>
@@ -708,15 +666,17 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
                             <div class="flex flex-wrap items-center justify-between gap-2">
                                 <h3 class="text-base font-semibold">Recent payments</h3>
                                 <div class="flex gap-2">
-                                    <USelectMenu v-model="payFilterUser" :options="staffOptions" value-attribute="id" option-attribute="label" searchable placeholder="All staff" size="xs" class="w-40" />
+                                    <USelectMenu v-model="payFilterUser" :options="allStaffOptions" value-attribute="id" option-attribute="label" searchable placeholder="All staff" size="xs" class="w-40" />
                                     <USelect v-model="payFilterType" :options="payTypeOptions" placeholder="All types" size="xs" class="w-28" />
                                     <UButton v-if="payFilterUser || payFilterType" color="gray" variant="ghost" size="xs" icon="i-heroicons-x-mark" @click="payFilterUser = null; payFilterType = null" />
                                 </div>
                             </div>
                         </template>
-                        <UTable :rows="payments || []" :columns="paymentColumns" :loading="paymentsLoading">
+                        
+        <CompanyTableFilter class="mb-3" />
+<UTable :rows="payments || []" :columns="companyScope.columns(paymentColumns)" :loading="paymentsLoading"><template #companyId-data="{ row }">{{ companyScope.companyName(row.companyId) }}</template>
                             <template #date-data="{ row }">{{ fmtDate(row.paymentDate) }}</template>
-                            <template #user-data="{ row }">{{ row.user?.name || staffName(row.userId) }}</template>
+                            <template #user-data="{ row }">{{ row.user?.name || staffName(row.userId, row.companyId) }}</template>
                             <template #type-data="{ row }"><UBadge :color="row.type === 'ADVANCE' ? 'orange' : row.type === 'CREDIT' ? 'blue' : 'green'" variant="subtle" size="xs">{{ row.type }}</UBadge></template>
                             <template #mode-data="{ row }"><span class="text-xs">{{ row.paymentMode }}</span></template>
                             <template #amount-data="{ row }"><span class="font-medium">{{ money(row.amount) }}</span></template>
@@ -733,30 +693,12 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
                 </div>
 
                 <!-- ══════════ SETTINGS ══════════ -->
-                <div v-else-if="index === 1" class="pt-4">
-                    <UCard :ui="{ body: { padding: '' } }">
-                        <UTable :rows="settingsRows" :columns="settingsColumns" :loading="configsLoading">
-                            <template #name-data="{ row }"><span class="font-medium">{{ row.name }}</span></template>
-                            <template #period-data="{ row }"><UBadge v-if="row.config" color="gray" variant="subtle" size="xs">{{ row.config.period }}</UBadge><span v-else class="text-xs text-gray-400">not set</span></template>
-                            <template #amount-data="{ row }">{{ row.config ? money(row.config.amount) : '—' }}</template>
-                            <template #commission-data="{ row }">
-                                <span v-if="row.config" class="font-mono text-xs">{{ Number(row.config.commissionPercentage ?? 0) }}%</span>
-                                <span v-else class="text-xs text-gray-400">-</span>
-                            </template>
-                            <template #actions-data="{ row }">
-                                <UButton :label="row.config ? 'Edit' : 'Set'" color="gray" variant="soft" size="xs" icon="i-heroicons-cog-6-tooth" @click="openConfig(row)" />
-                            </template>
-                            <template #empty-state><div class="py-8 text-center text-sm text-gray-500">No shift-assigned staff. Assign shifts first.</div></template>
-                        </UTable>
-                    </UCard>
-                </div>
-
-                <!-- ══════════ ADJUSTMENTS ══════════ -->
-                <div v-else-if="index === 2" class="pt-4 space-y-4">
+                <div v-else-if="index === 1" class="pt-4 space-y-4">
                     <UCard :ui="{ header: { padding: 'px-4 py-3' } }">
                         <template #header><h3 class="text-base font-semibold">Add adjustment</h3></template>
                         <div class="grid grid-cols-1 gap-3 md:grid-cols-3 lg:grid-cols-6">
-                            <UFormGroup label="Staff" required>
+                            <CompanyFormField />
+<UFormGroup label="Staff" required>
                                 <USelectMenu v-model="adjForm.userId" :options="staffOptions" value-attribute="id" option-attribute="label" searchable placeholder="Staff" />
                             </UFormGroup>
                             <UFormGroup label="Type">
@@ -790,8 +732,9 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
                                 <UButton :label="showAdjHistory ? 'Show pending' : 'Show history'" color="gray" variant="soft" size="xs" @click="showAdjHistory = !showAdjHistory" />
                             </div>
                         </template>
-                        <UTable :rows="adjustments || []" :columns="adjColumns" :loading="adjLoading">
-                            <template #user-data="{ row }">{{ row.user?.name || staffName(row.userId) }}</template>
+                        <CompanyTableFilter class="mb-3" />
+<UTable :rows="adjustments || []" :columns="companyScope.columns(adjColumns)" :loading="adjLoading"><template #companyId-data="{ row }">{{ companyScope.companyName(row.companyId) }}</template>
+                            <template #user-data="{ row }">{{ row.user?.name || staffName(row.userId, row.companyId) }}</template>
                             <template #kind-data="{ row }"><UBadge :color="row.kind === 'ADDITION' ? 'green' : 'red'" variant="subtle" size="xs">{{ row.kind === 'ADDITION' ? '+ Add' : '− Deduct' }}</UBadge></template>
                             <template #label-data="{ row }"><span class="text-sm">{{ row.label }}</span><div v-if="row.reason" class="text-[11px] text-gray-400">{{ row.reason }}</div></template>
                             <template #amount-data="{ row }">{{ money(row.amount) }}</template>
@@ -806,12 +749,13 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
                 </div>
 
                 <!-- ══════════ RUN PAYROLL ══════════ -->
-                <div v-else-if="index === 3" class="pt-4 space-y-4">
+                <div v-else-if="index === 2" class="pt-4 space-y-4">
                     <div class="flex justify-end">
                         <UButton icon="i-heroicons-plus" label="Create new cycle" @click="openCreateCycle" />
                     </div>
                     <UCard :ui="{ body: { padding: '' } }">
-                        <UTable :rows="cycles || []" :columns="cycleColumns" :loading="cyclesLoading">
+                        <CompanyTableFilter class="mb-3" />
+<UTable :rows="cycles || []" :columns="companyScope.columns(cycleColumns)" :loading="cyclesLoading"><template #companyId-data="{ row }">{{ companyScope.companyName(row.companyId) }}</template>
                             <template #period-data="{ row }"><span class="font-medium">{{ row.name || `${row.month}/${row.year}` }}</span></template>
                             <template #dates-data="{ row }"><span class="text-xs">{{ fmtDate(row.periodStart) }} – {{ fmtDate(row.periodEnd) }}</span></template>
                             <template #paymentDate-data="{ row }"><span class="text-xs">{{ fmtDate(row.paymentDate) }}</span></template>
@@ -826,9 +770,10 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
                     </UCard>
                 </div>
 
-                <div v-else-if="index === 4" class="pt-4">
+                <div v-else-if="index === 3" class="pt-4">
                     <UCard :ui="{ body: { padding: '' } }">
-                        <UTable :rows="fnfRows" :columns="fnfColumns" :loading="fnfLoading">
+                        <CompanyTableFilter class="mb-3" />
+<UTable :rows="fnfRows" :columns="companyScope.columns(fnfColumns)" :loading="fnfLoading"><template #companyId-data="{ row }">{{ companyScope.companyName(row.companyId) }}</template>
                             <template #name-data="{ row }">
                                 <div>
                                     <div class="font-medium">{{ row.name || row.user?.email || row.userId }}</div>
@@ -858,6 +803,7 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
             <UCard :ui="{ header: { padding: 'px-4 py-4' } }">
                 <template #header><h3 class="text-base font-semibold">Edit payment</h3></template>
                 <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <CompanyFormField @transferred="paymentEditOpen = false" />
                     <UFormGroup label="Staff" required>
                         <USelectMenu v-model="paymentEditForm.userId" :options="staffOptions" value-attribute="id" option-attribute="label" searchable placeholder="Select staff" />
                     </UFormGroup>
@@ -887,26 +833,7 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
         </UModal>
 
         <!-- ─── Salary config modal ─── -->
-        <UModal v-model="configModalOpen" :ui="{ width: 'sm:max-w-xl' }">
-            <UCard :ui="{ header: { padding: 'px-4 py-4' } }">
-                <template #header><h3 class="text-base font-semibold">Salary settings — {{ staffName(configForm.userId) }}</h3></template>
-                <div class="space-y-4">
-                    <div class="grid grid-cols-2 gap-3">
-                        <UFormGroup label="Salary period"><USelect v-model="configForm.period" :options="periodOptions" /></UFormGroup>
-                        <UFormGroup label="Salary amount" hint="for the chosen period"><UInput v-model.number="configForm.amount" type="number" min="0" /></UFormGroup>
-                        <UFormGroup label="Commission %" hint="on net user sales in cycle period">
-                            <UInput v-model.number="configForm.commissionPercentage" type="number" min="0" step="0.01" />
-                        </UFormGroup>
-                    </div>
-                </div>
-                <template #footer>
-                    <div class="flex justify-end gap-2">
-                        <UButton color="gray" variant="ghost" label="Cancel" @click="configModalOpen = false" />
-                        <UButton :loading="isSavingConfig" label="Save" @click="submitConfig" />
-                    </div>
-                </template>
-            </UCard>
-        </UModal>
+
 
         <!-- ─── Create / edit cycle modal ─── -->
         <UModal v-model="fnfModalOpen" :ui="{ width: 'sm:max-w-xl' }">
@@ -926,7 +853,8 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
                         </div>
                     </div>
                     <div class="grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <UFormGroup label="Settlement amount" required>
+                        <CompanyFormField locked @transferred="fnfModalOpen = false" />
+                    <UFormGroup label="Settlement amount" required>
                             <UInput v-model.number="fnfForm.amount" type="number" min="0" step="0.01" />
                         </UFormGroup>
                         <UFormGroup label="Date">
@@ -954,7 +882,8 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
                 <template #header><h3 class="text-base font-semibold">{{ editingCycle ? 'Edit & recalculate cycle' : 'Create new cycle' }}</h3></template>
                 <div class="space-y-4">
                     <div class="grid grid-cols-2 gap-3">
-                        <UFormGroup label="Pay period start"><UInput v-model="cycleForm.periodStart" type="date" /></UFormGroup>
+                        <CompanyFormField @transferred="cycleModalOpen = false" />
+                    <UFormGroup label="Pay period start"><UInput v-model="cycleForm.periodStart" type="date" /></UFormGroup>
                         <UFormGroup label="Pay period end"><UInput v-model="cycleForm.periodEnd" type="date" /></UFormGroup>
                     </div>
                     <UFormGroup label="Payment date"><UInput v-model="cycleForm.paymentDate" type="date" /></UFormGroup>
@@ -980,6 +909,7 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
                 <template #header><h3 class="text-base font-semibold">Clear payment — {{ clearingCycle?.name }}</h3></template>
                 <div class="space-y-3">
                     <p class="text-sm text-gray-600 dark:text-gray-300">Pays each staff member their outstanding net for this cycle as salary.</p>
+                    <CompanyFormField locked @transferred="clearModalOpen = false" />
                     <UFormGroup label="Pay from">
                         <USelect v-model="clearPayMode" :options="payModeOptions" value-attribute="value" option-attribute="label" />
                     </UFormGroup>
@@ -990,6 +920,14 @@ const dueColor = (due: number) => (due > 0.009 ? 'red' : due < -0.009 ? 'green' 
                         <UButton color="green" :loading="isClearing" label="Pay all" @click="submitClear" />
                     </div>
                 </template>
+            </UCard>
+        </UModal>
+        <UModal v-model="cycleDeleteOpen" :prevent-close="deletingCycle">
+            <UCard>
+                <template #header><h3 class="font-semibold">Delete payroll cycle?</h3></template>
+                <p>{{ cycleDeleteTarget?.name || 'Payroll cycle' }}: {{ fmtDate(cycleDeleteTarget?.periodStart) }} to {{ fmtDate(cycleDeleteTarget?.periodEnd) }}</p>
+                <p class="mt-3 text-sm text-gray-500">This removes calculated pay, accruals and payroll credit settlements, then recalculates staff balances. Actual salary payments remain recorded. Deletion cannot be undone.</p>
+                <template #footer><div class="flex justify-end gap-2"><UButton label="Keep cycle" color="gray" :disabled="deletingCycle" @click="cycleDeleteOpen = false" /><UButton label="Delete cycle" color="red" :loading="deletingCycle" @click="deleteCycle" /></div></template>
             </UCard>
         </UModal>
     </UDashboardPanelContent>

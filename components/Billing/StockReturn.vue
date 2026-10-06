@@ -1,7 +1,10 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 import { ref, watch, computed, nextTick, onMounted, onBeforeUnmount } from 'vue';
-import { useFindManyCategory } from '~/lib/hooks/category';
-import { useFindFirstItem } from '~/lib/hooks/item';
+import { useFindManyCategory } from '~/lib/company-hooks/category';
+import { useFindFirstItem } from '~/lib/company-hooks/item';
 import Quagga from '@ericblade/quagga2'
 import {
   CapacitorBarcodeScanner,
@@ -102,9 +105,9 @@ const stopResize = () => {
 };
 
 // hooks & API fetching
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 const { data: categories } = useFindManyCategory({
-  where: { companyId: useAuth().session.value?.companyId },
+  where: { companyId: { in: useAuth().session.value?.companyId ? [useAuth().session.value!.companyId] : [] } },
   select: { id: true, name: true }
 });
 
@@ -113,7 +116,7 @@ const scannedBarcode = ref('');
 const itemargs = computed(() => ({
   where: {
     barcode: scannedBarcode.value,
-    companyId: useAuth().session.value?.companyId
+    companyId: { in: useAuth().session.value?.companyId ? [useAuth().session.value!.companyId] : [] }
   },
   select: {
     id: true,

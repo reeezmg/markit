@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": "..",
+    "paths": {
+      "~/*": [
+        "./*"
+      ]
+    },
+    "types": [
+      "node"
+    ]
+  },
+  "include": [
+    "aws-migration-globals.d.ts",
+    "../server/utils/awsStorefront.ts",
+    "../server/utils/storefrontTransport.ts",
+    "../server/utils/storefrontAgent.ts",
+    "../server/utils/storefrontSource.ts",
+    "../server/api/ecommerce-cms/storefront-source/*.ts",
+    "../server/api/ecommerce-cms/storefront-agent/models.get.ts"
+  ]
+}

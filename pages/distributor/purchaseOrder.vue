@@ -1,13 +1,16 @@
 <script setup lang="ts">
-import { useCreateDistributorPayment } from '~/lib/hooks/distributor-payment';
-import { useFindManyPurchaseOrder, useCountPurchaseOrder, useDeletePurchaseOrder } from '~/lib/hooks/purchase-order';
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
+import { useFindManyPurchaseOrder, useCountPurchaseOrder, useDeletePurchaseOrder } from '~/lib/company-hooks/purchase-order';
 
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
 const toast = useToast()
 const { defaultSizeLabel } = useSizeLabel()
 const router = useRouter()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
+const { forOwner } = useOrganizationActions()
 
 // -------------------------------------
 // STATE
@@ -110,7 +113,6 @@ const DeletePurchaseOrder = useDeletePurchaseOrder({
   optimisticUpdate: true,
 })
 
-const CreateDistributorPayment = useCreateDistributorPayment()
 
 // -------------------------------------
 // TABLE COLUMNS
@@ -125,6 +127,9 @@ const columns = [
   { key: 'due', label: 'Due' },
   { key: 'actions', label: 'Actions' },
 ]
+const displayColumns = computed(() => useAuth().session.value?.allStores
+  ? [{ key: 'company.name', label: 'Store' }, ...columns]
+  : columns)
 
 // -------------------------------------
 // FILTERS & PAGINATION
@@ -265,6 +270,7 @@ const queryArgs = computed(() => ({
   },
   select: {
     id: true,
+    company: { select: { name: true } },
     createdAt: true,
     paymentType: true,
     totalAmount: true,
@@ -545,7 +551,9 @@ const confirmDelete = (row: any) => {
   isDeleteModalOpen.value = true
 }
 
-const openPayModal = (row: any) => {
+const openPayModal = async (row: any) => {
+  await companyScope.selectOwner(row.companyId)
+  companyScope.record.value = null
   selectedRow.value = row
   resetForm()
   isOpenPay.value = true
@@ -610,46 +618,14 @@ const handlePay = async () => {
       ? new Date(form.value.date)
       : new Date()
 
-    const expenseData = {
-      totalAmount: form.value.amount,
-      note: form.value.remarks || null,
-      paymentMode: form.value.paymentType,
-      status: 'Paid',
-      companyId: companyId.value,
-      userId: useAuth().session.value?.userId,
-      expensecategoryId:
-        useAuth().session.value?.purchaseExpenseCategoryId,
-      createdAt: createdAtDate,
-    }
-
-    await CreateDistributorPayment.mutateAsync({
-      data: {
-        amount: form.value.amount,
-        paymentType: form.value.paymentType,
-        createdAt: createdAtDate,
-
-        ...(form.value.remarks
-          ? { remarks: form.value.remarks }
-          : {}),
-
-        purchaseOrder: {
-          connect: { id: selectedRow.value.id },
-        },
-
-        distributorCompany: {
-          connect: {
-            distributorId_companyId: {
-              distributorId: distributorIdValue,
-              companyId: companyId.value,
-            },
-          },
-        },
-
-        expense: {
-          create: expenseData,
-        },
+    await $fetch('/api/distributor/payments', {
+      method: 'POST',
+      body: {
+        companyId: companyId.value, createExpense: true,
+        amount: form.value.amount, remarks: form.value.remarks,
+        paymentType: form.value.paymentType, distributorId: distributorIdValue,
+        purchaseOrderId: selectedRow.value.id || null, createdAt: createdAtDate,
       },
-      select: { id: true },
     })
 
     showToast('Payment added successfully', 'green')
@@ -740,6 +716,8 @@ const action = (row: any) => {
 
   return items
 }
+
+watch(companyScope.readIds, () => { page.value = 1; });
 </script>
 
 <template>
@@ -758,6 +736,7 @@ const action = (row: any) => {
       <template #header>
         <div class="flex flex-col sm:flex-row justify-between gap-3 w-full">
           <div class="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+                  <CompanyTableFilter />
             <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
               <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
                 {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
@@ -855,7 +834,7 @@ const action = (row: any) => {
         v-model:sort="sort"
         v-model:expand="expand"
         :rows="rows"
-        :columns="columns"
+        :columns="displayColumns"
         :loading="isLoading"
         sort-asc-icon="i-heroicons-arrow-up"
         sort-desc-icon="i-heroicons-arrow-down"
@@ -905,7 +884,7 @@ const action = (row: any) => {
 
         <!-- ACTIONS -->
         <template #actions-data="{ row }">
-          <UDropdown :items="action(row)">
+          <UDropdown :items="forOwner(action(row), row.companyId)">
             <UButton
               color="gray"
               variant="ghost"
@@ -1228,6 +1207,7 @@ const action = (row: any) => {
         <div class="p-4 space-y-4">
           
           <!-- PAYMENT DATE -->
+          <CompanyFormField locked />
           <UFormGroup label="Payment Date">
             <UInput
               type="date"

@@ -1,10 +1,15 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import AwsService from '~/composables/aws';
 import { v4 as uuidv4 } from 'uuid';
 const router = useRouter();
 const toast = useToast();
 const { printLabel } = usePrint();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { selectOwnerAndReload } = useOrganizationActions();
 
 const variantInputs = ref(useAuth().session.value?.variantInputs)
 const { defaultSizeLabel, labelFor } = useSizeLabel()
@@ -197,7 +202,9 @@ const isLoading = ref(true);
 const productRefetch = async () => {
   isLoading.value = true;
   try {
-    selectedProductRaw.value = await $fetch(`/api/products/${route.params.id}`);
+    const product: any = await $fetch(`/api/products/${route.params.id}`);
+    if (!await selectOwnerAndReload(product.companyId)) return;
+    selectedProductRaw.value = product;
   } catch (e) {
     console.error('Failed to load product', e);
   } finally {
@@ -671,6 +678,7 @@ const confirmPrint = async () => {
 }
 
 
+watch(() => companyScope.auth.session.value?.variantInputs, value => { variantInputs.value = value; });
 </script>
 
 <template>
@@ -679,6 +687,7 @@ const confirmPrint = async () => {
 </div>
     
     <UDashboardPanelContent v-else class="pb-24">
+      <CompanyFormField />
       <div class="flex sm:flex-row flex-col gap-4">
         <div class="sm:w-1/2 w-full ">
   <UPageCard class="m-3">

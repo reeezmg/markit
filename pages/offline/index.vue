@@ -18,6 +18,7 @@ const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const router = useRouter();
 const billNo = ref('1');
+const requestId = ref('');
 const loadingStates = ref([]);
 
 const date = ref(new Date().toISOString());
@@ -285,6 +286,7 @@ onMounted(() => {
 
 // ✅ Single computed object to track all changes
 const currentBill = computed(() => ({
+  requestId: requestId.value,
   billNo: billNo.value,
   date: date.value,
   items: items.value
@@ -310,6 +312,7 @@ watch(currentBill, (newVal) => {
 // ✅ Create new bill
 // ✅ Create new bill (sequential billNo)
 function createNewBill() {
+  requestId.value = '';
   const existing = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]');
   const newBillNo = (existing.length + 1).toString(); // always next in sequence
 
@@ -347,6 +350,7 @@ function loadBill(billNumber) {
   if (!bill) return;
 
   billNo.value = bill.billNo ?? '';
+  requestId.value = bill.requestId ?? '';
   date.value = bill.date ?? new Date().toISOString();
   items.value = bill.items ?? [];
 }
@@ -377,6 +381,7 @@ watch(selectedDraft, (val) => {
 
 
 const reset = () => {
+  requestId.value = '';
   items.value = [
     {
       id: '',
@@ -675,6 +680,7 @@ const handleInvalidBarcode = (index) => {
 
 
 const handleSave = async () => {
+  if (isSaving.value) return;
   // Flush a date that is typed but not yet blurred.
   commitDateInput();
 
@@ -711,9 +717,12 @@ const handleSave = async () => {
 
 
     // 🔁 Backend call to handle everything with Prisma transaction
-    $fetch('/api/bill/offline', {
+    requestId.value ||= uuidv4();
+    await nextTick();
+    await $fetch('/api/bill/offline', {
       method: 'POST',
       body: {
+        requestId: requestId.value,
         items: items.value,
         returnedItems,
         companyId: useAuth().session.value?.companyId,
@@ -730,10 +739,9 @@ const handleSave = async () => {
       });
          reset();
     }).catch(error => {
-        reconstructBill(error.data.data)
        toast.add({
         title: 'Stock updation failed!',
-        description: 'Check the last draft',
+        description: error?.data?.data?.message || error?.data?.statusMessage || error.message,
         color: 'red',
       });
    
@@ -750,7 +758,7 @@ const handleSave = async () => {
       description: error.message,
       color: 'red',
     });
-  }
+  } finally { isSaving.value = false; }
 };
 
 

@@ -1,13 +1,12 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
 
 // Raw-SQL replacement for useFindManyProduct(draftProductsQuery) on add.vue —
 // returns the draft product rows (by id, company-scoped) with brand/category/
 // subcategory + variants + items, in the camelCase shape the table/barcode code expects.
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
-  const companyId = session.data?.companyId
-  if (!companyId) throw createError({ statusCode: 401, statusMessage: 'No company in session' })
+  const companyIds = await getReadCompanyIds(event)
 
   const { ids = [] } = (await readBody(event)) || {}
   if (!Array.isArray(ids) || !ids.length) return []
@@ -23,9 +22,9 @@ export default defineEventHandler(async (event) => {
        LEFT JOIN categories c ON c.id = p.category_id
        LEFT JOIN brands b ON b.id = p.brand_id
        LEFT JOIN subcategories s ON s.id = p.subcategory_id
-       WHERE p.id = ANY($1::text[]) AND p.company_id = $2
+       WHERE p.id = ANY($1::text[]) AND p.company_id = ANY($2::text[])
        ORDER BY p.created_at ASC`,
-      [ids, companyId],
+      [ids, companyIds],
     )
     const productIds = prodRes.rows.map((p) => p.id)
 

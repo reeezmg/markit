@@ -1,13 +1,14 @@
 // ~/server/api/report.get.ts
 import { defineEventHandler } from 'h3';
 import { pool } from '~/server/db';
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope';
 
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event);
-  const companyId = session.data.companyId;
+  const companyIds = await getReadCompanyIds(event);
   const cleanup = session.data.cleanup ?? false;
 
-  if (!companyId) {
+  if (!companyIds.length) {
     throw createError({ statusCode: 401, statusMessage: 'Unauthorized' });
   }
 
@@ -27,38 +28,38 @@ export default defineEventHandler(async (event) => {
       client.query(
         `SELECT COALESCE(SUM(qty), 0) AS total_items
          FROM items
-         WHERE company_id = $1`,
-        [companyId]
+         WHERE company_id = ANY($1::text[])`,
+        [companyIds]
       ),
 
       // total expenses
       client.query(
         `SELECT COALESCE(SUM(total_amount), 0) AS total_expenses
          FROM expenses
-         WHERE company_id = $1`,
-        [companyId]
+         WHERE company_id = ANY($1::text[])`,
+        [companyIds]
       ),
 
       // total sales (grandTotal in bills)
       client.query(
         `SELECT COALESCE(SUM(grand_total), 0) AS total_sales
          FROM bills
-         WHERE company_id = $1
+         WHERE company_id = ANY($1::text[])
            AND deleted = false
            AND payment_status = 'PAID'
            AND ($2 = true OR precedence IS NOT TRUE)`,
-        [companyId, cleanup]
+        [companyIds, cleanup]
       ),
 
       // total discounts
       client.query(
         `SELECT COALESCE(SUM(discount), 0) AS total_discounts
          FROM bills
-         WHERE company_id = $1
+         WHERE company_id = ANY($1::text[])
            AND deleted = false
            AND payment_status = 'PAID'
            AND ($2 = true OR precedence IS NOT TRUE)`,
-        [companyId, cleanup]
+        [companyIds, cleanup]
       ),
 
       // total tax (sum entries.value * entries.tax/100)
@@ -66,11 +67,11 @@ export default defineEventHandler(async (event) => {
         `SELECT COALESCE(SUM((e.value * e.tax) / 100), 0) AS total_tax
          FROM entries e
          INNER JOIN bills b ON e.bill_id = b.id
-         WHERE b.company_id = $1
+         WHERE b.company_id = ANY($1::text[])
            AND b.deleted = false
            AND b.payment_status = 'PAID'
            AND ($2 = true OR b.precedence IS NOT TRUE)`,
-        [companyId, cleanup]
+        [companyIds, cleanup]
       ),
 
       // total items where product.status = true
@@ -79,9 +80,9 @@ export default defineEventHandler(async (event) => {
          FROM items i
          INNER JOIN variants v ON i.variant_id = v.id
          INNER JOIN products p ON v.product_id = p.id
-         WHERE i.company_id = $1
+         WHERE i.company_id = ANY($1::text[])
            AND p.status = true`,
-        [companyId]
+        [companyIds]
       ),
 
       // total items where variant has at least one image
@@ -89,9 +90,9 @@ export default defineEventHandler(async (event) => {
         `SELECT COALESCE(SUM(i.qty), 0) AS total_items_with_images
          FROM items i
          INNER JOIN variants v ON i.variant_id = v.id
-         WHERE i.company_id = $1
+         WHERE i.company_id = ANY($1::text[])
            AND array_length(v.images, 1) > 0`,
-        [companyId]
+        [companyIds]
       ),
 
       client.query(
@@ -129,12 +130,12 @@ export default defineEventHandler(async (event) => {
                 END
             ) elem
         ) sp ON b.payment_method = 'Split'
-        WHERE b.company_id = $1
+        WHERE b.company_id = ANY($1::text[])
             AND b.deleted = false
             AND b.payment_status = 'PAID'
             AND ($2 = true OR b.precedence IS NOT TRUE);
         `,
-        [companyId, cleanup]
+        [companyIds, cleanup]
         )
 
     ]);

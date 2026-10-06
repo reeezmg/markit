@@ -1,4 +1,52 @@
+Legacy accounting archive policy (2026-10-06): generated create/update/delete is
+denied on AccountLedgerEntry, MoneyTransaction, AccountTransfer, Investment, BankAccount
+and CashAccount. Dedicated legacy financial mutation routes are retired. Raw scoped
+staff/supplier source services still maintain linked MoneyTransaction documents consumed
+by native posting triggers. This is an application-policy change, with no table/column
+migration or deletion of historical financial data.
+
 # Markit v1 - Project Architecture Guide
+
+`AccountantInvestor`, `AccountantInvestorTerm` and `AccountantInvestorEvent` own
+the new Accountant investor area. Profiles store contact/document metadata, a
+linked company user ID (the existing `legacyUserId` column now links both native and
+imported profiles, unique per company/user) and the three dedicated chart account IDs.
+`UserRole.investor` is added by migration `20260930180000_investor_user_role`;
+existing roles are not rewritten. Terms keep dated ownership/share/profit-sharing agreements. Manager/admin corrections
+are allowed before posted allocations protect the original or proposed effective
+date; the API audits before/after values under `terms-edited` in AccountantAudit.
+Unprotected terms may be deleted by manager/admin after validating remaining
+company totals; `terms-deleted` audits preserve the removed snapshot. Events retain dated amounts,
+journal/request/reversal/legacy IDs and allocation or import snapshots. Composite
+company/investor foreign keys keep terms/events within their profile's tenant;
+request, legacy and reversal IDs are unique per company. Generated CRUD is denied.
+The API owns posts and reversals; the legacy-import trigger makes adopted old
+investment rows immutable. See `ARCH-pages-accounts.md` and
+`scripts/production-accounting/INVESTORS.md` for calculation and import rules.
+
+Company-wide profit distributions reuse these investor models. `AccountantAudit`
+stores append-only funding-account configuration (`investor-profit-settings`),
+company share totals (`investor-share-settings`, `after.totalShares`), and
+approved request/result snapshots (`investor-profit-batch`). Investor event details
+link the batch ID; there is no separate distribution table or new schema migration.
+
+`AccountantUserSettings` stores company salary/credit account mappings and activation.
+`AccountantUserSource` freezes source account choices, posting signatures and current
+journal IDs; historical exclusions use stable source keys, with an amount baseline
+for cumulative payroll credit deductions. Generated CRUD is denied, as are direct
+UserLedgerEntry mutations. Source APIs and deferred SQL triggers own writes. See
+`ARCH-pages-users.md` for new-only activation and posting semantics.
+
+`AccountantStockControl` stores each company's opt-in Stock account, opening equity
+and adjustment expense accounts, initialization date, revision and product valuation
+snapshot. Deferred database triggers own synchronization; generated CRUD is denied.
+See `ARCH-pages-accounts.md` and `scripts/STOCK-ACCOUNTING.md`.
+
+ERP accounting adds `AccountantErpSettings` (one company settings row with activation
+date and account-role mappings) and `AccountantErpSource` (company/source composite
+key, posting signature, frozen account choices, revision and current journal ID).
+Generated CRUD access is denied; the authenticated Accountant API owns configuration.
+See `ARCH-pages-erp.md` for posting, exclusion and rollout rules.
 
 > Exhaustive field-level inventory: [`database/DB-CATALOG.md`](./database/DB-CATALOG.md)
 > and [`database/dbMeta.json`](./database/dbMeta.json). Generated files inventory
@@ -43,10 +91,53 @@ Markit is a multi-tenant retail store management platform. It consists of three 
 
 ## Database Tables — Full Reference
 
+### Independent Accountant books
+
+The `Accountant*` models added for `/accountant` are separate from `Account`,
+`AccountLedgerEntry`, `BankAccount`, `MoneyTransaction`, `Investment`, and
+`AccountTransfer`. Distributor integration is opt-in per company/distributor;
+its history import and deferred PostgreSQL triggers post source-linked journals.
+The original 19 models have a company foreign key, timestamps, and a nullable soft-delete
+timestamp. The three integration models below use composite source/mapping keys.
+Each denies generated ZenStack CRUD; server Accountant routes enforce
+authorization and company scope. Currency amounts use PostgreSQL Decimal(18,2),
+with Decimal(18,6) exchange rates. Source of truth: the Accountant section at the
+end of `schema.zmodel`; generated definitions live in `prisma/schema.prisma`.
+
+| Model | Table / responsibility |
+|---|---|
+| `AccountantDistributorSettings` | `accountant_v2_distributor_settings`: company/distributor connection, VENDOR contact and enabled flag |
+| `AccountantDistributorMapping` | `accountant_v2_distributor_mappings`: typed payable, stock, cash, bank, tax and opening-offset account choices; bank-specific roles use `bank:<legacy bank ID>` |
+| `AccountantDistributorSource` | `accountant_v2_distributor_sources`: source signature, frozen or explicitly overridden account snapshot, revision and current journal; repeat imports do not duplicate postings |
+| `AccountantAccountingAccount` | `accountant_v2_accounting_accounts`: categorized chart, parent hierarchy, bank metadata, status and dashboard flag |
+| `AccountantManualJournal` | `accountant_v2_manual_journals`: draft/published journal header, source identity, reversal, creator and approval records |
+| `AccountantManualJournalLine` | `accountant_v2_manual_journal_lines`: debit/credit amounts linked to journal and account |
+| `AccountantJournalTemplate` | `accountant_v2_journal_templates`: reusable JSON lines with amount/percentage mode |
+| `AccountantRecurringJournalProfile` | `accountant_v2_recurring_journal_profiles`: schedule, next run and child posting status |
+| `AccountantAccountingBudget` | `accountant_v2_accounting_budgets`: fiscal-year JSON account allocations |
+| `AccountantTransactionLock` | `accountant_v2_transaction_locks`: cutoff, module, lock/unlock actor and reason |
+| `AccountantAccountOpeningBalance` | `accountant_v2_account_opening_balances`: one opening record per company/account linked to the shared opening journal |
+| `AccountantFixedAssetCategory` | `accountant_v2_fixed_asset_categories`: depreciation policy and asset/expense/accumulated accounts |
+| `AccountantFixedAsset` | `accountant_v2_fixed_assets`: acquisition metadata, carrying value, depreciation/disposal status |
+| `AccountantAssetDepreciation` | `accountant_v2_asset_depreciations`: dated journal-linked depreciation history |
+| `AccountantAssetDisposal` | `accountant_v2_asset_disposals`: disposal proceeds, gain/loss and journal link |
+| `AccountantCurrencyAdjustment` | `accountant_v2_currency_adjustments`: foreign/base balances, rate, adjustment status and journal |
+| `AccountantPreference` | `accountant_v2_accountant_preferences`: one company preference record, fiscal start, approvals and gain/loss settings |
+| `AccountantClient` | `accountant_v2_accountant_clients`: new-book contact engagement metadata |
+| `AccountantAccountTransfer` | `accountant_v2_account_transfers`: movement between new cash/bank/card/clearing accounts |
+| `AccountantContact` | `accountant_v2_accountant_contact`: independent client/vendor/other directory |
+| `AccountantProject` | `accountant_v2_accountant_project`: independent journal project directory |
+| `AccountantAudit` | `accountant_v2_accountant_audit`: API actor, action, resource and metadata |
+
+See `ARCH-pages-accounts.md` for posting invariants, rollout boundaries and the
+targeted additive migration command. Scalar account/contact/project references in
+management records are validated by the scoped API; they are not all schema relations.
+
 ### Core Identity
 
 #### `companies` (Company)
 The central tenant entity. Every store is a Company.
+- Organization links: `isHeadOffice` marks a company that may own branches; `parentCompanyId` is an optional self-reference to its head office. A branch has its own company-scoped operational data. The database prevents self-parenting and a branch also being a head office; the branch API enforces one-level hierarchy.
 - Key fields: `id`, `name`, `storecode` (auto-increment), `storeUniqueName`, `type` (seller/buyer)
 - Financial config: `cash`, `bank`, `openingCashDate`, `openingBankDate`
 - Feature flags: `isTaxIncluded`, `isCostIncluded`, `isUserTrackIncluded`, `isAiImage`, `darkstore` (Boolean, default false; marks the company as eligible for marketplace dark-store catalog selection)
@@ -72,8 +163,10 @@ Junction table linking a User to a Company with a role. This is the staff record
 - **Used in:** storetools (auth, billing, reports)
 
 #### Payroll / Salary tables
+- `Shift.policy` (nullable JSONB) holds advanced break, off-day pay/compensatory leave, attendance thresholds, missing-checkout and typed-leave switches. `Shift.policyHistory` holds immutable effective-date snapshots of all shift policy fields; `utils/shift-policy.ts` resolves historical settings. Null policy preserves legacy defaults. Generated Shift create/update is denied so the versioned API owns policy changes.
+- `LeaveApplication.type` additionally supports `COMP_OFF`. Approved applications are reconciled against typed allowances or compensatory leave by `server/utils/shift-calendar.ts`; there is no separate credit-minting table. Generic LeaveApplication writes are denied; validated company-scoped APIs own changes. Migration: `20260929160000_shift_policy_scenarios`.
 - `shifts`: reusable shift definitions for attendance and payroll. Besides timing (`startTime`, `endTime`, `breakMinutes`) and selected working weekdays (`workDays`, default Monday-Saturday), each shift now owns reusable payroll policy: overtime config (`overtimeMode`, `overtimeRate`, `otDailyThresholdMinutes`, `otHourlyRoundMinutes`), leave cuts (`leaveCutFullDay`, `leaveCutHalfDay`, `leaveCutPerHour`), late-entry fine config (`lateEntryGraceMinutes`, `lateEntryFine`), and early-exit fine config (`earlyExitGraceMinutes`, `earlyExitFine`). Assigned users reuse the policy from their active shift.
-- `salary_configs`: one row per `companyId + userId`, used for `/users/salary` Settings. Fields include per-user salary base/commission config: `period`, `amount`, `commissionPercentage`, and `effectiveFrom`.
+- `salary_configs`: one row per `companyId + userId`, edited through `/users` staff Actions. Scalar `period`, `amount`, `commissionPercentage` and `effectiveFrom` represent the latest configured rate; nullable JSONB `rateHistory` stores immutable effective-date versions. Historical payroll resolves the applicable version by date. Legacy rows provide a current-rate baseline; previously overwritten rates cannot be recovered. Migration: `20260930120000_salary_rate_history`. Generated SalaryConfig, SalaryPayment, PayrollCycle, PayrollCycleLine and PayrollAdjustment mutations are denied; role-checked salary APIs own writes.
 - `payroll_cycle_lines`: generated by salary payroll runs. Stores `baseSalary`, day counts, `leaveDeduction`, `lateEntryFine`, `earlyExitFine`, overtime totals, `commissionSales`, `commissionAmount`, signed `adjustmentTotal`, `grossPay`, and `netPay`.
 - `user_ledger_entries`: complete per-user double-entry ledger with `type` (`OPENING`, `PAYROLL_ACCRUAL`, `SALARY_PAYMENT`, `USER_CREDIT_BILL`, `CREDIT_BILL_PAYMENT`, `ADJUSTMENT`), `direction` (`DEBIT`/`CREDIT`), `amount`, `sourceType`, `sourceId`, `note`, and optional `balanceAfter`. Positive balance means the company owes the user. Credit-related rows (`USER_CREDIT_BILL`, `CREDIT_BILL_PAYMENT`) are also shown in the credit page as a filtered ledger.
 - `user_credit_transactions`: legacy narrow credit table retained for historical compatibility/backfill. Active bill/payroll/user-credit writes now go through `user_ledger_entries`.
@@ -205,6 +298,7 @@ Liability the company owes to a distributor.
 
 #### `bills` (Bill)
 A sales invoice/order.
+- `paidAt` (`paid_at`, timestamptz): first observed PAID insertion/transition after migration `20261001120000_document_status_history`. A database trigger sets it using the transaction timestamp and preserves it on retries, edits, refunds or reopening. Existing paid rows remain null; neither `createdAt` nor `updatedAt` is treated as historical payment evidence. New historical imports also record observation time, not a backdated collection date.
 - Fields: `companyId`, `clientId`, `userId`, `accountId`, `creditUserId`, `invoiceNumber`, `subtotal`, `originalSubtotal`, `discount`, `originalDiscount`, `tax`, `grandTotal`, `originalGrandTotal`, `paymentMethod`, `paymentStatus`, `splitPayments` (JSON), `type` (STANDARD/BOOKING/TRY_AT_HOME/BILL), `status` (order lifecycle), `deleted`, `isMarkit`, `precedence` (Boolean? default false), `commission`, `storeWaitingFee`
 - `originalSubtotal` / `originalGrandTotal` / `originalDiscount`: cleanup reduction snapshots. First cleanup amount reduction preserves the real bill values here before lowering visible `subtotal` / `grandTotal` and zeroing visible `discount`; cleanup users can see these real values.
 - `splitPayments`: JSON array of `{method, amount}` for partial payment across modes
@@ -233,6 +327,8 @@ Line item in a bill. One entry per product/variant sold.
 
 #### `ecomm_checkouts` / `ecomm_orders` / `ecomm_payment_verifications`
 Custom storefront order and payment state linked one-to-one to the generated bill.
+- `accountant_v2_ecommerce_settings` (`AccountantEcommerceSettings`) owns company-scoped opt-in activation and account mappings. Ecommerce accounting uses namespaced `AccountantErpSource` records for sales, collections, refund obligations and manual activity; no independent schema exists in the customer API. Migration `20261001130000_ecommerce_accounting` installs transactional posting functions and ERP-prefixed deferred order/entry triggers. The ERP dispatcher routes only newly connected linked bills, preserving ordinary POS/expense handling. See `ARCH-pages-accounts.md` for posting/rollout rules.
+- Checkout and order have the same trigger-managed `paidAt` semantics as Bill. The existing COD settlement transaction updates all three, so their first PAID transition shares one timestamp. Tracking does not itself propagate statuses or change billing/collection timing.
 - `ecomm_checkouts.idempotencyKey` is unique per company/client when present and makes a repeated checkout attempt return its original bill/order without a second stock movement.
 - `ecomm_orders.items` is the server-priced line snapshot used by order detail, cancellation, and fulfilment.
 - `ecomm_payment_verifications.primaryRef` is unique per company/gateway. The row stores the gateway-confirmed amount/currency and is consumed once by checkout settlement; settlement also remains idempotent for the same transaction ID.
@@ -243,6 +339,10 @@ Audit log for bill changes.
 - Fields: `billId`, `data` (JSON snapshot), `operation`, `changedAt`, `precedence` (Boolean? default false)
 - `precedence`: mirrors `Bill.precedence` — set to `true` when the parent bill is soft-deleted by cleanup
 - **Used in:** storetools (bill edit tracking)
+
+`document_status_history` (`DocumentStatusHistory`) is a separate database-written status audit for `bills`, `ecomm_orders`, and `ecomm_checkouts`. AFTER INSERT/UPDATE triggers append initial non-null statuses and every distinct change to `status` or `payment_status` (including transitions to null). Rows carry company, entity type/id, field, previous/new status, `changedAt`, sequence, source and optional actor. Sequence provides stable ordering when timestamps match. Unchanged writes add no rows; rolled-back writes leave no history. No document foreign key is used, so hard deletion retains the audit. Generated model access is denied; the authenticated `GET /api/bill/status-history?id=&type=bill|order|checkout` reader restricts every query to authorized companies. Existing BillHistory snapshots and `ecomm_order_status_history` carrier/manual notes remain unchanged.
+
+The bill create/edit and manual-order-status handlers set transaction-local source and `user:<id>` actor; storefront checkout sets `client:<id>` and a checkout source; carrier polling/webhooks set a shipping source with no actor. Other writers are still captured with source `database` and unknown actor. Dates are database-observed times, not carrier event times or courier bank-remittance dates. Apply the migration before deploying readers/generated clients; schema push alone does not install triggers. No historical dates or transitions are fabricated.
 
 #### `token_entries` (TokenEntry)
 Queue/token system for billing without full bill creation.
@@ -377,7 +477,7 @@ Records every time a coupon is used.
 
 #### `expenses` (Expense)
 Business expenses.
-- Fields: `companyId`, `userId`, `expensecategoryId`, `expenseDate`, `totalAmount`, `taxAmount`, `paymentMode`, `status`, `note`, `receipt`, `receiptName`
+- Fields: `companyId`, `userId`, `expensecategoryId`, `expenseDate`, `totalAmount`, `taxAmount`, `recoverableTaxAmount`, `paymentMode`, `status`, `note`, `receipt`, `receiptName`
 - Can be linked to a `DistributorPayment`
 - **Used in:** storetools (expense tracking, accounts ledger)
 
@@ -385,6 +485,18 @@ Business expenses.
 Types/buckets for expenses.
 - Fields: `name`, `companyId`, `status`
 - **Used in:** storetools
+
+#### `recurring_expenses` / `recurring_expense_occurrences`
+`RecurringExpense` stores company-owned fixed monthly schedules: category, name/note,
+tax-inclusive amount, included/recoverable tax, next due date, original monthly day,
+active flag and last generation error. Category deletion is restricted while referenced.
+`RecurringExpenseOccurrence` uniquely identifies `(scheduleId, dueDate)` and links to
+the generated `Expense`. Deleting that expense sets the link to null but retains the
+occurrence, so retries cannot recreate a deleted expense. Company deletion cascades
+through schedules and occurrences. Both models deny all generic ZenStack operations;
+only scoped raw-SQL endpoints and the secret-authenticated cron manage them.
+Deployment uses the owner's schema-push workflow from `schema.zmodel` and generated
+`prisma/schema.prisma`. Input validation is enforced by the recurring-expense APIs.
 
 #### `payments` (Payment)
 Payment records (separate from bill payments — likely used for subscription/platform payments).
@@ -496,6 +608,7 @@ Flexible per-company, per-page preference storage for reusable page rules/settin
 
 #### `storefront_sources` (runtime-managed)
 Private storefront source-provisioning state, created defensively by `storetools/server/utils/storefrontSource.ts`.
+- Provider fields: `repository_provider`/`hosting_provider` default to `github`/`vercel` for existing stores. New AWS rows select `codecommit`/`amplify` and persist `repository_arn`, `amplify_app_id`, `sandbox_role_arn`, the packaged `template_digest`, and resumable `provisioning_stage`. Migration `20261004120000_aws_storefront` is additive and mirrored in both ORM schemas.
 - Fields: `company_id` (unique FK to `companies`, cascade delete), private `repository_id`, private `repository_full_name`, `preview_branch` (default `preview`), private `vercel_project_id`, immutable preview/production deployment IDs and URLs, stable `preview_branch_url` and `production_url` aliases, deployment statuses, overall `status` (`CREATING`, `READY`, or `FAILED`), private `error_message`, timestamps.
 - Seller-facing APIs return only status and readiness; repository metadata is server-only.
 - **Used in:** `GET/POST /api/ecommerce-cms/storefront-source` and `pages/storefront/editor.vue` setup gating.
@@ -503,7 +616,8 @@ Private storefront source-provisioning state, created defensively by `storetools
 #### `storefront_agent_sessions` (runtime-managed)
 Company-scoped storefront editor conversation state, created defensively by `storetools/server/utils/storefrontAgent.ts`.
 - `queued_messages` is an ordered JSONB array mirrored in both ORM schemas. Each entry has a stable UUID, content, creation timestamp, and optional durable R2 image metadata; it never stores image base64.
-- Fields: `company_id` (FK to `companies`, cascade delete), authenticated affinity owner `user_id`, browser-generated `conversation_id`, latest turn `interaction_id`, assigned Cloud Run `environment_id`, Pi `pi_session_id`, rollback-only legacy `opencode_session_id`, latest private GCS Pi JSONL `storage_uri`, selected `model`, pending dispatch payload (`pending_prompt`, `pending_model`, encrypted `pending_runtime_payload`), queue/dispatch coordination (`dispatch_state`, `queued_at`), status, user-facing lifecycle `stage`, title, persisted JSONB `messages`, persisted JSONB `timing_report`, nullable JSONB `plan_state`, `saved_interaction_id` assistant-message deduplication marker, initial branch SHAs, `deployment_triggered`, reply and timestamps. User-message objects in `messages` may include an `images` array containing only durable R2 URL, MIME type, and optional original name; base64 is never stored there. Assistant-message objects created by code-changing turns include the interaction ID, before/after commit SHAs, Pi leaf entry ID, and `canUndo`; these server-trusted values drive per-reply Undo and Fork controls. `pending_runtime_payload` temporarily seals BYOK runtime configuration, inline image/assets, and non-default plan run modes while a turn waits for a slot; it is cleared on completion or timeout. `timing_report` stores the latest turn's ordered spans (`startedAt`, `endedAt`, `durationMs`, status and safe detail) plus the total start/completion timestamps, so the report survives a cold container and Recent-chat reopen. `plan_state` mirrors Pi's durable plan phase, automatic flag, numbered steps, and completion counts for Recent-chat restore.
+- Fields: `company_id` (FK to `companies`, cascade delete), authenticated affinity owner `user_id`, browser-generated `conversation_id`, latest turn `interaction_id`, assigned runtime `environment_id`, Pi `pi_session_id`, rollback-only legacy `opencode_session_id`, latest private GCS or company-prefixed S3 Pi JSONL `storage_uri`, selected `model`, pending dispatch payload (`pending_prompt`, `pending_model`, encrypted `pending_runtime_payload`), queue/dispatch coordination (`dispatch_state`, `queued_at`), status, user-facing lifecycle `stage`, title, persisted JSONB `messages`, persisted JSONB `timing_report`, nullable JSONB `plan_state`, `saved_interaction_id` assistant-message deduplication marker, initial branch SHAs, `deployment_triggered`, reply and timestamps. User-message objects in `messages` may include an `images` array containing only durable R2 URL, MIME type, and optional original name; base64 is never stored there. Assistant-message objects created by code-changing turns include the interaction ID, before/after commit SHAs, Pi leaf entry ID, and `canUndo`; these server-trusted values drive per-reply Undo and Fork controls. `pending_runtime_payload` temporarily seals BYOK runtime configuration, inline image/assets, and non-default plan run modes while a turn waits for a slot; it is cleared on completion or timeout. `timing_report` stores the latest turn's ordered spans (`startedAt`, `endedAt`, `durationMs`, status and safe detail) plus the total start/completion timestamps, so the report survives a cold container and Recent-chat reopen. `plan_state` mirrors Pi's durable plan phase, automatic flag, numbered steps, and completion counts for Recent-chat restore.
+- `runtime_result` stores the latest terminal runtime response for replay after Fargate shutdown; new starts clear it.
 - Unique constraint: `(company_id, conversation_id)` prevents conversation IDs from crossing company boundaries.
 - **Used in:** Storetools storefront-agent routes, `orchestrator/server.js`, and the edit-sandbox Pi lifecycle.
 
@@ -519,7 +633,8 @@ Company-scoped initial storefront design onboarding and rollout state, created b
 - **Used in:** `/api/ecommerce-cms/storefront-design` and the storefront editor's post-provisioning design gate.
 
 #### `edit_environment` (runtime-managed)
-Generic Cloud Run storefront-edit pool slots, seeded by the orchestrator pool tooling.
+Provider-aware editing slot registry: generic GCP pool slots and company-bound AWS Fargate tasks. AWS rows are never reassigned across companies.
+- AWS lifecycle fields: `compute_provider` defaults to `gcp`; `task_arn`, idempotent `task_token`, `lifecycle_state` (stopped/starting/running/stopping) and `lifecycle_error` track Fargate startup, capacity, shutdown and operational failures. `url` is the task?s private endpoint for AWS. All non-stopped AWS rows consume task capacity.
 - `owner_company_id` identifies the storefront currently holding a processing slot; the orchestrator's partial unique index permits only one processing slot per non-null company.
 - Fields: slot `id`, private Cloud Run `url`, `state` (`idle`, `processing`, or `quarantined`), authenticated affinity owner `owner_user_id`, currently hydrated Pi conversation `owner_conversation_id`, `last_activity_at`, hard-turn timer `processing_started_at`, legacy edit-session relation/assignment fields, and rollback-only `lease_owner`/`lease_until` compatibility fields. Runtime allocation does not renew or depend on the legacy lease fields.
 - An idle slot remains reserved to `owner_user_id` for 15 minutes from `last_activity_at`, so that user can switch, create, or fork conversations in the same warm slot; the orchestrator rehydrates the requested conversation when it differs from `owner_conversation_id`. Processing rows cannot be claimed, and a user with a processing slot is not assigned a second slot. An idle row with expired affinity is globally eligible, ordered oldest first. A failed teardown is quarantined.
@@ -591,3 +706,11 @@ Saved remark→operation lookup for auto-matching future statements. Per-company
 - **Auto-matching:** 30% keyword overlap matching (splits on `[\s\/\-\.]+`, matches if ≥30% of keywords present). Exact match takes priority; best-scoring partial match otherwise.
 
 ---
+
+### Company holiday mutation ownership
+
+`CompanyHoliday` stores one optional name per company/date (`@@unique([companyId, date])`). Generated create/update/delete operations are denied; validated holiday APIs own writes for admin/manager/accountant. The holiday editor supports explicit creation, scoped updates and confirmed removal. Bulk weekday actions are retired; weekly-off definitions remain in Shift work days. This policy change does not add database columns.
+
+### Attendance adjustment mutation ownership
+
+Generated AttendanceAdjustment create/update/delete operations are denied. Custom request APIs validate ownership and pending state; cancellation retains the row as CANCELLED. The management-only decision endpoint remains responsible for approval/rejection and atomic attendance/log correction. No database column migration is required for this permission change.

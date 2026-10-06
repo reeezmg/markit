@@ -1,7 +1,9 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
 
 export default defineEventHandler(async (event) => {
+  const companyIds = await getReadCompanyIds(event)
   const { id: billId } = getQuery(event)
 
   if (!billId) {
@@ -79,12 +81,13 @@ export default defineEventHandler(async (event) => {
       LEFT JOIN categories cat ON cat.id = e.category_id
 
       WHERE b.id = $1
+        AND b.company_id = ANY($2::text[])
         AND b.deleted = false
 
       GROUP BY b.id, cl.id, co.id, ad.id
     `
 
-    const { rows } = await client.query(query, [billId])
+    const { rows } = await client.query(query, [billId, companyIds])
 
     if (!rows.length) {
       throw createError({

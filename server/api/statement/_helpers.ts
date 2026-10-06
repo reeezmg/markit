@@ -1,15 +1,8 @@
 import { GoogleGenAI } from '@google/genai'
 import { pool } from '~/server/db'
 import crypto from 'crypto'
-import {
-  deleteAccountLedgerForSource,
-  distributorPaymentLedgerRows,
-  expenseLedgerRows,
-  investmentLedgerRows,
-  moneyTransactionLedgerRows,
-  rebuildAccountLedgerForSource,
-  transferLedgerRows,
-} from '~/server/utils/account-ledger'
+import { selectDistributorAccounts } from '~/server/utils/distributor-account-selection'
+
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -39,8 +32,8 @@ export async function fetchCompanyContext(companyId: string): Promise<CompanyCon
        WHERE dc.company_id = $1 AND d.status = true ORDER BY d.name`,
       [companyId]
     ),
-    pool.query(`SELECT id, bank_name, account_no FROM bank_accounts WHERE company_id = $1`, [companyId]),
-    pool.query(`SELECT bank_name, account_no FROM companies WHERE id = $1`, [companyId]),
+    pool.query(`SELECT id,name AS bank_name,'' AS account_no FROM accountant_v2_accounting_accounts WHERE company_id=$1 AND account_type='BANK' AND is_active AND deleted_at IS NULL ORDER BY name`, [companyId]),
+    Promise.resolve({ rows: [] }),
   ])
 
   return {
@@ -64,7 +57,7 @@ export async function classifyRow(
   if (!apiKey) throw new Error('GEMINI_API_KEY not configured')
 
   const isDebit = (row.debit ?? 0) > 0
-  const amount = row.debit ?? row.credit ?? 0
+  const amount = statementAmount(row)
 
   const categoryList = context.categories.length
     ? context.categories.map(c => `- "${c.name}" (id: ${c.id})`).join('\n')
@@ -116,41 +109,27 @@ ${bankListStr}
 
 **Operations and their exact JSON meta format:**
 
+Only expenses, supplier payments and IGNORE can be executed here. For transfers,
+Receive/Pay money or investment/capital activity, return operation="ERROR" and
+operationLabel="Use Accountant or Investments for this financial entry".
+
 1. **EXPENSE** — a business expense
 \`\`\`json
 { "categoryId": "uuid or null", "categoryName": "category name", "userId": "uuid or null", "userName": "name or null", "note": "optional string or null" }
 \`\`\`
 Rules: Pick categoryId from the list above by closest match. If the user asks to create a new category not in the list, set categoryId=null and categoryName to the new name. userId/userName are optional — only set if user mentions a person.
 
-2. **TRANSFER** — money moved between accounts
-\`\`\`json
-{ "fromType": "BANK|CASH|INVESTMENT", "fromAccountId": "uuid or null", "toType": "BANK|CASH|INVESTMENT", "toAccountId": "uuid or null", "note": "optional string or null" }
-\`\`\`
-Rules: If debit row, fromType=BANK and fromAccountId=${bankAccountId}. Figure out toType and toAccountId. If credit row, toType=BANK and toAccountId=${bankAccountId}. Figure out fromType and fromAccountId. If the other side is BANK, pick the account from the bank accounts list. If CASH or INVESTMENT, set accountId to null.
-
-3. **TRANSACTION** — money given to or received from a party
-\`\`\`json
-{ "partyType": "CUSTOMER|SUPPLIER|EMPLOYEE|OWNER|OTHER", "direction": "GIVEN|RECEIVED", "accountId": "uuid or null", "note": "optional string or null" }
-\`\`\`
-Rules: GIVEN = debit (money went out), RECEIVED = credit (money came in). accountId = ${bankAccountId}. Pick the partyType based on context.
-
-4. **DISTRIBUTOR_PAYMENT** — payment to a distributor/supplier
+2. **DISTRIBUTOR_PAYMENT** — payment to a distributor/supplier
 \`\`\`json
 { "distributorId": "uuid", "distributorName": "name", "billNo": "optional string or null", "purchaseOrderNo": "number or null", "remarks": "optional string or null" }
 \`\`\`
 Rules: Pick distributorId from the distributors list by closest name match. If no match found, return operation="ERROR" with operationLabel explaining the distributor was not found. billNo and purchaseOrderNo only if the user specifically mentions them (e.g. "PO 5" or "purchase order 12"). purchaseOrderNo is the numeric PO number, NOT a uuid.
 
-5. **INVESTMENT** — capital invested in or withdrawn from business
-\`\`\`json
-{ "userId": "uuid", "userName": "name", "direction": "IN|OUT" }
-\`\`\`
-Rules: Pick userId from the company users list. IN = money coming into business (credit), OUT = money going out / drawings (debit). Only classify as INVESTMENT if user explicitly mentions investment/capital/drawing.
-
-6. **IGNORE** — skip, no action
+3. **IGNORE** — skip, no action
 Meta: null
 
 Return ONLY valid JSON, no markdown fences, no explanation:
-{"operation":"<TYPE>","operationMeta":{...},"operationLabel":"<short label like Expense(Rent) or Transfer(Cash→Bank)>"}`
+{"operation":"<TYPE>","operationMeta":{...},"operationLabel":"<short label like Expense(Rent) or Supplier payment(Cash→Bank)>"}`
 
   const genai = new GoogleGenAI({ apiKey })
   const response = await genai.models.generateContent({
@@ -178,6 +157,9 @@ Return ONLY valid JSON, no markdown fences, no explanation:
   if (parsed.operation === 'ERROR') {
     throw new Error(parsed.operationLabel || 'Could not classify this row, please rewrite your input')
   }
+  if (!['EXPENSE', 'DISTRIBUTOR_PAYMENT', 'IGNORE'].includes(parsed.operation)) {
+    throw new Error('Use Accountant or Investments for this financial entry')
+  }
 
   return {
     operation: parsed.operation,
@@ -193,8 +175,15 @@ export async function executeOperation(
   operation: string,
   meta: Record<string, any>,
   companyId: string,
+  db: any = pool,
+  bankAccountId?: string,
 ): Promise<{ operationId: string | null; insertedData: Record<string, any> }> {
-  const amount = row.debit ?? row.credit ?? 0
+  const amount = statementAmount(row)
+  if (operation !== 'IGNORE' && amount <= 0) throw new Error('Statement amount must be positive')
+  if (bankAccountId && operation !== 'IGNORE') {
+    const bank = await db.query(`SELECT id FROM accountant_v2_accounting_accounts WHERE id=$1 AND company_id=$2 AND account_type='BANK' AND is_active AND deleted_at IS NULL`, [bankAccountId,companyId])
+    if (!bank.rows.length) throw new Error('Select an active accounting bank in this company')
+  }
   const bankRemark = row.description ? ` [${row.description}]` : ''
   let txDate: string
   try {
@@ -218,73 +207,40 @@ export async function executeOperation(
       if (!categoryId && meta.categoryName) {
         // Auto-create category
         categoryId = crypto.randomUUID()
-        await pool.query(
+        await db.query(
           `INSERT INTO expense_categories (id, name, status, company_id, created_at, updated_at) VALUES ($1, $2, true, $3, now(), now())`,
           [categoryId, meta.categoryName, companyId]
         )
       }
       if (!categoryId) throw new Error(`Category "${meta.categoryName || 'unknown'}" not found, please create it first`)
+      const category = await db.query('SELECT id FROM expense_categories WHERE id=$1 AND company_id=$2 AND status=true', [categoryId,companyId])
+      if (!category.rows.length) throw new Error('Expense category does not belong to this company')
+      if (meta.userId) {
+        const user=await db.query('SELECT user_id FROM company_users WHERE user_id=$1 AND company_id=$2 AND deleted=false',[meta.userId,companyId])
+        if (!user.rows.length) throw new Error('Staff member does not belong to this company')
+      }
 
       const operationId = crypto.randomUUID()
+      if (bankAccountId) {
+        const settings=await db.query('SELECT accounts,enabled FROM accountant_v2_erp_settings WHERE company_id=$1',[companyId])
+        if (!settings.rows[0]?.enabled) throw new Error('Enable expense accounting before executing a statement')
+        await db.query(`INSERT INTO accountant_v2_erp_sources(company_id,source_key,signature,accounts) VALUES($1,$2,'{}',$3::jsonb)`,[companyId,'expense:'+operationId,JSON.stringify({...settings.rows[0].accounts,bank:bankAccountId})])
+      }
       const note = (meta.note || '') + bankRemark
       const expenseData = { id: operationId, expense_date: txDate, note, payment_mode: 'BANK', status: 'Paid', total_amount: amount, expense_category_id: categoryId, categoryName: meta.categoryName, company_id: companyId, from_id: meta.userId || null, userName: meta.userName || null }
-      await pool.query(
+      await db.query(
         `INSERT INTO expenses (id, expense_date, note, payment_mode, status, total_amount, expense_category_id, company_id, from_id, created_at, updated_at)
          VALUES ($1, $2, $3, 'BANK', 'Paid', $4, $5, $6, $7, now(), now())`,
         [operationId, txDate, note, amount, categoryId, companyId, meta.userId || null]
       )
-      await rebuildAccountLedgerForSource(pool, {
-        companyId,
-        sourceType: 'EXPENSE',
-        sourceId: operationId,
-        rows: expenseLedgerRows({ id: operationId, companyId, totalAmount: amount, paymentMode: 'BANK', status: 'Paid', expenseDate: txDate, note }),
-      })
+
       return { operationId, insertedData: expenseData }
-    }
-
-    case 'TRANSFER': {
-      const operationId = crypto.randomUUID()
-      const fromAccountId = meta.fromAccountId === 'PRIMARY' ? null : (meta.fromAccountId || null)
-      const toAccountId = meta.toAccountId === 'PRIMARY' ? null : (meta.toAccountId || null)
-      const transferNote = (meta.note || '') + bankRemark
-      const transferData = { id: operationId, company_id: companyId, from_type: meta.fromType, to_type: meta.toType, from_account_id: fromAccountId, to_account_id: toAccountId, amount, note: transferNote, created_at: txDate }
-      await pool.query(
-        `INSERT INTO account_transfers (id, company_id, from_type, to_type, from_account_id, to_account_id, amount, note, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
-        [operationId, companyId, meta.fromType, meta.toType, fromAccountId, toAccountId, amount, transferNote, txDate]
-      )
-      await rebuildAccountLedgerForSource(pool, {
-        companyId,
-        sourceType: 'ACCOUNT_TRANSFER',
-        sourceId: operationId,
-        rows: transferLedgerRows({ id: operationId, companyId, fromType: meta.fromType, toType: meta.toType, fromAccountId, toAccountId, amount, note: transferNote, createdAt: txDate }),
-      })
-      return { operationId, insertedData: transferData }
-    }
-
-    case 'TRANSACTION': {
-      const operationId = crypto.randomUUID()
-      const accountId = meta.accountId === 'PRIMARY' ? null : (meta.accountId || null)
-      const txNote = (meta.note || '') + bankRemark
-      const txData = { id: operationId, company_id: companyId, party_type: meta.partyType || 'OTHER', direction: meta.direction, status: 'PAID', amount, payment_mode: 'BANK', account_id: accountId, note: txNote, created_at: txDate }
-      await pool.query(
-        `INSERT INTO money_transactions (id, company_id, party_type, direction, status, amount, payment_mode, account_id, note, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, 'PAID', $5, 'BANK', $6, $7, $8, now())`,
-        [operationId, companyId, meta.partyType || 'OTHER', meta.direction, amount, accountId, txNote, txDate]
-      )
-      await rebuildAccountLedgerForSource(pool, {
-        companyId,
-        sourceType: 'MONEY_TRANSACTION',
-        sourceId: operationId,
-        rows: moneyTransactionLedgerRows({ id: operationId, companyId, amount, paymentMode: 'BANK', accountId, direction: meta.direction, status: 'PAID', createdAt: txDate, note: txNote }),
-      })
-      return { operationId, insertedData: txData }
     }
 
     case 'DISTRIBUTOR_PAYMENT': {
       // Look up distributor by name if distributorId not provided
       if (!meta.distributorId && meta.distributorName) {
-        const { rows: dists } = await pool.query(
+        const { rows: dists } = await db.query(
           `SELECT d.id FROM distributors d
            JOIN distributor_companies dc ON dc.distributor_id = d.id
            WHERE LOWER(d.name) LIKE LOWER($1) AND dc.company_id = $2 AND d.status = true LIMIT 1`,
@@ -293,6 +249,8 @@ export async function executeOperation(
         if (dists.length) meta.distributorId = dists[0].id
       }
       if (!meta.distributorId) throw new Error(`Distributor "${meta.distributorName || 'unknown'}" not found, please create it first`)
+      const vendor=await db.query('SELECT distributor_id FROM distributor_companies WHERE distributor_id=$1 AND company_id=$2',[meta.distributorId,companyId])
+      if (!vendor.rows.length) throw new Error('Supplier does not belong to this company')
       const operationId = crypto.randomUUID()
       const dpRemarks = (meta.remarks || '') + bankRemark
 
@@ -301,56 +259,34 @@ export async function executeOperation(
       if (!purchaseOrderId && meta.purchaseOrderNo) {
         const poNo = parseInt(meta.purchaseOrderNo, 10)
         if (!isNaN(poNo)) {
-          const { rows: poRows } = await pool.query(
+          const { rows: poRows } = await db.query(
             `SELECT id FROM purchase_orders WHERE purchase_order_no = $1 AND distributor_id = $2 AND company_id = $3 LIMIT 1`,
             [poNo, meta.distributorId, companyId]
           )
-          if (poRows.length) purchaseOrderId = poRows[0].id
+          if (!poRows.length) throw new Error('Purchase order not found for this supplier')
+          purchaseOrderId = poRows[0].id
         }
       }
+      if (purchaseOrderId) {
+        const order=await db.query('SELECT id FROM purchase_orders WHERE id=$1 AND company_id=$2 AND distributor_id=$3',[purchaseOrderId,companyId,meta.distributorId])
+        if (!order.rows.length) throw new Error('Purchase order does not belong to this supplier and company')
+      }
+      if (bankAccountId) await selectDistributorAccounts(db,companyId,meta.distributorId,'payment:'+operationId,{bank:bankAccountId})
 
       const dpData = { id: operationId, distributor_id: meta.distributorId, distributorName: meta.distributorName, company_id: companyId, amount, payment_type: 'BANK', remarks: dpRemarks, bill_no: meta.billNo || null, purchase_order_id: purchaseOrderId, created_at: txDate }
-      await pool.query(
+      await db.query(
         `INSERT INTO distributor_payments (id, distributor_id, company_id, amount, payment_type, remarks, bill_no, purchase_order_id, created_at)
          VALUES ($1, $2, $3, $4, 'BANK', $5, $6, $7, $8)`,
         [operationId, meta.distributorId, companyId, amount, dpRemarks, meta.billNo || null, purchaseOrderId, txDate]
       )
-      await rebuildAccountLedgerForSource(pool, {
-        companyId,
-        sourceType: 'DISTRIBUTOR_PAYMENT',
-        sourceId: operationId,
-        rows: distributorPaymentLedgerRows({ id: operationId, companyId, amount, paymentType: 'BANK', createdAt: txDate, remarks: dpRemarks }),
-      })
+
       return { operationId, insertedData: dpData }
     }
 
-    case 'INVESTMENT': {
-      let userId = meta.userId
-      // Look up user by name if userId not provided
-      if (!userId && meta.userName) {
-        const { rows: users } = await pool.query(
-          `SELECT user_id FROM company_users WHERE LOWER(name) LIKE LOWER($1) AND company_id = $2 AND deleted = false LIMIT 1`,
-          [`%${meta.userName}%`, companyId]
-        )
-        if (users.length) userId = users[0].user_id
-      }
-      if (!userId) throw new Error(`User "${meta.userName || 'unknown'}" not found, please create it first`)
-      const operationId = crypto.randomUUID()
-      const invNote = (meta.note || '') + bankRemark
-      const invData = { id: operationId, company_id: companyId, userId, userName: meta.userName, direction: meta.direction || 'IN', amount, payment_mode: 'BANK', status: 'COMPLETED', note: invNote, created_at: txDate }
-      await pool.query(
-        `INSERT INTO investments (id, company_id, "userId", direction, amount, payment_mode, status, note, created_at, updated_at)
-         VALUES ($1, $2, $3, $4, $5, 'BANK', 'COMPLETED', $6, $7, now())`,
-        [operationId, companyId, userId, meta.direction || 'IN', amount, invNote, txDate]
-      )
-      await rebuildAccountLedgerForSource(pool, {
-        companyId,
-        sourceType: 'INVESTMENT',
-        sourceId: operationId,
-        rows: investmentLedgerRows({ id: operationId, companyId, amount, direction: meta.direction || 'IN', status: 'COMPLETED', createdAt: txDate, note: invNote }),
-      })
-      return { operationId, insertedData: invData }
-    }
+    case 'TRANSFER':
+    case 'TRANSACTION':
+    case 'INVESTMENT':
+      throw new Error('Legacy statement financial operations are read-only. Use Accountant for transfers, Receive/Pay and investments.')
 
     case 'IGNORE':
       return { operationId: null, insertedData: {} }
@@ -362,32 +298,20 @@ export async function executeOperation(
 
 // ─── Delete Previously Executed Record (for re-execution) ────────────────────
 
-export async function deleteExecutedRecord(operation: string, executionResult: any): Promise<void> {
+export async function deleteExecutedRecord(operation: string, executionResult: any, db:any=pool, owner?:string): Promise<void> {
   const opId = executionResult?.operationId
   if (!opId) return
 
   const tableMap: Record<string, string> = {
     EXPENSE: 'expenses',
-    TRANSFER: 'account_transfers',
-    TRANSACTION: 'money_transactions',
     DISTRIBUTOR_PAYMENT: 'distributor_payments',
-    INVESTMENT: 'investments',
   }
   const table = tableMap[operation]
-  if (table) {
-    const companyId = executionResult?.insertedData?.company_id
-    const sourceTypeMap: Record<string, any> = {
-      EXPENSE: 'EXPENSE',
-      TRANSFER: 'ACCOUNT_TRANSFER',
-      TRANSACTION: 'MONEY_TRANSACTION',
-      DISTRIBUTOR_PAYMENT: 'DISTRIBUTOR_PAYMENT',
-      INVESTMENT: 'INVESTMENT',
-    }
-    if (companyId && sourceTypeMap[operation]) {
-      await deleteAccountLedgerForSource(pool, { companyId, sourceType: sourceTypeMap[operation], sourceId: opId })
-    }
-    await pool.query(`DELETE FROM ${table} WHERE id = $1`, [opId])
-  }
+  if (!table) throw new Error('Legacy statement financial records are read-only. Use Accountant.')
+  const companyId = owner || executionResult?.insertedData?.company_id
+  if (!companyId) throw new Error('Statement source company is required')
+  await db.query(`DELETE FROM ${table} WHERE id = $1 AND company_id = $2`, [opId, companyId])
+
 }
 
 // ─── Upsert Statement Mapping ────────────────────────────────────────────────
@@ -399,21 +323,22 @@ export async function upsertMapping(
   operationMeta: any,
   operationLabel: string,
   userInput?: string,
+  db:any=pool,
 ): Promise<void> {
   const metaJson = JSON.stringify(operationMeta)
-  const { rows: existing } = await pool.query(
+  const { rows: existing } = await db.query(
     `SELECT id FROM statement_mappings WHERE company_id = $1 AND LOWER(remarks) = LOWER($2) LIMIT 1`,
     [companyId, description]
   )
 
   if (!existing.length) {
-    await pool.query(
+    await db.query(
       `INSERT INTO statement_mappings (id, company_id, remarks, operation, operation_meta, operation_label, user_input, created_at)
        VALUES ($1, $2, $3, $4, $5, $6, $7, now())`,
       [crypto.randomUUID(), companyId, description, operation, metaJson, operationLabel, userInput || null]
     )
   } else {
-    await pool.query(
+    await db.query(
       `UPDATE statement_mappings SET operation = $2, operation_meta = $3, operation_label = $4, user_input = $5 WHERE id = $1`,
       [existing[0].id, operation, metaJson, operationLabel, userInput || null]
     )
@@ -425,4 +350,10 @@ export async function upsertMapping(
 export function parseMeta(raw: any): Record<string, any> {
   if (!raw) return {}
   return typeof raw === 'string' ? JSON.parse(raw) : raw
+}
+
+export function statementAmount(row:{debit?:number|null;credit?:number|null}):number {
+  const debit=Number(row.debit ?? 0), credit=Number(row.credit ?? 0)
+  if (!Number.isFinite(debit) || !Number.isFinite(credit) || debit<0 || credit<0 || (debit>0 && credit>0)) throw new Error('Invalid statement debit/credit amounts')
+  return debit>0 ? debit : credit
 }

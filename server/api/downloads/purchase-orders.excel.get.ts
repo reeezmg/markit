@@ -1,13 +1,12 @@
 import { defineEventHandler, getQuery, createError, setHeader } from 'h3'
 import { pool } from '~/server/db'
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
 import ExcelJS from 'exceljs'
 
 export default defineEventHandler(async (event) => {
 
   /* ── AUTH ── */
-  const session = await useAuthSession(event)
-  const companyId = session.data.companyId
-  if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  const companyIds = await getReadCompanyIds(event)
 
   /* ── PARAMS ── */
   const query = getQuery(event)
@@ -32,6 +31,7 @@ export default defineEventHandler(async (event) => {
          po.created_at,
          po.payment_type,
          po.total_amount,
+         co.name AS company_name,
          d.name AS distributor_name,
          COALESCE((
            SELECT SUM(i.initial_qty)
@@ -46,11 +46,12 @@ export default defineEventHandler(async (event) => {
            WHERE  dp.purchase_order_id = po.id
          ), 0) AS paid
        FROM purchase_orders po
+       JOIN companies co ON co.id = po.company_id
        LEFT JOIN distributors d ON d.id = po.distributor_id
-       WHERE po.company_id = $1
+       WHERE po.company_id = ANY($1::text[])
          AND po.created_at BETWEEN $2 AND $3
        ORDER BY po.created_at DESC`,
-      [companyId, startDate, endDate]
+      [companyIds, startDate, endDate]
     )
 
     let rows = posRes.rows.map(r => ({
@@ -60,6 +61,7 @@ export default defineEventHandler(async (event) => {
       payment_type:      r.payment_type,
       total_amount:      Number(r.total_amount),
       distributor_name:  r.distributor_name || '-',
+      company_name:      r.company_name,
       qty:               Number(r.qty),
       paid:              Number(r.paid),
       due:               r.payment_type === 'CREDIT' ? Number(r.total_amount) - Number(r.paid) : null,
@@ -86,14 +88,14 @@ export default defineEventHandler(async (event) => {
     /* title */
     const titleRow = sheet.addRow(['Purchase Orders'])
     titleRow.font = { bold: true, size: 14 }
-    sheet.mergeCells('A1:G1')
+    sheet.mergeCells('A1:H1')
 
     sheet.addRow([`${startDate.toLocaleDateString('en-GB')} – ${endDate.toLocaleDateString('en-GB')}`])
-    sheet.mergeCells('A2:G2')
+    sheet.mergeCells('A2:H2')
     sheet.addRow([])
 
     /* header */
-    const headerRow = sheet.addRow(['PO No', 'Date', 'Distributor', 'Payment Type', 'Total (Rs)', 'Qty', 'Due (Rs)'])
+    const headerRow = sheet.addRow(['PO No', 'Date', 'Distributor', 'Payment Type', 'Total (Rs)', 'Qty', 'Due (Rs)', 'Store'])
     headerRow.font = { bold: true }
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAD3' } }
     headerRow.eachCell(cell => { cell.border = { bottom: { style: 'thin' } } })
@@ -108,6 +110,7 @@ export default defineEventHandler(async (event) => {
         r.total_amount.toFixed(2),
         r.qty,
         r.due !== null ? r.due.toFixed(2) : '-',
+        r.company_name,
       ])
     })
 
@@ -121,6 +124,7 @@ export default defineEventHandler(async (event) => {
       rows.reduce((s, r) => s + r.total_amount, 0).toFixed(2),
       rows.reduce((s, r) => s + r.qty, 0),
       rows.filter(r => r.due !== null).reduce((s, r) => s + (r.due ?? 0), 0).toFixed(2),
+      '',
     ])
     totalRow.font = { bold: true }
 

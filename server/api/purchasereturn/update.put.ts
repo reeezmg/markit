@@ -1,8 +1,11 @@
+import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { pool } from '~/server/db'
 import crypto from 'crypto'
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const sessionCompanyId = session.data.companyId
   if (!sessionCompanyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
@@ -49,6 +52,7 @@ export default defineEventHandler(async (event) => {
     const client = await pool.connect()
     try {
       await client.query('BEGIN')
+      await lockCompanyRequest(event, client);
 
       /* 1. Verify the return belongs to this company */
       const checkRes = await client.query(
@@ -146,11 +150,13 @@ export default defineEventHandler(async (event) => {
       /* 8. Update the linked distributor payment */
       await client.query(
         `UPDATE distributor_payments
-         SET amount = $1, remarks = $2
+         SET amount = $1, remarks = $2, distributor_id=$4, created_at=$5
          WHERE purchase_return_id = $3 AND payment_type = 'RETURN'`,
-        [totalAmount || 0, remarks || null, id]
+        [totalAmount || 0, remarks || null, id, distributorId, new Date(returnDate)]
       )
 
+      const linkedPayment = (await client.query('SELECT id FROM distributor_payments WHERE purchase_return_id=$1 AND company_id=$2', [id,companyId])).rows[0];
+      if (linkedPayment) await selectDistributorAccounts(client,companyId,distributorId,`payment:${linkedPayment.id}`,body.accountingAccounts);
       await client.query('COMMIT')
       client.release()
       return { success: true, purchaseReturnId: id }

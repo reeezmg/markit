@@ -19,7 +19,9 @@ export interface ProductCustomFieldDef {
 const inflight = new Map<string, Promise<void>>()
 
 export const useProductCustomFields = () => {
-  const auth = useNuxtApp().$auth as any
+  const companyScope = useCompanyScope();
+  const $fetch = companyScope.fetch;
+  const auth = companyScope.auth as any
   const companyId = computed<string>(() => auth?.session?.value?.companyId || 'none')
 
   // Keyed by company so switching companies (TeamsDropdown) refetches instead

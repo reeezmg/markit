@@ -1,5 +1,11 @@
 <script setup lang="ts">
-import { useFindManyDistributorCompany } from '~/lib/hooks/distributor-company';
+const returnAccountingAccounts = ref<Record<string,string>>({});
+const returnAccountingSource = ref<string>();
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
+import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company';
 
 import { useQueryClient } from '@tanstack/vue-query'
 import type { Prisma } from '@prisma/client'
@@ -7,7 +13,7 @@ import type { Prisma } from '@prisma/client'
 const toast   = useToast()
 const router  = useRouter()
 const route   = useRoute()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 
 const companyId = computed(() => useAuth().session.value?.companyId)
 const { defaultSizeLabel } = useSizeLabel()
@@ -27,7 +33,7 @@ onMounted(async () => {
 const selectedDistributorId = ref((route.query.distributorId as string) || '')
 
 const distArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
-  where: { companyId: companyId.value },
+  where: { companyId: { in: companyId.value ? [companyId.value] : [] } },
   select: {
     distributorId: true,
     distributor: { select: { id: true, name: true } },
@@ -311,6 +317,8 @@ const handleSubmit = async () => {
     const result = await $fetch<{ success: boolean; purchaseReturnId: string }>('/api/purchasereturn/create', {
       method: 'POST',
       body: {
+        accountingAccounts: returnAccountingAccounts.value,
+        returnDate: returnDate.value,
         distributorId:   selectedDistributorId.value,
         companyId:       companyId.value,
         purchaseOrderId: selectedPO.value?.id || undefined,
@@ -372,6 +380,7 @@ const downloadPdf = async (id?: string) => {
 
 <template>
   <UDashboardPanelContent class="p-1 flex flex-col gap-2">
+      <CompanyFormField />
     <div class="flex items-center gap-2 px-1">
       <UButton icon="i-heroicons-arrow-left" color="gray" variant="ghost" size="sm" @click="router.push('/distributor/purchase-return')" />
       <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">New Purchase Return</span>
@@ -393,6 +402,7 @@ const downloadPdf = async (id?: string) => {
 
       <!-- ── HEADER ── -->
       <template #header>
+        <DistributorAccountSelection v-if="selectedDistributorId" v-model="returnAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="selectedDistributorId" :source-key="returnAccountingSource" :roles="['payable', 'stock']" />
         <div class="flex flex-wrap items-end gap-3 w-full">
           <UFormGroup label="Date" class="w-36">
             <UInput v-model="returnDate" type="date" />

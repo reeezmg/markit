@@ -1,6 +1,10 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const $fetch = companyScope.fetch;
+
 import AwsService from '~/composables/aws';
-import { useCreateCategory } from '~/lib/hooks/category';
+import { useCreateCategory } from '~/lib/company-hooks/category';
 
 const route = useRoute();
 const router = useRouter();
@@ -8,7 +12,7 @@ const toast = useToast();
 const categoryStore = useCategoryStore();
 const CreateCategory = useCreateCategory();
 const awsService = new AwsService();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 
 interface ImageData {
   file: File;
@@ -178,6 +182,7 @@ const scrollToSection = (sectionId: string) => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+      <CompanyFormField />
     <div class="flex flex-row">
       <div class="w-1/4 sm:block hidden">
         <UPageCard class="m-3">

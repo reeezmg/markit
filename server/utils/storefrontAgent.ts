@@ -1,3 +1,5 @@
+import { storefrontTransport, storefrontUsesAws } from './storefrontTransport'
+import { awsStorefrontRequest } from './awsStorefront'
 import crypto from 'node:crypto'
 import { pool } from '~/server/db'
 import {
@@ -249,41 +251,7 @@ export async function steerStorefrontInteraction(args: {
  * (environment_id, pi_session_id, storage_uri). Two writers on the same
  * rows would race; two writers on disjoint columns do not.
  */
-const ORCHESTRATOR_URL = process.env.EDIT_ORCHESTRATOR_URL || ''
-const ORCHESTRATOR_SHARED_SECRET = process.env.ORCHESTRATOR_SHARED_SECRET || ''
-
-export async function orchestratorRequest<T>(path: string, init: RequestInit = {}) {
-  if (!ORCHESTRATOR_URL) throw new Error('EDIT_ORCHESTRATOR_URL is not configured')
-  if (!ORCHESTRATOR_SHARED_SECRET) throw new Error('ORCHESTRATOR_SHARED_SECRET is not configured')
-  const canRetry = !init.method || init.method === 'GET'
-  const attempts = canRetry ? 3 : 1
-  for (let attempt = 0; attempt < attempts; attempt++) {
-    const body = typeof init.body === 'string' ? init.body : ''
-    const timestamp = String(Date.now())
-    const signature = crypto.createHmac('sha256', ORCHESTRATOR_SHARED_SECRET)
-      .update(`${timestamp}\n${path}\n${body}`)
-      .digest('hex')
-    const response = await fetch(`${ORCHESTRATOR_URL}${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        'x-markit-timestamp': timestamp,
-        'x-markit-signature': signature,
-        ...init.headers,
-      },
-    })
-    if (response.ok) return await response.json() as T
-    const detail = await response.text()
-    const transient = response.status === 429 || response.status >= 500
-    if (!transient || attempt === attempts - 1) {
-      const error = new Error(`Edit sandbox request failed (${response.status}): ${detail.slice(0, 500)}`)
-      Object.assign(error, { statusCode: response.status, transient })
-      throw error
-    }
-    await new Promise(resolve => setTimeout(resolve, 400 * (2 ** attempt)))
-  }
-  throw new Error('Edit sandbox request failed')
-}
+export const orchestratorRequest = storefrontTransport
 
 async function readBranchSha(repositoryFullName: string, branch: string, githubToken: string) {
   const response = await fetch(
@@ -385,22 +353,29 @@ export async function startStorefrontInteraction(args: {
     throw createError({ statusCode: 409, statusMessage: 'The previous request is still running' })
   }
 
-  const githubToken = await getGitHubInstallationToken(args.runtime.githubStorefront)
-  const previewSha = await readBranchSha(repository.repositoryFullName, 'preview', githubToken)
+  const usesAws = await storefrontUsesAws(args.companyId)
+  const awsBranches = usesAws ? await awsStorefrontRequest<{ preview: string; main: string }>('branches', args.companyId) : null
+  const githubToken = usesAws ? '' : await getGitHubInstallationToken(args.runtime.githubStorefront)
+  const previewSha = usesAws ? awsBranches?.preview : await readBranchSha(repository.repositoryFullName, 'preview', githubToken)
   if (!previewSha) throw new Error('Unable to read the storefront preview branch')
   // main is tracked too: the agent publishes by merging preview into main, and
   // a moved main is how we detect that a production deploy is owed.
-  const mainSha = await readBranchSha(repository.repositoryFullName, 'main', githubToken)
+  const mainSha = usesAws ? awsBranches?.main : await readBranchSha(repository.repositoryFullName, 'main', githubToken)
   const stage = session?.environmentId ? 'resuming_environment' : 'creating_environment'
 
   // Sticky per conversation: if the seller picked a model earlier and doesn't
   // pick one now, keep using it rather than silently reverting to the default
   // halfway through a chat.
-  const chosenModel = args.model || session?.model || 'qwen3-coder-480b'
+  const awsModels = usesAws ? await storefrontTransport<{ default: string; models: { key: string; supportsImages?: boolean }[] }>('/agent/models', {}, args.companyId) : null
+  const chosenModel = args.model || session?.model || (usesAws ? awsModels?.default || '' : 'qwen3-coder-480b')
+  const bedrockModel = usesAws ? awsModels?.models.find(item => item.key === chosenModel && item.key.startsWith('bedrock:')) : null
+  if (usesAws && !bedrockModel && !chosenModel.startsWith('byok:')) {
+    throw createError({ statusCode: 409, statusMessage: 'Select an enabled Amazon Bedrock or company AI model before editing.' })
+  }
   const providerConfig = chosenModel?.startsWith('byok:')
     ? await resolveAiProvider(args.companyId, chosenModel, args.runtime)
     : null
-  const supportsImageInput = chosenModel.startsWith('gemini') || providerConfig?.supportsImages === true
+  const supportsImageInput = chosenModel.startsWith('gemini') || bedrockModel?.supportsImages === true || providerConfig?.supportsImages === true
   const chatAssets = (args.images || []).map((image, index) => {
     const attachment = args.imageAttachments?.[index]
     const extension = image.mimeType === 'image/jpeg' ? '.jpg'
@@ -430,7 +405,7 @@ export async function startStorefrontInteraction(args: {
    * getStorefrontInteraction to decide whether to fire a Vercel deployment —
    * that logic is unchanged.
    */
-  await pool.query(
+  const reservedSession = await pool.query(
     `INSERT INTO storefront_agent_sessions
        (company_id, user_id, conversation_id, interaction_id, status, stage, title, messages,
         initial_preview_sha, initial_main_sha, model, deployment_triggered, updated_at)
@@ -446,9 +421,13 @@ export async function startStorefrontInteraction(args: {
          user_id = EXCLUDED.user_id,
          deployment_triggered = FALSE,
          saved_interaction_id = NULL,
-         updated_at = NOW()`,
+         updated_at = NOW()
+       WHERE storefront_agent_sessions.status NOT IN ('queued','in_progress','requires_action')
+       RETURNING id`,
     [args.companyId, args.conversationId, stage, args.displayPrompt, previewSha, mainSha, chosenModel, JSON.stringify(args.imageAttachments || []), args.userId],
   )
+
+  if (!reservedSession.rowCount) throw createError({ statusCode: 409, statusMessage: 'The previous request is still running' })
 
   const started = await orchestratorRequest<{
     status: string
@@ -821,7 +800,13 @@ export async function getStorefrontInteraction(args: {
       [args.companyId],
     )
     const storefront = source.rows[0]
-    if (storefront?.repositoryFullName && storefront.vercelProjectId && storefront.storeUniqueName) {
+    if (await storefrontUsesAws(args.companyId)) {
+      const branches = await awsStorefrontRequest<{ preview: string; main: string }>('branches', args.companyId)
+      previewDeploymentStarted = Boolean(session.initialPreviewSha && branches.preview !== session.initialPreviewSha)
+      productionDeploymentStarted = Boolean(session.initialMainSha && branches.main !== session.initialMainSha)
+      await awsStorefrontRequest('status', args.companyId)
+      await pool.query('UPDATE storefront_agent_sessions SET deployment_triggered=TRUE WHERE company_id=$1 AND conversation_id=$2', [args.companyId, args.conversationId])
+    } else if (storefront?.repositoryFullName && storefront.vercelProjectId && storefront.storeUniqueName) {
       const githubToken = await getGitHubInstallationToken(args.runtime.githubStorefront)
 
       /*

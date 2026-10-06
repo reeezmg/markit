@@ -1,3 +1,5 @@
+import { storefrontUsesAws } from '~/server/utils/storefrontTransport'
+import { awsStorefrontRequest } from '~/server/utils/awsStorefront'
 import { pool } from '~/server/db'
 import { ensureStorefrontSourcesTable, publicStorefrontSourceStatus } from '~/server/utils/storefrontSource'
 import {
@@ -15,6 +17,8 @@ export default defineEventHandler(async (event) => {
   const session = await requireAuthSession(event)
   const refreshLatest = getQuery(event).refreshLatest === '1'
   await ensureStorefrontSourcesTable()
+
+  if (await storefrontUsesAws(session.data.companyId)) return awsStorefrontRequest('status', session.data.companyId)
 
   const { rows } = await pool.query<{
     status: 'CREATING' | 'READY' | 'FAILED'

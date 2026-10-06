@@ -1,5 +1,6 @@
 import { normalizeBillingUnits } from '~/utils/billing-units';
 import { normalizeSizeLabels } from '~/utils/size-labels';
+import { ensureHeadOfficeBranchMemberships, getHeadOfficeAdmin } from '~/server/utils/organizationAccess';
 
 export default eventHandler(async (event) => {
 
@@ -21,57 +22,74 @@ export default eventHandler(async (event) => {
             statusCode: 401,
         });
     }
-    const purchaseExpenseCategoryId = await getPurchaseExpenseCategoryId(user.companies[0].companyId);
+    const selectedCompanyUser = user.companies.find((item) =>
+        item.status && !item.deleted && item.company.status && !item.delegatedHeadOfficeId
+    ) ?? user.companies.find((item) => item.status && !item.deleted && item.company.status);
+    if (!selectedCompanyUser || (selectedCompanyUser.delegatedHeadOfficeId &&
+        (selectedCompanyUser.company.parentCompanyId !== selectedCompanyUser.delegatedHeadOfficeId ||
+         !await getHeadOfficeAdmin(user.id, selectedCompanyUser.delegatedHeadOfficeId)))) {
+        throw createError({ statusCode: 403, statusMessage: 'No active company access' });
+    }
+    const purchaseExpenseCategoryId = await getPurchaseExpenseCategoryId(selectedCompanyUser.companyId);
+
+    if (selectedCompanyUser.role === 'admin' && selectedCompanyUser.company.isHeadOffice &&
+        !selectedCompanyUser.company.parentCompanyId) {
+        await ensureHeadOfficeBranchMemberships(user.id, selectedCompanyUser.companyId, selectedCompanyUser.name);
+    }
 
     await session.update({
         id: user.id,
+        allStores: selectedCompanyUser.role === 'admin' && selectedCompanyUser.company.isHeadOffice && !selectedCompanyUser.company.parentCompanyId,
+        organizationHeadOfficeId: undefined,
+        readCompanyId: undefined,
+        delegatedHeadOfficeId: selectedCompanyUser.delegatedHeadOfficeId ?? undefined,
         cleanup: user.cleanup || false,
         cleanupCode: user.cleanupCode ?? undefined,
-        name: user.companies[0].name || null,
+        name: selectedCompanyUser.name || null,
         purchaseExpenseCategoryId,
-        logo: user.companies[0].company.logo ?? undefined,
-        description: user.companies[0].company.description ?? undefined,
-        thankYouNote: user.companies[0].company.thankYouNote ?? undefined,
-        refundPolicy: user.companies[0].company.refundPolicy ?? undefined,
-        returnPolicy: user.companies[0].company.returnPolicy ?? undefined,
-        companyPhone: user.companies[0].company.phone ?? undefined,
-        commissionRate: user.companies[0].company.commissionRate ?? undefined,
+        logo: selectedCompanyUser.company.logo ?? undefined,
+        description: selectedCompanyUser.company.description ?? undefined,
+        thankYouNote: selectedCompanyUser.company.thankYouNote ?? undefined,
+        refundPolicy: selectedCompanyUser.company.refundPolicy ?? undefined,
+        returnPolicy: selectedCompanyUser.company.returnPolicy ?? undefined,
+        companyPhone: selectedCompanyUser.company.phone ?? undefined,
+        commissionRate: selectedCompanyUser.company.commissionRate ?? undefined,
         image: user.image || null,
         email: user.email,
-        printerLabelSize: user.companies[0].company.printerLabelSize ?? undefined,
-        code: user.companies[0].code ?? undefined,
-        storeUniqueName: user.companies[0].company.storeUniqueName ?? undefined,
-        isTaxIncluded: user.companies[0].company.isTaxIncluded,
-        isAiImage: user.companies[0].company.isAiImage ?? true,
-        deliveryType: user.companies[0].company.deliveryType || [],
-        deliveryMode: user.companies[0].company.deliveryMode || [],
-        deliveryRadius: user.companies[0].company.deliveryRadius || 0,
-        deliveryDiscount: user.companies[0].company.deliveryDiscount ?? 0,
-        codCharge: user.companies[0].company.codCharge ?? 0,
-        isCostIncluded: user.companies[0].company.isCostIncluded,
-        isUserTrackIncluded: user.companies[0].company.isUserTrackIncluded,
-        companyId: user.companies[0].companyId,
-        companyType: user.companies[0].company.type,
-        companyName: user.companies[0].company.name,
-        pipelineId: user.companies[0].company.pipeline?.id,
-        role: user.companies[0].role,
-        pointsValue: user.companies[0].company.pointsValue || 0,
-        currency: user.companies[0].company.currency || 'INR',
-        type:user.companies[0].role,
-        address: user.companies[0].company.address || {},
-        openTime: user.companies[0].company.openTime || '',
-        closeTime: user.companies[0].company.closeTime || '',
-        gstin: user.companies[0].company.gstin || '',
-        accHolderName: user.companies[0].company.accHolderName || '',
-        ifsc: user.companies[0].company.ifsc || '',
-        accountNo: user.companies[0].company.accountNo || '',
-        bankName: user.companies[0].company.bankName || '',
-        upiId: user.companies[0].company.upiId || '',
-        openingCashDate: user.companies[0].company.openingCashDate ? user.companies[0].company.openingCashDate.toISOString() : null,
-        openingBankDate: user.companies[0].company.openingBankDate ? user.companies[0].company.openingBankDate.toISOString() : null,
-        plan: user.companies[0].company.plan,
+        printerLabelSize: selectedCompanyUser.company.printerLabelSize ?? undefined,
+        code: selectedCompanyUser.code ?? undefined,
+        storeUniqueName: selectedCompanyUser.company.storeUniqueName ?? undefined,
+        isTaxIncluded: selectedCompanyUser.company.isTaxIncluded,
+        isAiImage: selectedCompanyUser.company.isAiImage ?? true,
+        deliveryType: selectedCompanyUser.company.deliveryType || [],
+        deliveryMode: selectedCompanyUser.company.deliveryMode || [],
+        deliveryRadius: selectedCompanyUser.company.deliveryRadius || 0,
+        deliveryDiscount: selectedCompanyUser.company.deliveryDiscount ?? 0,
+        codCharge: selectedCompanyUser.company.codCharge ?? 0,
+        isCostIncluded: selectedCompanyUser.company.isCostIncluded,
+        isUserTrackIncluded: selectedCompanyUser.company.isUserTrackIncluded,
+        companyId: selectedCompanyUser.companyId,
+        companyType: selectedCompanyUser.company.type,
+        companyName: selectedCompanyUser.company.name,
+        pipelineId: selectedCompanyUser.company.pipeline?.id,
+        role: selectedCompanyUser.role,
+        pointsValue: selectedCompanyUser.company.pointsValue || 0,
+        currency: selectedCompanyUser.company.currency || 'INR',
+        type:selectedCompanyUser.role,
+        address: selectedCompanyUser.company.address || {},
+        openTime: selectedCompanyUser.company.openTime || '',
+        closeTime: selectedCompanyUser.company.closeTime || '',
+        gstin: selectedCompanyUser.company.gstin || '',
+        accHolderName: selectedCompanyUser.company.accHolderName || '',
+        ifsc: selectedCompanyUser.company.ifsc || '',
+        accountNo: selectedCompanyUser.company.accountNo || '',
+        bankName: selectedCompanyUser.company.bankName || '',
+        upiId: selectedCompanyUser.company.upiId || '',
+        openingCashDate: selectedCompanyUser.company.openingCashDate ? selectedCompanyUser.company.openingCashDate.toISOString() : null,
+        openingBankDate: selectedCompanyUser.company.openingBankDate ? selectedCompanyUser.company.openingBankDate.toISOString() : null,
+        plan: selectedCompanyUser.company.plan,
         productInputs: (({ name, brand, category, subcategory, description }) =>
-        ({ name, brand, category, subcategory, description }))(user.companies[0].company.productinput || {}),
+        ({ name, brand, category, subcategory, description }))(selectedCompanyUser.company.productinput || {}),
 
         variantInputs: (({ name, code, sprice, pprice, dprice, discount, qty, unit, sizes, sizeLabels, images, button }) => ({
         name,
@@ -86,17 +104,17 @@ export default eventHandler(async (event) => {
         sizeLabels: normalizeSizeLabels(sizeLabels),
         images,
         button,
-        }))(user.companies[0].company.variantinput || {}),
+        }))(selectedCompanyUser.company.variantinput || {}),
 
-        closingDate: user.companies[0].company.closingDate ?? null,
-        billPrefix: user.companies[0].company.billPrefix ?? '',
-        expensePrefix: user.companies[0].company.expensePrefix ?? 'EXP',
-        distributorPrefix: user.companies[0].company.distributorPrefix ?? 'DIST',
-        distributorPaymentPrefix: user.companies[0].company.distributorPaymentPrefix ?? 'DP',
-        distributorCreditPrefix: user.companies[0].company.distributorCreditPrefix ?? 'DC',
-        clientPrefix: user.companies[0].company.clientPrefix ?? 'CL',
-        userPrefix: user.companies[0].company.userPrefix ?? '',
-        accountPrefix: user.companies[0].company.accountPrefix ?? 'ACC',
+        closingDate: selectedCompanyUser.company.closingDate ?? null,
+        billPrefix: selectedCompanyUser.company.billPrefix ?? '',
+        expensePrefix: selectedCompanyUser.company.expensePrefix ?? 'EXP',
+        distributorPrefix: selectedCompanyUser.company.distributorPrefix ?? 'DIST',
+        distributorPaymentPrefix: selectedCompanyUser.company.distributorPaymentPrefix ?? 'DP',
+        distributorCreditPrefix: selectedCompanyUser.company.distributorCreditPrefix ?? 'DC',
+        clientPrefix: selectedCompanyUser.company.clientPrefix ?? 'CL',
+        userPrefix: selectedCompanyUser.company.userPrefix ?? '',
+        accountPrefix: selectedCompanyUser.company.accountPrefix ?? 'ACC',
         authSessionVersion:process.env.AUTH_SESSION_VERSION
     });
 

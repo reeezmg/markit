@@ -1,4 +1,4 @@
-import { distributorPaymentLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
@@ -69,19 +69,7 @@ export async function recalculatePurchaseOrderTotals(
          WHERE id = $1 AND company_id = $2`,
         [payment.id, input.companyId, total],
       )
-      await rebuildAccountLedgerForSource(client, {
-        companyId: input.companyId,
-        sourceType: 'DISTRIBUTOR_PAYMENT',
-        sourceId: payment.id,
-        rows: distributorPaymentLedgerRows({
-          id: payment.id,
-          companyId: input.companyId,
-          amount: total,
-          paymentType: payment.payment_type,
-          createdAt: payment.created_at,
-          remarks: payment.remarks || `Purchase order ${input.poId}`,
-        }),
-      })
+
     }
   }
 

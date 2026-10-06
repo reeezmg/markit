@@ -1,13 +1,18 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 import { Switch } from '@headlessui/vue';
 import { sub } from 'date-fns';
 import type { Period, Range } from '~/types';
 import type { Prisma } from '@prisma/client'
 import AwsService from '~/composables/aws';
 import Quagga from '@ericblade/quagga2'
-import { useFindFirstItem } from '~/lib/hooks/item';
-import { useFindManyProduct, useUpdateProduct, useUpdateManyProduct, useCountProduct, useDeleteProduct } from '~/lib/hooks/product';
-import { useUpdateVariant } from '~/lib/hooks/variant';
+import { useFindFirstItem } from '~/lib/company-hooks/item';
+import { useFindManyCategory } from '~/lib/company-hooks/category';
+import { useFindManySubcategory } from '~/lib/company-hooks/subcategory';
+import { useFindManyProduct, useUpdateProduct, useUpdateManyProduct, useCountProduct } from '~/lib/company-hooks/product';
+import { useUpdateVariant } from '~/lib/company-hooks/variant';
 import { Swiper, SwiperSlide } from 'swiper/vue'
 import { Pagination } from 'swiper/modules'
 import 'swiper/css'
@@ -23,12 +28,13 @@ interface ImageData {
 const awsService = new AwsService();
 const toast = useToast();
 const UpdateProduct = useUpdateProduct({ optimisticUpdate: true });
-const DeleteProduct = useDeleteProduct({ optimisticUpdate: true });
+const { invalidateModels } = useModelCache();
 const UpdateManyProduct = useUpdateManyProduct({ optimisticUpdate: true });
 const Updatevariant = useUpdateVariant({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
+const { forOwner } = useOrganizationActions();
 const isAddPhotoModelOpen = ref(false)
 const isBarcodeLoading = ref(false);
 const isModalOpen = ref(false)
@@ -54,6 +60,10 @@ onMounted(() => {
 const isDiscountModalOpen = ref(false)
 const isDiscountApplying = ref(false)
 const discountPercentage = ref<number | null>(null)
+const { data: discountCategories } = useFindManyCategory(computed(() => ({ where: { companyId: companyScope.companyId.value } })), { companyScope: 'form' } as any)
+const { data: discountSubcategories } = useFindManySubcategory(computed(() => ({ where: { companyId: companyScope.companyId.value } })), { companyScope: 'form' } as any)
+const discountCategoryOptions = computed(() => (discountCategories.value ?? []).map(c => ({ label: c.name, value: c.id })))
+const discountSubcategoryOptions = computed(() => (discountSubcategories.value ?? []).map(c => ({ label: c.name, value: c.id })))
 const discountFilters = reactive({
   categoryId: '',
   subcategoryId: '',
@@ -94,7 +104,8 @@ const subcategoryOptions = computed(() =>
 )
 
 
-watch(isDiscountModalOpen, (open) => {
+watch(isDiscountModalOpen, async (open) => {
+  if (open) await companyScope.beginForm();
   if (!open) {
     Object.assign(discountFilters, {
       categoryId: '',
@@ -312,6 +323,9 @@ watch(selectedColumns, (newVal) => {
 const columnsTable = computed(() =>
     columns.filter((column) => selectedColumns.value.includes(column)),
 );
+const displayColumns = computed(() => useAuth().session.value?.allStores
+  ? [{ key: 'company.name', label: 'Store', sortable: false }, ...selectedColumns.value]
+  : selectedColumns.value);
 
 // Selected Rows
 const selectedRows = ref([]);
@@ -377,6 +391,7 @@ const action = (row) => [
                 deletingRowIdentity.value = {
                     name: row.name,
                     id: row.id,
+                    companyId: row.companyId,
                     imageKeys: (row.variants || []).flatMap((v: any) => v.images || []),
                 }
                 }
@@ -524,6 +539,7 @@ if (filters.status !== "" && filters.status !== null && filters.status !== undef
     },
 
     include: {
+      company: { select: { name: true } },
       variants: { include: { items: true }},
       category: true,
       subcategory: true,
@@ -588,7 +604,7 @@ const {
         },
 },
 
-},{enabled:!!itemBarcode})
+},{enabled: computed(() => !!itemBarcode.value), companyScope: 'form'} as any)
 
 watch(items, (newItems) => {
     console.log('Item data updated:', newItems);
@@ -750,9 +766,13 @@ function openImageViewer(images: string[], updatedAt: Date) {
 
 const removeProduct = async() => {
   try {
-    await DeleteProduct.mutateAsync({ where: { id :deletingRowIdentity.value.id} });
-    // Variants cascade with the product, so their photos are now unreferenced.
-    await awsService.deleteObjects(deletingRowIdentity.value.imageKeys || []);
+    await $fetch('/api/products/delete', {
+      method: 'POST',
+      headers: { 'x-company-id': deletingRowIdentity.value.companyId || companyScope.companyId.value },
+      body: { id: deletingRowIdentity.value.id, companyId: deletingRowIdentity.value.companyId },
+    });
+    await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder', 'DistributorCredit', 'DistributorPayment');
+    await refetch();
   } catch (err) {
     console.log(err);
   }finally{
@@ -770,7 +790,7 @@ async function multiToggle(ids, status: boolean) {
                         updateMany: {
                             where: {},  
                             data: {
-                                status: updatedStatus  
+                                status
                             }
                         }
                     }
@@ -895,6 +915,10 @@ const handleAddPhoto = async () => {
 
 
 
+
+watch(companyScope.readIds, () => { page.value = 1; });
+watch(isAddPhotoModelOpen, async open => { if (open) await companyScope.beginForm(); });
+watch(companyScope.companyId, () => { itemBarcode.value = ''; discountFilters.categoryId = ''; discountFilters.subcategoryId = ''; });
 </script>
 
 <template>
@@ -917,6 +941,7 @@ const handleAddPhoto = async () => {
 >
   <!-- LEFT SIDE: Search -->
   <div class="flex flex-row gap-3 w-full sm:w-auto">
+    <CompanyTableFilter />
     <UInput
       v-model="search"
       icon="i-heroicons-magnifying-glass-20-solid"
@@ -1045,7 +1070,7 @@ const handleAddPhoto = async () => {
                 v-model:sort="sort"
                 v-model:expand="expand"
                 :rows="products"
-                :columns="selectedColumns"
+                :columns="displayColumns"
                 :loading="isLoading"
                 sort-mode="manual"
                 class="w-full"
@@ -1055,7 +1080,7 @@ const handleAddPhoto = async () => {
                 }"
             >
                 <template #actions-data="{ row }">
-                    <UDropdown :items="action(row)">
+                    <UDropdown :items="forOwner(action(row), row.companyId)">
                         <UButton
                             color="gray"
                             variant="ghost"
@@ -1348,6 +1373,7 @@ const handleAddPhoto = async () => {
             <UButton color="gray" variant="ghost" icon="i-heroicons-x-mark-20-solid" class="-my-1" @click="isAddPhotoModelOpen = false" />
           </div>
         </template>
+    <CompanyFormField />
 
     <!-- 📷 Camera View -->
     <div class="relative">
@@ -1481,12 +1507,13 @@ const handleAddPhoto = async () => {
       </div>
     </template>
 
+    <CompanyFormField />
     <!-- Filters -->
     <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
       <UFormGroup label="Category">
         <USelect
           v-model="discountFilters.categoryId"
-          :options="categoryOptions"
+          :options="discountCategoryOptions"
           placeholder="Select Category"
         />
       </UFormGroup>
@@ -1494,7 +1521,7 @@ const handleAddPhoto = async () => {
       <UFormGroup label="Sub Category">
         <USelect
           v-model="discountFilters.subcategoryId"
-          :options="subcategoryOptions"
+          :options="discountSubcategoryOptions"
           placeholder="Select Category"
         />
       </UFormGroup>
@@ -1582,7 +1609,7 @@ const handleAddPhoto = async () => {
       <UFormGroup label="Category">
         <USelect
           v-model="filters.categoryId"
-          :options="categoryOptions"
+          :options="discountCategoryOptions"
           placeholder="Select Category"
         />
       </UFormGroup>
@@ -1590,7 +1617,7 @@ const handleAddPhoto = async () => {
       <UFormGroup label="Sub Category">
         <USelect
           v-model="filters.subcategoryId"
-          :options="subcategoryOptions"
+          :options="discountSubcategoryOptions"
           placeholder="Select Sub Category"
         />
       </UFormGroup>

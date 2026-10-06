@@ -1,16 +1,18 @@
 import 'dotenv/config'
 import { Pool } from 'pg'
+import { pool as schemaPool } from '../server/db'
 import {
   billLedgerRows,
   deleteAccountLedgerForSource,
   distributorPaymentLedgerRows,
   expenseLedgerRows,
+  ensureAccountLedgerSchema,
   investmentLedgerRows,
   moneyTransactionLedgerRows,
   rebuildAccountLedgerForSource,
   transferLedgerRows,
   type AccountLedgerSourceType,
-} from '../server/utils/account-ledger'
+} from '../scripts/lib/legacy-account-ledger'
 
 const companyId = process.env.COMPANY_ID || process.env.ACCOUNT_LEDGER_TEST_COMPANY_ID
 const databaseUrl = process.env.DATABASE_URL
@@ -116,10 +118,28 @@ async function assertRunningBalance(client: any) {
 }
 
 async function main() {
+  // Warm the global setup connection before this test holds bank/table locks.
+  // Cold legacy route ordering is reviewed separately; setup inside a caller
+  // transaction can wait on that caller's own locks.
+  const schema = new URL(databaseUrl!).searchParams.get('schema') || 'public'
+  assert(/^[A-Za-z_][A-Za-z0-9_]*$/.test(schema), 'Invalid test schema')
+  const warm = await schemaPool.connect(), originalSchemaConnect = schemaPool.connect.bind(schemaPool)
+  try {
+    await warm.query('BEGIN')
+    await warm.query(`SET LOCAL search_path TO "${schema}"`)
+    ;(schemaPool as any).connect = async () => ({ query: warm.query.bind(warm), release() {} })
+    await ensureAccountLedgerSchema()
+  } finally {
+    ;(schemaPool as any).connect = originalSchemaConnect
+    await warm.query('ROLLBACK')
+    warm.release()
+    await schemaPool.end()
+  }
   const client = await pool.connect()
   try {
     console.log(`Account ledger writeflow test for ${companyId}`)
     await client.query('BEGIN')
+    await client.query(`SET LOCAL search_path TO "${schema}"`)
 
     const bankRes = await client.query(`SELECT id FROM bank_accounts WHERE company_id = $1 ORDER BY "createdAt" LIMIT 1`, [companyId])
     const bankId = bankRes.rows[0]?.id as string | undefined

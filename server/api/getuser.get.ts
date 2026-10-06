@@ -1,9 +1,10 @@
+import { assertCompanyAccess } from '~/server/utils/companyRequestScope'
 import { prisma } from '~/server/prisma'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const companyId = query.companyId as string
-console.log(companyId)
+
   if (!companyId) {
     throw createError({
       statusCode: 400,
@@ -11,6 +12,7 @@ console.log(companyId)
     })
   }
 
+  await assertCompanyAccess(event, companyId)
   const users = await prisma.companyUser.findMany({
     where: {
       companyId,

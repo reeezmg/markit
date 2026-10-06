@@ -6,16 +6,17 @@
 
 ## Order Pages
 
-The `order/` pages handle order operations. The visible sidebar currently exposes **Orders** (`/order/ecomorders`) and **Requests** (`/order/requests`); older Try N Buy and Bookings pages remain in source but are hidden from the sidebar for now.
+The `order/` pages handle order operations. The full Storefront sidebar exposes Orders (`/order/ecomorders`), Pickup, Failed deliveries, Requests, Returns and Exchange. `layouts/default.vue` excludes the Orders group from the ERP sidebar. Older Try N Buy and Bookings pages remain in source but are hidden from the sidebar for now.
 
 ### Navigation (`pages/order.vue` layout)
-- Sidebar links: Orders (`/order/ecomorders`), Requests (`/order/requests`)
+- Sidebar links are owned by `layouts/default.vue`; `pages/order.vue` renders the authenticated Order shell and `<NuxtPage />` without a local navigation list.
 - `/order` redirects to `/order/ecomorders`
 - Packing pages (`/order/pack`, `/order/ready`) are navigated to directly from the list rows
 
 ---
 
 ### `pages/order/ecomorders.vue` - Ecommerce Orders
+**Accountant connection:** New orders can post through company-enabled Ecommerce accounting. `/accountant/ecommerce` records actual received returns, completed refunds, courier/gateway settlements, costs and extra financial charges. Request approval and shipment status alone do not prove those financial activities. See `ARCH-pages-accounts.md`; the existing order/bill creation timing is preserved.
 **Data model:** `EcommOrder` rows from `ecomm_orders`, created by the Revomotive custom storefront checkout flow.
 
 **Query:** `useFindManyEcommOrder`
@@ -26,6 +27,8 @@ The `order/` pages handle order operations. The visible sidebar currently expose
 **UI:** Server-side search by order/customer/phone/email/invoice, status/payment filters, and a table with order, date, customer, item summary, payment, status, total and detail view. It bulk-checks live carrier tracking and displays that status ahead of a stale stored status. Staff can mark an eligible order packed, inspect/override status with a note, cancel through the dedicated rollback endpoint, and create shipments in bulk. A manual status change does not override a newer live carrier status in the table.
 
 **Detail popover:** Shows shipping address, item snapshot from the `items` JSON (including variant, size, and shade when present), subtotal, discount, delivery fee, and grand total.
+
+**Status dates:** Database triggers now retain first observed `paidAt` and a separate `document_status_history` audit for bill/order/checkout status and payment-status changes. The tenant-scoped `/api/bill/status-history?type=order&id=...` reader exposes these records; this does not add a timeline panel to the page. Existing carrier/manual order history is retained. See `ARCH-schema.md` for migration and legacy-date semantics.
 
 ---
 

@@ -1,5 +1,6 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
 
 const SORT_COLUMNS: Record<string, string> = {
   id: 'e.id',
@@ -19,9 +20,7 @@ const toArray = (val: any): string[] => {
 }
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
-  const companyId = session.data?.companyId as string | undefined
-  if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  const companyIds = await getReadCompanyIds(event)
 
   const query = getQuery(event)
 
@@ -43,8 +42,8 @@ export default defineEventHandler(async (event) => {
   const offset = (page - 1) * pageCount
 
   // Build shared WHERE clause + params
-  const conditions: string[] = ['e.company_id = $1']
-  const params: any[] = [companyId]
+  const conditions: string[] = ['e.company_id = ANY($1::text[])']
+  const params: any[] = [companyIds]
   const add = (clause: string, value: any) => {
     params.push(value)
     conditions.push(clause.replace('$$', `$${params.length}`))
@@ -67,6 +66,7 @@ export default defineEventHandler(async (event) => {
   const whereSql = conditions.join(' AND ')
   const joinSql = `
     FROM expenses e
+    JOIN companies co ON co.id = e.company_id
     LEFT JOIN expense_categories ec ON ec.id = e.expense_category_id
     LEFT JOIN company_users cu ON cu.company_id = e.company_id AND cu.user_id = e.from_id
   `
@@ -81,6 +81,9 @@ export default defineEventHandler(async (event) => {
       `
       SELECT
         e.id,
+        e.company_id AS "companyId",
+        co.name AS "companyName",
+        co.expense_prefix AS "expensePrefix",
         e.expense_number AS "expenseNumber",
         e.expense_date AS "expenseDate",
         e.created_at AS "createdAt",
@@ -90,6 +93,7 @@ export default defineEventHandler(async (event) => {
         e.receipt,
         e.receipt_name AS "receiptName",
         e.tax_amount AS "taxAmount",
+        e.recoverable_tax_amount AS "recoverableTaxAmount",
         e.total_amount AS "totalAmount",
         e.expense_category_id AS "expensecategoryId",
         e.from_id AS "userId",
@@ -108,6 +112,9 @@ export default defineEventHandler(async (event) => {
 
     const rows = dataRes.rows.map((r: any) => ({
       id: r.id,
+      companyId: r.companyId,
+      companyName: r.companyName,
+      expensePrefix: r.expensePrefix,
       expenseNumber: r.expenseNumber,
       expenseDate: r.expenseDate,
       createdAt: r.createdAt,
@@ -117,6 +124,7 @@ export default defineEventHandler(async (event) => {
       receipt: r.receipt,
       receiptName: r.receiptName,
       taxAmount: r.taxAmount,
+      recoverableTaxAmount: r.recoverableTaxAmount,
       totalAmount: r.totalAmount,
       expensecategoryId: r.expensecategoryId,
       expensecategory: r.categoryId ? { id: r.categoryId, name: r.categoryName } : null,

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { prisma } from '~/server/prisma';
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope';
 
 const bodySchema = z.object({
   companyId: z.string(),
@@ -15,10 +16,11 @@ const bodySchema = z.object({
 })
 
 export default defineEventHandler(async (event) => {
-  const { companyId, filters, groupBy } = bodySchema.parse(await readBody(event))
+  const { filters, groupBy } = bodySchema.parse(await readBody(event))
+  const companyIds = await getReadCompanyIds(event)
 
   const where = {
-    companyId,
+    companyId: { in: companyIds },
     status: true,
     product: {
       status: true,

@@ -27,6 +27,15 @@ export function ensureStorefrontSourcesTable() {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+-- Additive migration: existing companies keep their legacy providers.
+ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS repository_provider TEXT NOT NULL DEFAULT 'github';
+ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS hosting_provider TEXT NOT NULL DEFAULT 'vercel';
+ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS repository_arn TEXT;
+ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS amplify_app_id TEXT;
+ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS sandbox_role_arn TEXT;
+ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS template_digest TEXT;
+ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS provisioning_stage TEXT;
+
       ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS vercel_project_id TEXT;
       ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS preview_deployment_id TEXT;
       ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS preview_deployment_url TEXT;

@@ -1,1028 +1,282 @@
-import { defineEventHandler, getQuery, createError, setHeader } from 'h3'
-import { pool } from '~/server/db'
-import { jsPDF } from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { dailyExportReport } from '~/server/utils/report-daily';
+import { reportWindow } from '~/server/utils/report-accounting';
+import { getReadCompanyId } from '~/server/utils/organizationReadScope';
+import { defineEventHandler, getQuery, createError, setHeader } from 'h3';
+import { pool } from '~/server/db';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 export default defineEventHandler(async (event) => {
-
-  /* =====================================================
-     AUTH
-  ===================================================== */
-
-  const session = await useAuthSession(event)
-  const companyId = session.data.companyId
-  const cleanup = session.data.cleanup ?? false
+  const session = await useAuthSession(event);
+  const companyId = await getReadCompanyId(event);
+  const cleanup = session.data.cleanup ?? false;
 
   if (!companyId) {
     throw createError({
       statusCode: 401,
-      statusMessage: 'Unauthorized'
-    })
+      statusMessage: 'Unauthorized',
+    });
   }
 
-
-
-  /* =====================================================
-     DATE FILTER
-  ===================================================== */
-
-  const query = getQuery(event)
-  const showCleanedValues = String(query.showCleanedValues) === 'true'
-  const useOriginalCleanupValues = cleanup && !showCleanedValues
-  const includeCleanupPrecedence = cleanup && !showCleanedValues
-
-  const startDate = query.startDate
-    ? new Date(query.startDate as string)
-    : new Date(0)
-
-  const endDate = query.endDate
-    ? new Date(query.endDate as string)
-    : new Date()
-
-  const billTotalExpr = useOriginalCleanupValues
-    ? 'COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total)'
-    : 'b.grand_total'
-
-  const billSubtotalExpr = useOriginalCleanupValues
-    ? 'COALESCE(NULLIF(b.original_subtotal, 0), b.subtotal)'
-    : 'b.subtotal'
-
-
-
-  const client = await pool.connect()
-
-  try {
-    if (cleanup) {
-      await client.query(`
-        ALTER TABLE bills
-        ADD COLUMN IF NOT EXISTS original_subtotal DOUBLE PRECISION
-      `)
-      await client.query(`
-        ALTER TABLE bills
-        ADD COLUMN IF NOT EXISTS original_grand_total DOUBLE PRECISION
-      `)
-    }
-
-    /* =====================================================
-       BASE OPENING (COMPANY)
-    ===================================================== */
-
-    const baseRes = await client.query(
-      `
-      SELECT 
-        cash,
-        bank,
-        opening_cash_date,
-        opening_bank_date
-      FROM companies
-      WHERE id = $1
-      `,
-      [companyId]
-    )
-
-    const company = baseRes.rows[0] || {}
-
-    let baseCash = 0
-    let baseBank = 0
-
-    if (
-      company.cash &&
-      company.opening_cash_date &&
-      new Date(company.opening_cash_date) <= startDate
-    ) {
-      baseCash = Number(company.cash)
-    }
-
-    if (
-      company.bank &&
-      company.opening_bank_date &&
-      new Date(company.opening_bank_date) <= startDate
-    ) {
-      baseBank = Number(company.bank)
-    }
-
-    const isZeroOpening =
-      Number(company.cash || 0) === 0 &&
-      Number(company.bank || 0) === 0
-
-    let openingCash = 0
-    let openingBank = 0
-
-    if (!isZeroOpening) {
-      const [
-        cashSalesBeforeRes,
-        cashExpensesBeforeRes,
-        cashDistributorBeforeRes,
-        cashMoneyBeforeRes,
-        cashTransferBeforeRes,
-        bankSalesBeforeRes,
-        bankExpensesBeforeRes,
-        bankDistributorBeforeRes,
-        bankMoneyBeforeRes,
-        bankTransferBeforeRes
-      ] = await Promise.all([
-        client.query(
-          `
-          WITH split AS (
-            SELECT (elem->>'amount')::numeric AS amount
-            FROM bills b
-            JOIN LATERAL jsonb_array_elements(
-              CASE
-                WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-                THEN b.split_payments::jsonb
-                ELSE '[]'::jsonb
-              END
-            ) elem ON true
-            WHERE b.company_id = $1
-              AND b.payment_method = 'Split'
-              AND (elem->>'method') = 'Cash'
-              AND b.deleted = false
-              AND b.payment_status IN ('PAID','PENDING')
-              AND b.is_markit = false
-              AND b.created_at < $2
-              AND ($3 = true OR b.precedence IS NOT TRUE)
-          )
-          SELECT
-            COALESCE(SUM(CASE WHEN b.payment_method = 'Cash' THEN ${billTotalExpr} ELSE 0 END),0)
-            + COALESCE((SELECT SUM(amount) FROM split),0) AS total
-          FROM bills b
-          WHERE b.company_id = $1
-            AND b.deleted = false
-            AND b.payment_status IN ('PAID','PENDING')
-            AND b.is_markit = false
-            AND b.created_at < $2
-            AND ($3 = true OR b.precedence IS NOT TRUE)
-          `,
-          [companyId, startDate, includeCleanupPrecedence]
-        ),
-        client.query(
-          `
-          SELECT COALESCE(SUM(total_amount),0) AS total
-          FROM expenses
-          WHERE company_id = $1
-            AND payment_mode = 'CASH'
-            AND UPPER(status) = 'PAID'
-            AND expense_date < $2
-          `,
-          [companyId, startDate]
-        ),
-        client.query(
-          `
-          SELECT COALESCE(SUM(amount),0) AS total
-          FROM distributor_payments
-          WHERE company_id = $1
-            AND payment_type = 'CASH'
-            AND created_at < $2
-          `,
-          [companyId, startDate]
-        ),
-        client.query(
-          `
-          SELECT COALESCE(SUM(
-            CASE WHEN direction = 'RECEIVED' THEN amount ELSE -amount END
-          ),0) AS net
-          FROM money_transactions
-          WHERE company_id = $1
-            AND payment_mode = 'CASH'
-            AND status = 'PAID'
-            AND created_at < $2
-          `,
-          [companyId, startDate]
-        ),
-        client.query(
-          `
-          SELECT
-            COALESCE(SUM(CASE WHEN to_type = 'CASH' THEN amount ELSE 0 END),0)
-            -
-            COALESCE(SUM(CASE WHEN from_type = 'CASH' THEN amount ELSE 0 END),0)
-            AS net
-          FROM account_transfers
-          WHERE company_id = $1
-            AND created_at < $2
-          `,
-          [companyId, startDate]
-        ),
-        client.query(
-          `
-          WITH split AS (
-            SELECT (elem->>'amount')::numeric AS amount
-            FROM bills b
-            JOIN LATERAL jsonb_array_elements(
-              CASE
-                WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-                THEN b.split_payments::jsonb
-                ELSE '[]'::jsonb
-              END
-            ) elem ON true
-            WHERE b.company_id = $1
-              AND b.payment_method = 'Split'
-              AND (elem->>'method') IN ('UPI','Card')
-              AND b.deleted = false
-              AND b.payment_status IN ('PAID','PENDING')
-              AND b.is_markit = false
-              AND b.created_at < $2
-              AND ($3 = true OR b.precedence IS NOT TRUE)
-          )
-          SELECT
-            COALESCE(SUM(CASE WHEN b.payment_method IN ('UPI','Card') THEN ${billTotalExpr} ELSE 0 END),0)
-            + COALESCE((SELECT SUM(amount) FROM split),0) AS total
-          FROM bills b
-          WHERE b.company_id = $1
-            AND b.deleted = false
-            AND b.payment_status IN ('PAID','PENDING')
-            AND b.is_markit = false
-            AND b.created_at < $2
-            AND ($3 = true OR b.precedence IS NOT TRUE)
-          `,
-          [companyId, startDate, includeCleanupPrecedence]
-        ),
-        client.query(
-          `
-          SELECT COALESCE(SUM(total_amount),0) AS total
-          FROM expenses
-          WHERE company_id = $1
-            AND payment_mode IN ('UPI','CARD','BANK','CHEQUE')
-            AND UPPER(status) = 'PAID'
-            AND expense_date < $2
-          `,
-          [companyId, startDate]
-        ),
-        client.query(
-          `
-          SELECT COALESCE(SUM(amount),0) AS total
-          FROM distributor_payments
-          WHERE company_id = $1
-            AND payment_type = 'BANK'
-            AND created_at < $2
-          `,
-          [companyId, startDate]
-        ),
-        client.query(
-          `
-          SELECT COALESCE(SUM(
-            CASE WHEN direction = 'RECEIVED' THEN amount ELSE -amount END
-          ),0) AS net
-          FROM money_transactions
-          WHERE company_id = $1
-            AND payment_mode = 'BANK'
-            AND status = 'PAID'
-            AND account_id IS NULL
-            AND created_at < $2
-          `,
-          [companyId, startDate]
-        ),
-        client.query(
-          `
-          SELECT
-            COALESCE(SUM(CASE WHEN to_type = 'BANK' AND to_account_id IS NULL THEN amount ELSE 0 END),0)
-            -
-            COALESCE(SUM(CASE WHEN from_type = 'BANK' AND from_account_id IS NULL THEN amount ELSE 0 END),0)
-            AS net
-          FROM account_transfers
-          WHERE company_id = $1
-            AND created_at < $2
-          `,
-          [companyId, startDate]
-        )
-      ])
-
-      const cashSalesBefore = Number(cashSalesBeforeRes.rows[0].total || 0)
-      const cashExpensesBefore = Number(cashExpensesBeforeRes.rows[0].total || 0)
-      const cashDistributorBefore = Number(cashDistributorBeforeRes.rows[0].total || 0)
-      const cashMoneyNetBefore = Number(cashMoneyBeforeRes.rows[0].net || 0)
-      const cashTransferNetBefore = Number(cashTransferBeforeRes.rows[0].net || 0)
-
-      const bankSalesBefore = Number(bankSalesBeforeRes.rows[0].total || 0)
-      const bankExpensesBefore = Number(bankExpensesBeforeRes.rows[0].total || 0)
-      const bankDistributorBefore = Number(bankDistributorBeforeRes.rows[0].total || 0)
-      const bankMoneyNetBefore = Number(bankMoneyBeforeRes.rows[0].net || 0)
-      const bankTransferNetBefore = Number(bankTransferBeforeRes.rows[0].net || 0)
-
-      openingCash =
-        baseCash +
-        cashSalesBefore -
-        cashExpensesBefore -
-        cashDistributorBefore +
-        cashMoneyNetBefore +
-        cashTransferNetBefore
-
-      openingBank =
-        baseBank +
-        bankSalesBefore -
-        bankExpensesBefore -
-        bankDistributorBefore +
-        bankMoneyNetBefore +
-        bankTransferNetBefore
-    }
-
-
-
-    /* =====================================================
-       SALES (PERIOD)
-    ===================================================== */
-    const salesRes = await client.query(
-  `
-  SELECT
-    /* TOTAL SALES (Exclude Credit + Split Credit) */
-    COALESCE(SUM(
-      CASE 
-        WHEN b.payment_method NOT IN ('Split','Credit')
-        THEN ${billTotalExpr}
-        ELSE 0 
-      END
-    ),0)
-    +
-    COALESCE(SUM(
-      CASE 
-        WHEN sp.method != 'Credit'
-        THEN sp.amount 
-        ELSE 0 
-      END
-    ),0) AS total_sales,
-
-    /* CASH */
-    COALESCE(SUM(
-      CASE WHEN b.payment_method = 'Cash'
-      THEN ${billTotalExpr} ELSE 0 END
-    ),0)
-    +
-    COALESCE(SUM(
-      CASE WHEN sp.method = 'Cash'
-      THEN sp.amount ELSE 0 END
-    ),0) AS cash,
-
-    /* UPI */
-    COALESCE(SUM(
-      CASE WHEN b.payment_method = 'UPI'
-      THEN ${billTotalExpr} ELSE 0 END
-    ),0)
-    +
-    COALESCE(SUM(
-      CASE WHEN sp.method = 'UPI'
-      THEN sp.amount ELSE 0 END
-    ),0) AS upi,
-
-    /* CARD */
-    COALESCE(SUM(
-      CASE WHEN b.payment_method = 'Card'
-      THEN ${billTotalExpr} ELSE 0 END
-    ),0)
-    +
-    COALESCE(SUM(
-      CASE WHEN sp.method = 'Card'
-      THEN sp.amount ELSE 0 END
-    ),0) AS card
-
-  FROM bills b
-
-  /* SPLIT PAYMENTS PARSE */
-  LEFT JOIN LATERAL (
-    SELECT
-      (elem->>'method') AS method,
-      (elem->>'amount')::numeric AS amount
-    FROM jsonb_array_elements(
-      CASE
-        WHEN jsonb_typeof(b.split_payments::jsonb) = 'array'
-        THEN b.split_payments::jsonb
-        ELSE '[]'::jsonb
-      END
-    ) elem
-  ) sp ON b.payment_method = 'Split'
-
-  WHERE b.company_id = $1
-    AND b.deleted = false
-    AND b.created_at BETWEEN $2 AND $3
-    AND ($4 = true OR b.precedence IS NOT TRUE)
-  `,
-  [companyId, startDate, endDate, includeCleanupPrecedence]
-)
-
-const sales = salesRes.rows[0]
-
-
-
-    /* =====================================================
-       EXPENSES
-    ===================================================== */
-
-    const expenseRes = await client.query(
-      `
-      SELECT
-        SUM(total_amount) AS total_expense,
-
-        SUM(CASE WHEN payment_mode='CASH' THEN total_amount ELSE 0 END) AS cash,
-        SUM(CASE WHEN payment_mode='UPI' THEN total_amount ELSE 0 END) AS upi,
-        SUM(CASE WHEN payment_mode='CARD' THEN total_amount ELSE 0 END) AS card,
-        SUM(CASE WHEN payment_mode='BANK' THEN total_amount ELSE 0 END) AS bank,
-        SUM(CASE WHEN payment_mode='CHEQUE' THEN total_amount ELSE 0 END) AS cheque
-
-      FROM expenses
-      WHERE company_id=$1
-        AND UPPER(status)='PAID'
-        AND expense_date BETWEEN $2 AND $3
-      `,
-      [companyId, startDate, endDate]
-    )
-
-    const expenses = expenseRes.rows[0]
-
-    const salaryPaymentsRes = await client.query(
-      `
-      SELECT
-        sp.payment_date AS date,
-        sp.amount,
-        sp.type,
-        sp.payment_mode AS "paymentMode",
-        COALESCE(cu.name, 'Staff') AS "userName",
-        sp.note
-      FROM salary_payments sp
-      LEFT JOIN company_users cu
-        ON cu.company_id = sp.company_id
-       AND cu.user_id = sp.user_id
-      WHERE sp.company_id = $1
-        AND sp.payment_date BETWEEN $2 AND $3
-      ORDER BY sp.payment_date ASC, sp.id ASC
-      `,
-      [companyId, startDate, endDate]
-    )
-
-    const salaryPayments = salaryPaymentsRes.rows.map(r => ({
-      ...r,
-      amount: Number(r.amount || 0)
-    }))
-    const salaryGiven = salaryPayments.reduce((sum, r) => sum + Number(r.amount || 0), 0)
-
-
-
-    /* =====================================================
-       PURCHASE (DISTRIBUTOR)
-    ===================================================== */
-
-    const purchaseRes = await client.query(
-      `
-      SELECT
-        SUM(amount) AS total_purchase,
-
-        SUM(CASE WHEN payment_type='CASH' THEN amount ELSE 0 END) AS cash,
-        SUM(CASE WHEN payment_type='UPI' THEN amount ELSE 0 END) AS upi,
-        SUM(CASE WHEN payment_type='CARD' THEN amount ELSE 0 END) AS card,
-        SUM(CASE WHEN payment_type='BANK' THEN amount ELSE 0 END) AS bank,
-        SUM(CASE WHEN payment_type='CHEQUE' THEN amount ELSE 0 END) AS cheque
-
-      FROM distributor_payments
-      WHERE company_id=$1
-        AND created_at BETWEEN $2 AND $3
-      `,
-      [companyId, startDate, endDate]
-    )
-
-    const purchase = purchaseRes.rows[0]
-
-        /* =====================================================
-       ACCOUNT TRANSFERS
-    ===================================================== */
-
-    const transferRes = await client.query(
-      `
-      SELECT
-
-        /* ---------- CASH ---------- */
-
-        SUM(CASE WHEN from_type='CASH' THEN amount ELSE 0 END) AS cash_debit,
-        SUM(CASE WHEN to_type='CASH' THEN amount ELSE 0 END) AS cash_credit,
-
-
-        /* ---------- BANK ---------- */
-
-        SUM(
-          CASE 
-            WHEN from_type!='CASH'
-              AND (from_account_id IS NULL OR from_account_id='')
-            THEN amount ELSE 0 END
-        ) AS bank_debit,
-
-        SUM(
-          CASE 
-            WHEN to_type!='CASH'
-              AND (to_account_id IS NULL OR to_account_id='')
-            THEN amount ELSE 0 END
-        ) AS bank_credit
-
-      FROM account_transfers
-      WHERE company_id=$1
-        AND created_at BETWEEN $2 AND $3
-      `,
-      [companyId, startDate, endDate]
-    )
-
-    const transfers = transferRes.rows[0]
-
-    const transferCashNet =
-      Number(transfers.cash_credit || 0) -
-      Number(transfers.cash_debit || 0)
-
-    const transferBankNet =
-      Number(transfers.bank_credit || 0) -
-      Number(transfers.bank_debit || 0)
-
-
-
-    /* =====================================================
-       MONEY TRANSACTIONS
-    ===================================================== */
-
-    const transactionRes = await client.query(
-      `
-      SELECT
-
-        /* ---------- CASH ---------- */
-
-        SUM(
-          CASE 
-            WHEN payment_mode='CASH'
-              AND direction='GIVEN'
-            THEN amount ELSE 0 END
-        ) AS cash_debit,
-
-        SUM(
-          CASE 
-            WHEN payment_mode='CASH'
-              AND direction='RECEIVED'
-            THEN amount ELSE 0 END
-        ) AS cash_credit,
-
-
-        /* ---------- BANK ---------- */
-
-        SUM(
-          CASE 
-            WHEN payment_mode!='CASH'
-              AND direction='GIVEN'
-              AND (account_id IS NULL OR account_id='')
-            THEN amount ELSE 0 END
-        ) AS bank_debit,
-
-        SUM(
-          CASE 
-            WHEN payment_mode!='CASH'
-              AND direction='RECEIVED'
-              AND (account_id IS NULL OR account_id='')
-            THEN amount ELSE 0 END
-        ) AS bank_credit
-
-      FROM money_transactions
-      WHERE company_id=$1
-        AND status='PAID'
-        AND created_at BETWEEN $2 AND $3
-      `,
-      [companyId, startDate, endDate]
-    )
-
-    const transactions = transactionRes.rows[0]
-
-    const transactionCashNet =
-      Number(transactions.cash_credit || 0) -
-      Number(transactions.cash_debit || 0)
-
-    const transactionBankNet =
-      Number(transactions.bank_credit || 0) -
-      Number(transactions.bank_debit || 0)
-
-
-
-    /* =====================================================
-       CLOSING BALANCE
-    ===================================================== */
-
-    const closingCash =
-      openingCash +
-      Number(sales.cash) -
-      (Number(expenses.cash) + Number(purchase.cash)) +
-      transactionCashNet +
-      transferCashNet
-
-    const closingBank =
-      openingBank +
-      (Number(sales.upi) + Number(sales.card)) -
-      (
-        Number(expenses.upi) +
-        Number(expenses.card) +
-        Number(expenses.bank) +
-        Number(expenses.cheque) +
-        Number(purchase.upi) +
-        Number(purchase.card) +
-        Number(purchase.bank) +
-        Number(purchase.cheque)
-      ) +
-      transactionBankNet +
-      transferBankNet
-
-    const selectedPeriodCash = closingCash - openingCash
-    const selectedPeriodBank = closingBank - openingBank
-    const selectedPeriodTotal = selectedPeriodCash + selectedPeriodBank
-
-
-
-    /* =====================================================
-       BILL ROWS
-    ===================================================== */
-
-const billsRes = await client.query(
-  `
-  SELECT
-    invoice_number AS invoice,
-    created_at AS date,
-    COALESCE(${billSubtotalExpr},0) AS subtotal,
-    COALESCE(${billSubtotalExpr},0) - COALESCE(${billTotalExpr},0) AS discount,
-    ${billTotalExpr} AS total,
-    b.payment_method AS payment
-
-  FROM bills b
-
-  WHERE b.company_id = $1
-    AND b.deleted = false
-
-    /* EXCLUDE CREDIT BILLS */
-    AND b.payment_method != 'Credit'
-
-    /* EXCLUDE PENDING BILLS */
-    AND b.payment_status != 'PENDING'
-
-    AND b.created_at BETWEEN $2 AND $3
-    AND ($4 = true OR b.precedence IS NOT TRUE)
-
-  ORDER BY b.created_at DESC
-  `,
-  [companyId, startDate, endDate, includeCleanupPrecedence]
-)
-
-
-
-
-    /* =====================================================
-       EXPENSE ROWS
-    ===================================================== */
-
-    const expenseRowsRes = await client.query(
-      `
-      SELECT
-        e.expense_date AS date,
-        ec.name AS category,
-        e.payment_mode AS mode,
-        e.note,
-        e.total_amount AS amount
-      FROM expenses e
-      JOIN expense_categories ec
-        ON ec.id=e.expense_category_id
-      WHERE e.company_id=$1
-        AND e.expense_date BETWEEN $2 AND $3
-      ORDER BY e.expense_date DESC
-      `,
-      [companyId, startDate, endDate]
-    )
-
-    const expenseRows = expenseRowsRes.rows.map(r => ({
-      ...r,
-      amount: Number(r.amount)
-    }))
-
-
-
-    /* =====================================================
-       EXPENSE BY CATEGORY
-    ===================================================== */
-
-    const expenseByCategory: Record<string, number> = {}
-
-    expenseRows.forEach(e => {
-      expenseByCategory[e.category] =
-        (expenseByCategory[e.category] || 0) +
-        Number(e.amount)
-    })
-
-      /* =====================================================
-       PDF GENERATION
-    ===================================================== */
-
-    const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-    const MARGIN = 14
-    let y = MARGIN
-
-
-
-    /* ---------- TITLE ---------- */
-
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(18)
-    doc.text('Store Summary', MARGIN, y)
-
-    doc.setFontSize(10)
-    doc.setFont('helvetica', 'normal')
-    y += 7
-
-    doc.text(
-      `From: ${startDate.toLocaleDateString()}  To: ${endDate.toLocaleDateString()}`,
-      MARGIN,
-      y
-    )
-
-    y += 5
-    doc.text(
-      `Generated: ${new Date().toLocaleString()}`,
-      MARGIN,
-      y
-    )
-
-    y += 10
-
-
-
-    /* =====================================================
-       SELECTED PERIOD BALANCE
-    ===================================================== */
-
-    doc.setFontSize(13)
-    doc.text('Selected Period Balance', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Type', 'Amount']],
-      body: [
-        ['Cash', rs(selectedPeriodCash)],
-        ['Bank', rs(selectedPeriodBank)],
-        ['Total', rs(selectedPeriodTotal)]
-      ],
-      theme: 'grid'
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-
-
-    /* =====================================================
-       SALES
-    ===================================================== */
-
-    doc.text('Sales Breakdown', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Type', 'Amount']],
-      body: [
-        ['Total Sales', rs(sales.total_sales)],
-        ['Cash', rs(sales.cash)],
-        ['UPI', rs(sales.upi)],
-        ['Card', rs(sales.card)],
-        ['Credit', rs(sales.credit)]
-      ],
-      theme: 'grid'
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-
-
-    /* =====================================================
-       EXPENSES
-    ===================================================== */
-
-    doc.text('Expense Breakdown', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Type', 'Amount']],
-      body: [
-        ['Total Expense', rs(Number(expenses.total_expense || 0) + salaryGiven)],
-        ['Salary Given', rs(salaryGiven)],
-        ['Cash', rs(expenses.cash)],
-        ['UPI', rs(expenses.upi)],
-        ['Card', rs(expenses.card)],
-        ['Bank', rs(expenses.bank)],
-        ['Cheque', rs(expenses.cheque)]
-      ],
-      theme: 'grid'
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-
-
-    /* =====================================================
-       PURCHASE
-    ===================================================== */
-
-    doc.text('Distributor Purchase', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Type', 'Amount']],
-      body: [
-        ['Total Purchase', rs(purchase.total_purchase)],
-        ['Cash', rs(purchase.cash)],
-        ['UPI', rs(purchase.upi)],
-        ['Card', rs(purchase.card)],
-        ['Bank', rs(purchase.bank)],
-        ['Cheque', rs(purchase.cheque)]
-      ],
-      theme: 'grid'
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-
-
-    /* =====================================================
-       SALARY GIVEN
-    ===================================================== */
-
-    doc.text('Salary Given', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Date', 'Staff', 'Mode', 'Amount', 'Note']],
-      body: salaryPayments.length
-        ? salaryPayments.map(s => [
-            new Date(s.date).toLocaleDateString(),
-            s.userName || 'Staff',
-            s.paymentMode || '-',
-            rs(s.amount),
-            s.note ?? '-'
-          ])
-        : [['-', '-', '-', '-', '-']],
-      theme: 'grid'
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-
-
-    /* =====================================================
-       TRANSFERS
-    ===================================================== */
-
-    doc.text('Account Transfers', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Account', 'Debit', 'Credit', 'Net']],
-      body: [
-        [
-          'Cash',
-          rs(transfers.cash_debit),
-          rs(transfers.cash_credit),
-          rs(transferCashNet)
-        ],
-        [
-          'Bank',
-          rs(transfers.bank_debit),
-          rs(transfers.bank_credit),
-          rs(transferBankNet)
-        ]
-      ],
-      theme: 'grid'
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-
-
-    /* =====================================================
-       TRANSACTIONS
-    ===================================================== */
-
-    doc.text('Money Transactions', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Account', 'Debit', 'Credit', 'Net']],
-      body: [
-        [
-          'Cash',
-          rs(transactions.cash_debit),
-          rs(transactions.cash_credit),
-          rs(transactionCashNet)
-        ],
-        [
-          'Bank',
-          rs(transactions.bank_debit),
-          rs(transactions.bank_credit),
-          rs(transactionBankNet)
-        ]
-      ],
-      theme: 'grid'
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-
-
-    /* =====================================================
-       BILLS TABLE
-    ===================================================== */
-
-    doc.text('Bills', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Invoice', 'Date', 'Subtotal', 'Discount', 'Total', 'Payment']],
-      body: billsRes.rows.length
-        ? billsRes.rows.map(b => [
-            b.invoice,
-            new Date(b.date).toLocaleDateString(),
-            rs(b.subtotal),
-            rs(b.discount),
-            rs(b.total),
-            b.payment
-          ])
-        : [['—', '—', '—', '—', '—', 'No data']],
-      styles: { fontSize: 8 },
-      theme: 'grid'
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-
-
-    /* =====================================================
-       EXPENSE ROWS
-    ===================================================== */
-
-    doc.text('Expense Details', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Date', 'Category', 'Mode', 'Note', 'Amount']],
-      body: expenseRows.length
-        ? expenseRows.map(e => [
-            new Date(e.date).toLocaleDateString(),
-            e.category,
-            e.mode,
-            e.note ?? '-',
-            rs(e.amount)
-          ])
-        : [['—', '—', '—', '—', 'No data']],
-      styles: { fontSize: 8 },
-      theme: 'grid'
-    })
-
-    y = doc.lastAutoTable.finalY + 8
-
-
-
-    /* =====================================================
-       EXPENSE BY CATEGORY
-    ===================================================== */
-
-    doc.text('Expense by Category', MARGIN, y)
-    y += 4
-
-    autoTable(doc, {
-      startY: y,
-      head: [['Category', 'Amount']],
-      body: Object.entries(expenseByCategory).map(([c, a]) => [
-        c,
-        rs(a)
-      ]),
-      theme: 'grid'
-    })
-
-
-
-    /* =====================================================
-       PDF OUTPUT
-    ===================================================== */
-
-    const pdf = Buffer.from(doc.output('arraybuffer'))
-
-    setHeader(event, 'Content-Type', 'application/pdf')
-    setHeader(
-      event,
-      'Content-Disposition',
-      `attachment; filename="summary.pdf"`
-    )
-
-    return pdf
-
-  } finally {
-    client.release()
-  }
-})
-
-
-
-/* =====================================================
-   RUPEE FORMATTER
-===================================================== */
+  const query = getQuery(event);
+  const showCleanedValues = String(query.showCleanedValues) === 'true';
+  const useOriginalCleanupValues = cleanup && !showCleanedValues;
+  const includeCleanupPrecedence = cleanup && !showCleanedValues;
+
+  const { from: startDate, to: endDate } = reportWindow(query);
+
+  const {
+    sales,
+    expenses,
+    salaryPayments,
+    salaryGiven,
+    purchase,
+    transfers,
+    transferCashNet,
+    transferBankNet,
+    transactions,
+    transactionCashNet,
+    transactionBankNet,
+    selectedPeriodCash,
+    selectedPeriodBank,
+    selectedPeriodTotal,
+    moneyPosition,
+    moneyAccounts,
+    customerDues,
+    billsRes,
+    expenseRows,
+    expenseByCategory,
+  } = await dailyExportReport(pool, {
+    companyId,
+    startDate,
+    endDate,
+    useOriginalCleanupValues,
+    includeCleanupPrecedence,
+  });
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  const MARGIN = 14;
+  let y = MARGIN;
+
+  /* ---------- TITLE ---------- */
+
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(18);
+  doc.text('Store Summary', MARGIN, y);
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  y += 7;
+
+  doc.text(
+    `From: ${startDate.toLocaleDateString()}  To: ${endDate.toLocaleDateString()}`,
+    MARGIN,
+    y
+  );
+
+  y += 5;
+  doc.text(`Generated: ${new Date().toLocaleString()}`, MARGIN, y);
+
+  y += 10;
+
+  doc.setFontSize(13);
+  doc.text('Posted cash/bank movement', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Type', 'Amount']],
+    body: [
+      ['Cash', rs(selectedPeriodCash)],
+      ['Bank', rs(selectedPeriodBank)],
+      ['Total', rs(selectedPeriodTotal)],
+    ],
+    theme: 'grid',
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Cash and bank position', MARGIN, y);
+  autoTable(doc, {
+    startY: y + 4,
+    head: [['Account', 'Opening', 'Net movement', 'Closing']],
+    body: [...moneyAccounts.map(a => [a.name, rs(a.opening), rs(a.movement), rs(a.closing)]),
+      ['Total', rs(moneyPosition.opening), rs(moneyPosition.delta), rs(moneyPosition.closing)]],
+    theme: 'grid',
+  });
+  y = doc.lastAutoTable.finalY + 8;
+  if (y > 245) { doc.addPage(); y = MARGIN; }
+  doc.setFontSize(10);
+  doc.text(`Customer dues (separate): ${rs(customerDues)}`, MARGIN, y);
+  y += 10;
+  doc.setFontSize(13);
+  doc.text('Sales Breakdown', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Type', 'Amount']],
+    body: [
+      ['Total Sales', rs(sales.total_sales)],
+      ['Cash', rs(sales.cash)],
+      ['UPI', rs(sales.upi)],
+      ['Card', rs(sales.card)],
+      ['Credit', rs(sales.credit)],
+    ],
+    theme: 'grid',
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Expense Breakdown', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Type', 'Amount']],
+    body: [
+      ['Total Expense', rs(Number(expenses.total_expense || 0) + salaryGiven)],
+      ['Salary Given', rs(salaryGiven)],
+      ['Cash', rs(expenses.cash)],
+      ['UPI', rs(expenses.upi)],
+      ['Card', rs(expenses.card)],
+      ['Bank', rs(expenses.bank)],
+      ['Cheque', rs(expenses.cheque)],
+    ],
+    theme: 'grid',
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Distributor Purchase', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Type', 'Amount']],
+    body: [
+      ['Total Purchase', rs(purchase.total_purchase)],
+      ['Cash', rs(purchase.cash)],
+      ['UPI', rs(purchase.upi)],
+      ['Card', rs(purchase.card)],
+      ['Bank', rs(purchase.bank)],
+      ['Cheque', rs(purchase.cheque)],
+    ],
+    theme: 'grid',
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Salary Given', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Date', 'Staff', 'Mode', 'Amount', 'Note']],
+    body: salaryPayments.length
+      ? salaryPayments.map((s) => [
+          new Date(s.date).toLocaleDateString(),
+          s.userName || 'Staff',
+          s.paymentMode || '-',
+          rs(s.amount),
+          s.note ?? '-',
+        ])
+      : [['-', '-', '-', '-', '-']],
+    theme: 'grid',
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Account Transfers', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Account', 'Debit', 'Credit', 'Net']],
+    body: [
+      ['Cash', rs(transfers.cash_debit), rs(transfers.cash_credit), rs(transferCashNet)],
+      ['Bank', rs(transfers.bank_debit), rs(transfers.bank_credit), rs(transferBankNet)],
+    ],
+    theme: 'grid',
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Money Transactions', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Account', 'Debit', 'Credit', 'Net']],
+    body: [
+      ['Cash', rs(transactions.cash_debit), rs(transactions.cash_credit), rs(transactionCashNet)],
+      ['Bank', rs(transactions.bank_debit), rs(transactions.bank_credit), rs(transactionBankNet)],
+    ],
+    theme: 'grid',
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Bills', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Invoice', 'Date', 'Subtotal', 'Discount', 'Total', 'Payment']],
+    body: billsRes.rows.length
+      ? billsRes.rows.map((b) => [
+          b.invoice,
+          new Date(b.date).toLocaleDateString(),
+          rs(b.subtotal),
+          rs(b.discount),
+          rs(b.total),
+          b.payment,
+        ])
+      : [['—', '—', '—', '—', '—', 'No data']],
+    styles: { fontSize: 8 },
+    theme: 'grid',
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Expense Details', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Date', 'Category', 'Mode', 'Note', 'Amount']],
+    body: expenseRows.length
+      ? expenseRows.map((e) => [
+          new Date(e.date).toLocaleDateString(),
+          e.category,
+          e.mode,
+          e.note ?? '-',
+          rs(e.amount),
+        ])
+      : [['—', '—', '—', '—', 'No data']],
+    styles: { fontSize: 8 },
+    theme: 'grid',
+  });
+
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Expense by Category', MARGIN, y);
+  y += 4;
+
+  autoTable(doc, {
+    startY: y,
+    head: [['Category', 'Amount']],
+    body: Object.entries(expenseByCategory).map(([c, a]) => [c, rs(a)]),
+    theme: 'grid',
+  });
+
+  const pdf = Buffer.from(doc.output('arraybuffer'));
+
+  setHeader(event, 'Content-Type', 'application/pdf');
+  setHeader(event, 'Content-Disposition', `attachment; filename="summary.pdf"`);
+
+  return pdf;
+});
 
 function rs(v: number) {
-  return `Rs ${Number(v || 0).toFixed(2)}`
+  return `Rs ${Number(v || 0).toFixed(2)}`;
 }

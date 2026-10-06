@@ -1,75 +1,12 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 
-import BankForm from '~/components/Bank/Form.vue'
 
 import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
 import { useFindUniqueCompany } from '~/lib/hooks/company';
 
-const toast = useToast()
 const useAuth = () => useNuxtApp().$auth
 const PRIMARY_BANK_DETAILS_URL = '/accounts/bank/primary'
-
-/* ---------------------------------------------------
-   MODAL STATE
---------------------------------------------------- */
-const showBankForm = ref(false)
-const selectedBank = ref<any | null>(null)
-const isDeleteModalOpen = ref(false)
-const deletingRow = ref<any>(null)
-
-/* ---------------------------------------------------
-   OPEN / CLOSE
---------------------------------------------------- */
-const openBankForm = (row = null) => {
-  selectedBank.value = row
-  showBankForm.value = true
-}
-
-const closeBankForm = () => {
-  showBankForm.value = false
-  selectedBank.value = null
-}
-
-/* ---------------------------------------------------
-   CREATE / UPDATE
---------------------------------------------------- */
-const addBank = async (bank: any) => {
-  await $fetch('/api/accounts/banks', { method: 'POST', body: bank })
-  toast.add({ title: 'Bank account added', color: 'green' })
-}
-
-const editSecondaryBank = async (id: string, bank: any) => {
-  await $fetch(`/api/accounts/banks/${id}`, { method: 'PUT', body: bank })
-  toast.add({ title: 'Bank account updated', color: 'green' })
-}
-
-const editPrimaryBank = async (bank: any) => {
-  await $fetch('/api/accounts/primary-bank', { method: 'PUT', body: bank })
-
-  toast.add({ title: 'Primary bank updated', color: 'green' })
-}
-
-const saveBank = async (form: any) => {
-  if (selectedBank.value?.isPrimary) {
-    await editPrimaryBank(form)
-  } else if (selectedBank.value) {
-    await editSecondaryBank(selectedBank.value.id, form)
-  } else {
-    addBank(form)
-  }
-
-  closeBankForm()
-}
-
-/* ---------------------------------------------------
-   DELETE
---------------------------------------------------- */
-const confirmDelete = async () => {
-  await $fetch(`/api/accounts/banks/${deletingRow.value.id}`, { method: 'DELETE' })
-  toast.add({ title: 'Bank account deleted', color: 'green' })
-  isDeleteModalOpen.value = false
-}
 
 /* ---------------------------------------------------
    PAGINATION
@@ -165,35 +102,12 @@ const goToDetails = (row: any) => {
   navigateTo(`/accounts/bank/${row.id}`)
 }
 
-const actionItems = (row: any) => [
-  [
-    {
-      label: 'Details',
-      icon: 'i-heroicons-document-text-20-solid',
-      click: () => goToDetails(row),
-    },
-    {
-      label: 'Edit',
-      icon: 'i-heroicons-pencil-square-20-solid',
-      click: () => openBankForm(row),
-    },
-  ],
-  [
-    {
-      label: 'Delete',
-      icon: 'i-heroicons-trash-20-solid',
-      disabled: row.isPrimary,
-      click: () => {
-        deletingRow.value = row
-        isDeleteModalOpen.value = true
-      },
-    },
-  ],
-]
 </script>
 
 <template>
   <UDashboardPanelContent class="pb-24">
+    <UAlert class="mb-4" title="Legacy bank history" description="These records are read-only. Manage bank accounts and opening balances in Accountant." />
+    <UButton class="mb-4" to="/accountant/chart-of-accounts">Open Accountant</UButton>
    <UCard
             class="w-full"
             :ui="{
@@ -213,9 +127,7 @@ const actionItems = (row: any) => [
         <div class="flex justify-between items-center">
           <h2 class="font-semibold">Bank Accounts</h2>
 
-          <UButton color="primary" @click="openBankForm()">
-            Add Bank Account
-          </UButton>
+
         </div>
       </template>
 
@@ -255,13 +167,7 @@ const actionItems = (row: any) => [
         </template>
 
         <template #actions-data="{ row }">
-          <UDropdown :items="actionItems(row)">
-            <UButton
-              icon="i-heroicons-ellipsis-horizontal-20-solid"
-              variant="ghost"
-              color="gray"
-            />
-          </UDropdown>
+          <UButton label="Details" variant="ghost" color="gray" @click="goToDetails(row)" />
         </template>
       </UTable>
 
@@ -299,30 +205,6 @@ const actionItems = (row: any) => [
                 </div>
             </template>
     </UCard>
-
-    <!-- DELETE MODAL -->
-    <UDashboardModal
-      v-model="isDeleteModalOpen"
-      title="Delete Bank Account"
-      description="Are you sure you want to delete this bank account?"
-      icon="i-heroicons-exclamation-circle"
-      prevent-close
-      :close-button="null"
-    >
-      <template #footer>
-        <UButton color="red" label="Delete" @click="confirmDelete" />
-        <UButton color="gray" label="Cancel" @click="isDeleteModalOpen = false" />
-      </template>
-    </UDashboardModal>
-
-    <!-- FORM MODAL -->
-    <UModal v-model="showBankForm">
-      <BankForm
-        :bank="selectedBank?.raw"
-        @save="saveBank"
-        @cancel="closeBankForm"
-      />
-    </UModal>
 
   </UDashboardPanelContent>
 </template>

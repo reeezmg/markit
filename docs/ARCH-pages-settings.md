@@ -1,9 +1,73 @@
 ## Settings Pages
 
 ### Settings Tab Navigation
-- Current `pages/settings.vue` tabs: General, Store, Products, Printer, Numbering, Requests.
+- Current `pages/settings.vue` tabs: General, Store, Company & Branches, Products, Account, Printer, Numbering, Requests.
+- `/settings/branches` lets a company admin mark a root company as a head office and create branches. Branches have separate settings, stock, bills, and accounts. The page reads `/api/branches` and calls `/api/branches/head-office` and `/api/branches` for writes.
+- `TeamsDropdown.vue` lists actual companies and branches and is the explicit session company switch. ERP, Products, and Distributor use local table filters and form company fields; these controls do not change the sidebar company. There is no synthetic All Stores company or shared header selector.
+- When the selected company has `parentCompanyId`, the settings shell hides Company & Branches and a direct visit to `/settings/branches` redirects to `/settings/store`.
 - Inline horizontal tabs via `<SettingsTabNav />` component on the main settings pages: General (`/settings`), Printer (`/settings/printer`), Numbering (`/settings/numbering`), Requests (`/settings/requests`). The Store page (`/settings/store`) uses the parent navigation instead of rendering the tab row again.
-- The parent settings page supplies the six-tab navigation; older child `SettingsTabNav` descriptions may reflect the previous layout.
+- The parent settings page supplies the settings navigation; older child `SettingsTabNav` descriptions may reflect the previous layout.
+
+---
+
+### `pages/settings/account.vue` (Account Settings)
+
+Native bank disconnection (2026-10-06): staff/supplier configuration no longer
+queries archived BankAccount records. Historical `bank:<id>` roles are retained
+from source documents and saved mappings for existing postings. Staff settings
+returns no legacy bank selector options; future payout choices use active native
+BANK accounts or the configured default. Existing source account snapshots remain
+authoritative on edits.
+
+Company-scoped admin/manager/accountant configuration is grouped into Billing & sales,
+Expenses, Salary & staff credit, Purchase & supplier payments, Investments,
+Receive money, Pay money, Transfers, Fixed assets, and Online sales & settlements.
+ERP and staff sections use their existing configuration/activation APIs. Billing
+and expenses currently share the ERP cash/bank choices. Supplier-specific setup,
+history import and overrides are embedded here through `Distributor/Accounting.vue`.
+The previous Accounting buttons on billing, sales, expense, customer, staff and
+supplier pages have been removed. Ecommerce setup and investor profit-distribution
+account selection are also here; investment share-count settings remain separate.
+
+`/api/accountant/account-settings` lists active company accounts, suppliers and saved
+form defaults; `/defaults` reads just defaults. PUT `/:group` validates account type,
+company, activity, role and distinct transfer endpoints. Defaults are append-only
+`AccountantAudit` entries (`account-defaults` / `configured`, resourceId = group).
+No new schema is required. Empty saved groups clear older defaults. Purchase forms
+and payment writes use company defaults only without an existing source-account
+snapshot; explicit transaction choices take precedence. Investor profiles/movements,
+Receive/Pay, transfer creation, asset categories and disposals prefill from these
+settings. Existing posted source mappings remain unchanged. Ecommerce PUT `/settings`
+updates future-order defaults without enabling posting or changing existing orders.
+
+Verified selection precedence (2026-10-06): new supplier transaction forms merge
+supplier mappings, then company purchase defaults, then the user's transaction
+choices. Company defaults therefore override a supplier mapping for the same role;
+recorded source accounts take precedence when editing. Billing and expense sections
+share Cash/Bank mappings. Saving either section merges only its fields into current
+saved ERP settings so the other section's dedicated fields are preserved.
+
+Verified fixes (2026-10-06): ERP mapping save updates stock-control's default
+Stock account in the same transaction and synchronizes valuation when enabled.
+PO-specific stock snapshots retain their recorded selections; default/unlinked
+stock follows the Billing Stock selection. Supplier opening sources consume the
+company purchase opening default on their first posting. The additive migration
+`20261006120000_supplier_opening_account_default` installs a selection trigger for
+generated supplier opening edits; import also snapshots defaults explicitly.
+Existing source selections remain frozen. This migration is prepared/tested,
+not applied to production by the sidebar-fix task. Supplier preview supplies the
+company opening default when no opening has been recorded. Profit distribution
+settings remain admin/manager-only: accountants see a disabled selector and no
+Save button; the handler and endpoint enforce the same permission.
+Shared SQL selection helpers use `prismaSqlClient` inside the Accountant transaction;
+advisory locks and mutations without RETURNING execute without decoding row data.
+
+Checks: `npx tsx tests/account-settings.test.ts` covers company/role/type validation,
+clearing defaults, purchase overrides and preserving existing account snapshots.
+`tests/account-settings-posting.integration.test.ts` additionally checks every ERP
+and staff mapping role, named staff banks, old/new source account preservation and
+all 22 form-default selectors in a disposable schema. The stock and supplier
+account-settings integration suites verify selected accounts and frozen snapshots.
 
 ---
 
@@ -49,7 +113,7 @@ All other sections save individually per field (toggle, input blur, etc.).
 | Delivery Settings | Delivery type | `useUpdateCompany` + `updateDeliveryType` | `deliveryType` array - options: `['trynbuy', 'booking', 'delivery']` |
 | Delivery Settings | Delivery config | `useUpdateCompany` + `updateDeliveryConfig` | `deliveryMode`, `deliveryRadius`, `deliveryDiscount` (0-100%), `codCharge` (non-negative flat COD surcharge) |
 | Bank Details | Bank / UPI | `useUpdateCompany` + session update | `accHolderName`, `ifsc`, `accountNo`, `bankName`, `upiId`, `gstin` |
-| Opening Balance | Opening balance | `useUpdateCompany` + `updateOpeningBalance` | `cash`, `bank`, `openingCashDate`, `openingBankDate` (cash/bank amount + date pairs shown side by side in separate cards) |
+| Opening Balance | Archived opening balance | Disabled history fields; link to `/accountant/opening-balances` | Existing `cash`, `bank`, `openingCashDate`, `openingBankDate` remain visible. New financial openings use Accountant; the old PUT route returns 410. |
 | Feature Toggles | AI Image toggle | `useUpdateCompany` + `updateIsAiImage` | `isAiImage` |
 | Feature Toggles | User track toggle | `useUpdateCompany` + `updateIsUserTrackIncluded` | `isUserTrackIncluded` |
 
@@ -174,3 +238,7 @@ Key exported functions (all call PUT endpoints and then `useAuth().updateSession
 Controls which product and variant inputs sellers see, billing units and size labels, and dimension-related input switches. Reads/saves configuration through `/api/product-inputs` and company update hooks. Also manages scoped custom product fields (create fields versus variant fields) through `/api/product-custom-fields`; field validation runs before save. These are input-definition settings, not edits to existing product rows. The page shows a migration warning if the custom-field database support is unavailable.
 
 The current parent `pages/settings.vue` has six tabs: General, Store, Products, Printer, Numbering and Requests. Earlier references to a `pages/settings/members.vue` route are historical: that Vue file is not present in the current page tree.
+
+Store opening balances (2026-10-06): `/settings/store` displays the old company cash/bank
+opening values and dates disabled. Its former legacy PUT is removed; the action links
+to `/accountant/opening-balances`. Account role selection remains on `/settings/account`.

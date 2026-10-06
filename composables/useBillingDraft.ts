@@ -1,3 +1,4 @@
+import { companyStorageKey } from '~/utils/companyStorageKey';
 /**
  * useBillingDraft
  *
@@ -43,8 +44,13 @@ function makeDefaultBill(billNo = '1') {
 }
 
 export function useBillingDraft() {
+  const companyScope = useCompanyScope();
+  const $fetch = companyScope.fetch;
+  const LOCAL_BILLS_KEY = companyStorageKey('bills', companyScope.companyId.value, useNuxtApp().$auth.session.value?.companyId || '');
+
   // ─── Bill state refs ────────────────────────────────────────────────────────
   const billNo = ref('1')
+  const requestId = ref('')
   const date = ref(new Date().toISOString())
   const parentUserCode = ref(null)
   const parentUserId = ref(null)
@@ -131,6 +137,7 @@ export function useBillingDraft() {
 
   /** Aggregates all reactive bill state into a single snapshot for persistence. */
   const currentBill = computed(() => ({
+    requestId: requestId.value,
     billNo: billNo.value,
     date: date.value,
     parentUserCode: parentUserCode.value,
@@ -181,7 +188,8 @@ export function useBillingDraft() {
     if (!bill) return
 
     billNo.value = bill.billNo ?? ''
-    date.value = new Date().toISOString()
+    requestId.value = bill.requestId ?? ''
+    date.value = requestId.value ? bill.date : new Date().toISOString()
     parentUserCode.value = bill.parentUserCode ?? null
     parentUserId.value = bill.parentUserId ?? null
     parentUserName.value = bill.parentUserName ?? null
@@ -211,6 +219,7 @@ export function useBillingDraft() {
     const newBillNo = (existing.length + 1).toString()
 
     billNo.value = newBillNo
+    requestId.value = ''
     date.value = new Date().toISOString()
     parentUserCode.value = null
     parentUserId.value = null
@@ -253,6 +262,7 @@ export function useBillingDraft() {
    * Caller should also clear selectedCouponId and focus the first barcode input.
    */
   function resetDraft() {
+    requestId.value = ''
     items.value = [{ ...makeEmptyItem(), rate: 0, discount: 0, tax: 0 }]
     discount.value = 0
     paymentMethod.value = 'Cash'
@@ -299,7 +309,7 @@ export function useBillingDraft() {
     discount, redeemedAmt, redeemedPoints, paymentMethod,
     phoneNo, points, clientName, clientId, couponValue,
     splitPayments, isRedeemPoint, selected, tempSplits, items,
-    draftBills, selectedDraft,
+    draftBills, selectedDraft, requestId,
     // Computeds
     currentBill, returnAmt, subtotal, grandTotal, tQty,
     // Date input model

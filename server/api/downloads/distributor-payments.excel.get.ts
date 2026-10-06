@@ -1,13 +1,15 @@
 import { defineEventHandler, getQuery, createError, setHeader } from 'h3'
 import { pool } from '~/server/db'
+import { getReadCompanyId, getReadCompanyIds } from '~/server/utils/organizationReadScope'
 import ExcelJS from 'exceljs'
 
 export default defineEventHandler(async (event) => {
 
   /* ── AUTH ── */
-  const session = await useAuthSession(event)
-  const companyId = session.data.companyId
-  if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
+  const requestedCompanyId = getQuery(event).companyId as string | undefined
+  const companyIds = requestedCompanyId
+    ? [await getReadCompanyId(event, requestedCompanyId)]
+    : await getReadCompanyIds(event)
 
   /* ── PARAMS ── */
   const query = getQuery(event)
@@ -32,17 +34,19 @@ export default defineEventHandler(async (event) => {
          dp.amount,
          dp.remarks,
          dp.bill_no,
+         co.name AS company_name,
          d.name AS distributor_name,
          po.purchase_order_no
        FROM distributor_payments dp
+       JOIN companies co ON co.id = dp.company_id
        LEFT JOIN distributors    d  ON d.id  = dp.distributor_id
        LEFT JOIN purchase_orders po ON po.id = dp.purchase_order_id
-       WHERE dp.company_id = $1
+       WHERE dp.company_id = ANY($1::text[])
          AND dp.created_at BETWEEN $2 AND $3
          AND ($4::text IS NULL OR dp.distributor_id = $4)
          AND (NOT $5::boolean OR dp.payment_type IS DISTINCT FROM 'RETURN')
        ORDER BY dp.created_at DESC`,
-      [companyId, startDate, endDate, distributorId, excludeReturns]
+      [companyIds, startDate, endDate, distributorId, excludeReturns]
     )
 
     let rows = paymentsRes.rows.map(r => ({
@@ -53,6 +57,7 @@ export default defineEventHandler(async (event) => {
       remarks:           r.remarks || '-',
       bill_no:           r.bill_no,
       distributor_name:  r.distributor_name || '-',
+      company_name:      r.company_name,
       purchase_order_no: r.purchase_order_no ?? '-',
     }))
 
@@ -77,14 +82,14 @@ export default defineEventHandler(async (event) => {
     /* title */
     const titleRow = sheet.addRow(['Distributor Payments'])
     titleRow.font = { bold: true, size: 14 }
-    sheet.mergeCells('A1:G1')
+    sheet.mergeCells('A1:H1')
 
     sheet.addRow([`${startDate.toLocaleDateString('en-GB')} – ${endDate.toLocaleDateString('en-GB')}`])
-    sheet.mergeCells('A2:G2')
+    sheet.mergeCells('A2:H2')
     sheet.addRow([])
 
     /* header */
-    const headerRow = sheet.addRow(['Payment No', 'Date', 'Distributor', 'PO No', 'Payment Type', 'Amount (Rs)', 'Remarks'])
+    const headerRow = sheet.addRow(['Payment No', 'Date', 'Distributor', 'PO No', 'Payment Type', 'Amount (Rs)', 'Remarks', 'Store'])
     headerRow.font = { bold: true }
     headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAD3' } }
     headerRow.eachCell(cell => { cell.border = { bottom: { style: 'thin' } } })
@@ -99,6 +104,7 @@ export default defineEventHandler(async (event) => {
         r.payment_type ?? '-',
         r.amount.toFixed(2),
         r.remarks,
+        r.company_name,
       ])
     })
 
@@ -111,6 +117,7 @@ export default defineEventHandler(async (event) => {
       '',
       `${rows.length} payments`,
       rows.reduce((s, r) => s + r.amount, 0).toFixed(2),
+      '',
       '',
     ])
     totalRow.font = { bold: true }

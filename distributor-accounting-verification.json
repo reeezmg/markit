@@ -1,0 +1,31 @@
+{
+  "companies": [
+    {
+      "name": "Markit",
+      "distributors": 2,
+      "journals": 18,
+      "sources": 18
+    },
+    {
+      "name": "ORIGINALS CLOTHING",
+      "distributors": 11,
+      "journals": 162,
+      "sources": 162
+    },
+    {
+      "name": "Ubar Mobiles",
+      "distributors": 3,
+      "journals": 4,
+      "sources": 4
+    },
+    {
+      "name": "reezc",
+      "distributors": 1,
+      "journals": 4,
+      "sources": 4
+    }
+  ],
+  "repeatChanged": 0,
+  "unbalanced": 0,
+  "mismatchedDistributors": []
+}

@@ -1,0 +1,17 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "strictNullChecks": true,
+    "skipLibCheck": true,
+    "noEmit": true,
+    "allowSyntheticDefaultImports": true,
+    "baseUrl": "..",
+    "paths": {
+      "~/*": ["./*"]
+    },
+    "types": ["node"]
+  },
+  "include": ["../server/utils/report-*.ts", "../server/utils/reportSummary.ts"]
+}

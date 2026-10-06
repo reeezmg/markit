@@ -1,4 +1,7 @@
 <script setup >
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 import Quagga from '@ericblade/quagga2'
 import {
   CapacitorBarcodeScanner,
@@ -27,7 +30,7 @@ const rateInputs = ref([]);
 const discountInputs = ref([]);
 const taxInputs = ref([]);
 const userInputs = ref([]);
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 const isMobile = ref(false);
 const isTaxIncluded = useAuth().session.value?.isTaxIncluded;
 

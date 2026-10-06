@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "through": "2026-09-29 23:59:59.999",
+  "decision": "User confirmed new accounting is authoritative; preserve current postings and accept traced differences.",
+  "companies": [
+    {
+      "companyId": "02856c86-60b8-41a4-ba18-79dbd55bf016",
+      "company": "Markit",
+      "conflicts": [
+        {
+          "source": "EXPENSE:7a4520f8-f7c4-45fd-82c9-2c6c49ec973a",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "DISTRIBUTOR_PAYMENT:1f2c566f-5993-4ede-ac99-30ad1b6a42fa",
+          "journalId": "cf8b874f12e4340816aaf520b"
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:ae7b0123-50aa-47b0-abb2-fb003d0c7ea7",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "EXPENSE:8da4605d-5cc2-4860-8224-fbf645f17b76",
+          "journalId": "c51ed5be9838e690c646aa1a2"
+        },
+        {
+          "source": "DISTRIBUTOR_PAYMENT:9d1003df-7846-4e3e-b888-ded08d8ffd17",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "EXPENSE:be184ec1-9517-4ab4-b736-a610b81fd7f5",
+          "journalId": "c3c57198b578f0692b30210a2"
+        },
+        {
+          "source": "EXPENSE:52204eed-59f1-4376-b9d3-7e541abd201b",
+          "reason": "Two legacy sources refer to the same posted journal",
+          "also": "DISTRIBUTOR_PAYMENT:c5677bec-2443-45c4-8891-1d60446b026d",
+          "journalId": "c601d9e3389a4349eb30c4fb7"
+        },
+        {
+          "account": "CASH",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "550.00"
+        }
+      ],
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujm9rc000021zuc5rbsml9f",
+          "oldBalance": "-89513.00",
+          "newBalanceBefore": "-6050.00",
+          "toImport": "-82913.00",
+          "newBalanceAfter": "-88963.00",
+          "difference": "550.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmn0gh000k10hvc72g30cs",
+          "oldBalance": "230.00",
+          "newBalanceBefore": "0.00",
+          "toImport": "230.00",
+          "newBalanceAfter": "230.00",
+          "difference": "0.00"
+        }
+      ]
+    },
+    {
+      "companyId": "3c431903-0d62-4f8d-89aa-b8b456c179f3",
+      "company": "Ubar Mobiles",
+      "conflicts": [],
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujm9urx00141zuc2nw3klxy",
+          "oldBalance": "134881.10",
+          "newBalanceBefore": "-21500.00",
+          "toImport": "156381.10",
+          "newBalanceAfter": "134881.10",
+          "difference": "0.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmnrgy005u10hvzzy7byk9",
+          "oldBalance": "3364.99",
+          "newBalanceBefore": "0.00",
+          "toImport": "3364.99",
+          "newBalanceAfter": "3364.99",
+          "difference": "0.00"
+        }
+      ]
+    },
+    {
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "company": "reezc",
+      "conflicts": [
+        {
+          "source": "DISTRIBUTOR_PAYMENT:6d88bb54-75ea-4e25-b498-409d8c70cee3",
+          "reason": "Existing source posting differs in account, date or amount",
+          "legacy": [
+            [
+              "cmujmoiog00dn10hvj2ikxi6c|2026-05-08 06:13:26.1",
+              "-600.00"
+            ]
+          ],
+          "posted": []
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "600.00"
+        }
+      ],
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujj2907000210el5xemzhdq",
+          "oldBalance": "167534.80",
+          "newBalanceBefore": "-200.00",
+          "toImport": "167734.80",
+          "newBalanceAfter": "167534.80",
+          "difference": "0.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmoiog00dn10hvj2ikxi6c",
+          "oldBalance": "3291.00",
+          "newBalanceBefore": "0.00",
+          "toImport": "3891.00",
+          "newBalanceAfter": "3891.00",
+          "difference": "600.00"
+        }
+      ]
+    },
+    {
+      "companyId": "6980e6e4-7d5d-413c-9554-24f385c9b853",
+      "company": "ORIGINALS CLOTHING",
+      "conflicts": [
+        {
+          "account": "CASH",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "-27440.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "reason": "Projected balance does not match the old ledger; unlinked postings may exist",
+          "difference": "-249242.00"
+        }
+      ],
+      "reconciliation": [
+        {
+          "account": "CASH",
+          "accountId": "cmujk8pon002x10elczamrss3",
+          "oldBalance": "-573562.65",
+          "newBalanceBefore": "-710881.00",
+          "toImport": "109878.35",
+          "newBalanceAfter": "-601002.65",
+          "difference": "-27440.00"
+        },
+        {
+          "account": "PRIMARY_BANK",
+          "accountId": "cmujmot8b00ga10hv36n32efa",
+          "oldBalance": "533399.81",
+          "newBalanceBefore": "-2111292.00",
+          "toImport": "2395449.81",
+          "newBalanceAfter": "284157.81",
+          "difference": "-249242.00"
+        }
+      ]
+    }
+  ]
+}

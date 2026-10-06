@@ -1,9 +1,12 @@
 <script setup>
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+
 const emit = defineEmits(['account-created'])
 const open = defineModel()
 
 const toast = useToast()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 
 const account = ref({
   name: '',
@@ -59,6 +62,7 @@ const submitForm = async () => {
 <template>
   <UModal v-model="open">
     <div class="p-4 space-y-4">
+      <CompanyFormField locked />
       <h2 class="text-lg font-semibold">Enter Account Details</h2>
 
       <h3 class="text-md font-semibold">Personal Details</h3>

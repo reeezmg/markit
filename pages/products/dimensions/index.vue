@@ -1,9 +1,14 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+
 import { format } from 'date-fns';
 
 definePageMeta({ auth: true });
 
 const toast = useToast();
+const auth = companyScope.auth;
+const { selectOwner } = useOrganizationActions();
 
 // Dimension presets: packaging "box" and "product" dimension presets. Backed by
 // raw /api/dimensions endpoints (shipping_boxes table) so the `type` field works
@@ -32,6 +37,9 @@ const columns = [
   { key: 'createdAt', label: 'Added' },
   { key: 'actions', label: '' },
 ];
+const displayColumns = computed(() => auth.session.value?.allStores
+  ? [{ key: 'companyName', label: 'Store' }, ...columns]
+  : columns);
 
 const dimsText = (r: any) => [r.length, r.width, r.height].every((v: any) => v != null)
   ? `${r.length} × ${r.width} × ${r.height}`
@@ -58,8 +66,13 @@ const dimFields: Array<{ key: 'weight' | 'length' | 'width' | 'height'; label: s
 
 const isValid = computed(() => String(form.value.name || '').trim() !== '' && ['box', 'product'].includes(form.value.type));
 
-function openCreate() { form.value = blank(); modalOpen.value = true; }
-function openEdit(row: any) { form.value = { ...blank(), ...row }; modalOpen.value = true; }
+async function openCreate() { await companyScope.beginForm(); form.value = blank(); modalOpen.value = true; }
+async function openEdit(row: any) {
+  await companyScope.beginForm({ model: 'ShippingBox', id: row.id, companyId: row.companyId });
+  if (!await selectOwner(row.companyId)) return;
+  form.value = { ...blank(), ...row };
+  modalOpen.value = true;
+}
 
 async function save() {
   if (!isValid.value) return;
@@ -87,6 +100,7 @@ async function save() {
 }
 
 async function remove(row: any) {
+  if (!await selectOwner(row.companyId)) return;
   try {
     await $fetch(`/api/dimensions/${row.id}`, { method: 'DELETE' });
     toast.add({ title: `${row.name} removed`, color: 'green' });
@@ -95,6 +109,8 @@ async function remove(row: any) {
     toast.add({ title: 'Delete failed', description: e.data?.statusMessage || e.message, color: 'red' });
   }
 }
+
+watch(companyScope.readIds, () => { void load(); });
 </script>
 
 <template>
@@ -111,7 +127,8 @@ async function remove(row: any) {
       </div>
 
       <UCard :ui="{ body: { padding: '' } }">
-        <UTable :rows="rows" :columns="columns" :loading="loading">
+        <template #header><CompanyTableFilter /></template>
+        <UTable :rows="rows" :columns="displayColumns" :loading="loading">
           <template #type-data="{ row }">
             <UBadge :color="row.type === 'product' ? 'blue' : 'gray'" variant="subtle" class="capitalize">
               {{ row.type }}
@@ -153,7 +170,8 @@ async function remove(row: any) {
             <h2 class="text-lg font-semibold">{{ editing ? 'Edit' : 'Add' }} Dimension</h2>
           </template>
           <div class="space-y-4">
-            <UFormGroup label="Type" required>
+            <CompanyFormField @transferred="modalOpen = false" />
+          <UFormGroup label="Type" required>
               <div class="grid grid-cols-2 gap-2">
                 <button
                   v-for="opt in typeOptions"

@@ -17,6 +17,7 @@ const fetchEntries = async (start?: Date, end?: Date) => {
   const finalStart = start ?? todayStart
   const finalEnd = end ?? todayEnd
   loading.value = true
+  entries.value=null
   try {
     entries.value = await $fetch('/api/user/report', {
       query: {
@@ -52,6 +53,7 @@ watch([selectedDate, companyName], ([newVal, newCompany]) => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+    <ReportsBasis kind="source" detail="Staff sales, attendance, payroll earned and payments use source records. Accounting salary entries cover connected activity only." />
     <div v-if="loading" class="w-full flex justify-center items-center py-20">
         <UIcon name="i-heroicons-arrow-path-20-solid" class="animate-spin w-5 h-5 text-gray-500 mr-2" />
         <span>Loading data...</span>

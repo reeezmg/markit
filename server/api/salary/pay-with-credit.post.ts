@@ -1,13 +1,17 @@
+import { assertSalaryManager, salaryMoney, publicSalaryPayment } from '~/server/utils/salary-input'
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { insertSalaryPaymentInClient } from './_payment'
 import { upsertUserLedgerEntry } from '~/server/utils/user-ledger'
-import { ensureAccountLedgerSchema, rebuildAccountLedgerForSource, userCreditAccountLedgerRows } from '~/server/utils/account-ledger'
+
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
+    assertSalaryManager(session.data.role)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
@@ -23,8 +27,8 @@ export default defineEventHandler(async (event) => {
     cycleLineId?: string | null
   }>(event)
 
-  const salaryAmount = round2(Number(body.salaryAmount || 0))
-  const creditCutAmount = round2(Number(body.creditCutAmount || 0))
+  const salaryAmount = salaryMoney(body.salaryAmount ?? 0, true)
+  const creditCutAmount = salaryMoney(body.creditCutAmount ?? 0, true)
   if (!body.userId) throw createError({ statusCode: 400, statusMessage: 'User is required' })
   if (salaryAmount <= 0 && creditCutAmount <= 0) {
     throw createError({ statusCode: 400, statusMessage: 'Enter salary payment or credit cut amount' })
@@ -33,10 +37,13 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: 'Cycle line is required for credit cut' })
   }
 
+  publicSalaryPayment({ userId: body.userId, amount: Math.max(salaryAmount, creditCutAmount), paymentMode: body.paymentMode, bankAccountId: body.bankAccountId, paymentDate: body.paymentDate, note: body.note })
   const client = await pool.connect()
   try {
-    await ensureAccountLedgerSchema(client)
+
     await client.query('BEGIN')
+    await client.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE', [companyId])
+    await lockCompanyRequest(event, client)
 
     const userRes = await client.query(
       `
@@ -51,6 +58,10 @@ export default defineEventHandler(async (event) => {
     )
     if (!userRes.rowCount) throw createError({ statusCode: 404, statusMessage: 'User not found' })
 
+    if (body.cycleLineId) {
+      const line = await client.query('SELECT id FROM payroll_cycle_lines WHERE id=$1 AND company_id=$2 AND user_id=$3 AND cycle_id=$4 FOR UPDATE', [body.cycleLineId, companyId, body.userId, body.cycleId])
+      if (!line.rowCount) throw createError({ statusCode: 400, statusMessage: 'Payroll line does not match this staff member and cycle' })
+    }
     const existingCreditCutRes = body.cycleLineId
       ? await client.query(
           `
@@ -123,23 +134,7 @@ export default defineEventHandler(async (event) => {
         createdAt: body.paymentDate || null,
       })
 
-      if (creditCut?.id) {
-        await rebuildAccountLedgerForSource(client, {
-          companyId,
-          sourceType: 'USER_CREDIT',
-          sourceId: creditCut.id,
-          rows: userCreditAccountLedgerRows({
-            id: creditCut.id,
-            companyId,
-            type: 'CREDIT_BILL_PAYMENT',
-            sourceType: 'PAYROLL',
-            sourceId: body.cycleLineId || null,
-            amount: round2(previousCreditCut + creditCutAmount),
-            createdAt: body.paymentDate || null,
-            note: body.note || 'Credit reduced from payroll cycle',
-          }),
-        })
-      }
+
     }
 
     await client.query('COMMIT')

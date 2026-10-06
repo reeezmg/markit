@@ -1,10 +1,12 @@
+import { getReadCompanyIds } from '~/server/utils/organizationReadScope';
+
 export default defineEventHandler(async (event) => {
-   const session = await useAuthSession(event);
+  const companyIds = await getReadCompanyIds(event);
   const distributors = await prisma.distributor.findMany({
     where: { 
       status: true,
       companies:{
-        some:{companyId: session.data.companyId}
+        some:{companyId: { in: companyIds }}
       }
       
     },

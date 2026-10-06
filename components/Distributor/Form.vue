@@ -1,7 +1,10 @@
 
 <script setup lang="ts">
-import { useCreateDistributor, useUpdateDistributor, useDeleteDistributor } from '~/lib/hooks/distributor';
-import { useUpdateDistributorCompany } from '~/lib/hooks/distributor-company';
+const companyScope = useCompanyScope('form');
+const $fetch = companyScope.fetch;
+
+import { useCreateDistributor, useUpdateDistributor, useDeleteDistributor } from '~/lib/company-hooks/distributor';
+import { useUpdateDistributorCompany } from '~/lib/company-hooks/distributor-company';
 
 const props = defineProps({
     selectedSupplier: {
@@ -22,9 +25,13 @@ const props = defineProps({
     },
 });
 
+const companyLink = computed(() => props.distributorCompanyKey || (props.selectedSupplier?.companyId ? { distributorId: props.selectedSupplier.id, companyId: props.selectedSupplier.companyId } : null));
+watch(companyLink, value => { void companyScope.beginForm(value ? { model: 'DistributorCompany', id: value.distributorId, companyId: value.companyId } : null); }, { immediate: true });
+
+const emit = defineEmits(['transferred']);
 const iscreating = ref(false);
 const toast = useToast();
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 const CreateDistributor = useCreateDistributor()
 const UpdateDistributor = useUpdateDistributor()
 const UpdateDistributorCompany = useUpdateDistributorCompany()
@@ -87,10 +94,10 @@ const submitForm = async () => {
               }
     })
     // Update opening due on distributor-company link
-    if (props.distributorCompanyKey) {
+    if (companyLink.value) {
       await UpdateDistributorCompany.mutateAsync({
         where: {
-          distributorId_companyId: props.distributorCompanyKey,
+          distributorId_companyId: companyLink.value,
         },
         data: {
           openingDue: supplier.value.openingDue || 0,
@@ -164,6 +171,7 @@ const submitForm = async () => {
 
 <template>
         <div class="p-4 space-y-4">
+      <CompanyFormField @transferred="emit('transferred')" />
           <h2 class="text-lg font-semibold">Enter Distributor Details</h2>
 
           <!-- Name -->

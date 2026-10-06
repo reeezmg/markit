@@ -14,9 +14,13 @@ const form = reactive({
 })
 const { data: modelData } = await useFetch<{
   default: string
+  configurationMessage?: string | null
   models: { key: string; label: string; note: string; supportsImages?: boolean }[]
 }>('/api/ecommerce-cms/storefront-agent/models')
 const visionModels = computed(() => (modelData.value?.models || []).filter(model => model.supportsImages))
+watch(visionModels, models => {
+  if (!models.some(model => model.key === form.model)) form.model = models[0]?.key || ''
+}, { immediate: true })
 let pollTimer: ReturnType<typeof setTimeout> | null = null
 
 async function poll() {
@@ -160,7 +164,7 @@ async function skip() {
         </UFormGroup>
         <UFormGroup label="AI model" required help="Only image-capable models are listed because this setup may use visual references.">
           <USelectMenu v-model="form.model" :options="visionModels" value-attribute="key" option-attribute="label" />
-          <p v-if="!visionModels.length" class="mt-2 text-xs text-amber-600">No vision model is available. Add one under AI → Models.</p>
+          <p v-if="!visionModels.length" class="mt-2 text-xs text-amber-600"><span v-if="modelData?.configurationMessage">{{ modelData.configurationMessage }}</span><span v-else>No vision model is available. <NuxtLink to="/ai/models" class="underline">Configure one in AI Models.</NuxtLink></span></p>
         </UFormGroup>
         <UFormGroup label="Anything else? (optional)"><UTextarea v-model="form.notes" :rows="3" placeholder="Accessibility needs, competitor references, special pages, constraints or other notes." /></UFormGroup>
         <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">

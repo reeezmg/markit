@@ -1,0 +1,11 @@
+import assert from 'node:assert/strict';
+import {settleCreditPayment as settle} from '../utils/credit-payment';
+assert.deepEqual(settle({payment_method:'Credit'},'PAID','Cash'),{method:'Cash',splits:null});
+const bill={payment_method:'Split',grand_total:100,split_payments:[{method:'Cash',amount:30},{method:'Credit',amount:70}]};
+assert.deepEqual(settle(bill,'PAID','UPI'),{method:'Split',splits:[{method:'Cash',amount:30},{method:'UPI',amount:70}]});
+assert.equal(bill.split_payments[1].method,'Credit');
+assert.throws(()=>settle({...bill,grand_total:101},'PAID','Cash'),/equal/);
+assert.throws(()=>settle(bill,'PAID','Credit'),/Select/);
+assert.equal(settle({payment_method:'Cash'},'PENDING').method,'Credit');
+assert.throws(()=>settle({...bill,payment_status:'PAID'},'PENDING'),/Edit the split/);
+console.log('Credit settlement: full payment, split credit only, unchanged source, invalid totals and reopen handling passed');

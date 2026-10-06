@@ -1,27 +1,26 @@
+import { assertSalaryManager, publicSalaryPayment } from '~/server/utils/salary-input'
+import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
-import { moneyTransactionLedgerRows, rebuildAccountLedgerForSource } from '~/server/utils/account-ledger'
+
 import { recalculateManyUserLedgerBalances, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
+import { selectStaffPaymentAccount } from '~/server/utils/staff-payment-account'
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
+    assertSalaryManager(session.data.role)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })
 
   const paymentId = event.context.params?.id
   if (!paymentId) throw createError({ statusCode: 400, statusMessage: 'payment id is required' })
 
-  const body = await readBody<{
-    userId?: string
-    amount?: number
-    type?: 'SALARY' | 'ADVANCE'
-    paymentMode?: 'CASH' | 'BANK' | 'UPI'
-    bankAccountId?: string | null
-    paymentDate?: string
-    note?: string | null
-  }>(event)
+  const raw = await readBody(event)
+  const validated = publicSalaryPayment({ ...raw, userId: raw?.userId || '_existing' })
+  const body = { ...validated, userId: raw?.userId }
 
   const amount = round2(Number(body.amount || 0))
   if (!amount || amount <= 0) throw createError({ statusCode: 400, statusMessage: 'Amount must be positive' })
@@ -29,10 +28,12 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    await client.query('SELECT id FROM companies WHERE id=$1 FOR UPDATE', [companyId])
+    await lockCompanyRequest(event, client)
 
     const paymentRes = await client.query(
       `
-      SELECT id, user_id, cycle_id, cycle_line_id, money_transaction_id
+      SELECT id, user_id, amount, cycle_id, cycle_line_id, money_transaction_id, bank_account_id
       FROM salary_payments
       WHERE id = $1
         AND company_id = $2
@@ -74,7 +75,7 @@ export default defineEventHandler(async (event) => {
     }
 
     const mode = body.paymentMode || 'CASH'
-    const accountId = mode === 'BANK' ? body.bankAccountId || null : null
+    const accountId = null
     const ledgerMode = mode === 'UPI' ? 'BANK' : mode
     const when = body.paymentDate ? new Date(body.paymentDate) : new Date()
 
@@ -110,41 +111,17 @@ export default defineEventHandler(async (event) => {
         `,
         [existing.money_transaction_id, companyId, amount, ledgerMode, accountId, body.note || 'Salary payment', when],
       )
-      await rebuildAccountLedgerForSource(client, {
-        companyId,
-        sourceType: 'MONEY_TRANSACTION',
-        sourceId: existing.money_transaction_id,
-        rows: moneyTransactionLedgerRows({
-          id: existing.money_transaction_id,
-          companyId,
-          amount,
-          paymentMode: ledgerMode,
-          accountId,
-          direction: 'GIVEN',
-          status: 'PAID',
-          createdAt: when,
-          note: body.note || 'Salary payment',
-        }),
-      })
+
     }
 
-    const creditCutRes = cycleLineId
-      ? await client.query(
-          `
-          SELECT amount
-          FROM user_ledger_entries
-          WHERE company_id = $1
-            AND source_type = 'PAYROLL'
-            AND source_id = $2
-            AND type = 'CREDIT_BILL_PAYMENT'
-          LIMIT 1
-          `,
-          [companyId, cycleLineId],
-        )
-      : { rows: [] }
-    const ledgerAmount = round2(amount + Number(creditCutRes.rows[0]?.amount || 0))
+    // Preserve only the credit cut attached to this payout, not every cut in the cycle.
+    const originalLedger = await client.query(`SELECT amount FROM user_ledger_entries
+      WHERE company_id=$1 AND source_type='SALARY_PAYMENT' AND source_id=$2 AND type='SALARY_PAYMENT'`, [companyId,paymentId])
+    const attachedCut = Math.max(0, round2(Number(originalLedger.rows[0]?.amount || existing.amount) - Number(existing.amount)))
+    if (attachedCut > 0 && userId !== existing.user_id) throw createError({statusCode:400,statusMessage:'Reverse this salary credit settlement before assigning the payout to another user'})
+    const ledgerAmount = round2(amount + attachedCut)
 
-    await upsertUserLedgerEntry(client, {
+    const ledger = await upsertUserLedgerEntry(client, {
       companyId,
       userId,
       type: 'SALARY_PAYMENT',
@@ -156,6 +133,7 @@ export default defineEventHandler(async (event) => {
       createdAt: when,
     })
 
+    await selectStaffPaymentAccount(client, companyId, ledgerMode, body.bankAccountId, ledger.id, existing.bank_account_id)
     await recalculateManyUserLedgerBalances(client, companyId, [existing.user_id, userId])
     await client.query('COMMIT')
     return { success: true }

@@ -1,3 +1,4 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, getQuery, createError, setHeader } from 'h3'
 import { pool } from '~/server/db'
 import { jsPDF } from 'jspdf'
@@ -6,7 +7,7 @@ import autoTable from 'jspdf-autotable'
 export default defineEventHandler(async (event) => {
 
   /* ── AUTH ── */
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data.companyId
   const cleanup = session.data.cleanup ?? false
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
