@@ -380,7 +380,7 @@ const fetchSales = async () => {
     sales.value = res.rows
     pageTotal.value = res.total   // ✅ REAL TOTAL
     if (res.totals) salesTotals.value = res.totals
-    collectionsTotal.value = res.collections?.total ?? null
+    collectionsTotal.value = res.collections?.creditRepayments ?? null
   } catch (err) {
     if (fetchId !== lastFetchId.value) return
     sales.value = []
@@ -1359,7 +1359,7 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
                     </div>
                     <div
                       class="ml-auto flex items-center gap-2 text-sm"
-                      title="Payments received in the selected dates, including credit repayments. Covers all invoices in the selected stores."
+                      title="Credit repayments received in the selected dates. Includes older credit invoices in the selected stores; excludes direct sale payments."
                       aria-live="polite"
                     >
                       <span class="text-gray-500 dark:text-gray-400">Collections</span>

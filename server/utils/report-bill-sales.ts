@@ -1,5 +1,6 @@
 // One definition of invoice-date sales and payment-date collections for screen,
-// PDF and Excel. Receipt journals include dated reversals; source receipt status
+// PDF and Excel. Collections mean credit repayments only, not direct sale tenders.
+// Receipt journals include dated reversals; source receipt status
 // is deliberately not used to erase previously collected money from history.
 export function billCreditSql(alias = 'b', total = `${alias}.grand_total`) {
   return `(CASE WHEN ${alias}.payment_method='Credit' THEN ${total}::numeric
@@ -30,9 +31,7 @@ export function billSalesSql(total: string, multipleCompanies = false) {
     WHERE p.company_id ${companyScope} AND j.status='PUBLISHED' AND j.deleted_at IS NULL
       AND j.journal_date BETWEEN $2 AND $3 AND ($4=true OR b.precedence IS NOT TRUE)
   ), collections AS (
-    SELECT method,amount FROM sales_parts s WHERE method IN ('Cash','UPI','Card','Bank','Cheque')
-      AND (s.payment_status='PAID' OR EXISTS(SELECT 1 FROM sales_parts credit_part WHERE credit_part.id=s.id AND credit_part.method='Credit'))
-    UNION ALL SELECT method,amount FROM receipt_parts
+    SELECT method,amount FROM receipt_parts
   ) SELECT
     COALESCE((SELECT sum(amount) FROM sales_parts),0) AS total_sales,
     COALESCE((SELECT sum(amount) FROM sales_parts WHERE method='Credit'),0) AS credit,

@@ -22,13 +22,13 @@ const h = harness(file, ['isLoading', 'lastFetchId', 'salesTotals', 'collections
 try {
   const c = h.context
   const first = c.fetchSales(), second = c.fetchSales()
-  pending[1].resolve({ rows: [], total: 0, totals: { total: 0 }, collections: { total: 400 } })
+  pending[1].resolve({ rows: [], total: 0, totals: { total: 100 }, collections: { total: 200, creditRepayments: 100 } })
   await second
-  assert.equal(c.collectionsTotal.value, 400, 'Older invoice repayment is visible even without new sales')
-  assert.equal(c.salesTotals.value.total, 0, 'Collections do not increase sales')
-  pending[0].resolve({ rows: [], total: 0, collections: { total: 999 } })
+  assert.equal(c.collectionsTotal.value, 100, 'Collections shows credit repayments only, excluding the direct cash sale')
+  assert.equal(c.salesTotals.value.total, 100, 'Repayments do not increase sales')
+  pending[0].resolve({ rows: [], total: 0, collections: { total: 999, creditRepayments: 999 } })
   await first
-  assert.equal(c.collectionsTotal.value, 400, 'Stale responses cannot replace the selected-date total')
+  assert.equal(c.collectionsTotal.value, 100, 'Stale responses cannot replace the selected-date total')
   const failed = c.fetchSales()
   assert.equal(c.isLoading.value, true)
   pending[2].reject(new Error('Request failed'))

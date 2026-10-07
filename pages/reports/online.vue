@@ -128,7 +128,7 @@ const categoryRows = computed(() => {
 
 <template>
   <UDashboardPanelContent>
-    <ReportsBasis kind="source" detail="Marketplace bills and collections. These are operational totals, not posted accounting income." />
+    <ReportsBasis kind="source" detail="Marketplace bills and payments. These are operational totals, not posted accounting income." />
     <div ref="scrollContainer" class="scroll-container">
       <div class="space-y-6 p-4 md:p-6">
 

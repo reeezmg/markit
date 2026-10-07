@@ -35,7 +35,8 @@ try {
     .replace(/\bbills\b/g,'fixture_bills').replace(/\bpayments\b/g,'fixture_payments').replace(/\baccountant_v2_manual_journals\b/g,'fixture_journals')
   const day=async(date:string,cleanup=false)=>(await client.query(sql,['fixture',date+'T00:00:00Z',date+'T23:59:59.999Z',cleanup])).rows[0]
   const sale=await day('2026-10-01')
-  assert.equal(Number(sale.total_sales),2000);assert.equal(Number(sale.credit),1600);assert.equal(Number(sale.total_collections),400)
+  assert.equal(Number(sale.total_sales),2000);assert.equal(Number(sale.credit),1600);assert.equal(Number(sale.total_collections),0,'The cash portion of a split credit sale is not a credit collection')
+  assert.equal(Number(sale.collected_cash),0)
   const partial=await day('2026-10-05')
   assert.equal(Number(partial.total_sales),0);assert.equal(Number(partial.total_collections),400);assert.equal(Number(partial.collected_upi),400)
   assert.equal(Number((await day('2026-10-02')).total_collections),0,'Pending non-credit payments must not be counted as collected')
@@ -50,6 +51,10 @@ try {
   assert.equal(Number((await scopedDay(['fixture'],'2026-10-06')).total_collections),200,'Single-store scope excludes other stores and nets reversals')
   assert.equal(Number((await scopedDay(['fixture','foreign'],'2026-10-06')).total_collections),10199,'Multiple-store scope includes only selected stores')
   assert.equal(Number((await scopedDay([],'2026-10-06')).total_collections),0,'Empty scope cannot expose collections')
+  const directSales=await scopedDay(['fixture','foreign'],'2026-10-01')
+  assert.equal(Number(directSales.total_sales),11999,'Direct cash sales remain in sales')
+  assert.equal(Number(directSales.total_collections),0,'Direct cash sales and upfront split payments are excluded from collections')
+  assert.equal(Number(directSales.collected_cash),0,'Collection method totals exclude direct payments too')
   console.log('Read-only SQL fixtures: invoice-date sales, split credit, dated partial/final collections, reversals, cleanup and company isolation passed')
 
   // Compile the actual receipt INSERT/UPDATE statements against the existing
@@ -83,6 +88,8 @@ try {
     assert.equal(daily.totalCreditSales,exported.sales.credit)
     assert.equal(daily.totalCollections,exported.totalCollections)
     assert.deepEqual(daily.collectionsByPaymentMethod,exported.collectionsByPaymentMethod)
+    assert.equal(daily.totalCollections,daily.creditCollections,'All report collection totals mean credit repayments only')
+    assert.deepEqual(daily.collectionsByPaymentMethod,daily.creditCollectionsByPaymentMethod)
   }
   console.log(`Read-only connected reports: screen/export sales and collections agree for ${companies.length} companies in both cleanup modes`)
   const originalQuery=appPool.query
