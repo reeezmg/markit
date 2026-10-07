@@ -2,6 +2,7 @@ import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
+import { billSalesSql } from '~/server/utils/report-bill-sales'
 
 const SORT_COLUMN_MAP: Record<string, string> = {
   orderNumber: 'COALESCE(t.order_number, 0)',
@@ -47,6 +48,10 @@ export default defineEventHandler(async (event) => {
   const queryEndDate = endDate
     ? new Date(endDate as string)
     : new Date()
+
+  if (!Number.isFinite(queryStartDate.getTime()) || !Number.isFinite(queryEndDate.getTime()) || queryStartDate > queryEndDate) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid date range' })
+  }
 
   const queryClosingDate = !authSession.data.allStores && closingDate
     ? new Date(closingDate as string)
@@ -411,9 +416,11 @@ export default defineEventHandler(async (event) => {
       (Number(page) - 1) * Number(pageCount)
     )
 
-    const [res, totalsRes] = await Promise.all([
+    // Collections follow payment dates, independently of invoice search and pagination.
+    const [res, totalsRes, collectionsRes] = await Promise.all([
       client.query(query, values),
       client.query(totalsQuery, totalsValues),
+      client.query(billSalesSql(billTotalExpr, true), [companyIds, queryStartDate, queryEndDate, includeCleanupPrecedence]),
     ])
 
     const t = totalsRes.rows[0] ?? {}
@@ -426,6 +433,10 @@ export default defineEventHandler(async (event) => {
           : (splitPayments ?? []),
       })),
       total: res.rows[0]?.total_count ?? 0,
+      collections: {
+        total: Number(collectionsRes.rows[0]?.total_collections ?? 0),
+        creditRepayments: Number(collectionsRes.rows[0]?.credit_collections ?? 0),
+      },
       totals: {
         total:  Number(t.total  ?? 0),
         cash:   Number(t.cash   ?? 0),

@@ -43,6 +43,13 @@ try {
   assert.equal(Number(final.total_sales),0);assert.equal(Number(final.total_collections),200);assert.equal(Number(final.credit_collections),200)
   const cleaned=await day('2026-10-01',true)
   assert.equal(Number(cleaned.total_sales),2500);assert.equal(Number(cleaned.credit),2100)
+  const scopedSql = fixtures + billSalesSql('b.grand_total',true).replace(/^WITH /,'')
+    .replace(/\bbills\b/g,'fixture_bills').replace(/\bpayments\b/g,'fixture_payments').replace(/\baccountant_v2_manual_journals\b/g,'fixture_journals')
+  const scopedDay=async(ids:string[],date:string)=>(await client.query(scopedSql,[ids,date+'T00:00:00Z',date+'T23:59:59.999Z',false])).rows[0]
+  assert.equal(Number((await scopedDay(['fixture'],'2026-10-05')).total_collections),400,'Selected dates include repayments for older bills')
+  assert.equal(Number((await scopedDay(['fixture'],'2026-10-06')).total_collections),200,'Single-store scope excludes other stores and nets reversals')
+  assert.equal(Number((await scopedDay(['fixture','foreign'],'2026-10-06')).total_collections),10199,'Multiple-store scope includes only selected stores')
+  assert.equal(Number((await scopedDay([],'2026-10-06')).total_collections),0,'Empty scope cannot expose collections')
   console.log('Read-only SQL fixtures: invoice-date sales, split credit, dated partial/final collections, reversals, cleanup and company isolation passed')
 
   // Compile the actual receipt INSERT/UPDATE statements against the existing

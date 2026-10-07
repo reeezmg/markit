@@ -317,6 +317,7 @@ const isLoading = ref(false)
 const isDownloadLoading = ref(false)
 const lastFetchId = ref(0)
 const salesTotals = ref({ total: 0, cash: 0, card: 0, upi: 0, credit: 0 })
+const collectionsTotal = ref<number | null>(null)
 
 const paymentMethodFilterOptions = [
   { label: 'Cash', value: 'Cash' },
@@ -379,10 +380,12 @@ const fetchSales = async () => {
     sales.value = res.rows
     pageTotal.value = res.total   // ✅ REAL TOTAL
     if (res.totals) salesTotals.value = res.totals
+    collectionsTotal.value = res.collections?.total ?? null
   } catch (err) {
     if (fetchId !== lastFetchId.value) return
     sales.value = []
     pageTotal.value = 0
+    collectionsTotal.value = null
   } finally{
     if (fetchId === lastFetchId.value) {
       isLoading.value = false
@@ -1317,8 +1320,8 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
         >
             <!-- Filters -->
             <template #header>
-            <div class="flex justify-between items-center gap-3 w-full">
-                    <div class="flex items-center gap-3">
+            <div class="flex flex-wrap justify-between items-center gap-3 w-full">
+                    <div class="flex flex-wrap items-center gap-3">
                   <CompanyTableFilter />
                   
                       <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
@@ -1353,6 +1356,16 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
                         placeholder="Search Invoice"
                         class="w-full sm:w-52"
                       />
+                    </div>
+                    <div
+                      class="ml-auto flex items-center gap-2 text-sm"
+                      title="Payments received in the selected dates, including credit repayments. Covers all invoices in the selected stores."
+                      aria-live="polite"
+                    >
+                      <span class="text-gray-500 dark:text-gray-400">Collections</span>
+                      <span class="font-semibold tabular-nums text-gray-900 dark:text-white">
+                        {{ isLoading ? '…' : collectionsTotal === null ? '—' : formatCurrency(collectionsTotal) }}
+                      </span>
                     </div>
             </div>
         </template>

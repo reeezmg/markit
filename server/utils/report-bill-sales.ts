@@ -8,9 +8,10 @@ export function billCreditSql(alias = 'b', total = `${alias}.grand_total`) {
     ELSE 0 END)`
 }
 
-export function billSalesSql(total: string) {
+export function billSalesSql(total: string, multipleCompanies = false) {
+  const companyScope = multipleCompanies ? '= ANY($1::text[])' : '= $1'
   return `WITH sales_bills AS (
-    SELECT b.*, ${total} AS report_total FROM bills b WHERE b.company_id=$1 AND b.deleted=false
+    SELECT b.*, ${total} AS report_total FROM bills b WHERE b.company_id ${companyScope} AND b.deleted=false
       AND b.payment_status IN ('PAID','PENDING') AND b.is_markit=false
       AND b.created_at BETWEEN $2 AND $3 AND ($4=true OR b.precedence IS NOT TRUE)
   ), sales_parts AS (
@@ -26,7 +27,7 @@ export function billSalesSql(total: string) {
     FROM payments p JOIN accountant_v2_manual_journals j ON j.company_id=p.company_id AND j.source_id=p.id
       AND j.source_type IN ('ERP_CREDIT_RECEIPT','ERP_CREDIT_RECEIPT_REVERSAL')
     JOIN bills b ON b.id=p.bill_id AND b.company_id=p.company_id
-    WHERE p.company_id=$1 AND j.status='PUBLISHED' AND j.deleted_at IS NULL
+    WHERE p.company_id ${companyScope} AND j.status='PUBLISHED' AND j.deleted_at IS NULL
       AND j.journal_date BETWEEN $2 AND $3 AND ($4=true OR b.precedence IS NOT TRUE)
   ), collections AS (
     SELECT method,amount FROM sales_parts s WHERE method IN ('Cash','UPI','Card','Bank','Cheque')
