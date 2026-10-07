@@ -189,7 +189,8 @@ export async function accountingMoneyActivity(db: Queryable, ids: string[], from
   const rows = (
     await db.query(
       `SELECT a.id,a.name,a.account_type::text AS type,
-  CASE WHEN COALESCE(parent.source_type,j.source_type)='ACCOUNT_TRANSFER' THEN 'transfer' ELSE 'money' END AS kind,
+  CASE WHEN COALESCE(parent.source_type,j.source_type)='ACCOUNT_TRANSFER' THEN 'transfer'
+       WHEN COALESCE(parent.source_type,j.source_type) IN ('INVESTOR','LEGACY_INVESTOR','INVESTOR_REVERSAL') THEN 'investment' ELSE 'money' END AS kind,
   CASE WHEN l.distributor_id IS NOT NULL THEN 'SUPPLIER' WHEN l.source_parties ? 'user' THEN 'EMPLOYEE' WHEN l.source_parties ? 'client' THEN 'CUSTOMER' ELSE COALESCE(audit."after"->'sourceRow'->>'party_type','OTHER') END AS party,
   l.side,round(l.amount*j.exchange_rate,2)::text AS amount
  FROM accountant_v2_manual_journal_lines l JOIN accountant_v2_manual_journals j ON j.id=l.journal_id AND j.company_id=l.company_id
@@ -197,12 +198,15 @@ export async function accountingMoneyActivity(db: Queryable, ids: string[], from
  LEFT JOIN accountant_v2_manual_journals parent ON parent.id=j.reversed_from_id AND parent.company_id=j.company_id
  LEFT JOIN accountant_v2_accountant_audit audit ON audit.company_id=j.company_id AND audit.resource='transaction-history-import' AND audit.action='imported' AND audit."after"->>'journalId'=COALESCE(parent.id,j.id)
  WHERE j.company_id=ANY($1::text[]) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL AND j.journal_date BETWEEN $2 AND $3
- AND (a.account_type IN ('CASH','BANK') OR COALESCE(parent.source_type,j.source_type)='ACCOUNT_TRANSFER') AND (COALESCE(parent.source_type,j.source_type) IN ('ACCOUNT_TRANSFER','MONEY_RECEIVE','MONEY_PAY','LEGACY_MONEY_RECEIVE','LEGACY_MONEY_PAY') OR audit.id IS NOT NULL)`,
+ AND (a.account_type IN ('CASH','BANK') OR COALESCE(parent.source_type,j.source_type)='ACCOUNT_TRANSFER') AND (COALESCE(parent.source_type,j.source_type) IN ('ACCOUNT_TRANSFER','MONEY_RECEIVE','MONEY_PAY','LEGACY_MONEY_RECEIVE','LEGACY_MONEY_PAY','INVESTOR','LEGACY_INVESTOR','INVESTOR_REVERSAL') OR audit.id IS NOT NULL)`,
       [ids, from.toISOString(), to.toISOString()]
     )
   ).rows;
   const transfers = new Map<string, any>(),
+    transactionAccounts = new Map<string, any>(),
+    investmentAccounts = new Map<string, any>(),
     transactions = { cash: { debit: 0, credit: 0, net: 0 }, bank: { debit: 0, credit: 0, net: 0 } },
+    investments = { cash: { debit: 0, credit: 0, net: 0 }, bank: { debit: 0, credit: 0, net: 0 } },
     byPartyIn: Record<string, number> = {},
     byPartyOut: Record<string, number> = {};
   for (const r of rows) {
@@ -222,13 +226,23 @@ export async function accountingMoneyActivity(db: Queryable, ids: string[], from
       item.net = reportNumber(item.net + sign * amount);
       transfers.set(r.id, item);
     } else {
-      const group = r.type === 'CASH' ? transactions.cash : transactions.bank;
+      const activity = r.kind === 'investment' ? investments : transactions;
+      const group = r.type === 'CASH' ? activity.cash : activity.bank;
       group[r.side === 'DEBIT' ? 'debit' : 'credit'] = reportNumber(
         group[r.side === 'DEBIT' ? 'debit' : 'credit'] + amount
       );
       group.net = reportNumber(group.net + sign * amount);
-      const parties = r.side === 'DEBIT' ? byPartyIn : byPartyOut;
-      parties[r.party] = reportNumber((parties[r.party] || 0) + amount);
+      const details = r.kind === 'investment' ? investmentAccounts : transactionAccounts;
+      const item = details.get(r.id) || { id: r.id, name: r.name, type: r.type, debit: 0, credit: 0, net: 0 };
+      item[r.side === 'DEBIT' ? 'debit' : 'credit'] = reportNumber(
+        item[r.side === 'DEBIT' ? 'debit' : 'credit'] + amount
+      );
+      item.net = reportNumber(item.net + sign * amount);
+      details.set(r.id, item);
+      if (r.kind !== 'investment') {
+        const parties = r.side === 'DEBIT' ? byPartyIn : byPartyOut;
+        parties[r.party] = reportNumber((parties[r.party] || 0) + amount);
+      }
     }
   }
   const incoming = reportNumber(Object.values(byPartyIn).reduce((a, b) => a + b, 0)),
@@ -248,6 +262,9 @@ export async function accountingMoneyActivity(db: Queryable, ids: string[], from
     transfers: { cash: transferTotal('CASH'), bank: transferTotal('BANK') },
     transfersDisplay: [...transfers.values()],
     transactions,
+    investments,
+    transactionsDisplay: [...transactionAccounts.values()],
+    investmentsDisplay: [...investmentAccounts.values()],
     moneyTransactions: {
       in: { total: incoming, byParty: byPartyIn },
       out: { total: outgoing, byParty: byPartyOut },

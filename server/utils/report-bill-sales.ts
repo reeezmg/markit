@@ -38,5 +38,6 @@ export function billSalesSql(total: string) {
     COALESCE((SELECT sum(amount) FROM receipt_parts),0) AS credit_collections,
     COALESCE((SELECT sum(amount) FROM collections),0) AS total_collections,
     ${['Cash','UPI','Card','Bank','Cheque'].map(method => `COALESCE((SELECT sum(amount) FROM sales_parts WHERE method='${method}'),0) AS ${method.toLowerCase()},
-    COALESCE((SELECT sum(amount) FROM collections WHERE method='${method}'),0) AS collected_${method.toLowerCase()}`).join(',\n')}`
+    COALESCE((SELECT sum(amount) FROM collections WHERE method='${method}'),0) AS collected_${method.toLowerCase()},
+    COALESCE((SELECT sum(amount) FROM receipt_parts WHERE method='${method}'),0) AS credit_collected_${method.toLowerCase()}`).join(',\n')}`
 }

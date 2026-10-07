@@ -184,6 +184,7 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
     totalCreditSales: Number(sales.credit || 0),
     totalCollections: Number(sales.total_collections || 0),
     creditCollections: Number(sales.credit_collections || 0),
+    creditCollectionsByPaymentMethod: Object.fromEntries(['Cash','UPI','Card','Bank','Cheque'].map(m => [m, Number(sales['credit_collected_'+m.toLowerCase()] || 0)])),
     collectionsByPaymentMethod: Object.fromEntries(['Cash','UPI','Card','Bank','Cheque'].map(m => [m, Number(sales['collected_'+m.toLowerCase()] || 0)])),
 
     creditBills: creditBillsRes.rows.map((r) => ({
@@ -194,9 +195,9 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
     })),
 
     salesByPaymentMethod: {
-      Cash: Number(sales.cash_sales || 0),
-      UPI: Number(sales.upi_sales || 0),
-      Card: Number(sales.card_sales || 0),
+      Cash: Number(sales.cash || 0),
+      UPI: Number(sales.upi || 0),
+      Card: Number(sales.card || 0),
       Credit: Number(sales.credit || 0),
       Bank: Number(sales.bank || 0),
       Cheque: Number(sales.cheque || 0),
@@ -243,6 +244,9 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
 
     transfersDisplay: moneyActivity.transfersDisplay,
     transactions: moneyActivity.transactions,
+    investments: moneyActivity.investments,
+    transactionsDisplay: moneyActivity.transactionsDisplay,
+    investmentsDisplay: moneyActivity.investmentsDisplay,
 
     /* ---------- BALANCES ---------- */
 
@@ -313,5 +317,6 @@ export async function dailyExportReport(db: ReportDatabase, context: DailyReport
     transactions:oldMovement(daily.transactions),transactionCashNet:daily.transactions.cash.net,transactionBankNet:daily.transactions.bank.net,
     selectedPeriodCash:daily.balances.cashBalance,selectedPeriodBank:daily.balances.bankBalance,selectedPeriodTotal:daily.balances.totalBalance,
     moneyPosition:daily.financial.balances.total,moneyAccounts:daily.financial.accounts.filter(a=>a.type==='CASH'||a.type==='BANK'),
+    investments:daily.investments,
     customerDues:daily.financial.balances.receivable.closing,billsRes,expenseRows,expenseByCategory};
 }

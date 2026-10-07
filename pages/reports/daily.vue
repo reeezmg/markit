@@ -155,12 +155,6 @@ const balanceColumns: any[] = [
     { key: 'credit', label: 'Credit', type: 'money' },
     { key: 'movement', label: 'Balance', type: 'money' },
 ];
-const movementColumns: any[] = [
-    { key: 'name', label: 'Account' },
-    { key: 'debit', label: 'Debit', type: 'money' },
-    { key: 'credit', label: 'Credit', type: 'money' },
-    { key: 'net', label: 'Net change', type: 'signed' },
-];
 const itemColumns: any[] = [
     { key: 'name', label: 'Name' },
     { key: 'qty', label: 'Quantity', type: 'number' },
@@ -200,70 +194,118 @@ const paymentModes = [
     ['Cheque', 'CHEQUE'],
 ];
 const expensesRows = computed(() =>
-    paymentModes.map(([key, mode]) => ({
-        name: key === 'BankTransfer' ? 'Bank transfer' : key,
-        amount:
-            Number(dashboard.value?.expensesByPaymentMethod?.[key] || 0) +
-            (dashboard.value?.salaryPayments || [])
-                .filter((s: any) => s.paymentMode === mode)
-                .reduce((sum: number, s: any) => sum + Number(s.amount), 0),
-    }))
-);
-const paymentBalanceRows = computed(() =>
-    [...paymentModes.map(([key]) => key), 'Credit'].map((key) => {
-        const name = key === 'BankTransfer' ? 'Bank transfer' : key;
-        return {
-            name,
-            amount:
-                Number(dashboard.value?.salesByPaymentMethod?.[key] || 0) -
-                (expensesRows.value.find((row) => row.name === name)?.amount || 0),
-        };
-    })
-);
-const purchaseRows = computed(() =>
     paymentModes.map(([key]) => ({
         name: key === 'BankTransfer' ? 'Bank transfer' : key,
-        amount: dashboard.value?.purchaseExpensesByPaymentMethod?.[key] || 0,
+        amount: Number(dashboard.value?.expensesByPaymentMethod?.[key] || 0),
     }))
 );
-const transactionRows = computed(() =>
-    ['cash', 'bank'].map((key) => ({
-        name: key === 'cash' ? 'Cash' : 'All banks',
-        ...dashboard.value?.transactions?.[key],
-    }))
-);
+const otherTransactionRows = computed(() => {
+    const data = dashboard.value;
+    return ['cash', 'bank'].map(key => {
+        const isCash = key === 'cash';
+        const receiptMethods = isCash ? ['Cash'] : ['UPI', 'Card', 'Bank', 'Cheque'];
+        const purchaseMethods = isCash ? ['Cash'] : ['UPI', 'Card', 'BankTransfer', 'Cheque'];
+        const receipts = receiptMethods.reduce(
+            (sum, method) => sum + Number(data?.creditCollectionsByPaymentMethod?.[method] || 0), 0
+        );
+        const salary = (data?.salaryPayments || [])
+            .filter((row: any) => isCash
+                ? row.paymentMode === 'CASH'
+                : ['UPI', 'CARD', 'BANK', 'CHEQUE'].includes(row.paymentMode))
+            .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+        const purchases = purchaseMethods.reduce(
+            (sum, method) => sum + Number(data?.purchaseExpensesByPaymentMethod?.[method] || 0), 0
+        );
+        const movement = ['transfers', 'transactions', 'investments'].reduce(
+            (sum, kind) => sum + Number(data?.[kind]?.[key]?.net || 0), 0
+        );
+        return { name: isCash ? 'Cash' : 'Bank', amount: receipts - salary - purchases + movement };
+    });
+});
+const finalBalanceRows = computed(() => {
+    const banks = accountRows.value.filter((account: any) => account.type === 'BANK');
+    return [
+        { name: 'Cash', amount: financial.value?.balances?.cash?.delta || 0 },
+        ...(banks.length ? banks.map((account: any) => ({
+            id: account.id, name: account.name, amount: account.movement, href: account.href,
+        })) : [{ name: 'Bank', amount: 0 }]),
+    ];
+});
+const movementColumns: any[] = [
+    { key: 'name', label: 'Account' },
+    { key: 'debit', label: 'Money in', type: 'money' },
+    { key: 'credit', label: 'Money out', type: 'money' },
+    { key: 'net', label: 'Net change', type: 'signed' },
+];
+const transactionDetailGroups = computed(() => [
+    {
+        title: 'Salary payments',
+        amount: dashboard.value?.salaryExpense || 0,
+        rows: dashboard.value?.salaryPayments || [],
+        columns: salaryColumns,
+    },
+    {
+        title: 'Purchase payments',
+        amount: dashboard.value?.totalPurchaseExpense || 0,
+        rows: paymentModes.map(([key]) => ({
+            name: key === 'BankTransfer' ? 'Bank transfer' : key,
+            amount: dashboard.value?.purchaseExpensesByPaymentMethod?.[key] || 0,
+        })),
+        columns: amountColumns,
+    },
+    { title: 'Account transfers', rows: dashboard.value?.transfersDisplay || [], columns: movementColumns },
+    { title: 'Receive / Pay money', rows: dashboard.value?.transactionsDisplay || [], columns: movementColumns },
+    { title: 'Investments', rows: dashboard.value?.investmentsDisplay || [], columns: movementColumns },
+    {
+        title: 'Credit repayments',
+        amount: dashboard.value?.creditCollections || 0,
+        rows: ['Cash', 'UPI', 'Card', 'Bank', 'Cheque'].map(name => ({
+            name, amount: dashboard.value?.creditCollectionsByPaymentMethod?.[name] || 0,
+        })),
+        columns: amountColumns,
+    },
+    {
+        title: 'Collections',
+        amount: dashboard.value?.totalCollections || 0,
+        rows: ['Cash', 'UPI', 'Card', 'Bank', 'Cheque'].map(name => ({
+            name, amount: dashboard.value?.collectionsByPaymentMethod?.[name] || 0,
+        })),
+        columns: amountColumns,
+    },
+]);
+const transactionDetailRows = computed(() => [
+    ['Purchase payments', 'Salary payments', 'Investments'],
+    ['Credit repayments', 'Collections'],
+    ['Account transfers', 'Receive / Pay money'],
+].map(titles => titles.map(title => transactionDetailGroups.value.find(group => group.title === title)!)));
 const summaryCards = computed(() => [
     {
-        name: 'Total Sales (including credit)',
+        name: 'Sales',
         amount: dashboard.value?.totalSales,
         rows: salesRows.value,
+        columns: amountColumns,
+        note: `Collections: ${money(dashboard.value?.totalCollections)}`,
     },
     {
-        name: 'Collections (including credit repayments)',
-        amount: dashboard.value?.totalCollections,
-        rows: ['Cash','UPI','Card','Bank','Cheque'].map(name=>({name,amount:dashboard.value?.collectionsByPaymentMethod?.[name] || 0})),
-    },
-    {
-        name: 'Total Expense',
-        amount: dashboard.value?.totalExpenses,
+        name: 'Expense',
+        amount: Number(dashboard.value?.totalExpenses || 0) - Number(dashboard.value?.salaryExpense || 0),
         rows: expensesRows.value,
+        columns: amountColumns,
+        note: 'Salary is included in Other transactions.',
     },
     {
-        name: 'Sales minus expenses',
-        amount:
-            Number(dashboard.value?.totalSales || 0) -
-            Number(dashboard.value?.totalExpenses || 0),
-        rows: paymentBalanceRows.value,
+        name: 'Other transactions',
+        amount: otherTransactionRows.value.reduce((sum, row) => sum + row.amount, 0),
+        rows: otherTransactionRows.value,
+        columns: amountColumns,
+        note: '',
     },
     {
-        name: 'Cash and bank at end',
-        amount: financial.value?.balances?.total?.closing,
-        rows: ['cash','bank'].map(key=>({name:key === 'cash' ? 'Cash' : 'All banks',amount:financial.value?.balances?.[key]?.closing || 0})),
-    },
-    {
-        name: 'Posted customer dues at end',
-        amount: financial.value?.balances?.receivable?.closing,
-        rows: [{name:'Opening dues',amount:financial.value?.balances?.receivable?.opening || 0},{name:'Period change',amount:financial.value?.balances?.receivable?.delta || 0}],
+        name: 'Final balance',
+        amount: position.value.delta,
+        rows: finalBalanceRows.value,
+        columns: amountColumns,
+        note: '',
     },
 ]);
 async function download(kind: 'pdf' | 'excel') {
@@ -439,9 +481,9 @@ const exportActions = [
                 role="status"
                 aria-label="Loading daily report"
                 class="space-y-6"
-                ><div class="grid grid-cols-1 gap-4 lg:grid-cols-3"
+                ><div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4"
                     ><USkeleton
-                        v-for="n in 3"
+                        v-for="n in 4"
                         :key="n"
                         class="h-36 rounded-xl" /></div
                 ><USkeleton class="h-80 rounded-xl"
@@ -450,126 +492,50 @@ const exportActions = [
                 <div
                     v-if="!hasActivity"
                     class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400"
-                    >No activity in this period. Closing balances still include
-                    earlier posted entries.</div
+                    >No activity in this period. Selected-period amounts are zero.</div
                 >
                 <section
-                    class="grid grid-cols-1 gap-4 lg:grid-cols-3"
+                    class="daily-summary grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4"
                     aria-label="Report highlights"
                 >
                     <UCard
                         v-for="card in summaryCards"
                         :key="card.name"
-                        :ui="{ body: { padding: 'p-4 sm:p-4' } }"
+                        class="min-w-0"
+                        :ui="{ body: { padding: 'p-3 sm:p-3' } }"
                     >
-                        <h2 class="text-sm text-gray-500">{{ card.name }}</h2>
-                        <p class="mb-3 text-xl font-semibold tabular-nums">{{
+                        <h2 class="text-sm font-medium text-gray-500">{{ card.name }}</h2>
+                        <p class="mb-2 text-xl font-semibold tabular-nums">{{
                             money(card.amount)
                         }}</p>
                         <ReportsDailyTable
                             :rows="card.rows"
-                            :columns="amountColumns"
+                            :style="{ maxHeight: 'none' }"
+                            :columns="card.columns"
                             :currency="currency"
                             :caption="card.name"
                         />
-                        <p
-                            v-if="card.name === 'Sales minus expenses'"
-                            class="mt-2 text-xs text-gray-500"
-                            >Includes unpaid credit sales and salary payments.
-                            Available funds are shown in Cash and bank at end.</p
-                        >
+                        <p v-if="card.note" class="mt-2 text-xs text-gray-500">{{ card.note }}</p>
                     </UCard>
                 </section>
-                <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                    <section
-                        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-                        ><div
-                            class="flex items-center justify-between gap-3 p-5"
-                            ><span
-                                ><span class="font-semibold"
-                                    >Salary payments</span
-                                ><span class="ml-2 text-xs text-gray-500"
-                                    >{{
-                                        dashboard.salaryPayments?.length || 0
-                                    }}
-                                    entries · Included in paid expenses</span
-                                ></span
-                            ><span class="font-semibold tabular-nums">{{
-                                money(dashboard.salaryExpense)
-                            }}</span></div
-                        ><ReportsDailyTable
-                            :rows="dashboard.salaryPayments || []"
-                            :columns="salaryColumns"
-                            :currency="currency"
-                            caption="Salary payments included in paid expenses"
-                            empty="No salary payments in this period."
-                    /></section>
-                    <section
-                        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-                    >
-                        <div class="flex items-center justify-between gap-3 p-5"
-                            ><div
-                                ><h2 class="font-semibold">Total Purchase</h2
-                                ><p class="mt-1 text-xs text-gray-500"
-                                    >Payments to distributors in this period.</p
-                                ></div
-                            ><strong class="tabular-nums">{{
-                                money(dashboard.totalPurchaseExpense)
-                            }}</strong></div
-                        >
-                        <ReportsDailyTable
-                            :rows="purchaseRows"
-                            :columns="amountColumns"
-                            :currency="currency"
-                            caption="Purchase payments by payment method"
-                        /> </section
-                ></div>
-                <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
-                    <section
-                        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-                        ><div class="flex items-start justify-between gap-3 p-5"
-                            ><div
-                                ><h2 class="font-semibold">Account transfers</h2
-                                ><p class="mt-1 text-xs text-gray-500"
-                                    >Movement by account. Already included in
-                                    the remaining balances below.</p
-                                ></div
-                            ><UButton
-                                to="/accountant/account-transfers"
-                                color="gray"
-                                variant="ghost"
-                                icon="i-lucide-arrow-up-right"
-                                aria-label="Open account transfers" /></div
-                        ><ReportsDailyTable
-                            :rows="dashboard.transfersDisplay || []"
-                            :columns="movementColumns"
-                            :currency="currency"
-                            caption="Posted account transfer movements"
-                            empty="No transfers in this period."
-                    /></section>
-                    <section
-                        class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
-                        ><div class="flex items-start justify-between gap-3 p-5"
-                            ><div
-                                ><h2 class="font-semibold"
-                                    >Receive / Pay money</h2
-                                ><p class="mt-1 text-xs text-gray-500"
-                                    >Standalone entries. Already included in the
-                                    remaining balances below.</p
-                                ></div
-                            ><UButton
-                                to="/accountant/money"
-                                color="gray"
-                                variant="ghost"
-                                icon="i-lucide-arrow-up-right"
-                                aria-label="Open Receive and Pay money" /></div
-                        ><ReportsDailyTable
-                            :rows="transactionRows"
-                            :columns="movementColumns"
-                            :currency="currency"
-                            caption="Standalone money receipts and payments by cash and bank"
-                    /></section>
-                </div>
+                <details class="rounded-lg border border-gray-200 dark:border-gray-800">
+                    <summary class="cursor-pointer px-4 py-3 text-sm font-medium">Transaction details</summary>
+                    <div class="space-y-3 p-3">
+                        <div v-for="(row, index) in transactionDetailRows" :key="index"
+                            class="transaction-details-grid grid grid-cols-1 gap-3"
+                            :class="row.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'">
+                        <section v-for="group in row" :key="group.title" class="min-w-0 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800">
+                            <div class="flex items-center justify-between gap-3 px-3 py-3"><h2 class="text-sm font-medium">{{ group.title }}</h2><strong v-if="group.amount !== undefined" class="text-sm tabular-nums">{{ money(group.amount) }}</strong></div>
+                            <ReportsDailyTable
+                                :rows="group.rows"
+                                :columns="group.columns"
+                                :currency="currency"
+                                :caption="group.title"
+                            />
+                        </section>
+                        </div>
+                    </div>
+                </details>
                 <section
                     id="money-position"
                     class="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900"
@@ -611,14 +577,14 @@ const exportActions = [
                         ><div class="p-5"
                             ><h2 class="font-semibold">{{ group.title }}</h2
                             ><p class="mt-1 text-xs text-gray-500"
-                                >Item detail from paid source bills.</p
+                                >Item detail including credit sales.</p
                             ></div
                         ><ReportsDailyTable
                             :rows="group.rows || []"
                             :columns="itemColumns"
                             :currency="currency"
                             :caption="group.title"
-                            empty="No paid bill items in this period."
+                            empty="No bill items in this period."
                     /></section>
                 </div>
                 <p class="px-1 text-xs leading-5 text-gray-500"
@@ -631,3 +597,31 @@ const exportActions = [
         </div>
     </UDashboardPanelContent>
 </template>
+
+<style scoped>
+.daily-summary :deep(table) {
+    table-layout: auto;
+    font-size: 12px;
+}
+.daily-summary :deep(th),
+.daily-summary :deep(td) {
+    padding: 8px 6px;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.daily-summary :deep(td:last-child) {
+    width: 1%;
+    white-space: nowrap;
+    overflow-wrap: normal;
+}
+.transaction-details-grid :deep(table) {
+    font-size: 12px;
+}
+.transaction-details-grid :deep(th),
+.transaction-details-grid :deep(td) {
+    padding: 8px 6px;
+}
+.transaction-details-grid :deep(th) {
+    white-space: normal;
+}
+</style>

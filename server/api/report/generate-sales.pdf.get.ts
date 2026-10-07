@@ -38,6 +38,7 @@ export default defineEventHandler(async (event) => {
     transferCashNet,
     transferBankNet,
     transactions,
+    investments,
     transactionCashNet,
     transactionBankNet,
     selectedPeriodCash,
@@ -224,6 +225,19 @@ export default defineEventHandler(async (event) => {
     theme: 'grid',
   });
 
+  y = doc.lastAutoTable.finalY + 8;
+
+  doc.text('Investments', MARGIN, y);
+  y += 4;
+  autoTable(doc, {
+    startY: y,
+    head: [['Account', 'Money in', 'Money out', 'Net']],
+    body: ['cash', 'bank'].map(key => {
+      const row = investments[key as 'cash' | 'bank'];
+      return [key === 'cash' ? 'Cash' : 'Bank', rs(row.debit), rs(row.credit), rs(row.net)];
+    }),
+    theme: 'grid',
+  });
   y = doc.lastAutoTable.finalY + 8;
 
   doc.text('Bills', MARGIN, y);

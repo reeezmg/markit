@@ -37,6 +37,7 @@ export default defineEventHandler(async (event) => {
     transferCashNet,
     transferBankNet,
     transactions,
+    investments,
     transactionCashNet,
     transactionBankNet,
     selectedPeriodCash,
@@ -154,6 +155,13 @@ export default defineEventHandler(async (event) => {
   txnSheet.addRow(['Cash', transactions.cash_debit, transactions.cash_credit, transactionCashNet]);
 
   txnSheet.addRow(['Bank', transactions.bank_debit, transactions.bank_credit, transactionBankNet]);
+
+  const investmentSheet = workbook.addWorksheet('Investments');
+  investmentSheet.addRow(['Account', 'Money in', 'Money out', 'Net']);
+  for (const key of ['cash', 'bank'] as const) {
+    const row = investments[key];
+    investmentSheet.addRow([key === 'cash' ? 'Cash' : 'Bank', row.debit, row.credit, row.net]);
+  }
 
   const billsSheet = workbook.addWorksheet('Bills');
 
