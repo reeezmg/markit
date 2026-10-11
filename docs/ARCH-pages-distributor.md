@@ -11,10 +11,14 @@ before editing; runtime setup derives historical role IDs from source records an
 saved mappings without querying the archived bank table.
 
 The main distributor page's Accounts tab replaces the legacy Transactions table with
-`AccountingTransactions.vue`. It groups published journal lines by journal, computes
-running payable from Accounts Payable lines before filtering, and includes reversal
-journals. Date/type/text filters, CSV export, debit/credit details and journal links
-use accounting data. Pay/Add Credit and mapped source edit/delete actions still write
+`AccountingTransactions.vue`. It shows only published entries whose journal ID is
+the current distributor source pointer and whose source still exists in the event
+projection. Superseded, reversed, deleted-source and unlinked journal rows are
+excluded, including from CSV and running due. Rows use Purchase/Payment/Return/Receipt/
+Opening source types; the table offers no Journal/Reversal filters. It groups
+current journal lines and computes running payable from Accounts Payable lines
+before date/type/text filtering. Debit/credit details and journal links use current
+source-linked accounting data. Full journal history remains available in accounting. Pay/Add Credit and mapped source edit/delete actions still write
 the original documents. Source refetches refresh the accounting view. Unconnected
 suppliers show an import/setup notice; existing source tables remain in use.
 
