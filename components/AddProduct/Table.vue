@@ -163,8 +163,6 @@ watch([() => props.products, () => productIds.value], () => {
 });
 
 const normalizeProductForEdit = (product: any) => {
-  if (!isEdit.value) return product;
-
   return {
     ...product,
     variants: product.variants?.map((variant: any) => ({

@@ -747,13 +747,21 @@ const handleEdit = async (e: Event) => {
             dimensionId: updated.dimensionId,
             customFields: updated.customFields,
           },
-          variants: updated.variants,
+          variants: updated.variants.map((variant: any) => ({
+            ...variant,
+            items: (variant.items || []).map((item: any) => ({
+              ...item,
+              initialQty: item.qty ?? 0,
+              updateInitialQty: Number(item.qty ?? 0) !== Number(editPurchaseOrder.value?.products
+                ?.find((savedProduct: any) => savedProduct.id === productId)?.variants
+                ?.flatMap((savedVariant: any) => savedVariant.items || []).find((saved: any) => saved.id === item.id)?.initialQty ?? 0),
+            })),
+          })),
           categoryTax: snapshotCategoryTax,
           // Existing images were intentionally not loaded into this edit form.
           // Preserve them unless the user attached replacement images.
           updateImages: base64files.length > 0,
           syncPurchaseOrder: true,
-          updateInitialQty: true,
         },
       })
       await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder')
@@ -1679,7 +1687,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
                 </UPageCard>
 
                 <!-- <UPageCard class="m-3" id="Variants">
-                    <AddProductVariants @update="variantValue" />
+                    <AddProductVariants quantity-label="Initial quantity" @update="variantValue" />
                 </UPageCard> -->
 
                
@@ -1697,7 +1705,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
                       </UButton>
                     </div>
                     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
-                    <AddProductVariants   
+                    <AddProductVariants quantity-label="Initial quantity"
                       ref="variantRef"
                       :id="variant.id"
                       :editName="variant.name" 

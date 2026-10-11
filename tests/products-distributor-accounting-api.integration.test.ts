@@ -125,6 +125,9 @@ try {
   const returned=await call(createReturn,'POST','/api/purchasereturn/create',ret);const returnId=returned.purchaseReturnId;fixtureIds.add(returnId);
   await movement({STOCK:1080,OTHER_CURRENT_ASSET:108,ACCOUNTS_PAYABLE:-1188},'purchase return reduces stock/tax/payable without bank movement');
   assert.equal((await db.query('SELECT qty FROM items WHERE id=$1',[itemId])).rows[0].qty,9);
+  await call(editProduct,'POST','/api/products/update',productEdit);
+  assert.equal((await db.query('SELECT qty FROM items WHERE id=$1',[itemId])).rows[0].qty,9,'Purchase edit must not restore supplier-returned stock');
+  await movement({STOCK:1080,OTHER_CURRENT_ASSET:108,ACCOUNTS_PAYABLE:-1188},'purchase edit preserves supplier return stock and accounting');
   await call(editReturn,'PUT','/api/purchasereturn/update',{...ret,id:returnId,subTotalAmount:240,taxAmount:24,totalAmount:264,items:[{...ret.items[0],qty:2,taxAmount:24,subtotal:240}]});
   await movement({STOCK:960,OTHER_CURRENT_ASSET:96,ACCOUNTS_PAYABLE:-1056},'edit purchase return reverses and replaces');
   assert.equal((await db.query('SELECT qty FROM items WHERE id=$1',[itemId])).rows[0].qty,8);
@@ -154,6 +157,31 @@ try {
     company:{connect:{id:f.company_id}},entries:{create:[{name:product.name,qty:1,rate:150,value:150,discount:0,tax:0,return:false,category:{connect:{id:f.category_id}},variant:{connect:{id:variantId}},item:{connect:{id:itemId}}}]}}});
   await movement({STOCK:1080,OTHER_CURRENT_ASSET:120,ACCOUNTS_PAYABLE:-1320,CASH:150,INCOME:-150,COST_OF_GOODS_SOLD:120},'sell purchased stock: cash/revenue and stock/COGS both post');
   assert.equal((await db.query('SELECT qty FROM items WHERE id=$1',[itemId])).rows[0].qty,9);
+  const assertStock = async (initial: number, sold: number, qty: number) => {
+    const row = (await db.query('SELECT initial_qty, sold_qty, qty FROM items WHERE id=$1', [itemId])).rows[0];
+    assert.deepEqual(row, { initial_qty: initial, sold_qty: sold, qty });
+    assert.equal(row.qty, row.initial_qty - row.sold_qty);
+  };
+  // A purchase edit supplies purchased quantity, not available stock. Price-only
+  // saves after a sale must retain the sold counter and must not replenish stock.
+  await call(editProduct,'POST','/api/products/update',productEdit);
+  await assertStock(10, 1, 9);
+  await movement({STOCK:1080,OTHER_CURRENT_ASSET:120,ACCOUNTS_PAYABLE:-1320,CASH:150,INCOME:-150,COST_OF_GOODS_SOLD:120},'purchase edit after sale preserves remaining stock');
+  await call(editProduct,'POST','/api/products/update',{...productEdit,updateInitialQty:false});
+  await assertStock(10, 1, 9); // incoming qty=10 is stale; metadata saves ignore it
+  await call(editProduct,'POST','/api/products/update',{...productEdit,variants:[{...productEdit.variants[0],items:[{id:itemId,size:'M',qty:12}]}]});
+  await assertStock(12, 1, 11);
+  await call(editProduct,'POST','/api/products/update',productEdit);
+  await assertStock(10, 1, 9);
+  // Current-stock adjustment flags cannot change counters. Only explicit
+  // initial-quantity edits may change the baseline.
+  const stockEdit={...productEdit,updateInitialQty:false,variants:[{...productEdit.variants[0],items:[{id:itemId,size:'M',qty:8,updateStockQty:true}]}]};
+  await call(editProduct,'POST','/api/products/update',stockEdit);
+  await assertStock(10, 1, 9);
+  await call(editProduct,'POST','/api/products/update',{...stockEdit,variants:[{...productEdit.variants[0],items:[{id:itemId,size:'M',qty:999,initialQty:9,updateInitialQty:true,soldQty:0}]}]});
+  await assertStock(9, 1, 8);
+  await call(editProduct,'POST','/api/products/update',productEdit);
+  await assertStock(10, 1, 9);
   const entryId=(await db.query('SELECT id FROM entries WHERE bill_id=$1',[billId])).rows[0].id;
   await call(updateBill,'POST','/api/bill/update',{billData:{id:billId,companyId:f.company_id,subtotal:300,grandTotal:300,discount:0,paymentMethod:'Cash',paymentStatus:'PAID',date},items:[{entryId,id:itemId,variantId,name:product.name,qty:2,rate:150,value:300,discount:0,tax:0,return:false,category:[{id:f.category_id}]}],entriesToDelete:[]});
   await movement({STOCK:960,OTHER_CURRENT_ASSET:120,ACCOUNTS_PAYABLE:-1320,CASH:300,INCOME:-300,COST_OF_GOODS_SOLD:240},'edit sold quantity updates revenue, COGS and stock');

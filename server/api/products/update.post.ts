@@ -178,29 +178,42 @@ export default defineEventHandler(async (event) => {
         [keepVariantIds, keepItemIds],
       )
       if (allItems.length) {
+        const initialQuantityIds = allItems.filter((it: any) => it.updateInitialQty === true).map((it: any) => it.id)
         const IC = 7 // params per item row
         const iVals: any[] = []
         const iRows = allItems.map((it: any, i: number) => {
           const base = i * IC
-          // initial_qty is seeded for new items. Existing items only change it
-          // when the caller explicitly identifies this as a purchase-order edit.
-          iVals.push(it.id || crypto.randomUUID(), it.size || null, it.qty || 0, it.qty || 0, companyId, it.variantId, it.dimensionId || null)
+          // Edits can change only initial quantity. Neither incoming current
+          // quantity nor a supplied sold counter can overwrite stored stock.
+          const initialQty = it.initialQty ?? it.qty ?? 0
+          iVals.push(it.id || crypto.randomUUID(), it.size || null, initialQty, initialQty, companyId, it.variantId, it.dimensionId || null)
           const p = Array.from({ length: IC }, (_, k) => `$${base + k + 1}`)
           return `(${p[0]},${p[1]},${p[2]},${p[3]},${p[4]},${p[5]},${p[6]},now(),now())`
         })
         const updateInitialQtyParam = `$${allItems.length * IC + 1}`
         const itemDimensionParam = `$${allItems.length * IC + 2}`
+        const initialQuantityParam = `$${allItems.length * IC + 3}`
+        const supplierReturnedQtySql = `COALESCE((
+          SELECT SUM(ri.qty) FROM purchase_return_items ri
+          JOIN purchase_returns pr ON pr.id = ri.purchase_return_id
+          WHERE ri.item_id = items.id AND pr.company_id = items.company_id
+        ), 0)`
+        // Use the row's latest sold counter, including sales made while the form
+        // was open. An ordinary metadata save must not restore stale stock.
+        const initialQtySql = `CASE
+          WHEN ${updateInitialQtyParam}::boolean OR items.id = ANY(${initialQuantityParam}::text[]) THEN EXCLUDED.initial_qty
+          ELSE COALESCE(items.initial_qty, 0) END`
         const itemsRes = await client.query(
           `INSERT INTO items (id, size, qty, initial_qty, company_id, variant_id, dimension_id, created_at, updated_at)
            VALUES ${iRows.join(',')}
            ON CONFLICT (id) DO UPDATE SET
              size = EXCLUDED.size,
-             qty = EXCLUDED.qty,
-             initial_qty = CASE WHEN ${updateInitialQtyParam}::boolean THEN EXCLUDED.initial_qty ELSE items.initial_qty END,
+             qty = (${initialQtySql}) - COALESCE(items.sold_qty, 0) - ${supplierReturnedQtySql},
+             initial_qty = ${initialQtySql},
              dimension_id = CASE WHEN ${itemDimensionParam}::boolean THEN EXCLUDED.dimension_id ELSE items.dimension_id END,
              updated_at = now()
-           RETURNING id, barcode, size, qty, dimension_id, variant_id`,
-          [...iVals, updateInitialQty, hasItemDimension],
+           RETURNING id, barcode, size, qty, initial_qty, sold_qty, dimension_id, variant_id`,
+          [...iVals, updateInitialQty, hasItemDimension, initialQuantityIds],
         )
         returnedItems = itemsRes.rows
       }
@@ -239,7 +252,7 @@ export default defineEventHandler(async (event) => {
       const itemsByVariant = new Map<string, any[]>()
       for (const it of returnedItems) {
         const list = itemsByVariant.get(it.variant_id) || []
-        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty, dimensionId: it.dimension_id })
+        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty, initialQty: it.initial_qty, soldQty: it.sold_qty, dimensionId: it.dimension_id })
         itemsByVariant.set(it.variant_id, list)
       }
 

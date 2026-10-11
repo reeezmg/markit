@@ -9,6 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { billingUnitOptions, normalizeBillingUnits } from '~/utils/billing-units';
 
 const props = defineProps<{
+    quantityLabel?: string;
     id?: string | null;
     editName?: string | null;
     editCode?: string | null;
@@ -21,8 +22,8 @@ const props = defineProps<{
     editItems?: {id:string; size: string | null; qty: number; dimensionId?: string | null }[] | null;
     editSizeLabel?: string | null;
     editCustomFields?: Record<string, any> | null;
-    // products/purchase.vue still writes variants through ZenStack and has no
-    // custom-field plumbing, so it opts out of rendering them.
+    // products/purchase.vue has no custom-field plumbing, so it opts out
+    // of rendering them.
     hideCustomFields?: boolean;
 
 }>();
@@ -472,7 +473,7 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
 
 
     <!-- Quantity (Full Width) -->
-    <UFormGroup label="Quantity" required :error="errors.qty && errors.qty" class="md:col-span-2" v-if="variantInputs?.qty">
+    <UFormGroup :label="quantityLabel || 'Quantity'" required :error="errors.qty && errors.qty" class="md:col-span-2" v-if="variantInputs?.qty">
       <div class="flex gap-2">
         <div ref="unitSelectRef" v-if="showUnitSelect" class="w-36 shrink-0">
         <USelectMenu
@@ -490,7 +491,7 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
           v-model.number="editableQty"
           type="text"
           inputmode="numeric"
-          placeholder="Enter quantity"
+          :placeholder="quantityLabel || 'Enter quantity'"
           :disabled="items.length > 1"
           :class="showUnitSelect ? 'flex-1' : 'w-full'"
         />
@@ -569,10 +570,10 @@ defineExpose({ resetForm, addItem, removeItem, focusFirst, focusSizeAt, focusLas
     </UFormGroup>
 
     <template v-if="items[0]?.size !== null">
-      <label class="block text-sm font-medium leading-6 dark:text-white mt-4">{{ sizeLabel }} &amp; Quantities</label>
+      <label class="block text-sm font-medium leading-6 dark:text-white mt-4">{{ sizeLabel }} &amp; {{ quantityLabel || 'Quantities' }}</label>
       <div v-for="(item, index) in items" :key="index" :data-size-index="index" class="grid grid-cols-1 gap-2 mt-2" :class="showSizeDimension ? 'md:grid-cols-5' : 'md:grid-cols-4'">
         <UInput v-model="item.size" :data-size-field="'size'" type="text" :placeholder="sizeLabel" class="w-full" />
-        <UInput v-model.number="item.qty" data-qty-field="qty" type="text" inputmode="numeric" placeholder="Quantity" class="w-full" />
+        <UInput v-model.number="item.qty" data-qty-field="qty" type="text" inputmode="numeric" :placeholder="quantityLabel || 'Quantity'" class="w-full" />
         <USelectMenu
           v-if="showSizeDimension"
           v-model="item.dimensionId"

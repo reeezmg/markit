@@ -252,6 +252,19 @@ existing journals are preserved. Company snapshots and journal audit evidence ke
 product, PO, item quantity and unit cost; journal details expose product/PO links.
 Production commands and repeat behavior: `scripts/STOCK-ACCOUNTING.md`.
 
+`scripts/reconcile-originals-stock-rows.mjs` is the company-scoped stock-row
+correction for ORIGINALS CLOTHING. Its default preview is read-only and tallies
+every item against `initial_qty - sold_qty - supplier-return quantity`, alongside
+new Stock-account valuation, all published journal balances, ERP source lines and
+supplier postings/payables. `--apply` backs up company items and accounting rows
+under `artifacts/stock-reconciliation`, changes only mismatching current quantities,
+then calls the already-installed stock synchronizer once. It preserves initial/sold
+counters, source documents, old ledgers, existing journals and unrelated account
+balances, and verifies repeat synchronization posts nothing. JSON and CSV reports
+include every stock row and new account; sold-counter differences from active bill
+history are reported separately without changing those counters. No schemas are
+created or changed by this command.
+
 ### Legacy Cash / Primary Bank history import
 
 `scripts/production-accounting/remove-originals-nine-payments.mjs` is a narrowly

@@ -231,7 +231,11 @@ watch(selectedProductRaw, (newVal) => {
     collection.value = newVal.collectionId ?? '';
     productDimensionId.value = newVal.dimensionId ?? null;
     productCustomFields.value = newVal.customFields ?? {};
-    variants.value = JSON.parse(JSON.stringify(newVal.variants ?? []));
+    variants.value = JSON.parse(JSON.stringify(newVal.variants ?? [])).map((variant: any) => ({
+      ...variant,
+      items: (variant.items || []).map((item: any) => ({ ...item, qty: item.initialQty ?? 0 })),
+    }));
+    selectedProduct.value.variants = JSON.parse(JSON.stringify(variants.value));
   }
 }, { immediate: true });
 
@@ -455,10 +459,14 @@ const updateResult: any = await $fetch('/api/products/update', {
       customFields: v.customFields || {},
       items: v.items.map(item => ({
         id: item.id, size: item.size || null, qty: item.qty || 0, dimensionId: item.dimensionId ?? null,
+        initialQty: item.qty ?? 0,
+        updateInitialQty: Number(item.qty ?? 0) !== Number(selectedProductRaw.value?.variants
+          ?.flatMap((variant: any) => variant.items || []).find((saved: any) => saved.id === item.id)?.initialQty ?? 0),
       })),
     })),
     categoryTax: categoryTax.value,
     updateImages: !!variantInputs?.value?.images,
+    syncPurchaseOrder: true,
   }
 });
     if (updateResult?.product) {
@@ -467,7 +475,7 @@ const updateResult: any = await $fetch('/api/products/update', {
       await productRefetch();
     }
     // Raw-SQL write bypasses the ZenStack cache — drop it so /products shows the edit.
-    await invalidateModels('Product', 'Variant', 'Item');
+    await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder');
     toast.add({
       title: 'Product Edited!',
       id: 'modal-success',
@@ -764,7 +772,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
           </div>
           <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
           
-          <AddProductVariants   
+          <AddProductVariants quantity-label="Initial quantity"
             ref="variantRef"
             :id="variant.id"
             :editName="variant.name" 
@@ -862,7 +870,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
                   </button>
                 </div>
                 <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
-                <AddProductVariants :key="index"
+                <AddProductVariants quantity-label="Initial quantity" :key="index"
                   :id="variant.id"
                   :editName="selectedProduct?.variants[index].name"
                   :editCode="selectedProduct?.variants[index].code"

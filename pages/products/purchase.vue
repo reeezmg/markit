@@ -10,13 +10,14 @@ import { useUpdateDistributorCompany } from '~/lib/company-hooks/distributor-com
 import { useCreateDistributorCredit, useUpdateManyDistributorCredit, useDeleteManyDistributorCredit } from '~/lib/company-hooks/distributor-credit';
 import { useCreateDistributorPayment, useUpdateManyDistributorPayment, useDeleteManyDistributorPayment } from '~/lib/company-hooks/distributor-payment';
 import { useDeleteManyItem } from '~/lib/company-hooks/item';
-import { useCreateProduct, useUpdateProduct } from '~/lib/company-hooks/product';
+import { useCreateProduct } from '~/lib/company-hooks/product';
 import { useCreatePurchaseOrder, useUpdatePurchaseOrder, useFindUniquePurchaseOrder } from '~/lib/company-hooks/purchase-order';
 import { useUpsertVariant } from '~/lib/company-hooks/variant';
 import BarcodeComponent from "@/components/BarcodeComponent.vue";
 import type { paymentType as PType } from '@prisma/client';
 import { useQueryClient } from '@tanstack/vue-query';
 const queryClient = useQueryClient();
+const { invalidateModels } = useModelCache();
 const { printLabel } = usePrint();
 const router = useRouter();
 const toast = useToast();
@@ -173,181 +174,6 @@ const cacheKey = [
     }
   }
 })
-
-const UpdateProduct = useUpdateProduct({
-
-  invalidate: false, // we'll manually invalidate
-
-  onMutate: async (updatedProductInput) => {
-  const purchaseOrderId = poId.value;
-
-  if (!purchaseOrderId) return;
-
-  const cacheKey = [
-    'zenstack', 'PurchaseOrder', 'findUnique',
-    {
-      where: { id: purchaseOrderId },
-      include: { products: { include: { variants: { include: { items: true } } } } }
-    },
-    {
-      infinite: false,
-      optimisticUpdate: true
-    }
-  ];
-
-  const previous = queryClient.getQueryData(cacheKey);
-
-
-  if (!previous || typeof previous !== 'object') return;
-
-  const input = updatedProductInput.data;
-  const productId = updatedProductInput.where.id;
-  settledMap.value.set(productId, false);
-  // First, handle the product-level updates
-  const updatedProducts = (previous.products ?? []).map(product => {
-    if (product.id !== productId) return product;
-
-    // Update the product fields
-    const updatedProduct = {
-      ...product,
-      name: input.name ?? product.name,
-      brandId: input.brand?.connect?.id ?? product.brandId,
-      description: input.description ?? product.description,
-      status: input.status ?? product.status,
-      companyId: input.company?.connect?.id ?? product.companyId,
-      categoryId: input.category?.connect?.id ?? product.categoryId,
-      subcategoryId: input.subcategory?.connect?.id ?? product.subcategoryId,
-    };
-
-    // Handle variants
-    if (!input.variants) return updatedProduct;
-
-    // First apply deleteMany (remove variants not in the input)
-    const variantsToKeep = input.variants.upsert?.map(v => v.where.id) ?? [];
-    let updatedVariants = product.variants.filter(v => 
-      variantsToKeep.includes(v.id)
-    );
-
-    // Then handle upsert operations
-    input.variants.upsert?.forEach(variantInput => {
-      const existingVariantIndex = updatedVariants.findIndex(
-        v => v.id === variantInput.where.id
-      );
-
-      const variantData = variantInput.update ?? variantInput.create;
-      
-      if (existingVariantIndex >= 0) {
-        // Update existing variant
-        const existingVariant = updatedVariants[existingVariantIndex];
-        updatedVariants[existingVariantIndex] = {
-          ...existingVariant,
-          name: variantData?.name ?? existingVariant.name,
-          unit: variantData?.unit ?? existingVariant.unit,
-          sprice: variantData?.sprice ?? existingVariant.sprice,
-          pprice: variantData?.pprice ?? existingVariant.pprice,
-          dprice: variantData?.dprice ?? existingVariant.dprice,
-          discount: variantData?.discount ?? existingVariant.discount,
-          status: variantData?.status ?? existingVariant.status,
-          tax: variantData?.tax ?? existingVariant.tax,
-          images: variantData?.images ?? existingVariant.images,
-        };
-
-        // Handle items for this variant
-        if (variantData?.items) {
-          // First apply deleteMany (remove items not in the input)
-          const itemsToKeep = variantData.items.upsert?.map(i => i.where?.id) ?? [];
-          let updatedItems = existingVariant.items.filter(i => 
-            i.id && itemsToKeep.includes(i.id)
-          );
-
-          // Then handle upsert operations for items
-          variantData.items.upsert?.forEach(itemInput => {
-            const existingItemIndex = updatedItems.findIndex(
-              i => i.id === itemInput.where?.id
-            );
-
-            const itemData = itemInput.update ?? itemInput.create;
-            
-            if (existingItemIndex >= 0) {
-              // Update existing item
-              updatedItems[existingItemIndex] = {
-                ...updatedItems[existingItemIndex],
-                size: itemData?.size ?? updatedItems[existingItemIndex].size,
-                qty: itemData?.qty ?? updatedItems[existingItemIndex].qty,
-              };
-            } else {
-              // Add new item
-              updatedItems.push({
-                id: itemInput.where?.id ?? null,
-                size: itemData?.size ?? null,
-                qty: itemData?.qty ?? 0,
-                companyId: useAuth().session.value?.companyId ?? null,
-                variantId: variantInput.where.id,
-              });
-            }
-          });
-
-          updatedVariants[existingVariantIndex].items = updatedItems;
-        }
-      } else {
-        // Add new variant
-        const newVariant = {
-          id: variantInput.where.id,
-          name: variantData?.name ?? '',
-          unit: variantData?.unit ?? 'Nos',
-          sprice: variantData?.sprice ?? 0,
-          pprice: variantData?.pprice ?? 0,
-          dprice: variantData?.dprice ?? 0,
-          discount: variantData?.discount ?? 0,
-          status: variantData?.status ?? true,
-          tax: variantData?.tax ?? 0,
-          images: variantData?.images ?? [],
-          companyId: useAuth().session.value?.companyId ?? null,
-          productId: productId,
-          items: (variantData?.items?.upsert ?? []).map(itemInput => ({
-            id: itemInput.where?.id ?? null,
-            size: (itemInput.update ?? itemInput.create)?.size ?? null,
-            qty: (itemInput.update ?? itemInput.create)?.qty ?? 0,
-            companyId: useAuth().session.value?.companyId ?? null,
-            variantId: variantInput.where.id,
-          })),
-        };
-        updatedVariants.push(newVariant);
-      }
-    });
-
-    return {
-      ...updatedProduct,
-      variants: updatedVariants,
-    };
-  });
-
-
-
-  queryClient.setQueryData(cacheKey, {
-    ...previous,
-    products: updatedProducts
-  });
-  return { previous, cacheKey, productId : productId };
-},
-
-  onError: (_err, _newData, ctx) => {
-    if (ctx?.previous) {
-      queryClient.setQueryData(ctx.cacheKey, ctx.previous);
-    }
-  },
-
-  onSettled: (_data, _error, _vars, ctx) => {
-      settledMap.value.set(ctx?.productId, true);
-    if (ctx?.cacheKey) {
-      queryClient.invalidateQueries({
-        queryKey: ctx.cacheKey,
-        exact: true
-      });
-    }
-  }
-});
-
 
 const CreatePurchaseOrder = useCreatePurchaseOrder({ optimisticUpdate: true });
 const CreateDistributorCredit = useCreateDistributorCredit({ optimisticUpdate: true });
@@ -767,130 +593,40 @@ const handleEdit = async (e: Event) => {
 
    const productId = selectedProduct.value.id;
 
-   // Photos the product carries today. Removed variants and replaced images are
-   // both dropped by the update below, so whatever is missing afterwards is no
-   // longer referenced and should leave Cloudflare too.
-   const previousImageKeys: string[] = (selectedProduct.value.variants || [])
-     .flatMap((v: any) => (v.images || []).map((img: any) => (typeof img === 'string' ? img : img?.uuid)))
-     .filter(Boolean);
-
-const updatedProduct =  await UpdateProduct.mutateAsync({
-  where: { id: productId },
-  data: {
-    name: name.value || '',
-    description: description.value || '',
-    status: live.value ?? undefined,
-    company: {
-      connect: { id: useAuth().session.value?.companyId },
-    },
-    ...(category.value && {
-      category: { connect: { id: category.value.id } }
-    }),
-    ...(brand.value && {
-      brand: { connect: { id: brand.value } }
-    }),
-    ...(subcategory.value && {
-      subcategory: { connect: { id: subcategory.value } }
-    }),
-
-    variants: {
-      // 1. Delete removed variants
-      deleteMany: {
-        id: {
-          notIn: variants.value.filter(v => v.id).map(v => v.id),
-        },
-      },
-
-      // 2. Upsert variants (update if exists, create if not)
-      upsert: variants.value.map(v => ({
-        where: { id: v.id }, // Prisma ignores if no match found
-        update: {
-          name: v.name || '',
-          code: v.code || null,
-          unit: v.unit || 'Nos',
-          sprice: v.sprice || 0,
-          pprice: v.pprice || 0,
-          dprice: v.dprice || 0,
-          deliveryType: deliveryType.value || 'trynbuy',
-          discount: v.discount || 0,
-          status: true,
-          sizeLabel: v.sizeLabel || 'Size',
-          images: v.images?.map(file => file.uuid) || [],
-          tax: calculateTax(v),
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-          items: {
-            // Delete removed items
-            deleteMany: {
-              id: {
-                notIn: v.items.filter(item => item.id).map(item => item.id)
-              }
-            },
-            // Upsert items
-            upsert: v.items.map(item => ({
-              where: { id: item.id },
-              update: {
-                size: item.size || null,
-                qty: item.qty || 0,
-                initialQty: item.qty || 0,
-              },
-              create: {
-                id:item.id,
-                size: item.size || null,
-                qty: item.qty || 0,
-                initialQty: item.qty || 0,
-                company: {
-                  connect: { id: useAuth().session.value?.companyId },
-                },
-              }
-            }))
-          }
-        },
-        create: {
-          id: v.id,
-          name: v.name || '',
-          code: v.code || null,
-          unit: v.unit || 'Nos',
-          sprice: v.sprice || 0,
-          pprice: v.pprice || 0,
-          dprice: v.dprice || 0,
-          discount: v.discount || 0,
-          deliveryType: deliveryType.value || 'trynbuy',
-          status: true,
-          sizeLabel: v.sizeLabel || 'Size',
-             ...(variantInputs?.value.images && { images: (v.images || [])
-                .sort((a, b) => (a.view === 'front' ? -1 : b.view === 'front' ? 1 : 0))
-                .map((file) => file.uuid),}),
-          tax: calculateTax(v),
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
+    settledMap.value.set(productId, false);
+    try {
+      await $fetch('/api/products/update', {
+        method: 'POST',
+        body: {
+          productId,
           product: {
-            connect: { id: productId }
+            name: name.value || '',
+            description: description.value || '',
+            status: live.value ?? null,
+            categoryId: category.value?.id || null,
+            brandId: brand.value || null,
+            subcategoryId: subcategory.value || null,
           },
-          items: {
-            create: v.items.map(item => ({
-              id: item.id,
-              size: item.size || null,
-              qty: item.qty || 0,
-              initialQty: item.qty || 0,
-              company: {
-                connect: { id: useAuth().session.value?.companyId },
-              }
-            }))
-          }
-        }
-      }))
+          variants: variants.value.map(v => ({
+            ...v,
+            images: (v.images || []).map(file => typeof file === 'string' ? file : file.uuid),
+            items: v.items.map(item => ({
+              ...item,
+              qty: item.qty ?? 0,
+              initialQty: item.qty ?? 0,
+              updateInitialQty: Number(item.qty ?? 0) !== Number(selectedProduct.value?.variants
+                ?.flatMap((variant: any) => variant.items || []).find((saved: any) => saved.id === item.id)?.initialQty ?? 0),
+            })),
+          })),
+          categoryTax: categoryTax.value,
+          updateImages: !!variantInputs.value?.images,
+          syncPurchaseOrder: true,
+        },
+      });
+      await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder');
+    } finally {
+      settledMap.value.set(productId, true);
     }
-  },
-  select: { id: true }
-});
-
-    const keptImageKeys = new Set(
-      variants.value.flatMap((v: any) => (v.images || []).map((file: any) => file?.uuid)).filter(Boolean)
-    );
-    await awsService.deleteObjects(previousImageKeys.filter(key => !keptImageKeys.has(key)));
 
     handleReset();
 
@@ -1265,7 +1001,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
                 </UPageCard>
 
                 <!-- <UPageCard class="m-3" id="Variants">
-                    <AddProductVariants @update="variantValue" />
+                    <AddProductVariants quantity-label="Initial quantity" @update="variantValue" />
                 </UPageCard> -->
 
                
@@ -1283,7 +1019,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
                       </UButton>
                     </div>
                     <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
-                    <AddProductVariants   
+                    <AddProductVariants quantity-label="Initial quantity"
                       ref="variantRef"
                       :id="selectedProduct?.variants[index]?.id"
                       :editName="selectedProduct?.variants[index]?.name " 

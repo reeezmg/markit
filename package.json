@@ -36,6 +36,7 @@
         "test:accountant-money": "tsx tests/accountant-money.integration.test.ts",
         "test:erp-accounting:api": "tsx tests/erp-accounting-api.integration.test.ts",
         "test:products-distributor-accounting:api": "tsx tests/products-distributor-accounting-api.integration.test.ts",
+        "test:product-stock": "node tests/product-stock.integration.test.mjs",
         "db:stock-accounting": "node scripts/apply-distributor-accounting.mjs --stock",
         "db:reconcile-stock": "node scripts/reconcile-stock-accounting.mjs",
         "test:stock-accounting": "node tests/stock-accounting.integration.test.mjs",

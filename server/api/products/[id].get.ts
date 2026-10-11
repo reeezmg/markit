@@ -42,13 +42,13 @@ export default defineEventHandler(async (event) => {
     const itemsByVariant = new Map<string, any[]>()
     if (variantIds.length) {
       const itemsRes = await client.query(
-        `SELECT id, barcode, size, qty, dimension_id, variant_id
+        `SELECT id, barcode, size, qty, initial_qty, sold_qty, dimension_id, variant_id
          FROM items WHERE variant_id = ANY($1::text[]) ORDER BY created_at ASC`,
         [variantIds],
       )
       for (const it of itemsRes.rows) {
         const list = itemsByVariant.get(it.variant_id) || []
-        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty, dimensionId: it.dimension_id })
+        list.push({ id: it.id, barcode: it.barcode, size: it.size, qty: it.qty, initialQty: it.initial_qty, soldQty: it.sold_qty, dimensionId: it.dimension_id })
         itemsByVariant.set(it.variant_id, list)
       }
     }
