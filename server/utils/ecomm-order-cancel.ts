@@ -102,13 +102,12 @@ export async function cancelEcommOrder(
 
   const restored: { itemId: string; quantity: number }[] = []
   for (const [itemId, quantity] of quantities) {
-    // GREATEST on sold_qty: a bill edited after checkout can leave sold_qty
-    // lower than this order's share, and a negative sold count is worse than an
-    // imprecise one.
+    // Restore both counters equally, including legacy net returns.
+    // Clamping only sold_qty breaks initial - sold - supplier returns.
     const upd = await db.query(
       `UPDATE items
        SET qty = COALESCE(qty, 0) + $1,
-           sold_qty = GREATEST(0, COALESCE(sold_qty, 0) - $1),
+           sold_qty = COALESCE(sold_qty, 0) - $1,
            updated_at = now()
        WHERE id = $2 AND company_id = $3
        RETURNING id`,

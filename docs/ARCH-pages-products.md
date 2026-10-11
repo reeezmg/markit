@@ -49,6 +49,14 @@ Company query composition uses `utils/companyWhere.ts` in both the generated-hoo
 
 ---
 
+#### Stock quantity invariant
+
+Available quantity is `initial_qty - sold_qty - supplier returns`. Generated item creates (including nested and bulk creates) seed initial quantity from the submitted initial/current quantity and start sold quantity at zero. Generated updates cannot change any of these three counters; initial-quantity edits must use the product API so saved sales and returns are preserved. The legacy `POST /api/item` creates stock only for company-owned variants without existing items, in a serializable transaction. It refuses to replace existing items, barcodes or sales history.
+
+Product upserts lock existing item rows before the statement that sums supplier returns, so a concurrent committed return is visible. Offline returns, ecommerce cancellation and received ecommerce returns move available and sold counters equally in opposite directions; sold quantity may become negative for net returns and is never clamped independently.
+
+`scripts/reconcile-company-stock-rows.mjs` requires explicit company ID/name/report prefix. Default execution is read-only. Authorized `--apply` backs up item rows and stock control, fingerprints existing accounting/source history, updates only available quantities, and invokes the installed stock-control reconciliation. It verifies all initial/sold values and source documents are unchanged, all quantities and Stock accounts tally, existing journals remain intact, and a repeat reconciliation posts nothing. It never changes database schemas.
+
 #### Product PurchaseOrder Link
 The current `/products/add` flow stages products in `localStorage['product_drafts']` and writes them through `/api/products/save-batch` only when Save succeeds. That transaction can include a new PO or link an existing PO; products do not have to be attached to a PO. PO edit/new-from-distributor flows use `/products/purchase?poId=...`.
 

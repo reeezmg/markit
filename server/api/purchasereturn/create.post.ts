@@ -118,8 +118,8 @@ export default defineEventHandler(async (event) => {
         items.map((item: any) =>
           item.barcode?.trim() && item.itemId
             ? client.query(
-              `UPDATE items SET qty = COALESCE(qty, 0) - $1 WHERE id = $2`,
-              [item.qty, item.itemId]
+              `UPDATE items SET qty = COALESCE(qty, 0) - $1 WHERE id = $2 AND company_id = $3`,
+              [item.qty, item.itemId, companyId]
             )
             : Promise.resolve()
         )

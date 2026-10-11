@@ -178,6 +178,12 @@ export default defineEventHandler(async (event) => {
         [keepVariantIds, keepItemIds],
       )
       if (allItems.length) {
+        // Take locks before the upsert's snapshot so a just-committed supplier
+        // return is included when the next statement sums returned quantities.
+        await client.query(
+          'SELECT id FROM items WHERE id=ANY($1::text[]) AND company_id=$2 ORDER BY id FOR UPDATE',
+          [keepItemIds, companyId],
+        )
         const initialQuantityIds = allItems.filter((it: any) => it.updateInitialQty === true).map((it: any) => it.id)
         const IC = 7 // params per item row
         const iVals: any[] = []

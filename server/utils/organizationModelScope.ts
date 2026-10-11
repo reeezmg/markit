@@ -2,6 +2,7 @@ import { appendCompanyWhere } from '~/utils/companyWhere';
 import { Prisma } from '@prisma/client';
 import { createError } from 'h3';
 import { prisma } from '~/server/prisma';
+import { prepareItemStockWrite } from './item-stock-write';
 
 const models = new Map(Prisma.dmmf.datamodel.models.map(m => [m.name, m]));
 const delegateName = (name: string) => name[0].toLowerCase() + name.slice(1);
@@ -12,7 +13,7 @@ const reads = new Set(['findMany', 'findFirst', 'findUnique', 'findFirstOrThrow'
 const writes = new Set(['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert']);
 const legacyArchives = new Set(['AccountLedgerEntry', 'MoneyTransaction', 'AccountTransfer', 'Investment', 'BankAccount', 'CashAccount']);
 const archiveMutations = new Set([...writes, 'createManyAndReturn', 'updateManyAndReturn']);
-const financialSources = new Set(['Bill','Entry','Payment','DistributorCredit']);
+const financialSources = new Set(['Bill','Entry','Payment','DistributorCredit','Item']);
 const archiveWriteDenied = () => createError({ statusCode: 410, statusMessage: 'Legacy Accounts is read-only. Use Accountant for new financial entries.' });
 const billFinanceFields = new Set(['paymentMethod','paymentStatus','splitPayments','grandTotal','subtotal','tax','discount','discountType','adjustment','couponValue','originalGrandTotal','originalSubtotal','originalDiscount','createdAt','paidAt','invoiceNumber','currency','accountId','account','clientId','client','creditUserId','creditUser','entries','payments','deleted','precedence','type','isMarkit','companyId','company']);
 const sourceWriteDenied = () => createError({statusCode:409,statusMessage:'Use the bill source API or dated credit receipts for financial changes'});
@@ -34,11 +35,12 @@ function scopeRelations(modelName: string, args: any, ids: string[]): any {
   return result;
 }
 
-async function validateData(modelName: string, data: any, ids: string[], parentCompany?: string, db: any = prisma): Promise<void> {
+async function validateData(modelName: string, data: any, ids: string[], parentCompany?: string, db: any = prisma, creating = true): Promise<void> {
   if (!data) return;
   if (legacyArchives.has(modelName)) throw archiveWriteDenied();
   if (modelName === 'Payment' || modelName === 'Entry') throw sourceWriteDenied();
-  if (Array.isArray(data)) { for (const row of data) await validateData(modelName, row, ids, parentCompany, db); return; }
+  if (Array.isArray(data)) { for (const row of data) await validateData(modelName, row, ids, parentCompany, db, creating); return; }
+  if (modelName === 'Item') prepareItemStockWrite(data, creating);
   if (modelName === 'DistributorCredit') {
     const poId = typeof data.purchaseOrderId === 'object' ? data.purchaseOrderId?.set : data.purchaseOrderId;
     if (poId != null || (data.purchaseOrder && !data.purchaseOrder.disconnect)) {
@@ -85,7 +87,7 @@ async function validateData(modelName: string, data: any, ids: string[], parentC
         const row = await db[delegateName(field.type)].findUnique({ where: value.where, select: { companyId: true } });
         if (!row || !ids.includes(row.companyId) || (companyId && row.companyId !== companyId)) throw denied();
       }
-      await validateData(field.type, value.data ?? value, ids, companyId, db);
+      await validateData(field.type, value.data ?? value, ids, companyId, db, false);
     }
     for (const operation of ['connectOrCreate', 'upsert']) {
       for (const value of relation[operation] ? (Array.isArray(relation[operation]) ? relation[operation] : [relation[operation]]) : []) {
@@ -95,7 +97,7 @@ async function validateData(modelName: string, data: any, ids: string[], parentC
         }
         if (value.update?.companyId !== undefined || value.update?.company) throw createError({ statusCode: 409, statusMessage: 'Use a confirmed company transfer to change ownership' });
         await validateData(field.type, value.create, ids, companyId, db);
-        await validateData(field.type, value.update, ids, companyId, db);
+        await validateData(field.type, value.update, ids, companyId, db, false);
       }
     }
     for (const operation of ['updateMany', 'deleteMany']) {
@@ -103,7 +105,7 @@ async function validateData(modelName: string, data: any, ids: string[], parentC
         if (value.data?.companyId !== undefined || value.data?.company) throw createError({ statusCode: 409, statusMessage: 'Use a confirmed company transfer to change ownership' });
         // Prisma confines nested bulk operations to the already-authorized parent.
         // Querying this filter globally would reject valid `where: {}` updates.
-        await validateData(field.type, value.data, ids, companyId, db);
+        await validateData(field.type, value.data, ids, companyId, db, false);
       }
     }
   }
@@ -130,7 +132,10 @@ export function scopeOrganizationModelReads<T extends object>(client: T, activeI
           return async (args: any = {}) => {
             if (legacyArchives.has(model.name) && archiveMutations.has(operation)) throw archiveWriteDenied();
             if (['Payment','Entry'].includes(model.name) && archiveMutations.has(operation)) throw sourceWriteDenied();
-            if (financialSources.has(model.name) && ['createManyAndReturn','updateManyAndReturn'].includes(operation)) throw sourceWriteDenied();
+            if (financialSources.has(model.name) && ['createManyAndReturn','updateManyAndReturn'].includes(operation)) {
+              if (model.name === 'Item') throw createError({ statusCode: 409, statusMessage: 'Use product forms to create or edit stock' });
+              throw sourceWriteDenied();
+            }
             if (model.name === 'Bill' && ['delete','deleteMany','create','createMany','upsert'].includes(operation)) throw sourceWriteDenied();
             const run = async (db: any) => {
             let owner: string | undefined;
@@ -168,8 +173,8 @@ export function scopeOrganizationModelReads<T extends object>(client: T, activeI
                   owner = record.companyId;
                 }
               }
-              await validateData(model.name, args.data ?? args.create, ids, owner ?? activeId, db);
-              if (args.update) await validateData(model.name, args.update, ids, owner ?? activeId, db);
+              await validateData(model.name, args.data ?? args.create, ids, owner ?? activeId, db, !operation.startsWith('update'));
+              if (args.update) await validateData(model.name, args.update, ids, owner ?? activeId, db, false);
             }
             const cap = isOwned ? { companyId: { in: ids } }
               : parent ? { [parent.name]: { companyId: { in: ids } } }

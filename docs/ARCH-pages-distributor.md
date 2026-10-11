@@ -106,7 +106,7 @@ with existing settlements. PO/product recalculation never resets payment amounts
 An explicitly paid new PO creates one numbered DP after its total is finalized;
 an existing payment/allocation prevents an extra payment. Generic direct and nested
 PO-credit links are rejected by `organizationModelScope.ts`. Return deletion uses `DELETE /api/purchasereturn/:id`,
-restores quantities and removes return/payment rows atomically, triggering reversal.
+restores quantities and removes return/payment rows atomically, triggering reversal. Supplier-return edits lock the header before reading old lines to serialize concurrent edits/deletion; stock updates are company-scoped.
 
 Apply with `npm run db:distributor-accounting`. The explicit-company import CLI is
 `tsx scripts/import-distributor-accounting.ts --company=<id> [--company=<id> ...]`;

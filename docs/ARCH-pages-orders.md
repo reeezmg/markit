@@ -16,6 +16,8 @@ The `order/` pages handle order operations. The full Storefront sidebar exposes 
 ---
 
 ### `pages/order/ecomorders.vue` - Ecommerce Orders
+Cancellation restores available quantity and reduces sold quantity by the same amount. Sold quantity is not independently clamped at zero, preserving the stock formula for legacy net returns.
+
 **Accountant connection:** New orders can post through company-enabled Ecommerce accounting. `/accountant/ecommerce` records actual received returns, completed refunds, courier/gateway settlements, costs and extra financial charges. Request approval and shipment status alone do not prove those financial activities. See `ARCH-pages-accounts.md`; the existing order/bill creation timing is preserved.
 **Data model:** `EcommOrder` rows from `ecomm_orders`, created by the Revomotive custom storefront checkout flow.
 

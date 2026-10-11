@@ -113,8 +113,8 @@ async function main() {
       const want = expected.get(row.id) || 0
       const qtyDelta = Number(row.qty) - Number(prev.qty)
       const soldDelta = Number(prev.sold_qty) - Number(row.sold_qty)
-      // sold_qty is floored at 0, so it can move by less than the full quantity.
-      if (qtyDelta !== want || soldDelta > want || soldDelta < 0) stockOk = false
+      // Both counters must move equally, including a net negative sold count.
+      if (qtyDelta !== want || soldDelta !== want) stockOk = false
       stockDetail.push({ item: row.id, want, qtyDelta, soldDelta })
     }
     check('stock qty goes back up by exactly the ordered quantity', stockOk, stockDetail)

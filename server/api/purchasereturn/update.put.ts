@@ -56,7 +56,7 @@ export default defineEventHandler(async (event) => {
 
       /* 1. Verify the return belongs to this company */
       const checkRes = await client.query(
-        `SELECT id FROM purchase_returns WHERE id = $1 AND company_id = $2`,
+        `SELECT id FROM purchase_returns WHERE id = $1 AND company_id = $2 FOR UPDATE`,
         [id, companyId]
       )
       if (checkRes.rows.length === 0) {
@@ -74,8 +74,8 @@ export default defineEventHandler(async (event) => {
         oldItemsRes.rows.map((item: any) =>
           item.item_id
             ? client.query(
-              `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE id = $2`,
-              [item.qty, item.item_id]
+              `UPDATE items SET qty = COALESCE(qty, 0) + $1 WHERE id = $2 AND company_id = $3`,
+              [item.qty, item.item_id, companyId]
             )
             : Promise.resolve()
         )
@@ -140,8 +140,8 @@ export default defineEventHandler(async (event) => {
         items.map((item: any) =>
           item.barcode?.trim() && item.itemId
             ? client.query(
-              `UPDATE items SET qty = COALESCE(qty, 0) - $1 WHERE id = $2`,
-              [item.qty, item.itemId]
+              `UPDATE items SET qty = COALESCE(qty, 0) - $1 WHERE id = $2 AND company_id = $3`,
+              [item.qty, item.itemId, companyId]
             )
             : Promise.resolve()
         )

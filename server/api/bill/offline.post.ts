@@ -37,8 +37,8 @@ export default defineEventHandler(async (event) => {
         `
         UPDATE items
         SET 
-          qty = qty - $1,
-          sold_qty = sold_qty + $1,
+          qty = COALESCE(qty, 0) - $1,
+          sold_qty = COALESCE(sold_qty, 0) + $1,
           updated_at = NOW()
         WHERE id = $2
           AND company_id = $3
@@ -57,8 +57,8 @@ export default defineEventHandler(async (event) => {
         `
         UPDATE items
         SET 
-          qty = qty + $1,
-          sold_qty = GREATEST(sold_qty - $1, 0),
+          qty = COALESCE(qty, 0) + $1,
+          sold_qty = COALESCE(sold_qty, 0) - $1,
           updated_at = NOW()
         WHERE id = $2
           AND company_id = $3

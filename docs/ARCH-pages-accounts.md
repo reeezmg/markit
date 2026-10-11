@@ -151,6 +151,8 @@ Stock control flushes the ERP-prefixed constraints before comparing item quantit
 | Received return | Credit proportional merchandise/tax/rewards and optional original delivery/COD fees; restore received quantities and original-cost stock/COGS; create refund payable where needed |
 | Completed refund | Dr refund payable / Cr actual funding account on the supplied date. Does not invoke a gateway refund API |
 
+Received returns restore available quantity and reduce sold quantity equally; the sold counter is not independently clamped, preserving the stock formula.
+
 Return accounting accepts delivered/returned orders. Request approval, a policy fee,
 reverse shipment or exchange waybill alone is not received stock, earned income, a
 refund or a replacement sale. Exchanges use actual received returns and replacement

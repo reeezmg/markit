@@ -123,7 +123,7 @@ ecommerceAccountingRouter.post('/orders/:id/events', async (req, res) => {
     catch (error: any) { throw badRequest(error.message); }
     lines.push(...plan.lines); extra = plan.metadata;
     for (const item of plan.items) {
-      const moved = await db.$queryRawUnsafe(`UPDATE items SET qty=COALESCE(qty,0)+$1,sold_qty=GREATEST(0,COALESCE(sold_qty,0)-$1),updated_at=now()
+      const moved = await db.$queryRawUnsafe(`UPDATE items SET qty=COALESCE(qty,0)+$1,sold_qty=COALESCE(sold_qty,0)-$1,updated_at=now()
         WHERE id=$2 AND company_id=$3 RETURNING id`, item.qty, item.itemId, companyId);
       if (!moved.length) throw badRequest('A returned stock item no longer exists in this company');
     }
