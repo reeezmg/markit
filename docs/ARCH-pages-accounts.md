@@ -508,8 +508,9 @@ creates a disposable schema.
   exchange rate; original journal lines retain entered amounts/currency. Exchange
   conversion must also balance after cent rounding. Ledger dates carry forward
   earlier opening/movement, and the chart provides 50-row ledger pagination.
-  Chart From/To controls automatically refresh both account period balances and
-  the selected account's transaction rows, resetting pagination to page one.
+  Chart From/To controls automatically refresh account period balances. Separate
+  From/To controls above Recent Transactions filter only the selected account's
+  rows, resetting pagination to page one. Each filter has its own clear action.
   Clear dates restores all-time balances. Account period balances are net movement
   within the range; ledger closing/running balances carry earlier activity forward.
   Both account-list and ledger endpoints accept date-only `from`/`to` filters,

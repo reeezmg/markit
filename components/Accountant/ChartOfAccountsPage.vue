@@ -27,15 +27,15 @@
         />
         <USelect v-model="statusFilter" :options="statusFilters" class="w-36" />
         <label class="text-xs text-gray-500">From
-          <UInput v-model="ledgerFrom" type="date" aria-label="Accounts from date" :max="ledgerTo || undefined" />
+          <UInput v-model="chartFrom" type="date" aria-label="Accounts from date" :max="chartTo || undefined" />
         </label>
         <label class="text-xs text-gray-500">To
-          <UInput v-model="ledgerTo" type="date" aria-label="Accounts to date" :min="ledgerFrom || undefined" />
+          <UInput v-model="chartTo" type="date" aria-label="Accounts to date" :min="chartFrom || undefined" />
         </label>
-        <UButton v-if="ledgerFrom || ledgerTo" color="gray" variant="soft" @click="ledgerFrom = ''; ledgerTo = ''">Clear dates</UButton>
+        <UButton v-if="chartFrom || chartTo" color="gray" variant="soft" @click="chartFrom = ''; chartTo = ''">Clear dates</UButton>
       </div>
-      <p v-if="ledgerFrom || ledgerTo" class="px-3 py-2 text-xs text-gray-500">
-        Account balances show movement in the selected period. Ledger closing balances include earlier transactions.
+      <p v-if="chartFrom || chartTo" class="px-3 py-2 text-xs text-gray-500">
+        Account balances show movement in the selected period.
       </p>
 
       <div class="grid min-h-[560px] lg:grid-cols-[minmax(360px,42%)_1fr]">
@@ -173,7 +173,7 @@
               </dd>
             </div>
             <div>
-              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">{{ ledgerFrom || ledgerTo ? 'Period Balance' : 'Current Balance' }}</dt>
+              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">{{ chartFrom || chartTo ? 'Period Balance' : 'Current Balance' }}</dt>
               <dd class="mt-1 text-lg font-semibold">
                 {{ money(selected.balance) }}
               </dd>
@@ -230,6 +230,15 @@
 
             <div class="mt-6">
               <h4 class="text-lg font-semibold">Recent Transactions</h4>
+              <div class="mt-3 flex flex-wrap items-end gap-2">
+                <label class="text-xs text-gray-500">From
+                  <UInput v-model="ledgerFrom" type="date" aria-label="Transactions from date" :max="ledgerTo || undefined" />
+                </label>
+                <label class="text-xs text-gray-500">To
+                  <UInput v-model="ledgerTo" type="date" aria-label="Transactions to date" :min="ledgerFrom || undefined" />
+                </label>
+                <UButton v-if="ledgerFrom || ledgerTo" color="gray" variant="soft" @click="ledgerFrom = ''; ledgerTo = ''">Clear transaction dates</UButton>
+              </div>
             </div>
             <div class="mt-3 overflow-x-auto">
               <table class="w-full min-w-[760px] text-sm">
@@ -451,7 +460,12 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 const api = useAccountantApi();
 const baseCurrency = ref("INR");
 const ledgerPage = ref(1), ledgerFrom = ref(''), ledgerTo = ref('');
+const chartFrom = ref(''), chartTo = ref('');
 const dateQuery = computed(() => ({
+  ...(chartFrom.value ? { from: chartFrom.value } : {}),
+  ...(chartTo.value ? { to: chartTo.value } : {}),
+}));
+const ledgerDateQuery = computed(() => ({
   ...(ledgerFrom.value ? { from: ledgerFrom.value } : {}),
   ...(ledgerTo.value ? { to: ledgerTo.value } : {}),
 }));
@@ -684,7 +698,7 @@ async function loadLedger(id: string) {
   }
   ledgerLoading.value = true;
   try {
-    const result = await api.get(`/accounting-accounts/${id}/ledger`, { query: { page: ledgerPage.value, ...dateQuery.value } });
+    const result = await api.get(`/accounting-accounts/${id}/ledger`, { query: { page: ledgerPage.value, ...ledgerDateQuery.value } });
     if (request !== ledgerRequest) return;
     ledger.value = result;
   } catch (e: any) {
@@ -861,8 +875,13 @@ watch([ledgerFrom, ledgerTo], () => {
     return toast.add({ title: 'From date cannot be after to date', color: 'red' });
   }
   ledgerPage.value = 1;
-  load();
   loadLedger(selectedId.value);
+});
+watch([chartFrom, chartTo], () => {
+  if (chartFrom.value && chartTo.value && chartFrom.value > chartTo.value) {
+    return toast.add({ title: 'From date cannot be after to date', color: 'red' });
+  }
+  load();
 });
 onMounted(load);
 </script>
