@@ -11,8 +11,8 @@ export function distributorAccountingTransactions(data: any) {
     // journals, cancellation history and unrelated journals are not transactions.
     if (!event || !sourceTypes.has(event.kind) || line.source_type === 'DISTRIBUTOR_REVERSAL') continue;
     if (!groups.has(line.id)) {
-      groups.set(line.id, { id: line.id, entryNumber: line.entry_number, date: line.journal_date, reference: line.reference_number || event?.reference || line.entry_number,
-        type: event.kind,
+      groups.set(line.id, { id: line.id, entryNumber: line.entry_number, date: line.journal_date, reference: event.source_reference || event.reference || line.reference_number || source.source_key,
+        type: event.source_kind || event.kind,
         description: line.notes || event?.description || '', sourceKey: source?.source_key,
         debit: 0, credit: 0, lines: [] });
     }

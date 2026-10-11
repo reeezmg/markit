@@ -14,13 +14,25 @@ The main distributor page's Accounts tab replaces the legacy Transactions table 
 `AccountingTransactions.vue`. It shows only published entries whose journal ID is
 the current distributor source pointer and whose source still exists in the event
 projection. Superseded, reversed, deleted-source and unlinked journal rows are
-excluded, including from CSV and running due. Rows use Purchase/Payment/Return/Receipt/
-Opening source types; the table offers no Journal/Reversal filters. It groups
+excluded, including from CSV and running due. Rows use Purchase/Payment/Credit/Return/Receipt/
+Opening source types; the table offers no Journal/Reversal filters. The preview joins
+company-scoped source documents to supply `PO-{purchaseOrderNo}`, `DP-{paymentNo}`,
+or `DC-{creditNo}` references (source IDs when unnumbered), ahead of journal references
+or supplier invoice numbers. Standalone product credits display Credit rather than
+Purchase; accounting event kinds and amounts remain unchanged. The same source
+references drive table search, sorting, details and CSV. It groups
 current journal lines and computes running payable from Accounts Payable lines
 before date/type/text filtering. Debit/credit details and journal links use current
 source-linked accounting data. Full journal history remains available in accounting. Pay/Add Credit and mapped source edit/delete actions still write
 the original documents. Source refetches refresh the accounting view. Unconnected
 suppliers show an import/setup notice; existing source tables remain in use.
+
+`scripts/audit-distributor-source-accounts.mjs` requires explicit company and report
+arguments and runs in a repeatable-read, read-only transaction. It checks positive
+PO headers (including separately posted unassigned POs), every distributor payment,
+current source journals, all mapped accounting lines, distributor balances, unlinked
+entries and the actual API reference query. It saves source/posted evidence and
+issues without changing data or database schemas.
 
 `components/Distributor/Accounting.vue` is embedded in Settings → Account → Purchase
 for the selected distributor's company-scoped account choices, import preview,

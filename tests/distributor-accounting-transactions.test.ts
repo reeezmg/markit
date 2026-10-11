@@ -22,4 +22,15 @@ assert.deepEqual(distributorAccountingTransactions({ledger:[line('reverse','DEBI
 assert.deepEqual(distributorAccountingTransactions({ledger:[line('purchase','CREDIT',100)],sources:[{journal_id:'purchase',source_key:'purchase:po',distributor_id:'supplier-a'}],events:[{source_key:'purchase:po',kind:'PURCHASE',distributor_id:'supplier-b'}]}),[],'Source must belong to the matching supplier');
 const opening = distributorAccountingTransactions({ledger:[line('opening','CREDIT',1000)],sources:[{journal_id:'opening',source_key:'opening'}],events:[{source_key:'opening',kind:'OPENING'}]});
 assert.equal(opening[0].due,1000);assert.equal(opening[0].type,'OPENING');
+const referenced = distributorAccountingTransactions({...data,
+  ledger: data.ledger.map(l=>({...l,entry_number:`DIST-${l.id}`,reference_number:'Supplier invoice'})),
+  events:[{source_key:'purchase:po',kind:'PURCHASE',reference:'Supplier invoice',source_reference:'PO-218'},
+    {source_key:'payment:dp',kind:'PAYMENT',source_reference:'DP-27'}],
+});
+assert.deepEqual(referenced.map(r=>r.reference),['PO-218','DP-27'],'Source numbers override journal and supplier invoice references');
+const credit = distributorAccountingTransactions({ledger:[line('credit','CREDIT',34500)],
+  sources:[{journal_id:'credit',source_key:'credit:dc'}],
+  events:[{source_key:'credit:dc',kind:'PURCHASE',source_kind:'CREDIT',source_reference:'DC-4'}]});
+assert.equal(credit[0].reference,'DC-4');assert.equal(credit[0].type,'CREDIT');assert.equal(credit[0].due,34500);
+assert.equal(rows[0].reference,'purchase:po','Missing references fall back to the source key, never DIST');
 console.log('Current source transactions passed: grouping, running due, edited purchases, deleted/unlinked sources, reversal exclusion, supplier isolation and opening due.');
