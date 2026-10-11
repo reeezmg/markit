@@ -26,7 +26,17 @@
           class="w-44"
         />
         <USelect v-model="statusFilter" :options="statusFilters" class="w-36" />
+        <label class="text-xs text-gray-500">From
+          <UInput v-model="ledgerFrom" type="date" aria-label="Accounts from date" :max="ledgerTo || undefined" />
+        </label>
+        <label class="text-xs text-gray-500">To
+          <UInput v-model="ledgerTo" type="date" aria-label="Accounts to date" :min="ledgerFrom || undefined" />
+        </label>
+        <UButton v-if="ledgerFrom || ledgerTo" color="gray" variant="soft" @click="ledgerFrom = ''; ledgerTo = ''">Clear dates</UButton>
       </div>
+      <p v-if="ledgerFrom || ledgerTo" class="px-3 py-2 text-xs text-gray-500">
+        Account balances show movement in the selected period. Ledger closing balances include earlier transactions.
+      </p>
 
       <div class="grid min-h-[560px] lg:grid-cols-[minmax(360px,42%)_1fr]">
         <div class="border-r border-gray-200 dark:border-gray-700">
@@ -163,7 +173,7 @@
               </dd>
             </div>
             <div>
-              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Current Balance</dt>
+              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">{{ ledgerFrom || ledgerTo ? 'Period Balance' : 'Current Balance' }}</dt>
               <dd class="mt-1 text-lg font-semibold">
                 {{ money(selected.balance) }}
               </dd>
@@ -220,11 +230,6 @@
 
             <div class="mt-6">
               <h4 class="text-lg font-semibold">Recent Transactions</h4>
-              <div class="flex flex-wrap gap-2 mt-3">
-                <UInput v-model="ledgerFrom" type="date" aria-label="Ledger from date" />
-                <UInput v-model="ledgerTo" type="date" aria-label="Ledger to date" />
-                <UButton color="gray" @click="ledgerPage = 1; loadLedger(selected.id)">Apply dates</UButton>
-              </div>
             </div>
             <div class="mt-3 overflow-x-auto">
               <table class="w-full min-w-[760px] text-sm">
@@ -446,6 +451,11 @@ import { computed, onMounted, reactive, ref, watch } from "vue";
 const api = useAccountantApi();
 const baseCurrency = ref("INR");
 const ledgerPage = ref(1), ledgerFrom = ref(''), ledgerTo = ref('');
+const dateQuery = computed(() => ({
+  ...(ledgerFrom.value ? { from: ledgerFrom.value } : {}),
+  ...(ledgerTo.value ? { to: ledgerTo.value } : {}),
+}));
+let ledgerRequest = 0, accountsRequest = 0;
 
 type Account = {
   id: string;
@@ -666,15 +676,19 @@ function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-IN");
 }
 async function loadLedger(id: string) {
+  const request = ++ledgerRequest;
   if (!id) {
     ledger.value = null;
+    ledgerLoading.value = false;
     return;
   }
   ledgerLoading.value = true;
   try {
-    ledger.value = await api.get(`/accounting-accounts/${id}/ledger`, { query: { page: ledgerPage.value,
-      ...(ledgerFrom.value ? { from: ledgerFrom.value } : {}), ...(ledgerTo.value ? { to: ledgerTo.value } : {}) } });
+    const result = await api.get(`/accounting-accounts/${id}/ledger`, { query: { page: ledgerPage.value, ...dateQuery.value } });
+    if (request !== ledgerRequest) return;
+    ledger.value = result;
   } catch (e: any) {
+    if (request !== ledgerRequest) return;
     ledger.value = null;
     toast.add({
       title: "Could not load account ledger",
@@ -682,7 +696,7 @@ async function loadLedger(id: string) {
       color: "red",
     });
   } finally {
-    ledgerLoading.value = false;
+    if (request === ledgerRequest) ledgerLoading.value = false;
   }
 }
 function addDepth(rows: Account[]) {
@@ -707,9 +721,11 @@ function addDepth(rows: Account[]) {
     );
 }
 async function load() {
+  const request = ++accountsRequest;
   loading.value = true;
   try {
-    const result = await api.get<{ data: Account[]; baseCurrency: string }>("/accounting-accounts");
+    const result = await api.get<{ data: Account[]; baseCurrency: string }>("/accounting-accounts", { query: dateQuery.value });
+    if (request !== accountsRequest) return;
     baseCurrency.value = result.baseCurrency;
     accounts.value = addDepth(result.data);
     if (
@@ -718,13 +734,14 @@ async function load() {
     )
       selectedId.value = accounts.value[0]?.id || "";
   } catch (e: any) {
+    if (request !== accountsRequest) return;
     toast.add({
       title: "Could not load accounts",
       description: e.message,
       color: "red",
     });
   } finally {
-    loading.value = false;
+    if (request === accountsRequest) loading.value = false;
   }
 }
 function openCreate() {
@@ -839,5 +856,13 @@ watch(
   },
 );
 watch(selectedId, (id) => { ledgerPage.value = 1; loadLedger(id); }, { immediate: true });
+watch([ledgerFrom, ledgerTo], () => {
+  if (ledgerFrom.value && ledgerTo.value && ledgerFrom.value > ledgerTo.value) {
+    return toast.add({ title: 'From date cannot be after to date', color: 'red' });
+  }
+  ledgerPage.value = 1;
+  load();
+  loadLedger(selectedId.value);
+});
 onMounted(load);
 </script>

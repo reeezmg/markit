@@ -1,4 +1,5 @@
 import { baseAmount, baseCurrencyTotals } from './reporting';
+import { journalDateRange } from './date-range';
 import { z } from 'zod';
 import { Router, asyncHandler, badRequest, notFound, requireAuth, rbac } from './router';
 import { accountantPrisma as prisma, logActivity, context } from './context';
@@ -416,8 +417,11 @@ accountingAccountRouter.get(
           .enum(["ASSET", "LIABILITY", "EQUITY", "INCOME", "EXPENSE"])
           .optional(),
         status: z.enum(["ACTIVE", "INACTIVE"]).optional(),
+        from: z.string().optional(),
+        to: z.string().optional(),
       })
       .parse(req.query);
+    const journalDate = journalDateRange(query.from, query.to);
     const data = await prisma.accountingAccount.findMany({
       where: {
         ...(query.category ? { category: query.category } : {}),
@@ -439,7 +443,7 @@ accountingAccountRouter.get(
         by: ["accountId", "side"],
         where: {
           deletedAt: null,
-          journal: { status: "PUBLISHED", deletedAt: null },
+          journal: { status: "PUBLISHED", deletedAt: null, ...(journalDate ? { journalDate } : {}) },
         },
         _sum: { amount: true },
       }),
@@ -487,6 +491,7 @@ accountingAccountRouter.get(
         to: z.string().optional(),
       })
       .parse(req.query);
+    const journalDate = journalDateRange(query.from, query.to);
     const account = await prisma.accountingAccount.findFirst({ where: { id } });
     if (!account) throw notFound("Account");
     const where: any = {
@@ -495,16 +500,7 @@ accountingAccountRouter.get(
       journal: {
         status: "PUBLISHED",
         deletedAt: null,
-        ...(query.from || query.to
-          ? {
-              journalDate: {
-                ...(query.from ? { gte: new Date(query.from) } : {}),
-                ...(query.to
-                  ? { lte: new Date(`${query.to}T23:59:59.999Z`) }
-                  : {}),
-              },
-            }
-          : {}),
+        ...(journalDate ? { journalDate } : {}),
       },
     };
     const company = await prisma.company.findUnique({ where: { id: account.companyId } });
@@ -534,7 +530,7 @@ accountingAccountRouter.get(
       prisma.manualJournalLine.count({ where }),
       baseCurrencyTotals({
         by: ["side"],
-        where: { ...where, journal: { ...where.journal, journalDate: query.to ? { lte: new Date(`${query.to}T23:59:59.999Z`) } : undefined } },
+        where: { ...where, journal: { ...where.journal, journalDate: journalDate?.lte ? { lte: journalDate.lte } : undefined } },
         _sum: { amount: true },
       }),
       skip

@@ -508,6 +508,14 @@ creates a disposable schema.
   exchange rate; original journal lines retain entered amounts/currency. Exchange
   conversion must also balance after cent rounding. Ledger dates carry forward
   earlier opening/movement, and the chart provides 50-row ledger pagination.
+  Chart From/To controls automatically refresh both account period balances and
+  the selected account's transaction rows, resetting pagination to page one.
+  Clear dates restores all-time balances. Account period balances are net movement
+  within the range; ledger closing/running balances carry earlier activity forward.
+  Both account-list and ledger endpoints accept date-only `from`/`to` filters,
+  include the entire end day and reject invalid or reversed ranges.
+  `node tests/accountant-date-filter.test.mjs` verifies handlers and page refresh
+  without database writes.
 - Account-editor and opening-balance-screen writes share one `OPENING_BALANCE`
   journal per account. Opening values are entered in company base currency and
   offset against `Opening Balance Adjustments`. Used accounts cannot be deleted;
