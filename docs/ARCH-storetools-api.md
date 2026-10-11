@@ -392,7 +392,7 @@ Dropdown option loaders for filter UIs. All require `useAuthSession`.
 | `products/by-ids` | POST | session | Raw SQL product list by `{ ids }` (brand/category/subcategory + variants + items incl. `initialQty`). Replaces `useFindManyProduct` (draft table) |
 | `products/delete` | POST | session | Raw SQL product delete `{ id }` (company-scoped; variants/items cascade). Replaces `useDeleteProduct` |
 | `products/category-tax` | GET | session | Category tax fields `?id=` for variant tax recalc. Replaces `useFindUniqueCategory` |
-| `products/save-batch` | POST | session | **Deferred batch save** (one txn): all staged products + variants + items (batched multi-row), optional new PO (`po`) or link to existing (`poId`), PO-linked credit/payment. Returns created products with trigger barcodes. **O(1) round-trips regardless of product count.** Used by the staged add-products flow |
+| `products/save-batch` | POST | session | **Deferred batch save** (one txn): all staged products + variants + items (batched multi-row), optional new PO (`po`) or link to existing (`poId`), PO header purchase source and optional numbered payment; no PO-linked DC. Returns created products with trigger barcodes. **O(1) round-trips regardless of product count.** Used by the staged add-products flow |
 
 ---
 
@@ -401,8 +401,8 @@ Dropdown option loaders for filter UIs. All require `useAuthSession`.
 | Route | Method | Description |
 |---|---|---|
 | `purchaseorder/create` | POST | Creates empty `PurchaseOrder` for session company. Returns `{ id }`. Used by distributor/PO flows that route to `/products/purchase?poId=...`; `/products/add` no longer calls it up front. **Bug:** `console.log('res', res)` |
-| `purchaseorder/save` | POST (session) | Raw SQL atomic PO create: increment `companies.purchase_counter` (number = counter-1; the `assign_purchase_order_number` trigger no-ops since the number is preset), link `productIds`, create PO-linked `DistributorCredit` (CREDIT) or `DistributorPayment`. No money_transaction (no cash/bank ledger cascade). Replaces add.vue's `handleSaveWithPO` ZenStack chain |
-| `purchaseorder/update` | POST (session) | Raw SQL atomic PO edit: the 6-branch credit/payment transition matrix (create/delete/update keyed by `purchase_order_id`) + PO row update. Replaces `syncEditedPurchasePayment`. Existing same-supplier purchase accounting is updated in place by `purchase-accounting-update.ts`, preserving journal identity and auditing its previous values before commit; the deferred trigger sees the synchronized signature. |
+| `purchaseorder/save` | POST (session) | Raw SQL atomic PO create: increment `companies.purchase_counter` (number = counter-1; the `assign_purchase_order_number` trigger no-ops since the number is preset), link `productIds`, register the PO header as purchase source. Credit POs create no DC; explicitly paid POs create one numbered DP. Replaces add.vue's `handleSaveWithPO` ZenStack chain |
+| `purchaseorder/update` | POST (session) | Raw SQL atomic PO edit: PO row/source update preserving actual payments and standalone credits. Replaces `syncEditedPurchasePayment`. Existing same-supplier purchase accounting is updated in place by `purchase-accounting-update.ts`, preserving journal identity and auditing its previous values before commit; the deferred trigger sees the synchronized signature. |
 | `purchaseorder/[id]` | GET (session) | Raw SQL PO read (PO + products + variants + items incl. `initialQty`). Replaces `useFindUniquePurchaseOrder` |
 
 ---
@@ -424,11 +424,11 @@ Analytics and reporting endpoints. All auth via `useAuthSession`.
 | `report/generate-sales.excel` | GET | Excel export of sales data. Cleanup sessions use original bill grand total/subtotal where available |
 | `report/generate-profit.pdf` | GET | Profit summary PDF: Sales, COGS, Profit, Total Expense, Net Profit. Simple 5-row table. Returns `application/pdf` |
 | `report/gstr1` | GET | GSTR-1 (outward supplies). Sources from `bills + entries` filtered to `b.deleted=false`, `b.payment_status IN (PAID,PENDING)`, `b.is_markit=false`. Returns kpi + rate-wise + HSN summary. |
-| `report/gstr3b` | GET | GSTR-3B (summary return). Outward from `bills/entries` (split into `taxable` vs `nil` by tax > 0). **Table 4 (ITC)** sources from `distributor_credits` where `money_transaction_id IS NULL`, joined to `purchase_orders → products → variants → items` for taxable+tax breakdown (only `v.tax > 0`). AMOUNT-type credits are excluded (cash inflows, not goods inward). |
-| `report/gstr2b` | GET | GSTR-2B (inward supplies / ITC). Source: `distributor_credits` where `money_transaction_id IS NULL`. PO-linked credits join to `products → variants → items` for per-tax-rate breakdown (taxable = `initial_qty * p_price`, tax = same × `v.tax/100`). Manual credits (no PO) are included as flat 0%-tax taxable rows. Aggregation done in JS into `{ kpi, rateSummary, distributorSummary }`. |
+| `report/gstr3b` | GET | GSTR-3B summary. Outward values use bill sources. Table 4 ITC reads positive purchase orders directly through company-scoped product/variant/item joins, using the PO date once per order. Existing per-item tax and `v.tax > 0` rules remain. |
+| `report/gstr2b` | GET | GSTR-2B inward supplies. Positive POs join directly to company-scoped products/variants/items once per order, using the PO date/supplier. Standalone product credits are included at 0% tax; received-money credits are excluded. Returns kpi, rateSummary and distributorSummary. |
 | `report/generate-gstr1.excel` | GET | Excel export of GSTR-1. |
 | `report/generate-gstr3b.excel` | GET | Excel export of GSTR-3B. Same Table 4 ITC source change as `gstr3b.get.ts`. |
-| `report/generate-gstr2b.excel` | GET | Excel export of GSTR-2B. Same `distributor_credits` + items source as `gstr2b.get.ts`; writes Summary / Rate-wise ITC / Distributor-wise sheets. |
+| `report/generate-gstr2b.excel` | GET | Excel export of GSTR-2B. Same purchase orders plus standalone product credits source as `gstr2b.get.ts`; writes Summary / Rate-wise ITC / Distributor-wise sheets. |
 
 ---
 

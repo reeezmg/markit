@@ -1,5 +1,6 @@
 import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
 import { updatePurchaseAccounting } from '../../utils/purchase-accounting-update';
+import { createPurchaseOrderPayment } from '../../utils/purchase-order-source';
 import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
@@ -10,8 +11,8 @@ import { recalculatePurchaseOrderTotals } from '~/server/utils/purchase-order-to
 // Atomic batch save for the deferred add-products flow: the client stages N
 // products locally (variable + localStorage) and calls this once on Save.
 // Everything happens in ONE transaction — all products + variants + items in
-// batched multi-row inserts, plus optional purchase order + PO-linked
-// credit/payment. Either the whole batch commits (client then resets staged
+// batched multi-row inserts, plus optional purchase order + actual payment.
+// Credit POs do not create DC records. Either the whole batch commits (client then resets staged
 // products) or it rolls back (client keeps them as-is).
 //
 // Body: {
@@ -184,25 +185,9 @@ export default defineEventHandler(async (event) => {
         returnedItems = itemsRes.rows
       }
 
-      // 3) PO-linked credit/payment (no money_transaction → no cash/bank ledger cascade)
-      if (po && po.paymentType && po.distributorId) {
-        if (po.paymentType === 'CREDIT') {
-          await client.query(
-            `INSERT INTO distributor_credits (id, created_at, amount, "billNo", distributor_id, company_id, purchase_order_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [crypto.randomUUID(), createdAtDate, po.totalAmount || 0, po.billNo || null, po.distributorId, companyId, poId],
-          )
-        } else {
-          await client.query(
-            `INSERT INTO distributor_payments (id, created_at, amount, payment_type, distributor_id, company_id, purchase_order_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [crypto.randomUUID(), createdAtDate, po.totalAmount || 0, po.paymentType, po.distributorId, companyId, poId],
-          )
-        }
-      }
-
       if (poId) {
         await recalculatePurchaseOrderTotals(client, { companyId, poId })
+        if (po) await createPurchaseOrderPayment(client, companyId, poId)
       }
 
       // 4) read back product names; variant/item rows already came from INSERT ... RETURNING.

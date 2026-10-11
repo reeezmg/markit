@@ -76,14 +76,18 @@ the source, revision and previous/new journal IDs. New purchases, supplier chang
 source removal and non-purchase transactions still use native posting. Direct SQL or
 generic model writes bypassing these edit APIs retain native reversal behavior.
 
-Purchase credits linked to the same PO are grouped by company/distributor. Their
-actual amounts and distributor ownership take precedence over inconsistent historical
-PO headers; the preview lists mismatches. A paid PO with linked payment(s) and no
-credit gets a purchase-side journal. This is disclosed as a difference from legacy
-due, whose calculation only sums credits less payments plus opening due. A PO without
-a credit or payment does not post. PurchaseOrder.tax is a percentage: input tax is
+Purchase orders are the purchase source, for both Credit and paid purchases. Saving
+a Credit PO creates no DistributorCredit. `server/utils/purchase-order-source.ts`
+registers PO-header authority in the existing accounting audit mechanism inside the
+source transaction; the installed deferred posting then reads the PO directly.
+This uses data writes only, without runtime schema/view/trigger changes. PO-linked
+credit records were removed with a backup; standalone Add Credit records remain.
+Where a PO previously inferred its supplier solely from those credits, the existing
+source supplier was carried onto the PO before deleting them.
+Distributor totals and statements add positive PO totals and standalone credits,
+then subtract recorded payments/returns and include the saved opening due. The
+main Accounts view still resolves current source journal pointers. PurchaseOrder.tax is a percentage: input tax is
 computed from subtotal less percentage/fixed discount, matching purchase totals.
-When credited amount disagrees with the PO, no unsupported tax split is inferred.
 Standalone product credits debit Stock; amount credits debit the mapped cash/bank.
 Payments debit Payable and credit cash/bank; returns debit Payable and credit stock
 and recorded return tax. Opening due offsets the selected opening account; a missing
@@ -98,7 +102,10 @@ and new native settlement journals; legacy ledger rows are no longer rebuilt. De
 direction changes that would separate a connected credit from its money transaction;
 direct deletion requires removing the credit first. Purchase editing uses `/api/purchaseorder/update`;
 the server reads the stored payment method and rejects unsafe payment-method changes
-with existing settlements. Return deletion uses `DELETE /api/purchasereturn/:id`,
+with existing settlements. PO/product recalculation never resets payment amounts.
+An explicitly paid new PO creates one numbered DP after its total is finalized;
+an existing payment/allocation prevents an extra payment. Generic direct and nested
+PO-credit links are rejected by `organizationModelScope.ts`. Return deletion uses `DELETE /api/purchasereturn/:id`,
 restores quantities and removes return/payment rows atomically, triggering reversal.
 
 Apply with `npm run db:distributor-accounting`. The explicit-company import CLI is
@@ -183,7 +190,7 @@ Fetches `DistributorCompany` records with distributor info + purchase orders + c
     - Row taxonomy (mapped client-side in `distributors` computed):
       | Source row | Condition | Type label | No | Debit | Credit |
       |---|---|---|---|---|---|
-      | `DistributorCredit` | `purchaseOrderId` set | `PURCHASE` | `PO-{po.purchaseOrderNo}` | – | `amount` |
+      | `PurchaseOrder` | positive total | `PURCHASE` | `PO-{po.purchaseOrderNo}` | – | `totalAmount` |
       | `DistributorCredit` | no `purchaseOrderId` | `CREDIT` | `DC-{creditNo}` | – | `amount` |
       | `DistributorPayment` | `paymentType !== 'RETURN'` | `PAYMENT` | `DP-{paymentNo}` | `amount` | – |
       | `DistributorPayment` | `paymentType === 'RETURN'` (linked via `purchaseReturnId`) | `PURCHASE RETURN` | `PR-{returnNo}` (resolved via `returnMap` built from `purchaseReturns`) | `amount` | – |
@@ -201,7 +208,7 @@ Fetches `DistributorCompany` records with distributor info + purchase orders + c
 - **Delete:**
   - PO → `useDeletePurchaseOrder`.
   - Distributor → `useDeleteDistributorCompany`.
-  - PURCHASE/CREDIT row → `useDeleteDistributorCredit`; if the credit has `moneyTransactionId`, also call `useDeleteMoneyTransaction` (application-layer cascade — schema FK is `onDelete: SetNull` on the DistributorCredit side).
+  - PURCHASE row deletes its PO through the existing PO delete action; standalone CREDIT rows use the atomic distributor credit API.
   - PAYMENT row → `useDeleteDistributorPayment`.
   - PURCHASE RETURN row → `useDeletePurchaseReturn` (handled in the dedicated branch of `transactionAction` for `paymentType === 'RETURN'`).
 - **Main-table row menu (`mainAction`):** Edit · Pay · Add Credit · Purchase Return · **Download Transactions** (new — calls `downloadAllTransactions(row)` which hits `/api/downloads/distributor-credits.pdf` with no `startDate`/`endDate`/`type` so the endpoint returns the full all-time ledger) · Delete.

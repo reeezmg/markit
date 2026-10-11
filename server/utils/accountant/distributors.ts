@@ -38,7 +38,8 @@ export async function distributorAccountingPreview(id: string) {
     LEFT JOIN distributor_credits dc ON dc.company_id=e.company_id AND dc.distributor_id=e.distributor_id AND e.source_key='credit:'||dc.id
     WHERE e.company_id=$1 AND e.distributor_id=$2 ORDER BY e.event_date,e.source_key`,companyId,id);
   const [legacy] = await query(`SELECT COALESCE(opening_due,0)::numeric
-    +COALESCE((SELECT sum(amount) FROM distributor_credits WHERE company_id=$1 AND distributor_id=$2),0)::numeric
+    +COALESCE((SELECT sum(total_amount) FROM purchase_orders WHERE company_id=$1 AND distributor_id=$2 AND total_amount>0),0)::numeric
+    +COALESCE((SELECT sum(amount) FROM distributor_credits WHERE company_id=$1 AND distributor_id=$2 AND purchase_order_id IS NULL),0)::numeric
     -COALESCE((SELECT sum(amount) FROM distributor_payments WHERE company_id=$1 AND distributor_id=$2),0)::numeric AS balance
     FROM distributor_companies WHERE company_id=$1 AND distributor_id=$2`,companyId,id);
   const sources = await query('SELECT source_key,journal_id,revision,accounts FROM accountant_v2_distributor_sources WHERE company_id=$1 AND distributor_id=$2',companyId,id);
@@ -64,7 +65,7 @@ export async function distributorAccountingPreview(id: string) {
     FROM distributor_credits c JOIN purchase_orders p ON p.id=c.purchase_order_id AND p.company_id=c.company_id
     WHERE c.company_id=$1 AND c.distributor_id=$2 GROUP BY p.id,p.purchase_order_no,p.total_amount,p.distributor_id,c.distributor_id
     HAVING p.distributor_id<>c.distributor_id OR round(sum(c.amount)::numeric,2)<>round(p.total_amount::numeric,2)`,companyId,id);
-  const warnings=differences.map((d:any)=>`PO-${d.purchase_order_no}: legacy credit ${d.credited}; purchase total ${d.total_amount}${d.different_supplier?'; distributor differs':''}. Imported using the legacy credit.`);
+  const warnings=differences.map((d:any)=>`PO-${d.purchase_order_no}: obsolete linked credit ${d.credited}; purchase source ${d.total_amount}${d.different_supplier?'; distributor differs':''}. Accounting uses the purchase order.`);
   const suggestedMappings=Object.fromEntries(mappings.map((m:any)=>[m.role,m.account_id]));
   if (!sources.some((source:any)=>source.source_key==='opening' && Object.keys(source.accounts || {}).length)) {
     const [saved]=await query(`SELECT "after" FROM accountant_v2_accountant_audit WHERE company_id=$1 AND resource='account-defaults' AND action='configured' AND "resourceId"='purchase' AND deleted_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 1`,companyId);
@@ -73,7 +74,7 @@ export async function distributorAccountingPreview(id: string) {
   }
   return { distributor, enabled: Boolean(settings?.enabled), mappings: suggestedMappings,
     accounts, banks, requiredRoles: [...required], events, sources, ledger, errors, warnings,
-    legacyBalance: Number(legacy.balance), expectedBalance, postedBalance,
+    sourceBalance: Number(legacy.balance), legacyBalance: Number(legacy.balance), expectedBalance, postedBalance,
     legacyDifference: Math.round((expectedBalance-Number(legacy.balance))*100)/100,
     unpostedCount: events.filter((e:any)=>!sources.some((s:any)=>s.source_key===e.source_key)).length };
 }

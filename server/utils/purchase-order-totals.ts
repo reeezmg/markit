@@ -1,4 +1,5 @@
 import { updatePurchaseAccounting } from './purchase-accounting-update';
+import { ensurePurchaseOrderSource } from './purchase-order-source';
 
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
@@ -44,35 +45,8 @@ export async function recalculatePurchaseOrderTotals(
     [input.poId, input.companyId, subtotal, total],
   )
 
-  if (po.payment_type === 'CREDIT') {
-    await client.query(
-      `UPDATE distributor_credits SET amount = $3
-       WHERE purchase_order_id = $1 AND company_id = $2`,
-      [input.poId, input.companyId, total],
-    )
-  } else if (po.payment_type) {
-    // A normal PO creates one full-payment row. If later payment history contains
-    // multiple rows, preserve those real partial payments instead of multiplying
-    // the new order total across every row.
-    const payments = await client.query(
-      `SELECT id, payment_type, created_at, remarks
-       FROM distributor_payments
-       WHERE purchase_order_id = $1 AND company_id = $2
-       ORDER BY created_at, id
-       FOR UPDATE`,
-      [input.poId, input.companyId],
-    )
-    if (payments.rows.length === 1) {
-      const payment = payments.rows[0]
-      await client.query(
-        `UPDATE distributor_payments SET amount = $3
-         WHERE id = $1 AND company_id = $2`,
-        [payment.id, input.companyId, total],
-      )
-
-    }
-  }
-
+  await ensurePurchaseOrderSource(client, input.companyId, input.poId)
+  // Purchase totals are independent of actual payments and standalone credits.
   await updatePurchaseAccounting(client, input.companyId, input.poId)
   return { subtotalAmount: subtotal, totalAmount: total }
 }

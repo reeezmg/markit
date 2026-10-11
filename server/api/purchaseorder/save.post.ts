@@ -1,4 +1,5 @@
 import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
+import { ensurePurchaseOrderSource, createPurchaseOrderPayment } from '../../utils/purchase-order-source';
 import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
@@ -9,9 +10,8 @@ import { pool } from '~/server/db'
 // Raw-SQL atomic replacement for add.vue's handleSaveWithPO (create flow):
 // increment purchase_counter, create the PO (app-owned number = counter-1, matching
 // the existing flow — the assign_purchase_order_number trigger no-ops because the
-// number is already set), link draft products, and create the PO-linked
-// DistributorCredit (CREDIT) or DistributorPayment (other types). PO-linked rows
-// carry no money_transaction, so there is no cash/bank ledger cascade here.
+// number is already set), link draft products, and post the PO header as purchase.
+// Credit POs create no DC. An explicitly paid PO creates one numbered DP.
 export default defineEventHandler(async (event) => {
   const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId
@@ -61,23 +61,8 @@ export default defineEventHandler(async (event) => {
         )
       }
 
-      if (paymentType && distributorId) {
-        if (paymentType === 'CREDIT') {
-          await client.query(
-            `INSERT INTO distributor_credits (id, created_at, amount, "billNo", distributor_id, company_id, purchase_order_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [crypto.randomUUID(), createdAtDate, totalAmount || 0, billNo || null, distributorId, companyId, poId],
-          )
-        } else {
-          const paymentId = crypto.randomUUID()
-          await client.query(
-            `INSERT INTO distributor_payments (id, created_at, amount, payment_type, distributor_id, company_id, purchase_order_id)
-             VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-            [paymentId, createdAtDate, totalAmount || 0, paymentType, distributorId, companyId, poId],
-          )
-
-        }
-      }
+      await ensurePurchaseOrderSource(client, companyId, poId)
+      await createPurchaseOrderPayment(client, companyId, poId)
 
       if (payment?.distributorId) {
         await selectDistributorAccounts(client,companyId,payment.distributorId,`purchase:${poId}`,payment.accountingAccounts);

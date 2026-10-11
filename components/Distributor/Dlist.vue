@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { distributorPurchaseTransactions } from '~/utils/distributor-purchase-transactions';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 
@@ -169,6 +170,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
         remarks:true,
         billNo:true,
         creditNo:true,
+        purchaseOrderId:true,
       }
     },
 
@@ -188,6 +190,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
           createdAt: true,
           paymentType: true,
           totalAmount: true,
+          purchaseOrderNo: true,
           products: {
             select: {
               id: true,
@@ -242,7 +245,7 @@ const getPurchaseOrderQty = (purchaseOrder) => {
 const distributors = computed(() => {
   return data.value?.map(distributor => {
 
-    const credits = (distributor.distributorCredits || []).map(c => ({
+    const credits = (distributor.distributorCredits || []).filter(c => !c.purchaseOrderId).map(c => ({
       ...c,
       createdAt: new Date(c.createdAt),
       type: 'CREDIT',
@@ -258,11 +261,12 @@ const distributors = computed(() => {
       class: 'bg-green-500/50 dark:bg-green-400/50'
     }));
 
-    const transactions = [...credits, ...payments].sort(
+    const purchases = distributorPurchaseTransactions(distributor.purchaseOrders || []);
+    const transactions = [...purchases, ...credits, ...payments].sort(
       (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
     );
 
-    const totalAmount = credits.reduce((sum, c) => sum + (c.amount || 0), 0);
+    const totalAmount = [...purchases, ...credits].reduce((sum, c) => sum + (c.amount || 0), 0);
     const paidAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     // ✅ ADD QTY PER PURCHASE ORDER

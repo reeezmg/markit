@@ -12,7 +12,7 @@ const reads = new Set(['findMany', 'findFirst', 'findUnique', 'findFirstOrThrow'
 const writes = new Set(['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert']);
 const legacyArchives = new Set(['AccountLedgerEntry', 'MoneyTransaction', 'AccountTransfer', 'Investment', 'BankAccount', 'CashAccount']);
 const archiveMutations = new Set([...writes, 'createManyAndReturn', 'updateManyAndReturn']);
-const financialSources = new Set(['Bill','Entry','Payment']);
+const financialSources = new Set(['Bill','Entry','Payment','DistributorCredit']);
 const archiveWriteDenied = () => createError({ statusCode: 410, statusMessage: 'Legacy Accounts is read-only. Use Accountant for new financial entries.' });
 const billFinanceFields = new Set(['paymentMethod','paymentStatus','splitPayments','grandTotal','subtotal','tax','discount','discountType','adjustment','couponValue','originalGrandTotal','originalSubtotal','originalDiscount','createdAt','paidAt','invoiceNumber','currency','accountId','account','clientId','client','creditUserId','creditUser','entries','payments','deleted','precedence','type','isMarkit','companyId','company']);
 const sourceWriteDenied = () => createError({statusCode:409,statusMessage:'Use the bill source API or dated credit receipts for financial changes'});
@@ -39,6 +39,12 @@ async function validateData(modelName: string, data: any, ids: string[], parentC
   if (legacyArchives.has(modelName)) throw archiveWriteDenied();
   if (modelName === 'Payment' || modelName === 'Entry') throw sourceWriteDenied();
   if (Array.isArray(data)) { for (const row of data) await validateData(modelName, row, ids, parentCompany, db); return; }
+  if (modelName === 'DistributorCredit') {
+    const poId = typeof data.purchaseOrderId === 'object' ? data.purchaseOrderId?.set : data.purchaseOrderId;
+    if (poId != null || (data.purchaseOrder && !data.purchaseOrder.disconnect)) {
+      throw createError({statusCode:409,statusMessage:'Purchase orders are their own source. Add Credit entries must be standalone.'});
+    }
+  }
   if (modelName === 'Bill' && Object.keys(data).some(k => billFinanceFields.has(k))) throw sourceWriteDenied();
   const linkedCompany = Object.values(data).flatMap((value: any) => Object.values(value?.connect ?? {}))
     .find((value: any) => value && typeof value === 'object' && typeof value.companyId === 'string') as any;
@@ -47,6 +53,10 @@ async function validateData(modelName: string, data: any, ids: string[], parentC
   for (const field of models.get(modelName)?.fields ?? []) {
     if (field.kind !== 'object' || !data[field.name]) continue;
     const relation = data[field.name];
+    if (modelName === 'PurchaseOrder' && field.type === 'DistributorCredit'
+      && ['create','createMany','connect','connectOrCreate','set','upsert'].some(operation => relation[operation])) {
+      throw createError({statusCode:409,statusMessage:'Purchase orders cannot create or link credits. Use standalone Add Credit.'});
+    }
     if (field.type === 'Bill' && ['create','createMany','upsert','connectOrCreate'].some(k=>relation[k])) throw sourceWriteDenied();
     if (['Bill','Entry','Payment'].includes(field.type) && ['connect','delete','deleteMany','disconnect','set'].some(k=>relation[k])) throw sourceWriteDenied();
     if (legacyArchives.has(field.type) && ['create', 'createMany', 'update', 'updateMany', 'upsert', 'connectOrCreate', 'delete', 'deleteMany'].some(operation => relation[operation])) throw archiveWriteDenied();

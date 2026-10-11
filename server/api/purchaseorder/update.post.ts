@@ -1,16 +1,15 @@
 import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
-import crypto from 'crypto'
 import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
 import { updatePurchaseAccounting } from '../../utils/purchase-accounting-update';
+import { ensurePurchaseOrderSource, createPurchaseOrderPayment } from '../../utils/purchase-order-source';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 
 
 // Raw-SQL atomic replacement for add.vue's saveEditedPurchaseInfo +
-// syncEditedPurchasePayment (PO edit flow). Mirrors the credit/payment transition
-// matrix exactly (create / delete / update many keyed by purchase_order_id) then
-// updates the PO row — all in one transaction.
+// syncEditedPurchasePayment (PO edit flow). The PO is the purchase source;
+// existing payments and standalone credits are preserved.
 export default defineEventHandler(async (event) => {
   const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId
@@ -21,55 +20,16 @@ export default defineEventHandler(async (event) => {
   if (!poId) throw createError({ statusCode: 400, statusMessage: 'Missing poId' })
 
   const {
-    paymentType = null, oldPaymentType = null, billNo = null, distributorId = null,
+    paymentType = null, billNo = null, distributorId = null,
     totalAmount = 0, subTotalAmount = 0, discount = 0, tax = 0, adjustment = 0, createdAt,
   } = payment
 
   const newType = paymentType || null
-  let oldType: string | null = null
-  const isNewCredit = newType === 'CREDIT'
-  let wasOldCredit = false
   const hasNew = newType !== null
-  let hasOld = false
   if (hasNew && !distributorId) throw createError({ statusCode: 400, statusMessage: 'Distributor is required for purchase payment' })
 
   const createdAtDate = createdAt ? new Date(createdAt) : new Date()
   const TRANSIENT_ERROR_CODES = ['40001', '40P01', '53300', '57P01', '55006', '08006', '08003', 'P1001']
-
-  const insertCredit = (client: any) => client.query(
-    `INSERT INTO distributor_credits (id, created_at, amount, "billNo", distributor_id, company_id, purchase_order_id)
-     VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-    [crypto.randomUUID(), createdAtDate, totalAmount || 0, billNo || null, distributorId, companyId, poId],
-  )
-  const insertPayment = async (client: any) => {
-    const paymentId = crypto.randomUUID()
-    await client.query(
-      `INSERT INTO distributor_payments (id, created_at, amount, payment_type, distributor_id, company_id, purchase_order_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7)`,
-      [paymentId, createdAtDate, totalAmount || 0, newType, distributorId, companyId, poId],
-    )
-
-  }
-
-  const deletePaymentsForPurchaseOrder = async (client: any) => {
-    const existing = await client.query(
-      `SELECT id FROM distributor_payments WHERE purchase_order_id = $1 AND company_id = $2`,
-      [poId, companyId],
-    )
-
-    await client.query(`DELETE FROM distributor_payments WHERE purchase_order_id = $1 AND company_id = $2`, [poId, companyId])
-  }
-
-  const updatePaymentsForPurchaseOrder = async (client: any) => {
-    const existing = await client.query(
-      `UPDATE distributor_payments
-       SET amount = $2, payment_type = $3, created_at = $4
-       WHERE purchase_order_id = $1 AND company_id = $5
-       RETURNING id`,
-      [poId, totalAmount || 0, newType, createdAtDate, companyId],
-    )
-
-  }
 
   async function runTransaction(attempt = 1): Promise<any> {
     const client = await pool.connect()
@@ -78,33 +38,12 @@ export default defineEventHandler(async (event) => {
       await lockCompanyRequest(event, client);
       const previous = (await client.query('SELECT * FROM purchase_orders WHERE id=$1 AND company_id=$2 FOR UPDATE', [poId,companyId])).rows[0];
       if (!previous) throw createError({statusCode:404,statusMessage:'Purchase order not found'});
-      oldType=previous.payment_type; wasOldCredit=oldType==='CREDIT'; hasOld=oldType!==null;
+      const oldType=previous.payment_type;
       const allocated=(await client.query('SELECT payment_id,amount FROM distributor_payment_allocations WHERE purchase_order_id=$1 AND company_id=$2',[poId,companyId])).rows;
       const payments=(await client.query('SELECT id,expense_id FROM distributor_payments WHERE company_id=$2 AND (purchase_order_id=$1 OR id=ANY($3::text[]))',[poId,companyId,allocated.map((a:any)=>a.payment_id)])).rows;
       if (allocated.length && Number(totalAmount) < allocated.reduce((sum:number,a:any)=>sum+Number(a.amount),0)) throw createError({statusCode:409,statusMessage:'Purchase total cannot be below its allocated payments. Edit payment allocations first.'});
       if (distributorId && previous.distributor_id && distributorId!==previous.distributor_id && payments.length) throw createError({statusCode:409,statusMessage:'This purchase has payments. Reverse its payments before changing distributor.'});
-      if (payments.length && (oldType!==newType || (oldType!=='CREDIT' && (payments.length>1 || payments.some((p:any)=>p.expense_id))))) throw createError({statusCode:409,statusMessage:'Edit payments separately before changing the payment method or a purchase with multiple settlements.'});
-
-      // --- payment transition matrix (keyed by purchase_order_id) ---
-      if (hasNew && !hasOld) {
-        if (isNewCredit) await insertCredit(client); else await insertPayment(client)
-      } else if (!hasNew && hasOld) {
-        if (wasOldCredit) await client.query(`DELETE FROM distributor_credits WHERE purchase_order_id = $1`, [poId])
-        else await deletePaymentsForPurchaseOrder(client)
-      } else if (isNewCredit && wasOldCredit) {
-        await client.query(
-          `UPDATE distributor_credits SET amount = $2, "billNo" = $3, created_at = $4, distributor_id=$5 WHERE purchase_order_id = $1 AND company_id=$6`,
-          [poId, totalAmount || 0, billNo || null, createdAtDate, distributorId, companyId],
-        )
-      } else if (!isNewCredit && wasOldCredit) {
-        await client.query(`DELETE FROM distributor_credits WHERE purchase_order_id = $1`, [poId])
-        if (hasNew) await insertPayment(client)
-      } else if (!isNewCredit && !wasOldCredit && hasNew) {
-        await updatePaymentsForPurchaseOrder(client)
-      } else if (isNewCredit && !wasOldCredit) {
-        await deletePaymentsForPurchaseOrder(client)
-        await insertCredit(client)
-      }
+      if (payments.length && oldType!==newType) throw createError({statusCode:409,statusMessage:'Edit payments separately before changing the purchase payment method.'});
 
       // --- PO row ---
       await client.query(
@@ -126,12 +65,12 @@ export default defineEventHandler(async (event) => {
         ],
       )
 
+      await ensurePurchaseOrderSource(client, companyId, poId)
+      const newPaymentId = newType && newType !== 'CREDIT' && !payments.length
+        ? await createPurchaseOrderPayment(client, companyId, poId) : null
       if (distributorId) {
         await selectDistributorAccounts(client,companyId,distributorId,`purchase:${poId}`,payment.accountingAccounts);
-        if (newType && newType!=='CREDIT') {
-          const rows=await client.query('SELECT id FROM distributor_payments WHERE company_id=$1 AND purchase_order_id=$2',[companyId,poId]);
-          for(const row of rows.rows) await selectDistributorAccounts(client,companyId,distributorId,`payment:${row.id}`,payment.accountingAccounts);
-        }
+        if (newPaymentId) await selectDistributorAccounts(client,companyId,distributorId,`payment:${newPaymentId}`,payment.accountingAccounts);
       }
       await updatePurchaseAccounting(client, companyId, poId)
       await client.query('COMMIT')

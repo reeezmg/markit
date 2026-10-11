@@ -11,6 +11,7 @@ export async function writeDistributorCredit(event:H3Event) {
   const companyId=session.data.companyId;
   const id=getRouterParam(event,'id') || randomUUID();
   const body=event.method==='DELETE'?{}:await readBody(event);
+  if (body.purchaseOrderId || body.purchaseOrder) throw createError({statusCode:409,statusMessage:'Add Credit is standalone. Record purchases through their purchase order.'});
   const client=await pool.connect();
   const invalid=(message:string)=>createError({statusCode:400,statusMessage:message});
   try {

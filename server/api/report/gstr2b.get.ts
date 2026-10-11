@@ -7,13 +7,12 @@ import { pool } from '~/server/db';
 /**
  * GSTR-2B — Inward supplies / Input Tax Credit (ITC).
  *
- * Source: `distributor_credits` where `money_transaction_id IS NULL`
- *   = product purchases (PO-linked or manual product credits).
+ * Source: purchase_orders plus standalone product credits.
  *   AMOUNT-type credits (linked to a MoneyTransaction) are excluded —
  *   those are cash inflows from distributors, not inward goods supplies.
  *
  * Tax breakdown:
- *   - PO-linked credits → sum (item.initial_qty * variant.p_price) per variant.tax rate.
+ *   - POs → sum (item.initial_qty * variant.p_price) per variant.tax rate.
  *   - Manual credits (no PO) → flat amount at 0% tax, treated as taxable_value
  *     (no item-level tax data exists on the credit row itself).
  */
@@ -32,20 +31,18 @@ export default defineEventHandler(async (event) => {
       [
         `
       SELECT
-        dc.id              AS credit_id,
-        dc.distributor_id, d.name AS distributor_name,
+        po.id              AS purchase_id,
+        po.distributor_id, d.name AS distributor_name,
         COALESCE(v.tax, 0) AS tax_rate,
         SUM(COALESCE(i.initial_qty, 0) * COALESCE(v.p_price, 0))                          AS taxable_value,
         SUM(COALESCE(i.initial_qty, 0) * COALESCE(v.p_price, 0) * COALESCE(v.tax, 0) / 100) AS tax_amount
-      FROM distributor_credits dc LEFT JOIN distributors d ON d.id=dc.distributor_id
-      JOIN purchase_orders po ON po.id = dc.purchase_order_id
-      JOIN products        p  ON p.purchaseorder_id = po.id
-      JOIN variants        v  ON v.product_id = p.id
-      JOIN items           i  ON i.variant_id = v.id
-      WHERE dc.company_id           = $1
-        AND dc.money_transaction_id IS NULL
-        AND dc.created_at           BETWEEN $2 AND $3
-      GROUP BY dc.id, dc.distributor_id, d.name, COALESCE(v.tax, 0)
+      FROM purchase_orders po LEFT JOIN distributors d ON d.id=po.distributor_id
+      JOIN products        p  ON p.purchaseorder_id = po.id AND p.company_id=po.company_id
+      JOIN variants        v  ON v.product_id = p.id AND v.company_id=p.company_id
+      JOIN items           i  ON i.variant_id = v.id AND i.company_id=v.company_id
+      WHERE po.company_id = $1 AND po.total_amount>0
+        AND po.created_at BETWEEN $2 AND $3
+      GROUP BY po.id, po.distributor_id, d.name, COALESCE(v.tax, 0)
       `,
         `
       SELECT
@@ -96,7 +93,7 @@ export default defineEventHandler(async (event) => {
       taxableValue: 0,
       taxAmount: 0,
     };
-    db.invoiceIds.add(r.credit_id);
+    db.invoiceIds.add(`purchase:${r.purchase_id}`);
     db.taxableValue += taxable;
     db.taxAmount += tax;
     distMap.set(distId, db);

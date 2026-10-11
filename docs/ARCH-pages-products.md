@@ -27,9 +27,9 @@ Company query composition uses `utils/companyWhere.ts` in both the generated-hoo
 - `server/api/products/by-ids.post.ts` — Raw SQL product list by id array (with brand/category/subcategory + variants + items incl. `initialQty`), replaces `useFindManyProduct` for the draft table
 - `server/api/products/delete.post.ts` — Raw SQL product delete (`{ id }`, company-scoped; variants/items cascade), replaces `useDeleteProduct`
 - The Products list (`pages/products/index.vue`) also uses this delete endpoint so removing a purchased product recalculates its PO and linked accounting. It sends the row's company, lets the server clean up media, and invalidates product/stock/purchase query caches.
-- `server/api/products/save-batch.post.ts` — **Deferred batch save** (one transaction): all staged products + variants + items (batched multi-row), optional new PO (`po`) or link to existing (`poId`), PO-linked credit/payment; uses `INSERT ... RETURNING` for variants/items so trigger barcodes are returned without extra variant/item readback queries. O(1) round-trips regardless of product count
-- `server/api/purchaseorder/save.post.ts` — Raw SQL atomic PO create (counter-1 numbering, link products, PO-linked credit/payment); replaces the `handleSaveWithPO` ZenStack chain
-- `server/api/purchaseorder/update.post.ts` — Raw SQL atomic PO edit: the 6-branch credit/payment transition matrix (keyed by `purchase_order_id`) + PO row update; replaces `syncEditedPurchasePayment`
+- `server/api/products/save-batch.post.ts` — **Deferred batch save** (one transaction): all staged products + variants + items (batched multi-row), optional new PO (`po`) or link to existing (`poId`), PO header purchase source and optional numbered payment; Credit POs create no DC; uses `INSERT ... RETURNING` for variants/items so trigger barcodes are returned without extra variant/item readback queries. O(1) round-trips regardless of product count
+- `server/api/purchaseorder/save.post.ts` — Raw SQL atomic PO create (counter-1 numbering, link products, PO header purchase source and optional numbered payment; Credit POs create no DC); replaces the `handleSaveWithPO` ZenStack chain
+- `server/api/purchaseorder/update.post.ts` — Raw SQL atomic PO edit: PO-header source updates that preserve recorded payments and standalone credits; replaces `syncEditedPurchasePayment`
 - `server/api/purchaseorder/[id].get.ts` — Raw SQL PO read (PO + products + variants + items), replaces `useFindUniquePurchaseOrder`
 - `scripts/bench-product.mjs` / `bench-po.mjs` / `bench-save-batch.mjs` — rollback integrity+timing harnesses (BEGIN…ROLLBACK; nothing persists)
 - `npm run test:product-stock` executes the actual product-handler item-upsert SQL against PostgreSQL in a rollback-only fixture. Covers purchase edits after sales, stale metadata saves, initial-only quantity changes and attempts to overwrite current/sold counters, overselling and supplier returns; it changes no schemas.
@@ -104,7 +104,7 @@ Multi-section form with purchase info at top.
 - `deliveryType` persisted to `localStorage` (key: `lastDeliveryType`) — restores last used on next open
 - Can create new distributor inline without leaving the page (ZenStack `useCreateDistributor`)
 - Discount: positive = percentage off, negative = flat deduction
-- `oldPaymentType` vs `paymentType` pattern: tracks the original payment type to manage distributor credit/payment adjustments on edit
+- `oldPaymentType` vs `paymentType` pattern: tracks the original payment type to reject unsafe changes with recorded payments; PO edits preserve payment amounts
 
 **Variant pricing logic (`Variants.vue`):**
 - `dprice` auto-defaults to `sprice` when first set (if user hasn't manually changed it)

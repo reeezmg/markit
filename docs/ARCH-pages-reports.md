@@ -140,8 +140,8 @@ Tabbed page: client is a thin wrapper that lazy-fetches each report via `$fetch`
 **Endpoints:** `/api/report/gstr1`, `/api/report/gstr3b`, `/api/report/gstr2b` (+ matching `generate-gstr*.excel`).
 
 **ITC sources (GSTR-2B + GSTR-3B Table 4):**
-- Pulled from `distributor_credits` where `money_transaction_id IS NULL` — i.e. **product credits only**. AMOUNT-type DistributorCredits (cash inflows from distributor) are excluded.
-- PO-linked credits → joined to `purchase_orders → products → variants → items` for per-item tax breakdown: `taxable_value = i.initial_qty * v.p_price`, `tax_amount = taxable_value * v.tax / 100`. Rate buckets group by `v.tax`.
+- Positive `purchase_orders` are joined directly to `products → variants → items`, once per PO regardless of payment method, using the PO date and supplier. Per-item tax breakdown remains `taxable_value = i.initial_qty * v.p_price`, `tax_amount = taxable_value * v.tax / 100`; rate buckets group by `v.tax`. Every item/product join is company-scoped.
+- Standalone product credits (`purchase_order_id IS NULL`, `money_transaction_id IS NULL`) remain included where described below. AMOUNT-type credits are excluded from inward goods supplies. Removed PO-linked credits are not required by these reports.
 - Manual product credits (no PO):
   - **GSTR-2B:** included as flat 0%-tax taxable rows (so the totals reflect them).
   - **GSTR-3B Table 4:** excluded (the SQL keeps the legacy `v.tax > 0` filter — zero-rated items don't generate ITC).

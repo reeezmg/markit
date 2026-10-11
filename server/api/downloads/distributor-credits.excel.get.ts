@@ -2,6 +2,7 @@ import { defineEventHandler, getQuery, createError, setHeader } from 'h3'
 import { pool } from '~/server/db'
 import { getReadCompanyId } from '~/server/utils/organizationReadScope'
 import ExcelJS from 'exceljs'
+import { distributorPurchasesAndCreditsSql, distributorSourceOpeningSql } from '../../utils/distributor-source-queries';
 
 type RowType = 'PURCHASE' | 'CREDIT' | 'PAYMENT' | 'PURCHASE RETURN'
 
@@ -48,18 +49,7 @@ export default defineEventHandler(async (event) => {
 
     /* ── CREDITS ── */
     const creditsRes = await client.query(
-      `SELECT
-         dc.credit_no,
-         dc.created_at,
-         dc.amount,
-         dc.remarks,
-         dc.purchase_order_id,
-         po.purchase_order_no
-       FROM distributor_credits dc
-       LEFT JOIN purchase_orders po ON po.id = dc.purchase_order_id
-       WHERE dc.company_id    = $1
-         AND dc.distributor_id = $2
-         AND dc.created_at    BETWEEN $3 AND $4`,
+      distributorPurchasesAndCreditsSql,
       [companyId, distributorId, startDate, endDate]
     )
 
@@ -121,11 +111,7 @@ export default defineEventHandler(async (event) => {
     let openingBalance = openingDueBase
     if (hasStart) {
       const before = await client.query(
-        `SELECT
-           COALESCE((SELECT SUM(amount) FROM distributor_credits
-                     WHERE company_id = $1 AND distributor_id = $2 AND created_at < $3), 0) AS credits_before,
-           COALESCE((SELECT SUM(amount) FROM distributor_payments
-                     WHERE company_id = $1 AND distributor_id = $2 AND created_at < $3), 0) AS payments_before`,
+        distributorSourceOpeningSql,
         [companyId, distributorId, startDate]
       )
       openingBalance = openingDueBase + Number(before.rows[0].credits_before) - Number(before.rows[0].payments_before)

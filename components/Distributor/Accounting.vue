@@ -72,7 +72,7 @@ watch(()=>[props.companyId,props.distributorId],()=>{data.value=null;if(open.val
         </div>
         <p class="text-xs text-gray-500">Changes apply to new transactions. Existing entries keep their original accounts. Tax is split only where the source document records a tax amount.</p>
         <div class="grid grid-cols-3 gap-3 text-sm">
-          <div class="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">Legacy due<strong class="block">{{ money(data.legacyBalance) }}</strong></div>
+          <div class="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">Source due<strong class="block">{{ money(data.sourceBalance) }}</strong></div>
           <div class="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">Expected payable<strong class="block">{{ money(data.expectedBalance) }}</strong></div>
           <div class="rounded-lg bg-gray-50 dark:bg-gray-800 p-3">Posted payable<strong class="block">{{ money(data.postedBalance) }}</strong></div>
         </div>

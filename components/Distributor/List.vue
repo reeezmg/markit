@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { distributorPurchaseTransactions } from '~/utils/distributor-purchase-transactions';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 
@@ -93,7 +94,9 @@ const action = (row:any) => [
     
 ];
 
-const subaction = (row:any) => [
+const subaction = (row:any) => row.type === 'PURCHASE'
+  ? [[{ label: 'Edit purchase', icon: 'i-heroicons-pencil-square-20-solid', click: () => router.push(`/products/purchase?poId=${row.purchaseOrderId}&isEdit=true`) }]]
+  : [
 
     [
         {
@@ -191,6 +194,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => {
         purchaseOrderId:true
       }
     },
+      purchaseOrders: { select: { id:true,createdAt:true,totalAmount:true,purchaseOrderNo:true,billNo:true } },
 
       distributorPayments:{
         select:{
@@ -222,7 +226,7 @@ onMounted(() => {
 
 const distributors = computed(() => {
   return data.value?.map(distributor => {
-    const credits = (distributor.distributorCredits || []).map(c => ({
+    const credits = (distributor.distributorCredits || []).filter(c => !c.purchaseOrderId).map(c => ({
       ...c,
       createdAt: new Date(c.createdAt),
       type: 'CREDIT',
@@ -239,11 +243,12 @@ const distributors = computed(() => {
        class: 'bg-green-500/50 dark:bg-green-400/50'
     }));
 
-    const transactions = [...credits, ...payments].sort(
+    const purchases = distributorPurchaseTransactions(distributor.purchaseOrders || []);
+    const transactions = [...purchases, ...credits, ...payments].sort(
       (a, b) => b.createdAt.getTime() - a.createdAt.getTime()
     );
 
-    const totalAmount = credits.reduce((sum, c) => sum + (c.amount || 0), 0);
+    const totalAmount = [...purchases, ...credits].reduce((sum, c) => sum + (c.amount || 0), 0);
     const paidAmount = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
 
     return {

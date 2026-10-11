@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { purchaseOrderPayments } from '~/utils/purchase-order-payments';
+import { distributorPurchaseTransactions } from '~/utils/distributor-purchase-transactions';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 
@@ -395,7 +396,7 @@ const purchaseOrderLineRows = (po: any) => {
 // ─── Computed rows ───
 const distributors = computed(() =>
   data.value?.map(d => {
-    const rawCredits = d.distributorCredits || []
+    const rawCredits = (d.distributorCredits || []).filter((c: any) => !c.purchaseOrderId)
     const rawPayments = d.distributorPayments || []
 
     const poMap = new Map((d.purchaseOrders || []).map((po: any) => [po.id, { poNo: po.purchaseOrderNo, billNo: po.billNo }]))
@@ -438,7 +439,8 @@ const distributors = computed(() =>
       }
     })
     const openingAmount = Number(d.openingDue || 0)
-    const earliestTxTime = Math.min(...[...credits, ...payments].map((t: any) => t.createdAt.getTime()), Date.now())
+    const purchases = distributorPurchaseTransactions(d.purchaseOrders || [])
+    const earliestTxTime = Math.min(...[...purchases, ...credits, ...payments].map((t: any) => t.createdAt.getTime()), Date.now())
     const openingRows = (d.openingDueDate || openingAmount !== 0)
       ? [{
           id: `__opening-${d.distributorId}__`,
@@ -453,7 +455,7 @@ const distributors = computed(() =>
         }]
       : []
     let runningDue = 0
-    const transactions = [...openingRows, ...credits, ...payments]
+    const transactions = [...openingRows, ...purchases, ...credits, ...payments]
       .sort((a: any, b: any) =>
         a.createdAt.getTime() - b.createdAt.getTime() || (a.isOpening ? -1 : b.isOpening ? 1 : 0)
       )
@@ -462,7 +464,7 @@ const distributors = computed(() =>
         return { ...transaction, due: runningDue }
       })
 
-    const totalAmount = rawCredits.reduce((s: number, c: any) => s + (c.amount || 0), 0)
+    const totalAmount = [...purchases, ...credits].reduce((s: number, c: any) => s + Number(c.credit || 0), 0)
     const paidAmount = rawPayments.reduce((s: number, p: any) => s + (p.amount || 0), 0)
     const returnAmount = rawPayments.filter((p: any) => p.paymentType === 'RETURN').reduce((s: number, p: any) => s + (p.amount || 0), 0)
     const purchaseOrders = (d.purchaseOrders || []).map((po: any) => ({
@@ -826,6 +828,10 @@ const confirmDeletePO = (row: any) => {
 }
 
 const confirmDeleteTransaction = (row: any) => {
+  if (row.type === 'PURCHASE') {
+    confirmDeletePO({ ...row, id: row.purchaseOrderId })
+    return
+  }
   const isCreditRow = row.type === 'CREDIT' || row.type === 'PURCHASE'
   const label = isCreditRow ? (row.no || row.billNo || row.id) : (row.no || row.paymentType || row.id)
   deletingRowIdentity.value = {
