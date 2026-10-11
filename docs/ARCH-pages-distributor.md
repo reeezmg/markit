@@ -124,8 +124,8 @@ Head-office admins default to the active head office plus active direct branches
 
 Payment creation from the payment and PO forms calls `/api/distributor/payments` with `createExpense: true`. This allocates payment/expense numbers and writes the linked source expense in one transaction. Payment edit/delete keeps that source synchronized; native supplier triggers post the payment once and suppress a duplicate ERP expense journal. No old account-ledger rows are created or rebuilt. `CompanySupplierField.vue` and purchase-order options follow the selected form company.
 
-The Distributor Payments form supports one payment allocated across multiple credit
-POs of the same supplier/company. `DistributorPayment.allocations` stores each PO
+The Distributor Payments form supports one payment allocated across multiple outstanding
+POs of the same supplier/company, regardless of the original payment method. `DistributorPayment.allocations` stores each PO
 and its portion of the payment in `distributor_payment_allocations`; the payment
 total and optional linked expense are stored once. Legacy `purchaseOrderId` remains
 for single-order clients, while allocated payments leave that field null. The
@@ -134,9 +134,15 @@ and due values combine legacy payments with allocation amounts, never the whole
 payment for each PO. A fully allocated payment clears the calculated due of fully
 covered orders without setting the manual `dueCleared` flag.
 
+`utils/purchase-order-payments.ts` calculates dues from the source total minus
+direct payments and per-PO allocations in cents. Increasing an already-paid PO's
+total preserves its original payment and exposes the remainder in both PO lists,
+details and payment options, regardless of its original payment method. Manual
+`dueCleared` remains respected; editing a payment excludes its existing portion.
+
 `server/utils/distributor-payment-save.ts` handles both create and edit atomically:
 positive cent-precision amounts, unique selected POs, total allocation equality,
-current unpaid credit-order limits, supplier/company ownership and transaction
+current unpaid order limits, supplier/company ownership and transaction
 locks. An empty allocation list unlinks orders; editing replaces allocations.
 Payment deletion cascades allocations, restoring those calculated dues. PO deletion
 is restricted while allocated, and PO edits cannot change its supplier/payment type
@@ -146,6 +152,18 @@ indexes/foreign keys were applied with Prisma `db push` on 2026-10-11 after a
 schema/data backup; existing payment and purchase-order data was preserved.
 `node tests/distributor-payment-allocations.test.mjs` runs allocation/API and Vue
 checks without a database.
+
+`node node_modules/tsx/dist/cli.mjs tests/purchase-payment-flow.integration.test.ts`
+exercises real product/PO/payment/credit/return handlers and installed accounting
+triggers in one rollback-only transaction on the existing schema. It covers both
+PO creation paths with Credit/Cash/Bank/UPI/Card/Cheque, edits preserving settlements
+and purchase journal IDs, multi-PO allocation/edit/unlink/delete and invalid-input
+rollback, standalone credits, supplier returns and stock after sales. Sales fixtures
+use the already-installed billing function to avoid the HTTP wrapper's schema
+bootstrap. No schema creation or migration runs. The report is saved under
+`artifacts/purchase-flow-regression/latest.json` in the workspace root.
+The `--remaining-due-only` option runs the focused paid-PO edit/settlement regression
+and writes `remaining-due.json` in the same directory.
 
 **Files:**
 - `pages/distributor/index.vue` — Distributor list with two-pane split layout (PO + credit tabs)
@@ -197,7 +215,7 @@ Fetches `DistributorCompany` records with distributor info + purchase orders + c
     - Row backgrounds (via `row.class` — same idiom as `pages/accounts/cash.vue`'s `styledLedger`): credit rows green (`bg-green-50 dark:bg-green-900/20`), debit rows red (`bg-red-50 dark:bg-red-900/20`).
     - Type filter options: `ALL / PURCHASE / PAYMENT / CREDIT / PURCHASE RETURN` — applied as `t.type === filter` in `filteredTransactions`.
     - Edit action: `PURCHASE` rows route to `/products/purchase?poId=...&isEdit=true`; `CREDIT` rows open the Add Credit modal preloaded with `creditKind` (derived from `moneyTransactionId` presence) and (for AMOUNT credits) `paymentMode`/`bankAccountId` from the linked `moneyTransaction`. The kind toggle is locked during edit (`editingCreditKindLocked = true`).
-  - **Purchase Orders tab:** PO list with columns: PO No, Date, Payment Type, Total, Qty (sum of `item.initialQty`), Due (for CREDIT only), Actions (Pay/Delete).
+  - **Purchase Orders tab:** PO list with columns: PO No, Date, Payment Type, Total, Qty (sum of `item.initialQty`), Due (all payment types, calculated from settlements), Actions (Pay/Delete).
   - **Purchase Returns tab:** date-filtered list with columns: Date, PO No, Subtotal, Tax, Total, Remarks, Actions (Download / Edit / Delete).
   - **Payments tab:** selected-distributor-only payment rows (purchase-return payments excluded), with Payment No, Date, PO No, Payment, Amount, Remarks, and Actions columns. Includes date range and payment-mode filters, pagination, New Payment, and the shared transaction Edit/Delete menu.
 - **Pay flow:** inline modal with date, amount, paymentType (CASH/BANK/UPI/CARD/CHEQUE), remarks. Uses `useCreateDistributorPayment` / `useUpdateDistributorPayment`. UPI QR code shown when paymentType = UPI. Optional PO link search.

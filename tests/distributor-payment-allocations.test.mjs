@@ -5,7 +5,7 @@ import ts from 'typescript';
 import { parse, compileScript, compileTemplate } from '@vue/compiler-sfc';
 
 const source = ts.transpileModule(readFileSync('server/utils/distributor-payment-save.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2022 } }).outputText.replace(/^import .*;\r?\n/gm, '').replace(/export /g, '');
-let body, calls, saved, transaction, failAllocation = false, foreignOrder = false, posting = [];
+let body, calls, saved, transaction, failAllocation = false, foreignOrder = false, posting = [], orderPaymentType = 'CREDIT', orderCleared = false;
 const db = { release() {}, async query(sql, args = []) {
   calls.push({ sql, args });
   const result = rows => ({ rows, rowCount: rows.length });
@@ -14,7 +14,7 @@ const db = { release() {}, async query(sql, args = []) {
   if (sql.startsWith('SELECT id,expense_id,distributor_id')) return result(saved.payment ? [saved.payment] : []);
   if (sql.startsWith('SELECT 1 FROM distributor_companies')) return result([{}]);
   if (sql.startsWith('SELECT 1 FROM distributor_payment_allocations')) return result(saved.allocations.length ? [{}] : []);
-  if (sql.startsWith('SELECT id,total_amount')) return result(foreignOrder ? [] : args[2].map(id => ({ id, total_amount: id === 'po1' ? 100 : 200, payment_type: 'CREDIT', due_cleared: false })));
+  if (sql.startsWith('SELECT id,total_amount')) return result(foreignOrder ? [] : args[2].map(id => ({ id, total_amount: id === 'po1' ? 100 : 200, payment_type: orderPaymentType, due_cleared: orderCleared })));
   if (sql.startsWith('SELECT purchase_order_id,sum')) return result([{ purchase_order_id: 'po1', amount: 20 }]);
   if (sql.startsWith('SELECT id FROM expense_categories')) return result([{ id: 'purchase' }]);
   if (sql.startsWith('UPDATE companies')) return result([{ number: 10 }]);
@@ -41,7 +41,7 @@ for (const invalid of [
   { ...original, amount: 0.001 },
 ]) assert.throws(() => paymentParts(invalid));
 assert.deepEqual(paymentParts({ amount: 100, purchaseOrderId: 'po1' }), [{ purchaseOrderId: 'po1', amount: 100 }]);
-function reset() { saved = { payment: null, expense: null, allocations: [] }; calls = []; posting = []; foreignOrder = false; failAllocation = false; body = structuredClone(original); }
+function reset() { saved = { payment: null, expense: null, allocations: [] }; calls = []; posting = []; foreignOrder = false; failAllocation = false; orderPaymentType = 'CREDIT'; orderCleared = false; body = structuredClone(original); }
 reset();
 const created = await saveDistributorPayment({});
 assert.equal(saved.payment.amount, 150);
@@ -70,11 +70,24 @@ assert.equal(saved.payment, null);
 reset(); failAllocation = true;
 await assert.rejects(saveDistributorPayment({}), /write failed/);
 assert.deepEqual(saved, { payment: null, expense: null, allocations: [] }, 'Failure rolls back payment, expense and allocations together');
+for (const mode of ['CASH','BANK','UPI','CARD','CHEQUE']) {
+  reset(); orderPaymentType = mode; await saveDistributorPayment({});
+  assert.equal(saved.allocations.length, 2, `${mode} PO with a genuine remaining due can be settled`);
+}
+reset(); orderCleared = true; await assert.rejects(saveDistributorPayment({}), /cleared/);
 const helper = ts.transpileModule(readFileSync('utils/purchase-order-payments.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText.replace(/export /g, '');
 const purchaseOrderPayments = new Function(helper + '\nreturn purchaseOrderPayments;')();
+const purchaseOrderDue = new Function(helper + '\nreturn purchaseOrderDue;')();
 const po = { totalAmount: 100, distributorPayment: [{ id: 'old', amount: 20 }], paymentAllocations: [{ amount: 80, payment: { id: 'shared', amount: 150 } }] };
 assert.equal(purchaseOrderPayments(po).reduce((sum, p) => sum + p.amount, 0), 100, 'PO due counts its 80 allocation plus 20 legacy, not the parent payment of 150');
 assert.equal(purchaseOrderPayments({ paymentAllocations: [{ amount: 70, payment: { id: 'shared', amount: 150 } }] })[0].amount, 70);
+for (const paymentType of ['CREDIT','CASH','BANK','UPI','CARD','CHEQUE']) {
+  const edited = { ...po, paymentType, totalAmount: 120 };
+  assert.equal(purchaseOrderDue(edited), 20, `${paymentType} edit shows actual outstanding amount`);
+  assert.equal(purchaseOrderDue(edited, 'shared'), 100, 'Editing a shared payment adds back only this PO allocation');
+  assert.equal(purchaseOrderDue({ ...edited, dueCleared: true }), 0);
+}
+assert.equal(purchaseOrderDue({totalAmount:0.3,distributorPayment:[{amount:0.1},{amount:0.2}]}),0,'Cent precision prevents phantom dues');
 for (const file of ['pages/distributor/payments.vue', 'pages/distributor/purchaseOrder.vue', 'pages/distributor/index.vue']) {
   const { descriptor, errors } = parse(readFileSync(file, 'utf8'), { filename: file });
   assert.deepEqual(errors, []);

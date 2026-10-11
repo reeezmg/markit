@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { purchaseOrderPayments } from '~/utils/purchase-order-payments';
+import { purchaseOrderPayments, purchaseOrderDue } from '~/utils/purchase-order-payments';
 import { distributorPurchaseTransactions } from '~/utils/distributor-purchase-transactions';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
@@ -344,12 +344,7 @@ const getPOQty = (po: any) =>
     0
   )
 
-const getDue = (po: any) => {
-  if (po.paymentType !== 'CREDIT') return null
-  if (po.dueCleared) return 0
-  const paid = purchaseOrderPayments(po).reduce((s: number, p: any) => s + (p.amount ?? 0), 0)
-  return po.totalAmount - paid
-}
+const getDue = purchaseOrderDue
 
 const getPaidAmount = (po: any) =>
   purchaseOrderPayments(po).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
@@ -1171,7 +1166,7 @@ const detailsGrandTotal = computed(() =>
     + detailsTaxAmount.value
     + Number(selectedDetailsRow.value?.adjustment || 0)
 )
-const detailsDue = computed(() => Math.max(0, detailsGrandTotal.value - getPaidAmount(selectedDetailsRow.value)))
+const detailsDue = computed(() => Math.max(0, purchaseOrderDue(selectedDetailsRow.value)))
 
 const openDetailsModal = (row: any) => {
   selectedDetailsRow.value = row
@@ -1207,7 +1202,7 @@ const poAction = (row: any) => {
       },
     ],
   ]
-  if (row.paymentType === 'CREDIT') {
+  if (row.due > 0 && !row.dueCleared) {
     items.push([{ label: 'Pay', icon: 'i-heroicons-banknotes-20-solid', click: () => openPayModal(row) }])
   }
   items.push([{ label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDeletePO(row) }])

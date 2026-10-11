@@ -3,7 +3,7 @@ const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 
 import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company';
-import { purchaseOrderPayments } from '~/utils/purchase-order-payments';
+import { purchaseOrderDue } from '~/utils/purchase-order-payments';
 import { useFindManyDistributorPayment, useCountDistributorPayment } from '~/lib/company-hooks/distributor-payment';
 
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
@@ -365,13 +365,11 @@ const purchaseOrdersForPayment = computed(() => {
   const dc = (distributorCompanies.value ?? []).find((dc: any) => dc.distributorId === addForm.value.distributorId)
   return (dc?.purchaseOrders ?? []).map((po: any) => ({
     ...po,
-    due: po.dueCleared ? 0 : Math.max(0, Number(po.totalAmount) - purchaseOrderPayments(po)
-      .filter((p: any) => p.id !== editingPaymentId.value)
-      .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)),
+    due: Math.max(0, purchaseOrderDue(po, editingPaymentId.value || undefined)),
   }))
 })
 const purchaseOrderOptions = computed(() => purchaseOrdersForPayment.value
-  .filter((po: any) => (po.paymentType === 'CREDIT' && po.due > 0) || addForm.value.purchaseOrderIds.includes(po.id))
+  .filter((po: any) => po.due > 0 || addForm.value.purchaseOrderIds.includes(po.id))
   .map((po: any) => ({ label: `PO#${po.purchaseOrderNo ?? '-'}${po.billNo ? ` / ${po.billNo}` : ''} ? Due ${formatCurrency(po.due)}`, value: po.id })))
 const selectedPurchaseOrders = computed(() => addForm.value.purchaseOrderIds.map(id => purchaseOrdersForPayment.value.find((po: any) => po.id === id)).filter(Boolean))
 const allocationPayload = computed(() => addForm.value.purchaseOrderIds.map(purchaseOrderId => ({ purchaseOrderId, amount: Number(allocationAmounts.value[purchaseOrderId] || 0) })))

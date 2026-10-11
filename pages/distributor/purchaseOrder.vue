@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { purchaseOrderPayments } from '~/utils/purchase-order-payments';
+import { purchaseOrderPayments, purchaseOrderDue } from '~/utils/purchase-order-payments';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 
@@ -396,18 +396,7 @@ const getPurchaseOrderQty = (po: any) =>
     0
   )
 
-const getDueAmount = (po: any) => {
-  if (po?.paymentType !== 'CREDIT') return null
-  if (po?.dueCleared) return 0
-
-  const paid =
-    purchaseOrderPayments(po).reduce(
-      (sum: number, p: any) => sum + (p.amount ?? 0),
-      0
-    )
-
-  return (po?.totalAmount ?? 0) - paid
-}
+const getDueAmount = purchaseOrderDue
 
 const getPaidAmount = (po: any) =>
   purchaseOrderPayments(po).reduce(
@@ -470,9 +459,7 @@ const detailsGrandTotal = computed(() =>
     + detailsTaxAmount.value
     + Number(selectedDetailsRow.value?.adjustment || 0)
 )
-const detailsDue = computed(() => selectedDetailsRow.value?.dueCleared
-  ? 0
-  : Math.max(0, detailsGrandTotal.value - getPaidAmount(selectedDetailsRow.value)))
+const detailsDue = computed(() => Math.max(0, purchaseOrderDue(selectedDetailsRow.value)))
 
 // -------------------------------------
 // FINAL ROWS
@@ -687,7 +674,7 @@ const action = (row: any) => {
     ],
   ]
 
-  if (row.paymentType === 'CREDIT') {
+  if (row.distributorId) {
     const dueActions: any[] = []
     if (!row.dueCleared && row.due > 0) {
       dueActions.push({

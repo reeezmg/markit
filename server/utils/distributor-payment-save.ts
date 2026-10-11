@@ -60,7 +60,7 @@ export async function saveDistributorPayment(event: any, existingId?: string) {
         for (const part of parts) {
           const po = orders.rows.find((r: any) => r.id === part.purchaseOrderId);
           const due = Math.round(Number(po.total_amount) * 100) - Math.round(Number(paid.rows.find((r: any) => r.purchase_order_id === po.id)?.amount || 0) * 100);
-          if (po.payment_type !== 'CREDIT' || po.due_cleared || Math.round(part.amount * 100) > due) throw fail('An allocation exceeds the current due or its purchase order is already cleared. Reload the orders.');
+          if (po.due_cleared || Math.round(part.amount * 100) > due) throw fail('An allocation exceeds the current due or its purchase order is already cleared. Reload the orders.');
         }
       }
     }
