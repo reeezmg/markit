@@ -3,6 +3,7 @@ import { Prisma } from '@prisma/client';
 import { createError } from 'h3';
 import { recalculateUserLedgerBalances } from './user-ledger';
 import { assertNoBillReceipts } from './bill-receipts';
+import { ensurePurchaseOrderSource } from './purchase-order-source';
 
 const metadata = new Map(Prisma.dmmf.datamodel.models.map(model => [model.name, model]));
 const roots = new Set(['Bill', 'Product', 'Brand', 'Category', 'Subcategory', 'Collection', 'ShippingBox',
@@ -226,6 +227,9 @@ export async function executeCompanyTransfer(db: any, input: TransferInput) {
     if (node.model === 'PayrollCycle') for (const field of ['includeUserIds', 'excludeUserIds']) changes[field] = node.row[field].map((id: string) => mapping('CompanyUser', id));
     const entries = Object.entries(changes);
     if (entries.length) await db.query(`UPDATE ${table(node.model)} SET ${entries.map(([field], i) => `${col(node.model, field)} = $${i + 2}`).join(', ')} WHERE id = $1`, [node.row.id, ...entries.map(([, value]) => value)]);
+  }
+  for (const node of graph.nodes.values()) {
+    if (node.model === 'PurchaseOrder') await ensurePurchaseOrderSource(db, input.companyId, node.row.id);
   }
   for (const user of users) await recalculateUserLedgerBalances(db, user);
   if (input.model === 'DistributorCompany') {

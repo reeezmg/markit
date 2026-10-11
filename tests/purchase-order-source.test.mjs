@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-import {randomUUID} from 'node:crypto';
+import {randomUUID,createHash} from 'node:crypto';
+import {Prisma} from '@prisma/client';
 import ts from 'typescript';
 import {parse,compileScript,compileTemplate} from '@vue/compiler-sfc';
 const samples=new Map();
@@ -29,6 +30,13 @@ const db={release(){},async query(raw,args=[]){
  if(sql.startsWith('INSERT INTO purchase_orders')){state.po={...state.po,id:args[0],created_at:args[1],company_id:args[2],payment_type:args[3],total_amount:args[4],distributor_id:args[5]};return result([]);}
  if(sql.startsWith('INSERT INTO distributor_payments')){state.payments.push({id:args[0],amount:args[2],payment_no:args[7]});return result([]);}
  if(sql.startsWith('UPDATE purchase_orders SET payment_type')){state.po={...state.po,payment_type:args[1],created_at:args[4],total_amount:args[5],distributor_id:args[3]||state.po.distributor_id};return result([]);}
+ if(sql.startsWith('SELECT id, payment_type'))return result([{...state.po,tax:0,discount:0,adjustment:0}]);
+ if(sql.includes('AS subtotal'))return result([{subtotal:200}]);
+ if(sql.startsWith('UPDATE purchase_orders SET subtotal_amount')){state.po.total_amount=args[3];return result([]);}
+ if(sql.startsWith('INSERT INTO products'))return result([]);
+ if(sql.startsWith('INSERT INTO variants'))return result([{id:args[0],product_id:args[12],p_price:args[5]}]);
+ if(sql.startsWith('INSERT INTO items'))return result([{id:args[0],variant_id:args[5],qty:args[2],barcode:'TEST'}]);
+ if(sql.startsWith('SELECT p.id, p.name'))return result([{id:'product',name:'Test'}]);
  throw Error('Unexpected query '+sql);
 }};
 state=fixture();await helpers.ensurePurchaseOrderSource(db,'company','po');assert.equal(state.audit.length,1);assert.deepEqual(state.audit[0].accounts,{payable:'ap',stock:'stock',tax:'tax'});
@@ -59,7 +67,29 @@ assert.deepEqual(state.payments,[{id:'dp1',amount:40,expense_id:'expense'},{id:'
 const totals=load('server/utils/purchase-order-totals.ts',{...helpers,updatePurchaseAccounting:async()=>true},'\nreturn recalculatePurchaseOrderTotals;');
 const recalculation=[];await totals({query:async(sql,args)=>{recalculation.push(sql);if(sql.includes('SELECT id, payment_type'))return result([{payment_type:'BANK',tax:0,discount:0,adjustment:0}]);if(sql.includes('AS subtotal'))return result([{subtotal:200}]);if(sql.startsWith('UPDATE purchase_orders'))return result([]);return db.query(sql,args);}},{companyId:'company',poId:'po'});
 assert.ok(!recalculation.some(sql=>sql.includes('distributor_payments')||sql.includes('distributor_credits')),'Product quantity/cost edits never overwrite actual payments or credits');
+const batch=load('server/api/products/save-batch.post.ts',{...bindings,recalculatePurchaseOrderTotals:totals});
+for(const paymentType of ['CREDIT','BANK']){
+ state=fixture();calls=[];
+ const saved=await batch({body:{products:[{id:'product',name:'Test',variants:[{id:'variant',pprice:200,items:[{id:'item',qty:1}]}]}],po:{paymentType,distributorId:'vendor',totalAmount:100}}});
+ assert.equal(saved.success,true);assert.equal(state.po.total_amount,200);
+ assert.equal(state.payments.length,paymentType==='CREDIT'?0:1);
+ if(paymentType==='BANK')assert.equal(state.payments[0].amount,200,'Paid batch uses its finalized product-derived PO total');
+ assert.ok(!calls.some(c=>c.sql.includes('distributor_credits')),'Actual product batch endpoint does not create a DC');
+}
 const purchases=load('utils/distributor-purchase-transactions.ts',{},'\nreturn distributorPurchaseTransactions;');
+let moved=false,registered=0;
+const transferDb={async query(sql,args=[]){
+ if(sql.includes('FROM "purchase_orders" WHERE "id" = $1 AND "company_id" = $2'))return result([{id:'po',companyId:'source',purchaseOrderNo:1,totalAmount:100,paymentType:'CREDIT'}]);
+ if(sql.startsWith('UPDATE "purchase_orders"')){assert.equal(args[1],'target');moved=true;return result([]);}
+ if(sql.startsWith('UPDATE companies SET "purchase_counter"'))return result([{number:9}]);
+ return result([]);
+}};
+const transfer=load('server/utils/companyTransfer.ts',{Prisma,createHash,createError:bindings.createError,recalculateUserLedgerBalances:async()=>{},assertNoBillReceipts:async()=>{},ensurePurchaseOrderSource:async(client,company,id)=>{assert.equal(client,transferDb);assert.equal(company,'target');assert.equal(id,'po');assert.ok(moved,'Register destination PO source after moving the source document');registered++;}},'\nreturn {transferGraph,executeCompanyTransfer};');
+const transferInput={model:'PurchaseOrder',id:'po',sourceCompanyId:'source',companyId:'target'};
+const preview=await transfer.transferGraph(transferDb,transferInput);
+assert.equal(preview.nodes.size,1);
+await transfer.executeCompanyTransfer(transferDb,{...transferInput,fingerprint:preview.fingerprint});
+assert.equal(registered,1,'Transferred credit PO remains an accounting purchase source without a linked DC');
 assert.deepEqual(purchases([{id:'po',purchaseOrderNo:10,totalAmount:150,createdAt:'2026-02-01'},{id:'empty',totalAmount:0}]).map(p=>[p.no,p.type,p.credit]),[['PO-10','PURCHASE',150]]);
 for(const file of ['pages/distributor/index.vue','components/Distributor/List.vue','components/Distributor/Dlist.vue']){
  const {descriptor,errors}=parse(readFileSync(file,'utf8'),{filename:file});assert.deepEqual(errors,[]);compileScript(descriptor,{id:file});assert.deepEqual(compileTemplate({source:descriptor.template.content,filename:file,id:file}).errors,[]);
