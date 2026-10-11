@@ -37,7 +37,9 @@ export default defineEventHandler(async (event) => {
          dp.bill_no,
          co.name AS company_name,
          d.name AS distributor_name,
-         po.purchase_order_no
+         COALESCE((SELECT string_agg(apo.purchase_order_no::text, ', ' ORDER BY apo.purchase_order_no)
+           FROM distributor_payment_allocations a JOIN purchase_orders apo ON apo.id=a.purchase_order_id AND apo.company_id=a.company_id
+           WHERE a.payment_id=dp.id AND a.company_id=dp.company_id),po.purchase_order_no::text) AS purchase_order_no
        FROM distributor_payments dp
        JOIN companies co ON co.id = dp.company_id
        LEFT JOIN distributors    d  ON d.id  = dp.distributor_id

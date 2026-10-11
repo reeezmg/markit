@@ -781,49 +781,65 @@ model Distributor {
 }
 
 model PurchaseOrder {
-  id                 String               @id() @default(uuid())
-  createdAt          DateTime             @default(now()) @map("created_at")
-  updatedAt          DateTime             @updatedAt() @map("updated_at")
-  purchaseOrderNo    Int?                 @map("purchase_order_no")
+  id                 String                         @id() @default(uuid())
+  createdAt          DateTime                       @default(now()) @map("created_at")
+  updatedAt          DateTime                       @updatedAt() @map("updated_at")
+  purchaseOrderNo    Int?                           @map("purchase_order_no")
   products           Product[]
-  company            Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId          String               @map("company_id")
-  paymentType        paymentType?         @map("payment_type")
-  subTotalAmount     Float                @default(0) @map("subtotal_amount")
-  totalAmount        Float                @default(0) @map("total_amount")
-  billNo             String?              @map("bill_no")
-  distributorId      String?              @map("distributor_id")
-  distributorCompany DistributorCompany?  @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
+  company            Company                        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId          String                         @map("company_id")
+  paymentType        paymentType?                   @map("payment_type")
+  subTotalAmount     Float                          @default(0) @map("subtotal_amount")
+  totalAmount        Float                          @default(0) @map("total_amount")
+  billNo             String?                        @map("bill_no")
+  distributorId      String?                        @map("distributor_id")
+  distributorCompany DistributorCompany?            @relation(fields: [distributorId, companyId], references: [distributorId, companyId])
   distributorCredit  DistributorCredit[]
   distributorPayment DistributorPayment[]
+  paymentAllocations DistributorPaymentAllocation[]
   purchaseReturns    PurchaseReturn[]
-  discount           Float?               @default(0)
-  adjustment         Float?               @default(0)
-  tax                Float?               @default(0)
-  dueCleared         Boolean              @default(false) @map("due_cleared")
+  discount           Float?                         @default(0)
+  adjustment         Float?                         @default(0)
+  tax                Float?                         @default(0)
+  dueCleared         Boolean                        @default(false) @map("due_cleared")
 
   @@map("purchase_orders")
 }
 
 model DistributorPayment {
-  id                 String             @id() @default(uuid())
-  createdAt          DateTime           @default(now()) @map("created_at")
-  paymentNo          Int?               @map("payment_no")
+  id                 String                         @id() @default(uuid())
+  createdAt          DateTime                       @default(now()) @map("created_at")
+  paymentNo          Int?                           @map("payment_no")
   amount             Float
   remarks            String?
-  billNo             String?            @map("bill_no")
-  paymentType        paymentType?       @map("payment_type")
-  distributorId      String             @map("distributor_id")
-  companyId          String             @map("company_id")
-  purchaseOrderId    String?            @map("purchase_order_id")
-  purchaseOrder      PurchaseOrder?     @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
-  distributorCompany DistributorCompany @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
-  expense            Expense?           @relation(fields: [expenseId], references: [id])
-  expenseId          String?            @unique() @map("expense_id")
-  purchaseReturnId   String?            @unique() @map("purchase_return_id")
-  purchaseReturn     PurchaseReturn?    @relation(fields: [purchaseReturnId], references: [id])
+  billNo             String?                        @map("bill_no")
+  paymentType        paymentType?                   @map("payment_type")
+  distributorId      String                         @map("distributor_id")
+  companyId          String                         @map("company_id")
+  purchaseOrderId    String?                        @map("purchase_order_id")
+  purchaseOrder      PurchaseOrder?                 @relation(fields: [purchaseOrderId], references: [id], onDelete: Cascade)
+  distributorCompany DistributorCompany             @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Cascade)
+  expense            Expense?                       @relation(fields: [expenseId], references: [id])
+  expenseId          String?                        @unique() @map("expense_id")
+  purchaseReturnId   String?                        @unique() @map("purchase_return_id")
+  purchaseReturn     PurchaseReturn?                @relation(fields: [purchaseReturnId], references: [id])
+  allocations        DistributorPaymentAllocation[]
 
   @@map("distributor_payments")
+}
+
+model DistributorPaymentAllocation {
+  id              String             @id() @default(uuid())
+  companyId       String             @map("company_id")
+  paymentId       String             @map("payment_id")
+  purchaseOrderId String             @map("purchase_order_id")
+  amount          Float
+  payment         DistributorPayment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  purchaseOrder   PurchaseOrder      @relation(fields: [purchaseOrderId], references: [id], onDelete: Restrict)
+
+  @@unique([paymentId, purchaseOrderId])
+  @@index([companyId, purchaseOrderId])
+  @@map("distributor_payment_allocations")
 }
 
 model DistributorCredit {

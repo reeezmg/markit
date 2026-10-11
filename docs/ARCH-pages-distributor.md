@@ -91,6 +91,29 @@ Head-office admins default to the active head office plus active direct branches
 
 Payment creation from the payment and PO forms calls `/api/distributor/payments` with `createExpense: true`. This allocates payment/expense numbers and writes the linked source expense in one transaction. Payment edit/delete keeps that source synchronized; native supplier triggers post the payment once and suppress a duplicate ERP expense journal. No old account-ledger rows are created or rebuilt. `CompanySupplierField.vue` and purchase-order options follow the selected form company.
 
+The Distributor Payments form supports one payment allocated across multiple credit
+POs of the same supplier/company. `DistributorPayment.allocations` stores each PO
+and its portion of the payment in `distributor_payment_allocations`; the payment
+total and optional linked expense are stored once. Legacy `purchaseOrderId` remains
+for single-order clients, while allocated payments leave that field null. The
+payment table and PDF/Excel exports show all linked PO numbers. PO list/detail paid
+and due values combine legacy payments with allocation amounts, never the whole
+payment for each PO. A fully allocated payment clears the calculated due of fully
+covered orders without setting the manual `dueCleared` flag.
+
+`server/utils/distributor-payment-save.ts` handles both create and edit atomically:
+positive cent-precision amounts, unique selected POs, total allocation equality,
+current unpaid credit-order limits, supplier/company ownership and transaction
+locks. An empty allocation list unlinks orders; editing replaces allocations.
+Payment deletion cascades allocations, restoring those calculated dues. PO deletion
+is restricted while allocated, and PO edits cannot change its supplier/payment type
+or reduce its total below allocated payments. Generic allocation writes are denied;
+reads are company-scoped by the organization proxy. The allocation table and its
+indexes/foreign keys were applied with Prisma `db push` on 2026-10-11 after a
+schema/data backup; existing payment and purchase-order data was preserved.
+`node tests/distributor-payment-allocations.test.mjs` runs allocation/API and Vue
+checks without a database.
+
 **Files:**
 - `pages/distributor/index.vue` — Distributor list with two-pane split layout (PO + credit tabs)
 - `pages/distributor/credit.vue` — Distributor credit/payment ledger per distributor (legacy — functionality now also in index.vue)

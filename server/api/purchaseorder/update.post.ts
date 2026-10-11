@@ -78,7 +78,9 @@ export default defineEventHandler(async (event) => {
       const previous = (await client.query('SELECT * FROM purchase_orders WHERE id=$1 AND company_id=$2 FOR UPDATE', [poId,companyId])).rows[0];
       if (!previous) throw createError({statusCode:404,statusMessage:'Purchase order not found'});
       oldType=previous.payment_type; wasOldCredit=oldType==='CREDIT'; hasOld=oldType!==null;
-      const payments=(await client.query('SELECT id,expense_id FROM distributor_payments WHERE purchase_order_id=$1 AND company_id=$2',[poId,companyId])).rows;
+      const allocated=(await client.query('SELECT payment_id,amount FROM distributor_payment_allocations WHERE purchase_order_id=$1 AND company_id=$2',[poId,companyId])).rows;
+      const payments=(await client.query('SELECT id,expense_id FROM distributor_payments WHERE company_id=$2 AND (purchase_order_id=$1 OR id=ANY($3::text[]))',[poId,companyId,allocated.map((a:any)=>a.payment_id)])).rows;
+      if (allocated.length && Number(totalAmount) < allocated.reduce((sum:number,a:any)=>sum+Number(a.amount),0)) throw createError({statusCode:409,statusMessage:'Purchase total cannot be below its allocated payments. Edit payment allocations first.'});
       if (distributorId && previous.distributor_id && distributorId!==previous.distributor_id && payments.length) throw createError({statusCode:409,statusMessage:'This purchase has payments. Reverse its payments before changing distributor.'});
       if (payments.length && (oldType!==newType || (oldType!=='CREDIT' && (payments.length>1 || payments.some((p:any)=>p.expense_id))))) throw createError({statusCode:409,statusMessage:'Edit payments separately before changing the payment method or a purchase with multiple settlements.'});
 

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { purchaseOrderPayments } from '~/utils/purchase-order-payments';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 
@@ -272,6 +273,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
         tax: true,
         adjustment: true,
         dueCleared: true,
+        paymentAllocations: { select: { amount: true, payment: { select: { id: true, amount: true, paymentType: true, billNo: true, createdAt: true, remarks: true } } } },
         distributorPayment: {
           select: { id: true, amount: true, paymentType: true, billNo: true, createdAt: true, remarks: true },
           orderBy: { createdAt: 'desc' },
@@ -344,12 +346,12 @@ const getPOQty = (po: any) =>
 const getDue = (po: any) => {
   if (po.paymentType !== 'CREDIT') return null
   if (po.dueCleared) return 0
-  const paid = po.distributorPayment?.reduce((s: number, p: any) => s + (p.amount ?? 0), 0) ?? 0
+  const paid = purchaseOrderPayments(po).reduce((s: number, p: any) => s + (p.amount ?? 0), 0)
   return po.totalAmount - paid
 }
 
 const getPaidAmount = (po: any) =>
-  (po?.distributorPayment ?? []).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
+  purchaseOrderPayments(po).reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)
 
 const formatCurrency = (amount: any) =>
   new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(Number(amount || 0))
@@ -465,6 +467,8 @@ const distributors = computed(() =>
     const returnAmount = rawPayments.filter((p: any) => p.paymentType === 'RETURN').reduce((s: number, p: any) => s + (p.amount || 0), 0)
     const purchaseOrders = (d.purchaseOrders || []).map((po: any) => ({
       ...po,
+      distributorPayment: purchaseOrderPayments(po),
+      paymentAllocations: [],
       qty: getPOQty(po),
       due: getDue(po),
     }))

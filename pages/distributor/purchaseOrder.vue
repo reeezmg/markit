@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { purchaseOrderPayments } from '~/utils/purchase-order-payments';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 
@@ -303,6 +304,7 @@ const queryArgs = computed(() => ({
       },
     },
 
+    paymentAllocations: { select: { amount: true, payment: { select: { id: true, amount: true, paymentType: true, billNo: true, createdAt: true, remarks: true } } } },
     distributorPayment: {
       select: {
         id: true,
@@ -399,7 +401,7 @@ const getDueAmount = (po: any) => {
   if (po?.dueCleared) return 0
 
   const paid =
-    asArray(po?.distributorPayment).reduce(
+    purchaseOrderPayments(po).reduce(
       (sum: number, p: any) => sum + (p.amount ?? 0),
       0
     )
@@ -408,7 +410,7 @@ const getDueAmount = (po: any) => {
 }
 
 const getPaidAmount = (po: any) =>
-  asArray(po?.distributorPayment).reduce(
+  purchaseOrderPayments(po).reduce(
     (sum: number, p: any) => sum + Number(p.amount || 0),
     0
   )
@@ -478,6 +480,8 @@ const detailsDue = computed(() => selectedDetailsRow.value?.dueCleared
 const rows = computed(() =>
   purchaseOrders.value?.map(po => ({
     ...po,
+    distributorPayment: purchaseOrderPayments(po),
+    paymentAllocations: [],
     qty: getPurchaseOrderQty(po),
     due: getDueAmount(po),
     distributorId: po.distributorCompany?.distributorId,

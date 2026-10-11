@@ -292,7 +292,18 @@ Junction linking a Distributor to a Company (many-to-many).
 Payments made to a distributor.
 - Fields: `distributorId`, `companyId`, `amount`, `paymentType`, `purchaseOrderId`, `expenseId`, `remarks`
 - Can be linked to an Expense record
+- `allocations` links one payment to several POs through `DistributorPaymentAllocation`.
+  Each allocation stores its portion of the total; legacy `purchaseOrderId` is
+  retained for direct single-order payments. Allocated payments leave it null.
 - **Used in:** storetools (accounts, ledger)
+
+#### `distributor_payment_allocations` (DistributorPaymentAllocation)
+Applied with Prisma `db push` on 2026-10-11 after backup. Links a payment
+to each selected PO with `companyId`, `paymentId`, `purchaseOrderId` and `amount`.
+Each payment/PO pair is unique. Payment deletion cascades allocations; PO deletion
+is restricted while allocations exist. Raw payment APIs validate same-company
+supplier ownership and total/amount limits; generic writes are denied. PO dues use
+allocated amounts rather than the parent payment total.
 
 #### `distributor_credits` (DistributorCredit)
 Liability the company owes to a distributor.

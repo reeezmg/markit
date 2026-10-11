@@ -30,6 +30,7 @@ export default defineEventHandler(async (event) => {
          po.bill_no,
          po.created_at,
          po.payment_type,
+         po.due_cleared,
          po.total_amount,
          co.name AS company_name,
          d.name AS distributor_name,
@@ -43,7 +44,10 @@ export default defineEventHandler(async (event) => {
          COALESCE((
            SELECT SUM(dp.amount)
            FROM   distributor_payments dp
-           WHERE  dp.purchase_order_id = po.id
+           WHERE  dp.purchase_order_id = po.id AND dp.company_id = po.company_id
+         ), 0) + COALESCE((
+           SELECT SUM(a.amount) FROM distributor_payment_allocations a
+           WHERE a.purchase_order_id = po.id AND a.company_id = po.company_id
          ), 0) AS paid
        FROM purchase_orders po
        JOIN companies co ON co.id = po.company_id
@@ -64,7 +68,7 @@ export default defineEventHandler(async (event) => {
       company_name:      r.company_name,
       qty:               Number(r.qty),
       paid:              Number(r.paid),
-      due:               r.payment_type === 'CREDIT' ? Number(r.total_amount) - Number(r.paid) : null,
+      due:               r.payment_type === 'CREDIT' ? (r.due_cleared ? 0 : Number(r.total_amount) - Number(r.paid)) : null,
     }))
 
     /* ── CLIENT-SIDE FILTERS ── */

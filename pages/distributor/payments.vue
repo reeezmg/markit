@@ -3,6 +3,7 @@ const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 
 import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company';
+import { purchaseOrderPayments } from '~/utils/purchase-order-payments';
 import { useFindManyDistributorPayment, useCountDistributorPayment } from '~/lib/company-hooks/distributor-payment';
 
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
@@ -181,6 +182,7 @@ const queryArgs = computed(() => ({
     paymentType: true,
     distributorId: true,
 
+    allocations: { select: { purchaseOrderId: true, amount: true, purchaseOrder: { select: { purchaseOrderNo: true } } } },
     purchaseOrder: {
       select: {
         id: true,
@@ -229,7 +231,7 @@ const rows = computed(() =>
     ...p,
     distributorName: p.distributorCompany?.distributor?.name || '-',
     purchaseOrderId: p.purchaseOrder?.id ?? null,
-    purchaseOrderNo: p.purchaseOrder?.purchaseOrderNo ?? '-',
+    purchaseOrderNo: p.allocations?.length ? p.allocations.map(a => a.purchaseOrder.purchaseOrderNo).join(', ') : p.purchaseOrder?.purchaseOrderNo ?? '-',
   })) ?? []
 )
 
@@ -293,7 +295,7 @@ const paymentToDelete = ref<any>(null)
 
 const addForm = ref({
   distributorId: '' as string,
-  purchaseOrderId: '' as string,
+  purchaseOrderIds: [] as string[],
   amount: null as number | null,
   paymentType: 'CASH',
   remarks: '',
@@ -303,7 +305,7 @@ const addForm = ref({
 const resetAddForm = () => {
   addForm.value = {
     distributorId: '',
-    purchaseOrderId: '',
+    purchaseOrderIds: [],
     amount: null,
     paymentType: 'CASH',
     remarks: '',
@@ -313,7 +315,7 @@ const resetAddForm = () => {
 watch(companyScope.companyId, () => {
   if (!editingPaymentId.value) {
     addForm.value.distributorId = ''
-    addForm.value.purchaseOrderId = ''
+    addForm.value.purchaseOrderIds = []
   }
 })
 
@@ -329,6 +331,10 @@ const distributorQueryArgs = computed(() => ({
         purchaseOrderNo: true,
         billNo: true,
         totalAmount: true,
+        paymentType: true,
+        dueCleared: true,
+        distributorPayment: { select: { id: true, amount: true } },
+        paymentAllocations: { select: { amount: true, payment: { select: { id: true } } } },
       },
       orderBy: { createdAt: 'desc' },
     },
@@ -354,20 +360,43 @@ const distributorOptions = computed(() =>
   }))
 )
 
-const purchaseOrderOptions = computed(() => {
-  const distributorCompany = (distributorCompanies.value ?? []).find(
-    (dc: any) => dc.distributorId === addForm.value.distributorId
-  )
-
-  return (distributorCompany?.purchaseOrders ?? []).map((po: any) => ({
-    label: `PO#${po.purchaseOrderNo ?? '-'}${po.billNo ? ` / ${po.billNo}` : ''} — ${formatCurrency(po.totalAmount)}`,
-    value: po.id,
+const allocationAmounts = ref<Record<string, number>>({})
+const purchaseOrdersForPayment = computed(() => {
+  const dc = (distributorCompanies.value ?? []).find((dc: any) => dc.distributorId === addForm.value.distributorId)
+  return (dc?.purchaseOrders ?? []).map((po: any) => ({
+    ...po,
+    due: po.dueCleared ? 0 : Math.max(0, Number(po.totalAmount) - purchaseOrderPayments(po)
+      .filter((p: any) => p.id !== editingPaymentId.value)
+      .reduce((sum: number, p: any) => sum + Number(p.amount || 0), 0)),
   }))
+})
+const purchaseOrderOptions = computed(() => purchaseOrdersForPayment.value
+  .filter((po: any) => (po.paymentType === 'CREDIT' && po.due > 0) || addForm.value.purchaseOrderIds.includes(po.id))
+  .map((po: any) => ({ label: `PO#${po.purchaseOrderNo ?? '-'}${po.billNo ? ` / ${po.billNo}` : ''} ? Due ${formatCurrency(po.due)}`, value: po.id })))
+const selectedPurchaseOrders = computed(() => addForm.value.purchaseOrderIds.map(id => purchaseOrdersForPayment.value.find((po: any) => po.id === id)).filter(Boolean))
+const allocationPayload = computed(() => addForm.value.purchaseOrderIds.map(purchaseOrderId => ({ purchaseOrderId, amount: Number(allocationAmounts.value[purchaseOrderId] || 0) })))
+const allocatedTotal = computed(() => allocationPayload.value.reduce((sum, part) => sum + Math.round(part.amount * 100), 0) / 100)
+function allocatePayment() {
+  let remaining = Math.round(Number(addForm.value.amount || 0) * 100)
+  allocationAmounts.value = Object.fromEntries(selectedPurchaseOrders.value.map((po: any) => {
+    const amount = Math.min(remaining, Math.round(po.due * 100))
+    remaining -= amount
+    return [po.id, amount / 100]
+  }))
+}
+watch(() => addForm.value.purchaseOrderIds, () => {
+  allocationAmounts.value = {}
+  if (editingPaymentId.value && paymentToEdit.value?.allocations?.length &&
+      addForm.value.purchaseOrderIds.every(id => paymentToEdit.value.allocations.some((a: any) => a.purchaseOrderId === id))) {
+    allocationAmounts.value = Object.fromEntries(paymentToEdit.value.allocations.map((a: any) => [a.purchaseOrderId, Number(a.amount)]))
+  } else if (editingPaymentId.value && addForm.value.purchaseOrderIds.length === 1) {
+    allocationAmounts.value[addForm.value.purchaseOrderIds[0]] = Number(addForm.value.amount || 0)
+  } else allocatePayment()
 })
 
 const selectDistributor = (distributorId: string) => {
   addForm.value.distributorId = distributorId
-  addForm.value.purchaseOrderId = ''
+  addForm.value.purchaseOrderIds = []
 }
 
 const openAddModal = async () => {
@@ -384,7 +413,7 @@ const openEditModal = async (row: any) => {
   paymentToEdit.value = row
   addForm.value = {
     distributorId: row.distributorId,
-    purchaseOrderId: row.purchaseOrderId || '',
+    purchaseOrderIds: row.allocations?.length ? row.allocations.map((a: any) => a.purchaseOrderId) : row.purchaseOrderId ? [row.purchaseOrderId] : [],
     amount: Number(row.amount),
     paymentType: row.paymentType || 'CASH',
     remarks: row.remarks || '',
@@ -407,6 +436,7 @@ const deletePayment = async () => {
     isDeleteOpen.value = false
     paymentToDelete.value = null
     await refetch()
+    await refetchDistributorCompanies()
   } catch (err: any) {
     showToast('Delete failed', 'red', err.message)
   } finally {
@@ -435,6 +465,12 @@ const handleAddPayment = async () => {
       return
     }
 
+    if (addForm.value.purchaseOrderIds.length &&
+        (allocationPayload.value.some(p => p.amount <= 0) || Math.round(allocatedTotal.value * 100) !== Math.round(addForm.value.amount * 100))) {
+      showToast('Allocate the payment total across the selected orders', 'red')
+      return
+    }
+
     const createdAtDate = addForm.value.date
       ? new Date(addForm.value.date)
       : new Date()
@@ -447,7 +483,8 @@ const handleAddPayment = async () => {
           paymentType: addForm.value.paymentType,
           remarks: addForm.value.remarks || null,
           billNo: paymentToEdit.value?.billNo || null,
-          purchaseOrderId: addForm.value.purchaseOrderId || null,
+          purchaseOrderId: addForm.value.purchaseOrderIds[0] || null,
+          ...(addForm.value.purchaseOrderIds.length ? { allocations: allocationPayload.value } : { allocations: [] }),
           createdAt: createdAtDate,
         },
       })
@@ -457,6 +494,7 @@ const handleAddPayment = async () => {
       paymentToEdit.value = null
       resetAddForm()
       await refetch()
+      await refetchDistributorCompanies()
       return
     }
 
@@ -466,7 +504,8 @@ const handleAddPayment = async () => {
         companyId: companyId.value, createExpense: true,
         amount: addForm.value.amount, remarks: addForm.value.remarks,
         paymentType: addForm.value.paymentType, distributorId: addForm.value.distributorId,
-        purchaseOrderId: addForm.value.purchaseOrderId || null, createdAt: createdAtDate,
+        purchaseOrderId: addForm.value.purchaseOrderIds[0] || null,
+        ...(addForm.value.purchaseOrderIds.length ? { allocations: allocationPayload.value } : {}), createdAt: createdAtDate,
       },
     })
 
@@ -474,6 +513,8 @@ const handleAddPayment = async () => {
     isAddOpen.value = false
     resetAddForm()
     refetch()
+    refetchDistributorCompanies()
+    refetchCount()
   } catch (err: any) {
     showToast('Error', 'red', err.message)
   } finally {
@@ -709,18 +750,31 @@ watch(companyScope.readIds, () => { page.value = 1; });
             />
           </UFormGroup>
 
-          <UFormGroup label="Purchase Order">
+          <UFormGroup label="Purchase Orders">
             <USelectMenu
-              v-model="addForm.purchaseOrderId"
+              v-model="addForm.purchaseOrderIds"
+              multiple
               :options="purchaseOrderOptions"
               option-attribute="label"
               value-attribute="value"
-              :placeholder="addForm.distributorId ? 'Select purchase order (optional)' : 'Select distributor first'"
+              :placeholder="addForm.distributorId ? 'Select purchase orders (optional)' : 'Select distributor first'"
               searchable
               searchable-placeholder="Search purchase order..."
               :disabled="!addForm.distributorId"
             />
           </UFormGroup>
+
+          <div v-if="selectedPurchaseOrders.length" class="space-y-3 rounded-md border p-3">
+            <div class="flex items-center justify-between gap-2">
+              <span class="text-sm font-medium">Amount per purchase order</span>
+              <UButton color="gray" variant="soft" @click="allocatePayment">Allocate payment amount</UButton>
+            </div>
+            <UFormGroup v-for="po in selectedPurchaseOrders" :key="po.id" :label="`PO#${po.purchaseOrderNo} ? Due ${formatCurrency(po.due)}`">
+              <UInput v-model.number="allocationAmounts[po.id]" type="number" min="0.01" step="0.01" :max="po.due" />
+            </UFormGroup>
+            <p class="text-sm">Allocated: {{ formatCurrency(allocatedTotal) }} / {{ formatCurrency(addForm.amount) }}</p>
+            <p class="text-xs text-gray-500">One payment is linked to these orders. Each order's due is reduced by its allocated amount.</p>
+          </div>
 
           <!-- PAYMENT DATE -->
           <UFormGroup label="Payment Date">

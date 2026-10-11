@@ -406,6 +406,7 @@
         "distributorCompany": "Links this PurchaseOrder record to DistributorCompany through distributorId, companyId.",
         "distributorCredit": "Links this PurchaseOrder record to DistributorCredit.",
         "distributorPayment": "Links this PurchaseOrder record to DistributorPayment.",
+        "paymentAllocations": "Partial or complete settlements from payments shared across several purchase orders.",
         "purchaseReturns": "Links this PurchaseOrder record to PurchaseReturn.",
         "discount": "Discount amount or rate applied to this PurchaseOrder record.",
         "adjustment": "Manual amount added to or subtracted from the calculated total.",
@@ -431,7 +432,20 @@
         "expense": "Links this DistributorPayment record to Expense through expenseId.",
         "expenseId": "Expense record associated with this supplier payment.",
         "purchaseReturnId": "Purchase return associated with this DistributorPayment record.",
-        "purchaseReturn": "Links this DistributorPayment record to PurchaseReturn through purchaseReturnId."
+        "purchaseReturn": "Links this DistributorPayment record to PurchaseReturn through purchaseReturnId.",
+        "allocations": "Purchase-order allocations of this payment; their sum equals its total when linked."
+      }
+    },
+    "DistributorPaymentAllocation": {
+      "purpose": "Allocates one distributor payment across purchase orders; schema applied with Prisma db push on 2026-10-11.",
+      "fields": {
+        "id": "Unique allocation identity.",
+        "companyId": "Company owning the payment and purchase order; validated by the raw payment API.",
+        "paymentId": "Parent payment; deleting it cascades its allocations.",
+        "purchaseOrderId": "Purchase order settled by this allocation; deletion restricted while allocated.",
+        "amount": "Portion of the parent payment that reduces this purchase order due.",
+        "payment": "One full payment and accounting source, shared by its allocations.",
+        "purchaseOrder": "Purchase order receiving this payment portion."
       }
     },
     "DistributorCredit": {
