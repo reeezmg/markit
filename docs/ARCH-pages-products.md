@@ -229,11 +229,12 @@ Loads the brand by ID with `useFindUniqueBrand`; saves name, target audience, de
 
 ### `pages/products/purchase.vue`
 
-Purchase-order product entry/edit page. The route can receive `poId` and an edit flag from distributor pages. New-product creation still uses hooks. Editing an existing product uses `/api/products/update` with item-level `updateInitialQty: true` only for changed initial quantities and request-level `syncPurchaseOrder: true`, so purchased quantities are saved separately from remaining stock and the PO totals are recalculated. Saving the purchase header and payment uses `/api/purchaseorder/update` in one transaction. Do not assume the deferred `save-batch` model of `/products/add` applies here.
+Purchase-order product entry/edit page. The route can receive `poId` and an edit flag from distributor pages. New-product creation still uses hooks. Editing an existing product uses `/api/products/update` with item-level `updateInitialQty: true` only for changed initial quantities and request-level `syncPurchaseOrder: true`, so purchased quantities are saved separately from remaining stock and the PO totals are recalculated. Saving the purchase header and payment uses `/api/purchaseorder/update` in one transaction. PO edits and product-driven total recalculation synchronize existing same-supplier purchase journals through `purchase-accounting-update.ts` before commit. The journal ID/entry number remains stable; its current amounts/lines follow the source and previous values are stored in audit JSON. Save-batch applies this again after transaction account overrides. No schema or trigger changes are required. Do not assume the deferred `save-batch` model of `/products/add` applies here.
 
 The purchase information `TopBar` includes `DistributorAccountSelection` for connected
 distributors. It emits `accountingAccounts` with payable/stock/tax/cash/bank choices.
 Both add and purchase pages send those choices to their save endpoint; the server's
 `selectDistributorAccounts` validates company and account type and saves the source
-snapshot inside the same transaction. Deferred distributor triggers post or reverse
-journals at commit. See `ARCH-pages-distributor.md` for import and reconciliation.
+snapshot inside the same transaction. Existing same-supplier purchase edits update
+the linked journal in place before commit; deferred triggers handle first postings
+and other source transitions. See `ARCH-pages-distributor.md` for import and reconciliation.

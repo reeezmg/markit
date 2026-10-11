@@ -2878,7 +2878,7 @@ PostgreSQL table: `accounts`. Source: `schema.zmodel:2094`. Extends `Base`.
 
 Purpose: Stores an account associated with a company.
 
-Code references (direct text/accessor matches): `storetools/server/api/accountant/[...path].ts`, `storetools/server/api/accounts/bank-ledger.pdf.get.ts`, `storetools/server/api/accounts/cash-ledger.pdf.get.ts`, `storetools/server/api/bill/createAccount.post.ts`, `storetools/server/api/bill/findManyAccount.get.ts`, `storetools/server/api/billSale/receipts.get.ts`, `storetools/server/api/notifications/notify.post.ts`, `storetools/server/api/salary/payment-options.get.ts`, `storetools/server/api/statement/_helpers.ts`, `storetools/server/middleware/company-request.ts`, `storetools/server/utils/accountant/account-settings.ts`, `storetools/server/utils/accountant/accounts.ts`, `storetools/server/utils/accountant/company-account-defaults.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/accountant/ecommerce.ts`, `storetools/server/utils/accountant/erp.ts`, `storetools/server/utils/accountant/investment-account-settings.ts`, `storetools/server/utils/accountant/investor-import.ts`, `storetools/server/utils/accountant/investor-profits.ts`, `storetools/server/utils/accountant/investors.ts`, `storetools/server/utils/accountant/journals.ts`, `storetools/server/utils/accountant/management.ts`, `storetools/server/utils/accountant/money.ts`, `storetools/server/utils/accountant/transfers.ts`, `storetools/server/utils/accountant/users.ts`, `storetools/server/utils/aiChat.ts`, `storetools/server/utils/bill-receipts.ts`, `storetools/server/utils/companyRequestScope.ts`, `storetools/server/utils/distributor-account-selection.ts`, `storetools/server/utils/distributor-credit-write.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/report-daily.ts`, `storetools/server/utils/staff-payment-account.ts`, `server/firebase.js`
+Code references (direct text/accessor matches): `storetools/server/api/accountant/[...path].ts`, `storetools/server/api/accounts/bank-ledger.pdf.get.ts`, `storetools/server/api/accounts/cash-ledger.pdf.get.ts`, `storetools/server/api/bill/createAccount.post.ts`, `storetools/server/api/bill/findManyAccount.get.ts`, `storetools/server/api/billSale/receipts.get.ts`, `storetools/server/api/notifications/notify.post.ts`, `storetools/server/api/salary/payment-options.get.ts`, `storetools/server/api/statement/_helpers.ts`, `storetools/server/middleware/company-request.ts`, `storetools/server/utils/accountant/account-settings.ts`, `storetools/server/utils/accountant/accounts.ts`, `storetools/server/utils/accountant/company-account-defaults.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/accountant/ecommerce.ts`, `storetools/server/utils/accountant/erp.ts`, `storetools/server/utils/accountant/investment-account-settings.ts`, `storetools/server/utils/accountant/investor-import.ts`, `storetools/server/utils/accountant/investor-profits.ts`, `storetools/server/utils/accountant/investors.ts`, `storetools/server/utils/accountant/journals.ts`, `storetools/server/utils/accountant/management.ts`, `storetools/server/utils/accountant/money.ts`, `storetools/server/utils/accountant/transfers.ts`, `storetools/server/utils/accountant/users.ts`, `storetools/server/utils/aiChat.ts`, `storetools/server/utils/bill-receipts.ts`, `storetools/server/utils/companyRequestScope.ts`, `storetools/server/utils/distributor-account-selection.ts`, `storetools/server/utils/distributor-credit-write.ts`, `storetools/server/utils/purchase-accounting-update.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/report-daily.ts`, `storetools/server/utils/staff-payment-account.ts`, `server/firebase.js`
 
 Declared constraints and policies:
 
@@ -5616,7 +5616,7 @@ PostgreSQL table: `accountant_v2_accounting_accounts`. Source: `schema.zmodel:40
 
 Purpose: Independent Accountant books: categorized chart, parent hierarchy, bank metadata, status and dashboard flag. Stored separately from the existing finance system.
 
-Code references (direct text/accessor matches): `storetools/server/api/billSale/receipts.get.ts`, `storetools/server/api/salary/payment-options.get.ts`, `storetools/server/api/statement/banks.get.ts`, `storetools/server/api/statement/_helpers.ts`, `storetools/server/api/users/ledger.get.ts`, `storetools/server/utils/accountant/company-account-defaults.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/accountant/erp.ts`, `storetools/server/utils/accountant/investor-profits.ts`, `storetools/server/utils/bill-receipts.ts`, `storetools/server/utils/distributor-account-selection.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/report-profit.ts`, `storetools/server/utils/reportSummary.ts`, `storetools/server/utils/staff-payment-account.ts`
+Code references (direct text/accessor matches): `storetools/server/api/billSale/receipts.get.ts`, `storetools/server/api/salary/payment-options.get.ts`, `storetools/server/api/statement/banks.get.ts`, `storetools/server/api/statement/_helpers.ts`, `storetools/server/api/users/ledger.get.ts`, `storetools/server/utils/accountant/company-account-defaults.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/accountant/erp.ts`, `storetools/server/utils/accountant/investor-profits.ts`, `storetools/server/utils/bill-receipts.ts`, `storetools/server/utils/distributor-account-selection.ts`, `storetools/server/utils/purchase-accounting-update.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/report-profit.ts`, `storetools/server/utils/reportSummary.ts`, `storetools/server/utils/staff-payment-account.ts`
 
 Declared constraints and policies:
 
@@ -5662,7 +5662,7 @@ PostgreSQL table: `accountant_v2_manual_journals`. Source: `schema.zmodel:4054`.
 
 Purpose: Independent Accountant books: draft/published journal header, source identity, reversal, creator and approval records. Stored separately from the existing finance system.
 
-Code references (direct text/accessor matches): `storetools/server/api/users/ledger.get.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/accountant/ecommerce.ts`, `storetools/server/utils/accountant/erp.ts`, `storetools/server/utils/accountant/investor-profits.ts`, `storetools/server/utils/accountant/investors.ts`, `storetools/server/utils/bill-receipts.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/report-bill-sales.ts`, `storetools/server/utils/report-profit.ts`, `storetools/server/utils/reportSummary.ts`
+Code references (direct text/accessor matches): `storetools/server/api/users/ledger.get.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/accountant/ecommerce.ts`, `storetools/server/utils/accountant/erp.ts`, `storetools/server/utils/accountant/investor-profits.ts`, `storetools/server/utils/accountant/investors.ts`, `storetools/server/utils/bill-receipts.ts`, `storetools/server/utils/purchase-accounting-update.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/report-bill-sales.ts`, `storetools/server/utils/report-profit.ts`, `storetools/server/utils/reportSummary.ts`
 
 Declared constraints and policies:
 
@@ -5710,7 +5710,7 @@ PostgreSQL table: `accountant_v2_manual_journal_lines`. Source: `schema.zmodel:4
 
 Purpose: Independent Accountant books: debit/credit amounts linked to journal and account. Stored separately from the existing finance system.
 
-Code references (direct text/accessor matches): `storetools/server/api/users/ledger.get.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/accountant/ecommerce.ts`, `storetools/server/utils/accountant/erp.ts`, `storetools/server/utils/accountant/investor-profits.ts`, `storetools/server/utils/bill-receipts.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/report-profit.ts`, `storetools/server/utils/reportSummary.ts`
+Code references (direct text/accessor matches): `storetools/server/api/users/ledger.get.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/accountant/ecommerce.ts`, `storetools/server/utils/accountant/erp.ts`, `storetools/server/utils/accountant/investor-profits.ts`, `storetools/server/utils/bill-receipts.ts`, `storetools/server/utils/purchase-accounting-update.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/report-profit.ts`, `storetools/server/utils/reportSummary.ts`
 
 Declared constraints and policies:
 
@@ -6208,7 +6208,7 @@ PostgreSQL table: `accountant_v2_distributor_settings`. Source: `schema.zmodel:4
 
 Purpose: Company-specific distributor connection to the new Accountant books and vendor contact.
 
-Code references (direct text/accessor matches): `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/distributor-account-selection.ts`
+Code references (direct text/accessor matches): `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/distributor-account-selection.ts`, `storetools/server/utils/purchase-accounting-update.ts`
 
 Declared constraints and policies:
 
@@ -6262,7 +6262,7 @@ PostgreSQL table: `accountant_v2_distributor_sources`. Source: `schema.zmodel:44
 
 Purpose: Idempotent snapshot and revision of a distributor source posting; retained after deletion for reversal history.
 
-Code references (direct text/accessor matches): `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/distributor-account-selection.ts`, `storetools/server/utils/distributor-credit-write.ts`, `storetools/server/utils/report-accounting.ts`
+Code references (direct text/accessor matches): `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/distributor-account-selection.ts`, `storetools/server/utils/distributor-credit-write.ts`, `storetools/server/utils/purchase-accounting-update.ts`, `storetools/server/utils/report-accounting.ts`
 
 Declared constraints and policies:
 
@@ -6442,7 +6442,7 @@ PostgreSQL table: `accountant_v2_accountant_audit`. Source: `schema.zmodel:4553`
 
 Purpose: Independent Accountant books: API actor, action, resource and metadata. Stored separately from the existing finance system.
 
-Code references (direct text/accessor matches): `storetools/server/utils/accountant/company-account-defaults.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/distributor-account-selection.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/source-save-request.ts`
+Code references (direct text/accessor matches): `storetools/server/utils/accountant/company-account-defaults.ts`, `storetools/server/utils/accountant/distributors.ts`, `storetools/server/utils/distributor-account-selection.ts`, `storetools/server/utils/purchase-accounting-update.ts`, `storetools/server/utils/report-accounting.ts`, `storetools/server/utils/source-save-request.ts`
 
 Declared constraints and policies:
 

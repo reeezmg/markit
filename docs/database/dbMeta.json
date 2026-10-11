@@ -23213,6 +23213,7 @@
         "storetools/server/utils/companyRequestScope.ts",
         "storetools/server/utils/distributor-account-selection.ts",
         "storetools/server/utils/distributor-credit-write.ts",
+        "storetools/server/utils/purchase-accounting-update.ts",
         "storetools/server/utils/report-accounting.ts",
         "storetools/server/utils/report-daily.ts",
         "storetools/server/utils/staff-payment-account.ts",
@@ -42056,6 +42057,7 @@
         "storetools/server/utils/accountant/investor-profits.ts",
         "storetools/server/utils/bill-receipts.ts",
         "storetools/server/utils/distributor-account-selection.ts",
+        "storetools/server/utils/purchase-accounting-update.ts",
         "storetools/server/utils/report-accounting.ts",
         "storetools/server/utils/report-profit.ts",
         "storetools/server/utils/reportSummary.ts",
@@ -42540,6 +42542,7 @@
         "storetools/server/utils/accountant/investor-profits.ts",
         "storetools/server/utils/accountant/investors.ts",
         "storetools/server/utils/bill-receipts.ts",
+        "storetools/server/utils/purchase-accounting-update.ts",
         "storetools/server/utils/report-accounting.ts",
         "storetools/server/utils/report-bill-sales.ts",
         "storetools/server/utils/report-profit.ts",
@@ -42888,6 +42891,7 @@
         "storetools/server/utils/accountant/erp.ts",
         "storetools/server/utils/accountant/investor-profits.ts",
         "storetools/server/utils/bill-receipts.ts",
+        "storetools/server/utils/purchase-accounting-update.ts",
         "storetools/server/utils/report-accounting.ts",
         "storetools/server/utils/report-profit.ts",
         "storetools/server/utils/reportSummary.ts"
@@ -46664,7 +46668,8 @@
       "description": "Company-specific distributor connection to the new Accountant books and vendor contact.",
       "codeReferences": [
         "storetools/server/utils/accountant/distributors.ts",
-        "storetools/server/utils/distributor-account-selection.ts"
+        "storetools/server/utils/distributor-account-selection.ts",
+        "storetools/server/utils/purchase-accounting-update.ts"
       ]
     },
     "AccountantDistributorMapping": {
@@ -46996,6 +47001,7 @@
         "storetools/server/utils/accountant/distributors.ts",
         "storetools/server/utils/distributor-account-selection.ts",
         "storetools/server/utils/distributor-credit-write.ts",
+        "storetools/server/utils/purchase-accounting-update.ts",
         "storetools/server/utils/report-accounting.ts"
       ]
     },
@@ -48106,6 +48112,7 @@
         "storetools/server/utils/accountant/company-account-defaults.ts",
         "storetools/server/utils/accountant/distributors.ts",
         "storetools/server/utils/distributor-account-selection.ts",
+        "storetools/server/utils/purchase-accounting-update.ts",
         "storetools/server/utils/report-accounting.ts",
         "storetools/server/utils/source-save-request.ts"
       ]

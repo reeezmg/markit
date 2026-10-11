@@ -2,6 +2,7 @@ import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
 import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
+import { updatePurchaseAccounting } from '../../utils/purchase-accounting-update';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 
@@ -132,6 +133,7 @@ export default defineEventHandler(async (event) => {
           for(const row of rows.rows) await selectDistributorAccounts(client,companyId,distributorId,`payment:${row.id}`,payment.accountingAccounts);
         }
       }
+      await updatePurchaseAccounting(client, companyId, poId)
       await client.query('COMMIT')
       client.release()
       return { success: true, poId }

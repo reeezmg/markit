@@ -1,4 +1,4 @@
-
+import { updatePurchaseAccounting } from './purchase-accounting-update';
 
 const money = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100
 
@@ -73,5 +73,6 @@ export async function recalculatePurchaseOrderTotals(
     }
   }
 
+  await updatePurchaseAccounting(client, input.companyId, input.poId)
   return { subtotalAmount: subtotal, totalAmount: total }
 }

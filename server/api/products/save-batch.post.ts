@@ -1,4 +1,5 @@
 import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
+import { updatePurchaseAccounting } from '../../utils/purchase-accounting-update';
 import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
@@ -220,6 +221,7 @@ export default defineEventHandler(async (event) => {
         const linked = await client.query('SELECT id FROM distributor_payments WHERE company_id=$1 AND purchase_order_id=$2',[companyId,poId]);
         for(const row of linked.rows) await selectDistributorAccounts(client,companyId,po.distributorId,`payment:${row.id}`,po.accountingAccounts);
       }
+      if (poId) await updatePurchaseAccounting(client, companyId, poId)
       await client.query('COMMIT')
       client.release()
 

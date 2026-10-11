@@ -402,7 +402,7 @@ Dropdown option loaders for filter UIs. All require `useAuthSession`.
 |---|---|---|
 | `purchaseorder/create` | POST | Creates empty `PurchaseOrder` for session company. Returns `{ id }`. Used by distributor/PO flows that route to `/products/purchase?poId=...`; `/products/add` no longer calls it up front. **Bug:** `console.log('res', res)` |
 | `purchaseorder/save` | POST (session) | Raw SQL atomic PO create: increment `companies.purchase_counter` (number = counter-1; the `assign_purchase_order_number` trigger no-ops since the number is preset), link `productIds`, create PO-linked `DistributorCredit` (CREDIT) or `DistributorPayment`. No money_transaction (no cash/bank ledger cascade). Replaces add.vue's `handleSaveWithPO` ZenStack chain |
-| `purchaseorder/update` | POST (session) | Raw SQL atomic PO edit: the 6-branch credit/payment transition matrix (create/delete/update keyed by `purchase_order_id`) + PO row update. Replaces `syncEditedPurchasePayment` |
+| `purchaseorder/update` | POST (session) | Raw SQL atomic PO edit: the 6-branch credit/payment transition matrix (create/delete/update keyed by `purchase_order_id`) + PO row update. Replaces `syncEditedPurchasePayment`. Existing same-supplier purchase accounting is updated in place by `purchase-accounting-update.ts`, preserving journal identity and auditing its previous values before commit; the deferred trigger sees the synchronized signature. |
 | `purchaseorder/[id]` | GET (session) | Raw SQL PO read (PO + products + variants + items incl. `initialQty`). Replaces `useFindUniquePurchaseOrder` |
 
 ---

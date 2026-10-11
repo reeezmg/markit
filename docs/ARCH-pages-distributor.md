@@ -43,12 +43,20 @@ Four migrations (`20260927120000_distributor_accounting`,
 create mappings/source snapshots, the source projection and deferred triggers. They
 cover SQL and generated Prisma writes to credits, payments, POs, returns, opening dues
 and linked money transactions. A source change and its journals commit or roll back
-together. Changes/deletions reverse the previous journal at its original date before
-posting a replacement; ALL/ACCOUNTS and relevant BANKING locks are enforced. Source
-signatures prevent duplicate imports. Posted lines retain both a distributor ID and
-a company-specific VENDOR contact. Defaults change future sources; an explicit
-transaction account override reverses/reposts the affected source. Audit rows retain
-the source, revision and previous/new journal IDs.
+together. The native trigger reverses/reposts changed sources and deletions. Normal
+PO and product edit APIs first call `server/utils/purchase-accounting-update.ts` for
+an existing purchase linked to the same supplier: it keeps the journal ID and entry
+number, updates its date/reference/total and replaces its payable/stock/GST lines.
+The previous journal, lines and source signature are retained in the audit JSON.
+The synchronized signature makes the deferred trigger a no-op for that purchase.
+Both old and new accounting dates are checked; ALL/ACCOUNTS and relevant BANKING
+locks remain enforced. Source signatures prevent duplicate imports. Posted lines
+retain both a distributor ID and a company-specific VENDOR contact. Defaults change
+future sources; purchase account overrides use the same in-place edit path, while
+other transaction overrides retain native reversal/repost behavior. Audit rows retain
+the source, revision and previous/new journal IDs. New purchases, supplier changes,
+source removal and non-purchase transactions still use native posting. Direct SQL or
+generic model writes bypassing these edit APIs retain native reversal behavior.
 
 Purchase credits linked to the same PO are grouped by company/distributor. Their
 actual amounts and distributor ownership take precedence over inconsistent historical
