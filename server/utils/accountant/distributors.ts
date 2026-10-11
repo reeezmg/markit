@@ -27,11 +27,12 @@ export async function distributorAccountingPreview(id: string) {
   const accounts = await accountantPrisma.accountingAccount.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
   const events = await query(`SELECT e.*,
       CASE WHEN po.id IS NOT NULL THEN 'PO-'||COALESCE(po.purchase_order_no::text,po.id)
-        WHEN dp.id IS NOT NULL THEN 'DP-'||COALESCE(dp.payment_no::text,dp.id)
-        WHEN dc.id IS NOT NULL THEN 'DC-'||COALESCE(dc.credit_no::text,dc.id)
+        WHEN dp.id IS NOT NULL THEN concat_ws('-',NULLIF(COALESCE(company.distributor_payment_prefix,'DP'),''),COALESCE(dp.payment_no::text,dp.id))
+        WHEN dc.id IS NOT NULL THEN concat_ws('-',NULLIF(COALESCE(company.distributor_credit_prefix,'DC'),''),COALESCE(dc.credit_no::text,dc.id))
         ELSE e.reference END AS source_reference,
-      CASE WHEN dc.id IS NOT NULL AND e.kind='PURCHASE' THEN 'CREDIT' ELSE e.kind END AS source_kind
+      CASE WHEN dc.id IS NOT NULL THEN 'CREDIT' ELSE e.kind END AS source_kind
     FROM accountant_v2_distributor_events e
+    JOIN companies company ON company.id=e.company_id
     LEFT JOIN purchase_orders po ON po.company_id=e.company_id AND e.source_key='purchase:'||po.id
     LEFT JOIN distributor_payments dp ON dp.company_id=e.company_id AND dp.distributor_id=e.distributor_id AND e.source_key='payment:'||dp.id
     LEFT JOIN distributor_credits dc ON dc.company_id=e.company_id AND dc.distributor_id=e.distributor_id AND e.source_key='credit:'||dc.id

@@ -17,9 +17,11 @@ projection. Superseded, reversed, deleted-source and unlinked journal rows are
 excluded, including from CSV and running due. Rows use Purchase/Payment/Credit/Return/Receipt/
 Opening source types; the table offers no Journal/Reversal filters. The preview joins
 company-scoped source documents to supply `PO-{purchaseOrderNo}`, `DP-{paymentNo}`,
-or `DC-{creditNo}` references (source IDs when unnumbered), ahead of journal references
-or supplier invoice numbers. Standalone product credits display Credit rather than
-Purchase; accounting event kinds and amounts remain unchanged. The same source
+or `{distributorCreditPrefix}-{creditNo}` references (source IDs when unnumbered), ahead of journal references
+or supplier invoice numbers. Payment and credit prefixes come from the owning company's
+Numbering settings, defaulting to DP/DC when null; a saved empty prefix omits the dash.
+All standalone Add Credit records, including received-money credits, display Credit;
+accounting event kinds and amounts remain unchanged. The same source
 references drive table search, sorting, details and CSV. It groups
 current journal lines and computes running payable from Accounts Payable lines
 before date/type/text filtering. Debit/credit details and journal links use current

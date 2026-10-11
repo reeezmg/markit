@@ -32,5 +32,9 @@ const credit = distributorAccountingTransactions({ledger:[line('credit','CREDIT'
   sources:[{journal_id:'credit',source_key:'credit:dc'}],
   events:[{source_key:'credit:dc',kind:'PURCHASE',source_kind:'CREDIT',source_reference:'DC-4'}]});
 assert.equal(credit[0].reference,'DC-4');assert.equal(credit[0].type,'CREDIT');assert.equal(credit[0].due,34500);
+const receiptCredit = distributorAccountingTransactions({ledger:[line('credit','CREDIT',500)],
+  sources:[{journal_id:'credit',source_key:'credit:dc'}],
+  events:[{source_key:'credit:dc',kind:'RECEIPT',source_kind:'CREDIT',source_reference:'CUSTOM-4'}]});
+assert.equal(receiptCredit[0].type,'CREDIT');assert.equal(receiptCredit[0].reference,'CUSTOM-4');assert.equal(receiptCredit[0].due,500);
 assert.equal(rows[0].reference,'purchase:po','Missing references fall back to the source key, never DIST');
 console.log('Current source transactions passed: grouping, running due, edited purchases, deleted/unlinked sources, reversal exclusion, supplier isolation and opening due.');
