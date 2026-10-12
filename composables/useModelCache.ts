@@ -25,11 +25,15 @@ export const useModelCache = () => {
       affected.add('DistributorCompany')
     }
     if (affected.has('DistributorPayment')) affected.add('PurchaseOrder')
-    return Promise.all(
-      [...affected].map((model) =>
+    const queries = [...affected].map((model) =>
         queryClient.invalidateQueries({ queryKey: [QUERY_KEY_PREFIX, model] })
       )
-    )
+    if (['PurchaseOrder', 'DistributorPayment', 'DistributorCredit', 'PurchaseReturn', 'Bill', 'Expense', 'MoneyTransaction', 'Product', 'Item', 'Variant'].some(model => affected.has(model))) {
+      queries.push(queryClient.invalidateQueries({ predicate: query =>
+        query.queryKey[0] === 'accountant-v2' && ['chart-directory', 'chart-ledger'].includes(String(query.queryKey[2]))
+      }))
+    }
+    return Promise.all(queries)
   }
 
   return { invalidateModels }

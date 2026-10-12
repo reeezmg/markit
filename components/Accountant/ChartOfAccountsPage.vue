@@ -2,321 +2,141 @@
   <div class="space-y-4">
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div>
-        <h2 class="text-lg font-semibold text-gray-900 dark:text-white">
-          Chart of Accounts
-        </h2>
-        <p class="text-sm text-gray-500 dark:text-gray-400">
-          Organize the accounts used to classify your business transactions. Balances are shown in {{ baseCurrency }}.
-        </p>
+        <h2 class="text-xl font-semibold">Chart of accounts</h2>
+        <p class="text-sm text-gray-500">Choose an account to review its balance and transactions.</p>
       </div>
-      <UButton icon="i-lucide-plus" @click="openCreate">New Account</UButton>
+      <div class="flex gap-2">
+        <UButton color="gray" variant="outline" icon="i-heroicons-arrow-path" :loading="loading || ledgerLoading" @click="load">Refresh</UButton>
+        <UButton icon="i-heroicons-plus" @click="openCreate">New account</UButton>
+      </div>
     </div>
-
-    <UCard :ui="{ body: { padding: 'p-0 sm:p-0' } }">
-      <div class="flex flex-wrap gap-2 border-b border-gray-200 dark:border-gray-700 p-3">
-        <UInput
-          v-model="search"
-          icon="i-lucide-search"
-          placeholder="Search accounts..."
-          class="min-w-64 flex-1"
-        />
-        <USelect
-          v-model="categoryFilter"
-          :options="categoryFilters"
-          class="w-44"
-        />
-        <USelect v-model="statusFilter" :options="statusFilters" class="w-36" />
-        <label class="text-xs text-gray-500">From
-          <UInput v-model="chartFrom" type="date" aria-label="Accounts from date" :max="chartTo || undefined" />
-        </label>
-        <label class="text-xs text-gray-500">To
-          <UInput v-model="chartTo" type="date" aria-label="Accounts to date" :min="chartFrom || undefined" />
-        </label>
-        <UButton v-if="chartFrom || chartTo" color="gray" variant="soft" @click="chartFrom = ''; chartTo = ''">Clear dates</UButton>
-      </div>
-      <p v-if="chartFrom || chartTo" class="px-3 py-2 text-xs text-gray-500">
-        Account balances show movement in the selected period.
-      </p>
-
-      <div class="grid min-h-[560px] lg:grid-cols-[minmax(360px,42%)_1fr]">
-        <div class="border-r border-gray-200 dark:border-gray-700">
-          <div v-if="loading" class="p-8 text-center text-sm text-gray-500 dark:text-gray-400">
-            Loading accounts…
-          </div>
-          <div
-            v-else-if="!visibleAccounts.length"
-            class="p-8 text-center text-sm text-gray-500 dark:text-gray-400"
-          >
-            No accounts found.
-          </div>
-          <template v-for="category in visibleCategories" :key="category">
-            <div
-              class="bg-gray-50 dark:bg-gray-800 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400"
-            >
-              {{ title(category) }}
+    <UAlert v-if="accountsQuery.isError.value" color="red" title="Could not load accounts" :description="accountsQuery.error.value?.message" />
+    <div class="grid items-start gap-4 xl:grid-cols-[280px_minmax(0,1fr)]">
+      <UCard :ui="{ body: { padding: 'p-0' }, header: { padding: 'p-3' } }">
+        <template #header>
+          <div class="space-y-3">
+            <UInput v-model="search" icon="i-heroicons-magnifying-glass" placeholder="Search account or code" aria-label="Search accounts" />
+            <div class="grid grid-cols-2 gap-2">
+              <USelect v-model="categoryFilter" :options="categoryFilters" aria-label="Account category" />
+              <USelect v-model="statusFilter" :options="statusFilters" aria-label="Account status" />
             </div>
-            <button
-              v-for="account in accountsFor(category)"
-              :key="account.id"
-              type="button"
-              class="flex w-full items-center gap-3 border-b border-gray-200 dark:border-gray-700 px-4 py-3 text-left hover:bg-gray-50 dark:bg-gray-800"
-              :class="{
-                'bg-primary-50 dark:bg-primary-950/20':
-                  selected?.id === account.id,
-              }"
-              :style="{ paddingLeft: `${16 + account.depth * 22}px` }"
-              @click="selectedId = account.id"
-            >
-              <UIcon
-                :name="
-                  account.depth
-                    ? 'i-lucide-corner-down-right'
-                    : accountIcon(account)
-                "
-                class="size-4 text-gray-500 dark:text-gray-400"
-              />
-              <div class="min-w-0 flex-1">
-                <div class="truncate text-sm font-medium text-gray-900 dark:text-white">
-                  {{ account.name }}
-                </div>
-                <div class="truncate text-xs text-gray-500 dark:text-gray-400">
-                  {{ account.code || "No code" }} ·
-                  {{ typeLabel(account.accountType) }}
-                </div>
-              </div>
-              <span class="text-sm font-medium">{{
-                money(account.balance)
-              }}</span>
-              <UBadge
-                v-if="!account.isActive"
-                color="gray"
-                variant="subtle"
-                size="xs"
-                >Inactive</UBadge
-              >
+            <div class="text-xs text-gray-500">{{ visibleAccounts.length }} accounts</div>
+          </div>
+        </template>
+        <div class="max-h-64 overflow-y-auto xl:max-h-[72vh]">
+          <div v-if="loading && !accounts.length" class="p-6 text-sm text-gray-500">Loading accounts...</div>
+          <p v-else-if="!visibleAccounts.length" class="p-6 text-sm text-gray-500">No matching accounts. Try another name or clear the filters.</p>
+          <template v-for="category in visibleCategories" :key="category">
+            <div class="sticky top-0 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-800">{{ title(category) }}</div>
+            <button v-for="account in accountsFor(category)" :key="account.id" type="button"
+              class="flex w-full items-center gap-2 border-b border-gray-100 px-3 py-3 text-left transition-colors hover:bg-gray-50 dark:border-gray-800 dark:hover:bg-gray-800"
+              :class="selectedId === account.id ? 'bg-primary-50 text-primary-700 dark:bg-primary-950/40 dark:text-primary-300' : ''"
+              :aria-pressed="selectedId === account.id" @click="selectedId = account.id">
+              <UIcon :name="account.depth ? 'i-lucide-corner-down-right' : accountIcon(account)" class="h-4 w-4 shrink-0" />
+              <span class="min-w-0 flex-1"><span class="block truncate text-sm font-medium">{{ account.name }}</span>
+                <span class="block truncate text-xs text-gray-500">{{ account.code || 'No code' }} · {{ typeLabel(account.accountType) }}</span></span>
+              <UBadge v-if="!account.isActive" color="gray" size="xs">Inactive</UBadge>
+              <UIcon v-if="selectedId === account.id" name="i-heroicons-chevron-right" class="h-4 w-4" />
             </button>
           </template>
         </div>
-
-        <div v-if="selected" class="p-5 sm:p-7">
-          <div
-            class="flex items-start justify-between gap-3 border-b border-gray-200 dark:border-gray-700 pb-5"
-          >
-            <div>
-              <div class="flex flex-wrap items-center gap-2">
-                <h3 class="text-xl font-semibold text-gray-900 dark:text-white">
-                  {{ selected.name }}
-                </h3>
-                <UBadge v-if="selected.isSystem" color="blue" variant="subtle"
-                  >System Account</UBadge
-                >
-                <UBadge
-                  :color="selected.isActive ? 'green' : 'gray'"
-                  variant="subtle"
-                >
-                  {{ selected.isActive ? "Active" : "Inactive" }}
-                </UBadge>
-              </div>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {{ typeLabel(selected.accountType) }}
-              </p>
-            </div>
-            <div class="flex gap-2">
-              <UButton
-                color="gray"
-                variant="soft"
-                icon="i-lucide-pencil"
-                @click="openEdit(selected)"
-                >Edit</UButton
-              >
-              <UButton
-                color="gray"
-                variant="soft"
-                :icon="
-                  selected.isActive
-                    ? 'i-lucide-circle-pause'
-                    : 'i-lucide-circle-play'
-                "
-                :disabled="selected.isSystem && selected.isActive"
-                @click="toggleStatus"
-              >
-                {{ selected.isActive ? "Mark Inactive" : "Mark Active" }}
-              </UButton>
-              <UButton
-                v-if="!selected.isSystem"
-                color="red"
-                variant="soft"
-                icon="i-lucide-trash-2"
-                @click="removeAccount"
-                >Delete</UButton
-              >
+      </UCard>
+      <div v-if="selected" class="min-w-0 space-y-4">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h3 class="text-xl font-semibold">{{ selected.name }}</h3>
+            <div class="mt-1 flex flex-wrap items-center gap-2 text-sm text-gray-500">
+              <span>{{ selected.code || 'No code' }} · {{ typeLabel(selected.accountType) }} · {{ baseCurrency }}</span>
+              <UBadge :color="selected.isActive ? 'green' : 'gray'" variant="subtle">{{ selected.isActive ? 'Active' : 'Inactive' }}</UBadge>
             </div>
           </div>
-
-          <dl class="mt-6 grid gap-5 sm:grid-cols-2">
-            <div>
-              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Account Code</dt>
-              <dd class="mt-1 text-sm">{{ selected.code || "—" }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Currency</dt>
-              <dd class="mt-1 text-sm">{{ selected.currency }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Parent Account</dt>
-              <dd class="mt-1 text-sm">{{ parentName(selected.parentId) }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Dashboard Watchlist</dt>
-              <dd class="mt-1 text-sm">
-                {{ selected.showOnDashboard ? "Included" : "Not included" }}
-              </dd>
-            </div>
-            <div>
-              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">{{ chartFrom || chartTo ? 'Period Balance' : 'Current Balance' }}</dt>
-              <dd class="mt-1 text-lg font-semibold">
-                {{ money(selected.balance) }}
-              </dd>
-            </div>
-            <div v-if="selected.openingBalance">
-              <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Opening Balance</dt>
-              <dd class="mt-1 text-sm">
-                {{ money(selected.openingBalance) }}
-                <span class="text-xs text-gray-500 dark:text-gray-400"
-                  >as of {{ formatDate(selected.openingBalanceDate!) }}</span
-                >
-              </dd>
-            </div>
-            <template v-if="isBankType(selected.accountType)">
-              <div>
-                <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Bank Name</dt>
-                <dd class="mt-1 text-sm">{{ selected.bankName || "—" }}</dd>
-              </div>
-              <div>
-                <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Account Number</dt>
-                <dd class="mt-1 text-sm">
-                  {{ selected.accountNumber || "—" }}
-                </dd>
-              </div>
-              <div>
-                <dt class="text-xs uppercase text-gray-500 dark:text-gray-400">Routing / IFSC</dt>
-                <dd class="mt-1 text-sm">
-                  {{ selected.routingNumber || "—" }}
-                </dd>
-              </div>
-            </template>
-          </dl>
-          <div class="mt-6">
-            <div class="text-xs uppercase text-gray-500 dark:text-gray-400">Description</div>
-            <p class="mt-1 whitespace-pre-wrap text-sm">
-              {{ selected.description || "No description added." }}
-            </p>
+          <div class="flex flex-wrap gap-2">
+            <UButton color="gray" variant="outline" icon="i-heroicons-pencil-square" :disabled="!ledger || ledgerLoading" @click="openEdit(selected)">Edit account</UButton>
+            <UDropdown :items="accountActions">
+              <UButton color="gray" variant="outline" icon="i-heroicons-ellipsis-horizontal" aria-label="Account actions" />
+            </UDropdown>
           </div>
-
-          <div class="mt-7 border-t border-dashed border-primary-300 pt-6">
-            <div class="rounded-md bg-gray-50 dark:bg-gray-800/60 p-4">
-              <div class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">
-                Closing Balance
-              </div>
-              <div class="mt-1 text-2xl font-semibold text-primary">
-                {{ ledgerMoney(ledger?.closingBalance ?? selected.balance) }}
-                <span class="text-base"
-                  >({{
-                    ledger?.balanceSide ?? normalSide(selected.category)
-                  }})</span
-                >
-              </div>
-            </div>
-
-            <div class="mt-6">
-              <h4 class="text-lg font-semibold">Recent Transactions</h4>
-              <div class="mt-3 flex flex-wrap items-end gap-2">
-                <label class="text-xs text-gray-500">From
-                  <UInput v-model="ledgerFrom" type="date" aria-label="Transactions from date" :max="ledgerTo || undefined" />
-                </label>
-                <label class="text-xs text-gray-500">To
-                  <UInput v-model="ledgerTo" type="date" aria-label="Transactions to date" :min="ledgerFrom || undefined" />
-                </label>
-                <UButton v-if="ledgerFrom || ledgerTo" color="gray" variant="soft" @click="ledgerFrom = ''; ledgerTo = ''">Clear transaction dates</UButton>
-              </div>
-            </div>
-            <div class="mt-3 overflow-x-auto">
-              <table class="w-full min-w-[760px] text-sm">
-                <thead
-                  class="border-y border-primary-200 text-xs uppercase text-gray-500 dark:text-gray-400"
-                >
-                  <tr>
-                    <th class="px-3 py-3 text-left">Date</th>
-                    <th class="px-3 py-3 text-left">Transaction Details</th>
-                    <th class="px-3 py-3 text-left">Type</th>
-                    <th class="px-3 py-3 text-right">Debit</th>
-                    <th class="px-3 py-3 text-right">Credit</th>
-                    <th class="px-3 py-3 text-right">Balance</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr
-                    v-for="line in ledger?.data ?? []"
-                    :key="line.id"
-                    class="border-b border-gray-200 dark:border-gray-700"
-                  >
-                    <td class="px-3 py-4">{{ formatDate(line.date) }}</td>
-                    <td class="px-3 py-4">
-                      <div>{{ line.transactionDetails }}</div>
-                      <div v-if="line.sourceParties?.client" class="text-xs text-gray-500">Client: {{ line.sourceParties.client.name }}</div>
-                      <div v-if="line.sourceParties?.user" class="text-xs text-gray-500">User: {{ line.sourceParties.user.name }}</div>
-                      <div v-if="line.sourceParties?.creditUser" class="text-xs text-gray-500">Credit owed by: {{ line.sourceParties.creditUser.name }}</div>
-                      <div v-if="line.sourceParties?.creditAccount" class="text-xs text-gray-500">Customer account: {{ line.sourceParties.creditAccount.name }}</div>
-                      <div class="text-xs text-gray-500 dark:text-gray-400">
-                        {{ line.referenceNumber || line.journalNumber }}
+        </div>
+        <UAlert v-if="ledgerQuery.isError.value" color="red" title="Could not load transactions" :description="ledgerQuery.error.value?.message">
+          <template #actions><UButton color="red" variant="soft" @click="ledgerQuery.refetch()">Retry</UButton></template>
+        </UAlert>
+        <div class="grid gap-3 sm:grid-cols-3">
+          <UCard :ui="{ body: { padding: 'p-4' } }"><p class="text-xs text-gray-500">Balance {{ ledgerTo ? 'as of ' + formatDate(ledgerTo) : 'to date' }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ ledger ? ledgerMoney(ledger.closingBalance) : '—' }} <span class="text-sm">{{ ledger?.balanceSide }}</span></p></UCard>
+          <UCard :ui="{ body: { padding: 'p-4' } }"><p class="text-xs text-gray-500">Debits · matching transactions</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ ledger ? ledgerMoney(ledger.filteredDebitTotal) : '—' }}</p></UCard>
+          <UCard :ui="{ body: { padding: 'p-4' } }"><p class="text-xs text-gray-500">Credits · matching transactions</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ ledger ? ledgerMoney(ledger.filteredCreditTotal) : '—' }}</p></UCard>
+        </div>
+        <UCard :ui="{ body: { padding: '' }, header: { padding: 'px-4 py-4' }, footer: { padding: 'p-4' } }">
+          <template #header>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <div class="flex flex-wrap items-center gap-3">
+                <UPopover :popper="{ placement: 'bottom-start' }">
+                  <UButton icon="i-heroicons-calendar-days-20-solid" color="primary" variant="soft">{{ ledgerFrom && ledgerTo ? format(new Date(ledgerFrom + 'T00:00:00'), 'd MMM, yyyy') + ' - ' + format(new Date(ledgerTo + 'T00:00:00'), 'd MMM, yyyy') : 'All dates' }}</UButton>
+                  <template #panel="{ close }">
+                    <div class="flex flex-col sm:flex-row sm:divide-x divide-gray-200 dark:divide-gray-800">
+                      <div class="flex flex-wrap sm:flex-col py-3">
+                        <UButton v-for="range in ranges" :key="range.label" :label="range.label" color="gray" variant="ghost" class="rounded-none px-5" @click="selectRange(range.duration); close()" />
+                        <UButton label="All dates" color="gray" variant="ghost" class="rounded-none px-5" @click="ledgerFrom = ''; ledgerTo = ''; close()" />
                       </div>
-                    </td>
-                    <td class="px-3 py-4">{{ line.type }}</td>
-                    <td class="px-3 py-4 text-right">
-                      {{ line.debit ? ledgerLineMoney(line.debit, line) : "—" }}
-                    </td>
-                    <td class="px-3 py-4 text-right">
-                      {{
-                        line.credit ? ledgerLineMoney(line.credit, line) : "—"
-                      }}
-                    </td>
-                    <td
-                      class="whitespace-nowrap px-3 py-4 text-right font-medium"
-                    >
-                      {{ ledgerMoney(line.balance) }} {{ line.balanceSide }}
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-              <div class="flex items-center justify-between gap-3 py-3">
-                <UButton color="gray" :disabled="ledgerPage <= 1 || ledgerLoading" @click="ledgerPage--; loadLedger(selected.id)">Previous</UButton>
-                <span class="text-sm text-gray-500">Page {{ ledgerPage }} · {{ ledger?.total || 0 }} entries</span>
-                <UButton color="gray" :disabled="ledgerPage * 50 >= (ledger?.total || 0) || ledgerLoading" @click="ledgerPage++; loadLedger(selected.id)">Next</UButton>
+                      <DatePicker v-model="ledgerDateRange" @close="close" />
+                    </div>
+                  </template>
+                </UPopover>
+                <UInput v-model="ledgerSearch" icon="i-heroicons-magnifying-glass-20-solid" placeholder="Search reference or details" aria-label="Search transactions" class="w-full sm:w-60" />
               </div>
-              <div
-                v-if="ledgerLoading"
-                class="py-10 text-center text-sm text-gray-500 dark:text-gray-400"
-              >
-                Loading ledger…
-              </div>
-              <div
-                v-else-if="!ledger?.data.length"
-                class="py-10 text-center text-sm text-gray-500 dark:text-gray-400"
-              >
-                No published transactions for this account.
-              </div>
+              <UButton v-if="hasLedgerFilters" color="gray" variant="ghost" @click="resetLedgerFilters">Reset filters</UButton>
+            </div>
+          </template>
+          <div class="flex flex-wrap items-center justify-between gap-3 border-b border-gray-200 px-4 py-3 dark:border-gray-800">
+            <div class="flex items-center gap-2 text-sm"><span class="text-gray-500">Rows per page</span><USelect v-model="ledgerPageSize" :options="[10, 20, 50, 100]" size="xs" aria-label="Rows per page" /></div>
+            <div class="flex items-center gap-2">
+              <USelect v-model="ledgerOrder" :options="[{ label: 'Newest first', value: 'desc' }, { label: 'Oldest first', value: 'asc' }]" size="xs" aria-label="Transaction order" />
+              <UButton :color="hasAdvancedFilters ? 'primary' : 'gray'" variant="outline" size="xs" icon="i-heroicons-funnel" @click="openLedgerFilters">Filters</UButton>
             </div>
           </div>
-        </div>
-        <div
-          v-else
-          class="flex items-center justify-center p-8 text-sm text-gray-500 dark:text-gray-400"
-        >
-          Select an account to view its details.
-        </div>
+          <div v-if="hasAdvancedFilters" class="flex flex-wrap gap-2 px-4 py-2 text-xs text-gray-500">
+            <UBadge v-if="ledgerType" color="gray" variant="subtle">{{ sourceTypeOptions.find(o => o.value === ledgerType)?.label || ledgerType }}</UBadge>
+            <UBadge v-if="ledgerSide" color="gray" variant="subtle">{{ ledgerSide === 'DEBIT' ? 'Debits' : 'Credits' }}</UBadge>
+            <UBadge v-if="ledgerMin !== '' || ledgerMax !== ''" color="gray" variant="subtle">Amount: {{ ledgerMin === '' ? '0' : ledgerMin }} – {{ ledgerMax === '' ? 'Any' : ledgerMax }}</UBadge>
+          </div>
+          <UTable :rows="ledger?.data || []" :columns="ledgerColumns" :loading="ledgerLoading" :empty-state="{ icon: 'i-heroicons-document-magnifying-glass', label: 'No transactions match these filters.' }" :ui="{ td: { base: 'align-top', padding: 'px-4 py-3' } }">
+            <template #date-data="{ row }"><span class="whitespace-nowrap text-gray-500">{{ formatDate(row.date) }}</span></template>
+            <template #transactionDetails-data="{ row }"><div class="max-w-sm whitespace-normal"><p class="font-medium">{{ row.referenceNumber || row.journalNumber }}</p><p class="mt-1 text-sm text-gray-500">{{ row.transactionDetails || '—' }}</p><p v-for="(party, key) in row.sourceParties || {}" :key="key" class="text-xs text-gray-500">{{ party?.name }}</p></div></template>
+            <template #type-data="{ row }"><UBadge color="gray" variant="subtle" class="whitespace-nowrap">{{ row.type }}</UBadge></template>
+            <template #debit-data="{ row }"><span class="block text-right tabular-nums whitespace-nowrap">{{ row.debit ? ledgerMoney(row.debit) : '—' }}</span></template>
+            <template #credit-data="{ row }"><span class="block text-right tabular-nums whitespace-nowrap">{{ row.credit ? ledgerMoney(row.credit) : '—' }}</span></template>
+            <template #balance-data="{ row }"><span class="block text-right font-medium tabular-nums whitespace-nowrap">{{ ledgerMoney(row.balance) }} {{ row.balanceSide }}</span></template>
+          </UTable>
+          <template #footer>
+            <div class="flex flex-wrap items-center justify-between gap-3">
+              <p class="text-sm text-gray-500">{{ ledger?.total ? (ledgerPage - 1) * Number(ledgerPageSize) + 1 : 0 }}–{{ Math.min(ledgerPage * Number(ledgerPageSize), ledger?.total || 0) }} of {{ ledger?.total || 0 }} transactions</p>
+              <UPagination v-model="ledgerPage" :page-count="Number(ledgerPageSize)" :total="ledger?.total || 0" :disabled="ledgerLoading" />
+            </div>
+            <p class="mt-3 text-xs text-gray-500">Running balances include all earlier activity, even when search or filters hide some rows. Amounts are in {{ baseCurrency }}.</p>
+          </template>
+        </UCard>
+        <details class="rounded-lg border border-gray-200 p-4 text-sm dark:border-gray-800">
+          <summary class="cursor-pointer font-medium">Account information</summary>
+          <dl class="mt-4 grid gap-4 sm:grid-cols-2">
+            <div><dt class="text-gray-500">Parent account</dt><dd>{{ parentName(selected.parentId) }}</dd></div>
+            <div><dt class="text-gray-500">Description</dt><dd>{{ selected.description || 'No description added.' }}</dd></div>
+            <div v-if="selected.openingBalance != null"><dt class="text-gray-500">Opening balance</dt><dd>{{ money(selected.openingBalance) }} as of {{ formatDate(selected.openingBalanceDate!) }}</dd></div>
+            <template v-if="isBankType(selected.accountType)"><div><dt class="text-gray-500">Bank</dt><dd>{{ selected.bankName || '—' }}</dd></div><div><dt class="text-gray-500">Account number / IFSC</dt><dd>{{ selected.accountNumber || '—' }} / {{ selected.routingNumber || '—' }}</dd></div></template>
+          </dl>
+        </details>
       </div>
-    </UCard>
-
+      <UCard v-else class="min-h-80"><div class="flex flex-col items-center justify-center gap-3 py-20 text-center"><UIcon name="i-heroicons-book-open" class="h-10 w-10 text-gray-400" /><h3 class="font-semibold">Select an account</h3><p class="max-w-sm text-sm text-gray-500">Choose an account from the list to see its balance, find transactions, or update its details.</p></div></UCard>
+    </div>
+    <UModal v-model="ledgerFilterOpen">
+      <UCard>
+        <template #header><h3 class="font-semibold">Transaction filters</h3></template>
+        <div class="space-y-4">
+          <UFormGroup label="Transaction type"><USelect v-model="filterDraft.sourceType" :options="sourceTypeOptions" /></UFormGroup>
+          <UFormGroup label="Debit / credit"><USelect v-model="filterDraft.side" :options="[{ label: 'All entries', value: '' }, { label: 'Debit', value: 'DEBIT' }, { label: 'Credit', value: 'CREDIT' }]" /></UFormGroup>
+          <div class="grid grid-cols-2 gap-3"><UFormGroup label="Minimum amount"><UInput v-model="filterDraft.min" type="number" min="0" step="0.01" placeholder="0" /></UFormGroup><UFormGroup label="Maximum amount"><UInput v-model="filterDraft.max" type="number" min="0" step="0.01" placeholder="Any amount" /></UFormGroup></div>
+        </div>
+        <template #footer><div class="flex justify-end gap-2"><UButton color="gray" variant="ghost" @click="ledgerFilterOpen = false">Cancel</UButton><UButton @click="applyLedgerFilters">Apply filters</UButton></div></template>
+      </UCard>
+    </UModal>
     <AccountantModal
       v-model="formOpen"
       :title="editingId ? 'Edit Account' : 'Create Account'"
@@ -456,20 +276,53 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue";
+import { computed, reactive, ref, watch } from "vue";
+import { useQuery, useQueryClient } from '@tanstack/vue-query';
+import { refDebounced } from '@vueuse/core';
+import { format, sub, type Duration } from 'date-fns';
 const api = useAccountantApi();
-const baseCurrency = ref("INR");
+const queryClient = useQueryClient();
 const ledgerPage = ref(1), ledgerFrom = ref(''), ledgerTo = ref('');
-const chartFrom = ref(''), chartTo = ref('');
-const dateQuery = computed(() => ({
-  ...(chartFrom.value ? { from: chartFrom.value } : {}),
-  ...(chartTo.value ? { to: chartTo.value } : {}),
-}));
-const ledgerDateQuery = computed(() => ({
-  ...(ledgerFrom.value ? { from: ledgerFrom.value } : {}),
-  ...(ledgerTo.value ? { to: ledgerTo.value } : {}),
-}));
-let ledgerRequest = 0, accountsRequest = 0;
+const ledgerPageSize = ref(20), ledgerOrder = ref('desc');
+const ledgerSearch = ref(''), debouncedLedgerSearch = refDebounced(ledgerSearch, 300);
+const ledgerType = ref(''), ledgerSide = ref(''), ledgerMin = ref(''), ledgerMax = ref('');
+const ledgerFilterOpen = ref(false);
+const filterDraft = reactive({ sourceType: '', side: '', min: '', max: '' });
+const ranges: { label: string; duration: Duration }[] = [
+  { label: 'Today', duration: { days: 0 } }, { label: 'Last 7 days', duration: { days: 7 } },
+  { label: 'Last 30 days', duration: { days: 30 } }, { label: 'Last 3 months', duration: { months: 3 } },
+  { label: 'Last 6 months', duration: { months: 6 } }, { label: 'Last year', duration: { years: 1 } },
+];
+const ledgerDateRange = computed({
+  get: () => ({ start: ledgerFrom.value ? new Date(ledgerFrom.value + 'T00:00:00') : new Date(), end: ledgerTo.value ? new Date(ledgerTo.value + 'T00:00:00') : new Date() }),
+  set: (range: { start: Date; end: Date }) => {
+    ledgerFrom.value = format(range.start, 'yyyy-MM-dd'); ledgerTo.value = format(range.end, 'yyyy-MM-dd');
+  },
+});
+function selectRange(duration: Duration) { ledgerDateRange.value = { start: sub(new Date(), duration), end: new Date() }; }
+const hasAdvancedFilters = computed(() => Boolean(ledgerType.value || ledgerSide.value || ledgerMin.value !== '' || ledgerMax.value !== ''));
+const hasLedgerFilters = computed(() => hasAdvancedFilters.value || Boolean(ledgerFrom.value || ledgerTo.value || ledgerSearch.value));
+function openLedgerFilters() {
+  Object.assign(filterDraft, { sourceType: ledgerType.value, side: ledgerSide.value, min: ledgerMin.value, max: ledgerMax.value });
+  ledgerFilterOpen.value = true;
+}
+function applyLedgerFilters() {
+  if ([filterDraft.min, filterDraft.max].some(v => v !== '' && (!Number.isFinite(Number(v)) || Number(v) < 0)) ||
+      (filterDraft.min !== '' && filterDraft.max !== '' && Number(filterDraft.min) > Number(filterDraft.max))) {
+    toast.add({ title: 'Enter a valid minimum and maximum amount', color: 'red' }); return;
+  }
+  ledgerType.value = filterDraft.sourceType; ledgerSide.value = filterDraft.side;
+  ledgerMin.value = filterDraft.min; ledgerMax.value = filterDraft.max; ledgerFilterOpen.value = false;
+}
+function resetLedgerFilters() {
+  ledgerFrom.value = ''; ledgerTo.value = ''; ledgerSearch.value = '';
+  ledgerType.value = ''; ledgerSide.value = ''; ledgerMin.value = ''; ledgerMax.value = '';
+}
+const ledgerColumns = [
+  { key: 'date', label: 'Date' }, { key: 'transactionDetails', label: 'Transaction details' },
+  { key: 'type', label: 'Type' }, { key: 'debit', label: 'Debit', class: 'text-right' },
+  { key: 'credit', label: 'Credit', class: 'text-right' }, { key: 'balance', label: 'Running balance', class: 'text-right' },
+];
 
 type Account = {
   id: string;
@@ -556,18 +409,43 @@ const statusFilters = [
   { label: "Active", value: "ACTIVE" },
   { label: "Inactive", value: "INACTIVE" },
 ];
-const accounts = ref<Account[]>([]),
-  loading = ref(false),
-  saving = ref(false),
+const saving = ref(false),
   formOpen = ref(false);
-const ledger = ref<any>(null),
-  ledgerLoading = ref(false);
 const selectedId = ref(typeof useRoute().query.account === "string" ? String(useRoute().query.account) : ""),
   editingId = ref(""),
   search = ref(""),
   categoryFilter = ref("ALL"),
   statusFilter = ref("ALL");
 const toast = useToast();
+const accountsQuery = useQuery({
+  queryKey: ['accountant-v2', api.companyId, 'chart-directory'],
+  queryFn: () => api.get<{ data: Account[]; baseCurrency: string }>('/accounting-accounts', { query: { view: 'directory' } }),
+  enabled: computed(() => Boolean(api.companyId.value)), staleTime: 60_000, gcTime: 300_000,
+});
+const accounts = computed(() => addDepth(accountsQuery.data.value?.data || []));
+const baseCurrency = computed(() => accountsQuery.data.value?.baseCurrency || 'INR');
+const loading = accountsQuery.isFetching;
+const ledgerParams = computed(() => ({
+  page: ledgerPage.value, pageSize: Number(ledgerPageSize.value), order: ledgerOrder.value,
+  ...(ledgerFrom.value ? { from: ledgerFrom.value } : {}), ...(ledgerTo.value ? { to: ledgerTo.value } : {}),
+  ...(debouncedLedgerSearch.value ? { search: debouncedLedgerSearch.value } : {}),
+  ...(ledgerType.value ? { sourceType: ledgerType.value } : {}), ...(ledgerSide.value ? { side: ledgerSide.value } : {}),
+  ...(ledgerMin.value !== '' ? { minAmount: Number(ledgerMin.value) } : {}),
+  ...(ledgerMax.value !== '' ? { maxAmount: Number(ledgerMax.value) } : {}),
+}));
+const ledgerQuery = useQuery({
+  queryKey: ['accountant-v2', api.companyId, 'chart-ledger', selectedId, ledgerParams],
+  queryFn: () => api.get(`/accounting-accounts/${selectedId.value}/ledger`, { query: ledgerParams.value }),
+  enabled: computed(() => Boolean(api.companyId.value && selectedId.value) &&
+    (!ledgerFrom.value || !ledgerTo.value || ledgerFrom.value <= ledgerTo.value)),
+  staleTime: 60_000, gcTime: 300_000,
+});
+const ledger = ledgerQuery.data, ledgerLoading = ledgerQuery.isFetching;
+const sourceTypeOptions = computed(() => [{ label: 'All transaction types', value: '' }, ...(ledger.value?.sourceTypes || [])]);
+const accountActions = computed(() => [[
+  { label: selected.value?.isActive ? 'Mark inactive' : 'Mark active', disabled: selected.value?.isSystem && selected.value?.isActive, click: toggleStatus },
+  ...(!selected.value?.isSystem ? [{ label: 'Delete account', icon: 'i-heroicons-trash', click: removeAccount }] : []),
+]]);
 const emptyForm = () => ({
   accountType: "OTHER_CURRENT_ASSET",
   name: "",
@@ -586,7 +464,12 @@ const emptyForm = () => ({
 });
 const form = reactive(emptyForm());
 const byId = computed(() => new Map(accounts.value.map((a) => [a.id, a])));
-const selected = computed(() => byId.value.get(selectedId.value));
+const selected = computed(() => {
+  const account = byId.value.get(selectedId.value);
+  return account && ledger.value?.account.id === selectedId.value
+    ? { ...account, ...ledger.value.account, currency: account.currency }
+    : account;
+});
 const editingSystem = computed(() =>
   Boolean(editingId.value && byId.value.get(editingId.value)?.isSystem),
 );
@@ -689,30 +572,6 @@ function normalSide(category: string) {
 function formatDate(value: string) {
   return new Date(value).toLocaleDateString("en-IN");
 }
-async function loadLedger(id: string) {
-  const request = ++ledgerRequest;
-  if (!id) {
-    ledger.value = null;
-    ledgerLoading.value = false;
-    return;
-  }
-  ledgerLoading.value = true;
-  try {
-    const result = await api.get(`/accounting-accounts/${id}/ledger`, { query: { page: ledgerPage.value, ...ledgerDateQuery.value } });
-    if (request !== ledgerRequest) return;
-    ledger.value = result;
-  } catch (e: any) {
-    if (request !== ledgerRequest) return;
-    ledger.value = null;
-    toast.add({
-      title: "Could not load account ledger",
-      description: e.message,
-      color: "red",
-    });
-  } finally {
-    if (request === ledgerRequest) ledgerLoading.value = false;
-  }
-}
 function addDepth(rows: Account[]) {
   const map = new Map(rows.map((a) => [a.id, a]));
   return rows
@@ -735,30 +594,8 @@ function addDepth(rows: Account[]) {
     );
 }
 async function load() {
-  const request = ++accountsRequest;
-  loading.value = true;
-  try {
-    const result = await api.get<{ data: Account[]; baseCurrency: string }>("/accounting-accounts", { query: dateQuery.value });
-    if (request !== accountsRequest) return;
-    baseCurrency.value = result.baseCurrency;
-    accounts.value = addDepth(result.data);
-    if (
-      !selectedId.value ||
-      !accounts.value.some((a) => a.id === selectedId.value)
-    )
-      selectedId.value = accounts.value[0]?.id || "";
-  } catch (e: any) {
-    if (request !== accountsRequest) return;
-    toast.add({
-      title: "Could not load accounts",
-      description: e.message,
-      color: "red",
-    });
-  } finally {
-    if (request === accountsRequest) loading.value = false;
-  }
-}
-function openCreate() {
+  await queryClient.invalidateQueries({ queryKey: ['accountant-v2', api.companyId.value] });
+}function openCreate() {
   Object.assign(form, emptyForm());
   editingId.value = "";
   formOpen.value = true;
@@ -815,7 +652,6 @@ async function saveAccount() {
       : await api.post<Account>("/accounting-accounts", payload);
     formOpen.value = false;
     selectedId.value = saved.id;
-    await load();
     toast.add({
       title: editingId.value ? "Account updated" : "Account created",
       color: "green",
@@ -836,7 +672,6 @@ async function toggleStatus() {
     await api.post(`/accounting-accounts/${selected.value.id}/status`, {
       isActive: !selected.value.isActive,
     });
-    await load();
   } catch (e: any) {
     toast.add({
       title: "Could not update status",
@@ -850,7 +685,6 @@ async function removeAccount() {
   try {
     await api.delete(`/accounting-accounts/${selected.value.id}`);
     selectedId.value = "";
-    await load();
     toast.add({ title: "Account deleted", color: "green" });
   } catch (e: any) {
     toast.add({
@@ -869,19 +703,11 @@ watch(
     }
   },
 );
-watch(selectedId, (id) => { ledgerPage.value = 1; loadLedger(id); }, { immediate: true });
-watch([ledgerFrom, ledgerTo], () => {
-  if (ledgerFrom.value && ledgerTo.value && ledgerFrom.value > ledgerTo.value) {
-    return toast.add({ title: 'From date cannot be after to date', color: 'red' });
-  }
+watch([selectedId, ledgerFrom, ledgerTo, debouncedLedgerSearch, ledgerType, ledgerSide, ledgerMin, ledgerMax, ledgerPageSize, ledgerOrder], () => {
   ledgerPage.value = 1;
-  loadLedger(selectedId.value);
+}, { flush: 'sync' });
+watch(api.companyId, () => { selectedId.value = ''; resetLedgerFilters(); });
+watch(accounts, rows => {
+  if (accountsQuery.isSuccess.value && selectedId.value && !rows.some(row => row.id === selectedId.value)) selectedId.value = '';
 });
-watch([chartFrom, chartTo], () => {
-  if (chartFrom.value && chartTo.value && chartFrom.value > chartTo.value) {
-    return toast.add({ title: 'From date cannot be after to date', color: 'red' });
-  }
-  load();
-});
-onMounted(load);
 </script>

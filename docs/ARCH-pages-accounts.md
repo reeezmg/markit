@@ -509,16 +509,28 @@ creates a disposable schema.
 - The chart and account ledgers report company base currency using each journal's
   exchange rate; original journal lines retain entered amounts/currency. Exchange
   conversion must also balance after cent rounding. Ledger dates carry forward
-  earlier opening/movement, and the chart provides 50-row ledger pagination.
-  Chart From/To controls automatically refresh account period balances. Separate
-  From/To controls above Recent Transactions filter only the selected account's
-  rows, resetting pagination to page one. Each filter has its own clear action.
-  Clear dates restores all-time balances. Account period balances are net movement
-  within the range; ledger closing/running balances carry earlier activity forward.
+  earlier opening/movement. The chart first requests `/accounting-accounts?view=directory`
+  for account metadata only, skipping all journal totals and opening-balance reads.
+  No account is opened automatically; clicking one (or using an account deep link)
+  loads its ledger. TanStack Query caches directory and ledger requests for one minute,
+  keyed by company, account, dates, filters, order and page. Accountant API mutations
+  invalidate that company's cache; source writes using `useModelCache` also invalidate
+  chart caches. Refresh explicitly refetches active queries.
+  The transaction table uses the Sales page's `DatePicker` popover with presets and
+  All dates, debounced reference/details search, source-type/debit/credit/amount filters,
+  newest/oldest ordering and 10/20/50/100-row pagination (20 by default). Filter changes
+  reset the page. Summary cards distinguish balance through the end date from totals
+  for matching rows; running balances include earlier and hidden transactions.
+  `server/utils/accountant/account-ledger.ts` computes balances and filters in SQL for
+  one company/account and returns only the requested page. Window balances are computed
+  before display filters; currency conversion rounds each line to cents. The lightweight
+  directory omits balances; the existing full-list endpoint still supports period totals.
   Both account-list and ledger endpoints accept date-only `from`/`to` filters,
   include the entire end day and reject invalid or reversed ranges.
-  `node tests/accountant-date-filter.test.mjs` verifies handlers and page refresh
-  without database writes.
+  `node tests/accountant-date-filter.test.mjs` verifies lazy loading, cache reuse,
+  company isolation and table filtering. `node tests/accountant-ledger-query.test.mjs
+  --read-only-sql` checks the real SQL against CTE fixtures in a read-only transaction;
+  it creates no tables and changes no data or schema.
 - Account-editor and opening-balance-screen writes share one `OPENING_BALANCE`
   journal per account. Opening values are entered in company base currency and
   offset against `Opening Balance Adjustments`. Used accounts cannot be deleted;

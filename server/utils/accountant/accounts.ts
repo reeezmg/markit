@@ -1,5 +1,6 @@
-import { baseAmount, baseCurrencyTotals } from './reporting';
+import { baseCurrencyTotals } from './reporting';
 import { journalDateRange } from './date-range';
+import { readAccountLedger } from './account-ledger';
 import { z } from 'zod';
 import { Router, asyncHandler, badRequest, notFound, requireAuth, rbac } from './router';
 import { accountantPrisma as prisma, logActivity, context } from './context';
@@ -378,7 +379,7 @@ async function openingBalancesFor(
 ) {
   const categoryById = new Map(accounts.map((row) => [row.id, row.category]));
   const journals = await prisma.manualJournal.findMany({
-    where: { sourceType: OPENING_BALANCE_SOURCE },
+    where: { sourceType: OPENING_BALANCE_SOURCE, sourceId: { in: accounts.map(row => row.id) } },
     select: {
       sourceId: true,
       journalDate: true,
@@ -435,9 +436,16 @@ accountingAccountRouter.get(
             }
           : {}),
       },
-      include: { _count: { select: { children: true } } },
+      ...(req.query.view === 'directory' ? {
+        select: { id: true, parentId: true, category: true, accountType: true, name: true,
+          code: true, currency: true, isActive: true, isSystem: true },
+      } : { include: { _count: { select: { children: true } } } }),
       orderBy: [{ category: "asc" }, { name: "asc" }],
     });
+    if (req.query.view === 'directory') {
+      res.json({ baseCurrency: company.currency, data });
+      return;
+    }
     const [lineTotals, openings] = await Promise.all([
       baseCurrencyTotals({
         by: ["accountId", "side"],
@@ -482,179 +490,18 @@ accountingAccountRouter.get(
   "/:id/ledger",
   rbac("ACCOUNT", "READ"),
   asyncHandler(async (req, res) => {
-    const id = String(req.params.id);
-    const query = z
-      .object({
-        page: z.coerce.number().int().positive().default(1),
-        pageSize: z.coerce.number().int().min(1).max(200).default(50),
-        from: z.string().optional(),
-        to: z.string().optional(),
-      })
-      .parse(req.query);
-    const journalDate = journalDateRange(query.from, query.to);
-    const account = await prisma.accountingAccount.findFirst({ where: { id } });
+    const account = await prisma.accountingAccount.findFirst({ where: { id: String(req.params.id) } });
     if (!account) throw notFound("Account");
-    const where: any = {
-      accountId: id,
-      deletedAt: null,
-      journal: {
-        status: "PUBLISHED",
-        deletedAt: null,
-        ...(journalDate ? { journalDate } : {}),
-      },
-    };
     const company = await prisma.company.findUnique({ where: { id: account.companyId } });
-    const skip = (query.page - 1) * query.pageSize;
-    const [lines, total, totals, newerLines] = await Promise.all([
-      prisma.manualJournalLine.findMany({
-        where,
-        include: {
-          journal: {
-            select: {
-              id: true,
-              entryNumber: true,
-              journalDate: true,
-              referenceNumber: true,
-              notes: true,
-              sourceType: true,
-              sourceId: true,
-              currency: true,
-              exchangeRate: true,
-            },
-          },
-        },
-        orderBy: [{ journal: { journalDate: "desc" } }, { createdAt: "desc" }, { id: "desc" }],
-        skip,
-        take: query.pageSize,
-      }),
-      prisma.manualJournalLine.count({ where }),
-      baseCurrencyTotals({
-        by: ["side"],
-        where: { ...where, journal: { ...where.journal, journalDate: journalDate?.lte ? { lte: journalDate.lte } : undefined } },
-        _sum: { amount: true },
-      }),
-      skip
-        ? prisma.manualJournalLine.findMany({
-            where,
-            select: { side: true, amount: true, journal: { select: { exchangeRate: true } } },
-            orderBy: [
-              { journal: { journalDate: "desc" } },
-              { createdAt: "desc" }, { id: "desc" },
-            ],
-            take: skip,
-          })
-        : Promise.resolve([]),
+    const [ledger, openings] = await Promise.all([
+      readAccountLedger(prisma, req.user!.companyId!, account, company.currency, req.query),
+      openingBalancesFor([account]),
     ]);
-    const partyIds = [
-      ...new Set(lines.map((line) => line.partyId).filter(Boolean)),
-    ] as string[];
-    const parties = partyIds.length
-      ? await prisma.party.findMany({
-          where: { id: { in: partyIds } },
-          select: { id: true, name: true },
-        })
-      : [];
-    const partyMap = new Map(parties.map((party) => [party.id, party.name]));
-    const typeLabels: Record<string, string> = {
-      MONEY_RECEIVE: "Receipt", MONEY_PAY: "Payment", MONEY_REVERSAL: "Payment reversal",
-      SALES_INVOICE: "Invoice",
-      SALES_PAYMENT: "Invoice Payment",
-      ADVANCE_PAYMENT: "Retainer Payment",
-      ADVANCE_APPLICATION: "Retainer Applied",
-      ACCOUNT_TRANSFER: "Account Transfer",
-      OPENING_BALANCE: "Opening Balance",
-    };
-    const debitTotal = Number(
-      totals.find((row) => row.side === "DEBIT")?._sum.amount ?? 0,
-    );
-    const creditTotal = Number(
-      totals.find((row) => row.side === "CREDIT")?._sum.amount ?? 0,
-    );
-    const debitNormal = ["ASSET", "EXPENSE"].includes(account.category);
-    const signedBalance = debitNormal
-      ? debitTotal - creditTotal
-      : creditTotal - debitTotal;
-    const signedMovement = (side: string, amount: unknown) => {
-      const value = Number(amount);
-      return debitNormal
-        ? side === "DEBIT"
-          ? value
-          : -value
-        : side === "CREDIT"
-          ? value
-          : -value;
-    };
-    let runningBalance =
-      signedBalance -
-      newerLines.reduce(
-        (sum, line) => sum + signedMovement(line.side, baseAmount(line)),
-        0,
-      );
-    const data = lines.map((line) => {
-      const balance = runningBalance;
-      runningBalance -= signedMovement(line.side, baseAmount(line));
-      return {
-        id: line.id,
-        sourceParties: line.sourceParties,
-        date: line.journal.journalDate,
-        transactionDetails: line.partyId
-          ? (partyMap.get(line.partyId) ?? line.journal.notes)
-          : line.journal.notes,
-        type: line.journal.sourceType
-          ? (typeLabels[line.journal.sourceType] ??
-            line.journal.sourceType.replaceAll("_", " "))
-          : "Manual Journal",
-        referenceNumber: line.journal.referenceNumber,
-        journalNumber: line.journal.entryNumber,
-        debit: line.side === "DEBIT" ? baseAmount(line) : 0,
-        credit: line.side === "CREDIT" ? baseAmount(line) : 0,
-        balance: Math.abs(balance),
-        balanceSide:
-          balance === 0
-            ? debitNormal
-              ? "DR"
-              : "CR"
-            : balance > 0
-              ? debitNormal
-                ? "DR"
-                : "CR"
-              : debitNormal
-                ? "CR"
-                : "DR",
-        currency: company.currency,
-        originalCurrency: line.journal.currency, originalAmount: Number(line.amount),
-        exchangeRate: Number(line.journal.exchangeRate),
-      };
-    });
-    res.json({
-      account: {
-        id: account.id,
-        name: account.name,
-        category: account.category,
-        accountType: account.accountType,
-        currency: company.currency,
-      },
-      closingBalance: Math.abs(signedBalance),
-      balanceSide:
-        signedBalance === 0
-          ? debitNormal
-            ? "DR"
-            : "CR"
-          : signedBalance > 0
-            ? debitNormal
-              ? "DR"
-              : "CR"
-            : debitNormal
-              ? "CR"
-              : "DR",
-      debitTotal,
-      creditTotal,
-      total,
-      data,
-    });
+    const opening = openings.get(account.id);
+    res.json({ ...ledger, account: { ...ledger.account,
+      openingBalance: opening?.amount ?? null, openingBalanceDate: opening?.date ?? null } });
   }),
 );
-
 accountingAccountRouter.post(
   "/",
   rbac("ACCOUNT", "CREATE"),
