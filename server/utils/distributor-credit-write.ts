@@ -3,6 +3,7 @@ import { createError, getRouterParam, readBody, type H3Event } from 'h3';
 import { pool } from '../db';
 import { selectDistributorAccounts } from './distributor-account-selection';
 import { useCompanyRequestSession } from './companyRequestScope';
+import { distributorCreditKind, creditAccountSelection } from '../../utils/distributor-credit-kind';
 
 
 /** The credit and its received-money transaction are one business operation. */
@@ -32,11 +33,16 @@ export async function writeDistributorCredit(event:H3Event) {
       if(!(await client.query('SELECT 1 FROM distributor_companies WHERE company_id=$1 AND distributor_id=$2 FOR SHARE',[companyId,distributorId])).rowCount) throw invalid('Select a distributor linked to this company');
       const amount=Number(body.amount),date=new Date(body.createdAt || body.date || Date.now());
       if(!Number.isFinite(amount)||amount<=0||Math.abs(amount*100-Math.round(amount*100))>0.00001||!Number.isFinite(date.getTime())) throw invalid('Enter a positive amount with at most two decimals and a valid date');
-      const isMoney=old?Boolean(old.money_transaction_id):body.creditKind==='AMOUNT';
+      const recorded=old?(await client.query('SELECT accounts FROM accountant_v2_distributor_sources WHERE company_id=$1 AND distributor_id=$2 AND source_key=$3',[companyId,distributorId,`credit:${id}`])).rows[0]?.accounts:null;
+      const kind=old?distributorCreditKind(old.money_transaction_id,recorded):(body.creditKind || 'PRODUCT');
+      if(!['PRODUCT','AMOUNT','CHARGE'].includes(kind)) throw invalid('Choose Product, Amount or Charge Credit');
+      if(old && body.creditKind && body.creditKind!==kind) throw invalid('The credit type cannot be changed after creation');
+      const isMoney=kind==='AMOUNT';
       let moneyId=old?.money_transaction_id || null;
       const linked=moneyId?(await client.query('SELECT * FROM money_transactions WHERE id=$1 AND company_id=$2 FOR UPDATE',[moneyId,companyId])).rows[0]:null;
       if (moneyId && !linked) throw invalid('Linked money transaction belongs to another company');
-      const selections={...body.accountingAccounts};
+      const selections=creditAccountSelection(kind,body.paymentMode || 'CASH',body.accountingAccounts || {});
+      if(kind==='CHARGE' && !selections.expense) throw invalid('Select an expense account for Charge Credit');
       if(isMoney) {
         const mode=body.paymentMode || 'CASH';
         if(!['CASH','BANK'].includes(mode)) throw invalid('Choose cash or bank');
@@ -59,7 +65,7 @@ export async function writeDistributorCredit(event:H3Event) {
         const number=(await client.query('UPDATE companies SET distributor_credit_counter=distributor_credit_counter+1 WHERE id=$1 RETURNING distributor_credit_counter-1 AS number',[companyId])).rows[0].number;
         await client.query(`INSERT INTO distributor_credits(id,company_id,distributor_id,amount,created_at,remarks,"billNo",credit_no,money_transaction_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9)`,[id,companyId,distributorId,amount,date,body.remarks||null,isMoney?null:body.billNo||null,number,moneyId]);
       }
-      await selectDistributorAccounts(client,companyId,distributorId,`credit:${id}`,selections);
+      await selectDistributorAccounts(client,companyId,distributorId,`credit:${id}`,selections,kind==='CHARGE');
     }
     await client.query('COMMIT');
     return {id,success:true};

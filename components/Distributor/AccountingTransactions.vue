@@ -67,7 +67,7 @@ const sorted = computed(() => [...filtered.value].sort((a,b) => {
 }));
 const rows = computed(() => sorted.value.slice((page.value-1)*Number(pageCount.value), page.value*Number(pageCount.value)));
 const money = (value: number) => value.toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
-const typeLabels: Record<string,string> = {ALL:'All transactions',PURCHASE:'Purchase',PAYMENT:'Payment',CREDIT:'Credit',RETURN:'Return',RECEIPT:'Receipt',OPENING:'Opening balance',EXPENSE:'Expense'};
+const typeLabels: Record<string,string> = {ALL:'All transactions',PURCHASE:'Purchase',PAYMENT:'Payment',CREDIT:'Credit',CHARGE_CREDIT:'Charge Credit',RETURN:'Return',RECEIPT:'Receipt',OPENING:'Opening balance',EXPENSE:'Expense'};
 const typeOptions = Object.entries(typeLabels).map(([value,label])=>({value,label}));
 const reference = (row:any) => row.reference || row.sourceKey;
 const dateLabel = (date:any) => new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});

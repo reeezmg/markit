@@ -12,7 +12,7 @@ export function distributorAccountingTransactions(data: any) {
     if (!event || !sourceTypes.has(event.kind) || line.source_type === 'DISTRIBUTOR_REVERSAL') continue;
     if (!groups.has(line.id)) {
       groups.set(line.id, { id: line.id, entryNumber: line.entry_number, date: line.journal_date, reference: event.source_reference || event.reference || line.reference_number || source.source_key,
-        type: event.source_kind || event.kind,
+        type: source.source_key?.startsWith('credit:') && source.accounts?.expense ? 'CHARGE_CREDIT' : event.source_kind || event.kind,
         description: line.notes || event?.description || '', sourceKey: source?.source_key,
         debit: 0, credit: 0, payableChange: 0, lines: [] });
     }

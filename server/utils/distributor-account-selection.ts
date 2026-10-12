@@ -1,8 +1,9 @@
 import { createError } from 'h3';
 
 /** Call inside the source transaction. The deferred posting reads this snapshot. */
-export async function selectDistributorAccounts(db:any,companyId:string,distributorId:string,sourceKey:string,overrides:any) {
+export async function selectDistributorAccounts(db:any,companyId:string,distributorId:string,sourceKey:string,overrides:any,chargeCredit=false) {
   const fail=(message:string)=>createError({statusCode:400,statusMessage:message});
+  if(chargeCredit && (!sourceKey.startsWith('credit:') || !overrides?.expense)) throw fail('Select an expense account for Charge Credit');
   const configured=await db.query('SELECT enabled FROM accountant_v2_distributor_settings WHERE company_id=$1 AND distributor_id=$2',[companyId,distributorId]);
   if(!configured.rows[0]?.enabled) {
     if(overrides && Object.keys(overrides).length) throw fail('Connect this distributor to accounting before selecting transaction accounts');
@@ -15,7 +16,7 @@ export async function selectDistributorAccounts(db:any,companyId:string,distribu
     overrides={...(saved.rows[0]?.after||{}),...overrides};
   }
   if(!overrides || !Object.keys(overrides).length) return;
-  const types:Record<string,string[]>={payable:['ACCOUNTS_PAYABLE'],stock:['STOCK'],cash:['CASH'],bank:['BANK'],tax:['OTHER_CURRENT_ASSET'],opening:['EQUITY','OTHER_CURRENT_LIABILITY']};
+  const types:Record<string,string[]>={payable:['ACCOUNTS_PAYABLE'],stock:['STOCK'],cash:['CASH'],bank:['BANK'],tax:['OTHER_CURRENT_ASSET'],opening:['EQUITY','OTHER_CURRENT_LIABILITY'],...(chargeCredit?{expense:['EXPENSE','OTHER_EXPENSE']}: {})};
   for(const [role,id] of Object.entries(overrides)) {
     const allowed=role.startsWith('bank:')?['BANK']:types[role];
     if(!allowed || typeof id!=='string') throw fail('Invalid accounting selection');
@@ -25,6 +26,10 @@ export async function selectDistributorAccounts(db:any,companyId:string,distribu
   const original=await db.query('SELECT accounts FROM accountant_v2_distributor_sources WHERE company_id=$1 AND distributor_id=$2 AND source_key=$3',[companyId,distributorId,sourceKey]);
   const defaults=await db.query('SELECT role,account_id FROM accountant_v2_distributor_mappings WHERE company_id=$1 AND distributor_id=$2',[companyId,distributorId]);
   const accounts={...Object.fromEntries(defaults.rows.map((m:any)=>[m.role,m.account_id])),...original.rows[0]?.accounts,...overrides};
+  // Native standalone non-money credits use the `stock` slot as their debit
+  // offset. For Charge Credit only, point that slot at the validated expense.
+  // This is source-local: supplier defaults, item quantities and bank stay intact.
+  if(chargeCredit) accounts.stock=accounts.expense;
   await db.query(`INSERT INTO accountant_v2_distributor_sources(company_id,distributor_id,source_key,signature,accounts)
     VALUES($1,$2,$3,'{}',$4::jsonb) ON CONFLICT(company_id,distributor_id,source_key) DO UPDATE
     SET accounts=EXCLUDED.accounts,signature=CASE WHEN accountant_v2_distributor_sources.accounts<>EXCLUDED.accounts THEN accountant_v2_distributor_sources.signature || '{"accountSelectionChanged":true}'::jsonb ELSE accountant_v2_distributor_sources.signature END`,[companyId,distributorId,sourceKey,JSON.stringify(accounts)]);

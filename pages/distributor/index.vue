@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { purchaseOrderPayments, purchaseOrderDue } from '~/utils/purchase-order-payments';
 import { distributorPurchaseTransactions } from '~/utils/distributor-purchase-transactions';
+import { distributorCreditKind, creditAccountRoles, type DistributorCreditKind } from '~/utils/distributor-credit-kind';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
 const { invalidateModels } = useModelCache();
@@ -92,7 +93,7 @@ const creditForm = ref({
   remarks: '',
   billNo: '',
   date: new Date().toISOString().split('T')[0],
-  creditKind: 'PRODUCT' as 'PRODUCT' | 'AMOUNT',
+  creditKind: 'PRODUCT' as DistributorCreditKind,
   paymentMode: 'CASH' as 'CASH' | 'BANK',
   moneyTransactionId: '' as string,
 })
@@ -900,6 +901,9 @@ const openCreditModal = async () => {
 }
 
 const handleAddCredit = async () => {
+  if (creditForm.value.creditKind === 'CHARGE' && !creditAccountingAccounts.value.expense) {
+    toast.add({ title: 'Select an expense account for Charge Credit', color: 'red' }); return
+  }
   if (!creditForm.value.id && !formDistributorId.value) {
     toast.add({ title: 'Select a supplier for this company', color: 'red' }); return
   }
@@ -1185,7 +1189,14 @@ const transactionAction = (row: any) => {
           await companyScope.beginForm({ model: 'DistributorCredit', id: row.id, companyId: row.companyId });
           formDistributorId.value = row.distributorId || selectedDistributor.value?.distributorId || '';
           const linked = row.moneyTransaction
-          const kind: 'PRODUCT' | 'AMOUNT' = row.moneyTransactionId ? 'AMOUNT' : 'PRODUCT'
+          let kind: DistributorCreditKind;
+          try {
+            const preview = await $fetch<any>(`/api/accountant/distributors/${formDistributorId.value}`, { headers: { 'x-company-id': companyScope.companyId.value } });
+            kind = distributorCreditKind(row.moneyTransactionId, preview.sources?.find((s: any) => s.source_key === `credit:${row.id}`)?.accounts);
+          } catch (error: any) {
+            toast.add({ title: 'Could not load credit accounts', description: error.data?.statusMessage || error.message, color: 'red' });
+            return;
+          }
           creditForm.value = {
             id: row.id,
             amount: row.amount,
@@ -2177,7 +2188,7 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
         <div class="p-4 space-y-4">
           <CompanyFormField @transferred="isOpenCredit = false" />
           <CompanySupplierField v-if="!creditForm.id" v-model="formDistributorId" />
-          <DistributorAccountSelection v-if="formDistributorId" v-model="creditAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="formDistributorId" :source-key="creditForm.id ? `credit:${creditForm.id}` : undefined" :roles="['payable', creditForm.creditKind === 'PRODUCT' ? 'stock' : creditForm.paymentMode === 'CASH' ? 'cash' : 'bank']" />
+          <DistributorAccountSelection v-if="formDistributorId" v-model="creditAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="formDistributorId" :source-key="creditForm.id ? `credit:${creditForm.id}` : undefined" :roles="creditAccountRoles(creditForm.creditKind, creditForm.paymentMode)" />
           <UFormGroup label="Credit For">
             <USelect
               v-model="creditForm.creditKind"
@@ -2185,6 +2196,7 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
               :options="[
                 { label: 'Product', value: 'PRODUCT' },
                 { label: 'Amount', value: 'AMOUNT' },
+                { label: 'Charge Credit', value: 'CHARGE' },
               ]"
               option-attribute="label"
               value-attribute="value"
@@ -2193,7 +2205,8 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
           <UFormGroup label="Date">
             <UInput type="date" v-model="creditForm.date" />
           </UFormGroup>
-          <UFormGroup v-if="creditForm.creditKind === 'PRODUCT'" label="Bill No">
+          <p v-if="creditForm.creditKind === 'CHARGE'" class="text-sm text-gray-500">Record a supplier charge owed against the selected expense account. Existing payments, bank and stock stay unchanged. This does not create an Expenses-page record.</p>
+          <UFormGroup v-if="creditForm.creditKind !== 'AMOUNT'" label="Bill No">
             <UInput v-model="creditForm.billNo" placeholder="Bill number" />
           </UFormGroup>
           <UFormGroup label="Amount" required>

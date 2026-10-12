@@ -1,5 +1,27 @@
 ### Distributor (`/distributor`)
 
+#### Charge Credit (2026-10-12)
+
+Add Credit offers Product, Amount and Charge Credit. Charge Credit requires a
+connected supplier and an active same-company EXPENSE or OTHER_EXPENSE account.
+It creates a numbered standalone DC with no money transaction or ERP expense row.
+The credit increases payable; the offset is the selected expense account. Product
+credits retain their Stock offset; Amount credits retain their cash/bank receipt.
+
+`utils/distributor-credit-kind.ts` derives Charge Credit from the source snapshot's
+`accounts.expense`, with linked money transactions identifying Amount credits.
+`selectDistributorAccounts` validates the expense role only for Charge Credit and
+copies it into the native non-money-credit debit slot (`accounts.stock`) for that
+source alone. The installed posting function consumes that slot as an account ID;
+it does not update inventory quantities. Supplier/default stock mappings are untouched.
+This uses existing JSON snapshots and deferred posting, with no schema or database
+function changes. Edits preserve the type and revalidate the expense account;
+deletes use the existing native reversal lifecycle. The UI resolves saved type
+before opening an edit, and Accounts labels the current source-backed row Charge
+Credit under its DC reference, with only the payable credit in the row total.
+Stale form selections are stripped by credit type before posting. Existing manual
+journals are not converted by this code change.
+
 #### Expense party integration (2026-10-12)
 
 The detail panel adds an Expenses tab using `components/Distributor/Expenses.vue`

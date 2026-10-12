@@ -3,8 +3,8 @@ const props=defineProps<{companyId:string;distributorId:string;sourceKey?:string
 const model=defineModel<Record<string,string>>({default:()=>({})});
 const data=ref<any>(null);
 const error=ref('');
-const types:Record<string,string[]>={payable:['ACCOUNTS_PAYABLE'],stock:['STOCK'],cash:['CASH'],bank:['BANK'],tax:['OTHER_CURRENT_ASSET']};
-const names:Record<string,string>={payable:'Payable account',stock:'Stock account',cash:'Cash account',bank:'Bank account',tax:'Purchase tax account'};
+const types:Record<string,string[]>={payable:['ACCOUNTS_PAYABLE'],stock:['STOCK'],cash:['CASH'],bank:['BANK'],tax:['OTHER_CURRENT_ASSET'],expense:['EXPENSE','OTHER_EXPENSE']};
+const names:Record<string,string>={payable:'Payable account',stock:'Stock account',cash:'Cash account',bank:'Bank account',tax:'Purchase tax account',expense:'Expense account'};
 const auth=useNuxtApp().$auth;
 const allowed=computed(()=>['admin','manager','accountant'].includes(auth.session.value?.role || ''));
 let generation=0;
