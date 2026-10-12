@@ -122,6 +122,7 @@ enum PayableStatus {
 }
 
 model DistributorCompany {
+    expenses            Expense[]
     distributorId       String               @map("distributor_id")
     companyId           String               @map("company_id")
     distributor         Distributor          @relation(fields: [distributorId], references: [id])
@@ -2143,6 +2144,11 @@ model ExpenseCategory extends Base {
 }
 
 model Expense extends Base {
+    distributorId      String? @map("distributor_id")
+    distributor        DistributorCompany? @relation(fields: [distributorId, companyId], references: [distributorId, companyId], onDelete: Restrict)
+    clientId           String? @map("client_id")
+    client             CompanyClient? @relation(fields: [companyId, clientId], references: [companyId, clientId], onDelete: Restrict)
+    @@validate((userId == null || distributorId == null) && (userId == null || clientId == null) && (distributorId == null || clientId == null), "Select only one expense party")
     recurringOccurrence RecurringExpenseOccurrence?
     recoverableTaxAmount Float @default(0) @map("recoverable_tax_amount")
     expenseNumber      Int?                @map("expense_number")
@@ -2165,6 +2171,8 @@ model Expense extends Base {
     userId             String?             @map("from_id")
     distributorPayment DistributorPayment?
     @@index([companyId, expenseDate])
+    @@index([companyId, distributorId])
+    @@index([companyId, clientId])
     @@allow("create, read, update, delete", true)
     @@map("expenses")
 }
@@ -2349,6 +2357,7 @@ model CompanyUser {
 }
 
 model CompanyClient {
+    expenses       Expense[]
     companyId      String  @map('company_id')
     company        Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
     clientId       String  @map('client_id')

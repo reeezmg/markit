@@ -14,6 +14,9 @@ export default defineEventHandler(async (event) => {
   try {
     await client.query('BEGIN')
       await lockCompanyRequest(event, client);
+    if ((await client.query('SELECT id FROM distributor_payments WHERE expense_id=$1 AND company_id=$2', [id, companyId])).rowCount) {
+      throw createError({ statusCode: 409, statusMessage: 'Delete this linked expense through its distributor payment' });
+    }
 
     const res = await client.query(`DELETE FROM expenses WHERE id = $1 AND company_id = $2`, [id, companyId])
     if (!res.rowCount) throw createError({ statusCode: 404, statusMessage: 'Expense not found' })

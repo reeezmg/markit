@@ -33,6 +33,7 @@ const columns = [
 const selected = ref<any>(null);
 let generation = 0;
 const auth = useNuxtApp().$auth;
+const expenseRevision = useState('expense-revision', () => 0);
 const allowed = computed(() => ['admin', 'manager', 'accountant'].includes(auth.session.value?.role || ''));
 async function load() {
   const current = ++generation;
@@ -47,6 +48,7 @@ async function load() {
   finally { if (current === generation) busy.value = false; }
 }
 watch(() => [props.companyId, props.distributorId, props.revision], () => { selected.value = null; load(); }, { immediate: true });
+watch(expenseRevision, () => { void load(); });
 const all = computed(() => distributorAccountingTransactions(data.value || {}));
 const filtered = computed(() => all.value.filter(row => {
   const date = new Date(row.date);
@@ -65,7 +67,7 @@ const sorted = computed(() => [...filtered.value].sort((a,b) => {
 }));
 const rows = computed(() => sorted.value.slice((page.value-1)*Number(pageCount.value), page.value*Number(pageCount.value)));
 const money = (value: number) => value.toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
-const typeLabels: Record<string,string> = {ALL:'All transactions',PURCHASE:'Purchase',PAYMENT:'Payment',CREDIT:'Credit',RETURN:'Return',RECEIPT:'Receipt',OPENING:'Opening balance'};
+const typeLabels: Record<string,string> = {ALL:'All transactions',PURCHASE:'Purchase',PAYMENT:'Payment',CREDIT:'Credit',RETURN:'Return',RECEIPT:'Receipt',OPENING:'Opening balance',EXPENSE:'Expense'};
 const typeOptions = Object.entries(typeLabels).map(([value,label])=>({value,label}));
 const reference = (row:any) => row.reference || row.sourceKey;
 const dateLabel = (date:any) => new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});

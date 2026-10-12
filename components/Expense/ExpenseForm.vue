@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { expenseTaxAmounts } from '~/utils/expense-tax';
+import { expensePartyFields, expensePartyFromRow } from '~/utils/expense-party';
 const companyScope = useCompanyScope('form');
 const $fetch = companyScope.fetch;
 
@@ -26,6 +27,7 @@ const toast = useToast();
 const {
     categories,
     companyUsers,
+    parties,
     categoriesLoading: isLoading,
     loadCategories,
     loadCompanyUsers,
@@ -38,12 +40,12 @@ const {
 --------------------------------------------------- */
 
 const expenseData = computed(() => ({
-  date: props.expense?.createdAt
-    ? new Date(props.expense.createdAt).toLocaleDateString('en-CA')
+  date: props.expense?.expenseDate
+    ? new Date(props.expense.expenseDate).toLocaleDateString('en-CA')
     : new Date().toLocaleDateString('en-CA'),
 
   category: props.expense?.expensecategory || null,
-  user: props.expense?.user || null,
+  party: expensePartyFromRow(props.expense),
 
   amount: props.expense?.totalAmount || '',
   taxAmount: props.expense?.taxAmount || 0,
@@ -126,14 +128,14 @@ const saveForm = () => {
     emit('save', {
         companyId: companyScope.companyId.value,
         ...form.value,
-        userId: form.value.user?.userId || null,
+        ...expensePartyFields(form.value.party),
         categoryId: form.value.category?.id,
         paymentMode: form.value.paymentMode.value ,
         status: form.value.status.value ,
 
     });
 };
-watch(companyScope.companyId, () => { if (!companyScope.record.value) { form.value.category = null; form.value.user = null; } });
+watch(companyScope.companyId, () => { if (!companyScope.record.value) { form.value.category = null; form.value.party = null; } });
 </script>
 
 <template>
@@ -180,28 +182,8 @@ watch(companyScope.companyId, () => { if (!companyScope.record.value) { form.val
           </USelectMenu>
         </UFormGroup>
 
-        <!-- user (Company User) -->
-        <UFormGroup label="user">
-          <USelectMenu
-            v-model="form.user"
-            by="userId"
-            :options="companyUsers"
-            option-attribute="name"
-            searchable
-            placeholder="Select employee"
-          >
-            <template #label>
-              <div v-if="form.user">{{ form.user.name }}</div>
-              <div v-else>Select employee</div>
-            </template>
-
-            <template #option="{ option }">
-              <div class="flex flex-col">
-                <span class="font-medium">{{ option.name }}</span>
-                <span class="text-xs opacity-70">{{ option.phone }}</span>
-              </div>
-            </template>
-          </USelectMenu>
+        <UFormGroup label="Party">
+          <ExpensePartySelect v-model="form.party" :options="parties" />
         </UFormGroup>
 
         <ExpenseTaxFields v-model:tax="form.taxAmount" v-model:recoverable="form.recoverableTaxAmount" />

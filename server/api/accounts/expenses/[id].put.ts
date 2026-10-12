@@ -3,6 +3,7 @@ import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { validateExpenseParty, markExpensePartyChange, syncExpensePartyLines } from '~/server/utils/expense-party';
 
 
 export default defineEventHandler(async (event) => {
@@ -24,10 +25,19 @@ export default defineEventHandler(async (event) => {
   try {
     await client.query('BEGIN')
       await lockCompanyRequest(event, client);
+    const previous = (await client.query('SELECT from_id AS "userId",distributor_id AS "distributorId",client_id AS "clientId" FROM expenses WHERE id=$1 AND company_id=$2 FOR UPDATE', [id, companyId])).rows[0];
+    if (!previous) throw createError({ statusCode: 404, statusMessage: 'Expense not found' });
+    if ((await client.query('SELECT id FROM distributor_payments WHERE expense_id=$1 AND company_id=$2', [id, companyId])).rowCount) {
+      throw createError({ statusCode: 409, statusMessage: 'Edit this linked expense through its distributor payment' });
+    }
+    const party = await validateExpenseParty(client, companyId, body, previous);
+    await markExpensePartyChange(client, companyId, id, previous, party);
     const res = await client.query(
       `
       UPDATE expenses
       SET from_id = $3,
+          distributor_id = $15,
+          client_id = $16,
           expense_category_id = $4,
           expense_date = $5,
           note = $6,
@@ -43,10 +53,11 @@ export default defineEventHandler(async (event) => {
       WHERE id = $1 AND company_id = $2
       RETURNING id
       `,
-      [id, companyId, body.userId || null, body.expensecategoryId, expenseDate, body.note || null, body.paymentMode || 'CASH', body.status || 'Pending', body.receipt || null, body.receiptName || null, Number(body.taxAmount || 0), totalAmount, body.expenseNumber || null, taxAmounts.recoverableTaxAmount],
+      [id, companyId, party.userId, body.expensecategoryId, expenseDate, body.note || null, body.paymentMode || 'CASH', body.status || 'Pending', body.receipt || null, body.receiptName || null, taxAmounts.taxAmount, totalAmount, body.expenseNumber || null, taxAmounts.recoverableTaxAmount, party.distributorId, party.clientId],
     )
     if (!res.rowCount) throw createError({ statusCode: 404, statusMessage: 'Expense not found' })
 
+    await syncExpensePartyLines(client, companyId, [id]);
     await client.query('COMMIT')
     return { success: true }
   } catch (err) {

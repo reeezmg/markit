@@ -499,6 +499,7 @@ Records every time a coupon is used.
 
 #### `expenses` (Expense)
 Business expenses.
+- Party links: `distributorId` and `clientId` reference company/distributor and company/client memberships. Exactly zero or one of user/distributor/client is selected (API and ZenStack validation). Composite relations enforce company ownership. Generated Prisma output includes these fields. A read-only pre-push check confirmed both columns in the configured database; this task performed no schema writes.
 - Fields: `companyId`, `userId`, `expensecategoryId`, `expenseDate`, `totalAmount`, `taxAmount`, `recoverableTaxAmount`, `paymentMode`, `status`, `note`, `receipt`, `receiptName`
 - Can be linked to a `DistributorPayment`
 - **Used in:** storetools (expense tracking, accounts ledger)

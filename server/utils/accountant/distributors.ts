@@ -43,11 +43,25 @@ export async function distributorAccountingPreview(id: string) {
     -COALESCE((SELECT sum(amount) FROM distributor_payments WHERE company_id=$1 AND distributor_id=$2),0)::numeric AS balance
     FROM distributor_companies WHERE company_id=$1 AND distributor_id=$2`,companyId,id);
   const sources = await query('SELECT source_key,journal_id,revision,accounts FROM accountant_v2_distributor_sources WHERE company_id=$1 AND distributor_id=$2',companyId,id);
+  // Ordinary supplier expenses use ERP posting. A payment-linked expense is
+  // already represented by DP and must not appear a second time here.
+  const expenseEvents = await query(`SELECT 'expense:'||e.id AS source_key,'EXPENSE' AS kind,
+      'EXPENSE' AS source_kind,e.expense_date AS event_date,e.total_amount AS amount,
+      concat_ws('-',NULLIF(COALESCE(c.expense_prefix,'EXP'),''),COALESCE(e.expense_number::text,e.id)) AS source_reference,
+      e.note AS description,s.journal_id
+    FROM expenses e JOIN companies c ON c.id=e.company_id
+    JOIN accountant_v2_erp_sources s ON s.company_id=e.company_id AND s.source_key='expense:'||e.id
+    WHERE e.company_id=$1 AND e.distributor_id=$2 AND s.journal_id IS NOT NULL
+      AND NOT EXISTS (SELECT 1 FROM distributor_payments dp WHERE dp.company_id=e.company_id AND dp.expense_id=e.id)`,companyId,id);
   const ledger = await query(`SELECT j.id,j.entry_number,j.journal_date,j.reference_number,j.notes,
       a.name AS account,a.account_type::text AS account_type,l.side::text AS side,l.amount,l.account_id,j.source_type
     FROM accountant_v2_manual_journal_lines l JOIN accountant_v2_manual_journals j ON j.id=l.journal_id
     JOIN accountant_v2_accounting_accounts a ON a.id=l.account_id
-    WHERE l.company_id=$1 AND l.distributor_id=$2 AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL
+    WHERE l.company_id=$1 AND (l.distributor_id=$2 OR EXISTS (
+      SELECT 1 FROM expenses ex JOIN accountant_v2_erp_sources es ON es.company_id=ex.company_id AND es.source_key='expense:'||ex.id
+      WHERE ex.company_id=$1 AND ex.distributor_id=$2 AND es.journal_id=j.id
+        AND NOT EXISTS (SELECT 1 FROM distributor_payments dp WHERE dp.company_id=ex.company_id AND dp.expense_id=ex.id)
+    )) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL
     ORDER BY j.journal_date,j.created_at,j.id,l.side`,companyId,id);
   const expectedBalance = events.reduce((sum: number,e: any) => sum + Math.round(Number(e.amount)*100)*(e.kind==='PAYMENT'||e.kind==='RETURN'?-1:1),0)/100;
   const postedBalance = ledger.filter((l: any)=>l.account_type==='ACCOUNTS_PAYABLE').reduce((s: number,l: any)=>s+Math.round(Number(l.amount)*100)*(l.side==='CREDIT'?1:-1),0)/100;
@@ -73,7 +87,7 @@ export async function distributorAccountingPreview(id: string) {
     if (opening && accounts.some((a:any)=>a.id===opening && roleTypes.opening.includes(a.accountType))) suggestedMappings.opening=opening;
   }
   return { distributor, enabled: Boolean(settings?.enabled), mappings: suggestedMappings,
-    accounts, banks, requiredRoles: [...required], events, sources, ledger, errors, warnings,
+    accounts, banks, requiredRoles: [...required], events: [...events,...expenseEvents], sources: [...sources,...expenseEvents.map(e=>({source_key:e.source_key,journal_id:e.journal_id}))], ledger, errors, warnings,
     sourceBalance: Number(legacy.balance), legacyBalance: Number(legacy.balance), expectedBalance, postedBalance,
     legacyDifference: Math.round((expectedBalance-Number(legacy.balance))*100)/100,
     unpostedCount: events.filter((e:any)=>!sources.some((s:any)=>s.source_key===e.source_key)).length };

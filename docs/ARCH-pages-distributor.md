@@ -1,5 +1,23 @@
 ### Distributor (`/distributor`)
 
+#### Expense party integration (2026-10-12)
+
+The detail panel adds an Expenses tab using `components/Distributor/Expenses.vue`
+and the shared expense list, quick-add and edit forms. Creation fixes the company
+and prefills/locks the selected distributor. The tab starts with all dates and does
+not reuse the ERP table's persisted filters. Linked payment expenses are visible
+but their actions route to Payments to prevent source divergence.
+
+Accounts also includes current posted ERP expense journals linked to this supplier,
+with company expense-prefix references and Expense as a filter type. It excludes
+DP-linked expenses already represented by Payment. Expense debits include the full
+expense plus recoverable tax; running purchase due changes only for actual Accounts
+Payable lines, so ordinary expenses do not clear PO balances. Journal details show
+the party snapshot. Edits refresh both tables without a page reload.
+
+This requires the local Expense party fields in `schema.zmodel`; no database schema
+deployment or production backfill was performed for this feature.
+
 #### Accountant integration (2026-09-27)
 
 Legacy bank disconnection (2026-10-06): supplier credit forms use only native
@@ -221,7 +239,7 @@ Fetches `DistributorCompany` records with distributor info + purchase orders + c
 
 - **Layout:** Left panel = distributor summary table; Right panel = selected distributor detail with tabs
 - **Summary columns:** Distributor name, Orders, Total (sum of `distributorCredits.amount`), Paid (sum of `distributorPayments.amount`), Return (sum of `distributorPayments` where `paymentType='RETURN'`), Opening Due (`DistributorCompany.openingDue`), Due (`openingDue + Total − Paid`) — all computed client-side
-- **Detail panel tabs:** Accounts, Purchase Orders, Purchase Returns, Payments
+- **Detail panel tabs:** Accounts, Purchase Orders, Purchase Returns, Payments, Expenses
   - **Transactions tab** (the main ledger view) — columns: **Date · No · Type · Remarks · Debit · Credit · Actions**.
     - Row taxonomy (mapped client-side in `distributors` computed):
       | Source row | Condition | Type label | No | Debit | Credit |

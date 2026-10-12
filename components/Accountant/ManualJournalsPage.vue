@@ -180,6 +180,7 @@
                   <td class="p-3 text-gray-500 dark:text-gray-400">
                     <div>{{ l.description || "—" }}</div>
                     <div v-if="l.sourceParties?.client" class="text-xs">Client: {{ l.sourceParties.client.name }}</div>
+                    <div v-if="l.sourceParties?.distributor" class="text-xs">Distributor: {{ l.sourceParties.distributor.name }}</div>
                     <div v-if="l.sourceParties?.user" class="text-xs">User: {{ l.sourceParties.user.name }}</div>
                     <div v-if="l.sourceParties?.creditUser" class="text-xs">Credit owed by: {{ l.sourceParties.creditUser.name }}</div>
                     <div v-if="l.sourceParties?.creditAccount" class="text-xs">Customer account: {{ l.sourceParties.creditAccount.name }}</div>

@@ -4,6 +4,7 @@ import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import crypto from 'crypto'
 import { pool } from '~/server/db'
+import { validateExpenseParty, syncExpensePartyLines } from '~/server/utils/expense-party';
 
 
 export default defineEventHandler(async (event) => {
@@ -28,6 +29,7 @@ export default defineEventHandler(async (event) => {
   try {
     await client.query('BEGIN')
     await lockCompanyRequest(event, client)
+    const party = await validateExpenseParty(client, companyId, body);
     // Number reservation and source insert share this transaction. Deferred
     // Accountant triggers own financial posting; no legacy ledger is written.
     const res = await client.query(
@@ -38,13 +40,14 @@ export default defineEventHandler(async (event) => {
       INSERT INTO expenses (
         id, company_id, from_id, expense_category_id, expense_date, note,
         payment_mode, status, receipt, receipt_name, tax_amount, total_amount,
-        recoverable_tax_amount, created_at, updated_at, expense_number
+        recoverable_tax_amount, created_at, updated_at, expense_number, distributor_id, client_id
       )
-      SELECT $1,$2,$3,$4,$5,$6,$7::"PaymentMode",$8,$9,$10,$11,$12,$13,now(),now(),expense_number
+      SELECT $1,$2,$3,$4,$5,$6,$7::"PaymentMode",$8,$9,$10,$11,$12,$13,now(),now(),expense_number,$14,$15
       FROM numbered RETURNING expense_number`,
-      [id, companyId, body.userId || null, body.expensecategoryId, expenseDate, body.note || null, paymentMode, status, body.receipt || null, body.receiptName || null, taxAmounts.taxAmount, totalAmount, taxAmounts.recoverableTaxAmount],
+      [id, companyId, party.userId, body.expensecategoryId, expenseDate, body.note || null, paymentMode, status, body.receipt || null, body.receiptName || null, taxAmounts.taxAmount, totalAmount, taxAmounts.recoverableTaxAmount, party.distributorId, party.clientId],
     )
     if (!res.rowCount) throw createError({ statusCode: 404, statusMessage: 'Company not found' })
+    await syncExpensePartyLines(client, companyId, [id]);
     await client.query('COMMIT')
     return { success: true, id, expenseNumber: res.rows[0]?.expense_number }
   } catch (err: any) {

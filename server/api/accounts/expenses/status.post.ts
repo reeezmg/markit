@@ -2,6 +2,7 @@ import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { syncExpensePartyLines } from '~/server/utils/expense-party';
 
 
 export default defineEventHandler(async (event) => {
@@ -19,6 +20,9 @@ export default defineEventHandler(async (event) => {
   try {
     await client.query('BEGIN')
       await lockCompanyRequest(event, client);
+    if ((await client.query('SELECT id FROM distributor_payments WHERE company_id=$1 AND expense_id=ANY($2::text[])', [companyId, ids])).rowCount) {
+      throw createError({ statusCode: 409, statusMessage: 'Update linked expenses through their distributor payments' });
+    }
     const updated = await client.query(
       `
       UPDATE expenses
@@ -29,6 +33,7 @@ export default defineEventHandler(async (event) => {
       [status, companyId, ids],
     )
 
+    await syncExpensePartyLines(client, companyId, updated.rows.map(row => row.id));
     await client.query('COMMIT')
     return { success: true, count: updated.rowCount }
   } catch (err) {

@@ -9,6 +9,7 @@
     "DistributorCompany": {
       "purpose": "Associates a distributor with a company.",
       "fields": {
+        "expenses": "Expenses assigned to this distributor within this company.",
         "distributorId": "Distributor associated with this purchase or payment.",
         "companyId": "Company that owns this DistributorCompany record; use it when scoping tenant data.",
         "distributor": "Links this DistributorCompany record to Distributor through distributorId.",
@@ -1660,6 +1661,10 @@
       "purpose": "Records a company expense.",
       "fields": {
         "id": "Primary key identifying this Expense record.",
+        "distributorId": "Optional distributor party, company-scoped through DistributorCompany. Mutually exclusive with userId/clientId.",
+        "distributor": "Company membership for the selected expense distributor.",
+        "clientId": "Optional client party, company-scoped through CompanyClient. Mutually exclusive with userId/distributorId.",
+        "client": "Company membership for the selected expense client.",
         "recurringOccurrence": "Optional schedule occurrence that generated this expense; the occurrence survives expense deletion.",
         "recoverableTaxAmount": "Explicit recoverable part of taxAmount, included in totalAmount; only this amount posts to Input GST. Defaults to zero for new raw records.",
         "expenseNumber": "Company-local expense number.",
@@ -1850,6 +1855,7 @@
     "CompanyClient": {
       "purpose": "Links a customer to a company with company-specific identity and CRM state.",
       "fields": {
+        "expenses": "Expenses assigned to this client within this company.",
         "companyId": "Company that owns this CompanyClient record; use it when scoping tenant data.",
         "company": "Links this CompanyClient record to Company through companyId.",
         "clientId": "Customer associated with this CompanyClient record.",

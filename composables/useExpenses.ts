@@ -12,6 +12,8 @@ const buildBody = (e: any) => ({
   expenseDate: e.date,
   expensecategoryId: e.categoryId,
   userId: e.userId || null,
+  distributorId: e.distributorId || null,
+  clientId: e.clientId || null,
   totalAmount: Number(e.amount) || 0,
   paymentMode: e.paymentMode,
   status: e.status || 'Paid',
@@ -40,6 +42,9 @@ const optimisticFields = (e: any) => ({
       ? { id: e.categoryId, name: '' }
       : null,
   userId: e.userId || null,
+  distributorId: e.distributorId || null,
+  clientId: e.clientId || null,
+  party: e.party || null,
   user: e.user ? { userId: e.user.userId, name: e.user.name } : null,
 })
 
@@ -74,6 +79,7 @@ export function useExpenseList(
 }
 
 export function useExpenseMutations() {
+  const expenseRevision = useState('expense-revision', () => 0);
   const companyScope = useCompanyScope();
   const $fetch = companyScope.fetch;
   const queryClient = useQueryClient()
@@ -97,7 +103,11 @@ export function useExpenseMutations() {
     snap.forEach(([key, data]: any) => queryClient.setQueryData(key, data))
   const patchLists = (fn: (old: any) => any) =>
     queryClient.setQueriesData({ queryKey: LIST_KEY }, (old: any) => (old ? fn(old) : old))
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['expenses'] })
+  const invalidate = () => {
+    expenseRevision.value++;
+    void queryClient.invalidateQueries({ queryKey: ['accountant-v2'] });
+    return queryClient.invalidateQueries({ queryKey: ['expenses'] });
+  }
   const beginOptimistic = async () => {
     await queryClient.cancelQueries({ queryKey: LIST_KEY })
     return snapshot()
@@ -114,7 +124,12 @@ export function useExpenseMutations() {
         ...optimisticFields(e),
         __optimistic: true,
       }
-      queryClient.setQueriesData({ queryKey: LIST_KEY, predicate: q => { const ids = q.queryKey[3]; return Array.isArray(ids) && ids.includes(e.companyId || companyScope.companyId.value); } }, (old: any) => old ? ({ ...old, rows: [tempRow, ...old.rows], total: (old.total ?? 0) + 1 }) : old)
+      queryClient.setQueriesData({ queryKey: LIST_KEY, predicate: q => {
+        const ids = q.queryKey[3]; const params = q.queryKey[2] as any;
+        return Array.isArray(ids) && ids.includes(e.companyId || companyScope.companyId.value)
+          && (!params?.distributorId || params.distributorId === e.distributorId)
+          && (!params?.partyKeys?.length || params.partyKeys.includes(`${e.party?.kind}:${e.party?.id}`));
+      } }, (old: any) => old ? ({ ...old, rows: [tempRow, ...old.rows], total: (old.total ?? 0) + 1 }) : old)
       return { snap }
     },
     onError: (err: any, _e, ctx: any) => {

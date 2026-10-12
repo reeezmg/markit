@@ -8,6 +8,7 @@ const SORT_COLUMNS: Record<string, string> = {
   expenseDate: 'e.expense_date',
   'expensecategory.name': 'ec.name',
   'user.name': 'cu.name',
+  'party.name': 'COALESCE(d.name,cl.name,cu.name)',
   note: 'e.note',
   paymentMode: 'e.payment_mode',
   totalAmount: 'e.total_amount',
@@ -29,6 +30,7 @@ export default defineEventHandler(async (event) => {
   const paymentModes = toArray(query.paymentMode)
   const categoryIds = toArray(query.categoryIds)
   const userIds = toArray(query.userIds)
+  const partyKeys = toArray(query.partyKeys)
   const from = query.from ? new Date(String(query.from)) : null
   const to = query.to ? new Date(String(query.to)) : null
   const minAmount = query.minAmount != null && query.minAmount !== '' ? Number(query.minAmount) : null
@@ -52,12 +54,15 @@ export default defineEventHandler(async (event) => {
   if (search) {
     params.push(search)
     const p = `$${params.length}`
-    conditions.push(`(e.note ILIKE '%' || ${p} || '%' OR ec.name ILIKE '%' || ${p} || '%' OR cu.name ILIKE '%' || ${p} || '%')`)
+    conditions.push(`(e.note ILIKE '%' || ${p} || '%' OR ec.name ILIKE '%' || ${p} || '%' OR COALESCE(d.name,cl.name,cu.name) ILIKE '%' || ${p} || '%')`)
   }
   if (statuses.length) add('e.status = ANY($$)', statuses)
   if (paymentModes.length) add('e.payment_mode::text = ANY($$)', paymentModes)
   if (categoryIds.length) add('e.expense_category_id = ANY($$)', categoryIds)
   if (userIds.length) add('e.from_id = ANY($$)', userIds)
+  if (query.distributorId) add('COALESCE(dp.distributor_id,e.distributor_id) = $$', String(query.distributorId))
+  if (query.excludePaymentLinked === '1') conditions.push('dp.id IS NULL')
+  if (partyKeys.length) add("CASE WHEN COALESCE(dp.distributor_id,e.distributor_id) IS NOT NULL THEN 'distributor:'||COALESCE(dp.distributor_id,e.distributor_id) WHEN e.client_id IS NOT NULL THEN 'client:'||e.client_id WHEN e.from_id IS NOT NULL THEN 'user:'||e.from_id END = ANY($$::text[])", partyKeys)
   if (from) add('e.expense_date >= $$', from)
   if (to) add('e.expense_date <= $$', to)
   if (minAmount != null && Number.isFinite(minAmount)) add('e.total_amount >= $$', minAmount)
@@ -69,6 +74,9 @@ export default defineEventHandler(async (event) => {
     JOIN companies co ON co.id = e.company_id
     LEFT JOIN expense_categories ec ON ec.id = e.expense_category_id
     LEFT JOIN company_users cu ON cu.company_id = e.company_id AND cu.user_id = e.from_id
+    LEFT JOIN distributor_payments dp ON dp.company_id=e.company_id AND dp.expense_id=e.id
+    LEFT JOIN distributors d ON d.id=COALESCE(dp.distributor_id,e.distributor_id)
+    LEFT JOIN clients cl ON cl.id=e.client_id
   `
 
   const client = await pool.connect()
@@ -97,6 +105,9 @@ export default defineEventHandler(async (event) => {
         e.total_amount AS "totalAmount",
         e.expense_category_id AS "expensecategoryId",
         e.from_id AS "userId",
+        COALESCE(dp.distributor_id,e.distributor_id) AS "distributorId",
+        e.client_id AS "clientId", dp.id AS "distributorPaymentId",
+        COALESCE(d.name,cl.name,cu.name) AS "partyName",
         ec.id AS "categoryId",
         ec.name AS "categoryName",
         cu.user_id AS "cuUserId",
@@ -129,6 +140,12 @@ export default defineEventHandler(async (event) => {
       expensecategoryId: r.expensecategoryId,
       expensecategory: r.categoryId ? { id: r.categoryId, name: r.categoryName } : null,
       userId: r.userId,
+      distributorId: r.distributorId,
+      clientId: r.clientId,
+      distributorPaymentId: r.distributorPaymentId,
+      party: r.distributorId ? { kind: 'distributor', id: r.distributorId, name: r.partyName, key: `distributor:${r.distributorId}` }
+        : r.clientId ? { kind: 'client', id: r.clientId, name: r.partyName, key: `client:${r.clientId}` }
+        : r.userId ? { kind: 'user', id: r.userId, name: r.partyName, key: `user:${r.userId}` } : null,
       user: r.cuUserId ? { userId: r.cuUserId, name: r.cuName, phone: r.cuPhone } : null,
     }))
 

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { expenseTaxAmounts } from '~/utils/expense-tax';
+import { expensePartyFields, type ExpenseParty } from '~/utils/expense-party';
 const companyScope = useCompanyScope('form');
 const $fetch = companyScope.fetch;
 
@@ -23,6 +24,8 @@ const $fetch = companyScope.fetch;
  * deselect it; User remains a plain single select.
  */
 const props = defineProps({
+  companyId: { type: String, default: '' },
+  defaultParty: { type: Object, default: null },
   loading: {
     type: Boolean,
     default: false,
@@ -35,6 +38,7 @@ const toast = useToast();
 const {
   categories,
   companyUsers,
+  parties,
   categoriesLoading,
   loadCategories,
   loadCompanyUsers,
@@ -60,7 +64,7 @@ const statusOptions = [
 const makeDefaultForm = () => ({
   date: new Date().toLocaleDateString('en-CA'),
   category: [] as any[],
-  user: [] as any[],
+  party: props.defaultParty as ExpenseParty | null,
   amount: '' as string | number,
   taxAmount: 0,
   recoverableTaxAmount: null as number | null,
@@ -119,10 +123,7 @@ const handleStatusChange = (selected: any) => {
   if (form.value.status.length) advanceFromSelect(statusSelectRef);
 };
 
-const handleUserChange = (selected: any) => {
-  form.value.user = coerceSingleSelection(selected);
-  if (form.value.user.length) advanceFromSelect(userSelectRef);
-};
+const handlePartyChange = () => { advanceFromSelect(userSelectRef); };
 
 const removeCategory = async (category: any) => {
   const ok = await deleteCategory(category.id);
@@ -133,6 +134,7 @@ const removeCategory = async (category: any) => {
 
 const submit = () => {
   if (props.loading) return; // a create is already in flight
+  if (companyScope.busy.value || (props.companyId && props.companyId !== companyScope.companyId.value)) return;
   const category = form.value.category?.[0];
   if (!category?.id) {
     toast.add({ title: 'Please select a category!', color: 'red' });
@@ -157,8 +159,7 @@ const submit = () => {
         companyId: companyScope.companyId.value,
     ...form.value,
     category, // single object for optimistic display
-    user: form.value.user?.[0] || null,
-    userId: form.value.user?.[0]?.userId || null,
+    ...expensePartyFields(form.value.party),
     categoryId: category.id,
     paymentMode: paymentMode.value,
     status: status.value,
@@ -384,12 +385,13 @@ const reset = async () => {
 };
 
 defineExpose({ reset });
-watch(companyScope.companyId, () => { if (!companyScope.record.value) { form.value.category = []; form.value.user = []; } });
+watch(companyScope.companyId, () => { if (!companyScope.record.value) { form.value.category = []; form.value.party = props.defaultParty as ExpenseParty | null; } });
+watch(() => props.companyId, id => { if (id) void companyScope.selectOwner(id); }, { immediate: true });
 </script>
 
 <template>
   <UCard class="mb-4" :ui="{ body: { padding: 'px-4 py-3' } }">
-      <CompanyFormField />
+      <CompanyFormField v-if="!companyId" />
     <div ref="barRef" class="grid grid-cols-2 sm:grid-cols-4 gap-3 items-end" @keydown.capture="onBarKeydown">
       <UFormGroup label="Date">
         <UInput v-model="form.date" type="date" size="sm" @keydown.enter.prevent="onInputEnter" />
@@ -432,31 +434,9 @@ watch(companyScope.companyId, () => { if (!companyScope.record.value) { form.val
         </div>
       </UFormGroup>
 
-      <UFormGroup label="User">
+      <UFormGroup label="Party">
         <div ref="userSelectRef">
-          <USelectMenu
-            v-model="form.user"
-            size="sm"
-            :options="companyUsers"
-            option-attribute="name"
-            option-key="userId"
-            track-by="userId"
-            multiple
-            searchable
-            placeholder="Employee"
-            @update:modelValue="handleUserChange"
-          >
-            <template #label>
-              <span v-if="form.user.length">{{ form.user[0].name }}</span>
-              <span v-else class="text-gray-400">Employee</span>
-            </template>
-            <template #option="{ option }">
-              <div class="flex flex-col">
-                <span class="font-medium">{{ option.name }}</span>
-                <span class="text-xs opacity-70">{{ option.phone }}</span>
-              </div>
-            </template>
-          </USelectMenu>
+          <ExpensePartySelect v-model="form.party" :options="parties" :disabled="!!defaultParty" @update:model-value="handlePartyChange" />
         </div>
       </UFormGroup>
 

@@ -1,6 +1,8 @@
 <script setup lang="ts">
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
+const props = defineProps<{ distributorId?: string; companyId?: string }>();
+watch(() => props.companyId, id => { if (id) companyScope.filter(id); }, { immediate: true });
 
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 // import { saveAs } from 'file-saver';
@@ -38,7 +40,7 @@ const paymentModeOptions = [
     { label: 'Cheque', value: 'CHEQUE' },
 ]
 const selectedDate = ref({ 
-    start: new Date(new Date().setHours(0, 0, 0, 0)) , 
+    start: props.distributorId ? new Date(1970, 0, 1) : new Date(new Date().setHours(0, 0, 0, 0)) ,
     end: new Date(new Date().setHours(23, 59, 59, 999)) 
 });
 
@@ -64,8 +66,8 @@ const columns = [
         sortable: true,
     },
     {
-        key: 'user.name',
-        label: 'User',
+        key: 'party.name',
+        label: 'Party',
         sortable: true,
     },
     {
@@ -94,7 +96,10 @@ const columns = [
     },
 ];
 
-const action = (row:any) => [
+const action = (row:any) => row.distributorPaymentId ? [[{
+    label: 'Manage payment', icon: 'i-heroicons-arrow-top-right-on-square',
+    click: () => navigateTo(`/distributor/payments?entryCompany=${encodeURIComponent(row.companyId)}`),
+}]] : [
     [
         {
             label: 'Edit',
@@ -163,15 +168,16 @@ const loadCategories = async () => {
 }
 const loadCompanyUsers = async () => {
     if (!useAuth().session.value?.companyId) return
-    companyUsers.value = await $fetch<any[]>('/api/accounts/company-users', { query: { activeOnly: 1 } })
+    companyUsers.value = await $fetch<any[]>('/api/accounts/expense-parties')
 }
 
 const userFilterOptions = computed(() =>
     (companyUsers.value || []).map((u: any) => ({
-        label: u.name || 'Unknown',
-        value: u.userId
+        label: `${u.name || 'Unknown'} (${u.kind})`,
+        value: u.key
     }))
 )
+watch(companyScope.readIds, () => { void loadCategories(); void loadCompanyUsers(); page.value=1; selectedRows.value=[]; });
 
 const selectedUserIds = computed<string[]>(() =>
     (selectedUsers.value || [])
@@ -187,7 +193,8 @@ const expenseQueryParams = computed(() => {
         status: selectedStatus.value.length ? selectedStatus.value : undefined,
         paymentMode: selectedPaymentMode.value.length ? selectedPaymentMode.value : undefined,
         categoryIds: selectedCategory.value.length ? selectedCategory.value : undefined,
-        userIds: selectedUserIds.value.length ? selectedUserIds.value : undefined,
+        partyKeys: selectedUserIds.value.length ? selectedUserIds.value.map(id => id.includes(':') ? id : `user:${id}`) : undefined,
+        distributorId: props.distributorId,
         from: selectedDate.value ? startOfDay(selectedDate.value.start).toISOString() : undefined,
         to: selectedDate.value ? endOfDay(selectedDate.value.end).toISOString() : undefined,
         minAmount: hasMinAmount ? Number(minAmount.value) : undefined,
@@ -387,6 +394,7 @@ watch(
     selectedColumnKeys,
   ],
   () => {
+    if (props.distributorId) return;
     expenseTableStore.$patch({
       search: search.value,
       selectedStatus: selectedStatus.value,
@@ -408,6 +416,7 @@ watch(
 onMounted(() => {
   loadCategories()
   loadCompanyUsers()
+  if (props.distributorId) return;
   const s = expenseTableStore
   search.value = s.search ?? ''
   selectedStatus.value = s.selectedStatus ?? []
@@ -428,12 +437,13 @@ onMounted(() => {
   if (s.sort?.column && s.sort?.direction && s.sort.column !== 'id') {
     sort.value = {
       ...s.sort,
+      column: s.sort.column === 'user.name' ? 'party.name' : s.sort.column,
       direction: s.sort.column === 'expenseNumber' ? 'desc' : s.sort.direction,
     }
   }
   if (Array.isArray(s.selectedColumnKeys) && s.selectedColumnKeys.length > 0) {
     selectedColumns.value = columns.filter((c: any) =>
-      s.selectedColumnKeys.includes(c.key)
+      s.selectedColumnKeys.map(key => key === 'user.name' ? 'party.name' : key).includes(c.key)
     )
   }
 })
@@ -474,7 +484,7 @@ const buildExpenseExportData = (rows: any[]) => {
     companyName: row.companyName || '',
     expenseDate: row.expenseDate ? format(row.expenseDate, 'd MMM yyyy') : '',
     category: row.expensecategory?.name || '',
-    user: row.user?.name || '',
+    user: row.party?.name || row.user?.name || '',
     note: row.note || '',
     paymentMode: row.paymentMode || '',
     amount: Number(row.totalAmount || 0),
@@ -546,7 +556,7 @@ const handleDownloadExcel = async () => {
       'Expense #',
       'Date',
       'Category',
-      'User',
+      'Party',
       'Note',
       'Payment Mode',
       'Amount',
@@ -677,7 +687,7 @@ const handleDownloadPdf = async () => {
         'Expense #',
         'Date',
         'Category',
-        'User',
+        'Party',
         'Note',
         'Payment Mode',
         'Amount',
@@ -815,7 +825,7 @@ watch(companyScope.readIds, () => { page.value = 1; });
             <template #header>
                 <div class="flex justify-between items-center gap-3 w-full">
                     <div class="flex items-center gap-3">
-                  <CompanyTableFilter />
+                  <CompanyTableFilter v-if="!companyId" />
                         <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
                         <UButton icon="i-heroicons-calendar-days-20-solid" class=" w-full sm:w-60">
                         {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
@@ -845,7 +855,7 @@ watch(companyScope.readIds, () => { page.value = 1; });
                           v-model="search"
                           icon="i-heroicons-magnifying-glass-20-solid"
                           type="text"
-                          placeholder="Search note / category / user"
+                          placeholder="Search note / category / party"
                           class="w-full sm:w-56"
                         />
                     </div>
@@ -1068,7 +1078,7 @@ watch(companyScope.readIds, () => { page.value = 1; });
             v-model="draftSelectedUsers"
             :options="userFilterOptions"
             multiple
-            placeholder="User"
+            placeholder="Party"
           />
           <div class="grid grid-cols-2 gap-3">
             <UInput

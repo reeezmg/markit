@@ -58,6 +58,7 @@ const tabs = [
   { label: 'Purchase Orders', icon: 'i-heroicons-shopping-bag' },
   { label: 'Purchase Returns', icon: 'i-heroicons-arrow-uturn-left' },
   { label: 'Payments', icon: 'i-heroicons-banknotes' },
+  { label: 'Expenses', icon: 'i-heroicons-receipt-percent' },
 ]
 
 // ─── Mutations ───
@@ -1434,6 +1435,7 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
           >
             <template #item="{ item, index }">
               <div class="flex-1 flex flex-col overflow-auto p-4">
+                <DistributorExpenses v-if="index === 4" :key="distributorKey(selectedDistributor)" :company-id="selectedDistributor.companyId" :distributor-id="selectedDistributor.distributorId" :distributor-name="selectedDistributor.distributor?.name || 'Distributor'" />
 
                 <!-- ─── Tab 1: Purchase Orders ─── -->
                 <template v-if="index === 1">

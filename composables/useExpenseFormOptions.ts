@@ -13,6 +13,7 @@ export function useExpenseFormOptions() {
 
   const categories = ref<any[]>([])
   const companyUsers = ref<any[]>([])
+  const parties = ref<any[]>([])
   const categoriesLoading = ref(false)
 
   const loadCategories = async () => {
@@ -30,6 +31,9 @@ export function useExpenseFormOptions() {
     companyUsers.value = await $fetch<any[]>('/api/accounts/company-users', {
       query: { forWrite: 1, ...(activeOnly ? { activeOnly: 1 } : {}) },
     })
+    const companyId = companyScope.companyId.value;
+    const options = await $fetch<any[]>('/api/accounts/expense-parties', { query: { forWrite: 1 } });
+    if (companyId === companyScope.companyId.value) parties.value = options;
   }
 
   const createCategory = async (name: string) => {
@@ -64,11 +68,12 @@ export function useExpenseFormOptions() {
     }
   }
 
-  watch(companyScope.companyId, () => { void loadCategories(); void loadCompanyUsers(); });
+  watch(companyScope.companyId, () => { parties.value = []; void loadCategories(); void loadCompanyUsers(); });
 
   return {
     categories,
     companyUsers,
+    parties,
     categoriesLoading,
     loadCategories,
     loadCompanyUsers,
