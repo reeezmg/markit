@@ -103,9 +103,23 @@ function selectRange(duration: Duration) {
 }
 
 const paymentTypeFilter = useLocalStorage('dist:payments-page:paymentType', '')
+const distributorFilter = useLocalStorage('dist:payments-page:distributorId', '')
 
 const isFilterModalOpen = ref(false)
 const draftPaymentTypeFilter = ref('')
+const draftDistributorFilter = ref('')
+
+const { data: tableDistributors } = useFindManyDistributorCompany(computed(() => ({
+  where: { companyId: { in: companyScope.readIds.value } },
+  select: { distributorId: true, distributor: { select: { name: true } } },
+  orderBy: { distributor: { name: 'asc' as const } },
+})))
+const distributorFilterOptions = computed(() => [
+  { label: 'All distributors', value: '' },
+  ...Array.from(new Map((tableDistributors.value ?? []).map(dc => [dc.distributorId, {
+    label: dc.distributor?.name || '-', value: dc.distributorId,
+  }])).values()),
+])
 
 const paymentTypeFilterOptions = [
   { label: 'All', value: '' },
@@ -119,11 +133,13 @@ const paymentTypeFilterOptions = [
 
 const openFilterModal = () => {
   draftPaymentTypeFilter.value = paymentTypeFilter.value
+  draftDistributorFilter.value = distributorFilter.value
   isFilterModalOpen.value = true
 }
 
 const applyFilters = () => {
   paymentTypeFilter.value = draftPaymentTypeFilter.value
+  distributorFilter.value = draftDistributorFilter.value
   page.value = 1
   isFilterModalOpen.value = false
 }
@@ -132,10 +148,11 @@ const resetFilters = () => {
   search.value = ''
   selectedDate.value = { start: sub(new Date(), { days: 7 }), end: new Date() }
   paymentTypeFilter.value = ''
+  distributorFilter.value = ''
   page.value = 1
 }
 
-watch([search, selectedDate, paymentTypeFilter], () => {
+watch([search, selectedDate, paymentTypeFilter, distributorFilter], () => {
   page.value = 1
 }, { deep: true })
 
@@ -171,6 +188,7 @@ const queryArgs = computed(() => ({
       lte: endOfDay(selectedDate.value.end),
     },
     ...(paymentTypeFilter.value ? { paymentType: paymentTypeFilter.value } : {}),
+    ...(distributorFilter.value ? { distributorId: distributorFilter.value } : {}),
     ...searchWhere.value,
   },
   select: {
@@ -262,6 +280,7 @@ const downloadPayments = async (fileFormat: 'excel' | 'pdf') => {
         endDate: endOfDay(selectedDate.value.end).toISOString(),
         search: search.value || undefined,
         paymentType: paymentTypeFilter.value || undefined,
+        distributorId: distributorFilter.value || undefined,
       },
     })
 
@@ -863,6 +882,15 @@ watch(companyScope.readIds, () => { page.value = 1; });
         </template>
 
         <div class="space-y-3">
+          <USelectMenu
+            v-model="draftDistributorFilter"
+            :options="distributorFilterOptions"
+            option-attribute="label"
+            value-attribute="value"
+            placeholder="Distributor"
+            searchable
+            searchable-placeholder="Search distributor..."
+          />
           <USelect
             v-model="draftPaymentTypeFilter"
             :options="paymentTypeFilterOptions"

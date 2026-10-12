@@ -122,6 +122,13 @@ Integration tests run in a temporary isolated schema.
 
 Head-office admins default to the active head office plus active direct branches. Each table uses `useCompanyScope('table')` and `CompanyTableFilter.vue`; filters remain local to the component and participate in query keys. `CompanyFormField.vue` is inside add/edit forms: new forms default to the active head office, while edits load the stored owner through `/api/organization/context`. Related quick-add fields inherit their enclosing form company. Supplier, purchase-order, payment, credit, and purchase-return tables use the local scope. Shared suppliers are selected through company/distributor links. Scoped requests also drive PDF and Excel exports. Requests use explicit company IDs without updating the authentication session or sidebar company. `useOrganizationActions.ts` resolves row ownership locally. Changing an existing record's company opens the transfer preview, requires explicit destination mappings and linked-record confirmation, then moves the saved record in a transaction. Save other form changes before confirming a transfer. See `ARCH-storetools-api.md` for transfer and authorization details.
 
+The standalone Purchase Orders and Payments tables include a searchable distributor
+choice in their filter modals. Options come from accessible company/distributor links;
+the selected distributor ID joins the existing server-side date/search/payment filters,
+so rows and counts paginate together. Reset clears the selection. PDF/Excel downloads
+receive the same distributor ID; purchase-order exports calculate due from all
+recorded payments and allocations for every payment type.
+
 Payment creation from the payment and PO forms calls `/api/distributor/payments` with `createExpense: true`. This allocates payment/expense numbers and writes the linked source expense in one transaction. Payment edit/delete keeps that source synchronized; native supplier triggers post the payment once and suppress a duplicate ERP expense journal. No old account-ledger rows are created or rebuilt. `CompanySupplierField.vue` and purchase-order options follow the selected form company.
 
 The Distributor Payments form supports one payment allocated across multiple outstanding

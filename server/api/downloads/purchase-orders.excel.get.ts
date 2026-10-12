@@ -16,6 +16,7 @@ export default defineEventHandler(async (event) => {
 
   const search            = (query.search as string || '').trim().toLowerCase()
   const paymentTypeFilter = (query.paymentType as string || '').trim()
+  const distributorId     = (query.distributorId as string || '').trim() || null
   const minTotal          = query.minTotal !== undefined ? Number(query.minTotal) : null
   const maxTotal          = query.maxTotal !== undefined ? Number(query.maxTotal) : null
 
@@ -54,8 +55,9 @@ export default defineEventHandler(async (event) => {
        LEFT JOIN distributors d ON d.id = po.distributor_id
        WHERE po.company_id = ANY($1::text[])
          AND po.created_at BETWEEN $2 AND $3
+         AND ($4::text IS NULL OR po.distributor_id = $4)
        ORDER BY po.created_at DESC`,
-      [companyIds, startDate, endDate]
+      [companyIds, startDate, endDate, distributorId]
     )
 
     let rows = posRes.rows.map(r => ({
@@ -68,7 +70,7 @@ export default defineEventHandler(async (event) => {
       company_name:      r.company_name,
       qty:               Number(r.qty),
       paid:              Number(r.paid),
-      due:               r.payment_type === 'CREDIT' ? (r.due_cleared ? 0 : Number(r.total_amount) - Number(r.paid)) : null,
+      due:               r.due_cleared ? 0 : Number(r.total_amount) - Number(r.paid),
     }))
 
     /* ── CLIENT-SIDE FILTERS ── */

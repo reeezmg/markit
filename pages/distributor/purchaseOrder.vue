@@ -5,6 +5,7 @@ const $fetch = companyScope.fetch;
 const { invalidateModels } = useModelCache();
 
 import { useFindManyPurchaseOrder, useCountPurchaseOrder, useDeletePurchaseOrder } from '~/lib/company-hooks/purchase-order';
+import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company';
 
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
 
@@ -183,13 +184,27 @@ function selectRange(duration: Duration) {
 }
 
 const paymentTypeFilter = useLocalStorage('dist:purchase-orders-page:paymentType', '')
+const distributorFilter = useLocalStorage('dist:purchase-orders-page:distributorId', '')
 const minTotalFilter = useLocalStorage('dist:purchase-orders-page:minTotal', null as number | null)
 const maxTotalFilter = useLocalStorage('dist:purchase-orders-page:maxTotal', null as number | null)
 
 const isFilterModalOpen = ref(false)
 const draftPaymentTypeFilter = ref('')
+const draftDistributorFilter = ref('')
 const draftMinTotalFilter = ref<number | null>(null)
 const draftMaxTotalFilter = ref<number | null>(null)
+
+const { data: tableDistributors } = useFindManyDistributorCompany(computed(() => ({
+  where: { companyId: { in: companyScope.readIds.value } },
+  select: { distributorId: true, distributor: { select: { name: true } } },
+  orderBy: { distributor: { name: 'asc' as const } },
+})))
+const distributorFilterOptions = computed(() => [
+  { label: 'All distributors', value: '' },
+  ...Array.from(new Map((tableDistributors.value ?? []).map(dc => [dc.distributorId, {
+    label: dc.distributor?.name || '-', value: dc.distributorId,
+  }])).values()),
+])
 
 const paymentTypeFilterOptions = [
   { label: 'All', value: '' },
@@ -203,6 +218,7 @@ const paymentTypeFilterOptions = [
 
 const openFilterModal = () => {
   draftPaymentTypeFilter.value = paymentTypeFilter.value
+  draftDistributorFilter.value = distributorFilter.value
   draftMinTotalFilter.value = minTotalFilter.value
   draftMaxTotalFilter.value = maxTotalFilter.value
   isFilterModalOpen.value = true
@@ -210,6 +226,7 @@ const openFilterModal = () => {
 
 const applyFilters = () => {
   paymentTypeFilter.value = draftPaymentTypeFilter.value
+  distributorFilter.value = draftDistributorFilter.value
   minTotalFilter.value = draftMinTotalFilter.value
   maxTotalFilter.value = draftMaxTotalFilter.value
   page.value = 1
@@ -220,12 +237,13 @@ const resetFilters = () => {
   search.value = ''
   selectedDate.value = { start: sub(new Date(), { days: 7 }), end: new Date() }
   paymentTypeFilter.value = ''
+  distributorFilter.value = ''
   minTotalFilter.value = null
   maxTotalFilter.value = null
   page.value = 1
 }
 
-watch([search, selectedDate, paymentTypeFilter, minTotalFilter, maxTotalFilter], () => {
+watch([search, selectedDate, paymentTypeFilter, distributorFilter, minTotalFilter, maxTotalFilter], () => {
   page.value = 1
 }, { deep: true })
 
@@ -267,6 +285,7 @@ const queryArgs = computed(() => ({
       lte: endOfDay(selectedDate.value.end),
     },
     ...(paymentTypeFilter.value ? { paymentType: paymentTypeFilter.value } : {}),
+    ...(distributorFilter.value ? { distributorId: distributorFilter.value } : {}),
     ...totalAmountWhere.value,
     ...searchWhere.value,
   },
@@ -510,6 +529,7 @@ const downloadPurchaseOrders = async (format: 'excel' | 'pdf') => {
         endDate: endOfDay(selectedDate.value.end).toISOString(),
         search: search.value || undefined,
         paymentType: paymentTypeFilter.value || undefined,
+        distributorId: distributorFilter.value || undefined,
         minTotal: minTotalFilter.value ?? undefined,
         maxTotal: maxTotalFilter.value ?? undefined,
       },
@@ -1273,6 +1293,15 @@ watch(companyScope.readIds, () => { page.value = 1; });
         </template>
 
         <div class="space-y-3">
+          <USelectMenu
+            v-model="draftDistributorFilter"
+            :options="distributorFilterOptions"
+            option-attribute="label"
+            value-attribute="value"
+            placeholder="Distributor"
+            searchable
+            searchable-placeholder="Search distributor..."
+          />
           <USelect
             v-model="draftPaymentTypeFilter"
             :options="paymentTypeFilterOptions"
