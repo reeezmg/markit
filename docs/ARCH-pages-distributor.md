@@ -139,6 +139,11 @@ direct payments and per-PO allocations in cents. Increasing an already-paid PO's
 total preserves its original payment and exposes the remainder in both PO lists,
 details and payment options, regardless of its original payment method. Manual
 `dueCleared` remains respected; editing a payment excludes its existing portion.
+After a PO or distributor payment write, `useModelCache` invalidates both the
+purchase-order query and the `DistributorCompany` query that embeds PO totals,
+payments and dues. Distributor, PO and payment tables refetch when reactivated;
+open PO details follow their freshly loaded row. This keeps tables current after
+product purchase-price edits and payment changes without a browser reload.
 
 `server/utils/distributor-payment-save.ts` handles both create and edit atomically:
 positive cent-precision amounts, unique selected POs, total allocation equality,

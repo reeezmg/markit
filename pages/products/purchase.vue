@@ -823,6 +823,8 @@ const handleSave = async () => {
         },
       },
     })
+    await invalidateModels('PurchaseOrder', 'DistributorPayment')
+    await itemRefetch()
     oldPaymentType.value = paymentType.value
     toast.add({ title: 'Purchase and accounting saved', color: 'green' })
 

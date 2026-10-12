@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
+const { invalidateModels } = useModelCache();
 
 import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company';
 import { purchaseOrderDue } from '~/utils/purchase-order-payments';
@@ -353,6 +354,12 @@ onMounted(() => {
   refetchDistributorCompanies()
 })
 
+onActivated(() => {
+  refetch()
+  refetchCount()
+  refetchDistributorCompanies()
+})
+
 const distributorOptions = computed(() =>
   (distributorCompanies.value ?? []).map((dc: any) => ({
     label: dc.distributor?.name || '-',
@@ -433,6 +440,7 @@ const deletePayment = async () => {
     showToast('Payment deleted successfully')
     isDeleteOpen.value = false
     paymentToDelete.value = null
+    await invalidateModels('DistributorPayment')
     await refetch()
     await refetchDistributorCompanies()
   } catch (err: any) {
@@ -491,6 +499,7 @@ const handleAddPayment = async () => {
       editingPaymentId.value = null
       paymentToEdit.value = null
       resetAddForm()
+      await invalidateModels('DistributorPayment')
       await refetch()
       await refetchDistributorCompanies()
       return
@@ -510,7 +519,8 @@ const handleAddPayment = async () => {
     showToast('Payment added successfully', 'green')
     isAddOpen.value = false
     resetAddForm()
-    refetch()
+    await invalidateModels('DistributorPayment')
+    await refetch()
     refetchDistributorCompanies()
     refetchCount()
   } catch (err: any) {

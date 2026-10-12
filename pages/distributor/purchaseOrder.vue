@@ -2,6 +2,7 @@
 import { purchaseOrderPayments, purchaseOrderDue } from '~/utils/purchase-order-payments';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
+const { invalidateModels } = useModelCache();
 
 import { useFindManyPurchaseOrder, useCountPurchaseOrder, useDeletePurchaseOrder } from '~/lib/company-hooks/purchase-order';
 
@@ -476,6 +477,13 @@ const rows = computed(() =>
   })) ?? []
 )
 
+watch(rows, (latest) => {
+  if (selectedDetailsRow.value?.id) {
+    const fresh = latest.find(row => row.id === selectedDetailsRow.value.id)
+    if (fresh) selectedDetailsRow.value = fresh
+  }
+})
+
 // -------------------------------------
 // ACTION HANDLERS
 // -------------------------------------
@@ -560,6 +568,7 @@ const setDueCleared = async (row: any, dueCleared: boolean) => {
       body: { poId: row.id, dueCleared },
     })
     showToast(dueCleared ? 'Due cleared' : 'Due restored', 'green')
+    await invalidateModels('PurchaseOrder')
     await refetch()
   } catch (error: any) {
     showToast('Unable to update due', 'red', error?.data?.statusMessage || error?.message || '')
@@ -622,7 +631,8 @@ const handlePay = async () => {
     showToast('Payment added successfully', 'green')
     isOpenPay.value = false
     resetForm()
-    refetch()
+    await invalidateModels('DistributorPayment')
+    await refetch()
   } catch (err: any) {
     showToast('Error', 'red', err.message)
   } finally {

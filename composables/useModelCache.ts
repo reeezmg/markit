@@ -16,12 +16,21 @@ const QUERY_KEY_PREFIX = 'zenstack'
 export const useModelCache = () => {
   const queryClient = useQueryClient()
 
-  const invalidateModels = (...models: string[]) =>
-    Promise.all(
-      models.map((model) =>
+  const invalidateModels = (...models: string[]) => {
+    const affected = new Set(models)
+    // Supplier tables embed purchase orders and their payments in a
+    // DistributorCompany query. Invalidating the source model alone leaves
+    // those nested totals and dues cached after raw-SQL saves.
+    if (affected.has('PurchaseOrder') || affected.has('DistributorPayment') || affected.has('DistributorCredit') || affected.has('PurchaseReturn')) {
+      affected.add('DistributorCompany')
+    }
+    if (affected.has('DistributorPayment')) affected.add('PurchaseOrder')
+    return Promise.all(
+      [...affected].map((model) =>
         queryClient.invalidateQueries({ queryKey: [QUERY_KEY_PREFIX, model] })
       )
     )
+  }
 
   return { invalidateModels }
 }

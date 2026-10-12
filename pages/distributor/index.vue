@@ -3,6 +3,7 @@ import { purchaseOrderPayments, purchaseOrderDue } from '~/utils/purchase-order-
 import { distributorPurchaseTransactions } from '~/utils/distributor-purchase-transactions';
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
+const { invalidateModels } = useModelCache();
 
 import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/company-hooks/distributor-company';
 import { useCreateDistributorCredit, useUpdateDistributorCredit, useDeleteDistributorCredit } from '~/lib/company-hooks/distributor-credit';
@@ -333,6 +334,10 @@ onMounted(() => {
   refetch()
 })
 
+onActivated(() => {
+  refetch()
+})
+
 // ─── Helpers ───
 const getPOQty = (po: any) =>
   po.products.reduce(
@@ -534,6 +539,13 @@ watch(distributors, val => {
   } else if (selectedDistributorId.value) {
     const saved = val?.find(d => distributorKey(d) === selectedDistributorId.value)
     if (saved) selectedDistributor.value = saved
+  }
+})
+
+watch(() => selectedDistributor.value?.purchaseOrders, orders => {
+  if (selectedDetailsRow.value?.id) {
+    const fresh = orders?.find((po: any) => po.id === selectedDetailsRow.value.id)
+    if (fresh) selectedDetailsRow.value = fresh
   }
 })
 
@@ -863,7 +875,8 @@ const handleDelete = async () => {
       await $fetch(`/api/purchasereturn/${deletingRowIdentity.value.id}`, { method: 'DELETE' })
     }
     toast.add({ title: 'Deleted successfully', color: 'green' })
-    refetch()
+    await invalidateModels('PurchaseOrder', 'DistributorPayment', 'DistributorCredit', 'PurchaseReturn')
+    await refetch()
   } catch (err: any) {
     toast.add({ title: 'Error', color: 'red', description: err.message })
   } finally {
@@ -951,7 +964,8 @@ const handlePay = async () => {
     }
     isOpenPay.value = false
     resetPayForm()
-    refetch()
+    await invalidateModels('DistributorPayment')
+    await refetch()
   } catch (err: any) {
     toast.add({ title: 'Error', color: 'red', description: err.message })
   } finally {
@@ -977,7 +991,8 @@ const handleAddCredit = async () => {
     toast.add({ title: creditForm.value.id ? 'Credit updated' : 'Credit added', color: 'green' })
     isOpenCredit.value = false
     resetCreditForm()
-    refetch()
+    await invalidateModels('DistributorCredit')
+    await refetch()
   } catch (err: any) {
     toast.add({ title: 'Error', color: 'red', description: err.data?.statusMessage || err.message })
   } finally {
