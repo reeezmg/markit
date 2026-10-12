@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
+const { invalidateModels } = useModelCache();
 
 import { useFindManyPurchaseReturn, useDeletePurchaseReturn } from '~/lib/company-hooks/purchase-return';
 
@@ -204,6 +205,7 @@ const handleDelete = async () => {
   isDeleting.value = true
   try {
     await $fetch(`/api/purchasereturn/${deletingRow.value.id}`, { method: 'DELETE', headers: { 'x-company-id': deletingRow.value.companyId } })
+    await invalidateModels('PurchaseReturn');
     await refetch()
     toast.add({ title: 'Deleted', color: 'green' })
     isDeleteOpen.value = false
@@ -554,8 +556,8 @@ watch(companyScope.readIds, () => { page.value = 1; });
         </template>
         <div class="space-y-3">
           <div class="grid grid-cols-2 gap-3">
-            <UInput v-model.number="draftMinTotal" type="number" placeholder="Min Total" />
-            <UInput v-model.number="draftMaxTotal" type="number" placeholder="Max Total" />
+            <UFormGroup label="Minimum total"><UInput v-model.number="draftMinTotal" type="number" placeholder="No minimum" /></UFormGroup>
+            <UFormGroup label="Maximum total"><UInput v-model.number="draftMaxTotal" type="number" placeholder="No maximum" /></UFormGroup>
           </div>
         </div>
         <template #footer>

@@ -42,7 +42,6 @@
   <UModal v-model="isPurchaseInfoOpen" :prevent-close="isPurchaseInfoDoneLoading">
     <div class="p-4 space-y-4">
       <h2 class="text-lg font-semibold">Purchase Information</h2>
-      <DistributorAccountSelection v-if="selected?.id" v-model="accountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="selected.id" :source-key="accountingSourceKey" :roles="['payable','stock',...(Number(taxPercent) ? ['tax'] : []),...(paymentType && paymentType !== 'CREDIT' ? [paymentType === 'CASH' ? 'cash' : 'bank'] : [])]" />
            <!-- 🆕 BILL DATE -->
       <UFormGroup label="Bill Date">
         <UInput
@@ -102,6 +101,7 @@
         />
       </UFormGroup>
 
+      <DistributorAccountSelection v-if="selected?.id" v-model="accountingAccounts" @busy="purchaseAccountsLoading = $event" :company-id="companyScope.companyId.value" :distributor-id="selected.id" :source-key="accountingSourceKey" :roles="['payable','stock',...(Number(taxPercent) ? ['tax'] : []),...(paymentType && paymentType !== 'CREDIT' ? [paymentType === 'CASH' ? 'cash' : 'bank'] : [])]" />
       <UDivider />
 
       <!-- SUBTOTAL -->
@@ -148,7 +148,7 @@
       <UButton
         block
         :loading="isPurchaseInfoDoneLoading"
-        :disabled="isPurchaseInfoDoneLoading"
+        :disabled="isPurchaseInfoDoneLoading || purchaseAccountsLoading"
         @click="onPurchaseInfoDone"
       >
         Done
@@ -256,6 +256,7 @@ const useAuth = () => companyScope.auth
 
 const isPurchaseInfoOpen = ref(false)
 const isDistributorOpen = ref(false)
+const purchaseAccountsLoading = ref(false)
 const isPurchaseInfoSubmitPending = ref(false)
 const purchaseOrderNo = computed(() => props.purchaseOrderNo)
 const showPurchaseInfoButton = computed(() => props.showPurchaseInfoButton)
@@ -582,7 +583,7 @@ const syncPaymentState = () => {
 }
 
 const onPurchaseInfoDone = async () => {
-  if (isPurchaseInfoDoneLoading.value) return
+  if (isPurchaseInfoDoneLoading.value || purchaseAccountsLoading.value) return
   if (!paymentType.value) {
     toast.add({
       title: 'Payment method is required',

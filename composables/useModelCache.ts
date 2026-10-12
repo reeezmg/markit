@@ -15,9 +15,17 @@ const QUERY_KEY_PREFIX = 'zenstack'
  */
 export const useModelCache = () => {
   const queryClient = useQueryClient()
+  const distributorRevision = useState('distributor-revision', () => 0)
 
   const invalidateModels = (...models: string[]) => {
     const affected = new Set(models)
+    if (models.some(model => ['Distributor', 'DistributorCompany', 'DistributorCredit', 'DistributorPayment', 'PurchaseOrder', 'PurchaseReturn', 'Expense'].includes(model))) {
+      distributorRevision.value++
+    }
+    if (affected.has('Distributor')) affected.add('DistributorCompany')
+    if (affected.has('PurchaseReturn')) {
+      for (const model of ['PurchaseOrder', 'DistributorPayment', 'Product', 'Variant', 'Item']) affected.add(model)
+    }
     // Supplier tables embed purchase orders and their payments in a
     // DistributorCompany query. Invalidating the source model alone leaves
     // those nested totals and dues cached after raw-SQL saves.

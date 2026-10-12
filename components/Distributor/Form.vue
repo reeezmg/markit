@@ -2,6 +2,7 @@
 <script setup lang="ts">
 const companyScope = useCompanyScope('form');
 const $fetch = companyScope.fetch;
+const { invalidateModels } = useModelCache();
 
 import { useCreateDistributor, useUpdateDistributor, useDeleteDistributor } from '~/lib/company-hooks/distributor';
 import { useUpdateDistributorCompany } from '~/lib/company-hooks/distributor-company';
@@ -28,7 +29,7 @@ const props = defineProps({
 const companyLink = computed(() => props.distributorCompanyKey || (props.selectedSupplier?.companyId ? { distributorId: props.selectedSupplier.id, companyId: props.selectedSupplier.companyId } : null));
 watch(companyLink, value => { void companyScope.beginForm(value ? { model: 'DistributorCompany', id: value.distributorId, companyId: value.companyId } : null); }, { immediate: true });
 
-const emit = defineEmits(['transferred']);
+const emit = defineEmits(['transferred', 'saved']);
 const iscreating = ref(false);
 const toast = useToast();
 const useAuth = () => companyScope.auth;
@@ -158,8 +159,10 @@ const submitForm = async () => {
   }
    
     
-  }catch(error){
-    console.log(error)
+    await invalidateModels('Distributor', 'DistributorCompany');
+    emit('saved');
+  }catch(error:any){
+    toast.add({ title: 'Could not save distributor', description: error?.data?.statusMessage || error?.message, color: 'red' });
   }finally{
      iscreating.value = false
     
@@ -176,32 +179,60 @@ const submitForm = async () => {
 
           <!-- Name -->
           <h3 class="text-md font-semibold">Personal Details</h3>
-          <UInput v-model="supplier.name" label="Supplier Name" placeholder="Enter full name" required />
+          <UFormGroup label="Supplier Name">
+            <UInput v-model="supplier.name" placeholder="Enter full name" required />
+          </UFormGroup>
 
           <!-- Address -->
           <h3 class="text-md font-semibold mt-4">Address Details</h3>
-          <UInput v-model="supplier.street" label="Street" placeholder="Enter street name" required />
-          <UInput v-model="supplier.locality" label="Locality" placeholder="Enter locality" required />
-          <UInput v-model="supplier.city" label="City" placeholder="Enter city name" required />
-          <UInput v-model="supplier.state" label="State" placeholder="Enter state name" required />
-          <UInput v-model="supplier.pincode" label="Pincode" placeholder="Enter pincode" required />
+          <UFormGroup label="Street">
+            <UInput v-model="supplier.street" placeholder="Enter street name" required />
+          </UFormGroup>
+          <UFormGroup label="Locality">
+            <UInput v-model="supplier.locality" placeholder="Enter locality" required />
+          </UFormGroup>
+          <UFormGroup label="City">
+            <UInput v-model="supplier.city" placeholder="Enter city name" required />
+          </UFormGroup>
+          <UFormGroup label="State">
+            <UInput v-model="supplier.state" placeholder="Enter state name" required />
+          </UFormGroup>
+          <UFormGroup label="Pincode">
+            <UInput v-model="supplier.pincode" placeholder="Enter pincode" required />
+          </UFormGroup>
 
           <!-- GSTIN -->
           <h3 class="text-md font-semibold mt-4">Tax Information</h3>
-          <UInput v-model="supplier.gstin" label="GSTIN" placeholder="Enter 15-digit GST Number" required />
+          <UFormGroup label="GSTIN">
+            <UInput v-model="supplier.gstin" placeholder="Enter 15-digit GST Number" required />
+          </UFormGroup>
 
           <!-- Opening Due -->
           <h3 class="text-md font-semibold mt-4">Opening Due</h3>
-          <UInput v-model.number="supplier.openingDue" label="Opening Due Amount" placeholder="Positive = you owe, Negative = they owe" type="number" step="0.01" />
-          <UInput v-model="supplier.openingDueDate" label="Opening Due Date" type="date" />
+          <UFormGroup label="Opening Due Date">
+            <UInput v-model="supplier.openingDueDate" type="date" />
+          </UFormGroup>
+          <UFormGroup label="Opening Due Amount">
+            <UInput v-model.number="supplier.openingDue" placeholder="Positive = you owe, Negative = they owe" type="number" step="0.01" />
+          </UFormGroup>
 
           <!-- Bank Account Details -->
           <h3 class="text-md font-semibold mt-4">Bank Account Details</h3>
-          <UInput v-model="supplier.accHolderName" label="Account Holder Name" placeholder="Enter bank name" required />
-          <UInput v-model="supplier.bankName" label="Bank Name" placeholder="Enter bank name" required />
-          <UInput v-model="supplier.accountNo" label="Account Number" placeholder="Enter account number" required />
-          <UInput v-model="supplier.ifsc" label="IFSC Code" placeholder="Enter IFSC Code" required />
-          <UInput v-model="supplier.upiId" label="IFSC Code" placeholder="Enter UPI ID" required />
+          <UFormGroup label="Account Holder Name">
+            <UInput v-model="supplier.accHolderName" placeholder="Enter account holder name" required />
+          </UFormGroup>
+          <UFormGroup label="Bank Name">
+            <UInput v-model="supplier.bankName" placeholder="Enter bank name" required />
+          </UFormGroup>
+          <UFormGroup label="Account Number">
+            <UInput v-model="supplier.accountNo" placeholder="Enter account number" required />
+          </UFormGroup>
+          <UFormGroup label="IFSC Code">
+            <UInput v-model="supplier.ifsc" placeholder="Enter IFSC Code" required />
+          </UFormGroup>
+          <UFormGroup label="UPI ID">
+            <UInput v-model="supplier.upiId" placeholder="Enter UPI ID" required />
+          </UFormGroup>
 
           <!-- Submit Button -->
           <UButton @click="submitForm" :loading="iscreating" block>Submit</UButton>

@@ -1,5 +1,38 @@
 ### Distributor (`/distributor`)
 
+#### Payment modal allocation and field order (2026-10-12)
+
+The shared payment modal orders distributor/date/amount/payment method before
+account choices, linked POs and remarks. Selecting/removing a PO or changing the
+payment amount allocates in selection order, capped at each PO's outstanding due;
+there is no separate allocation button. Manual allocation edits remain available.
+Opening an existing payment preserves its saved allocations until those inputs
+change, and its own payment is excluded from the due calculation. Saves invalidate
+payment, PO and distributor caches inside the shared modal before emitting `saved`.
+Credit date precedes credit details; credit and purchase account selectors follow
+the type/amount fields they depend on.
+
+Account selectors request `GET /api/accountant/distributors/:id?view=form` with an
+optional sourceKey. This company-scoped response omits ledger, balance and audit
+queries, returning account choices, mappings and only the edited source snapshot.
+The selectors reserve their labelled fields while loading, disable interaction and
+emit a busy state so payment/credit/purchase saves wait for account initialization.
+Failures display a retry action. Payment forms show a loading state until source
+values, PO choices and saved allocations are ready; generation checks ignore late
+responses after closing or switching payment. Supplier forms group identity,
+address, tax, opening date/amount and bank details with visible field labels.
+
+All active distributor routes use shared cache invalidation: supplier saves refresh
+DistributorCompany and close the form; return create/edit/delete refresh return,
+PO, payment, supplier and inventory queries. Return creation invalidates before PDF
+download so a failed download cannot leave stale tables. `distributor-revision`
+also refreshes the non-query-backed Accounts subtable on source mutations.
+The historical `/distributor/credit` route renders the main distributor page,
+reusing its payment/credit forms instead of the legacy `Distributor/List.vue`
+mutation paths. Return account choices follow date/supplier/PO fields, and filter
+amounts have persistent labels. Payment, PO, expense, detail and filter forms retain
+their shared implementations.
+
 #### Charge Credit (2026-10-12)
 
 Add Credit offers Product, Amount and Charge Credit. Charge Credit requires a

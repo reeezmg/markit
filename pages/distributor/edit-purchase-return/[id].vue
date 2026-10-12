@@ -7,7 +7,7 @@ const $fetch = companyScope.fetch;
 
 import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company';
 
-import { useQueryClient } from '@tanstack/vue-query'
+
 import type { Prisma } from '@prisma/client'
 
 const toast   = useToast()
@@ -292,7 +292,7 @@ onMounted(async () => {
 
 // ─── Submit & PDF ─────────────────────────────────────────────────────────────
 const isSaving     = ref(false)
-const queryClient  = useQueryClient()
+const { invalidateModels } = useModelCache()
 
 const handleSubmit = async () => {
   if (!selectedDistributorId.value) {
@@ -340,8 +340,7 @@ const handleSubmit = async () => {
         })),
       },
     })
-    await queryClient.invalidateQueries({ queryKey: ['zenstack', 'PurchaseReturn'] })
-    await queryClient.invalidateQueries({ queryKey: ['zenstack', 'DistributorCompany'] })
+    await invalidateModels('PurchaseReturn')
     toast.add({ title: 'Purchase return updated', color: 'green' })
     router.push('/distributor/purchase-return')
   } catch (err: any) {
@@ -383,7 +382,6 @@ const handleSubmit = async () => {
 
       <!-- ── HEADER ── -->
       <template #header>
-        <DistributorAccountSelection v-if="selectedDistributorId" v-model="returnAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="selectedDistributorId" :source-key="returnAccountingSource" :roles="['payable', 'stock']" />
         <div class="flex flex-wrap items-end gap-3 w-full">
           <UFormGroup label="Date" class="w-36">
             <UInput v-model="returnDate" type="date" />
@@ -413,7 +411,8 @@ const handleSubmit = async () => {
             >
               <template #empty>
                 <span class="text-xs text-gray-400">{{ selectedDistributorId ? 'No purchase orders' : 'Select distributor first' }}</span>
-              </template>
+                <DistributorAccountSelection v-if="selectedDistributorId" v-model="returnAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="selectedDistributorId" :source-key="returnAccountingSource" :roles="['payable', 'stock']" />
+      </template>
             </USelectMenu>
           </UFormGroup>
         </div>

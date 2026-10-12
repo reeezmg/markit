@@ -85,6 +85,7 @@ const selectedDetailsRow = ref<any>(null)
 const selectedPayRow = ref<any>(null)
 const editingPaymentRow = ref<any>(null)
 const creditAccountingAccounts = ref<Record<string,string>>({})
+const creditAccountsLoading = ref(false)
 const formDistributorId = ref('')
 
 const creditForm = ref({
@@ -901,6 +902,7 @@ const openCreditModal = async () => {
 }
 
 const handleAddCredit = async () => {
+  if (creditAccountsLoading.value || isSaving.value) return
   if (creditForm.value.creditKind === 'CHARGE' && !creditAccountingAccounts.value.expense) {
     toast.add({ title: 'Select an expense account for Charge Credit', color: 'red' }); return
   }
@@ -1191,7 +1193,7 @@ const transactionAction = (row: any) => {
           const linked = row.moneyTransaction
           let kind: DistributorCreditKind;
           try {
-            const preview = await $fetch<any>(`/api/accountant/distributors/${formDistributorId.value}`, { headers: { 'x-company-id': companyScope.companyId.value } });
+            const preview = await $fetch<any>(`/api/accountant/distributors/${formDistributorId.value}`, { headers: { 'x-company-id': companyScope.companyId.value }, query: {view:'form',sourceKey:`credit:${row.id}`} });
             kind = distributorCreditKind(row.moneyTransactionId, preview.sources?.find((s: any) => s.source_key === `credit:${row.id}`)?.accounts);
           } catch (error: any) {
             toast.add({ title: 'Could not load credit accounts', description: error.data?.statusMessage || error.message, color: 'red' });
@@ -1888,7 +1890,7 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
 
     <!-- ─── Add/Edit Distributor Modal ─── -->
     <UModal v-model="openModal">
-      <DistributorForm @transferred="openModal = false"
+      <DistributorForm @transferred="openModal = false" @saved="openModal = false"
         :selectedSupplier="selectedSupplier"
         :openingDue="selectedSupplierDcData?.openingDue ?? 0"
         :openingDueDate="selectedSupplierDcData?.openingDueDate ?? ''"
@@ -2188,7 +2190,9 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
         <div class="p-4 space-y-4">
           <CompanyFormField @transferred="isOpenCredit = false" />
           <CompanySupplierField v-if="!creditForm.id" v-model="formDistributorId" />
-          <DistributorAccountSelection v-if="formDistributorId" v-model="creditAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="formDistributorId" :source-key="creditForm.id ? `credit:${creditForm.id}` : undefined" :roles="creditAccountRoles(creditForm.creditKind, creditForm.paymentMode)" />
+          <UFormGroup label="Date">
+            <UInput type="date" v-model="creditForm.date" />
+          </UFormGroup>
           <UFormGroup label="Credit For">
             <USelect
               v-model="creditForm.creditKind"
@@ -2201,9 +2205,6 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
               option-attribute="label"
               value-attribute="value"
             />
-          </UFormGroup>
-          <UFormGroup label="Date">
-            <UInput type="date" v-model="creditForm.date" />
           </UFormGroup>
           <p v-if="creditForm.creditKind === 'CHARGE'" class="text-sm text-gray-500">Record a supplier charge owed against the selected expense account. Existing payments, bank and stock stay unchanged. This does not create an Expenses-page record.</p>
           <UFormGroup v-if="creditForm.creditKind !== 'AMOUNT'" label="Bill No">
@@ -2225,11 +2226,12 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
               />
             </UFormGroup>
           </template>
+          <DistributorAccountSelection v-if="formDistributorId" v-model="creditAccountingAccounts" @busy="creditAccountsLoading = $event" :company-id="companyScope.companyId.value" :distributor-id="formDistributorId" :source-key="creditForm.id ? `credit:${creditForm.id}` : undefined" :roles="creditAccountRoles(creditForm.creditKind, creditForm.paymentMode)" />
           <UFormGroup label="Remarks">
             <UInput v-model="creditForm.remarks" placeholder="Optional remarks" />
           </UFormGroup>
           <div class="pt-4">
-            <UButton color="primary" block :loading="isSaving" @click="handleAddCredit">Submit</UButton>
+            <UButton color="primary" block :loading="isSaving" :disabled="creditAccountsLoading" @click="handleAddCredit">Submit</UButton>
           </div>
         </div>
       </UCard>

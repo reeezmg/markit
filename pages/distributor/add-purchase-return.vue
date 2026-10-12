@@ -7,7 +7,7 @@ const $fetch = companyScope.fetch;
 
 import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company';
 
-import { useQueryClient } from '@tanstack/vue-query'
+
 import type { Prisma } from '@prisma/client'
 
 const toast   = useToast()
@@ -293,7 +293,7 @@ const handleReset = () => {
 // ─── Submit & PDF ─────────────────────────────────────────────────────────────
 const isSaving      = ref(false)
 const savedReturnId = ref('')
-const queryClient   = useQueryClient()
+const { invalidateModels } = useModelCache()
 
 const handleSubmit = async () => {
   if (!selectedDistributorId.value) {
@@ -340,12 +340,11 @@ const handleSubmit = async () => {
         })),
       },
     })
+    await invalidateModels('PurchaseReturn')
     savedReturnId.value = result.purchaseReturnId
     toast.add({ title: 'Purchase return saved — downloading PDF…', color: 'green' })
     await downloadPdf(result.purchaseReturnId)
     localStorage.removeItem(LS_KEY)
-    await queryClient.invalidateQueries({ queryKey: ['zenstack', 'PurchaseReturn'] })
-    await queryClient.invalidateQueries({ queryKey: ['zenstack', 'DistributorCompany'] })
     router.push('/distributor/purchase-return')
   } catch (err: any) {
     toast.add({ title: 'Failed to save', description: err.data?.message || err.message, color: 'red' })
@@ -402,7 +401,6 @@ const downloadPdf = async (id?: string) => {
 
       <!-- ── HEADER ── -->
       <template #header>
-        <DistributorAccountSelection v-if="selectedDistributorId" v-model="returnAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="selectedDistributorId" :source-key="returnAccountingSource" :roles="['payable', 'stock']" />
         <div class="flex flex-wrap items-end gap-3 w-full">
           <UFormGroup label="Date" class="w-36">
             <UInput v-model="returnDate" type="date" />
@@ -432,7 +430,8 @@ const downloadPdf = async (id?: string) => {
             >
               <template #empty>
                 <span class="text-xs text-gray-400">{{ selectedDistributorId ? 'No purchase orders' : 'Select distributor first' }}</span>
-              </template>
+                <DistributorAccountSelection v-if="selectedDistributorId" v-model="returnAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="selectedDistributorId" :source-key="returnAccountingSource" :roles="['payable', 'stock']" />
+      </template>
             </USelectMenu>
           </UFormGroup>
 

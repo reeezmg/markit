@@ -34,6 +34,7 @@ const selected = ref<any>(null);
 let generation = 0;
 const auth = useNuxtApp().$auth;
 const expenseRevision = useState('expense-revision', () => 0);
+const distributorRevision = useState('distributor-revision', () => 0);
 const allowed = computed(() => ['admin', 'manager', 'accountant'].includes(auth.session.value?.role || ''));
 async function load() {
   const current = ++generation;
@@ -49,6 +50,7 @@ async function load() {
 }
 watch(() => [props.companyId, props.distributorId, props.revision], () => { selected.value = null; load(); }, { immediate: true });
 watch(expenseRevision, () => { void load(); });
+watch(distributorRevision, () => { void load(); });
 const all = computed(() => distributorAccountingTransactions(data.value || {}));
 const filtered = computed(() => all.value.filter(row => {
   const date = new Date(row.date);

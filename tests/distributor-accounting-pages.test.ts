@@ -14,6 +14,7 @@ const productList=readFileSync('pages/products/index.vue','utf8');
 assert.ok(productList.includes("$fetch('/api/products/delete'"),'Product list deletes through the PO/accounting-aware endpoint');
 assert.ok(!productList.includes('DeleteProduct.mutateAsync'),'Product list must not bypass purchase recalculation');
 const errors:string[]=[];
+files.push('components/Distributor/Form.vue');
 Object.assign(globalThis,Vue,{
   useNuxtApp:()=>({$auth:{session:Vue.ref({role:'admin'})}}),useToast:()=>({add(){}}),
   $fetch:async()=>({enabled:true,mappings:{},sources:[],accounts:[],defaults:{}}),
@@ -25,12 +26,16 @@ for(const file of files) {
   const script=compileScript(descriptor,{id:file,inlineTemplate:true});
   const output=ts.transpileModule(script.content,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext},reportDiagnostics:true});
   assert.equal(output.diagnostics?.length||0,0,file);
-  if(!file.startsWith('components/Distributor/') || file.endsWith('AccountingTransactions.vue') || file.endsWith('PaymentFormModal.vue'))continue;
+  if(!file.startsWith('components/Distributor/') || file.endsWith('AccountingTransactions.vue') || file.endsWith('PaymentFormModal.vue') || file.endsWith('/Form.vue'))continue;
   const dest=resolve('.cache/distributor-pages',file.split('/').pop()+'.mjs');writeFileSync(dest,output.outputText);
   const component=(await import(pathToFileURL(dest).href)).default;
   const app=Vue.createSSRApp(component,{companyId:'company',distributorId:'supplier',roles:['payable','stock']});
   app.config.warnHandler=()=>{};app.config.errorHandler=e=>errors.push(`${file}: ${e}`);
-  await renderToString(app);
+  const html=await renderToString(app);
+  if(file.endsWith('AccountSelection.vue')) {
+    assert.ok(html.includes('Payable account') && html.includes('Stock account'),'Account fields reserve their positions during loading');
+    assert.ok(html.includes('Loading accounts'),'Account inputs communicate loading rather than appearing late');
+  }
 }
 assert.deepEqual(errors,[]);
 console.log('Distributor account selectors render; all changed purchase/distributor Vue templates compile.');

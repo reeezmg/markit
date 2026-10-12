@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { purchaseOrderDue } from '~/utils/purchase-order-payments'
+import { purchaseOrderDue, allocatePurchaseOrderPayment } from '~/utils/purchase-order-payments'
 import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company'
 
 const props = defineProps<{
@@ -18,6 +18,9 @@ const companyScope = useCompanyScope('form')
 const $fetch = companyScope.fetch
 const toast = useToast()
 const saving = ref(false)
+const initializing = ref(false)
+const accountsLoading = ref(false)
+const { invalidateModels } = useModelCache()
 const paymentId = computed(() => props.payment?.id || '')
 const form = ref({ distributorId: '', purchaseOrderIds: [] as string[], amount: null as number | null,
   paymentType: 'CASH', remarks: '', date: new Date().toISOString().slice(0, 10) })
@@ -58,23 +61,24 @@ const allocations = computed(() => form.value.purchaseOrderIds.map(purchaseOrder
 const allocatedTotal = computed(() => allocations.value.reduce((sum, part) => sum + Math.round(part.amount * 100), 0) / 100)
 
 function allocatePayment() {
-  let remaining = Math.round(Number(form.value.amount || 0) * 100)
-  allocationAmounts.value = Object.fromEntries(selectedOrders.value.map((po: any) => {
-    const amount = Math.min(remaining, Math.round(po.due * 100))
-    remaining -= amount
-    return [po.id, amount / 100]
-  }))
+  if (initializing.value) return
+  allocationAmounts.value = allocatePurchaseOrderPayment(Number(form.value.amount || 0), selectedOrders.value)
 }
 
-watch(() => form.value.purchaseOrderIds, allocatePayment)
+watch(() => [form.value.amount, ...form.value.purchaseOrderIds], allocatePayment)
+let loadGeneration = 0
 watch(() => [props.modelValue, props.payment?.id, props.companyId, props.distributorId, props.purchaseOrderId], async () => {
-  if (!props.modelValue) return
+  const generation = ++loadGeneration
+  if (!props.modelValue) { initializing.value = false; return }
+  initializing.value = true
   try {
     const owner = props.payment?.companyId || props.companyId || companyScope.auth.session.value?.companyId
     await companyScope.beginForm(props.payment
       ? { model: 'DistributorPayment', id: props.payment.id, companyId: owner }
       : null)
+    if (generation !== loadGeneration) return
     if (owner) await companyScope.selectOwner(owner)
+    if (generation !== loadGeneration) return
     accountingAccounts.value = {}
     form.value = {
       distributorId: props.payment?.distributorId || props.distributorId || '',
@@ -86,14 +90,24 @@ watch(() => [props.modelValue, props.payment?.id, props.companyId, props.distrib
       remarks: props.payment?.remarks || '',
       date: props.payment?.createdAt ? new Date(props.payment.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
     }
-    await refetchDistributors()
+    const loaded = await refetchDistributors()
+    if (generation !== loadGeneration) return
+    if (loaded.error) throw loaded.error
     await nextTick()
+    if (generation !== loadGeneration) return
     allocationAmounts.value = props.payment?.allocations?.length
       ? Object.fromEntries(props.payment.allocations.map((a: any) => [a.purchaseOrderId, Number(a.amount)]))
       : props.payment?.purchaseOrderId ? { [props.payment.purchaseOrderId]: Number(props.payment.amount) } : {}
+    await nextTick()
+    if (generation !== loadGeneration) return
+    initializing.value = false
+    if (!props.payment) allocatePayment()
   } catch (error: any) {
+    if (generation !== loadGeneration) return
     toast.add({ title: 'Could not load payment', description: error?.message, color: 'red' })
     open.value = false
+  } finally {
+    if (generation === loadGeneration) initializing.value = false
   }
 }, { immediate: true })
 
@@ -103,6 +117,7 @@ function selectDistributor(id: string) {
 }
 
 async function save() {
+  if (initializing.value || accountsLoading.value || saving.value) return
   if (!form.value.distributorId || !Number(form.value.amount) || Number(form.value.amount) <= 0) {
     toast.add({ title: 'Select a distributor and enter a valid amount', color: 'red' }); return
   }
@@ -129,6 +144,7 @@ async function save() {
     } else {
       await $fetch('/api/distributor/payments', { method: 'POST', body: { ...body, createExpense: true } })
     }
+    await invalidateModels('DistributorPayment', 'PurchaseOrder', 'DistributorCompany')
     toast.add({ title: paymentId.value ? 'Payment updated' : 'Payment added', color: 'green' })
     open.value = false
     emit('saved')
@@ -145,13 +161,24 @@ async function save() {
     <UCard>
       <template #header><div class="text-base font-semibold">{{ paymentId ? 'Edit Payment' : 'New Payment' }}</div></template>
       <div class="space-y-4">
+        <p v-if="initializing" role="status" class="py-8 text-center text-sm text-gray-500">Loading payment details…</p>
+        <fieldset v-show="!initializing" :disabled="initializing" class="space-y-4">
         <CompanyFormField @transferred="open = false" />
         <UFormGroup label="Distributor" required>
           <USelectMenu :model-value="form.distributorId" :options="distributorOptions" option-attribute="label"
             value-attribute="value" placeholder="Select distributor" searchable searchable-placeholder="Search distributor..."
             :disabled="!!paymentId" @update:model-value="selectDistributor" />
         </UFormGroup>
+        <UFormGroup label="Payment Date"><UInput v-model="form.date" type="date" /></UFormGroup>
+        <UFormGroup label="Amount" required><UInput v-model.number="form.amount" type="number" min="0.01" step="0.01" /></UFormGroup>
+        <UFormGroup label="Payment Type">
+          <USelect v-model="form.paymentType" :options="[
+            { label: 'Cash', value: 'CASH' }, { label: 'Bank', value: 'BANK' }, { label: 'UPI', value: 'UPI' },
+            { label: 'Card', value: 'CARD' }, { label: 'Cheque', value: 'CHEQUE' },
+          ]" option-attribute="label" value-attribute="value" />
+        </UFormGroup>
         <DistributorAccountSelection v-if="form.distributorId" v-model="accountingAccounts"
+          @busy="accountsLoading = $event"
           :company-id="companyScope.companyId.value" :distributor-id="form.distributorId"
           :source-key="paymentId ? `payment:${paymentId}` : undefined"
           :roles="['payable', form.paymentType === 'CASH' ? 'cash' : 'bank']" />
@@ -163,26 +190,19 @@ async function save() {
         <div v-if="selectedOrders.length" class="space-y-3 rounded-md border p-3">
           <div class="flex items-center justify-between gap-2">
             <span class="text-sm font-medium">Amount per purchase order</span>
-            <UButton color="gray" variant="soft" @click="allocatePayment">Allocate payment amount</UButton>
           </div>
+          <p class="text-xs text-gray-500">Applied in selection order, up to each purchase order's due. You can adjust the amounts below.</p>
           <UFormGroup v-for="po in selectedOrders" :key="po.id" :label="`PO#${po.purchaseOrderNo} · Due ${money(po.due)}`">
             <UInput v-model.number="allocationAmounts[po.id]" type="number" min="0.01" step="0.01" :max="po.due" />
           </UFormGroup>
           <p class="text-sm">Allocated: {{ money(allocatedTotal) }} / {{ money(form.amount) }}</p>
         </div>
-        <UFormGroup label="Payment Date"><UInput v-model="form.date" type="date" /></UFormGroup>
-        <UFormGroup label="Amount" required><UInput v-model.number="form.amount" type="number" min="0.01" step="0.01" /></UFormGroup>
-        <UFormGroup label="Payment Type">
-          <USelect v-model="form.paymentType" :options="[
-            { label: 'Cash', value: 'CASH' }, { label: 'Bank', value: 'BANK' }, { label: 'UPI', value: 'UPI' },
-            { label: 'Card', value: 'CARD' }, { label: 'Cheque', value: 'CHEQUE' },
-          ]" option-attribute="label" value-attribute="value" />
-        </UFormGroup>
         <UFormGroup label="Remarks"><UInput v-model="form.remarks" placeholder="Optional remarks" /></UFormGroup>
+        </fieldset>
       </div>
       <template #footer><div class="flex justify-end gap-2">
         <UButton color="gray" variant="ghost" @click="open = false">Cancel</UButton>
-        <UButton color="primary" :loading="saving" @click="save">{{ paymentId ? 'Save' : 'Submit' }}</UButton>
+        <UButton color="primary" :loading="saving" :disabled="initializing || accountsLoading" @click="save">{{ paymentId ? 'Save' : 'Submit' }}</UButton>
       </div></template>
     </UCard>
   </UModal>

@@ -18,13 +18,19 @@ async function supplier(id: string) {
   return rows[0];
 }
 
-export async function distributorAccountingPreview(id: string) {
+export async function distributorAccountingPreview(id: string, formOnly = false, sourceKey?: string) {
   const { companyId } = context();
   const distributor = await supplier(id);
   await ensureDefaults(companyId);
   const [settings] = await query('SELECT * FROM accountant_v2_distributor_settings WHERE company_id=$1 AND distributor_id=$2',companyId,id);
   const mappings = await query('SELECT role,account_id FROM accountant_v2_distributor_mappings WHERE company_id=$1 AND distributor_id=$2',companyId,id);
   const accounts = await accountantPrisma.accountingAccount.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
+  if (formOnly) {
+    const sources = sourceKey ? await query('SELECT source_key,accounts,signature FROM accountant_v2_distributor_sources WHERE company_id=$1 AND distributor_id=$2 AND source_key=$3',companyId,id,sourceKey) : [];
+    return { distributor, enabled: Boolean(settings?.enabled), accounts,
+      mappings: Object.fromEntries(mappings.map((m:any)=>[m.role,m.account_id])), sources,
+      events: sources.map((s:any)=>({source_key:s.source_key,bank_id:s.signature?.bank_id})) };
+  }
   const events = await query(`SELECT e.*,
       CASE WHEN po.id IS NOT NULL THEN 'PO-'||COALESCE(po.purchase_order_no::text,po.id)
         WHEN dp.id IS NOT NULL THEN concat_ws('-',NULLIF(COALESCE(company.distributor_payment_prefix,'DP'),''),COALESCE(dp.payment_no::text,dp.id))
@@ -148,7 +154,7 @@ distributorAccountingRouter.get('/balances', async (_req,res)=> {
     FROM accountant_v2_distributor_settings s WHERE s.company_id=$1 AND s.enabled`,context().companyId);
   res.json(Object.fromEntries(rows.map((r:any)=>[r.distributor_id,Number(r.balance)])));
 });
-distributorAccountingRouter.get('/:id', async (req,res)=>res.json(await distributorAccountingPreview(req.params.id)));
+distributorAccountingRouter.get('/:id', async (req,res)=>res.json(await distributorAccountingPreview(req.params.id,req.query.view==='form',typeof req.query.sourceKey==='string'?req.query.sourceKey:undefined)));
 distributorAccountingRouter.put('/:id', async (req,res)=> {
   const body=z.object({mappings:z.record(z.string().min(1))}).parse(req.body);
   res.json(await configureDistributorAccounting(req.params.id,body.mappings));
