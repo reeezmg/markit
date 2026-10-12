@@ -4,7 +4,6 @@ const $fetch = companyScope.fetch;
 const { invalidateModels } = useModelCache();
 
 import { useFindManyDistributorCompany } from '~/lib/company-hooks/distributor-company';
-import { purchaseOrderDue } from '~/utils/purchase-order-payments';
 import { useFindManyDistributorPayment, useCountDistributorPayment } from '~/lib/company-hooks/distributor-payment';
 
 import { sub, format, isSameDay, startOfDay, endOfDay, type Duration } from 'date-fns'
@@ -193,6 +192,7 @@ const queryArgs = computed(() => ({
   },
   select: {
     id: true,
+    companyId: true,
     createdAt: true,
     paymentNo: true,
     amount: true,
@@ -306,143 +306,28 @@ const downloadItems = [[
 // ADD PAYMENT
 // -------------------------------------
 const isAddOpen = ref(false)
-const isSaving = ref(false)
-const editingPaymentId = ref<string | null>(null)
 const paymentToEdit = ref<any>(null)
 const isDeleteOpen = ref(false)
 const isDeleting = ref(false)
 const paymentToDelete = ref<any>(null)
 
-const addForm = ref({
-  distributorId: '' as string,
-  purchaseOrderIds: [] as string[],
-  amount: null as number | null,
-  paymentType: 'CASH',
-  remarks: '',
-  date: new Date().toISOString().split('T')[0], // yyyy-mm-dd
-})
-
-const resetAddForm = () => {
-  addForm.value = {
-    distributorId: '',
-    purchaseOrderIds: [],
-    amount: null,
-    paymentType: 'CASH',
-    remarks: '',
-    date: new Date().toISOString().split('T')[0],
-  }
-}
-watch(companyScope.companyId, () => {
-  if (!editingPaymentId.value) {
-    addForm.value.distributorId = ''
-    addForm.value.purchaseOrderIds = []
-  }
-})
-
-// distributor options for the Add Payment modal
-const distributorQueryArgs = computed(() => ({
-  where: { companyId: { in: companyId.value ? [companyId.value] : [] } },
-  select: {
-    distributorId: true,
-    distributor: { select: { name: true } },
-    purchaseOrders: {
-      select: {
-        id: true,
-        purchaseOrderNo: true,
-        billNo: true,
-        totalAmount: true,
-        paymentType: true,
-        dueCleared: true,
-        distributorPayment: { select: { id: true, amount: true } },
-        paymentAllocations: { select: { amount: true, payment: { select: { id: true } } } },
-      },
-      orderBy: { createdAt: 'desc' },
-    },
-  },
-  orderBy: { distributor: { name: 'asc' } },
-}))
-
-const {
-  data: distributorCompanies,
-  refetch: refetchDistributorCompanies,
-} = useFindManyDistributorCompany(distributorQueryArgs, { companyScope: 'form' } as any)
-
 onMounted(() => {
   refetch()
   refetchCount()
-  refetchDistributorCompanies()
 })
 
 onActivated(() => {
   refetch()
   refetchCount()
-  refetchDistributorCompanies()
 })
 
-const distributorOptions = computed(() =>
-  (distributorCompanies.value ?? []).map((dc: any) => ({
-    label: dc.distributor?.name || '-',
-    value: dc.distributorId,
-  }))
-)
-
-const allocationAmounts = ref<Record<string, number>>({})
-const purchaseOrdersForPayment = computed(() => {
-  const dc = (distributorCompanies.value ?? []).find((dc: any) => dc.distributorId === addForm.value.distributorId)
-  return (dc?.purchaseOrders ?? []).map((po: any) => ({
-    ...po,
-    due: Math.max(0, purchaseOrderDue(po, editingPaymentId.value || undefined)),
-  }))
-})
-const purchaseOrderOptions = computed(() => purchaseOrdersForPayment.value
-  .filter((po: any) => po.due > 0 || addForm.value.purchaseOrderIds.includes(po.id))
-  .map((po: any) => ({ label: `PO#${po.purchaseOrderNo ?? '-'}${po.billNo ? ` / ${po.billNo}` : ''} ? Due ${formatCurrency(po.due)}`, value: po.id })))
-const selectedPurchaseOrders = computed(() => addForm.value.purchaseOrderIds.map(id => purchaseOrdersForPayment.value.find((po: any) => po.id === id)).filter(Boolean))
-const allocationPayload = computed(() => addForm.value.purchaseOrderIds.map(purchaseOrderId => ({ purchaseOrderId, amount: Number(allocationAmounts.value[purchaseOrderId] || 0) })))
-const allocatedTotal = computed(() => allocationPayload.value.reduce((sum, part) => sum + Math.round(part.amount * 100), 0) / 100)
-function allocatePayment() {
-  let remaining = Math.round(Number(addForm.value.amount || 0) * 100)
-  allocationAmounts.value = Object.fromEntries(selectedPurchaseOrders.value.map((po: any) => {
-    const amount = Math.min(remaining, Math.round(po.due * 100))
-    remaining -= amount
-    return [po.id, amount / 100]
-  }))
-}
-watch(() => addForm.value.purchaseOrderIds, () => {
-  allocationAmounts.value = {}
-  if (editingPaymentId.value && paymentToEdit.value?.allocations?.length &&
-      addForm.value.purchaseOrderIds.every(id => paymentToEdit.value.allocations.some((a: any) => a.purchaseOrderId === id))) {
-    allocationAmounts.value = Object.fromEntries(paymentToEdit.value.allocations.map((a: any) => [a.purchaseOrderId, Number(a.amount)]))
-  } else if (editingPaymentId.value && addForm.value.purchaseOrderIds.length === 1) {
-    allocationAmounts.value[addForm.value.purchaseOrderIds[0]] = Number(addForm.value.amount || 0)
-  } else allocatePayment()
-})
-
-const selectDistributor = (distributorId: string) => {
-  addForm.value.distributorId = distributorId
-  addForm.value.purchaseOrderIds = []
-}
-
-const openAddModal = async () => {
-  await companyScope.beginForm();
-  resetAddForm()
-  editingPaymentId.value = null
+const openAddModal = () => {
   paymentToEdit.value = null
   isAddOpen.value = true
 }
 
-const openEditModal = async (row: any) => {
-  await companyScope.beginForm({ model: 'DistributorPayment', id: row.id, companyId: row.companyId });
-  editingPaymentId.value = row.id
+const openEditModal = (row: any) => {
   paymentToEdit.value = row
-  addForm.value = {
-    distributorId: row.distributorId,
-    purchaseOrderIds: row.allocations?.length ? row.allocations.map((a: any) => a.purchaseOrderId) : row.purchaseOrderId ? [row.purchaseOrderId] : [],
-    amount: Number(row.amount),
-    paymentType: row.paymentType || 'CASH',
-    remarks: row.remarks || '',
-    date: new Date(row.createdAt).toISOString().split('T')[0],
-  }
   isAddOpen.value = true
 }
 
@@ -461,7 +346,6 @@ const deletePayment = async () => {
     paymentToDelete.value = null
     await invalidateModels('DistributorPayment')
     await refetch()
-    await refetchDistributorCompanies()
   } catch (err: any) {
     showToast('Delete failed', 'red', err.message)
   } finally {
@@ -475,79 +359,12 @@ const paymentActions = (row: any) => [[
   { label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDeletePayment(row) },
 ]]
 
-
-const handleAddPayment = async () => {
-  isSaving.value = true
-
-  try {
-    if (!editingPaymentId.value && !addForm.value.distributorId) {
-      showToast('Please select a distributor', 'red')
-      return
-    }
-
-    if (!addForm.value.amount || addForm.value.amount <= 0) {
-      showToast('Please enter valid Amount', 'red')
-      return
-    }
-
-    if (addForm.value.purchaseOrderIds.length &&
-        (allocationPayload.value.some(p => p.amount <= 0) || Math.round(allocatedTotal.value * 100) !== Math.round(addForm.value.amount * 100))) {
-      showToast('Allocate the payment total across the selected orders', 'red')
-      return
-    }
-
-    const createdAtDate = addForm.value.date
-      ? new Date(addForm.value.date)
-      : new Date()
-
-    if (editingPaymentId.value) {
-      await $fetch(`/api/distributor/payments/${editingPaymentId.value}`, {
-        method: 'PUT',
-        body: {
-          amount: addForm.value.amount,
-          paymentType: addForm.value.paymentType,
-          remarks: addForm.value.remarks || null,
-          billNo: paymentToEdit.value?.billNo || null,
-          purchaseOrderId: addForm.value.purchaseOrderIds[0] || null,
-          ...(addForm.value.purchaseOrderIds.length ? { allocations: allocationPayload.value } : { allocations: [] }),
-          createdAt: createdAtDate,
-        },
-      })
-      showToast('Payment updated successfully')
-      isAddOpen.value = false
-      editingPaymentId.value = null
-      paymentToEdit.value = null
-      resetAddForm()
-      await invalidateModels('DistributorPayment')
-      await refetch()
-      await refetchDistributorCompanies()
-      return
-    }
-
-    await $fetch('/api/distributor/payments', {
-      method: 'POST',
-      body: {
-        companyId: companyId.value, createExpense: true,
-        amount: addForm.value.amount, remarks: addForm.value.remarks,
-        paymentType: addForm.value.paymentType, distributorId: addForm.value.distributorId,
-        purchaseOrderId: addForm.value.purchaseOrderIds[0] || null,
-        ...(addForm.value.purchaseOrderIds.length ? { allocations: allocationPayload.value } : {}), createdAt: createdAtDate,
-      },
-    })
-
-    showToast('Payment added successfully', 'green')
-    isAddOpen.value = false
-    resetAddForm()
-    await invalidateModels('DistributorPayment')
-    await refetch()
-    refetchDistributorCompanies()
-    refetchCount()
-  } catch (err: any) {
-    showToast('Error', 'red', err.message)
-  } finally {
-    isSaving.value = false
-  }
+const onPaymentSaved = async () => {
+  paymentToEdit.value = null
+  await invalidateModels('DistributorPayment')
+  await Promise.all([refetch(), refetchCount()])
 }
+
 
 watch(companyScope.readIds, () => { page.value = 1; });
 </script>
@@ -753,106 +570,7 @@ watch(companyScope.readIds, () => { page.value = 1; });
       </template>
     </UCard>
 
-    <!-- ADD PAYMENT MODAL -->
-    <UModal v-model="isAddOpen">
-      <UCard>
-        <template #header>
-          <div class="text-base font-semibold">{{ editingPaymentId ? 'Edit Payment' : 'New Payment' }}</div>
-        </template>
-
-        <div class="space-y-4">
-          <!-- DISTRIBUTOR -->
-          <CompanyFormField @transferred="isAddOpen = false" />
-          <UFormGroup label="Distributor" required>
-            <USelectMenu
-              :model-value="addForm.distributorId"
-              :options="distributorOptions"
-              option-attribute="label"
-              value-attribute="value"
-              placeholder="Select distributor"
-              searchable
-              searchable-placeholder="Search distributor..."
-              :disabled="!!editingPaymentId"
-              @update:model-value="selectDistributor"
-            />
-          </UFormGroup>
-
-          <UFormGroup label="Purchase Orders">
-            <USelectMenu
-              v-model="addForm.purchaseOrderIds"
-              multiple
-              :options="purchaseOrderOptions"
-              option-attribute="label"
-              value-attribute="value"
-              :placeholder="addForm.distributorId ? 'Select purchase orders (optional)' : 'Select distributor first'"
-              searchable
-              searchable-placeholder="Search purchase order..."
-              :disabled="!addForm.distributorId"
-            />
-          </UFormGroup>
-
-          <div v-if="selectedPurchaseOrders.length" class="space-y-3 rounded-md border p-3">
-            <div class="flex items-center justify-between gap-2">
-              <span class="text-sm font-medium">Amount per purchase order</span>
-              <UButton color="gray" variant="soft" @click="allocatePayment">Allocate payment amount</UButton>
-            </div>
-            <UFormGroup v-for="po in selectedPurchaseOrders" :key="po.id" :label="`PO#${po.purchaseOrderNo} ? Due ${formatCurrency(po.due)}`">
-              <UInput v-model.number="allocationAmounts[po.id]" type="number" min="0.01" step="0.01" :max="po.due" />
-            </UFormGroup>
-            <p class="text-sm">Allocated: {{ formatCurrency(allocatedTotal) }} / {{ formatCurrency(addForm.amount) }}</p>
-            <p class="text-xs text-gray-500">One payment is linked to these orders. Each order's due is reduced by its allocated amount.</p>
-          </div>
-
-          <!-- PAYMENT DATE -->
-          <UFormGroup label="Payment Date">
-            <UInput type="date" v-model="addForm.date" />
-          </UFormGroup>
-
-          <!-- AMOUNT -->
-          <UFormGroup label="Amount" required>
-            <UInput
-              v-model.number="addForm.amount"
-              type="number"
-              placeholder="Enter amount"
-            />
-          </UFormGroup>
-
-          <!-- PAYMENT TYPE -->
-          <UFormGroup label="Payment Type">
-            <USelect
-              v-model="addForm.paymentType"
-              :options="[
-                { label: 'Cash', value: 'CASH' },
-                { label: 'Bank', value: 'BANK' },
-                { label: 'UPI', value: 'UPI' },
-                { label: 'Card', value: 'CARD' },
-                { label: 'Cheque', value: 'CHEQUE' },
-              ]"
-              option-attribute="label"
-              value-attribute="value"
-              placeholder="Payment Type"
-            />
-          </UFormGroup>
-
-          <!-- REMARKS -->
-          <UFormGroup label="Remarks">
-            <UInput
-              v-model="addForm.remarks"
-              placeholder="Optional remarks"
-            />
-          </UFormGroup>
-        </div>
-
-        <template #footer>
-          <div class="w-full flex justify-end gap-2">
-            <UButton color="gray" variant="ghost" @click="isAddOpen = false">Cancel</UButton>
-            <UButton color="primary" :loading="isSaving" @click="handleAddPayment">
-              {{ editingPaymentId ? 'Save' : 'Submit' }}
-            </UButton>
-          </div>
-        </template>
-      </UCard>
-    </UModal>
+    <DistributorPaymentFormModal v-model="isAddOpen" :payment="paymentToEdit" :company-id="paymentToEdit?.companyId || companyScope.companyId.value" @saved="onPaymentSaved" />
 
     <UModal v-model="isDeleteOpen">
       <UCard>

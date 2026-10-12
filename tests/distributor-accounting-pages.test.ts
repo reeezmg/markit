@@ -7,8 +7,8 @@ import ts from 'typescript';
 import * as Vue from 'vue';
 import {renderToString} from '@vue/server-renderer';
 
-const files=['components/Expense/TaxFields.vue','components/Expense/ExpenseQuickAdd.vue','components/Expense/ExpenseForm.vue','components/Accountant/ErpConnection.vue','pages/erp/billing.vue','pages/erp/sales.vue','pages/erp/expenses.vue','components/Distributor/AccountingTransactions.vue','components/Distributor/Accounting.vue','components/Distributor/AccountSelection.vue',
-  'components/AddProduct/TopBar.vue','pages/distributor/index.vue','pages/distributor/add-purchase-return.vue',
+const files=['components/Expense/TaxFields.vue','components/Expense/ExpenseQuickAdd.vue','components/Expense/ExpenseForm.vue','components/Accountant/ErpConnection.vue','pages/erp/billing.vue','pages/erp/sales.vue','pages/erp/expenses.vue','components/Distributor/AccountingTransactions.vue','components/Distributor/Accounting.vue','components/Distributor/AccountSelection.vue','components/Distributor/PaymentFormModal.vue',
+  'components/AddProduct/TopBar.vue','pages/distributor/index.vue','pages/distributor/payments.vue','pages/distributor/purchaseOrder.vue','pages/distributor/add-purchase-return.vue',
   'pages/distributor/edit-purchase-return/[id].vue','pages/distributor/purchase-return.vue','pages/products/purchase.vue','pages/products/add.vue','pages/products/index.vue'];
 const productList=readFileSync('pages/products/index.vue','utf8');
 assert.ok(productList.includes("$fetch('/api/products/delete'"),'Product list deletes through the PO/accounting-aware endpoint');
@@ -25,7 +25,7 @@ for(const file of files) {
   const script=compileScript(descriptor,{id:file,inlineTemplate:true});
   const output=ts.transpileModule(script.content,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ESNext},reportDiagnostics:true});
   assert.equal(output.diagnostics?.length||0,0,file);
-  if(!file.startsWith('components/Distributor/') || file.endsWith('AccountingTransactions.vue'))continue;
+  if(!file.startsWith('components/Distributor/') || file.endsWith('AccountingTransactions.vue') || file.endsWith('PaymentFormModal.vue'))continue;
   const dest=resolve('.cache/distributor-pages',file.split('/').pop()+'.mjs');writeFileSync(dest,output.outputText);
   const component=(await import(pathToFileURL(dest).href)).default;
   const app=Vue.createSSRApp(component,{companyId:'company',distributorId:'supplier',roles:['payable','stock']});

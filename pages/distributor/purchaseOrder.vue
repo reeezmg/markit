@@ -25,30 +25,15 @@ const deletingRowIdentinty = ref<any>(null)
 const isAdd = ref(false)
 const isOpenPay = ref(false)
 const isDetailsOpen = ref(false)
-const isSaving = ref(false)
 
 const selectedRow = ref<any>(null)
 const selectedDetailsRow = ref<any>(null)
-
-// -------------------------------------
-// FORM STATE
-// -------------------------------------
-const form = ref({
-  amount: null as number | null,
-  paymentType: 'CASH',
-  remarks: '',
-  date: new Date().toISOString().split('T')[0], // yyyy-mm-dd
-})
 
 // -------------------------------------
 // COMPUTED
 // -------------------------------------
 const companyId = computed(
   () => useAuth().session.value?.companyId
-)
-
-const distributorId = computed(
-  () => selectedRow.value?.distributorId
 )
 
 const companyName = computed(
@@ -66,15 +51,6 @@ const companyGstin = computed(
 // -------------------------------------
 // HELPERS
 // -------------------------------------
-const resetForm = () => {
-  form.value = {
-    amount: null,
-    paymentType: 'CASH',
-    remarks: '',
-    date: new Date().toISOString().split('T')[0],
-  }
-}
-
 const showToast = (
   title: string,
   color: 'green' | 'red' | 'yellow' = 'green',
@@ -570,12 +546,14 @@ const confirmDelete = (row: any) => {
   isDeleteModalOpen.value = true
 }
 
-const openPayModal = async (row: any) => {
-  await companyScope.selectOwner(row.companyId)
-  companyScope.record.value = null
+const openPayModal = (row: any) => {
   selectedRow.value = row
-  resetForm()
   isOpenPay.value = true
+}
+
+const onPaymentSaved = async () => {
+  await invalidateModels('DistributorPayment')
+  await Promise.all([refetch(), refetchCount()])
 }
 
 const setDueCleared = async (row: any, dueCleared: boolean) => {
@@ -608,56 +586,6 @@ const printPurchaseOrder = async (row?: any) => {
 
   await nextTick()
   window.print()
-}
-
-// -------------------------------------
-// PAY HANDLER (FINAL + SAFE)
-// -------------------------------------
-const handlePay = async () => {
-  isSaving.value = true
-
-  try {
-    if (!form.value.amount || form.value.amount <= 0) {
-      showToast('Please enter valid Amount', 'red')
-      return
-    }
-
-    if (!selectedRow.value?.id) {
-      showToast('Purchase Order not found', 'red')
-      return
-    }
-
-    if (!distributorId.value) {
-      showToast('Distributor not linked to this purchase order', 'red')
-      return
-    }
-
-    // 🔒 Freeze reactive values
-    const distributorIdValue = distributorId.value
-    const createdAtDate = form.value.date
-      ? new Date(form.value.date)
-      : new Date()
-
-    await $fetch('/api/distributor/payments', {
-      method: 'POST',
-      body: {
-        companyId: companyId.value, createExpense: true,
-        amount: form.value.amount, remarks: form.value.remarks,
-        paymentType: form.value.paymentType, distributorId: distributorIdValue,
-        purchaseOrderId: selectedRow.value.id || null, createdAt: createdAtDate,
-      },
-    })
-
-    showToast('Payment added successfully', 'green')
-    isOpenPay.value = false
-    resetForm()
-    await invalidateModels('DistributorPayment')
-    await refetch()
-  } catch (err: any) {
-    showToast('Error', 'red', err.message)
-  } finally {
-    isSaving.value = false
-  }
 }
 
 // -------------------------------------
@@ -1222,68 +1150,8 @@ watch(companyScope.readIds, () => { page.value = 1; });
       </UCard>
     </UModal>
 
-    <!-- PAY MODAL -->
-    <UModal v-model="isOpenPay">
-      <UCard>
-        <div class="p-4 space-y-4">
-          
-          <!-- PAYMENT DATE -->
-          <CompanyFormField locked />
-          <UFormGroup label="Payment Date">
-            <UInput
-              type="date"
-              v-model="form.date"
-            />
-          </UFormGroup>
-          
-          <!-- AMOUNT -->
-          <UFormGroup label="Amount" required>
-            <UInput
-              v-model.number="form.amount"
-              type="number"
-              placeholder="Enter amount"
-            />
-          </UFormGroup>
-
-          <!-- PAYMENT TYPE -->
-          <UFormGroup label="Payment Type">
-            <USelect
-              v-model="form.paymentType"
-              :options="[
-                { label: 'Cash', value: 'CASH' },
-                { label: 'Bank', value: 'BANK' },
-                { label: 'UPI', value: 'UPI' },
-                { label: 'Card', value: 'CARD' },
-                { label: 'Cheque', value: 'CHEQUE' },
-              ]"
-              option-attribute="label"
-              value-attribute="value"
-              placeholder="Payment Type"
-            />
-          </UFormGroup>
-
-          <!-- REMARKS -->
-          <UFormGroup label="Remarks">
-            <UInput
-              v-model="form.remarks"
-              placeholder="Optional remarks"
-            />
-          </UFormGroup>
-
-          <!-- SUBMIT -->
-          <div class="pt-4">
-            <UButton
-              color="primary"
-              block
-              :loading="isSaving"
-              @click="handlePay"
-            >
-              Submit
-            </UButton>
-          </div>
-        </div>
-      </UCard>
-    </UModal>
+    <DistributorPaymentFormModal v-model="isOpenPay" :company-id="selectedRow?.companyId"
+      :distributor-id="selectedRow?.distributorId" :purchase-order-id="selectedRow?.id" @saved="onPaymentSaved" />
 
     <!-- FILTER MODAL -->
     <UModal v-model="isFilterModalOpen">

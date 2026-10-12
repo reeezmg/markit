@@ -8,7 +8,6 @@ const { invalidateModels } = useModelCache();
 import { useFindManyDistributorCompany, useDeleteDistributorCompany } from '~/lib/company-hooks/distributor-company';
 import { useCreateDistributorCredit, useUpdateDistributorCredit, useDeleteDistributorCredit } from '~/lib/company-hooks/distributor-credit';
 import { useDeletePurchaseOrder } from '~/lib/company-hooks/purchase-order';
-import { useFindManyPurchaseOrder } from '~/lib/company-hooks/purchase-order';
 import { useDeletePurchaseReturn } from '~/lib/company-hooks/purchase-return';
 
 import type { Prisma } from '@prisma/client'
@@ -82,31 +81,9 @@ const isDetailsOpen = ref(false)
 const selectedDetailsRow = ref<any>(null)
 
 const selectedPayRow = ref<any>(null)
-const paymentAccountingAccounts = ref<Record<string,string>>({})
+const editingPaymentRow = ref<any>(null)
 const creditAccountingAccounts = ref<Record<string,string>>({})
-
-const payForm = ref({
-  id: '',
-  amount: 0 as number,
-  remarks: '',
-  billNo: '',
-  paymentType: 'CASH',
-  date: new Date().toISOString().split('T')[0],
-  purchaseOrderId: '',
-})
-
-const poLinkSearch = ref('')
 const formDistributorId = ref('')
-const { data: formPurchaseOrders } = useFindManyPurchaseOrder(computed(() => ({
-  where: { companyId: companyScope.companyId.value, distributorId: formDistributorId.value || '__none__' },
-  orderBy: { createdAt: 'desc' as const },
-})), { companyScope: 'form' } as any)
-const poLinkOptions = computed(() => {
-  const pos = formPurchaseOrders.value ?? []
-  const q = poLinkSearch.value.trim().toLowerCase()
-  const filtered = q ? pos.filter((po: any) => String(po.purchaseOrderNo ?? '').toLowerCase().includes(q)) : pos
-  return filtered.slice(0, 5)
-})
 
 const creditForm = ref({
   id: '',
@@ -120,15 +97,6 @@ const creditForm = ref({
 })
 
 const editingCreditKindLocked = ref(false)
-watch([companyScope.companyId, formDistributorId], () => {
-  if (!payForm.value.id) payForm.value.purchaseOrderId = ''
-})
-
-const resetPayForm = () => {
-  payForm.value = { id: '', amount: 0, remarks: '', billNo: '', paymentType: 'CASH', date: new Date().toISOString().split('T')[0], purchaseOrderId: '' }
-  poLinkSearch.value = ''
-}
-
 const resetCreditForm = () => {
   creditForm.value = {
     id: '', amount: 0, remarks: '', billNo: '',
@@ -250,7 +218,8 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
       orderBy: { createdAt: 'desc' },
     },
     distributorPayments: {
-      select: { id: true, paymentNo: true, createdAt: true, amount: true, remarks: true, billNo: true, paymentType: true, purchaseOrderId: true, purchaseReturnId: true },
+      select: { id: true, paymentNo: true, createdAt: true, amount: true, remarks: true, billNo: true, paymentType: true, purchaseOrderId: true, purchaseReturnId: true,
+        allocations: { select: { purchaseOrderId: true, amount: true } } },
       orderBy: { createdAt: 'desc' },
     },
     purchaseReturns: {
@@ -897,14 +866,29 @@ const handleAdd = async () => {
   }
 }
 
-const openPayModal = async (poRow: any = null) => {
-  await companyScope.beginForm();
-  if (poRow?.id) await companyScope.selectOwner(poRow.companyId || selectedDistributor.value.companyId)
-  formDistributorId.value = selectedDistributor.value?.distributorId || ''
+const openPayModal = (poRow: any = null) => {
+  editingPaymentRow.value = null
   selectedPayRow.value = poRow
-  resetPayForm()
-  if (poRow?.id) payForm.value.purchaseOrderId = poRow.id
   isOpenPay.value = true
+}
+
+const onPaymentSaved = async () => {
+  editingPaymentRow.value = null
+  await invalidateModels('DistributorPayment')
+  await refetch()
+}
+
+const setDueCleared = async (row: any, dueCleared: boolean) => {
+  if (!window.confirm(`${dueCleared ? 'Clear' : 'Restore'} due for PO-${row.purchaseOrderNo ?? ''}?`)) return
+  try {
+    await companyScope.selectOwner(row.companyId || selectedDistributor.value?.companyId)
+    await $fetch('/api/purchaseorder/due-cleared', { method: 'PATCH', body: { poId: row.id, dueCleared } })
+    await invalidateModels('PurchaseOrder')
+    await refetch()
+    toast.add({ title: dueCleared ? 'Due cleared' : 'Due restored', color: 'green' })
+  } catch (error: any) {
+    toast.add({ title: 'Unable to update due', description: error?.data?.statusMessage || error?.message, color: 'red' })
+  }
 }
 
 const openCreditModal = async () => {
@@ -912,65 +896,6 @@ const openCreditModal = async () => {
   formDistributorId.value = selectedDistributor.value?.distributorId || ''
   resetCreditForm()
   isOpenCredit.value = true
-}
-
-const handlePay = async () => {
-  if (!payForm.value.id && !formDistributorId.value) {
-    toast.add({ title: 'Select a supplier for this company', color: 'red' }); return
-  }
-  isSaving.value = true
-  try {
-    if (!payForm.value.amount) {
-      toast.add({ title: 'Please enter Amount', color: 'red' })
-      return
-    }
-    const createdAt = payForm.value.date ? new Date(payForm.value.date) : new Date()
-    if (payForm.value.id) {
-      await $fetch(`/api/distributor/payments/${payForm.value.id}`, {
-        method: 'PUT',
-        body: {
-          amount: payForm.value.amount,
-          accountingAccounts: paymentAccountingAccounts.value,
-          remarks: payForm.value.remarks,
-          billNo: payForm.value.billNo || null,
-          paymentType: payForm.value.paymentType,
-          purchaseOrderId: payForm.value.purchaseOrderId || null,
-          createdAt,
-        },
-      })
-      toast.add({ title: 'Payment updated', color: 'green' })
-    } else {
-      // Atomically get next payment number
-      const { number: paymentNo } = await $fetch('/api/counter/increment', {
-        method: 'POST',
-        body: { entity: 'distributorPayment' },
-      })
-
-      await $fetch('/api/distributor/payments', {
-        method: 'POST',
-        body: {
-          paymentNo,
-          accountingAccounts: paymentAccountingAccounts.value,
-          amount: payForm.value.amount,
-          remarks: payForm.value.remarks || null,
-          billNo: payForm.value.billNo || null,
-          paymentType: payForm.value.paymentType,
-          purchaseOrderId: payForm.value.purchaseOrderId || null,
-          createdAt,
-          distributorId: formDistributorId.value,
-        },
-      })
-      toast.add({ title: 'Payment added', color: 'green' })
-    }
-    isOpenPay.value = false
-    resetPayForm()
-    await invalidateModels('DistributorPayment')
-    await refetch()
-  } catch (err: any) {
-    toast.add({ title: 'Error', color: 'red', description: err.message })
-  } finally {
-    isSaving.value = false
-  }
 }
 
 const handleAddCredit = async () => {
@@ -1217,14 +1142,25 @@ const poAction = (row: any) => {
       },
     ],
   ]
-  if (row.due > 0 && !row.dueCleared) {
-    items.push([{ label: 'Pay', icon: 'i-heroicons-banknotes-20-solid', click: () => openPayModal(row) }])
+  if (row.distributorId || selectedDistributor.value?.distributorId) {
+    if (row.due > 0 && !row.dueCleared) {
+      items.push([
+        { label: 'Pay', icon: 'i-heroicons-banknotes-20-solid', click: () => openPayModal(row) },
+        { label: 'Clear Due', icon: 'i-heroicons-check-circle-20-solid', click: () => setDueCleared(row, true) },
+      ])
+    } else if (row.dueCleared) {
+      items.push([{ label: 'Restore Due', icon: 'i-heroicons-arrow-path-20-solid', click: () => setDueCleared(row, false) }])
+    }
   }
   items.push([{ label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => confirmDeletePO(row) }])
   return items
 }
 
 const transactionAction = (row: any) => {
+  if (row.type === 'PURCHASE') {
+    const purchaseOrder = selectedPOs.value.find((po: any) => po.id === row.purchaseOrderId)
+    return purchaseOrder ? poAction(purchaseOrder) : []
+  }
   const actions: any[] = []
   if (row.paymentType === 'RETURN') {
     actions.push([
@@ -1244,9 +1180,7 @@ const transactionAction = (row: any) => {
       label: 'Edit',
       icon: 'i-heroicons-pencil-square-20-solid',
       click: async () => {
-        if (row.type === 'PURCHASE') {
-          router.push(`/products/purchase?poId=${row.purchaseOrderId}&isEdit=true`)
-        } else if (row.type === 'CREDIT') {
+        if (row.type === 'CREDIT') {
           await companyScope.beginForm({ model: 'DistributorCredit', id: row.id, companyId: row.companyId });
           formDistributorId.value = row.distributorId || selectedDistributor.value?.distributorId || '';
           const linked = row.moneyTransaction
@@ -1264,17 +1198,8 @@ const transactionAction = (row: any) => {
           editingCreditKindLocked.value = true
           isOpenCredit.value = true
         } else {
-          await companyScope.beginForm({ model: 'DistributorPayment', id: row.id, companyId: row.companyId });
-          formDistributorId.value = row.distributorId || selectedDistributor.value?.distributorId || '';
-          payForm.value = {
-            id: row.id,
-            amount: row.amount,
-            remarks: row.remarks || '',
-            billNo: row.billNo || '',
-            paymentType: row.paymentType || 'CASH',
-            date: new Date(row.createdAt).toISOString().split('T')[0],
-            purchaseOrderId: row.purchaseOrderId || '',
-          }
+          editingPaymentRow.value = { ...row, companyId: selectedDistributor.value?.companyId }
+          selectedPayRow.value = null
           isOpenPay.value = true
         }
       },
@@ -2031,87 +1956,11 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
       </UCard>
     </UModal>
 
-    <UModal v-model="isOpenPay">
-      <UCard>
-        <div class="p-4 space-y-4">
-          <CompanyFormField @transferred="isOpenPay = false" />
-          <CompanySupplierField v-if="!payForm.id" v-model="formDistributorId" />
-          <DistributorAccountSelection v-if="formDistributorId" v-model="paymentAccountingAccounts" :company-id="companyScope.companyId.value" :distributor-id="formDistributorId" :source-key="payForm.id ? `payment:${payForm.id}` : undefined" :roles="['payable', payForm.paymentType === 'CASH' ? 'cash' : 'bank']" />
-          <UFormGroup label="Payment Date">
-            <UInput type="date" v-model="payForm.date" />
-          </UFormGroup>
-          <UFormGroup label="Amount" required>
-            <UInput v-model.number="payForm.amount" type="number" placeholder="Enter amount" />
-          </UFormGroup>
-          <UFormGroup label="Bill No">
-            <UInput v-model="payForm.billNo" placeholder="Bill number (optional)" />
-          </UFormGroup>
-          <UFormGroup label="Payment Type">
-            <USelect
-              v-model="payForm.paymentType"
-              :options="[
-                { label: 'Cash', value: 'CASH' },
-                { label: 'Bank', value: 'BANK' },
-                { label: 'UPI', value: 'UPI' },
-                { label: 'Card', value: 'CARD' },
-                { label: 'Cheque', value: 'CHEQUE' },
-              ]"
-              option-attribute="label"
-              value-attribute="value"
-            />
-          </UFormGroup>
-          <UFormGroup label="Remarks">
-            <UInput v-model="payForm.remarks" placeholder="Optional remarks" />
-          </UFormGroup>
+    <DistributorPaymentFormModal v-model="isOpenPay" :payment="editingPaymentRow"
+      :company-id="selectedDistributor?.companyId" :distributor-id="selectedDistributor?.distributorId"
+      :purchase-order-id="selectedPayRow?.id" @saved="onPaymentSaved" />
 
-          <!-- ─── PO Link (new payment) ─── -->
-          <UFormGroup v-if="!payForm.id" label="Link to Purchase Order (optional)">
-            <UInput
-              v-model="poLinkSearch"
-              size="sm"
-              placeholder="Search PO No..."
-              icon="i-heroicons-magnifying-glass-20-solid"
-              class="mb-2"
-            />
-            <div class="border border-gray-200 dark:border-gray-700 rounded-md overflow-hidden">
-              <div v-if="!poLinkOptions.length" class="px-3 py-2 text-xs text-gray-400">No purchase orders found.</div>
-              <button
-                v-for="po in poLinkOptions"
-                :key="po.id"
-                type="button"
-                class="w-full flex items-center justify-between px-3 py-2 text-xs text-left border-t first:border-t-0 border-gray-200 dark:border-gray-700 transition-colors"
-                :class="payForm.purchaseOrderId === po.id
-                  ? 'bg-primary-50 dark:bg-primary-900/30 font-semibold text-primary-700 dark:text-primary-300'
-                  : 'hover:bg-gray-50 dark:hover:bg-gray-800/40'"
-                @click="payForm.purchaseOrderId = payForm.purchaseOrderId === po.id ? '' : po.id"
-              >
-                <span>PO#{{ po.purchaseOrderNo }}</span>
-                <span class="text-gray-500">{{ new Date(po.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: '2-digit' }) }} · ₹{{ (po.totalAmount || 0).toFixed(2) }}</span>
-              </button>
-            </div>
-            <p v-if="payForm.purchaseOrderId" class="mt-1 text-xs text-primary-600 dark:text-primary-400">
-              Linked: PO#{{ poLinkOptions.find(p => p.id === payForm.purchaseOrderId)?.purchaseOrderNo ?? selectedDistributor?.purchaseOrders?.find((p: any) => p.id === payForm.purchaseOrderId)?.purchaseOrderNo }}
-            </p>
-          </UFormGroup>
-
-          <!-- ─── Linked PO (edit mode, read-only) ─── -->
-          <UFormGroup v-else-if="payForm.purchaseOrderId" label="Linked Purchase Order">
-            <div class="px-3 py-2 text-xs rounded-md bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-primary-700 dark:text-primary-300 font-semibold">
-              PO#{{ selectedDistributor?.purchaseOrders?.find((p: any) => p.id === payForm.purchaseOrderId)?.purchaseOrderNo ?? payForm.purchaseOrderId }}
-              <span v-if="selectedDistributor?.purchaseOrders?.find((p: any) => p.id === payForm.purchaseOrderId)?.billNo" class="ml-2 text-gray-500 font-normal">
-                Bill: {{ selectedDistributor?.purchaseOrders?.find((p: any) => p.id === payForm.purchaseOrderId)?.billNo }}
-              </span>
-            </div>
-          </UFormGroup>
-
-          <div class="pt-4">
-            <UButton color="primary" block :loading="isSaving" @click="handlePay">Submit</UButton>
-          </div>
-        </div>
-      </UCard>
-    </UModal>
-
-    <!-- ─── PO Details Modal ─── -->
+    <!-- PO Details Modal -->
     <UModal v-model="isDetailsOpen" :ui="{ width: 'sm:max-w-5xl' }">
       <UCard
         :ui="{

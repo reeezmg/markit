@@ -129,7 +129,13 @@ so rows and counts paginate together. Reset clears the selection. PDF/Excel down
 receive the same distributor ID; purchase-order exports calculate due from all
 recorded payments and allocations for every payment type.
 
-Payment creation from the payment and PO forms calls `/api/distributor/payments` with `createExpense: true`. This allocates payment/expense numbers and writes the linked source expense in one transaction. Payment edit/delete keeps that source synchronized; native supplier triggers post the payment once and suppress a duplicate ERP expense journal. No old account-ledger rows are created or rebuilt. `CompanySupplierField.vue` and purchase-order options follow the selected form company.
+Payment creation from the payment and PO forms calls `/api/distributor/payments` with `createExpense: true`. This allocates payment/expense numbers and writes the linked source expense in one transaction. Payment edit/delete keeps that source synchronized; native supplier triggers post the payment once and suppress a duplicate ERP expense journal. No old account-ledger rows are created or rebuilt. Distributor and purchase-order options follow the selected form company.
+
+`components/Distributor/PaymentFormModal.vue` is the shared add/edit form used by
+`pages/distributor/payments.vue` and the distributor detail Payments and Accounts
+tabs. The Pay actions in both purchase-order tables also open it with the selected
+supplier and PO. The form preserves existing allocations on edit and saves through
+`/api/distributor/payments`; the parent tables invalidate and refetch after save.
 
 The Distributor Payments form supports one payment allocated across multiple outstanding
 POs of the same supplier/company, regardless of the original payment method. `DistributorPayment.allocations` stores each PO
@@ -215,7 +221,7 @@ Fetches `DistributorCompany` records with distributor info + purchase orders + c
 
 - **Layout:** Left panel = distributor summary table; Right panel = selected distributor detail with tabs
 - **Summary columns:** Distributor name, Orders, Total (sum of `distributorCredits.amount`), Paid (sum of `distributorPayments.amount`), Return (sum of `distributorPayments` where `paymentType='RETURN'`), Opening Due (`DistributorCompany.openingDue`), Due (`openingDue + Total − Paid`) — all computed client-side
-- **Detail panel tabs:** Transactions, Purchase Orders, Purchase Returns, Payments
+- **Detail panel tabs:** Accounts, Purchase Orders, Purchase Returns, Payments
   - **Transactions tab** (the main ledger view) — columns: **Date · No · Type · Remarks · Debit · Credit · Actions**.
     - Row taxonomy (mapped client-side in `distributors` computed):
       | Source row | Condition | Type label | No | Debit | Credit |
@@ -226,11 +232,11 @@ Fetches `DistributorCompany` records with distributor info + purchase orders + c
       | `DistributorPayment` | `paymentType === 'RETURN'` (linked via `purchaseReturnId`) | `PURCHASE RETURN` | `PR-{returnNo}` (resolved via `returnMap` built from `purchaseReturns`) | `amount` | – |
     - Row backgrounds (via `row.class` — same idiom as `pages/accounts/cash.vue`'s `styledLedger`): credit rows green (`bg-green-50 dark:bg-green-900/20`), debit rows red (`bg-red-50 dark:bg-red-900/20`).
     - Type filter options: `ALL / PURCHASE / PAYMENT / CREDIT / PURCHASE RETURN` — applied as `t.type === filter` in `filteredTransactions`.
-    - Edit action: `PURCHASE` rows route to `/products/purchase?poId=...&isEdit=true`; `CREDIT` rows open the Add Credit modal preloaded with `creditKind` (derived from `moneyTransactionId` presence) and (for AMOUNT credits) `paymentMode`/`bankAccountId` from the linked `moneyTransaction`. The kind toggle is locked during edit (`editingCreditKindLocked = true`).
-  - **Purchase Orders tab:** PO list with columns: PO No, Date, Payment Type, Total, Qty (sum of `item.initialQty`), Due (all payment types, calculated from settlements), Actions (Pay/Delete).
+    - Source-backed Accounts purchase rows and Purchase Orders tab rows share Details, Print, Edit, Pay, Clear Due, Restore Due, and Delete actions. Edit opens `/products/add?poId=...&isEdit=true`. Payment rows in Accounts and Payments share Edit/Delete and the same payment form as the standalone Payments page. `CREDIT` rows open the Add Credit modal preloaded with `creditKind` (derived from `moneyTransactionId` presence) and (for AMOUNT credits) `paymentMode`/`bankAccountId` from the linked `moneyTransaction`. The kind toggle is locked during edit (`editingCreditKindLocked = true`).
+  - **Purchase Orders tab:** PO list with columns: PO No, Date, Payment Type, Total, Qty (sum of `item.initialQty`), Due (all payment types, calculated from settlements), and the shared PO action menu.
   - **Purchase Returns tab:** date-filtered list with columns: Date, PO No, Subtotal, Tax, Total, Remarks, Actions (Download / Edit / Delete).
   - **Payments tab:** selected-distributor-only payment rows (purchase-return payments excluded), with Payment No, Date, PO No, Payment, Amount, Remarks, and Actions columns. Includes date range and payment-mode filters, pagination, New Payment, and the shared transaction Edit/Delete menu.
-- **Pay flow:** inline modal with date, amount, paymentType (CASH/BANK/UPI/CARD/CHEQUE), remarks. Uses `useCreateDistributorPayment` / `useUpdateDistributorPayment`. UPI QR code shown when paymentType = UPI. Optional PO link search.
+- **Pay flow:** opens the shared `PaymentFormModal.vue` with optional PO preselection; it supports multiple PO allocations, date, amount, payment type (CASH/BANK/UPI/CARD/CHEQUE), remarks, and account selection.
 - **Add Credit flow** — modal with **Credit For** select (`PRODUCT` / `AMOUNT`) at top:
   - **PRODUCT** (default): inserts only a `DistributorCredit` row (date, billNo, amount, remarks). Same as legacy behavior.
   - **AMOUNT**: selects CASH/BANK and an optional existing bank identity. `POST /api/distributor/credits` atomically creates the linked MoneyTransaction and DistributorCredit through `distributor-credit-write.ts`; PUT/DELETE maintain both. New supplier triggers post the receipt, with source account selection retained. The retired standalone `/api/accounts/transactions` endpoint is not used; no legacy account-ledger rows are written. Bill No is hidden.
@@ -278,17 +284,14 @@ A company-wide list of all purchase orders (not grouped by distributor).
 - Fetches via `useFindManyPurchaseOrder` — filtered: `{ companyId, products: { some: {} } }` (only POs that have at least one product)
 - Includes `distributorPayment[]` (payment history) + `products > variants > items` (for qty calculation)
 - **Qty column:** sum of `item.initialQty` across all variants/products of each PO (uses `initialQty` not `qty` — captures stock at time of purchase)
-- **Due column:** only for CREDIT type POs → `totalAmount - sum(distributorPayment.amount)`; null for non-credit POs
-- **"Pay" action:** only shown for CREDIT type POs
+- **Due column:** calculated for every payment type from the PO total less linked payments and allocations.
+- **"Pay" action:** shown when an associated supplier has an outstanding due; the menu also supports Clear Due and Restore Due.
 
-**Pay flow (inline modal for PO):**
-- `useCreateDistributorPayment` with: `purchaseOrder.connect`, `distributorCompany.connect`, and a nested `expense.create`
-- Expense created with: `expensecategoryId = session.purchaseExpenseCategoryId` (the "Purchase" category created at registration), `paymentMode = form.paymentType`, `status = 'Paid'`
-- PO-page payments create a linked expense source; native supplier settlement posts once while the ERP expense trigger suppresses duplicate posting.
+**Pay flow:** opens the shared `PaymentFormModal.vue` preselected to this PO. Its API save creates the linked expense source in the payment transaction; native supplier settlement posts once while the ERP expense trigger suppresses duplicate posting.
 
 **Expandable rows:** show payment history for that PO (date, type, amount, remarks)
 
-**Edit PO:** navigates to `/products/purchase?poId={id}&isEdit=true`
+**Edit PO:** navigates to `/products/add?poId={id}&isEdit=true&from=distributor-purchase-order`
 
 ---
 
