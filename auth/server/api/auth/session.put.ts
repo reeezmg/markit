@@ -1,6 +1,7 @@
 export default eventHandler(async (event) => {
   const session = await useAuthSession(event);
   const body = await readBody(event);
+  if (body?.selectedAccounts !== undefined || body?.selectedAccountsPacked !== undefined) throw createError({ statusCode: 403, statusMessage: 'Refresh account selections from saved settings' });
   if (!session.data.id || !session.data.email) throw createError({ statusCode: 401, statusMessage: 'Not authorized' });
   if (body?.companyId !== undefined && body.companyId !== session.data.companyId) {
     throw createError({ statusCode: 403, statusMessage: 'Use the company switch endpoint' });

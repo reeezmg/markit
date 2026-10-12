@@ -212,6 +212,7 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from "vue";
 const api = useAccountantApi();
+const selectedAccountSession = useSelectedAccounts();
 const baseCurrency = ref("INR");
 const toast = useToast(),
   rows = ref<any[]>([]),
@@ -296,7 +297,7 @@ function reset() {
 async function openCreate() {
   editingId.value = "";
   reset();
-  const settings = await api.get('/account-settings/defaults');
+  const settings = await selectedAccountSession.get(api.companyId.value);
   const defaults = settings.defaults.transfers || {};
   if (eligible.value.some(a => a.id === defaults.fromAccountId)) form.fromAccountId = defaults.fromAccountId;
   if (eligible.value.some(a => a.id === defaults.toAccountId)) form.toAccountId = defaults.toAccountId;

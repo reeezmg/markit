@@ -1,13 +1,15 @@
 <script setup lang="ts">
 const props=defineProps<{companyId:string}>();
 const auth=useNuxtApp().$auth;
+const selectedAccountSession=useSelectedAccounts();
 const allowed=computed(()=>['admin','manager','accountant'].includes(auth.session.value?.role || ''));
 const open=ref(false);const busy=ref(false);const data=ref<any>(null);const mappings=ref<Record<string,string>>({});
 const toast=useToast();
 const roles:Record<string,[string,string]>={cash:['Cash','CASH'],bank:['Payment bank account','BANK'],receivable:['Customer credit / receivable','ACCOUNTS_RECEIVABLE'],sales:['Sales income','INCOME'],outputTax:['Sales tax payable','OTHER_CURRENT_LIABILITY'],stock:['Stock / inventory','STOCK'],cogs:['Cost of goods sold','COST_OF_GOODS_SOLD'],expense:['Expense account','EXPENSE'],inputTax:['Recoverable expense tax','OTHER_CURRENT_ASSET'],expensePayable:['Unpaid expenses','OTHER_CURRENT_LIABILITY']};
 const request=(method:'GET'|'PUT'|'POST',suffix='',body?:any)=>$fetch<any>(`/api/accountant/erp${suffix}`,{method,headers:{'x-company-id':props.companyId,'x-company-filter':props.companyId},...(body?{body}:{})});
-async function load(){busy.value=true;try{data.value=await request('GET');mappings.value={...data.value.mappings};}catch(e:any){toast.add({title:'Could not load ERP accounting',description:e.data?.statusMessage || e.message,color:'red'});}finally{busy.value=false;}}
-async function save(){busy.value=true;try{await request('PUT','',{mappings:mappings.value});if(!data.value.enabled)await request('POST','/enable');await load();toast.add({title:'ERP accounting connected',color:'green'});}catch(e:any){toast.add({title:'Accounting setup failed',description:e.data?.statusMessage || e.message,color:'red'});}finally{busy.value=false;}}
+let loadVersion=0;
+async function load(){const version=++loadVersion;const owner=props.companyId;busy.value=true;try{const [result,saved]=await Promise.all([request('GET'),selectedAccountSession.get(owner)]);if(version!==loadVersion || owner!==props.companyId)return;data.value=result;mappings.value={...(saved.defaults.erp || result.mappings)};}catch(e:any){if(version===loadVersion)toast.add({title:'Could not load ERP accounting',description:e.data?.statusMessage || e.message,color:'red'});}finally{if(version===loadVersion)busy.value=false;}}
+async function save(){busy.value=true;try{await request('PUT','',{mappings:mappings.value});if(!data.value.enabled)await request('POST','/enable');await selectedAccountSession.refresh(props.companyId);await load();toast.add({title:'ERP accounting connected',color:'green'});}catch(e:any){toast.add({title:'Accounting setup failed',description:e.data?.statusMessage || e.message,color:'red'});}finally{busy.value=false;}}
 watch(open,value=>{if(value)load();});watch(()=>props.companyId,()=>{data.value=null;if(open.value)load();});
 </script>
 <template>

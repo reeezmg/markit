@@ -15,10 +15,14 @@ the type/amount fields they depend on.
 Account selectors request `GET /api/accountant/distributors/:id?view=form` with an
 optional sourceKey. This company-scoped response omits ledger, balance and audit
 queries, returning account choices, mappings and only the edited source snapshot.
+Company purchase defaults come from AuthSession.selectedAccounts via
+useSelectedAccounts; new forms seed them immediately. Source snapshots still
+override these defaults when editing, and options/ownership are fetched separately.
 The selectors reserve their labelled fields while loading, disable interaction and
 emit a busy state so payment/credit/purchase saves wait for account initialization.
-Failures display a retry action. Payment forms show a loading state until source
-values, PO choices and saved allocations are ready; generation checks ignore late
+Failures display a retry action. Payment fields render immediately with source
+values populated before requests start; selected accounts load inline. Controls
+remain disabled until PO choices and saved allocations are ready; generation checks ignore late
 responses after closing or switching payment. Supplier forms group identity,
 address, tax, opening date/amount and bank details with visible field labels.
 

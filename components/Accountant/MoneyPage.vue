@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const api=useAccountantApi();
+const selectedAccountSession = useSelectedAccounts();
 const toast=useToast();
 const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;};
 const options=ref<any>({accounts:[],people:[],currency:'INR'});
@@ -14,7 +15,7 @@ const people=computed(()=>options.value.people.map((p:any)=>({label:`${p.name} (
 const columns=[{key:'date',label:'Date'},{key:'entryNumber',label:'Number'},{key:'direction',label:'Type'},{key:'details',label:'Account / person'},{key:'total',label:'Amount'},{key:'status',label:'Status'},{key:'actions',label:'Actions'}];
 const amount=(n:any)=>new Intl.NumberFormat('en-IN',{style:'currency',currency:options.value.currency}).format(Number(n));
 async function loadRows(){loading.value=true;loadError.value='';try{const r=await api.get('/money',{query:{page:page.value,search:search.value}});rows.value=r.data;total.value=r.total;}catch(e:any){loadError.value=e.message;}finally{loading.value=false;}}
-async function load(){try{const [o,s]=await Promise.all([api.get('/money/options'),api.get('/account-settings/defaults')]);options.value=o;defaults.value=s.defaults;applyDefaults();await loadRows();}catch(e:any){loadError.value=e.message;}}
+async function load(){try{const [o,s]=await Promise.all([api.get('/money/options'),selectedAccountSession.get(api.companyId.value)]);options.value=o;defaults.value=s.defaults;applyDefaults();await loadRows();}catch(e:any){loadError.value=e.message;}}
 watch(()=>form.direction,applyDefaults);
 onMounted(load);
 async function save(){

@@ -19,6 +19,35 @@ Covers: `storetools/auth/` (Nuxt layer for session management) and `storetools/n
 
 ### `AuthSession` — `auth/server/utils/session.ts`
 
+`selectedAccounts` stores the current company's saved account-default IDs with a
+companyId guard. Login/company switch load these from account-default audit rows;
+session GET hydrates older sessions. POST `/api/auth/selected-accounts` reloads
+authorized-company settings from the database and updates the cookie only for the
+login company. Client `useSelectedAccounts` then calls `$auth.updateSession()`,
+following the company-phone update pattern. Other-store forms fetch their own
+defaults without replacing the login company's defaults. Generic session PUT may
+not overwrite selectedAccounts. Account Settings saves refresh this snapshot;
+account selectors and useAccountantApi default reads consume it. Account options
+and existing source snapshots remain separate; backend posting still validates
+account ownership/type rather than trusting cookie defaults.
+
+Cookie transport compresses the snapshot into `selectedAccountsPacked` to avoid
+adding the full mapping JSON to the existing encrypted login cookie. Session GET
+decodes it back to `selectedAccounts` for consumers and omits the packed field from
+the response. Missing, invalid or old-version snapshots reload from saved settings.
+Neither representation can be set by generic session PUT.
+
+The version-2 snapshot also includes saved ERP, staff and ecommerce mappings in
+`defaults.erp`, `defaults.staff` and `defaults.ecommerce`. Account Settings and the
+ERP/staff connection dialogs refresh it after successful mapping saves. Investment
+profile/movement, Receive/Pay, transfer and asset forms explicitly consume
+`useSelectedAccounts`; ecommerce money-account defaults use its ERP/ecommerce
+mappings. No component requests `/account-settings/defaults` over HTTP. Available
+account lists and source-specific overrides still use their respective endpoints.
+The Account Settings page and ERP/staff connection forms also populate saved
+selections from this snapshot; backend suggestions apply only when that group has
+never been saved. Their API reads retain available-account and activation data.
+
 Full seller/staff session. Login selects an active direct company membership first; a delegated branch membership is used only if its head-office admin access remains valid.
 
 | Field | Type | Source |

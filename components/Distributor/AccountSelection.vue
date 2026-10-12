@@ -9,18 +9,23 @@ const emit=defineEmits<{busy:[value:boolean]}>();
 const types:Record<string,string[]>={payable:['ACCOUNTS_PAYABLE'],stock:['STOCK'],cash:['CASH'],bank:['BANK'],tax:['OTHER_CURRENT_ASSET'],expense:['EXPENSE','OTHER_EXPENSE']};
 const names:Record<string,string>={payable:'Payable account',stock:'Stock account',cash:'Cash account',bank:'Bank account',tax:'Purchase tax account',expense:'Expense account'};
 const auth=useNuxtApp().$auth;
+const selectedAccounts=useSelectedAccounts();
 const allowed=computed(()=>['admin','manager','accountant'].includes(auth.session.value?.role || ''));
 let generation=0;
 onBeforeUnmount(()=>{generation++;emit('busy',false);});
 watch(()=>[props.companyId,props.distributorId,props.sourceKey,retry.value],async()=> {
   const current=++generation;data.value=null;error.value='';model.value={};
+  const savedDefaults=auth.session.value?.selectedAccounts;
+  if(!props.sourceKey && savedDefaults?.companyId===props.companyId) {
+    model.value={...savedDefaults.defaults.purchase};
+  }
   loading.value=allowed.value && !!props.distributorId;
   emit('busy',loading.value);
   if(!loading.value) return;
   try {
     const [result, settings]=await Promise.all([
       $fetch<any>(`/api/accountant/distributors/${props.distributorId}`,{headers:{'x-company-id':props.companyId},query:{view:'form',sourceKey:props.sourceKey}}),
-      $fetch<any>('/api/accountant/account-settings/defaults',{headers:{'x-company-id':props.companyId}}),
+      selectedAccounts.get(props.companyId),
     ]);
     if(current!==generation)return;
     data.value=result;
@@ -39,6 +44,7 @@ const options=(role:string)=>(data.value?.accounts||[]).filter((a:any)=>(types[r
 </script>
 <template>
   <div v-if="allowed" class="space-y-3 border-t dark:border-gray-700 pt-3">
+    <p v-if="loading" role="status" class="text-xs text-gray-500">Loading selected accounts…</p>
     <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
     <UButton v-if="error" color="gray" variant="ghost" @click="retry++">Retry loading accounts</UButton>
     <template v-if="loading || data?.enabled">

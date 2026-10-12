@@ -5,7 +5,9 @@ const props = defineProps<{
         investorId?: string;
     }>(),
     emit = defineEmits(['close', 'saved']);
-const api = useAccountantApi(),
+const selectedAccountSession = useSelectedAccounts();
+const api = useAccountantApi()
+,
     profiles = ref<any[]>([]),
     accounts = ref<any[]>([]),
     currency = ref('INR'),
@@ -53,7 +55,7 @@ onMounted(async () => {
         accounts.value = (await api.get('/investors/options')).filter(
             (a: any) => ['CASH', 'BANK'].includes(a.accountType)
         );
-        const settings = await api.get('/account-settings/defaults');
+        const settings = await selectedAccountSession.get(api.companyId.value);
         const saved = settings.defaults.investments || {};
         const suggested = props.mode === 'payouts' ? saved.payoutAccountId : saved.counterAccountId;
         if (accounts.value.some(a => a.id === suggested)) form.counterAccountId = suggested;

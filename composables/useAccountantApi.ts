@@ -4,11 +4,14 @@ export function useAccountantApi() {
   const scope = useCompanyScope();
   const toast = useToast();
   const queryClient = useQueryClient();
+  const selectedAccounts = useSelectedAccounts();
   async function request<T = any>(method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', path: string, body?: any, options?: any): Promise<T> {
     try {
       const companyId = scope.companyId.value;
+      if (method === 'GET' && path === '/account-settings/defaults') return await selectedAccounts.get(companyId) as T;
       const result = await scope.fetch<T>(`/api/accountant${path}`, { ...options, method, ...(body === undefined ? {} : { body }) });
       if (method !== 'GET') await queryClient.invalidateQueries({ queryKey: ['accountant-v2', companyId] });
+      if (method !== 'GET' && (path.startsWith('/account-settings/') || ['/erp','/erp/enable','/users','/users/enable','/ecommerce/settings','/ecommerce/enable'].includes(path))) await selectedAccounts.refresh(companyId);
       return result;
     } catch (error: any) {
       const message = error?.data?.statusMessage || error.message || 'The request could not be completed';

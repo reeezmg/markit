@@ -3,9 +3,14 @@ import { accountDefaultGroups, acceptsDefaultAccount } from '~/utils/account-def
 definePageMeta({ auth: true });
 const api = useAccountantApi(), toast = useToast();
 const auth = useNuxtApp().$auth;
+const selectedAccounts = useSelectedAccounts();
 const allowed = computed(() => ['admin', 'manager', 'accountant'].includes(auth.session.value?.role || ''));
 const canManageProfit = computed(() => ['admin', 'manager'].includes(auth.session.value?.role || ''));
-const request = (method: 'GET'|'PUT'|'POST', path: string, body?: any, owner = api.companyId.value) => $fetch<any>(`/api/accountant${path}`, { method, headers: { 'x-company-id': owner, 'x-company-filter': owner }, ...(body === undefined ? {} : { body }) });
+const request = async (method: 'GET'|'PUT'|'POST', path: string, body?: any, owner = api.companyId.value) => {
+  const result = await $fetch<any>(`/api/accountant${path}`, { method, headers: { 'x-company-id': owner, 'x-company-filter': owner }, ...(body === undefined ? {} : { body }) });
+  if (method !== 'GET' && (path.startsWith('/account-settings/') || ['/erp','/erp/enable','/users','/users/enable','/ecommerce/settings','/ecommerce/enable'].includes(path))) await selectedAccounts.refresh(owner);
+  return result;
+};
 const erp = ref<any>(null), staff = ref<any>(null), ecommerce = ref<any>(null), data = ref<any>(null);
 const busy = ref(''), error = ref(''), loading = ref(false), supplier = ref('');
 const profitSettings = ref<any>(null);
@@ -29,7 +34,12 @@ async function load() {
     const owner = api.companyId.value;
     const [e, s, ec, profit, investorList] = await Promise.all([request('GET','/erp',undefined,owner), request('GET','/users',undefined,owner), request('GET','/ecommerce/settings',undefined,owner), request('GET','/investor-profits/settings',undefined,owner), request('GET','/investors',undefined,owner)]);
     const d = await request('GET','/account-settings',undefined,owner);
+    const saved = await selectedAccounts.get(owner);
     if (version !== generation) return;
+    d.defaults = saved.defaults;
+    e.mappings = {...(saved.defaults.erp || e.mappings)};
+    s.mappings = {...(saved.defaults.staff || s.mappings)};
+    ec.mappings = {...(saved.defaults.ecommerce || ec.mappings)};
     erp.value = e; staff.value = s; ecommerce.value = ec; data.value = d;
     profitSettings.value = profit;
     investors.value = investorList.data;

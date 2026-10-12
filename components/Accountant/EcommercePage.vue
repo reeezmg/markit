@@ -1,5 +1,7 @@
 <script setup lang="ts">
 const api = useAccountantApi();
+const selectedAccountSession = useSelectedAccounts();
+const sessionMappings = ref<Record<string,string>>({});
 const toast = useToast();
 const config = ref<any>(null), orders = ref<any[]>([]), selected = ref<any>(null);
 const loading = ref(false), saving = ref(false), error = ref(''), search = ref(''), page = ref(1);
@@ -15,10 +17,10 @@ const moneyAccounts = computed(() => (config.value?.accounts || []).filter((a: a
 const showMoneyAccount = computed(() => form.action === 'SETTLEMENT' || ['cash', 'bank'].includes(form.funding));
 const number = (n: any) => Number(n || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 watch(() => form.action, () => { form.category = form.action === 'CHARGE' ? 'deliveryIncome' : 'shippingExpense'; form.funding = selected.value?.order.payment_method === 'COD' ? 'codClearing' : 'gatewayClearing'; form.moneyAccountId = ''; form.amount = 0; form.tax = 0; form.fee = 0; });
-function defaultMoneyAccount() { const role = form.action === 'SETTLEMENT' ? 'bank' : form.funding; return ['cash','bank'].includes(role) ? config.value?.mappings?.[role] || '' : ''; }
+function defaultMoneyAccount() { const role = form.action === 'SETTLEMENT' ? 'bank' : form.funding; return ['cash','bank'].includes(role) ? sessionMappings.value[role] || '' : ''; }
 watch(() => [form.funding, form.action], () => { form.moneyAccountId = defaultMoneyAccount(); });
 async function loadOrders() { orders.value = await api.get('/ecommerce/orders', { query: { search: search.value, page: page.value } }); }
-async function load() { loading.value = true; error.value = ''; try { config.value = await api.get('/ecommerce/settings'); await loadOrders(); } catch (e: any) { error.value = e.message; } finally { loading.value = false; } }
+async function load() { loading.value = true; error.value = ''; try { const saved = await selectedAccountSession.get(api.companyId.value); sessionMappings.value = {...saved.defaults.erp,...saved.defaults.ecommerce}; config.value = await api.get('/ecommerce/settings'); await loadOrders(); } catch (e: any) { error.value = e.message; } finally { loading.value = false; } }
 async function open(row: any) { loading.value = true; error.value = ''; selected.value = null; try { selected.value = await api.get(`/ecommerce/orders/${row.id}`); Object.keys(returned).forEach(k => delete returned[k]); Object.assign(form, { amount: 0, fee: 0, tax: 0, reference: '', note: '', refundDelivery: false, refundCod: false }); form.funding = selected.value.order.payment_method === 'COD' ? 'codClearing' : 'gatewayClearing'; } catch (e: any) { error.value = e.message; } finally { loading.value = false; } }
 async function save() {
   if (!selected.value || saving.value) return;

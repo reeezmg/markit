@@ -1,4 +1,6 @@
 import { prisma } from '~/server/prisma';
+import { loadSelectedAccounts } from '~/server/utils/selected-accounts';
+import { packSelectedAccounts } from '~/server/utils/selected-accounts-codec';
 import { ensureHeadOfficeBranchMemberships, getAllStoreIds, getHeadOfficeAdmin } from '~/server/utils/organizationAccess';
 import { normalizeBillingUnits } from '~/utils/billing-units';
 import { normalizeSizeLabels } from '~/utils/size-labels';
@@ -52,6 +54,8 @@ export default eventHandler(async (event) => {
   });
   if (!purchaseCategory) throw createError({ statusCode: 409, statusMessage: 'Company setup is incomplete' });
   await session.update({
+    selectedAccounts: undefined,
+    selectedAccountsPacked: packSelectedAccounts(await loadSelectedAccounts(companyId)),
     ...session.data,
     companyId: c.id, companyName: c.name, companyType: c.type,
     name: membership.name, code: String(membership.code ?? ''), role, type: role,

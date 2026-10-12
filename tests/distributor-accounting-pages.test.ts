@@ -15,7 +15,9 @@ assert.ok(productList.includes("$fetch('/api/products/delete'"),'Product list de
 assert.ok(!productList.includes('DeleteProduct.mutateAsync'),'Product list must not bypass purchase recalculation');
 const errors:string[]=[];
 files.push('components/Distributor/Form.vue');
+files.push('components/Investments/ProfileModal.vue','components/Investments/MovementModal.vue','components/Accountant/MoneyPage.vue','components/Accountant/AccountTransfersPage.vue','components/Accountant/AccountantManagementPage.vue','components/Accountant/EcommercePage.vue','pages/settings/account.vue');
 Object.assign(globalThis,Vue,{
+  useSelectedAccounts:()=>({get:async()=>({defaults:{purchase:{}}})}),
   useNuxtApp:()=>({$auth:{session:Vue.ref({role:'admin'})}}),useToast:()=>({add(){}}),
   $fetch:async()=>({enabled:true,mappings:{},sources:[],accounts:[],defaults:{}}),
 });

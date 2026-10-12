@@ -1,7 +1,9 @@
 <script setup lang="ts">
 const props = defineProps<{ investor?: any }>(),
     emit = defineEmits(['close', 'saved']);
-const api = useAccountantApi(),
+const selectedAccountSession = useSelectedAccounts();
+const api = useAccountantApi()
+,
     busy = ref(false),
     users = ref<any[]>([]),
     accounts = ref<any[]>([]),
@@ -19,7 +21,7 @@ onMounted(async () => {
     try {
         users.value = await api.get('/investors/users');
         {
-            const [options, settings] = await Promise.all([api.get('/investors/options'), api.get('/account-settings/defaults')]);
+            const [options, settings] = await Promise.all([api.get('/investors/options'), selectedAccountSession.get(api.companyId.value)]);
             accounts.value = options;
             const saved = settings.defaults.investments || {};
             companyDefaults.value = saved;

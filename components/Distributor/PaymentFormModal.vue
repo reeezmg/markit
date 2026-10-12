@@ -73,12 +73,6 @@ watch(() => [props.modelValue, props.payment?.id, props.companyId, props.distrib
   initializing.value = true
   try {
     const owner = props.payment?.companyId || props.companyId || companyScope.auth.session.value?.companyId
-    await companyScope.beginForm(props.payment
-      ? { model: 'DistributorPayment', id: props.payment.id, companyId: owner }
-      : null)
-    if (generation !== loadGeneration) return
-    if (owner) await companyScope.selectOwner(owner)
-    if (generation !== loadGeneration) return
     accountingAccounts.value = {}
     form.value = {
       distributorId: props.payment?.distributorId || props.distributorId || '',
@@ -90,6 +84,12 @@ watch(() => [props.modelValue, props.payment?.id, props.companyId, props.distrib
       remarks: props.payment?.remarks || '',
       date: props.payment?.createdAt ? new Date(props.payment.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
     }
+    await companyScope.beginForm(props.payment
+      ? { model: 'DistributorPayment', id: props.payment.id, companyId: owner }
+      : null)
+    if (generation !== loadGeneration) return
+    if (owner) await companyScope.selectOwner(owner)
+    if (generation !== loadGeneration) return
     const loaded = await refetchDistributors()
     if (generation !== loadGeneration) return
     if (loaded.error) throw loaded.error
@@ -161,8 +161,7 @@ async function save() {
     <UCard>
       <template #header><div class="text-base font-semibold">{{ paymentId ? 'Edit Payment' : 'New Payment' }}</div></template>
       <div class="space-y-4">
-        <p v-if="initializing" role="status" class="py-8 text-center text-sm text-gray-500">Loading payment details…</p>
-        <fieldset v-show="!initializing" :disabled="initializing" class="space-y-4">
+        <fieldset :disabled="initializing" class="space-y-4">
         <CompanyFormField @transferred="open = false" />
         <UFormGroup label="Distributor" required>
           <USelectMenu :model-value="form.distributorId" :options="distributorOptions" option-attribute="label"
@@ -179,7 +178,7 @@ async function save() {
         </UFormGroup>
         <DistributorAccountSelection v-if="form.distributorId" v-model="accountingAccounts"
           @busy="accountsLoading = $event"
-          :company-id="companyScope.companyId.value" :distributor-id="form.distributorId"
+          :company-id="props.payment?.companyId || props.companyId || companyScope.companyId.value" :distributor-id="form.distributorId"
           :source-key="paymentId ? `payment:${paymentId}` : undefined"
           :roles="['payable', form.paymentType === 'CASH' ? 'cash' : 'bank']" />
         <UFormGroup label="Purchase Orders">

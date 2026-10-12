@@ -1,4 +1,6 @@
 import { normalizeBillingUnits } from '~/utils/billing-units';
+import { loadSelectedAccounts } from '~/server/utils/selected-accounts';
+import { packSelectedAccounts } from '~/server/utils/selected-accounts-codec';
 import { normalizeSizeLabels } from '~/utils/size-labels';
 import { ensureHeadOfficeBranchMemberships, getHeadOfficeAdmin } from '~/server/utils/organizationAccess';
 
@@ -38,6 +40,8 @@ export default eventHandler(async (event) => {
     }
 
     await session.update({
+        selectedAccounts: undefined,
+        selectedAccountsPacked: packSelectedAccounts(await loadSelectedAccounts(selectedCompanyUser.company.id)),
         id: user.id,
         allStores: selectedCompanyUser.role === 'admin' && selectedCompanyUser.company.isHeadOffice && !selectedCompanyUser.company.parentCompanyId,
         organizationHeadOfficeId: undefined,

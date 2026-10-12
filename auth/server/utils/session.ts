@@ -26,6 +26,8 @@ export type AuthSession = {
     refundPolicy?: string;
     returnPolicy?: string;
     companyPhone?: string;
+    selectedAccounts?: { companyId: string; version?: number; defaults: Record<string, Record<string, string>> };
+    selectedAccountsPacked?: string;
     email: string;
     image: string | null;
     companyId: string;

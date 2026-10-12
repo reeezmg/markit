@@ -593,6 +593,7 @@ import { computed, defineComponent, h, reactive, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { useQuery, useQueryClient } from "@tanstack/vue-query";
 const api = useAccountantApi();
+const selectedAccountSession = useSelectedAccounts();
 import DataTable from "./SimpleTable.vue";
 
 const AccountField = defineComponent({
@@ -1169,13 +1170,13 @@ async function openCreate() {
   reset();
   if (view.value === 'fixed-assets') {
     form.requestId = crypto.randomUUID();
-    const settings = await api.get('/account-settings/defaults');
+    const settings = await selectedAccountSession.get(api.companyId.value);
     assetPurchaseDefaults.value = settings.defaults.purchase || {};
     form.paymentAccountId = assetPurchaseDefaults.value.cash || '';
     form.purchasePayableAccountId = assetPurchaseDefaults.value.payable || '';
   }
   if (view.value === 'asset-categories') {
-    const settings = await api.get('/account-settings/defaults');
+    const settings = await selectedAccountSession.get(api.companyId.value);
     const saved = settings.defaults.assets || {};
     for (const key of ['assetAccountId', 'accumulatedDepAccountId', 'depreciationExpenseAccountId']) if (saved[key]) form[key] = saved[key];
   }
@@ -1281,7 +1282,7 @@ async function startAssetAction(r: any, a: string) {
         },
   );
   if (a === 'dispose') {
-    const settings = await api.get('/account-settings/defaults');
+    const settings = await selectedAccountSession.get(api.companyId.value);
     const saved = settings.defaults.assets || {};
     form.proceedsAccountId = saved.proceedsAccountId || null;
     form.gainLossAccountId = saved.gainLossAccountId || null;
