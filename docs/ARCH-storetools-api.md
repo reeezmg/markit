@@ -480,7 +480,7 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `mails.ts` | GET | — | Returns hardcoded mock mail data (Nuxt UI template stub, not in use) |
 | `model/[...].ts` | — | — | ZenStack model proxy (forwards requests to ZenStack runtime) |
 | `notifyfcm.post` | POST | — | Send FCM push to all admin users of a company. Body: `{ companyId, excludeDeviceId?, title, body }`. Uses raw SQL `pool` to fetch `company_users` + `push_token` rows, then sends via FCM v1 API using GoogleAuth service account (`GOOGLE_PROJECT_ID`, `GOOGLE_CLIENT_EMAIL`, `GOOGLE_PRIVATE_KEY` env vars). Route now soft-fails and returns `{ success: false }` on notification-side errors so billing save is not blocked |
-| `savefcmtoken.post` | POST | — | Register/update web FCM push token: `{ fcmToken, userId, companyId, deviceId, deviceInfo? }`. Upserts `PushToken` by `userId_deviceId` |
+| `savefcmtoken.post` | POST | session | Register/update web FCM push token: `{ fcmToken, deviceId, deviceInfo? }`. Derives userId from the authenticated session, ignores body userId, validates nonempty token/device strings, and atomically upserts `PushToken` by `userId_deviceId`. Returns `{ success: true }`; missing auth is 401 and invalid fields are 400. |
 | `savecaptoken.post` | POST | — | Register/update Capacitor native push token: `{ token, userId, companyId, deviceId, deviceInfo? }`. Upserts `CapPushToken` |
 | `secret.ts` | GET | session (requireAuth) | Auth test endpoint. Returns email from session. Not used in production |
 | `send-otp.ts` | POST | — | Send OTP to email: `{ email }`. Generates 6-digit OTP, stores in `EmailOtp` with 10min expiry, sends via Gmail SMTP (`utils/mailer`) |

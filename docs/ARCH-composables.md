@@ -59,12 +59,12 @@ Used by: `useMessaging.ts`, `Checkout/login.vue`
 
 Lazy-loads Firebase Messaging on client only (`process.client` guard). Returns the messaging instance or `null` on SSR.
 
-### `composables/usePushNotifications.ts` — `usePushNotifications(userId)`
+### `composables/usePushNotifications.ts` — `usePushNotifications()`
 
 Web push notifications via Firebase Cloud Messaging:
 1. Requests browser notification permission
 2. Gets FCM token using hardcoded VAPID key
-3. Saves token + `deviceId` (from `localStorage` or `crypto.randomUUID()`) to `/api/savefcmtoken`
+3. Saves token + `deviceId` (from `localStorage` or `crypto.randomUUID()`) to `/api/savefcmtoken` with credentials. The endpoint gets userId from the signed auth session, so registration does not depend on the client session snapshot's id. Login catches registration failures separately.
 4. Sets up `onMessage` handler for foreground notifications (displays native `Notification`)
 
 **Bug:** VAPID key hardcoded in source.

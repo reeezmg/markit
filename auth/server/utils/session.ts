@@ -1,6 +1,7 @@
 import type { H3Event, SessionConfig } from 'h3';
 import crypto from 'uncrypto';
 import { normalizeBillingUnits } from '~/utils/billing-units';
+import { useChunkedAuthSession } from './chunked-session';
 
 const runtimeAuth = useRuntimeConfig().auth;
 const isProd = process.env.NODE_ENV === 'production'
@@ -99,7 +100,7 @@ export type AuthSession = {
 };
 
 export const useAuthSession = async (event: H3Event) => {
-    const session = await useSession<AuthSession>(event, sessionConfig);
+    const session = await useChunkedAuthSession<AuthSession>(event, sessionConfig);
     return session;
 };
 

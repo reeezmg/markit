@@ -2,7 +2,7 @@ import { getToken, onMessage } from 'firebase/messaging'
 import { useMessaging } from './useMessaging'
 
 
-export async function usePushNotifications(userId: string) {
+export async function usePushNotifications() {
       const config = useRuntimeConfig();
   if (!('Notification' in window) || !('serviceWorker' in navigator)) {
     console.warn('Notifications not supported in this browser')
@@ -42,8 +42,8 @@ export async function usePushNotifications(userId: string) {
   try {
     await $fetch('/api/savefcmtoken', {
       method: 'POST',
+      credentials: 'include',
       body: {
-        userId,
         fcmToken,
         deviceId,
         deviceInfo: {

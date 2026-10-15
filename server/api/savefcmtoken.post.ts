@@ -2,36 +2,37 @@ import { prisma } from '~/server/utils/prisma'
 
 export default defineEventHandler(async (event) => {
 
-const { fcmToken, userId, companyId, deviceId, deviceInfo } = await readBody(event)
-
-if (!fcmToken || !userId || !deviceId) {
-  throw createError({ statusCode: 400, message: 'Missing required fields' })
+const session = await requireAuthSession(event)
+const userId = session.data.id
+if (!userId) {
+  throw createError({ statusCode: 401, statusMessage: 'Not Authorized' })
 }
 
-// Check if user+device exists
-const existing = await prisma.pushToken.findUnique({
+const body = await readBody(event)
+const fcmToken = typeof body?.fcmToken === 'string' ? body.fcmToken.trim() : ''
+const deviceId = typeof body?.deviceId === 'string' ? body.deviceId.trim() : ''
+const deviceInfo = body?.deviceInfo
+
+if (!fcmToken || !deviceId) {
+  throw createError({ statusCode: 400, statusMessage: 'fcmToken and deviceId are required' })
+}
+
+await prisma.pushToken.upsert({
   where: {
     userId_deviceId: {
       userId,
       deviceId
     }
-  }
-})
-
-if (!existing) {
-  await prisma.pushToken.create({
-    data: {
+  },
+    create: {
       userId,
       token: fcmToken,
-      userAgent: deviceInfo?.userAgent || '',
+      userAgent: typeof deviceInfo?.userAgent === 'string' ? deviceInfo.userAgent : '',
       deviceId
-    }
-  })
-} else if (existing.token !== fcmToken) {
-  await prisma.pushToken.update({
-    where: { id: existing.id },
-    data: { token: fcmToken }
-  })
-}
+    },
+    update: { token: fcmToken },
+})
+
+return { success: true }
 
 })

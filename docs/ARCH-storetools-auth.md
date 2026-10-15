@@ -37,6 +37,19 @@ decodes it back to `selectedAccounts` for consumers and omits the packed field f
 the response. Missing, invalid or old-version snapshots reload from saved settings.
 Neither representation can be set by generic session PUT.
 
+Seller session cookie transport is handled by
+`auth/server/utils/chunked-session.ts`, called by `useAuthSession`. H3 still seals
+and verifies the entire session. A sealed value over 3,000 characters is split
+across `nuxt-session.0`, `.1`, etc., with a `chunks:N` marker in the base cookie;
+each cookie keeps the configured Secure, HttpOnly, SameSite and expiry options.
+Existing single-cookie sessions remain readable. Updates remove obsolete chunks;
+logout deletes the base cookie and its chunks. Incomplete or invalid encrypted
+chunks do not authenticate. This avoids browsers discarding a full login cookie
+over their individual-cookie size limit, which otherwise yields an empty session.
+The account snapshot compression alone does not bound the full session size.
+No server-local storage or database schema is introduced. The regression test is
+`tests/auth-session-cookie-size.test.ts`.
+
 The version-2 snapshot also includes saved ERP, staff and ecommerce mappings in
 `defaults.erp`, `defaults.staff` and `defaults.ecommerce`. Account Settings and the
 ERP/staff connection dialogs refresh it after successful mapping saves. Investment

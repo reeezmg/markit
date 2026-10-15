@@ -3,6 +3,7 @@ import {readFileSync} from 'node:fs';
 import ts from 'typescript';
 import {createApp,eventHandler,useSession,readBody,createError,toWebHandler} from 'h3';
 import {packSelectedAccounts,unpackSelectedAccounts} from '../server/utils/selected-accounts-codec';
+import {useChunkedAuthSession} from '../auth/server/utils/chunked-session';
 const config={name:'test-auth',password:'test-password-at-least-32-characters-long',cookie:{secure:false}};
 let selected='initial-account';
 const loadSelectedAccounts=async(companyId:string)=>({companyId,version:2,defaults:{purchase:{stock:selected}}});
@@ -11,8 +12,8 @@ const compile=(file:string,bindings:Record<string,unknown>)=>{
  return new Function(...Object.keys(bindings),js)(...Object.values(bindings));
 };
 const base={eventHandler,readBody,loadSelectedAccounts,packSelectedAccounts,unpackSelectedAccounts,
- useAuthSession:(event:any)=>useSession(event,config),
- requireAuthSession:async(event:any)=>{const s=await useSession(event,config);if(!s.data.email)throw createError({statusCode:401});return s;},
+ useAuthSession:(event:any)=>useChunkedAuthSession(event,config),
+ requireAuthSession:async(event:any)=>{const s=await useChunkedAuthSession(event,config);if(!s.data.email)throw createError({statusCode:401});return s;},
  assertCompanyAccess:async(_event:any,companyId:string)=>{if(!['a','b'].includes(companyId))throw createError({statusCode:403});},
  getHeadOfficeAdmin:async()=>null};
 const app=createApp();

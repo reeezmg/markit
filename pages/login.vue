@@ -68,7 +68,7 @@ async function onSubmit(data: any) {
        const res = await authLogin(data.email.trim().toLowerCase(), data.password.trim());
 
         if (!Capacitor.isNativePlatform()) {
-            usePushNotifications(useAuth().session.value?.id!)
+            void usePushNotifications().catch(error => console.error('Push registration failed:', error))
         }else{
              registerPush(useAuth().session.value?.id!)
         }
