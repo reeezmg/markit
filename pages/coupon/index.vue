@@ -4,11 +4,11 @@ import CouponForm from '~/components/Coupon/CouponForm.vue';
 import CouponList from '~/components/Coupon/CouponList.vue';
 import CouponDetail from '~/components/Coupon/CouponDetail.vue';
 import { useCreateCoupon, useUpdateCoupon, useDeleteCoupon } from '~/lib/hooks/coupon';
+const companyScope = useCompanyScope('table');
 
 const createCoupon = useCreateCoupon({ optimisticUpdate: true });
 const updateCoupon = useUpdateCoupon({ optimisticUpdate: true });
 const deleteCoupon = useDeleteCoupon({ optimisticUpdate: true });
-const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 
 // ─── Selected coupon detail panel ───
@@ -22,9 +22,9 @@ const closeDetail = () => {
     selectedCoupon.value = null
 }
 
-const addCoupon = (coupon: any) => {
+const addCoupon = async (coupon: any) => {
     try {
-        createCoupon.mutate({
+        await createCoupon.mutateAsync({
             data: {
                 code: coupon.code,
                 type: coupon.type,
@@ -43,23 +43,26 @@ const addCoupon = (coupon: any) => {
                 isBillCombine: coupon.isBillCombine,
                 company: {
                     connect: {
-                        id: useAuth().session.value?.companyId,
+                        id: coupon.companyId,
                     },
                 },
             },
         });
-    } catch(error) {
+        toast.add({ title: 'Coupon created successfully!', color: 'green' });
+        return true;
+    } catch(error: any) {
         toast.add({
             title: 'Error creating coupon',
             description: error.message,
             color: 'red',
         });
+        return false;
     }
 };
 
-const editCoupon = (id: string, editCoupon: any) => {
+const editCoupon = async (id: string, editCoupon: any) => {
     try {
-        updateCoupon.mutate({
+        await updateCoupon.mutateAsync({
             where: {
                 id,
             },
@@ -72,6 +75,7 @@ const editCoupon = (id: string, editCoupon: any) => {
                 minOrderValue: editCoupon.minOrderValue,
                 minBillAmount: editCoupon.minBillAmount,
                 audienceType: editCoupon.audienceType,
+                targetType: editCoupon.targetType,
                 startDate: new Date(editCoupon.startDate).toISOString(),
                 endDate: new Date(editCoupon.endDate).toISOString(),
                 usageLimit: editCoupon.usageLimit,
@@ -80,23 +84,26 @@ const editCoupon = (id: string, editCoupon: any) => {
                 isBillCombine: editCoupon.isBillCombine,
             },
         });
+        if (selectedCoupon.value?.id === id) selectedCoupon.value = { ...selectedCoupon.value, ...editCoupon };
 
         toast.add({
             title: `Coupon updated successfully!`,
             color: 'green',
         });
-    } catch(error) {
+        return true;
+    } catch(error: any) {
         toast.add({
             title: 'Error updating coupon',
             description: error.message,
             color: 'red',
         });
+        return false;
     }
 };
 
-const deleteCouponRow = (id: string) => {
+const deleteCouponRow = async (id: string) => {
     try {
-        deleteCoupon.mutate({
+        await deleteCoupon.mutateAsync({
             where: {
                 id,
             },
@@ -108,7 +115,7 @@ const deleteCouponRow = (id: string) => {
         if (selectedCoupon.value?.id === id) {
             selectedCoupon.value = null
         }
-    } catch(error) {
+    } catch(error: any) {
         toast.add({
             title: 'Error while deleting the coupon',
             description: error.message,
@@ -130,27 +137,33 @@ const closeForm = () => {
     editingCoupon.value = null;
 };
 
-const saveCoupon = (form: any) => {
+const saving = ref(false);
+const saveCoupon = async (form: any) => {
+    if (saving.value) return;
+    saving.value = true;
     try {
+        let saved: boolean;
         if (editingCoupon.value) {
-            editCoupon(editingCoupon.value.id, form);
+            saved = await editCoupon(editingCoupon.value.id, form);
         } else {
-            addCoupon(form);
+            saved = await addCoupon(form);
         }
-    } catch(error) {
+        if (saved) closeForm();
+    } catch(error: any) {
         toast.add({
             title: 'Error saving coupon',
             description: error.message,
             color: 'red',
         });
     } finally {
-        closeForm();
+        saving.value = false;
     }
 };
 </script>
 
 <template>
     <UDashboardPanelContent class="pb-24 p-4">
+        <CompanyTableFilter />
         <div class="flex border border-gray-200 dark:border-gray-700 rounded-md">
             <!-- Left: Coupon List -->
             <div
@@ -187,7 +200,9 @@ const saveCoupon = (form: any) => {
 
         <UModal v-model="showForm">
             <CouponForm
+                v-if="showForm"
                 :coupon="editingCoupon"
+                :saving="saving"
                 @save="saveCoupon"
                 @cancel="closeForm"
             />

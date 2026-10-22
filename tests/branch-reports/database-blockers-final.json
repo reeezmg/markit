@@ -1,0 +1,17 @@
+{
+  "observedAt": "2026-10-21T03:32:35.089Z",
+  "readOnlyVerified": true,
+  "schemaChanges": false,
+  "presence": {
+    "allocation_table": false,
+    "expense_distributor_column": false,
+    "expense_client_column": false,
+    "billing_function": false
+  },
+  "missing": [
+    "public.distributor_payment_allocations",
+    "expenses.distributor_id",
+    "expenses.client_id",
+    "create_bill_source_plpgsql(jsonb)"
+  ]
+}

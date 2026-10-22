@@ -1,0 +1,7 @@
+{
+  "startedAt": "2026-10-21T09:18:05.551Z",
+  "phase": "failed",
+  "bundleFingerprint": "5a1230e4cd5856b087ae216253ae748e715eeaa99e0e6c731bd5dcffae58b8e0",
+  "error": "All settings rejected-save interactions must pass",
+  "ownedShippingStopped": true
+}

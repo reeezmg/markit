@@ -118,9 +118,14 @@ function toggleSecretVisibility(fieldKey: string) {
   visibleSecrets.value[id] = !visibleSecrets.value[id];
 }
 
-const { data: prefData, isLoading } = useFindFirstGeneralPreference({
+const preferenceQuery = useFindFirstGeneralPreference({
   where: { companyId: companyId.value, pageName: PAGE_NAME, key: PREF_KEY },
 });
+const { data: prefData, isLoading } = preferenceQuery;
+if (import.meta.server && companyId.value && preferenceQuery.isFetching.value) {
+  await preferenceQuery.suspense().catch(() => {});
+}
+
 
 watch(prefData, (val) => {
   if (val?.value) {

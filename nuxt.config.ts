@@ -1,7 +1,15 @@
 import { commerceArticles } from './data/commerce-articles'
+import { relative, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
+
+const projectRoot = fileURLToPath(new URL('.', import.meta.url))
+const auditBuildDir = process.env.MARKIT_E2E_BUILD_DIR
 
 export default defineNuxtConfig({
   extends: ['@nuxt/ui-pro', './auth'],
+  buildDir: auditBuildDir || '.nuxt',
+  debug: auditBuildDir ? false : undefined,
+  ignore: ['**/.nuxt/**', '**/.nuxt-branch-e2e/**', '**/.output-branch-e2e/**', 'tests/branch-reports/**', '**/*.log'],
 
   ssr: true,
 
@@ -19,9 +27,26 @@ export default defineNuxtConfig({
     transpile: []
   },
 
+  hooks: {
+    'vite:compiled'() {
+      // Release completed build stages on the memory-constrained audit host.
+      if (auditBuildDir) (globalThis as typeof globalThis & { gc?: () => void }).gc?.();
+    },
+    'prepare:types'({ tsConfig }) {
+      // Standalone test projects supply intentionally minimal globals. Those
+      // declarations must not replace Nuxt's application/session types.
+      tsConfig.exclude ||= [];
+      for (const directory of ['tests', 'cypress', '.nuxt-branch-e2e']) {
+        if (resolve(projectRoot, directory) === resolve(projectRoot, auditBuildDir || '.nuxt')) continue;
+        const pattern = relative(resolve(projectRoot, auditBuildDir || '.nuxt'), resolve(projectRoot, directory)).replaceAll('\\', '/') + '/**';
+        if (!tsConfig.exclude.includes(pattern)) tsConfig.exclude.push(pattern);
+      }
+    },
+  },
+
   // Dev-only savings. Production keeps server sourcemaps so error traces stay
   // readable; generating them in dev is pure cost.
-  sourcemap: process.env.NODE_ENV === 'production'
+  sourcemap: process.env.NODE_ENV === 'production' && !auditBuildDir
     ? { server: true, client: false }
     : { server: false, client: false },
 
@@ -32,10 +57,19 @@ export default defineNuxtConfig({
   },
 
   nitro: {
-    preset: 'vercel',
+    // Large timing headers can exceed native fetch limits during SSR.
+    timing: false,
+    // Local audit output runs beside the installed dependencies. Avoid copying
+    // and tracing that tree; Prisma's generated .prisma import needs a path.
+    externals: auditBuildDir ? { trace: false } : undefined,
+    alias: auditBuildDir ? { '.prisma/client': resolve(projectRoot, 'node_modules/.prisma/client').replaceAll('\\', '/') } : undefined,
+    plugins: auditBuildDir ? [resolve(projectRoot, 'tests/helpers/readonly-nitro-plugin.ts')] : undefined,
+    handlers: auditBuildDir ? [{ route: '/', middleware: true, handler: resolve(projectRoot, 'tests/helpers/readonly-request-middleware.ts').replaceAll('\\', '/') }] : undefined,
+    preset: auditBuildDir ? 'node-server' : 'vercel',
+    output: auditBuildDir ? { dir: resolve(projectRoot, '.output-branch-e2e') } : undefined,
     vercel: { functions: { maxDuration: 60 } },
     routeRules: {
-      '/nonetwork': { prerender: true },
+      '/nonetwork': { prerender: !auditBuildDir },
       '/storelanding': { redirect: { to: '/', statusCode: 301 } },
       '/landing': { redirect: { to: '/', statusCode: 301 } },
     },
@@ -43,6 +77,7 @@ export default defineNuxtConfig({
   },
 
   vite: {
+    define: auditBuildDir ? { __VUE_PROD_HYDRATION_MISMATCH_DETAILS__: true } : undefined,
     optimizeDeps: {
       exclude: ['@point-of-sale/receipt-printer-encoder'],
     },
@@ -62,7 +97,7 @@ export default defineNuxtConfig({
       // Pre-transform the heaviest pages instead of compiling them on first
       // visit. Costs nothing at startup — Vite warms these in the background.
       warmup: {
-        clientFiles: [
+        clientFiles: auditBuildDir ? [] : [
           './pages/erp/billing.vue',
           './pages/erp/edit/[salesId].vue',
           './pages/products/add.vue',
@@ -71,17 +106,27 @@ export default defineNuxtConfig({
       },
     },
 
-    // ⭐ Eager load EVERYTHING → One bundle
+    // Keep the deployment's existing chunk policy. The isolated audit uses
+    // route splitting to avoid loading every seller page into each test tab.
     build: {
       rollupOptions: {
         output: {
-          manualChunks: () => 'app.js'
+          manualChunks: auditBuildDir ? undefined : () => 'app.js'
         }
       }
     }
   },
 
   modules: [
+    function preserveServerPrefetchIds(_options, nuxt) {
+      // Vue uses registered prefetch hooks to allocate SSR-safe useId boundaries.
+      // Icons register them on both sides; removing the client registration
+      // shifts subsequent menu/control IDs even though no hook runs in-browser.
+      const client = nuxt.options.optimization.treeShake.composables.client;
+      // Dev defaults to an empty map. Adding vue: [] activates Nuxt's transform
+      // with an empty regex alternative, which matches zero-length ranges.
+      if (client.vue) client.vue = client.vue.filter(name => name !== 'onServerPrefetch');
+    },
     '@nuxt/ui',
     '@nuxt/fonts',
     '@vueuse/nuxt',

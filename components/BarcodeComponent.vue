@@ -1,5 +1,6 @@
 <template>
-    <div class="barcode-container">
+    <PrintTemplateLabels v-if="!originalLabels" :items="barcodes" @original="originalLabels = true" />
+    <div v-else class="barcode-container">
       <div v-for="item in barcodes" :key="item.barcode" class="barcode-item">
         <svg :ref="el => setBarcode(el, item.barcode)"></svg>
         <div class="barcode-details">
@@ -15,7 +16,7 @@
   </template>
   
   <script setup lang="ts">
-  import { onMounted, watch, defineProps } from "vue";
+  import { onMounted, watch, defineProps, ref } from "vue";
   import JsBarcode from "jsbarcode";
   
   // Define the TypeScript interface
@@ -34,12 +35,14 @@
 
   // Define props
   const props = defineProps<{ barcodes: BarcodeItem[] }>();
+  const originalLabels = ref(false);
+  watch(() => props.barcodes, () => { originalLabels.value = false; }, { deep: true });
 
   const { labelFor } = useSizeLabel();
   
   // Function to generate barcode
-  const setBarcode = (el: SVGElement | null, barcodeValue: string) => {
-    if (el && barcodeValue) {
+  const setBarcode = (el: unknown, barcodeValue: string) => {
+    if (el instanceof SVGElement && barcodeValue) {
       JsBarcode(el, barcodeValue, {
         format: "CODE128",
         lineColor: "#000",
@@ -118,4 +121,3 @@
     margin:0 3px;
   }
   </style>
-  

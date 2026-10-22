@@ -10,8 +10,11 @@ const relations: Record<string, string> = { category: 'category', subcategory: '
 
 export default defineEventHandler(async event => {
   const path = getRequestURL(event).pathname;
-  if (!/^\/api\/(users\/|salary\/|attendance\/|clients\/|bill(?:Edit|Sale)?\/|products\/|purchaseorder\/|purchasereturn\/|distributor\/|counter\/|discount\/|dimensions(?:\/|$)|accounts\/(?:expenses|expense-categories|company-users|transactions)(?:\/|$))/.test(path)) return;
+  if (!/^\/api\/(cleanup\/|coupons\/|users\/|salary\/|attendance\/|clients\/|bill(?:Edit|Sale)?\/|products\/|purchaseorder\/|purchasereturn\/|distributor\/|counter\/|discount\/|dimensions(?:\/|$)|accounts\/(?:expenses|expense-categories|company-users|transactions)(?:\/|$))/.test(path)) return;
   const session = await requireAuthSession(event);
+  if (path.startsWith('/api/cleanup/') && !session.data.cleanup) {
+    throw createError({ statusCode: 403, statusMessage: 'Cleanup access required' });
+  }
   const query = getQuery(event);
   const isWrite = !['GET', 'HEAD'].includes(event.method) && !/findMany|by-ids|search|findFirst/.test(path);
   event.context.companyScopeChecks = [];
@@ -19,6 +22,10 @@ export default defineEventHandler(async event => {
   let companyId = getHeader(event, 'x-company-id') || query.companyId || body?.companyId || session.data.companyId;
   if (typeof companyId !== 'string') throw createError({ statusCode: 400, statusMessage: 'Invalid company' });
   await assertCompanyAccess(event, companyId);
+  if (query.companyId !== undefined && query.companyId !== companyId) {
+    throw createError({ statusCode: 403, statusMessage: 'Mixed company request' });
+  }
+  event.context.requestCompanyId = companyId;
   if (!isWrite || !body) return;
   async function check(model: string, id: unknown, mustExist = false) {
     if (typeof id !== 'string' || !id) return;

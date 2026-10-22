@@ -42,10 +42,10 @@
       <!-- Filters -->
       <div class="grid sm:grid-cols-3 grid-cols-2 gap-4 px-4 py-3">
         <CompanyTableFilter />
-        <USelect v-model="filters.category" :options="categories" option-attribute="name" value-attribute="id" placeholder="Filter by Category" />
-        <USelect v-model="filters.brand" :options="brands" placeholder="Filter by Brand" />
-        <USelect v-model="filters.rating" :options="ratings" placeholder="Filter by Rating" />
-        <USelect v-model="filters.distributor" :options="distributors" option-attribute="name" value-attribute="id" placeholder="Filter by Distributor" />
+        <USelect v-model="filters.category" :options="categories || []" option-attribute="name" value-attribute="id" placeholder="Filter by Category" />
+        <USelect v-model="filters.brand" :options="brands || []" placeholder="Filter by Brand" />
+        <USelect v-model="filters.rating" :options="ratings || []" placeholder="Filter by Rating" />
+        <USelect v-model="filters.distributor" :options="distributors || []" option-attribute="name" value-attribute="id" placeholder="Filter by Distributor" />
         <UInput v-model="filters.startDate" type="date" placeholder="Start Date" />
         <UInput v-model="filters.endDate" type="date" placeholder="End Date" />
       </div>
@@ -137,19 +137,15 @@ const { data: stockData, pending, refresh } = await useLazyAsyncData(
         companyId: companyId.value
       }
     }),
-  { enabled: !!companyId.value } // Do NOT run at load
+  { immediate: !!companyId.value, default: () => [] }
   
 )
 
-watch(stockData, (newData) => {
-  console.log('Stock data updated:', newData)
-})
 
 // TRIGGER FIRST CALL ONCE COMPANYID LOADS
 watch(companyId, (val) => {
   if (val) {
     refresh()
-    console.log('Fetching stock data for companyId:', val)
   }
 })
 
@@ -191,10 +187,10 @@ const columns = computed(() => [
 ])
 
 // FETCH FILTER OPTIONS
-const { data: categories } = await useCompanyFetch('/api/options/categories')
-const { data: brands } = await useCompanyFetch('/api/options/brands')
-const { data: ratings } = await useCompanyFetch('/api/options/ratings')
-const { data: distributors } = await useCompanyFetch('/api/options/distributors')
+const { data: categories } = await useCompanyFetch('/api/options/categories', { default: () => [] })
+const { data: brands } = await useCompanyFetch('/api/options/brands', { default: () => [] })
+const { data: ratings } = await useCompanyFetch('/api/options/ratings', { default: () => [] })
+const { data: distributors } = await useCompanyFetch('/api/options/distributors', { default: () => [] })
 
 watch(companyScope.readIds, () => { void refresh(); });
 </script>

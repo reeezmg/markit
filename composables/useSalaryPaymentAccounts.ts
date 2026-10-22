@@ -1,7 +1,13 @@
 /** Form-owner native bank options; generation guards prevent stale company replies. */
 export function useSalaryPaymentAccounts(companyScope: ReturnType<typeof useCompanyScope>) {
-  const banks=ref<{id:string;name:string}[]>([]);
-  const loading=ref(false), error=ref('');
+  const snapshots=useState<Record<string,{banks:{id:string;name:string}[];error:string}>>('salary-payment-account-options',()=>({}));
+  const current=computed(()=>snapshots.value[companyScope.companyId.value] || {banks:[],error:''});
+  const banks=computed({get:()=>current.value.banks,set:(value:{id:string;name:string}[])=>{
+    snapshots.value[companyScope.companyId.value]={...current.value,banks:value};
+  }});
+  const loading=ref(false), error=computed({get:()=>current.value.error,set:(value:string)=>{
+    snapshots.value[companyScope.companyId.value]={...current.value,error:value};
+  }});
   let generation=0;
   async function load(paymentId?:string) {
     const version=++generation, owner=companyScope.companyId.value;
@@ -16,6 +22,8 @@ export function useSalaryPaymentAccounts(companyScope: ReturnType<typeof useComp
     } catch(e:any) {if(version===generation)error.value=e.data?.statusMessage || e.message;throw e;}
     finally {if(version===generation)loading.value=false;}
   }
-  watch(companyScope.companyId,()=>{load().catch(()=>{});},{immediate:true});
+  watch(companyScope.companyId,()=>{load().catch(()=>{});});
+  onServerPrefetch(()=>load().catch(()=>{}));
+  onMounted(()=>{load().catch(()=>{});});
   return {banks,load,loading,error};
 }

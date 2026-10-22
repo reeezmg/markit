@@ -8,27 +8,12 @@ let tableReady: Promise<void> | null = null
 
 export function ensureAiUsageEventsTable() {
   if (!tableReady) {
-    tableReady = pool.query(`
-      CREATE TABLE IF NOT EXISTS ai_usage_events (
-        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-        source TEXT NOT NULL DEFAULT 'storefront_agent',
-        conversation_id TEXT,
-        interaction_id TEXT NOT NULL,
-        model TEXT,
-        status TEXT,
-        input_tokens BIGINT NOT NULL DEFAULT 0,
-        output_tokens BIGINT NOT NULL DEFAULT 0,
-        thoughts_tokens BIGINT NOT NULL DEFAULT 0,
-        cached_tokens BIGINT NOT NULL DEFAULT 0,
-        total_tokens BIGINT NOT NULL DEFAULT 0,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE (source, interaction_id)
-      );
-      CREATE INDEX IF NOT EXISTS ai_usage_events_company_created_idx
-        ON ai_usage_events (company_id, created_at DESC);
-    `).then(() => undefined)
+    // Schema belongs to schema.zmodel; request handlers only verify readiness.
+    tableReady = pool.query('SELECT id FROM ai_usage_events LIMIT 0').then(() => undefined).catch(error => {
+      tableReady = null
+      if (error?.code === '42P01') throw createError({ statusCode: 503, statusMessage: 'AI usage needs database setup before it can be used' })
+      throw error
+    })
   }
   return tableReady
 }

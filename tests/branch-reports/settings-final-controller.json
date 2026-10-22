@@ -1,0 +1,20 @@
+{
+  "startedAt": "2026-10-21T07:29:44.509Z",
+  "phase": "complete",
+  "bundleFingerprint": "9b9eae8be7489e1745d363448ed0139489f8714e9be275a616bbf124ebaf1dea",
+  "baselineBundleFingerprint": "393506d71ac9517c6ee151660c6c8a0bd36518f4e260254cb2065a3a7db50d26",
+  "changedSources": [
+    "package.json",
+    "pages/settings/index.vue",
+    "pages/settings/store.vue"
+  ],
+  "otherRuntimeSourcesUnchanged": true,
+  "exitCode": 1,
+  "externalMapsBlockedPages": 2,
+  "pageSummary": {
+    "passed": 6,
+    "failed": 2
+  },
+  "settingsFailureFormsPassed": 4,
+  "finishedAt": "2026-10-21T07:39:55.405Z"
+}

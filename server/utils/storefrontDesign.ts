@@ -1,39 +1,7 @@
+import { createTableReadinessCheck } from '~/server/utils/schemaReadiness'
 import { pool } from '~/server/db'
 
-let tableReady: Promise<void> | null = null
-
-export function ensureStorefrontDesignTable() {
-  if (!tableReady) {
-    tableReady = pool.query(`
-      CREATE TABLE IF NOT EXISTS storefront_design_profiles (
-        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        company_id TEXT NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
-        status TEXT NOT NULL DEFAULT 'NOT_CONFIGURED',
-        company_description TEXT,
-        design_direction TEXT,
-        figma_url TEXT,
-        asset_notes TEXT,
-        notes TEXT,
-        model TEXT,
-        conversation_id TEXT,
-        error_message TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        CONSTRAINT storefront_design_profiles_status_check
-          CHECK (status IN ('NOT_CONFIGURED','GENERATING','READY','FAILED','SKIPPED'))
-      );
-    `)
-      // SKIPPED was added after the table shipped, and CREATE TABLE IF NOT EXISTS
-      // leaves an existing constraint untouched - so restate it every boot.
-      .then(() => pool.query(`
-        ALTER TABLE storefront_design_profiles DROP CONSTRAINT IF EXISTS storefront_design_profiles_status_check;
-        ALTER TABLE storefront_design_profiles ADD CONSTRAINT storefront_design_profiles_status_check
-          CHECK (status IN ('NOT_CONFIGURED','GENERATING','READY','FAILED','SKIPPED'));
-      `))
-      .then(() => undefined).catch((error) => { tableReady = null; throw error })
-  }
-  return tableReady
-}
+export const ensureStorefrontDesignTable = createTableReadinessCheck(['storefront_design_profiles'], 'Storefront design')
 
 export async function getStorefrontDesignProfile(companyId: string) {
   await ensureStorefrontDesignTable()

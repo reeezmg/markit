@@ -1237,6 +1237,8 @@ const generateBarcodes = (products: any[]) => {
         item.qty === 0
           ? []
           : Array.from({ length: item.qty ?? 1 }, () => ({
+              itemId: item.id,
+              companyId: useAuth().session.value?.companyId,
               barcode: item.barcode ?? '',
               code: variant.code ?? '',
               shopname: useAuth().session.value?.companyName,
@@ -1548,7 +1550,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
 
 <template>
     <UDashboardPanelContent>
-      <CompanyFormField />
+      <CompanyFormField toolbar />
           <AddProductTopBar
             ref="addProductTopBarRef"
             @update="handleDistributorValue"

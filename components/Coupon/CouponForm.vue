@@ -3,6 +3,7 @@ import { useFindManyCoupon, useCreateCoupon, useUpdateCoupon } from '~/lib/hooks
 import type { Prisma } from '@prisma/client'
 
 const props = defineProps({
+    saving: { type: Boolean, default: false },
     coupon: {
         type: Object,
         required: false
@@ -10,10 +11,12 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['save', 'cancel']);
+const companyScope = useCompanyScope('form');
+await companyScope.beginForm(props.coupon ? { model: 'Coupon', id: props.coupon.id, companyId: props.coupon.companyId } : null);
 const toast = useToast();
 const createCoupon = useCreateCoupon({ optimisticUpdate: true });
 const updateCoupon = useUpdateCoupon({ optimisticUpdate: true });
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 
 const isActiveOptions = [
     { label: 'Active', value: true },
@@ -159,7 +162,7 @@ const saveForm = async () => {
 
     };
 
-    emit('save', couponData);
+    emit('save', { ...couponData, companyId: companyScope.companyId.value });
 };
 
 // Watch for type changes to reset max discount for flat coupons
@@ -182,6 +185,7 @@ const showGenerateField = computed(() => form.value.audienceType.value === 'GENE
 
 <template>
   <UCard class="p-6">
+   <CompanyFormField :locked="!!coupon" />
    <UForm :state="form" @submit="saveForm">
   <div class="grid grid-cols-2 gap-4">
 
@@ -297,8 +301,8 @@ const showGenerateField = computed(() => form.value.audienceType.value === 'GENE
 
   <!-- ✅ Buttons -->
   <div class="flex justify-end mt-6">
-    <UButton color="gray" variant="solid" @click="emit('cancel')">Cancel</UButton>
-    <UButton color="primary" variant="solid" class="ml-3" type="submit">
+    <UButton color="gray" variant="solid" :disabled="saving" @click="emit('cancel')">Cancel</UButton>
+    <UButton color="primary" variant="solid" class="ml-3" type="submit" :loading="saving" :disabled="saving">
       {{ coupon ? 'Update' : 'Create' }} Coupon
     </UButton>
   </div>

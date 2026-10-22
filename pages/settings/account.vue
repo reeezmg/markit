@@ -1,8 +1,10 @@
 <script setup lang="ts">
+const settingsCompany = await useSettingsCompany();
+const $fetch = settingsCompany.fetch;
 import { accountDefaultGroups, acceptsDefaultAccount } from '~/utils/account-defaults';
 definePageMeta({ auth: true });
 const api = useAccountantApi(), toast = useToast();
-const auth = useNuxtApp().$auth;
+const auth = settingsCompany.auth;
 const selectedAccounts = useSelectedAccounts();
 const allowed = computed(() => ['admin', 'manager', 'accountant'].includes(auth.session.value?.role || ''));
 const canManageProfit = computed(() => ['admin', 'manager'].includes(auth.session.value?.role || ''));
@@ -48,6 +50,8 @@ async function load() {
   finally { if (version === generation) loading.value = false; }
 }
 async function saveMapping(group: typeof groups[number], enable = false) {
+  if (busy.value) return;
+  error.value = '';
   const owner = api.companyId.value, edited = { ...state(group.owner).mappings };
   busy.value = group.key;
   try {
@@ -88,6 +92,8 @@ async function saveDefaults(key: string) {
   finally { busy.value = ''; }
 }
 async function saveEcommerce(enable = false) {
+  if (busy.value) return;
+  error.value = '';
   busy.value = 'ecommerce';
   try {
     const owner=api.companyId.value;
@@ -144,7 +150,7 @@ const onlineLabels: Record<string,string> = { codClearing: 'COD held by couriers
         <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3"><UFormGroup v-for="(spec, role) in ecommerce.roles" :key="role" :label="onlineLabels[String(role)] || String(role)"><USelect v-model="ecommerce.mappings[role]" :options="options((spec as any).type)" :disabled="!!busy" /></UFormGroup></div>
         <UButton class="mt-4" :loading="busy === 'ecommerce'" :disabled="!!busy" @click="saveEcommerce(!ecommerce.enabled)">{{ ecommerce.enabled ? 'Save online sales accounts' : 'Save & connect new online activity' }}</UButton>
       </UCard>
-      <UButton to="/accountant/chart-of-accounts" variant="outline">Manage chart of accounts</UButton>
+      <UButton :to="{ path: '/accountant/chart-of-accounts', query: { entryCompany: settingsCompany.scope.companyId.value } }" variant="outline">Manage chart of accounts</UButton>
     </template>
   </UDashboardPanelContent>
 </template>

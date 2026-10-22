@@ -1,17 +1,18 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { createError, type H3Event } from 'h3'
 
 /**
  * Forward seller shipping requests to the private FastAPI service in storetools.
  *
- * companyId is taken from the authenticated seller session (never trusted from
- * the client), and the shared X-Service-Token is injected server-side so it is
+ * companyId is resolved through authorized request scope, and the shared
+ * X-Service-Token is injected server-side so it is
  * never exposed to the browser. Carrier operations live under storetools/server/shipping_service.
  */
 export async function shippingProxy(
   event: H3Event,
   opts: { method: 'GET' | 'POST'; path: string; query?: Record<string, any>; body?: any },
 ) {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
@@ -46,7 +47,7 @@ export async function shippingProxyBinary(
   event: H3Event,
   opts: { method: 'GET' | 'POST'; path: string; query?: Record<string, any>; body?: any },
 ): Promise<{ body: Buffer; contentType: string }> {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 

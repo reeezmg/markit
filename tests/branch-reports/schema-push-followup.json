@@ -1,0 +1,26 @@
+{
+  "finishedAt": "2026-10-21T06:48:48.282Z",
+  "command": "npx prisma db push --skip-generate --schema prisma/schema.prisma",
+  "schemaHash": "a6c564b0d91483cb834e309e39bfce5f5cbb97e63a57372b51ab1ccdfb2f8aff",
+  "prismaHash": "906fb6aefed3ca0e7f0626f9e067efc6a004626ca2597d5cc20cb376bc84e560",
+  "exitCode": 0,
+  "existingRowsUnchanged": true,
+  "backedUpTables": [
+    "accountant_v2_distributor_mappings",
+    "accountant_v2_distributor_settings",
+    "accountant_v2_distributor_sources",
+    "accountant_v2_erp_settings",
+    "accountant_v2_erp_sources",
+    "accountant_v2_investor_events",
+    "accountant_v2_investor_terms",
+    "accountant_v2_investors",
+    "accountant_v2_manual_journal_lines",
+    "accountant_v2_stock_control",
+    "accountant_v2_user_settings",
+    "accountant_v2_user_sources",
+    "expenses",
+    "distributor_payment_allocations"
+  ],
+  "handwrittenSchemaSqlExecuted": false,
+  "acceptedDataLoss": false
+}

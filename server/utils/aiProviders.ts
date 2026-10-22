@@ -24,27 +24,10 @@ let tableReady: Promise<void> | null = null
 
 export function ensureAiProvidersTable() {
   if (!tableReady) {
-    tableReady = pool.query(`
-      CREATE TABLE IF NOT EXISTS ai_provider_credentials (
-        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-        name TEXT NOT NULL,
-        provider TEXT NOT NULL,
-        base_url TEXT NOT NULL,
-        model_id TEXT NOT NULL,
-        encrypted_api_key TEXT NOT NULL,
-        supports_images BOOLEAN NOT NULL DEFAULT FALSE,
-        enabled BOOLEAN NOT NULL DEFAULT TRUE,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        CONSTRAINT ai_provider_credentials_provider_check
-          CHECK (provider IN ('openai', 'openrouter', 'gemini', 'custom')),
-        UNIQUE (company_id, name)
-      );
-      CREATE INDEX IF NOT EXISTS ai_provider_credentials_company_idx
-        ON ai_provider_credentials (company_id, updated_at DESC);
-    `).then(() => undefined).catch((error) => {
+    // Schema belongs to schema.zmodel; request handlers only verify readiness.
+    tableReady = pool.query('SELECT id FROM ai_provider_credentials LIMIT 0').then(() => undefined).catch((error) => {
       tableReady = null
+      if (error?.code === '42P01') throw createError({ statusCode: 503, statusMessage: 'AI provider settings need database setup before they can be used' })
       throw error
     })
   }

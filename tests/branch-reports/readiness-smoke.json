@@ -1,0 +1,711 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 19680,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/products/collections/edit/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/users/salary/cycle/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/accounts/bank/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/statement/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/investments/investors/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/erp/online/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/order/ready?id=:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/products/edit/:record",
+      "status": "passed",
+      "landed": "/products/edit/:record",
+      "expectedPath": "/products/edit/:record",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 22909,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/saleshistory",
+      "status": "failed",
+      "landed": "/saleshistory",
+      "expectedPath": "/saleshistory",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 11073,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/Bb6tW3bE.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/offline",
+      "status": "passed",
+      "landed": "/erp/billing",
+      "expectedPath": "/erp/billing",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 13624,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/users/attendance",
+      "status": "passed",
+      "landed": "/users/attendance",
+      "expectedPath": "/users/attendance",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 10613,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/users/holidays",
+      "status": "passed",
+      "landed": "/users/holidays",
+      "expectedPath": "/users/holidays",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 7941,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/users/salary",
+      "status": "failed",
+      "landed": "/users/salary",
+      "expectedPath": "/users/salary",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "children",
+          "nodeTags": [
+            "select"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 7309,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/Bb6tW3bE.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/accounts/bank",
+      "status": "passed",
+      "landed": "/accounts/bank",
+      "expectedPath": "/accounts/bank",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5533,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products/stocks",
+      "status": "passed",
+      "landed": "/products/stocks",
+      "expectedPath": "/products/stocks",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 11948,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/order/pickup",
+      "status": "passed",
+      "landed": "/order/pickup",
+      "expectedPath": "/order/pickup",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5259,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/settings/printer",
+      "status": "passed",
+      "landed": "/settings/printer",
+      "expectedPath": "/settings/printer",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 7691,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accountant/preferences",
+      "status": "passed",
+      "landed": "/accountant/preferences",
+      "expectedPath": "/accountant/preferences",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 7295,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/settings/account",
+      "status": "passed",
+      "landed": "/settings/account",
+      "expectedPath": "/settings/account",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 9958,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/products/edit/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/products/collections/edit/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/distributor/edit-purchase-return/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/users/salary/cycle/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/accounts/bank/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/statement/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/accountant/manual-journals/:id/edit",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/investments/investors/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/erp/online/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/order/ready?id=:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/order/pack?id=:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "branch",
+      "route": "/saleshistory",
+      "status": "failed",
+      "landed": "/saleshistory",
+      "expectedPath": "/saleshistory",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 3673,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/Bb6tW3bE.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        }
+      ]
+    },
+    {
+      "company": "branch",
+      "route": "/offline",
+      "status": "passed",
+      "landed": "/erp/billing",
+      "expectedPath": "/erp/billing",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5949,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/users/attendance",
+      "status": "passed",
+      "landed": "/users/attendance",
+      "expectedPath": "/users/attendance",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 6514,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/users/holidays",
+      "status": "passed",
+      "landed": "/users/holidays",
+      "expectedPath": "/users/holidays",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4688,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/users/salary",
+      "status": "passed",
+      "landed": "/users/salary",
+      "expectedPath": "/users/salary",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5840,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/accounts/bank",
+      "status": "passed",
+      "landed": "/accounts/bank",
+      "expectedPath": "/accounts/bank",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3062,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/products/stocks",
+      "status": "passed",
+      "landed": "/products/stocks",
+      "expectedPath": "/products/stocks",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5013,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/order/pickup",
+      "status": "passed",
+      "landed": "/order/pickup",
+      "expectedPath": "/order/pickup",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3250,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/settings/printer",
+      "status": "passed",
+      "landed": "/settings/printer",
+      "expectedPath": "/settings/printer",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3571,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/accountant/preferences",
+      "status": "passed",
+      "landed": "/accountant/preferences",
+      "expectedPath": "/accountant/preferences",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5742,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/settings/account",
+      "status": "passed",
+      "landed": "/settings/account",
+      "expectedPath": "/settings/account",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 6565,
+      "errors": []
+    }
+  ],
+  "switches": [
+    {
+      "direction": "head-to-branch",
+      "status": 200,
+      "persisted": true
+    },
+    {
+      "direction": "branch-to-head",
+      "status": 200,
+      "persisted": true
+    }
+  ],
+  "errors": [],
+  "startedAt": "2026-10-21T00:50:43.182Z",
+  "bundleFingerprint": "c8af8af050b1bce13194e1cfbd4cc6ca533be54e5b75ec52251a4400f2b6831d",
+  "serverProcessId": 16964,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [],
+  "currentPage": {
+    "company": "branch",
+    "route": "/settings/account",
+    "startedAt": "2026-10-21T00:54:37.575Z"
+  },
+  "interactions": [
+    {
+      "company": "head",
+      "route": "/users/attendance",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    },
+    {
+      "company": "head",
+      "route": "/users/holidays",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    },
+    {
+      "company": "head",
+      "route": "/products/stocks",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    }
+  ],
+  "pageSummary": {
+    "no-existing-record": 18,
+    "passed": 20,
+    "failed": 3
+  },
+  "formSummary": {},
+  "interactionSummary": {
+    "passed": 3
+  },
+  "pageAuditStatus": "failed",
+  "finishedAt": "2026-10-21T00:54:47.914Z"
+}

@@ -1,0 +1,413 @@
+{
+  "scope": "actual branch creation handler; browser login is outside this test",
+  "prefix": "BRANCH_E2E_CREATE_8b69ab99-c694-4fb8-84f8-193ae1602f9c",
+  "existingRecords": [],
+  "steps": [
+    "blank branch name rejected before writing",
+    "branch cannot create a nested branch",
+    "head office creates branch with address, settings, pipeline and admin membership",
+    "Purchase category and branch-owned cash/bank/default account mappings are initialized"
+  ],
+  "startedAt": "2026-10-20T16:57:35.874Z",
+  "cleanup": "verified rollback: no run-owned company, membership, expense category or accounts remain",
+  "durationMs": 6251,
+  "snapshot": {
+    "company": {
+      "id": "e425ff49-03a8-4647-816d-14aed407425c",
+      "name": "BRANCH_E2E_CREATE_8b69ab99-c694-4fb8-84f8-193ae1602f9c",
+      "isHeadOffice": false,
+      "parentCompanyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "storecode": 59,
+      "storeUniqueName": "BRANCH_E2E_CREATE_8b69ab99-c694-4fb8-84f8-193ae1602f9c59",
+      "logo": null,
+      "darkstore": false,
+      "description": "",
+      "thankYouNote": "",
+      "refundPolicy": "",
+      "returnPolicy": "",
+      "phone": null,
+      "email": "",
+      "instagramUrl": "",
+      "facebookUrl": "",
+      "youtubeUrl": "",
+      "xUrl": "",
+      "linkedinUrl": "",
+      "currency": "INR",
+      "images": null,
+      "pointsValue": 0,
+      "billCounter": 1,
+      "purchaseCounter": 1,
+      "returnCounter": 1,
+      "quoteCounter": 1,
+      "salesOrderCounter": 1,
+      "invoiceCounter": 1,
+      "paymentCounter": 1,
+      "userCodeCounter": 1,
+      "closingDate": null,
+      "billPrefix": "",
+      "quotePrefix": "QT",
+      "salesOrderPrefix": "SO",
+      "invoicePrefix": "INV",
+      "paymentPrefix": "",
+      "expenseCounter": 1,
+      "expensePrefix": "EXP",
+      "distributorCounter": 1,
+      "distributorPrefix": "DIST",
+      "distributorPaymentCounter": 1,
+      "distributorPaymentPrefix": "DP",
+      "distributorCreditCounter": 1,
+      "distributorCreditPrefix": "DC",
+      "clientCounter": 1,
+      "clientPrefix": "CL",
+      "userPrefix": "",
+      "accountCounter": 1,
+      "accountPrefix": "ACC",
+      "isTaxIncluded": true,
+      "isCostIncluded": true,
+      "isUserTrackIncluded": true,
+      "isAiImage": true,
+      "deliveryType": [],
+      "deliveryMode": [],
+      "deliveryRadius": null,
+      "deliveryDiscount": 0,
+      "codCharge": 0,
+      "operationFeesShare": 0,
+      "cash": 0,
+      "openingCashDate": null,
+      "bank": 0,
+      "openingBankDate": null,
+      "plan": "pro",
+      "openTime": "9:30",
+      "closeTime": "9:30",
+      "category": [],
+      "status": true,
+      "type": "buyer",
+      "accHolderName": null,
+      "ifsc": null,
+      "accountNo": null,
+      "bankName": null,
+      "gstin": null,
+      "upiId": null,
+      "printerLabelSize": null,
+      "barcodeCounter": 1,
+      "commissionRate": null,
+      "address": {
+        "id": "f08e3958-1677-45d2-8f83-28358eb6d17a",
+        "createdAt": "2026-10-20T16:57:46.830Z",
+        "updatedAt": "2026-10-20T16:57:46.830Z",
+        "name": null,
+        "firstName": null,
+        "lastName": null,
+        "phoneNo": null,
+        "street": null,
+        "locality": null,
+        "landmark": null,
+        "city": "E2E test city",
+        "state": "E2E test state",
+        "pincode": null,
+        "houseDetails": null,
+        "type": null,
+        "formattedAddress": null,
+        "placeId": null,
+        "lat": null,
+        "lng": null,
+        "active": true,
+        "userId": null,
+        "clientId": null,
+        "distributorId": null,
+        "companyId": "e425ff49-03a8-4647-816d-14aed407425c",
+        "accountId": null,
+        "deliveryPartnerId": null
+      },
+      "productinput": {
+        "id": "9728d400-5498-4ffe-893d-ef823e0cd2c0",
+        "name": true,
+        "brand": true,
+        "category": true,
+        "subcategory": true,
+        "description": true,
+        "dimension": false,
+        "companyId": "e425ff49-03a8-4647-816d-14aed407425c"
+      },
+      "variantinput": {
+        "id": "769feeef-5773-4fa5-950c-9fca216f424b",
+        "name": true,
+        "code": true,
+        "sprice": true,
+        "pprice": true,
+        "dprice": true,
+        "discount": true,
+        "qty": true,
+        "unit": [
+          "Nos"
+        ],
+        "sizes": true,
+        "sizeLabels": [
+          "Size"
+        ],
+        "sizeDimension": false,
+        "images": true,
+        "button": true,
+        "companyId": "e425ff49-03a8-4647-816d-14aed407425c"
+      },
+      "pipeline": {
+        "id": "f81e61f9-cd67-4de2-8c03-7eb86e87cb87",
+        "companyId": "e425ff49-03a8-4647-816d-14aed407425c",
+        "newClients": [],
+        "prospectClients": [],
+        "viewingClients": [],
+        "rejectClients": [],
+        "closeClients": []
+      }
+    },
+    "membership": {
+      "role": "admin",
+      "status": true,
+      "deleted": false
+    },
+    "accounts": [
+      {
+        "id": "c6bca1a8839839f7ad77953f2",
+        "code": "1100",
+        "account_type": "ACCOUNTS_RECEIVABLE"
+      },
+      {
+        "id": "c38f7e203776a2f99d40cb9ff",
+        "code": "1001",
+        "account_type": "CASH"
+      },
+      {
+        "id": "c4ba5962fccab20d8e757f404",
+        "code": "1010",
+        "account_type": "CASH"
+      },
+      {
+        "id": "c7fd6c95f60cae0ebe6b83b87",
+        "code": "1190",
+        "account_type": "PAYMENT_CLEARING_ACCOUNT"
+      },
+      {
+        "id": "c0903ce4e616b62cf8f046d5f",
+        "code": "1200",
+        "account_type": "STOCK"
+      },
+      {
+        "id": "ce08a1f467634a879389ab79c",
+        "code": "1210",
+        "account_type": "OTHER_CURRENT_ASSET"
+      },
+      {
+        "id": "c5d31fb5a771820793340f6b8",
+        "code": "2100",
+        "account_type": "ACCOUNTS_PAYABLE"
+      },
+      {
+        "id": "cf180371589c23bf2f70edb5e",
+        "code": "2200",
+        "account_type": "OTHER_CURRENT_LIABILITY"
+      },
+      {
+        "id": "c904bfdc9bd90bafa7ca2e13b",
+        "code": "2210",
+        "account_type": "OTHER_CURRENT_LIABILITY"
+      },
+      {
+        "id": "ce4e24c06af2cc4a150a1e02e",
+        "code": "2220",
+        "account_type": "OTHER_CURRENT_LIABILITY"
+      },
+      {
+        "id": "c926534525f27ee08b17dc468",
+        "code": "2230",
+        "account_type": "OTHER_CURRENT_LIABILITY"
+      },
+      {
+        "id": "cebcff5918f35b8012718b67f",
+        "code": "3000",
+        "account_type": "EQUITY"
+      },
+      {
+        "id": "c0aa5a1e81715d493e9452f6e",
+        "code": "4000",
+        "account_type": "INCOME"
+      },
+      {
+        "id": "c9199c3061226ae441eb97002",
+        "code": "4010",
+        "account_type": "EXPENSE"
+      },
+      {
+        "id": "c428265ba0784e0fd0fdb3e9e",
+        "code": "2240",
+        "account_type": "OTHER_CURRENT_LIABILITY"
+      },
+      {
+        "id": "cbb320b99e34a15dd3243108a",
+        "code": "1250",
+        "account_type": "OTHER_CURRENT_ASSET"
+      },
+      {
+        "id": "c1130f55a27c52ce63c1b76ba",
+        "code": "5000",
+        "account_type": "EXPENSE"
+      },
+      {
+        "id": "c025544950c3a54f766867015",
+        "code": "5100",
+        "account_type": "COST_OF_GOODS_SOLD"
+      },
+      {
+        "id": "c024186538703dcb793f8a518",
+        "code": "PRIMARY-BANK",
+        "account_type": "BANK"
+      },
+      {
+        "id": "c50374434b941f9c4df6ac02a",
+        "code": "2250",
+        "account_type": "OTHER_CURRENT_LIABILITY"
+      },
+      {
+        "id": "c8aa5dc6d3e7011f1eb960280",
+        "code": "5200",
+        "account_type": "EXPENSE"
+      },
+      {
+        "id": "c591132e86104bd1f3abd0096",
+        "code": "2260",
+        "account_type": "OTHER_CURRENT_LIABILITY"
+      },
+      {
+        "id": "c94bdd9503226737c06422023",
+        "code": "INV-PROFIT-PAYABLE",
+        "account_type": "OTHER_CURRENT_LIABILITY"
+      },
+      {
+        "id": "c119f31ecff53e302cbf39b84",
+        "code": "INV-LOANS-PAYABLE",
+        "account_type": "OTHER_LIABILITY"
+      },
+      {
+        "id": "c8d42bb7e6d655a5570f244a6",
+        "code": "INV-DISTRIBUTION",
+        "account_type": "EQUITY"
+      },
+      {
+        "id": "cefe140c6c7c3d31b3f5488f8",
+        "code": "MONEY-CLEARING",
+        "account_type": "EQUITY"
+      },
+      {
+        "id": "c543bc07248da97fc95dd2976",
+        "code": "FA-ASSETS",
+        "account_type": "FIXED_ASSET"
+      },
+      {
+        "id": "ca87c63ca142fd9514854b23e",
+        "code": "FA-ACCUM-DEP",
+        "account_type": "FIXED_ASSET"
+      },
+      {
+        "id": "c9aaa1de577d89137328b8daf",
+        "code": "FA-DEP-EXPENSE",
+        "account_type": "EXPENSE"
+      },
+      {
+        "id": "cb2483f802f659f1000d15a07",
+        "code": "FA-DISPOSAL",
+        "account_type": "OTHER_EXPENSE"
+      },
+      {
+        "id": "c66e1f499d74b44fc49551a5e",
+        "code": "EC-COD",
+        "account_type": "PAYMENT_CLEARING_ACCOUNT"
+      },
+      {
+        "id": "cd2368ff95b40380dfc19f59c",
+        "code": "EC-GATEWAY",
+        "account_type": "PAYMENT_CLEARING_ACCOUNT"
+      },
+      {
+        "id": "c1baf148b58435eda56c27734",
+        "code": "EC-DELIVERY",
+        "account_type": "INCOME"
+      },
+      {
+        "id": "c12125130d7956192b464d30a",
+        "code": "EC-COD-INCOME",
+        "account_type": "INCOME"
+      },
+      {
+        "id": "c3d2f1bed2e3b812e88def925",
+        "code": "EC-REFUNDS",
+        "account_type": "OTHER_CURRENT_LIABILITY"
+      },
+      {
+        "id": "cba01a28baf8a3c80f838f65e",
+        "code": "EC-SHIPPING",
+        "account_type": "EXPENSE"
+      },
+      {
+        "id": "c492e566df07a013027ea5e03",
+        "code": "EC-GATEWAY-FEE",
+        "account_type": "EXPENSE"
+      },
+      {
+        "id": "c6fadad7f1876de8f931b8c56",
+        "code": "EC-LOYALTY",
+        "account_type": "EXPENSE"
+      }
+    ],
+    "settings": [
+      {
+        "kind": "erp",
+        "accounts": {
+          "bank": "c024186538703dcb793f8a518",
+          "cash": "c38f7e203776a2f99d40cb9ff",
+          "cogs": "c025544950c3a54f766867015",
+          "sales": "c0aa5a1e81715d493e9452f6e",
+          "stock": "c0903ce4e616b62cf8f046d5f",
+          "expense": "c1130f55a27c52ce63c1b76ba",
+          "inputTax": "ce08a1f467634a879389ab79c",
+          "outputTax": "c428265ba0784e0fd0fdb3e9e",
+          "receivable": "c6bca1a8839839f7ad77953f2",
+          "expensePayable": "c50374434b941f9c4df6ac02a"
+        }
+      },
+      {
+        "kind": "staff",
+        "accounts": {
+          "bank": "c024186538703dcb793f8a518",
+          "cash": "c38f7e203776a2f99d40cb9ff",
+          "opening": "ce4e24c06af2cc4a150a1e02e",
+          "receivable": "c6bca1a8839839f7ad77953f2",
+          "salaryExpense": "c8aa5dc6d3e7011f1eb960280",
+          "salaryPayable": "c591132e86104bd1f3abd0096"
+        }
+      },
+      {
+        "kind": "ecommerce",
+        "accounts": {
+          "bank": "c024186538703dcb793f8a518",
+          "cash": "c38f7e203776a2f99d40cb9ff",
+          "cogs": "c025544950c3a54f766867015",
+          "sales": "c0aa5a1e81715d493e9452f6e",
+          "stock": "c0903ce4e616b62cf8f046d5f",
+          "inputTax": "ce08a1f467634a879389ab79c",
+          "codIncome": "c12125130d7956192b464d30a",
+          "outputTax": "c428265ba0784e0fd0fdb3e9e",
+          "receivable": "c6bca1a8839839f7ad77953f2",
+          "codClearing": "c66e1f499d74b44fc49551a5e",
+          "refundPayable": "c3d2f1bed2e3b812e88def925",
+          "deliveryIncome": "c1baf148b58435eda56c27734",
+          "expensePayable": "c50374434b941f9c4df6ac02a",
+          "gatewayExpense": "c492e566df07a013027ea5e03",
+          "loyaltyExpense": "c6fadad7f1876de8f931b8c56",
+          "gatewayClearing": "cd2368ff95b40380dfc19f59c",
+          "shippingExpense": "cba01a28baf8a3c80f838f65e"
+        }
+      }
+    ]
+  },
+  "status": "passed",
+  "finishedAt": "2026-10-20T16:57:55.215Z"
+}

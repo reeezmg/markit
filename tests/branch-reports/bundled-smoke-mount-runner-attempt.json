@@ -1,0 +1,137 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 14652,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/notifications",
+      "status": "failed",
+      "durationMs": 109097,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BkPP0sIc.js",
+          "line": 16
+        },
+        {
+          "kind": "browser",
+          "detail": "Audit stopped by control request"
+        }
+      ],
+      "hydrationWarnings": [
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        }
+      ]
+    }
+  ],
+  "switches": [],
+  "errors": [
+    "Audit stopped by control request"
+  ],
+  "startedAt": "2026-10-20T18:54:54.393Z",
+  "bundleFingerprint": "d3ac5c3359d198a8c9db9ba126a3d50c134aeec76d06dfd83ab0f28677e535c4",
+  "serverProcessId": 7756,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [],
+  "currentPage": {
+    "company": "head",
+    "route": "/notifications",
+    "startedAt": "2026-10-20T18:56:06.068Z"
+  },
+  "recoveries": [
+    {
+      "company": "head",
+      "route": "/notifications",
+      "time": "2026-10-20T18:57:55.193Z"
+    }
+  ]
+}

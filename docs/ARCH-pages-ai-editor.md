@@ -8,7 +8,13 @@ Company AI provider configuration. Lists providers and allows add, edit and dele
 
 AI consumption dashboard from `/api/ai/usage`. Choose 7, 30, 90 days or all time; inspect total/input/output tokens, billed cost, daily usage and recent runs. The page includes a warning when token rates are not configured, so cost figures should not be treated as authoritative in that state.
 
+Provider and usage readiness checks only select from the existing tables with `LIMIT 0`. Their definitions belong to `schema.zmodel`; page requests do not create tables or indexes. A missing table returns 503, and failed readiness checks can retry after setup is restored.
+
+The AI Usage endpoint also depends on storefront agent sessions for chat titles. Agent-session, source, design-profile and page readiness helpers use the shared SELECT-only table check in `schemaReadiness.ts`, rather than runtime CREATE/ALTER/index/constraint changes. This covers the transitive dependency that previously made the usage GET fail on a read-only connection. Cloud source/deployment workflows remain separate from readiness checks.
+
 ### `pages/statement/[id].vue`
+
+Statement review resolves `StatementBatch` ownership through `/api/organization/context` before loading bank choices or actions. Its Company / branch field is locked to the saved statement's owner. All statement bank/classification/execution routes resolve authorized request scope; head-office users can work on a branch statement while their login remains in head office. Moving a statement to another company is not offered.
 
 Bank-statement review and execution page for a particular statement ID. Staff inspect extracted rows, assign or auto-find matching operations, review classification, and execute an individual row or the batch through the `/api/statement/find-operation`, `/api/statement/execute-row` and `/api/statement/execute` flows. Extraction and assignment do not by themselves post money movements; execution is the state-changing step. The statement-processing architecture and matching rules are in `ARCH-ai-chat.md`.
 

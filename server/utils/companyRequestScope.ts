@@ -3,6 +3,7 @@ import { prisma } from '~/server/prisma';
 import { getAllStoreIds, getHeadOfficeAdmin } from './organizationAccess';
 import { normalizeBillingUnits } from '~/utils/billing-units';
 import { normalizeSizeLabels } from '~/utils/size-labels';
+import { loadSelectedAccounts } from './selected-accounts';
 
 /** Authorization always starts from the authenticated company, never from a form selection. */
 export async function authorizedCompanyIds(event: H3Event): Promise<string[]> {
@@ -40,6 +41,7 @@ export async function companySettings(companyId: string) {
     'openingCashDate', 'openingBankDate'];
   return { ...Object.fromEntries(keys.map(key => [key, (fields as any)[key]])),
     companyId: id, companyName: name, companyType: type, companyPhone: phone,
+    selectedAccounts: await loadSelectedAccounts(id),
     address, pipelineId: pipeline?.id, purchaseExpenseCategoryId: purchase?.id,
     productInputs: productinput ? { name: productinput.name, brand: productinput.brand,
       category: productinput.category, subcategory: productinput.subcategory, description: productinput.description } : undefined,
@@ -62,7 +64,8 @@ export async function useCompanyRequestSession(event: H3Event) {
     companyId = record.companyId;
   }
   await assertCompanyAccess(event, companyId);
-  if (companyId === session.data.companyId) return session;
+  // Another authorized administrator may have edited this company since login.
+  // Read current settings for active-company requests too; never rewrite its cookie.
   const settings = await companySettings(companyId);
   return { ...session, data: { ...session.data, ...settings } } as typeof session;
 }

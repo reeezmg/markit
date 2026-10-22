@@ -1,4 +1,7 @@
 <script setup lang="ts">
+const settingsCompany = await useSettingsCompany();
+const $fetch = settingsCompany.fetch;
+const { updateSession } = settingsCompany;
 import { v4 as uuidv4 } from 'uuid'
 import { useUpdateCompany } from '~/lib/hooks/company';
 
@@ -9,7 +12,7 @@ import type { ProductCustomFieldDef, ProductCustomFieldScope } from '~/composabl
 definePageMeta({ auth: true })
 
 const toast = useToast()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => settingsCompany.auth;
 const UpdateCompany = useUpdateCompany({ optimisticUpdate: true })
 const { refresh: refreshCustomFields } = useProductCustomFields()
 
@@ -19,7 +22,6 @@ const { refresh: refreshCustomFields } = useProductCustomFields()
    Settings → Store so everything product-form related is in one place.
    ============================================================ */
 
-const isInputsChanged = ref(false)
 const isUpdatingInputs = ref(false)
 
 const productInputs = reactive([
@@ -43,9 +45,8 @@ const variantInputs = reactive([
   { key: 'button', label: 'Button', value: useAuth().session.value?.variantInputs?.button },
 ])
 
-// Dimension input toggles (product-level + size-level). Persisted via the raw
-// /api/product-inputs endpoint (product_inputs.dimension / variant_inputs.sizeDimension),
-// independent of the ZenStack company update below.
+// Dimension input toggles are read from their existing rows and saved together
+// with built-in fields through the nested company mutation below.
 const productDimensionFlag = ref(false)
 const sizeDimensionFlag = ref(false)
 const savedProductDimensionFlag = ref(false)
@@ -58,12 +59,6 @@ async function loadDimensionFlags() {
   } catch { /* ignore */ }
 }
 onMounted(loadDimensionFlags)
-watch([productDimensionFlag, sizeDimensionFlag], () => {
-  if (productDimensionFlag.value !== savedProductDimensionFlag.value ||
-      sizeDimensionFlag.value !== savedSizeDimensionFlag.value) {
-    isInputsChanged.value = true
-  }
-})
 
 const selectedBillingUnits = ref<string[]>(
   normalizeBillingUnits(useAuth().session.value?.variantInputs?.unit)
@@ -102,58 +97,39 @@ const onSizeLabelsChange = (labels: string[] | string | null | undefined) => {
   selectedSizeLabels.value = normalizeSizeLabels(labels)
 }
 
-watch(productInputs, (newInputs) => {
-  isInputsChanged.value = newInputs.some(input => input.value !== useAuth().session.value?.productInputs?.[input.key])
-}, { deep: true, immediate: true })
-watch(variantInputs, (newInputs) => {
-  isInputsChanged.value = isInputsChanged.value || newInputs.some(input => input.value !== useAuth().session.value?.variantInputs?.[input.key])
-}, { deep: true, immediate: true })
-
-watch(selectedBillingUnits, (newUnits) => {
-  const currentUnits = normalizeBillingUnits(useAuth().session.value?.variantInputs?.unit)
-  isInputsChanged.value =
-    isInputsChanged.value ||
-    newUnits.length !== currentUnits.length ||
-    newUnits.some((unit) => !currentUnits.includes(unit))
-}, { deep: true, immediate: true })
-
-watch(selectedSizeLabels, (newLabels) => {
-  const currentLabels = normalizeSizeLabels(useAuth().session.value?.variantInputs?.sizeLabels)
-  isInputsChanged.value =
-    isInputsChanged.value ||
-    newLabels.length !== currentLabels.length ||
-    newLabels.some((label) => !currentLabels.includes(label))
-}, { deep: true, immediate: true })
+const isInputsChanged = computed(() =>
+  productInputs.some(input => input.value !== useAuth().session.value?.productInputs?.[input.key]) ||
+  variantInputs.some(input => input.value !== useAuth().session.value?.variantInputs?.[input.key]) ||
+  JSON.stringify(savedBillingUnits.value) !== JSON.stringify(normalizeBillingUnits(useAuth().session.value?.variantInputs?.unit)) ||
+  JSON.stringify(savedSizeLabels.value) !== JSON.stringify(normalizeSizeLabels(useAuth().session.value?.variantInputs?.sizeLabels)) ||
+  productDimensionFlag.value !== savedProductDimensionFlag.value || sizeDimensionFlag.value !== savedSizeDimensionFlag.value
+)
 
 const onInputChange = async () => {
+  if (isUpdatingInputs.value) return
   isUpdatingInputs.value = true
   try {
     if (!navigator.onLine) {
       throw createError({ statusCode: 0, statusMessage: 'No internet connection' })
     }
-    const productinputData = Object.fromEntries(productInputs.map(input => [input.key, input.value]))
+    const productinputData = { ...Object.fromEntries(productInputs.map(input => [input.key, input.value])), dimension: productDimensionFlag.value }
     const variantinputData = {
       ...Object.fromEntries(variantInputs.map(input => [input.key, input.value])),
       unit: savedBillingUnits.value,
       sizeLabels: savedSizeLabels.value,
+      sizeDimension: sizeDimensionFlag.value,
     }
 
     await UpdateCompany.mutateAsync({
       where: { id: useAuth().session.value?.companyId },
       data: {
-        productinput: { update: productinputData },
-        variantinput: { update: variantinputData },
+        productinput: { upsert: { create: productinputData, update: productinputData } },
+        variantinput: { upsert: { create: variantinputData, update: variantinputData } },
       },
     })
     await updateSession(productinputData, variantinputData)
-    // Dimension toggles are stored separately (raw endpoint) to avoid a ZenStack regen.
-    await $fetch('/api/product-inputs', {
-      method: 'POST',
-      body: { productDimension: productDimensionFlag.value, sizeDimension: sizeDimensionFlag.value },
-    })
-    savedProductDimensionFlag.value = productDimensionFlag.value
-    savedSizeDimensionFlag.value = sizeDimensionFlag.value
-    isInputsChanged.value = false
+    savedProductDimensionFlag.value = productinputData.dimension
+    savedSizeDimensionFlag.value = variantinputData.sizeDimension
     toast.add({ title: 'Product and Variant inputs updated', icon: 'i-heroicons-check-circle' })
   } catch (error: any) {
     toast.add({ title: 'Error updating Product and Variant inputs', description: error?.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' })

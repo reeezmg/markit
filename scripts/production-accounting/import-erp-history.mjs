@@ -27,6 +27,7 @@ try{
  if(apply)await db.query('LOCK TABLE bills,entries,expenses,distributor_payments,variants,account_ledger_entries IN SHARE MODE');
  const companies=(await db.query(`SELECT c.id,c.name FROM companies c JOIN accountant_v2_erp_settings s ON s.company_id=c.id AND s.enabled WHERE ($1::boolean OR c.id=ANY($2::text[])) ORDER BY c.id`,[args.includes('--all-connected'),requested])).rows;
  if(!companies.length||requested.some(id=>!companies.some(c=>c.id===id)))throw Error('Select enabled ERP companies');
+ if((await db.query("SELECT id FROM accountant_v2_accountant_audit WHERE company_id=ANY($1::text[]) AND resource='source-accounting-rebuild' AND action='rebuilt' LIMIT 1",[companies.map(c=>c.id)])).rowCount)throw Error('Source accounting has been rebuilt; do not replay archived cash-history imports');
  await db.query(readFileSync(new URL('./lib/import-erp-history.sql',import.meta.url),'utf8'));
  for(const c of companies){
   await db.query("SELECT pg_advisory_xact_lock(hashtext('accountant-v2:'||$1))",[c.id]);

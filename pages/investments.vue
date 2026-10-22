@@ -20,12 +20,9 @@ const title = computed(
 <template>
     <UDashboardPage
         ><UDashboardPanel grow>
-            <UDashboardNavbar :title="`Investments · ${title}`" />
+            <ErpPageNavbar :title="`Investments · ${title}`" />
             <template v-if="allowed">
-                <div
-                    class="border-b border-gray-200 dark:border-gray-800 px-4 py-3 sm:px-6"
-                    ><div class="max-w-sm"><CompanyFormField /></div
-                ></div>
+                <CompanyFormField toolbar />
                 <main class="flex-1 overflow-auto p-4 sm:p-6"
                     ><NuxtPage
                         :key="`${scope.companyId.value}:${route.fullPath}`"

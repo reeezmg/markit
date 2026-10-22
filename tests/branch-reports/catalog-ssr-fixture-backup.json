@@ -1,0 +1,179 @@
+{
+  "recordPrefix": "BRANCH_E2E_MVHBPCD5_",
+  "existingRecords": [],
+  "snapshots": [
+    {
+      "at": "2026-10-20T23:38:58.314Z",
+      "records": {
+        "brand": [
+          {
+            "id": "99d6ae14-0d31-4b36-bd96-32cf2c523658",
+            "createdAt": "2026-10-20T23:38:55.559Z",
+            "updatedAt": "2026-10-20T23:38:55.559Z",
+            "name": "BRANCH_E2E_MVHBPCD5_HEAD_BRAND",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "9079f06b-dda5-4900-9af3-81fa81384458"
+          }
+        ],
+        "collection": []
+      }
+    },
+    {
+      "at": "2026-10-20T23:39:26.877Z",
+      "records": {
+        "brand": [
+          {
+            "id": "99d6ae14-0d31-4b36-bd96-32cf2c523658",
+            "createdAt": "2026-10-20T23:38:55.559Z",
+            "updatedAt": "2026-10-20T23:39:22.972Z",
+            "name": "BRANCH_E2E_MVHBPCD5_HEAD_BRAND",
+            "description": "Edited and reloaded BRANCH_E2E_MVHBPCD5_HEAD_BRAND",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "9079f06b-dda5-4900-9af3-81fa81384458"
+          }
+        ],
+        "collection": []
+      }
+    },
+    {
+      "at": "2026-10-20T23:40:02.026Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "dfe372d3-9383-40c8-a6cf-f2ef54918edb",
+            "createdAt": "2026-10-20T23:40:00.207Z",
+            "updatedAt": "2026-10-20T23:40:00.207Z",
+            "name": "BRANCH_E2E_MVHBPCD5_HEAD_COLLECTION",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "writeId": "ac05c531-4f5c-450b-925f-17ba032e0c41"
+          }
+        ]
+      }
+    },
+    {
+      "at": "2026-10-20T23:40:31.703Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "dfe372d3-9383-40c8-a6cf-f2ef54918edb",
+            "createdAt": "2026-10-20T23:40:00.207Z",
+            "updatedAt": "2026-10-20T23:40:27.337Z",
+            "name": "BRANCH_E2E_MVHBPCD5_HEAD_COLLECTION",
+            "description": "Edited and reloaded BRANCH_E2E_MVHBPCD5_HEAD_COLLECTION",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "writeId": "ac05c531-4f5c-450b-925f-17ba032e0c41"
+          }
+        ]
+      }
+    },
+    {
+      "at": "2026-10-20T23:41:39.070Z",
+      "records": {
+        "brand": [
+          {
+            "id": "b345268c-b851-42b6-bb5e-33bbcb3f0dd4",
+            "createdAt": "2026-10-20T23:41:37.690Z",
+            "updatedAt": "2026-10-20T23:41:37.690Z",
+            "name": "BRANCH_E2E_MVHBPCD5_BRANCH_BRAND",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "f04a0028-6e96-4f23-9dcf-921767961ae8"
+          }
+        ],
+        "collection": []
+      }
+    },
+    {
+      "at": "2026-10-20T23:42:00.061Z",
+      "records": {
+        "brand": [
+          {
+            "id": "b345268c-b851-42b6-bb5e-33bbcb3f0dd4",
+            "createdAt": "2026-10-20T23:41:37.690Z",
+            "updatedAt": "2026-10-20T23:41:57.071Z",
+            "name": "BRANCH_E2E_MVHBPCD5_BRANCH_BRAND",
+            "description": "Edited and reloaded BRANCH_E2E_MVHBPCD5_BRANCH_BRAND",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "f04a0028-6e96-4f23-9dcf-921767961ae8"
+          }
+        ],
+        "collection": []
+      }
+    },
+    {
+      "at": "2026-10-20T23:42:21.881Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "ed8f9381-5065-47a7-a466-859958aa2b19",
+            "createdAt": "2026-10-20T23:42:19.513Z",
+            "updatedAt": "2026-10-20T23:42:19.513Z",
+            "name": "BRANCH_E2E_MVHBPCD5_BRANCH_COLLECTION",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "42e43991-9a48-496d-8aea-4751bd62d7b5"
+          }
+        ]
+      }
+    },
+    {
+      "at": "2026-10-20T23:42:38.329Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "ed8f9381-5065-47a7-a466-859958aa2b19",
+            "createdAt": "2026-10-20T23:42:19.513Z",
+            "updatedAt": "2026-10-20T23:42:35.077Z",
+            "name": "BRANCH_E2E_MVHBPCD5_BRANCH_COLLECTION",
+            "description": "Edited and reloaded BRANCH_E2E_MVHBPCD5_BRANCH_COLLECTION",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "42e43991-9a48-496d-8aea-4751bd62d7b5"
+          }
+        ]
+      }
+    }
+  ],
+  "cleanup": "verified: no run-owned catalog fixtures remain",
+  "remainingBeforeCleanup": {
+    "brand": [],
+    "collection": []
+  }
+}

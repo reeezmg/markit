@@ -1,10 +1,11 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
 
 const round2 = (value: unknown) => Math.round((Number(value || 0) + Number.EPSILON) * 100) / 100
 
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId as string | undefined
   const cleanup = session.data?.cleanup ?? false
   const isTaxIncluded = session.data?.isTaxIncluded ?? true

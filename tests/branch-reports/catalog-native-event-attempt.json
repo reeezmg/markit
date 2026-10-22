@@ -1,0 +1,213 @@
+{
+  "databaseMode": "test database: only run-prefixed coupon/brand/collection fixtures may be mutated",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 1424,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/notifications",
+      "status": "passed",
+      "landed": "/notifications",
+      "expectedPath": "/notifications",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 9626,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "status": "passed",
+      "landed": "/products",
+      "expectedPath": "/products",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [
+        {
+          "path": "/api/notifications",
+          "sameDocument": false,
+          "documentKnown": true
+        },
+        {
+          "path": "/api/notifications",
+          "sameDocument": false,
+          "documentKnown": true
+        }
+      ],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 50951,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products/brands/add",
+      "status": "passed",
+      "landed": "/products/brands/add",
+      "expectedPath": "/products/brands/add",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [
+        {
+          "path": "/api/_nuxt_icon/heroicons.json",
+          "sameDocument": false,
+          "documentKnown": true
+        }
+      ],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 13282,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products/collections/add",
+      "status": "passed",
+      "landed": "/products/collections/add",
+      "expectedPath": "/products/collections/add",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 11786,
+      "errors": []
+    }
+  ],
+  "switches": [],
+  "errors": [
+    "Audit stopped by control request"
+  ],
+  "startedAt": "2026-10-20T20:01:49.079Z",
+  "forms": [
+    {
+      "company": "head",
+      "form": "coupon",
+      "code": "BRANCH_E2E_MVH402D5_HEAD",
+      "status": "passed",
+      "steps": [
+        "required discount rejected",
+        "created through browser form and verified in database",
+        "edited through browser form and verified after reload",
+        "deleted through confirmation and verified in database"
+      ],
+      "errors": [],
+      "hydrationWarnings": []
+    },
+    {
+      "company": "head",
+      "targetCompany": "branch",
+      "form": "brand",
+      "name": "BRANCH_E2E_MVH402D5_HEAD_BRAND",
+      "status": "failed",
+      "steps": [
+        "head-office form selected branch without switching the sidebar company",
+        "required name rejected"
+      ],
+      "errors": [],
+      "hydrationWarnings": [],
+      "error": "brand form timed out: create persisted"
+    },
+    {
+      "company": "head",
+      "targetCompany": "head",
+      "form": "collection",
+      "name": "BRANCH_E2E_MVH402D5_HEAD_COLLECTION",
+      "status": "failed",
+      "steps": [
+        "required name rejected"
+      ],
+      "errors": [],
+      "hydrationWarnings": [],
+      "error": "Audit stopped by control request"
+    }
+  ],
+  "bundleFingerprint": "386e1f8b617447ec4f93d517e7c72ac284f21ff84d1e2a5f58b900a6c0e4f1df",
+  "serverProcessId": 11932,
+  "actualServerTestModeVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [
+    "coupon",
+    "brand",
+    "collection"
+  ],
+  "currentPage": {
+    "company": "head",
+    "route": "/products/collections/add",
+    "startedAt": "2026-10-20T20:07:02.959Z"
+  },
+  "interactions": [
+    {
+      "company": "head",
+      "route": "/notifications",
+      "action": "switch unread/all tabs without marking notifications read",
+      "status": "passed",
+      "initial": {
+        "count": 2,
+        "selected": 0
+      },
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "action": "expand product row",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    }
+  ],
+  "catalogFixtureCleanup": "verified",
+  "fixtureCleanup": "verified"
+}

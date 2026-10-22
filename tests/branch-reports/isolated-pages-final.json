@@ -1,0 +1,169 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 10144,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/erp/sales",
+      "status": "passed",
+      "landed": "/erp/sales",
+      "expectedPath": "/erp/sales",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 16649,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "status": "passed",
+      "landed": "/products",
+      "expectedPath": "/products",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 10191,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/erp/sales",
+      "status": "passed",
+      "landed": "/erp/sales",
+      "expectedPath": "/erp/sales",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4715,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/products",
+      "status": "passed",
+      "landed": "/products",
+      "expectedPath": "/products",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3694,
+      "errors": []
+    }
+  ],
+  "switches": [
+    {
+      "direction": "head-to-branch",
+      "status": 200,
+      "persisted": true
+    },
+    {
+      "direction": "branch-to-head",
+      "status": 200,
+      "persisted": true
+    }
+  ],
+  "errors": [],
+  "startedAt": "2026-10-21T04:05:23.463Z",
+  "bundleFingerprint": "02e432730b3b836b94dc762fcc0d8f38df2c41a29f9ff1c0356b27a72546f697",
+  "serverProcessId": 7968,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [],
+  "currentPage": {
+    "company": "branch",
+    "route": "/products",
+    "startedAt": "2026-10-21T04:06:32.968Z"
+  },
+  "serverTimingMaxBytes": 0,
+  "interactions": [
+    {
+      "company": "head",
+      "route": "/erp/sales",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "action": "expand product row",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed",
+      "restrictedQueries": 2
+    },
+    {
+      "company": "branch",
+      "route": "/products",
+      "action": "expand product row",
+      "status": "no-visible-expandable-record"
+    }
+  ],
+  "pageSummary": {
+    "passed": 4
+  },
+  "formSummary": {},
+  "interactionSummary": {
+    "passed": 3,
+    "no-visible-expandable-record": 1
+  },
+  "pageAuditStatus": "passed",
+  "finishedAt": "2026-10-21T04:06:40.415Z"
+}

@@ -1,0 +1,49 @@
+{
+  "startedAt": "2026-10-21T10:41:29.605Z",
+  "schemaChanges": false,
+  "results": [
+    {
+      "company": "head",
+      "status": "passed",
+      "accountDefaultSelectors": 20,
+      "checks": [
+        "account-defaults-save-reload-all-groups",
+        "foreign-accounts-rejected",
+        "clearing-defaults",
+        "erp-and-staff-mapping-roundtrip-without-activation",
+        "custom-fields-create-edit-stable-key",
+        "invalid-and-foreign-field-replacement-rejected",
+        "print-preferences-save-reload-backup",
+        "print-save-role-denied",
+        "financial-year-role-company-date-validation",
+        "financial-year-fixture-bill-numbering"
+      ]
+    },
+    {
+      "company": "branch-managed-from-head",
+      "status": "passed",
+      "accountDefaultSelectors": 20,
+      "checks": [
+        "account-defaults-save-reload-all-groups",
+        "foreign-accounts-rejected",
+        "clearing-defaults",
+        "erp-and-staff-mapping-roundtrip-without-activation",
+        "custom-fields-create-edit-stable-key",
+        "invalid-and-foreign-field-replacement-rejected",
+        "print-preferences-save-reload-backup",
+        "print-save-role-denied",
+        "financial-year-role-company-date-validation",
+        "financial-year-fixture-bill-numbering"
+      ]
+    }
+  ],
+  "fixtureIds": {
+    "userId": "3c83ff34-114f-4611-a15f-197d1925f710",
+    "companies": [
+      "cce05a0f-dc84-4e2e-aaad-f7cceb79e09e",
+      "4fcbdb52-482b-4c94-b839-f9bdd4a36df9"
+    ]
+  },
+  "cleanup": "verified: all owned companies/users/accounts/fields/preferences and transaction effects rolled back",
+  "finishedAt": "2026-10-21T10:43:06.124Z"
+}

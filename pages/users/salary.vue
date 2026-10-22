@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const companyScope = useCompanyScope('table');
+await companyScope.ready;
 const $fetch = companyScope.fetch;
 
 import { useFindManyCompanyUser } from '~/lib/company-hooks/company-user';
@@ -13,6 +14,8 @@ const toast = useToast()
 const route = useRoute()
 const companyId = companyScope.companyId
 const canManageSalary = computed(() => ['admin', 'manager', 'accountant'].includes(useAuth().session.value?.role || ''))
+const assignmentAsOf = useState('salary-assignment-as-of', () => new Date().toISOString())
+onMounted(() => { assignmentAsOf.value = new Date().toISOString() })
 const now = new Date()
 const todayKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`
 
@@ -37,7 +40,7 @@ const years = Array.from({ length: 7 }, (_, i) => now.getFullYear() - 3 + i)
 // ─── Shift-assigned staff (payroll/salary apply only to them) ───
 const { data: assignments } = useFindManyShiftAssignment(
     computed(() => ({
-        where: { companyId: companyId.value, OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }] },
+        where: { companyId: companyId.value, OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(assignmentAsOf.value) } }] },
         include: { user: true },
     })),
 )
@@ -46,7 +49,7 @@ const shiftStaff = computed(() => {
     for (const a of assignments.value ?? []) seen.set(`${a.companyId}:${a.userId}`, { companyId: a.companyId, userId: a.userId, user: a.user })
     return Array.from(seen.values())
 })
-const { data: formAssignments } = useFindManyShiftAssignment(computed(() => ({ where: { companyId: companyId.value, OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date() } }] }, include: { user: true } })), { companyScope: 'form' } as any)
+const { data: formAssignments } = useFindManyShiftAssignment(computed(() => ({ where: { companyId: companyId.value, OR: [{ effectiveTo: null }, { effectiveTo: { gte: new Date(assignmentAsOf.value) } }] }, include: { user: true } })), { companyScope: 'form' } as any)
 const staffOptions = computed(() =>
     Array.from(new Map((formAssignments.value ?? []).map(s => [s.userId, s])).values()).map((s) => ({ id: s.userId, label: s.user?.name || s.userId })),
 )
@@ -672,7 +675,7 @@ watch(companyScope.companyId, () => {
                                 </div>
                             </div>
                         </template>
-                        
+
         <CompanyTableFilter class="mb-3" />
 <UTable :rows="payments || []" :columns="companyScope.columns(paymentColumns)" :loading="paymentsLoading"><template #companyId-data="{ row }">{{ companyScope.companyName(row.companyId) }}</template>
                             <template #date-data="{ row }">{{ fmtDate(row.paymentDate) }}</template>

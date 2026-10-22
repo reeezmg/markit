@@ -11,9 +11,9 @@ definePageMeta({
 <template>
     <UDashboardPage>
         <UDashboardPanel grow>
-            <UDashboardNavbar title="Users">
+            <ErpPageNavbar title="Users">
 
-            </UDashboardNavbar>
+            </ErpPageNavbar>
 
             <NuxtPage :key="auth.session.value?.companyId" />
         </UDashboardPanel>

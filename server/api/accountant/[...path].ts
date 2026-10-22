@@ -36,7 +36,7 @@ export default defineEventHandler(async event => {
       await router.dispatch(event.method, resource === 'parties' || resource === 'projects' ? `/${resource}` : `/${parts.join('/')}`, req, res);
       if (!['GET', 'HEAD'].includes(event.method)) await logActivity({ ...user,
         action: event.method, resource, resourceId: parts.join('/') || (result as any)?.id || '', meta: {} });
-    }, { lockCompany: resource === 'users', ...(resource === 'investor-profits' ? { transactionTimeoutMs: 120000 } : {}) });
+    }, { readOnly: ['GET', 'HEAD'].includes(event.method), lockCompany: resource === 'users' && !['GET', 'HEAD'].includes(event.method), ...(resource === 'investor-profits' ? { transactionTimeoutMs: 120000 } : {}) });
     return result;
   } catch (error: any) {
     if (error instanceof ZodError) throw createError({ statusCode: 400, statusMessage: error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') });

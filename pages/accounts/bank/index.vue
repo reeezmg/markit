@@ -1,11 +1,14 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+import { ref, computed, onServerPrefetch, unref } from 'vue'
 
 
 import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
 import { useFindUniqueCompany } from '~/lib/hooks/company';
 
-const useAuth = () => useNuxtApp().$auth
+const auth = companyScope.auth
+const useAuth = () => auth
 const PRIMARY_BANK_DETAILS_URL = '/accounts/bank/primary'
 
 /* ---------------------------------------------------
@@ -27,8 +30,14 @@ const bankQuery = computed(() => ({
   take: parseInt(pageCount.value),
 }))
 
-const { data: company } = useFindUniqueCompany(companyQuery)
-const { data: banks, isLoading } = useFindManyBankAccount(bankQuery)
+const companyRead = useFindUniqueCompany(companyQuery)
+const bankRead = useFindManyBankAccount(bankQuery)
+const { data: company } = companyRead
+const { data: banks, isLoading } = bankRead
+onServerPrefetch(async () => {
+  await Promise.all([companyRead, bankRead].filter(query => unref(query.isFetching))
+    .map(query => query.suspense().catch(() => {})))
+})
 
 /* ---------------------------------------------------
    PRIMARY BANK
@@ -107,7 +116,7 @@ const goToDetails = (row: any) => {
 <template>
   <UDashboardPanelContent class="pb-24">
     <UAlert class="mb-4" title="Legacy bank history" description="These records are read-only. Manage bank accounts and opening balances in Accountant." />
-    <UButton class="mb-4" to="/accountant/chart-of-accounts">Open Accountant</UButton>
+    <UButton class="mb-4" :to="{ path: '/accountant/chart-of-accounts', query: { entryCompany: companyScope.companyId.value } }">Open Accountant</UButton>
    <UCard
             class="w-full"
             :ui="{

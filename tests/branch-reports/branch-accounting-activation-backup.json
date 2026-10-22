@@ -1,0 +1,121 @@
+{
+  "at": "2026-10-21T08:44:21.347Z",
+  "branch": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+  "before": {
+    "bills": {
+      "count": "2",
+      "hash": "6c322a6cfe361230034bc66e132ac17a"
+    },
+    "entries": {
+      "count": "2",
+      "hash": "66d1acd18505d68d4ebbe8dc7bdabc93"
+    },
+    "expenses": {
+      "count": "2",
+      "hash": "11455c3b8756204e662a5a3e98cc254d"
+    },
+    "items": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "salary_payments": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "user_ledger_entries": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "purchase_orders": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "distributor_credits": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "distributor_payments": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "account_ledger_entries": {
+      "count": "4",
+      "hash": "9e693f2fc122bba220f37868dc098798"
+    },
+    "money_transactions": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "accountant_v2_manual_journals": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "accountant_v2_manual_journal_lines": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    }
+  },
+  "headBefore": {
+    "bills": {
+      "count": "217",
+      "hash": "7b222de9758bfc60a295d0d22a61547e"
+    },
+    "entries": {
+      "count": "257",
+      "hash": "adaf9ce85a26400eb4d02ba75d77bb38"
+    },
+    "expenses": {
+      "count": "18",
+      "hash": "9aca07df6c68d67d3c4b084d15829deb"
+    },
+    "items": {
+      "count": "23",
+      "hash": "3b8749801f007c3465215d93993c2f3f"
+    },
+    "salary_payments": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "user_ledger_entries": {
+      "count": "0",
+      "hash": "d41d8cd98f00b204e9800998ecf8427e"
+    },
+    "purchase_orders": {
+      "count": "59",
+      "hash": "5b85a4d3c152e10f112d2b657f6ba1f6"
+    },
+    "distributor_credits": {
+      "count": "2",
+      "hash": "105196dd1a9c309b1a9efbcebf406400"
+    },
+    "distributor_payments": {
+      "count": "2",
+      "hash": "1f066ca85a511f1f722644281d969f52"
+    },
+    "account_ledger_entries": {
+      "count": "219",
+      "hash": "f875141696fb6970ad71c34bd920ed7a"
+    },
+    "money_transactions": {
+      "count": "1",
+      "hash": "1cc27e71743adb27f3b515378aa21874"
+    },
+    "accountant_v2_manual_journals": {
+      "count": "654",
+      "hash": "864a8ba69efb6cbadc89ab3a3de08a0a"
+    },
+    "accountant_v2_manual_journal_lines": {
+      "count": "1476",
+      "hash": "e2a064061b6350aa512a7ef3ec0b4e48"
+    }
+  },
+  "data": {
+    "accountant_v2_accounting_accounts": [],
+    "accountant_v2_accountant_audit": [],
+    "accountant_v2_erp_settings": [],
+    "accountant_v2_user_settings": [],
+    "accountant_v2_ecommerce_settings": [],
+    "accountant_v2_erp_sources": [],
+    "accountant_v2_user_sources": []
+  }
+}

@@ -1,0 +1,145 @@
+{
+  "recordPrefix": "BRANCH_E2E_MVHFORPD_",
+  "existingRecords": [],
+  "createdRecords": [
+    {
+      "id": "63b685ac-e05e-4870-8cf2-523251c17e01",
+      "code": "BRANCH_E2E_MVHFORPD_BRANCH",
+      "type": "PERCENTAGE",
+      "discountValue": 17,
+      "giftBarcode": null,
+      "maxDiscountAmount": null,
+      "minOrderValue": null,
+      "startDate": "2026-10-21T00:00:00.000Z",
+      "endDate": "2026-11-20T00:00:00.000Z",
+      "isActive": true,
+      "minBillAmount": null,
+      "isBillCombine": false,
+      "usageLimit": null,
+      "perClientLimit": null,
+      "timesUsed": 0,
+      "targetType": "ALL",
+      "audienceType": "ALL",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "createdAt": "2026-10-21T01:32:19.520Z",
+      "updatedAt": "2026-10-21T01:32:22.602Z",
+      "isMarkit": false
+    }
+  ],
+  "cleanup": "verified: no run-owned fixtures remain",
+  "snapshots": [
+    {
+      "at": "2026-10-21T01:29:46.558Z",
+      "records": [
+        {
+          "id": "ee16d24b-0b90-4c54-9361-17a7f4f68765",
+          "code": "BRANCH_E2E_MVHFORPD_HEAD",
+          "type": "PERCENTAGE",
+          "discountValue": 12,
+          "giftBarcode": null,
+          "maxDiscountAmount": null,
+          "minOrderValue": null,
+          "startDate": "2026-10-21T00:00:00.000Z",
+          "endDate": "2026-11-20T00:00:00.000Z",
+          "isActive": true,
+          "minBillAmount": null,
+          "isBillCombine": false,
+          "usageLimit": null,
+          "perClientLimit": null,
+          "timesUsed": 0,
+          "targetType": "ALL",
+          "audienceType": "ALL",
+          "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+          "createdAt": "2026-10-21T01:29:45.325Z",
+          "updatedAt": "2026-10-21T01:29:45.325Z",
+          "isMarkit": false
+        }
+      ]
+    },
+    {
+      "at": "2026-10-21T01:29:51.736Z",
+      "records": [
+        {
+          "id": "ee16d24b-0b90-4c54-9361-17a7f4f68765",
+          "code": "BRANCH_E2E_MVHFORPD_HEAD",
+          "type": "PERCENTAGE",
+          "discountValue": 17,
+          "giftBarcode": null,
+          "maxDiscountAmount": null,
+          "minOrderValue": null,
+          "startDate": "2026-10-21T00:00:00.000Z",
+          "endDate": "2026-11-20T00:00:00.000Z",
+          "isActive": true,
+          "minBillAmount": null,
+          "isBillCombine": false,
+          "usageLimit": null,
+          "perClientLimit": null,
+          "timesUsed": 0,
+          "targetType": "ALL",
+          "audienceType": "ALL",
+          "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+          "createdAt": "2026-10-21T01:29:45.325Z",
+          "updatedAt": "2026-10-21T01:29:50.688Z",
+          "isMarkit": false
+        }
+      ]
+    },
+    {
+      "at": "2026-10-21T01:32:20.563Z",
+      "records": [
+        {
+          "id": "63b685ac-e05e-4870-8cf2-523251c17e01",
+          "code": "BRANCH_E2E_MVHFORPD_BRANCH",
+          "type": "PERCENTAGE",
+          "discountValue": 12,
+          "giftBarcode": null,
+          "maxDiscountAmount": null,
+          "minOrderValue": null,
+          "startDate": "2026-10-21T00:00:00.000Z",
+          "endDate": "2026-11-20T00:00:00.000Z",
+          "isActive": true,
+          "minBillAmount": null,
+          "isBillCombine": false,
+          "usageLimit": null,
+          "perClientLimit": null,
+          "timesUsed": 0,
+          "targetType": "ALL",
+          "audienceType": "ALL",
+          "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+          "createdAt": "2026-10-21T01:32:19.520Z",
+          "updatedAt": "2026-10-21T01:32:19.520Z",
+          "isMarkit": false
+        }
+      ]
+    },
+    {
+      "at": "2026-10-21T01:32:23.698Z",
+      "records": [
+        {
+          "id": "63b685ac-e05e-4870-8cf2-523251c17e01",
+          "code": "BRANCH_E2E_MVHFORPD_BRANCH",
+          "type": "PERCENTAGE",
+          "discountValue": 17,
+          "giftBarcode": null,
+          "maxDiscountAmount": null,
+          "minOrderValue": null,
+          "startDate": "2026-10-21T00:00:00.000Z",
+          "endDate": "2026-11-20T00:00:00.000Z",
+          "isActive": true,
+          "minBillAmount": null,
+          "isBillCombine": false,
+          "usageLimit": null,
+          "perClientLimit": null,
+          "timesUsed": 0,
+          "targetType": "ALL",
+          "audienceType": "ALL",
+          "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+          "createdAt": "2026-10-21T01:32:19.520Z",
+          "updatedAt": "2026-10-21T01:32:22.602Z",
+          "isMarkit": false
+        }
+      ]
+    }
+  ],
+  "remainingBeforeCleanup": []
+}

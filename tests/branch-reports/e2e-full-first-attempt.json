@@ -1,0 +1,424 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverHeapLimitMB": 8192,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/products/collections/edit/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/users/salary/cycle/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/accounts/bank/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/statement/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/investments/investors/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/erp/online/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/settings/branches",
+      "status": "passed",
+      "landed": "/settings/branches",
+      "expectedPath": "/settings/branches",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 47249,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accountant",
+      "status": "failed",
+      "landed": "/accountant/chart-of-accounts",
+      "expectedPath": "/accountant",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 42104,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accountant/manual-journals/add",
+      "status": "failed",
+      "landed": "/accountant/manual-journals/add",
+      "expectedPath": "/accountant/manual-journals/add",
+      "settled": false,
+      "readyState": "complete",
+      "pendingApiPaths": [
+        "/api/accountant/accounting-accounts",
+        "/api/gettax",
+        "/api/notifications",
+        "/api/notifications"
+      ],
+      "durationMs": 180211,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/accountant/accounting-accounts",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accountant/accounting-accounts",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accountant/accounting-accounts",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accountant/accounting-accounts",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accountant/accounting-accounts",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accountant/accounting-accounts",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accountant/accounting-accounts",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accountant/accounting-accounts",
+          "status": 500
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/accounts/bank",
+      "status": "passed",
+      "landed": "/accounts/bank",
+      "expectedPath": "/accounts/bank",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 4999,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/cash",
+      "status": "passed",
+      "landed": "/accounts/cash",
+      "expectedPath": "/accounts/cash",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 9467,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/credit",
+      "status": "passed",
+      "landed": "/accounts/credit",
+      "expectedPath": "/accounts/credit",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 2792,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/investment",
+      "status": "passed",
+      "landed": "/accounts/investment",
+      "expectedPath": "/accounts/investment",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 2718,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/tax",
+      "status": "passed",
+      "landed": "/accounts/tax",
+      "expectedPath": "/accounts/tax",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 2610,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/transaction",
+      "status": "passed",
+      "landed": "/accounts/transaction",
+      "expectedPath": "/accounts/transaction",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 2609,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/transfer",
+      "status": "passed",
+      "landed": "/accounts/transfer",
+      "expectedPath": "/accounts/transfer",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 2710,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts",
+      "status": "passed",
+      "landed": "/accounts",
+      "expectedPath": "/accounts",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 3038,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ai/models",
+      "status": "failed",
+      "landed": "/ai/models",
+      "expectedPath": "/ai/models",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 5156,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/ai/providers",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/ai/providers",
+          "status": 500
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/ai/usage",
+      "status": "failed",
+      "landed": "/ai/usage",
+      "expectedPath": "/ai/usage",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 2704,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/ai/usage",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/ai/usage",
+          "status": 500
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/ai",
+      "status": "passed",
+      "landed": "/ai",
+      "expectedPath": "/ai",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 2574,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/checkout",
+      "status": "passed",
+      "landed": "/checkout",
+      "expectedPath": "/checkout",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 2729,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/cleanup",
+      "status": "passed",
+      "landed": "/cleanup",
+      "expectedPath": "/cleanup",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 2726,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/client",
+      "status": "passed",
+      "landed": "/client",
+      "expectedPath": "/client",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 5616,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/coupon",
+      "status": "passed",
+      "landed": "/coupon",
+      "expectedPath": "/coupon",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 3128,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/dashboard",
+      "status": "passed",
+      "landed": "/dashboard",
+      "expectedPath": "/dashboard",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 5980,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/distributor/add-purchase-return",
+      "status": "passed",
+      "landed": "/distributor/add-purchase-return",
+      "expectedPath": "/distributor/add-purchase-return",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 3912,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/distributor/credit",
+      "status": "failed",
+      "landed": "/distributor/credit",
+      "expectedPath": "/distributor/credit",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 37379,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/distributor",
+      "status": "failed",
+      "landed": "/distributor",
+      "expectedPath": "/distributor",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "durationMs": 5013,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        }
+      ]
+    }
+  ],
+  "switches": [],
+  "errors": [
+    "Chrome command timed out: Runtime.evaluate"
+  ],
+  "startedAt": "2026-10-20T12:36:25.925Z",
+  "serverProcessId": 19288,
+  "actualServerReadOnlyVerified": true,
+  "authenticatedSessionVerified": true,
+  "currentPage": {
+    "company": "head",
+    "route": "/distributor/payments",
+    "startedAt": "2026-10-20T12:48:16.855Z"
+  }
+}

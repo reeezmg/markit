@@ -1,0 +1,74 @@
+{
+  "recordPrefix": "BRANCH_E2E_MVH402D5_",
+  "existingRecords": [],
+  "snapshots": [
+    {
+      "at": "2026-10-20T20:07:20.151Z",
+      "records": {
+        "brand": [
+          {
+            "id": "dede175b-138f-4bf1-9084-3a39a218fc2f",
+            "createdAt": "2026-10-20T20:04:03.577Z",
+            "updatedAt": "2026-10-20T20:04:03.577Z",
+            "name": "BRANCH_E2E_MVH402D5_HEAD_BRAND",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "writeId": "09153f4d-7d44-4303-b929-c0848f128f47"
+          }
+        ],
+        "collection": [
+          {
+            "id": "a3863a8a-2ee4-472e-9398-f83bf6a84298",
+            "createdAt": "2026-10-20T20:07:17.542Z",
+            "updatedAt": "2026-10-20T20:07:17.542Z",
+            "name": "BRANCH_E2E_MVH402D5_HEAD_COLLECTION",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "writeId": "199820ad-0b4e-4ee4-bfa8-4c500175769a"
+          }
+        ]
+      }
+    }
+  ],
+  "cleanup": "verified: no run-owned catalog fixtures remain",
+  "remainingBeforeCleanup": {
+    "brand": [
+      {
+        "id": "dede175b-138f-4bf1-9084-3a39a218fc2f",
+        "createdAt": "2026-10-20T20:04:03.577Z",
+        "updatedAt": "2026-10-20T20:04:03.577Z",
+        "name": "BRANCH_E2E_MVH402D5_HEAD_BRAND",
+        "description": "Created through the seller browser form",
+        "status": true,
+        "image": null,
+        "banner": null,
+        "targetAudience": "all",
+        "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+        "writeId": "09153f4d-7d44-4303-b929-c0848f128f47"
+      }
+    ],
+    "collection": [
+      {
+        "id": "a3863a8a-2ee4-472e-9398-f83bf6a84298",
+        "createdAt": "2026-10-20T20:07:17.542Z",
+        "updatedAt": "2026-10-20T20:07:17.542Z",
+        "name": "BRANCH_E2E_MVH402D5_HEAD_COLLECTION",
+        "description": "Created through the seller browser form",
+        "status": true,
+        "image": null,
+        "banner": null,
+        "targetAudience": "all",
+        "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+        "writeId": "199820ad-0b4e-4ee4-bfa8-4c500175769a"
+      }
+    ]
+  }
+}

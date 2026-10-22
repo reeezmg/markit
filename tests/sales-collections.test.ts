@@ -7,6 +7,22 @@ const { descriptor, errors } = parse(read(file), { filename: file })
 assert.deepEqual(errors, [])
 compileScript(descriptor, { id: 'sales' })
 assert.deepEqual(compileTemplate({ source: descriptor.template!.content, filename: file, id: 'sales' }).errors, [])
+const modalFile = 'components/Billing/CreditReceiptModal.vue'
+const modal = parse(read(modalFile), { filename: modalFile })
+assert.deepEqual(modal.errors, [])
+compileScript(modal.descriptor, { id: 'credit-modal' })
+assert.deepEqual(compileTemplate({ source: modal.descriptor.template!.content, filename: modalFile, id: 'credit-modal' }).errors, [])
+const actions = harness(file, ['creditReceiptBill', 'creditReceiptMode', 'creditReceiptOpen', 'openCreditCollection'])
+try {
+  const bill = { id: 'credit-bill', companyId: 'store', paymentStatus: 'PENDING' }
+  actions.context.openCreditCollection(bill, 'collect')
+  assert.equal(actions.context.creditReceiptMode.value, 'collect')
+  assert.equal(actions.context.creditReceiptBill.value.companyId, 'store')
+  assert.equal(actions.context.creditReceiptOpen.value, true)
+  actions.context.openCreditCollection({ ...bill, paymentStatus: 'PAID' }, 'reverse')
+  assert.equal(actions.context.creditReceiptMode.value, 'reverse')
+  assert.equal(actions.context.creditReceiptBill.value.paymentStatus, 'PAID', 'Opening Reverse does not change the bill status')
+} finally { actions.stop() }
 
 const pending: ReturnType<typeof deferred>[] = []
 const h = harness(file, ['isLoading', 'lastFetchId', 'salesTotals', 'collectionsTotal', 'fetchSales'], {

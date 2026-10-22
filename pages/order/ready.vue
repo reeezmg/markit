@@ -12,7 +12,8 @@ const router = useRouter();
 const UpdateEntry = useUpdateEntry()
 const UpdateItem = useUpdateItem()
 const UpdateBill = useUpdateBill()
-const orderId = route.query.id;
+const orderId = typeof route.query.id === 'string' ? route.query.id.trim() : '';
+if (!orderId) await navigateTo('/erp/online', { replace: true });
 
 const paymentMethod = ref('Cash');
 const scannedBarcode = ref("");
@@ -122,7 +123,7 @@ const stopResize = () => {
 
 onMounted(() => {
   // Initialize column widths (optional)
-  const ths = resizableTable.value.querySelectorAll('th');
+  const ths = resizableTable.value?.querySelectorAll('th') || [];
   ths.forEach((th) => {
     th.style.width = `${th.offsetWidth}px`;
   });
@@ -190,7 +191,9 @@ const billArgs = computed(() => ({
 }));
 
 
-const { data: bill ,refetch:itemRefetch} = useFindUniqueBill(billArgs);
+const { data: bill ,refetch:itemRefetch} = useFindUniqueBill(billArgs, {
+  enabled: computed(() => !!orderId && !!useAuth().session.value?.companyId),
+});
 
 watch(() => bill.value, (newData) => {
   if (!newData || !newData.entries) return;
@@ -203,14 +206,14 @@ watch(() => bill.value, (newData) => {
       sn: index + 1,
       name:entry.name || '',
       barcode: entry.barcode || '', 
-      category: entry.category.name,
+      category: entry.category?.name || '',
       size: entry.size || '',
       qty: entry.qty || 1,
       rate: entry.rate || 0,
       discount: entry.discount || 0,
       tax: entry.tax || 0,
       value: entry.value || 0,
-      image:entry.variant.images[0] || null,
+      image:entry.variant?.images?.[0] || null,
       outOfStock:entry.outOfStock || false
     };
   });
@@ -225,7 +228,9 @@ const itemArgs = computed(() => ({
   }
 }));
 
-const { data: itemData ,refetch:itemDataRefetch} = useFindFirstItem(itemArgs);
+const { data: itemData ,refetch:itemDataRefetch} = useFindFirstItem(itemArgs, {
+  enabled: computed(() => !!orderId && !!scannedBarcode.value && !!useAuth().session.value?.companyId),
+});
 
 
 const discount = ref(bill.value?.discount || 0);

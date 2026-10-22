@@ -2,7 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { prisma as database } from '../../prisma';
 import { badRequest } from './router';
 
-export type AccountantContext = { companyId: string; userId: string; role: string; db: any };
+export type AccountantContext = { companyId: string; userId: string; role: string; db: any; readOnly?: boolean };
 export const accountantContext = new AsyncLocalStorage<AccountantContext>();
 export function context() {
   const value = accountantContext.getStore();
@@ -70,7 +70,7 @@ export async function logActivity(input: { companyId: string; userId: string; ac
   const { companyId, userId, action, resource, resourceId, meta } = input;
   return accountantPrisma.auditLog.create({ data: { companyId, userId, action, resource, resourceId, after: meta || {} } });
 }
-export async function runAccountant<T>(identity: Omit<AccountantContext, 'db'>, fn: () => Promise<T>, options: { lockCompany?: boolean; transactionTimeoutMs?: number } = {}) {
+export async function runAccountant<T>(identity: Omit<AccountantContext, 'db'>, fn: () => Promise<T>, options: { lockCompany?: boolean; transactionTimeoutMs?: number; readOnly?: boolean } = {}) {
   return database.$transaction(async db => {
     // Raw integration queries and SQL functions must use the same schema as Prisma,
     // including behind a connection pool whose sessions may have another search_path.
@@ -80,6 +80,6 @@ export async function runAccountant<T>(identity: Omit<AccountantContext, 'db'>, 
     if (options.lockCompany) await db.$queryRawUnsafe('SELECT id FROM companies WHERE id=$1 FOR UPDATE', identity.companyId);
     // One ordering for all company accounting mutations prevents numbering, reversal, lock and asset races.
     await db.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`accountant-v2:${identity.companyId}`}))`;
-    return accountantContext.run({ ...identity, db }, fn);
+    return accountantContext.run({ ...identity, db, readOnly: options.readOnly ?? false }, fn);
   }, { maxWait: 15000, timeout: options.transactionTimeoutMs ?? 30000 });
 }

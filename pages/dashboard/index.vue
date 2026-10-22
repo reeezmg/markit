@@ -22,7 +22,7 @@
             variant="soft"
             color="gray"
             size="sm"
-            to="/reports/daily"
+            :to="{ path: '/reports/daily', query: { entryCompany: companyScope.companyId.value } }"
           >
             Reports
           </UButton>
@@ -30,7 +30,7 @@
             icon="i-heroicons-plus"
             color="primary"
             size="sm"
-            to="/erp/billing"
+            :to="{ path: '/erp/billing', query: { entryCompany: companyScope.companyId.value } }"
           >
             New Bill
           </UButton>
@@ -435,6 +435,7 @@
 <script setup lang="ts">
 import { computed, defineAsyncComponent, onMounted, ref } from 'vue'
 import { useCompanyDashboard } from '@/lib/api/useDashboardData'
+const companyScope = useCompanyScope();
 
 onMounted(() => {
   useEChartsSetup()

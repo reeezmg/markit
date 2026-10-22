@@ -69,6 +69,11 @@ export function useExpenseList(
     enabled: computed(() => !!useAuth().session.value?.companyId),
   })
 
+  onServerPrefetch(async () => {
+    await companyScope.ready;
+    if (companyScope.companyId.value && (query.isFetching.value || query.isPending.value)) await query.refetch({ cancelRefetch: false }).catch(() => {});
+  });
+
   return {
     rows: computed(() => query.data.value?.rows ?? []),
     total: computed(() => query.data.value?.total ?? 0),

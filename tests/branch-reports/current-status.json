@@ -1,0 +1,653 @@
+{
+  "updatedAt": "2026-10-21T09:45:27.715Z",
+  "supersedes": "Process and authorization notes in retry-status.txt",
+  "testEnvironment": "User confirmed C:/markit-v1/storetools/.env is linked to the test database",
+  "schemaChangesAllowed": true,
+  "regressions": {
+    "command": "npm run test:branches",
+    "passed": 145,
+    "failed": 0,
+    "vuePagesCompiled": 146,
+    "log": "settings-expanded-branches.log"
+  },
+  "typecheck": {
+    "command": "npm run typecheck:large",
+    "heapMB": 8192,
+    "status": "stopped to prioritize browser testing after sustained paging; incomplete, not passed",
+    "log": "typecheck-latest.log",
+    "lastCompletedCheckErrors": 988,
+    "lastCompletedCheckPredatesLatestFixes": true
+  },
+  "browserForms": {
+    "command": "npm run test:branches:forms",
+    "status": "passed automatically in both companies; exit 0",
+    "report": "forms-results.json",
+    "fixtureBackup": "forms-fixture-backup.json",
+    "fixtureCleanup": "verified",
+    "scope": "coupon required-field rejection, create/edit/reload/delete; zero API/JavaScript errors or hydration mismatches"
+  },
+  "sellerScope": "User explicitly selected seller head-office/branch flows; legacy buyer marketplace/checkout excluded",
+  "allPagesBrowser": {
+    "status": "complete baseline plus verified targeted follow-up",
+    "report": "all-pages-followup.json",
+    "pageSummary": {
+      "passed": 286,
+      "failed": 1,
+      "blocked-read-only": 2
+    },
+    "verificationMethod": "Complete original audit plus targeted production-bundle retests; source hashes restrict intervening changes to the checked pages/APIs and test registration/fixture guard.",
+    "latestBundleFingerprint": "9b9eae8be7489e1745d363448ed0139489f8714e9be275a616bbf124ebaf1dea",
+    "historicalBaselineReport": "all-pages-final.json",
+    "recordFixtureCleanup": "verified",
+    "catalogFixtureCleanup": "verified"
+  },
+  "databaseCompatibility": {
+    "status": "No missing tables/columns after authorized schema synchronization",
+    "report": "schema-compatibility.json",
+    "schemaPush": "schema-push-followup.json",
+    "modelsChecked": 175,
+    "billingCreateFunction": "No longer required; parameterized application source DML is verified",
+    "purchaseProjection": "Repository PO-header-authority SQL deployed under separate user authorization; existing data and historical projection unchanged"
+  },
+  "shipping": {
+    "service": "started locally; actual shipping database connection verified read-only before startup",
+    "testsPassed": 10,
+    "providerConfiguration": "no enabled providers; head and branch provider lists now return 200 with empty lists",
+    "report": "shipping-readiness.json",
+    "beforeFix": "shipping-readiness-before-fix.json",
+    "browserUIRetest": "First full bundled pass completed seller shipping/pickup routes; no enabled provider means carrier operations remain untested."
+  },
+  "branchCreation": {
+    "status": "passed",
+    "command": "npm run test:branches:create",
+    "durationMs": 6251,
+    "report": "branch-create-transaction.json",
+    "cleanup": "verified transaction rollback",
+    "scope": "actual handler validation, nested-branch rejection, parent ownership, admin membership, Purchase category and branch-owned account defaults; not browser clicks"
+  },
+  "targetedFixChecks": {
+    "queryHydration": "passed",
+    "decimalSerialization": "failed before using the model serializer; passed after",
+    "SSRModelSession": "bare fetch returned 401 in the local HTTP test; authenticated model fetch returned 200 without forwarding cookies to other origins",
+    "plainConstantVModel": "failed before product ref fix; passed after fix",
+    "fixtureMutationGuard": "passed",
+    "billingReadinessNoDDL": "passed",
+    "fullRegressionRerunAfterNewChecks": "40 passed",
+    "productionMountDetection": "passed targeted readiness regression",
+    "productionHydrationIds": "Chrome negative control mismatched v-1-0/v-0-0; configured registration preserved matching v-1-0/v-1-0",
+    "serviceWorkerCompanyCache": "2 tests failed before, both passed after; API and authenticated document caching removed, static offline assets retained",
+    "pageFormCompanySelection": "Corrected regression uses the existing products page key and Nuxt UI input event; native-select full suite passed 40. Unnecessary root NuxtPage key reverted.",
+    "documentRequestReadiness": "Previous coupon document requests falsely blocked brand page; loader-scope regression and actual brand-page rerun passed",
+    "liveTableFilter": "Earlier change-only interactions did not prove filtering; now require input/change plus branch-only query keys where ZenStack is used."
+  },
+  "catalogForms": {
+    "status": "8 browser CRUD flows passed",
+    "report": "catalog-followup.json",
+    "bundleFingerprint": "393506d71ac9517c6ee151660c6c8a0bd36518f4e260254cb2065a3a7db50d26",
+    "forms": [
+      "coupon",
+      "brand",
+      "collection",
+      "category"
+    ],
+    "couponFixtureCleanup": "verified",
+    "catalogFixtureCleanup": "verified",
+    "finalSourceProof": "Only settings pages and test registration changed after this catalog run; other source hashes unchanged"
+  },
+  "limitations": [
+    "Every listed seller page was audited in both roles where an owned record exists. The reported failures, missing-record routes, read-only blocked editor routes, and untested form saves remain explicit; all-pages/all-forms success is not established.",
+    "Billing writes remain blocked by the missing required SQL function. Runtime readiness now only inspects its expected source/type/language and never installs or replaces it.",
+    "Historical browser attempts stopped during startup or after server shutdown are not evidence of page failures.",
+    "Automatic approval review blocked removal of the earlier Temp Chrome profile markit-branch-e2e-zgMfk6; it remains. Do not retry that deletion through another mechanism."
+  ],
+  "notificationFixes": {
+    "status": "New notification regressions pass. First complete bundled pass loaded notifications in both companies and completed tab interactions without errors.",
+    "issues": [
+      "TypeScript generic ref call is inside a JavaScript script block",
+      "populated rows can fail with a null action label because template action state is shared",
+      "a delayed head-office mark-all response changes the branch list's local read state"
+    ],
+    "beforeFixReports": [
+      "notifications-language-before-fix.log",
+      "notifications-page-before-fix.log",
+      "notifications-race-before-fix.log"
+    ],
+    "browserReproduction": "Verified in all-pages-before-ssr-fix.json",
+    "regressionNote": "Included in passing 54-check suite"
+  },
+  "ssrFixCandidates": {
+    "status": "Implemented; verified by current 92-check regression suite and full audit plus isolated both-role page retests.",
+    "changes": [
+      "wait for accessible companies and final SDK query key",
+      "same-origin model API context",
+      "server/client auth and plan guards; explicit deep-link precedence",
+      "map errors inline and location on user action",
+      "stable bank/history query context",
+      "empty media feedback guards in child and product editor",
+      "ready company scope for staff REST reads; salary assignment timestamp shared through hydration",
+      "SSR pickup location read"
+    ]
+  },
+  "diffCheck": {
+    "status": "passed",
+    "log": "diff-check-final.log"
+  },
+  "cleanupPolicyBlocks": {
+    "reason": "Automatic approval review: blocked by policy; no deletion retried",
+    "remaining": [
+      "C:/Users/User/AppData/Local/Temp/markit-branch-e2e-zgMfk6",
+      "C:/markit-v1/storetools/node_modules/.cache/branch-e2e-profiles/markit-branch-e2e-4LlEdb",
+      "C:/markit-v1/storetools/node_modules/.cache/branch-e2e-profiles/markit-branch-e2e-IDkKQR"
+    ]
+  },
+  "finalFocusedSmoke": {
+    "report": "readiness-final-smoke.json",
+    "pageSummary": {
+      "failed": 4,
+      "passed": 8
+    },
+    "interactionSummary": {
+      "passed": 2
+    },
+    "hydrationWarnings": 0,
+    "remaining": "Known allocation-table and expense-column dependencies only"
+  },
+  "transportHeaderFailure": {
+    "report": "native-header-overflow-before.json",
+    "observedServerTimingBytes": 18073,
+    "cause": "UND_ERR_HEADERS_OVERFLOW",
+    "fix": "Explicit nitro.timing:false; production browser retest pending",
+    "observerSession": null,
+    "status": "verified: native model fetch HTTP 200, Server-Timing absent throughout both complete role audits",
+    "afterReport": "native-header-after.json",
+    "maxBytes": {
+      "head": 0,
+      "branch": 0
+    }
+  },
+  "externalServiceBlocker": {
+    "service": "Google Maps reverse geocoding",
+    "message": "Geocoding Service: You must enable Billing on the Google Cloud Project",
+    "codeChange": "Inline recoverable address service error; Cloud billing not enabled"
+  },
+  "scopeHydrationEvidence": {
+    "report": "hydration-probe-3109.json",
+    "beforeLog": "scope-page-readiness-before-fix.log",
+    "afterLog": "scope-page-readiness-candidate.log",
+    "before": {
+      "passed": 5,
+      "failed": 2
+    },
+    "candidate": {
+      "passed": 7,
+      "failed": 0
+    }
+  },
+  "lateSsrFetchEvidence": {
+    "report": "ssr-fetch-before-fix.json",
+    "beforeLogs": [
+      "ssr-refetch-before-fix.log",
+      "expense-refetch-before-fix.log"
+    ],
+    "afterLog": "ssr-refetch-candidates.log",
+    "candidate": {
+      "passed": 11,
+      "failed": 0
+    },
+    "fix": "Await current in-flight refetch without a persistent suspense options watcher; preserve completed same-key reads and disabled queries."
+  },
+  "remainingLocalCandidates": [
+    {
+      "page": "pages/erp/sales.vue",
+      "issue": "Initial raw sales rows/totals are not transferred before hydration",
+      "before": "sales-list-before-fix.log",
+      "candidate": "sales-list-candidate.log",
+      "status": "Applied and verified in both-role browser retest",
+      "browserReport": "isolated-pages-final.json"
+    },
+    {
+      "page": "pages/products/index.vue",
+      "issue": "Date cells depend on ambient server/browser locale",
+      "before": "product-date-before-fix.log",
+      "candidate": "product-date-candidate.log",
+      "status": "Applied and verified in both-role browser retest",
+      "browserReport": "isolated-pages-final.json"
+    }
+  ],
+  "remainingBrowserFailures": [
+    {
+      "company": "head",
+      "route": "/settings/store",
+      "status": "failed",
+      "evidence": "settings-browser-final.json"
+    },
+    {
+      "company": "head",
+      "route": "/storefront/editor",
+      "status": "blocked-read-only",
+      "evidence": "all-pages-final.json"
+    },
+    {
+      "company": "branch",
+      "route": "/storefront/editor",
+      "status": "blocked-read-only",
+      "evidence": "all-pages-final.json"
+    }
+  ],
+  "temporaryServices": {
+    "status": "All owned follow-up test servers, browser processes and controllers completed; no temporary service remains running.",
+    "historicalPolicyBlockedProfiles": "The three earlier blocked folders were not touched; see cleanupPolicyBlocks."
+  },
+  "previousCheckpoint": {
+    "updatedAt": "2026-10-21T04:08:07.248Z",
+    "regressions": {
+      "command": "npm run test:branches -- tests/audit-job.test.ts",
+      "passed": 92,
+      "failed": 0,
+      "vuePagesCompiled": 146,
+      "includes": "request-scoped model authentication, Decimal/date Nuxt payload serialization, fixture guards, SELECT-only bill readiness, page v-model checks and real Chrome company controls",
+      "status": "All 92 current regression checks passed, including sales-list rows/totals hydration and product Date cells under different ambient locales/timezones. All 146 Vue pages compile.",
+      "log": "regression-isolated-pages.log",
+      "retryLog": "regression-cleanup-retry.log",
+      "additionalChecks": {
+        "passed": 3,
+        "failed": 0,
+        "log": "printer-reader-guard.log",
+        "overlapWithMainSuite": 2,
+        "history": "history-loading-after-fix.log: 1 passed"
+      }
+    },
+    "allPagesBrowser": {
+      "status": "Complete seller head-office/branch audit plus successful isolated both-role page retests finished. Remaining failures and unverified saves are explicit.",
+      "buildStartedAt": "2026-10-21T03:53:29.761Z",
+      "bundleFingerprint": "02e432730b3b836b94dc762fcc0d8f38df2c41a29f9ff1c0356b27a72546f697",
+      "observerSession": 6792,
+      "partialReports": [
+        "all-pages-first-attempt.json",
+        "all-pages-second-attempt.json",
+        "all-pages-development-resource-attempt.json"
+      ],
+      "priorBuild": "bundled-build-first-attempt.log",
+      "buildLog": "bundled-build-isolated-pages.log",
+      "log": "bundled-all-pages.log",
+      "browserReport": "all-pages-final.json",
+      "buildSession": null,
+      "buildProcessId": null,
+      "browserSession": null,
+      "activeRuntimeReport": "C:/markit-v1/artifacts/storetools-branch-e2e-run/results.json",
+      "catalogFollowupSession": null,
+      "firstPassSummary": {
+        "no-existing-record": 18,
+        "passed": 233,
+        "failed": 36,
+        "blocked-read-only": 2
+      },
+      "readOnlyFollowupScript": "C:/markit-v1/artifacts/storetools-branch-e2e-run/run-readonly-followup.mjs",
+      "separateJobGuard": "audit-job-check.log: 1 passed; forms/dev mode rejected",
+      "buildStatus": "passed: Nitro rebuilt; compiled client/SSR and source fingerprints verified",
+      "readOnlyFollowupSession": null,
+      "readOnlyJobs": null,
+      "isolationCheck": "branch-isolation-check.json",
+      "previousFullRetest": {
+        "report": "all-pages-before-local-fixes.json",
+        "pageSummary": {
+          "passed": 260,
+          "failed": 9,
+          "no-existing-record": 18,
+          "blocked-read-only": 2
+        }
+      },
+      "readinessSmoke": "readiness-final-smoke.json",
+      "controllerSession": null,
+      "verificationMethod": "Complete head-office and branch audit followed by targeted both-role retests after two isolated page fixes; every other runtime source hash is unchanged.",
+      "baselineBundleFingerprint": "1e4a44b190b51e21c56d23572024a220ae9299a2451250b0b380571571d9bfb3",
+      "changedSources": [
+        "package.json",
+        "pages/erp/sales.vue",
+        "pages/products/index.vue"
+      ],
+      "unchangedRuntimeSourcesVerified": true,
+      "pageSummary": {
+        "no-existing-record": 18,
+        "passed": 262,
+        "failed": 7,
+        "blocked-read-only": 2
+      },
+      "interactionSummary": {
+        "passed": 28,
+        "no-visible-expandable-record": 1
+      },
+      "finishedAt": "2026-10-21T04:06:41.833Z",
+      "isolatedRetest": "isolated-pages-final.json"
+    },
+    "remainingBrowserFailures": [
+      {
+        "company": "head",
+        "route": "/distributor/credit",
+        "errors": [
+          {
+            "kind": "api",
+            "path": "/api/model/distributorCompany/findMany",
+            "status": 400
+          },
+          {
+            "kind": "query-state",
+            "count": 2
+          }
+        ],
+        "hydrationWarnings": []
+      },
+      {
+        "company": "head",
+        "route": "/distributor",
+        "errors": [
+          {
+            "kind": "api",
+            "path": "/api/model/distributorCompany/findMany",
+            "status": 400
+          },
+          {
+            "kind": "query-state",
+            "count": 2
+          }
+        ],
+        "hydrationWarnings": []
+      },
+      {
+        "company": "head",
+        "route": "/distributor/payments",
+        "errors": [
+          {
+            "kind": "query-state",
+            "count": 1
+          }
+        ],
+        "hydrationWarnings": []
+      },
+      {
+        "company": "head",
+        "route": "/distributor/purchaseOrder",
+        "errors": [
+          {
+            "kind": "query-state",
+            "count": 1
+          }
+        ],
+        "hydrationWarnings": []
+      },
+      {
+        "company": "head",
+        "route": "/erp/expenses",
+        "errors": [
+          {
+            "kind": "query-state",
+            "count": 1
+          }
+        ],
+        "hydrationWarnings": []
+      },
+      {
+        "company": "head",
+        "route": "/settings/store",
+        "errors": [
+          {
+            "kind": "console-error",
+            "source": "https://maps.googleapis.com/maps/api/js",
+            "line": 2559,
+            "category": "maps-billing-required"
+          }
+        ],
+        "hydrationWarnings": []
+      },
+      {
+        "company": "branch",
+        "route": "/erp/expenses",
+        "errors": [
+          {
+            "kind": "query-state",
+            "count": 1
+          }
+        ],
+        "hydrationWarnings": []
+      }
+    ]
+  },
+  "schemaAuthorization": "User explicitly authorized schema.zmodel -> npx zenstack generate -> npx prisma db push on the .env test database, then separately authorized the repository purchase-accounting SQL deployment with backups and no historical rewrites.",
+  "schemaSync": {
+    "finishedAt": "2026-10-21T06:48:48.282Z",
+    "command": "npx prisma db push --skip-generate --schema prisma/schema.prisma",
+    "schemaHash": "a6c564b0d91483cb834e309e39bfce5f5cbb97e63a57372b51ab1ccdfb2f8aff",
+    "prismaHash": "906fb6aefed3ca0e7f0626f9e067efc6a004626ca2597d5cc20cb376bc84e560",
+    "exitCode": 0,
+    "existingRowsUnchanged": true,
+    "backedUpTables": [
+      "accountant_v2_distributor_mappings",
+      "accountant_v2_distributor_settings",
+      "accountant_v2_distributor_sources",
+      "accountant_v2_erp_settings",
+      "accountant_v2_erp_sources",
+      "accountant_v2_investor_events",
+      "accountant_v2_investor_terms",
+      "accountant_v2_investors",
+      "accountant_v2_manual_journal_lines",
+      "accountant_v2_stock_control",
+      "accountant_v2_user_settings",
+      "accountant_v2_user_sources",
+      "expenses",
+      "distributor_payment_allocations"
+    ],
+    "handwrittenSchemaSqlExecuted": false,
+    "acceptedDataLoss": false,
+    "report": "schema-push-followup.json",
+    "backup": "schema-push-backup.json",
+    "compatibilityReport": "schema-compatibility.json",
+    "modelsChecked": 175,
+    "missingTables": 0,
+    "missingColumns": 0
+  },
+  "sourceWriteVerification": {
+    "billingAndCatalogProduct": {
+      "passed": 16,
+      "report": "billing-writes-followup.json",
+      "cleanup": "verified: all test bills and transaction effects rolled back",
+      "scope": "Both offices with ERP enabled: exact Cash/UPI/Credit/Split/Card journals; stock lifecycle/retries; customer partial/full collections, receipt reversal and isolation; product/coupon checks"
+    },
+    "expenses": {
+      "passed": 2,
+      "report": "expense-writes-followup.json",
+      "cleanup": "verified: expense fixtures and all transaction effects rolled back",
+      "scope": "Both offices with ERP enabled: exact expense/input-tax/accrual/cash-bank postings and reversals"
+    },
+    "settings": {
+      "status": "passed",
+      "modelRoleSuites": 2,
+      "apiRoleSuites": 2,
+      "reports": [
+        "settings-writes-followup.json",
+        "settings-api-expanded.json"
+      ],
+      "cleanup": "verified rollback",
+      "scope": "Store/profile, prefixes, printer settings, product inputs/dimensions/units, request preferences, account defaults, print design backups, branch creation and financial-year fixture numbering; role/company validation"
+    },
+    "staff": {
+      "status": "passed for head and branch",
+      "logs": [
+        "accounting-staff-head.log",
+        "accounting-staff-branch.log"
+      ],
+      "scope": "Actual salary/credit/repayment/payroll APIs, balances and reversals; rollback-only"
+    },
+    "purchases": {
+      "status": "passed for head and branch",
+      "purchases": {
+        "head": {
+          "passed": 26,
+          "log": "accounting-purchases-head.log"
+        },
+        "branch": {
+          "passed": 26,
+          "log": "accounting-purchases-branch.log"
+        }
+      },
+      "scope": "Actual handlers/native triggers; own zero-history branch supplier connection inside rollback transaction",
+      "historicalImports": false
+    }
+  },
+  "billingMissingFunction": "Resolved in application code: parameterized source DML replaces create_bill_source_plpgsql; invoice/accounting triggers retained.",
+  "browserFollowup": {
+    "startedAt": "2026-10-21T06:58:28.970Z",
+    "phase": "complete",
+    "jobs": [
+      {
+        "name": "catalog-followup",
+        "exitCode": 0,
+        "pageSummary": {
+          "passed": 26
+        },
+        "forms": [
+          {
+            "company": "head",
+            "form": "coupon",
+            "status": "passed"
+          },
+          {
+            "company": "head",
+            "form": "brand",
+            "status": "passed"
+          },
+          {
+            "company": "head",
+            "form": "collection",
+            "status": "passed"
+          },
+          {
+            "company": "head",
+            "form": "category",
+            "status": "passed"
+          },
+          {
+            "company": "branch",
+            "form": "coupon",
+            "status": "passed"
+          },
+          {
+            "company": "branch",
+            "form": "brand",
+            "status": "passed"
+          },
+          {
+            "company": "branch",
+            "form": "collection",
+            "status": "passed"
+          },
+          {
+            "company": "branch",
+            "form": "category",
+            "status": "passed"
+          }
+        ],
+        "fixtureCleanup": "verified",
+        "catalogFixtureCleanup": "verified"
+      },
+      {
+        "name": "detail-pages-followup",
+        "exitCode": 0,
+        "pageSummary": {
+          "passed": 38
+        },
+        "detailFixtureCleanup": "verified"
+      }
+    ],
+    "bundleFingerprint": "393506d71ac9517c6ee151660c6c8a0bd36518f4e260254cb2065a3a7db50d26",
+    "finishedAt": "2026-10-21T07:23:02.769Z"
+  },
+  "billingRegressions": {
+    "passed": 157,
+    "failed": 0,
+    "report": "billing/reports/latest.json",
+    "note": "Billing component sources unchanged since this successful run; backend source writes additionally exercised below."
+  },
+  "settingsFinalBrowser": {
+    "startedAt": "2026-10-21T09:40:44.995Z",
+    "phase": "complete",
+    "bundleFingerprint": "5a1230e4cd5856b087ae216253ae748e715eeaa99e0e6c731bd5dcffae58b8e0",
+    "rawAuditExitCode": 1,
+    "pageSummary": {
+      "passed": 28,
+      "failed": 2
+    },
+    "rejectedSavesPassed": 14,
+    "externalMapsBlockedVisits": 2,
+    "finishedAt": "2026-10-21T09:45:09.957Z",
+    "ownedShippingStopped": true
+  },
+  "settingsFixes": {
+    "applied": true,
+    "regressionChecks": 50,
+    "browserRejectedSaves": 14,
+    "modelRoleSuites": 2,
+    "apiRoleSuites": 2,
+    "report": "settings-final-verification.json",
+    "files": [
+      "pages/settings/numbering.vue",
+      "pages/settings/printer.vue",
+      "pages/settings/products.vue",
+      "pages/settings/account.vue",
+      "server/api/product-custom-fields/index.post.ts",
+      "server/api/bill/startNewYear.post.ts"
+    ]
+  },
+  "branchAccountingConfiguration": "ERP and staff accounting enabled on the authorized test branch using application services, after rollback preview and backups. 38 chart accounts provisioned. Existing financial data, stock and head-office books unchanged; no historical imports or opening balances.",
+  "remainingLimitations": [
+    "Google Maps project requires Cloud billing for reverse geocoding.",
+    "Storefront editor external-provisioning GETs remain blocked in read-only audit.",
+    "Actual password/OTP login, live media/carrier actions, every other form variation and a clean full-project typecheck are not established."
+  ],
+  "finalDiffCheck": {
+    "status": "passed",
+    "log": "diff-check-followup-final.log"
+  },
+  "purchaseAccountingDeployment": {
+    "finishedAt": "2026-10-21T07:59:01.399Z",
+    "sourceHash": "ee98a2ac4eb7af904383f28dadbe5b941fc290643dc0319155d52dac8fa45bee",
+    "status": "passed",
+    "existingRowsUnchanged": true,
+    "historicalImports": false,
+    "source": "scripts/production-accounting/lib/purchase-order-authority.sql",
+    "sqlDeploymentAuthorized": true,
+    "report": "purchase-authority-deployment.json",
+    "backup": "purchase-authority-deployment-backup.json"
+  },
+  "branchAccounting": {
+    "status": "passed",
+    "activation": "branch-accounting-activation.json",
+    "backup": "branch-accounting-activation-backup.json",
+    "suite": "branch-accounting-suite.json",
+    "integrity": "branch-accounting-readonly.json",
+    "locks": "branch-accounting-locks.json",
+    "purchases": {
+      "head": {
+        "passed": 26,
+        "log": "accounting-purchases-head.log"
+      },
+      "branch": {
+        "passed": 26,
+        "log": "accounting-purchases-branch.log"
+      }
+    }
+  },
+  "accountingHistory": "Activation posts new transactions. Old documents are excluded, and no historical balances were adopted in this task. Branch supplier scenarios used an owned temporary connected supplier; branch has no existing suppliers.",
+  "settingsBrowserReport": "settings-expanded-browser.json",
+  "latestSettingsBuild": {
+    "report": "bundled-manifest.json",
+    "fingerprint": "5a1230e4cd5856b087ae216253ae748e715eeaa99e0e6c731bd5dcffae58b8e0",
+    "status": "passed"
+  },
+  "companyWorkspace": {
+    "status": "passed-with-known-external-maps-limitation",
+    "verifiedAt": "2026-10-21T11:12:41.008Z",
+    "report": "company-workspace-verification.json",
+    "summary": "company-workspace-summary.txt",
+    "bundleFingerprint": "3558d7897da570995003541933b9035db9032768fed7807abf441af88c00ac63"
+  }
+}

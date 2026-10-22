@@ -16,7 +16,9 @@ async function makeHeadOffice() {
   saving.value = true;
   try {
     await $fetch('/api/branches/head-office', { method: 'POST' });
+    await auth.updateSession();
     await refresh();
+    await refreshNuxtData();
     toast.add({ title: 'Head office enabled' });
   } catch (error: any) {
     toast.add({ title: 'Could not enable head office', description: error?.data?.statusMessage, color: 'red' });
@@ -29,6 +31,7 @@ async function addBranch() {
     await $fetch('/api/branches', { method: 'POST', body: form });
     Object.assign(form, { name: '', phone: '', city: '', state: '' });
     await refresh();
+    await refreshNuxtData();
     toast.add({ title: 'Branch added' });
   } catch (error: any) {
     toast.add({ title: 'Could not add branch', description: error?.data?.statusMessage, color: 'red' });

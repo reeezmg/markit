@@ -29,7 +29,7 @@ const ranges = [
 
 const selectedDate = ref({ start: new Date(), end: new Date() })
 
-const getColumns = (isMobile) => {
+const getColumns = (isMobile: boolean) => {
   if (!isMobile) {
     return [
       { key: 'orderNumber', label: 'Order#', sortable: true },
@@ -85,12 +85,12 @@ const action = (row: any) => [
   ],
 ]
 
-const selectedColumns = ref([])
+const selectedColumns = ref<ReturnType<typeof getColumns>>([])
 watch(columns, (newColumns) => {
   selectedColumns.value = [...newColumns]
 }, { immediate: true })
 const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
-const columnsTable = computed(() => columns.value.filter((column) => selectedColumns.value.includes(column)))
+const columnsTable = computed(() => columns.value.filter((column) => selectedColumns.value.some(selected => selected.key === column.key)))
 
 const selectedRows = ref([])
 const notes = ref<any>({})
@@ -220,6 +220,17 @@ const fetchAll = async () => {
   await Promise.all([fetchSales(), fetchTotals()])
 }
 
+await companyScope.ready;
+const initialSales = await useAsyncData('online-sales:' + companyScope.readIds.value.join(','), async () => {
+  await fetchAll();
+  return { rows: sales.value, total: pageTotal.value, reportTotals: reportTotals.value };
+});
+if (initialSales.data.value) {
+  sales.value = initialSales.data.value.rows;
+  pageTotal.value = initialSales.data.value.total;
+  reportTotals.value = initialSales.data.value.reportTotals;
+}
+
 const styledSales = computed(() =>
   (sales.value || []).map(row => ({
     ...row,
@@ -330,7 +341,7 @@ onMounted(() => {
   fetchAll()
 })
 
-watch(() => billStore.lastUpdate, fetchAll, { immediate: true })
+watch(() => billStore.lastUpdate, fetchAll)
 
 const fetchFilteredSalesForExport = async () => {
   const allRows: any[] = []

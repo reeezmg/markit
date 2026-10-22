@@ -1,5 +1,14 @@
+import JsBarcode from 'jsbarcode';
+import { labelBarcode, requireLabelBarcode } from '../utils/label-barcode';
+import { getReceiptFinishing, receiptFeedBytes } from '../utils/receipt-finishing';
 import moment from 'moment';
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
+
+function finishReceipt(encoder: ReceiptPrinterEncoder) {
+  const settings = getReceiptFinishing();
+  encoder.raw(receiptFeedBytes(settings));
+  if (settings.autoCut) encoder.cut();
+}
 
 const COLUMN_WIDTHS = {
   sl: 4,
@@ -442,16 +451,12 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
     .newline(2);
 
   // End the main bill first so earned coupons print on a separate slip.
-  encoder
-    .newline(4)
-    .cut();
+  finishReceipt(encoder);
 
   appendGeneratedCoupons(encoder, bill);
 
   if (Array.isArray(bill.generatedCoupons) && bill.generatedCoupons.length) {
-    encoder
-      .newline(8)
-      .cut();
+    finishReceipt(encoder);
   }
 
   return encoder.encode();
@@ -646,8 +651,18 @@ export function buildReportReceiptBytes(r: any): Uint8Array {
     encoder.rule({ style: 'single' });
   }
 
-  encoder.newline(4).cut();
+  finishReceipt(encoder);
   return encoder.encode();
+}
+
+/** Reserve quiet zones and fit the native CODE128 command to a 50 mm, 203 DPI label. */
+export function labelBarcodeModuleWidth(barcode: string, preferred: number): number {
+  const encoded: any = {};
+  JsBarcode(encoded, barcode, { format: 'CODE128', width: 1, margin: 0, displayValue: false });
+  const modules = encoded.encodings.reduce((sum: number, part: any) => sum + part.data.length, 0);
+  const width = Math.min(preferred, Math.floor(378 / (modules + 20)));
+  if (width < 1) throw new Error('Barcode is too long for a 50 mm label. Use a wider label design.');
+  return width;
 }
 
 export function buildLabelPrintJobs(items: any[], printerLabelSize: string): Uint8Array[] {
@@ -657,7 +672,6 @@ export function buildLabelPrintJobs(items: any[], printerLabelSize: string): Uin
   return (items || []).map((item) => {
     const {
       shopname = '',
-      barcode = '',
       code = '',
       productName = '',
       name = '',
@@ -667,6 +681,9 @@ export function buildLabelPrintJobs(items: any[], printerLabelSize: string): Uin
       brand = '',
     } = item;
 
+    const barcode = requireLabelBarcode(labelBarcode(item));
+    const moduleWidth = labelBarcodeModuleWidth(barcode, labelSize === '50x38mm' ? 3 : 2);
+    const barcodeX = 10 + moduleWidth * 10;
     let tsplCommands = '';
 
     if (labelSize === '50x38mm') {
@@ -687,7 +704,7 @@ ${dprice != null ? `BAR 30,116,230,4` : ''}
 ${dprice != null ? `TEXT 30,136,"2",0,1,1,"Discount Rs.${formatMoney(dprice)}"` : ''}
 
 TEXT 10,168,"1",0,1,1,"${escapeLabelText(code)}-${escapeLabelText(brand)}"
-BARCODE 10,185,"128",80,0,0,3,3,"${escapeLabelText(barcode)}"
+BARCODE ${barcodeX},185,"128",80,0,0,${moduleWidth},${moduleWidth},"${escapeLabelText(barcode)}"
 TEXT 10,270,"1",0,1,1,"${escapeLabelText(barcode)}"
 
 PRINT 1,1
@@ -710,7 +727,7 @@ ${dprice != null ? `BAR 10,76,200,3` : ''}
 ${dprice != null ? `TEXT 10,90,"1",0,1,1,"Discount Rs.${formatMoney(dprice)}"` : ''}
 
 TEXT 10,110,"1",0,1,1,"${escapeLabelText(code)}-${escapeLabelText(brand)}"
-BARCODE 10,120,"128",60,0,0,2,2,"${escapeLabelText(barcode)}"
+BARCODE ${barcodeX},120,"128",60,0,0,${moduleWidth},${moduleWidth},"${escapeLabelText(barcode)}"
 TEXT 10,185,"1",0,1,1,"${escapeLabelText(barcode)}"
 
 PRINT 1,1

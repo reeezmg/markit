@@ -12,7 +12,7 @@ export const userAccountRoles:Record<string,{type:string;code:string}>={
 export async function userAccountingSettings(){
  const {db,companyId}=context();
  await ensureDefaults(companyId);
- await prisma.accountingAccount.createMany({data:[
+ if (!context().readOnly) await prisma.accountingAccount.createMany({data:[
   {name:'Salary Expense',code:'5200',accountType:'EXPENSE',category:'EXPENSE',isSystem:true},
   {name:'Salary Payable',code:'2260',accountType:'OTHER_CURRENT_LIABILITY',category:'LIABILITY',isSystem:true},
  ],skipDuplicates:true});

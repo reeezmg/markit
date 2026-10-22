@@ -3,7 +3,9 @@ import { format, startOfDay, endOfDay, sub, isSameDay, type Duration } from 'dat
 import PullToRefresh from 'pulltorefreshjs'
 import CategoryRevenuePie from '@/components/dashboard/CategoryRevenuePie.vue'
 
-const useAuth = () => useNuxtApp().$auth
+const companyScope = useCompanyScope('table');
+const $fetch = companyScope.fetch;
+const useAuth = () => companyScope.auth;
 const scrollContainer = ref<HTMLElement | null>(null)
 const loading = ref(false)
 const toast = useToast()
@@ -59,6 +61,7 @@ const fetchReport = async () => {
 }
 
 watch(selectedDate, fetchReport, { deep: true })
+watch(companyScope.readIds, fetchReport);
 
 onMounted(async () => {
   await fetchReport()
@@ -128,6 +131,7 @@ const categoryRows = computed(() => {
 
 <template>
   <UDashboardPanelContent>
+    <CompanyTableFilter />
     <ReportsBasis kind="source" detail="Marketplace bills and payments. These are operational totals, not posted accounting income." />
     <div ref="scrollContainer" class="scroll-container">
       <div class="space-y-6 p-4 md:p-6">

@@ -1,0 +1,380 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 8172,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/erp/expenses",
+      "status": "failed",
+      "landed": "/erp/expenses",
+      "expectedPath": "/erp/expenses",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 1,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 24153,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "query-state",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/distributor/credit",
+      "status": "failed",
+      "landed": "/distributor/credit",
+      "expectedPath": "/distributor/credit",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 2,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "div"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 22248,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/CW5mMX--.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "query-state",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/users/salary",
+      "status": "passed",
+      "landed": "/users/salary",
+      "expectedPath": "/users/salary",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 7072,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/users/attendance",
+      "status": "passed",
+      "landed": "/users/attendance",
+      "expectedPath": "/users/attendance",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 8310,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/erp/expenses",
+      "status": "failed",
+      "landed": "/erp/expenses",
+      "expectedPath": "/erp/expenses",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 1,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "tr"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 4556,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/CW5mMX--.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        },
+        {
+          "kind": "query-state",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "company": "branch",
+      "route": "/distributor/credit",
+      "status": "passed",
+      "landed": "/distributor/credit",
+      "expectedPath": "/distributor/credit",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3514,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/users/salary",
+      "status": "passed",
+      "landed": "/users/salary",
+      "expectedPath": "/users/salary",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4396,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/users/attendance",
+      "status": "passed",
+      "landed": "/users/attendance",
+      "expectedPath": "/users/attendance",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4407,
+      "errors": []
+    }
+  ],
+  "switches": [
+    {
+      "direction": "head-to-branch",
+      "status": 200,
+      "persisted": true
+    },
+    {
+      "direction": "branch-to-head",
+      "status": 200,
+      "persisted": true
+    }
+  ],
+  "errors": [],
+  "startedAt": "2026-10-21T02:19:57.792Z",
+  "bundleFingerprint": "98015783334404510a4514f7ce6e2776eda3d82b2b5590c2b319982d69533795",
+  "serverProcessId": 20752,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [],
+  "currentPage": {
+    "company": "branch",
+    "route": "/users/attendance",
+    "startedAt": "2026-10-21T02:21:48.700Z"
+  },
+  "serverTimingMaxBytes": 0,
+  "interactions": [
+    {
+      "company": "head",
+      "route": "/users/salary",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    },
+    {
+      "company": "head",
+      "route": "/users/attendance",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    }
+  ],
+  "pageSummary": {
+    "failed": 3,
+    "passed": 5
+  },
+  "formSummary": {},
+  "interactionSummary": {
+    "passed": 2
+  },
+  "pageAuditStatus": "failed",
+  "finishedAt": "2026-10-21T02:21:58.258Z"
+}

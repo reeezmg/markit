@@ -1,0 +1,29 @@
+Seller head-office / branch test-fix-test report
+Updated: 2026-10-21T04:06:59.041Z
+Bundle: 02e432730b3b836b94dc762fcc0d8f38df2c41a29f9ff1c0356b27a72546f697
+Verification: Complete head-office and branch audit followed by targeted both-role retests after two isolated page fixes; every other runtime source hash is unchanged.
+Environment: existing user-confirmed test database; no schema changes applied.
+
+Regression checks: 92 passed, 0 failed. All 146 Vue pages compile.
+Production build: passed with 8192 MB Node heap.
+Page audit: {"no-existing-record":18,"passed":262,"failed":7,"blocked-read-only":2}
+Browser interactions: {"passed":28,"no-visible-expandable-record":1}
+Catalog CRUD: {"passed":6}; coupon cleanup verified; catalog cleanup verified.
+
+Remaining browser failures:
+- head /distributor/credit: /api/model/distributorCompany/findMany; query-state
+- head /distributor: /api/model/distributorCompany/findMany; query-state
+- head /distributor/payments: query-state
+- head /distributor/purchaseOrder: query-state
+- head /erp/expenses: query-state
+- head /settings/store: maps-billing-required
+- branch /erp/expenses: query-state
+
+Native transport: HTTP 200 and no Server-Timing header after the fix; maximum timing bytes across both complete audits: {"head":0,"branch":0}
+External service: Google Maps reverse geocoding reports that billing must be enabled on its Cloud project. Cloud billing was not enabled by this change.
+Database dependencies absent: public.distributor_payment_allocations; expenses.distributor_id; expenses.client_id; create_bill_source_plpgsql(jsonb). No database schemas or SQL functions were installed or altered.
+Missing-record routes are unverified. Storefront editor routes that can write external state are blocked in the read-only audit. Actual password login, every non-catalog form save and live carrier operations remain unverified.
+Typecheck is not clean: last completed run reported 988 errors and predates these fixes; later memory-raised attempt was stopped incomplete.
+
+Evidence: all-pages-final.json; isolated-pages-final.json; catalog-final.json; database-blockers-final.json; regression-isolated-pages.log; current-status.json.
+Automatic approval review blocked deleting the earlier Temp Chrome profile markit-branch-e2e-zgMfk6. That directory and the two policy-blocked interrupted workspace browser profiles remain; deletion was not retried.

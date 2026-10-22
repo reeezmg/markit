@@ -1,0 +1,12 @@
+Head-office / branch settings verification
+Updated: 2026-10-21T09:45:27.715Z
+PASS: tested settings save/reload and company/role isolation for both offices. The external Maps billing failure remains.
+Fixed: Numbering and Printer saves await database/session completion, retain loading and reject duplicate clicks. Product inputs, units, size labels and dimension flags save atomically through nested upserts; dirty state tracks every field. Account save retries clear stale errors.
+Fixed: custom-field replacement requires an array, rejects duplicate/foreign-company IDs before replacement, and guards conflict updates by ownership. Financial-year API validates role/company/date, locks its company and explicitly casts typed parameters.
+Tests: 145 branch regressions passed, all 146 Vue pages compile; 50 settings component checks plus 2 accounting-router unit suites passed.
+Real model saves: store/profile, prefixes, printer label size, product inputs/units/dimensions, request preferences, address/policies and company isolation passed for head and branch.
+Real API saves: all 20 account-default selectors per office, ERP/staff mapping roundtrip without activation, custom-field create/edit/validation/isolation, print-template persistence/backups/permissions, real branch creation and financial-year numbering of owned zero-value fixture bills passed.
+Browser: {"passed":28,"failed":2}; all 14 rejected-save interactions passed. The server enforced read-only mutations, errors displayed without success, loading cleared, and auth snapshots stayed unchanged. Current bundle source fingerprint: 5a1230e4cd5856b087ae216253ae748e715eeaa99e0e6c731bd5dcffae58b8e0
+All owned data fixtures and transaction effects rolled back. Existing settings/history were not changed by these tests; no database schema changes. Owned browser/audit/shipping processes stopped.
+Limits: Maps Cloud billing; actual email OTP delivery, media uploads and physical printer output remain unverified.
+Evidence: settings-final-verification.json; settings-api-expanded.json; settings-writes-followup.json; settings-expanded-browser.json; settings-expanded-browser-controller.json; settings-expanded-branches.log; settings-expanded-final.log; bundled-manifest.json.

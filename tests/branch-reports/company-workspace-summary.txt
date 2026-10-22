@@ -1,0 +1,20 @@
+ERP company selection and Settings verification
+
+Head-office admins can select branches locally without changing the login company.
+Settings tabs preserve entryCompany; each child owns its own save context.
+Offline stock, legacy account history, notifications and cleanup now expose local company controls.
+Statements resolve their record's company; their company field is locked.
+Printer templates, dimensions and shipping preferences use authorized company scope.
+
+151 regressions passed; 14 focused isolation checks passed; all 146 Vue pages compile.
+Static ERP scope inventory: 99 pages, no unclassified active-session gaps.
+Actual database: head and branch-managed-from-head API saves/reloads passed; 20 account selectors per context.
+All test graph/financial-year fixture records rolled back and absence verified.
+16 real billing/customer-collection scenarios and 2 expense contexts passed after current-settings changes; all transaction effects rolled back.
+Actual browser: branch selection, branch values, tab retention and unchanged head session passed; 7 rejected-save checks passed.
+Production bundle: 3558d7897da570995003541933b9035db9032768fed7807abf441af88c00ac63
+Known external Maps visits: 2. No other browser errors allowed.
+
+Limits: not a fresh CRUD walkthrough of every ERP page; separate Storefront routes remain out of scope.
+Email/password/avatar remain user-wide. Organization hierarchy is managed from head office.
+Detailed evidence: company-workspace-verification.json, company-workspace-page-coverage.json, settings-head-scope-api.json, company-workspace-browser.json.

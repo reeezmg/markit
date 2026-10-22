@@ -1,3 +1,4 @@
+import { createTableReadinessCheck } from '~/server/utils/schemaReadiness'
 import { storefrontTransport, storefrontUsesAws } from './storefrontTransport'
 import { awsStorefrontRequest } from './awsStorefront'
 import crypto from 'node:crypto'
@@ -67,45 +68,7 @@ export function shouldAutoPlanStorefrontTask(value: string) {
   return broadScope || domains >= 3 || listedItems >= 3 || (text.length > 700 && domains >= 2)
 }
 
-let tableReady: Promise<void> | null = null
-
-export function ensureStorefrontAgentSessionsTable() {
-  if (!tableReady) {
-    tableReady = pool.query(`
-      CREATE TABLE IF NOT EXISTS storefront_agent_sessions (
-        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-        user_id TEXT,
-        conversation_id TEXT NOT NULL,
-        interaction_id TEXT,
-        environment_id TEXT,
-        status TEXT NOT NULL DEFAULT 'IDLE',
-        stage TEXT NOT NULL DEFAULT 'idle',
-        title TEXT,
-        messages JSONB NOT NULL DEFAULT '[]'::jsonb,
-        timing_report JSONB NOT NULL DEFAULT '{}'::jsonb,
-        saved_interaction_id TEXT,
-        initial_preview_sha TEXT,
-        deployment_triggered BOOLEAN NOT NULL DEFAULT FALSE,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        UNIQUE (company_id, conversation_id)
-      );
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS initial_preview_sha TEXT;
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS deployment_triggered BOOLEAN NOT NULL DEFAULT FALSE;
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS stage TEXT NOT NULL DEFAULT 'idle';
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS title TEXT;
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS messages JSONB NOT NULL DEFAULT '[]'::jsonb;
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS saved_interaction_id TEXT;
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS initial_main_sha TEXT;
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS timing_report JSONB NOT NULL DEFAULT '{}'::jsonb;
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS plan_state JSONB;
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS user_id TEXT;
-      ALTER TABLE storefront_agent_sessions ADD COLUMN IF NOT EXISTS queued_messages JSONB NOT NULL DEFAULT '[]'::jsonb;
-    `).then(() => undefined)
-  }
-  return tableReady
-}
+export const ensureStorefrontAgentSessionsTable = createTableReadinessCheck(['storefront_agent_sessions'], 'Storefront agent')
 
 export async function listStorefrontQueuedMessages(companyId: string, conversationId: string) {
   await ensureStorefrontAgentSessionsTable()

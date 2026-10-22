@@ -1,3 +1,4 @@
+import { createTableReadinessCheck } from '~/server/utils/schemaReadiness'
 import { createSign } from 'node:crypto'
 import { pool } from '~/server/db'
 
@@ -11,44 +12,7 @@ type GitHubConfig = {
   templateRepository: string
 }
 
-let tableReady: Promise<void> | null = null
-
-export function ensureStorefrontSourcesTable() {
-  if (!tableReady) {
-    tableReady = pool.query(`
-      CREATE TABLE IF NOT EXISTS storefront_sources (
-        id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-        company_id TEXT NOT NULL UNIQUE REFERENCES companies(id) ON DELETE CASCADE,
-        repository_id BIGINT,
-        repository_full_name TEXT,
-        preview_branch TEXT NOT NULL DEFAULT 'preview',
-        status TEXT NOT NULL CHECK (status IN ('CREATING', 'READY', 'FAILED')),
-        error_message TEXT,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      );
--- Additive migration: existing companies keep their legacy providers.
-ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS repository_provider TEXT NOT NULL DEFAULT 'github';
-ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS hosting_provider TEXT NOT NULL DEFAULT 'vercel';
-ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS repository_arn TEXT;
-ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS amplify_app_id TEXT;
-ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS sandbox_role_arn TEXT;
-ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS template_digest TEXT;
-ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS provisioning_stage TEXT;
-
-      ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS vercel_project_id TEXT;
-      ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS preview_deployment_id TEXT;
-      ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS preview_deployment_url TEXT;
-      ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS preview_branch_url TEXT;
-      ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS preview_deployment_status TEXT;
-      ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS production_deployment_id TEXT;
-      ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS production_deployment_url TEXT;
-      ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS production_url TEXT;
-      ALTER TABLE storefront_sources ADD COLUMN IF NOT EXISTS production_deployment_status TEXT;
-    `).then(() => undefined)
-  }
-  return tableReady
-}
+export const ensureStorefrontSourcesTable = createTableReadinessCheck(['storefront_sources'], 'Storefront source')
 
 function base64Url(value: string | Buffer) {
   return Buffer.from(value).toString('base64url')

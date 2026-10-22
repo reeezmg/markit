@@ -432,7 +432,7 @@ const resetFilters = () => {
 // Pagination
 const sort = useLocalStorageRef('sort', { column: 'createdAt', direction: 'desc' as const }, 'product');
 
-const expand = { openedRows: [], row: null };
+const expand = ref<{ openedRows: any[]; row: any }>({ openedRows: [], row: null });
 
 const page = useLocalStorageRef('page', 1, 'product');
 
@@ -1090,7 +1090,8 @@ watch(companyScope.companyId, () => { itemBarcode.value = ''; discountFilters.ca
                 </template>
 
                <template #createdAt-data="{ row }">
-                    {{ new Date(row.createdAt).toLocaleString(undefined, {
+                    {{ new Date(row.createdAt).toLocaleString('en-IN', {
+                        timeZone: 'Asia/Kolkata',
                         year: 'numeric',
                         month: 'short',
                         day: 'numeric',

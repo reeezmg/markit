@@ -1,6 +1,6 @@
 // server/api/notifications/notify.post.ts
 import { prisma } from '~/server/utils/prisma'
-import { broadcastToCompany } from '~/server/ws/server'
+import { assertCompanyAccess } from '~/server/utils/companyRequestScope'
 
 const validTypes = ['BILL', 'EXPENSE','ORDER','LOW_STOCK'] as const;
 type NotificationType = typeof validTypes[number];
@@ -8,7 +8,10 @@ type NotificationType = typeof validTypes[number];
 
 
 export default defineEventHandler(async (event) => {
+  const session = await requireAuthSession(event)
   const body = await readBody(event)
+  await assertCompanyAccess(event, body.companyId)
+  body.userId = session.data.id
 
   if (!validTypes.includes(body.type as NotificationType)) {
     throw createError({ statusCode: 400,
@@ -98,9 +101,9 @@ export default defineEventHandler(async (event) => {
           break;
 
           case 'LOW_STOCK':
-            const variant = await prisma.variant.findUnique({
-              where: { id:body.variantId },
-              include: { product: true }
+            const variant = await prisma.variant.findFirst({
+              where: { id: body.variantId, companyId: body.companyId },
+              include: { product: true, items: { select: { qty: true } } }
             });
             if (!variant) {
               throw createError({
@@ -124,7 +127,7 @@ export default defineEventHandler(async (event) => {
                   },
                 type: 'INVENTORY_LOW',
                 title: 'LOW STOCK',
-                message: `Variant : ${variant.name || 'N/A'} is low on stock. Quantity left : ${variant.qty} `,
+                message: `Variant : ${variant.name || 'N/A'} is low on stock. Quantity left : ${variant.items.reduce((sum, item) => sum + (item.qty ?? 0), 0)} `,
                 actionPath: `/products`,
                 metadata: {
                   variantId: variant.id,
@@ -143,21 +146,9 @@ export default defineEventHandler(async (event) => {
           });
       }
 
-    // Broadcast to connected clients
-      await fetch('http://localhost:3004/broadcast', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        companyId: body.companyId,
-        senderId: body.userId,
-        notification
-      })
-    })
-
     return { success: true, notification }
-  } catch (error) {
+  } catch (error: any) {
+    if (error?.statusCode) throw error
     console.error('Notification creation failed:', error)
     throw createError({
       statusCode: 500,

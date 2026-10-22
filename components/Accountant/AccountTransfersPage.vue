@@ -11,124 +11,89 @@
         >New Transfer</UButton
       >
     </div>
-    <UCard :ui="{ body: { padding: 'p-0 sm:p-0' } }">
-      <div class="border-b border-gray-200 dark:border-gray-700 p-3">
-        <UInput
-          v-model="search"
-          icon="i-lucide-search"
-          placeholder="Search transfers..."
-          class="w-full"
-        />
-      </div>
-      <div class="grid min-h-[520px] lg:grid-cols-[390px_1fr]">
-        <div class="border-r border-gray-200 dark:border-gray-700">
-          <button
-            v-for="row in filtered"
-            :key="row.id"
-            class="w-full border-b border-gray-200 dark:border-gray-700 p-4 text-left hover:bg-gray-50 dark:bg-gray-800"
-            :class="{
-              'bg-primary-50 dark:bg-primary-950/20': selected?.id === row.id,
-            }"
-            @click="selectedId = row.id"
-          >
-            <div class="flex justify-between">
-              <div class="font-medium text-primary">
-                {{ row.transferNumber }}
-              </div>
-              <div class="font-semibold">
-                {{ money(row.amount, row.currency) }}
-              </div>
-            </div>
-            <div class="mt-1 truncate text-xs text-gray-500 dark:text-gray-400">
-              {{ row.fromAccount?.name }} → {{ row.toAccount?.name }} ·
-              {{ date(row.transferDate) }}
-            </div>
-          </button>
-          <div
-            v-if="!filtered.length"
-            class="p-8 text-center text-sm text-gray-500 dark:text-gray-400"
-          >
-            No transfers found.
+    <UCard
+      class="w-full"
+      :ui="{
+        divide: 'divide-y divide-gray-200 dark:divide-gray-700',
+        header: { padding: 'px-4 py-5' },
+        body: { padding: '', base: 'divide-y divide-gray-200 dark:divide-gray-700' },
+        footer: { padding: 'p-4' },
+      }"
+    >
+      <template #header>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <UInput
+            v-model="search"
+            icon="i-heroicons-magnifying-glass-20-solid"
+            placeholder="Search transfers..."
+            aria-label="Search transfers"
+            class="w-full sm:w-64"
+          />
+          <div class="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+            <span>Rows per page</span>
+            <USelect v-model="pageSize" :options="[10, 25, 50, 100]" aria-label="Rows per page" />
           </div>
         </div>
-        <div v-if="selected" class="p-6">
-          <div
-            class="flex items-start justify-between border-b border-gray-200 dark:border-gray-700 pb-5"
-          >
-            <div>
-              <h3 class="text-xl font-semibold">
-                {{ selected.transferNumber }}
-              </h3>
-              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                {{ date(selected.transferDate)
-                }}<span v-if="selected.referenceNumber">
-                  · Ref: {{ selected.referenceNumber }}</span
-                >
-              </p>
-            </div>
-            <div v-if="!selected.imported" class="flex gap-2">
-              <UButton
-                color="gray"
-                variant="soft"
-                icon="i-lucide-pencil"
-                @click="openEdit(selected)"
-                >Edit</UButton
-              ><UButton
-                color="red"
-                variant="soft"
-                icon="i-lucide-trash-2"
-                @click="remove"
-                >Delete</UButton
-              >
-            </div>
-          </div>
-          <div class="my-8 grid items-center gap-4 sm:grid-cols-[1fr_auto_1fr]">
-            <div class="rounded-lg border border-gray-200 dark:border-gray-700 p-5">
-              <div class="text-xs uppercase text-gray-500 dark:text-gray-400">From Account</div>
-              <div class="mt-2 text-lg font-semibold">
-                {{ selected.fromAccount?.name }}
-              </div>
-              <div class="text-xs text-gray-500 dark:text-gray-400">
-                {{ selected.fromAccount?.accountType.replaceAll("_", " ") }}
-              </div>
-            </div>
-            <UIcon
-              name="i-lucide-arrow-right"
-              class="mx-auto size-6 text-primary"
-            />
-            <div class="rounded-lg border border-success-200 bg-success-50 p-5">
-              <div class="text-xs uppercase text-success-700">To Account</div>
-              <div class="mt-2 text-lg font-semibold text-success-700">
-                {{ selected.toAccount?.name }}
-              </div>
-              <div class="text-xs text-success-600">
-                {{ selected.toAccount?.accountType.replaceAll("_", " ") }}
-              </div>
-            </div>
-          </div>
-          <div class="rounded-lg bg-gray-50 dark:bg-gray-800 p-5 text-center">
-            <div class="text-xs uppercase text-gray-500 dark:text-gray-400">Amount Transferred</div>
-            <div class="mt-1 text-3xl font-bold">
-              {{ money(selected.amount, selected.currency) }}
-            </div>
-          </div>
-          <p
-            v-if="selected.description"
-            class="mt-5 whitespace-pre-wrap text-sm"
-          >
-            {{ selected.description }}
-          </p>
-          <SalesJournalEntries
-            resource="account-transfer"
-            :resource-id="selected.id"
-            class="mt-6"
+      </template>
+      <UTable
+        :rows="pagedRows"
+        :columns="columns"
+        :loading="loading"
+        :empty-state="{ icon: 'i-lucide-arrow-left-right', label: 'No transfers found.' }"
+        class="w-full"
+      >
+        <template #transferDate-data="{ row }">{{ date(row.transferDate) }}</template>
+        <template #transferNumber-data="{ row }">
+          <UButton color="primary" variant="link" :padded="false" @click="openDetails(row)">
+            {{ row.transferNumber }}
+          </UButton>
+        </template>
+        <template #fromAccount-data="{ row }">{{ row.fromAccount?.name || '-' }}</template>
+        <template #toAccount-data="{ row }">{{ row.toAccount?.name || '-' }}</template>
+        <template #amount-data="{ row }">
+          <span class="font-medium tabular-nums">{{ money(row.amount, row.currency) }}</span>
+        </template>
+        <template #referenceNumber-data="{ row }">{{ row.referenceNumber || '-' }}</template>
+        <template #description-data="{ row }">
+          <span class="block max-w-xs truncate" :title="row.description">{{ row.description || '-' }}</span>
+        </template>
+        <template #actions-data="{ row }">
+          <UDropdown :items="actions(row)">
+            <UButton color="gray" variant="ghost" icon="i-heroicons-ellipsis-horizontal-20-solid" :aria-label="`Actions for ${row.transferNumber}`" />
+          </UDropdown>
+        </template>
+      </UTable>
+      <template #footer>
+        <div class="flex flex-wrap items-center justify-between gap-3">
+          <span class="text-sm text-gray-500 dark:text-gray-400">
+            Showing {{ pageFrom }} to {{ pageTo }} of {{ filtered.length }} results
+          </span>
+          <UPagination
+            v-model="page"
+            :page-count="Number(pageSize)"
+            :total="filtered.length"
+            :ui="{ wrapper: 'flex items-center gap-1', rounded: '!rounded-full min-w-[32px] justify-center', default: { activeButton: { variant: 'outline' } } }"
           />
         </div>
-        <div v-else class="flex items-center justify-center text-sm text-gray-500 dark:text-gray-400">
-          Select a transfer to view details.
-        </div>
-      </div>
+      </template>
     </UCard>
+
+    <AccountantModal v-model="detailsOpen" :title="selected?.transferNumber || 'Transfer details'">
+      <template #body>
+        <div v-if="selected" class="space-y-5">
+          <dl class="grid gap-4 text-sm sm:grid-cols-2">
+            <div><dt class="text-gray-500 dark:text-gray-400">Date</dt><dd>{{ date(selected.transferDate) }}</dd></div>
+            <div><dt class="text-gray-500 dark:text-gray-400">Amount</dt><dd class="font-semibold">{{ money(selected.amount, selected.currency) }}</dd></div>
+            <div><dt class="text-gray-500 dark:text-gray-400">From account</dt><dd>{{ selected.fromAccount?.name || '-' }}</dd></div>
+            <div><dt class="text-gray-500 dark:text-gray-400">To account</dt><dd>{{ selected.toAccount?.name || '-' }}</dd></div>
+            <div><dt class="text-gray-500 dark:text-gray-400">Reference</dt><dd>{{ selected.referenceNumber || '-' }}</dd></div>
+            <div v-if="selected.imported"><dt class="text-gray-500 dark:text-gray-400">Source</dt><dd>Imported history</dd></div>
+          </dl>
+          <p v-if="selected.description" class="whitespace-pre-wrap text-sm">{{ selected.description }}</p>
+          <SalesJournalEntries resource="account-transfer" :resource-id="selected.id" />
+        </div>
+      </template>
+    </AccountantModal>
 
     <AccountantModal
       v-model="formOpen"
@@ -210,7 +175,7 @@
   </div>
 </template>
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 const api = useAccountantApi();
 const selectedAccountSession = useSelectedAccounts();
 const baseCurrency = ref("INR");
@@ -219,6 +184,10 @@ const toast = useToast(),
   accounts = ref<any[]>([]),
   selectedId = ref(""),
   search = ref(""),
+  page = ref(1),
+  pageSize = ref(10),
+  loading = ref(false),
+  detailsOpen = ref(false),
   formOpen = ref(false),
   editingId = ref(""),
   nextNumber = ref(""),
@@ -261,7 +230,7 @@ const filtered = computed(() =>
   rows.value.filter(
     (r) =>
       !search.value ||
-      `${r.transferNumber} ${r.referenceNumber || ""} ${r.fromAccount?.name} ${r.toAccount?.name}`
+      `${r.transferNumber} ${r.referenceNumber || ""} ${r.fromAccount?.name} ${r.toAccount?.name} ${r.description || ""}`
         .toLowerCase()
         .includes(search.value.toLowerCase()),
   ),
@@ -270,17 +239,50 @@ const selected = computed(() =>
     rows.value.find((r) => r.id === selectedId.value),
   ),
   editing = computed(() => rows.value.find((r) => r.id === editingId.value));
-async function load() {
-  const [t, a, n] = await Promise.all([
-    api.get<{ data: any[] }>("/account-transfers"),
-    api.get<{ data: any[]; baseCurrency: string }>("/accounting-accounts"),
-    api.get<{ transferNumber: string }>("/account-transfers/next-number"),
+const columns = [
+  { key: 'transferDate', label: 'Date' },
+  { key: 'transferNumber', label: 'Transfer No.' },
+  { key: 'fromAccount', label: 'From Account' },
+  { key: 'toAccount', label: 'To Account' },
+  { key: 'amount', label: 'Amount', class: 'text-right' },
+  { key: 'referenceNumber', label: 'Reference' },
+  { key: 'description', label: 'Description' },
+  { key: 'actions', label: 'Actions' },
+];
+const pageFrom = computed(() => filtered.value.length ? (page.value - 1) * Number(pageSize.value) + 1 : 0);
+const pageTo = computed(() => Math.min(page.value * Number(pageSize.value), filtered.value.length));
+const pagedRows = computed(() => filtered.value.slice((page.value - 1) * Number(pageSize.value), page.value * Number(pageSize.value)));
+watch([search, pageSize], () => { page.value = 1; });
+watch(() => filtered.value.length, (total) => {
+  page.value = Math.min(page.value, Math.max(1, Math.ceil(total / Number(pageSize.value))));
+});
+function openDetails(row: any) {
+  selectedId.value = row.id;
+  detailsOpen.value = true;
+}
+function actions(row: any) {
+  const items = [[{ label: 'Details', icon: 'i-heroicons-document-magnifying-glass', click: () => openDetails(row) }]];
+  if (!row.imported) items.push([
+    { label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => openEdit(row) },
+    { label: 'Delete', icon: 'i-heroicons-trash-20-solid', click: () => remove(row) },
   ]);
-  rows.value = t.data;
-  baseCurrency.value = a.baseCurrency;
-  accounts.value = a.data;
-  nextNumber.value = n.transferNumber;
-  if (!selectedId.value) selectedId.value = rows.value[0]?.id || "";
+  return items;
+}
+async function load() {
+  loading.value = true;
+  try {
+    const [t, a, n] = await Promise.all([
+      api.get<{ data: any[] }>("/account-transfers"),
+      api.get<{ data: any[]; baseCurrency: string }>("/accounting-accounts"),
+      api.get<{ transferNumber: string }>("/account-transfers/next-number"),
+    ]);
+    rows.value = t.data;
+    baseCurrency.value = a.baseCurrency;
+    accounts.value = a.data;
+    nextNumber.value = n.transferNumber;
+  } finally {
+    loading.value = false;
+  }
 }
 function reset() {
   Object.assign(form, {
@@ -348,12 +350,15 @@ async function save() {
     saving.value = false;
   }
 }
-async function remove() {
-  if (!selected.value || !confirm(`Delete ${selected.value.transferNumber}?`))
+async function remove(row: any) {
+  if (row.imported || !confirm(`Delete ${row.transferNumber}?`))
     return;
   try {
-    await api.delete(`/account-transfers/${selected.value.id}`);
-    selectedId.value = "";
+    await api.delete(`/account-transfers/${row.id}`);
+    if (selectedId.value === row.id) {
+      selectedId.value = "";
+      detailsOpen.value = false;
+    }
     await load();
     toast.add({ title: "Transfer deleted", color: "green" });
   } catch (e: any) {

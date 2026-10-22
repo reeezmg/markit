@@ -1,0 +1,20 @@
+{
+  "dependencyTests": {
+    "passed": 10,
+    "failed": 0
+  },
+  "databaseMode": "read-only",
+  "health": 200,
+  "providers": [
+    {
+      "company": "head",
+      "status": 200,
+      "providerCount": 0
+    },
+    {
+      "company": "branch",
+      "status": 200,
+      "providerCount": 0
+    }
+  ]
+}

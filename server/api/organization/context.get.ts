@@ -8,12 +8,14 @@ export default defineEventHandler(async event => {
   let record: { model: string; id: string; companyId: string } | undefined;
   if (query.model && query.id) {
     const models: Record<string, string> = { Bill: 'bill', Product: 'product', Brand: 'brand', Category: 'category',
-      Collection: 'collection', PurchaseOrder: 'purchaseOrder', PurchaseReturn: 'purchaseReturn', PayrollCycle: 'payrollCycle' };
+      Collection: 'collection', PurchaseOrder: 'purchaseOrder', PurchaseReturn: 'purchaseReturn', PayrollCycle: 'payrollCycle', BillHistory: 'billHistory', StatementBatch: 'statementBatch' };
     const model = models[String(query.model)];
     if (!model) throw createError({ statusCode: 400, statusMessage: 'Unsupported form' });
-    const row = await (prisma as any)[model].findUnique({ where: { id: String(query.id) }, select: { companyId: true } });
+    const row = await (prisma as any)[model].findUnique({ where: { id: String(query.id) },
+      select: model === 'billHistory' ? { bill: { select: { companyId: true } } } : { companyId: true } });
     if (!row) throw createError({ statusCode: 404, statusMessage: 'Record not found' });
-    companyId = row.companyId;
+    companyId = model === 'billHistory' ? row.bill?.companyId : row.companyId;
+    if (!companyId) throw createError({ statusCode: 404, statusMessage: 'Record company not found' });
     record = { model: String(query.model), id: String(query.id), companyId };
   }
   await assertCompanyAccess(event, companyId);

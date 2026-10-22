@@ -19,7 +19,7 @@ export const ecommerceRoles = { ...Object.fromEntries(Object.entries(erpRoles).f
 async function settings() {
   const { db, companyId } = context();
   const erp = await erpAccountingSettings();
-  await accountantPrisma.accountingAccount.createMany({ data: Object.values(extraRoles).map(r => ({ name: r.name, code: r.code, accountType: r.type, category: r.category, isSystem: true })), skipDuplicates: true });
+  if (!context().readOnly) await accountantPrisma.accountingAccount.createMany({ data: Object.values(extraRoles).map(r => ({ name: r.name, code: r.code, accountType: r.type, category: r.category, isSystem: true })), skipDuplicates: true });
   const [cfg] = await db.$queryRawUnsafe('SELECT * FROM accountant_v2_ecommerce_settings WHERE company_id=$1', companyId);
   const accounts = await accountantPrisma.accountingAccount.findMany({ where: { isActive: true }, orderBy: { name: 'asc' } });
   const mappings = { ...erp.mappings, ...cfg?.accounts };

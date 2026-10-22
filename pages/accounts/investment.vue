@@ -1,9 +1,11 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
 import { ref, computed } from 'vue'
 import { format } from 'date-fns'
 
 import { useFindManyInvestment } from '~/lib/hooks/investment'
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 const page = ref(1)
 const pageCount = ref('10')
 
@@ -61,7 +63,7 @@ const formatCurrency = (v: number) =>
 <template>
   <UDashboardPanelContent class="pb-24">
     <UAlert class="mb-4" title="Legacy investment history" description="Use Investors & ownership in Accountant for capital, shares and profit payouts. All legacy rows are read-only here." />
-    <UButton class="mb-4" to="/investments/investors" icon="i-heroicons-arrow-top-right-on-square">Open Investments</UButton>
+    <UButton class="mb-4" :to="{ path: '/investments/investors', query: { entryCompany: companyScope.companyId.value } }" icon="i-heroicons-arrow-top-right-on-square">Open Investments</UButton>
 
     <!-- SUMMARY -->
     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-4">

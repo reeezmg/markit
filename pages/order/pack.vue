@@ -11,7 +11,8 @@ const route = useRoute();
 const router = useRouter();
 const UpdateTrynbuyCartItem = useUpdateTrynbuyCartItem()
 const UpdateItem = useUpdateItem()
-const orderId = route.query.id;
+const orderId = typeof route.query.id === 'string' ? route.query.id.trim() : '';
+if (!orderId) await navigateTo('/order/trynbuy', { replace: true });
 
 // Out-of-stock modal state
 const oosModalOpen = ref(false)
@@ -145,7 +146,7 @@ const stopResize = () => {
 
 onMounted(() => {
   // Initialize column widths (optional)
-  const ths = resizableTable.value.querySelectorAll('th');
+  const ths = resizableTable.value?.querySelectorAll('th') || [];
   ths.forEach((th) => {
     th.style.width = `${th.offsetWidth}px`;
   });
@@ -246,7 +247,9 @@ const trynbuyArgs = computed(() => {
   }
 })
 
-const { data: trynbuy, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyArgs)
+const { data: trynbuy, refetch: trynbuyRefetch } = useFindUniqueTrynbuy(trynbuyArgs, {
+  enabled: computed(() => !!orderId && !!currentCompanyId.value),
+})
 
 // Always render the saved OTP from DB on page open / reload.
 // pickup_otps is per-store (set when this store clicks Pack); delivery_otp is

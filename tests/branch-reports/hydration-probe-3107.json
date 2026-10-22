@@ -1,0 +1,246 @@
+{
+  "route": "/products",
+  "hydrating": false,
+  "server": [
+    {
+      "op": [
+        "zenstack",
+        "Category",
+        "findMany"
+      ],
+      "hash": "3e4ad0b6",
+      "status": "success",
+      "fetch": "idle",
+      "count": 5
+    },
+    {
+      "op": [
+        "zenstack",
+        "Subcategory",
+        "findMany"
+      ],
+      "hash": "20d8b306",
+      "status": "success",
+      "fetch": "idle",
+      "count": 1
+    },
+    {
+      "op": [
+        "zenstack",
+        "Product",
+        "findMany"
+      ],
+      "hash": "d7e6096c",
+      "status": "success",
+      "fetch": "idle",
+      "count": 10
+    },
+    {
+      "op": [
+        "zenstack",
+        "Product",
+        "count"
+      ],
+      "hash": "2fb6bad5",
+      "status": "success",
+      "fetch": "idle"
+    }
+  ],
+  "client": [
+    {
+      "op": [
+        "zenstack",
+        "Category",
+        "findMany"
+      ],
+      "hash": "3e4ad0b6",
+      "status": "success",
+      "fetch": "idle",
+      "count": 5
+    },
+    {
+      "op": [
+        "zenstack",
+        "Subcategory",
+        "findMany"
+      ],
+      "hash": "20d8b306",
+      "status": "success",
+      "fetch": "idle",
+      "count": 1
+    },
+    {
+      "op": [
+        "zenstack",
+        "Product",
+        "findMany"
+      ],
+      "hash": "d7e6096c",
+      "status": "success",
+      "fetch": "idle",
+      "count": 10
+    },
+    {
+      "op": [
+        "zenstack",
+        "Product",
+        "count"
+      ],
+      "hash": "2fb6bad5",
+      "status": "success",
+      "fetch": "idle"
+    }
+  ],
+  "warnings": [
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    },
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    },
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    },
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    },
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    },
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    },
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    },
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    },
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    },
+    {
+      "kind": "text",
+      "sameIgnoringWhitespace": false,
+      "serverWhitespace": [
+        32
+      ],
+      "clientWhitespace": [
+        32
+      ],
+      "valueKind": "other",
+      "cell": {
+        "index": 3,
+        "header": "Date"
+      }
+    }
+  ]
+}

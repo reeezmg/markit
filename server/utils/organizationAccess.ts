@@ -46,7 +46,8 @@ export async function ensureHeadOfficeBranchMemberships(userId: string, headOffi
   const ids = (await getAllStoreIds(userId, headOfficeId)).slice(1);
   if (!ids.length) return;
   const existing = await prisma.companyUser.findMany({
-    where: { userId, companyId: { in: ids } }, select: { companyId: true },
+    where: { userId, companyId: { in: ids } },
+    select: { companyId: true, delegatedHeadOfficeId: true, status: true, deleted: true },
   });
   const existingIds = new Set(existing.map((item) => item.companyId));
   const missing = ids.filter((id) => !existingIds.has(id));
@@ -58,8 +59,11 @@ export async function ensureHeadOfficeBranchMemberships(userId: string, headOffi
       skipDuplicates: true,
     });
   }
-  await prisma.companyUser.updateMany({
-    where: { userId, companyId: { in: ids }, delegatedHeadOfficeId: headOfficeId },
-    data: { status: true, deleted: false },
-  });
+  const inactive = existing.filter(item => item.delegatedHeadOfficeId === headOfficeId && (!item.status || item.deleted));
+  if (inactive.length) {
+    await prisma.companyUser.updateMany({
+      where: { userId, companyId: { in: inactive.map(item => item.companyId) }, delegatedHeadOfficeId: headOfficeId },
+      data: { status: true, deleted: false },
+    });
+  }
 }

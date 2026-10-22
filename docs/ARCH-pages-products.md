@@ -6,12 +6,14 @@ Company query composition uses `utils/companyWhere.ts` in both the generated-hoo
 
 **Files:**
 - `pages/products/index.vue` — Product listing, search, barcode scan, quick image upload
+- Product row expansion uses a writable ref for `v-model:expand`; the former plain constant threw when the table emitted an expansion update. The page compilation suite checks direct `v-model` assignments across all pages.
 - `pages/products/add.vue` — Add new product with purchase order + distributor
 - `pages/products/edit/[id].vue` — Edit existing product
 - `pages/products/brands/index.vue` — Brand management table
 - `pages/products/brands/add.vue` — Add brand; editing an existing brand uses `pages/products/brands/edit/[id].vue`
 - `pages/products/categories/index.vue` — Category management table with PDF export
 - `pages/products/categories/edit/[id].vue` — Category + subcategory full edit
+- Category create/edit reject whitespace-only names before mutation. Create preserves the emitted inactive state and explicit zero tax/margin values. The catalog browser harness includes category create, row-action edit, reload and confirmed delete in each company; its fixture guard permits only run-owned categories with no nested child writes.
 - `pages/products/stocks/index.vue` — Stock aggregate view (groupBy + filters)
 - `components/AddProduct/Create.vue` — Product fields form (name, brand, category, subcategory, description)
 - `components/AddProduct/Variants.vue` — Variant fields form (name, code, unit, sprice, pprice, dprice, discount, qty, sizes)
@@ -167,16 +169,16 @@ Multi-section form with purchase info at top.
 - Shows totals: Total Qty, Stock in MRP (`qty * sprice`), Total Stock Value (`qty * pprice`)
 
 #### `POST /api/stock-aggregate`
+
+Stock aggregation reads current scoped variant items. Brand options expose Brand IDs and names; the stock reader filters `Product.brandId` and groups by related Brand name. Supplier and date restrictions share one purchase-order filter. Group dictionaries have no prototype. Stock option lists default to arrays while requests load; the POST stock endpoint performs reads only.
 - Uses **Prisma** (not raw SQL)
 - Fetches variants with items + product (category, subcategory, purchaseorder+distributor)
 - Groups and sums: `stock` (sprice × qty), `purchaseStock` (pprice × qty), `qty`
-- When `groupBy = "category"`: also builds a subcategory → variant breakdown (only used in console.log — **debug code left in production**)
-- **Bug:** Debug `console.log` on lines 112–130 runs on every stocks page load, dumps full category/subcategory/variant breakdown to server logs
 
 ---
 
 #### `components/AddProduct/Media.vue` — Image Upload
-- Each variant has its own `Media` component instance (indexed by `props.index`)
+- Each variant has its own `Media` component instance (indexed by `props.index`). Unchanged empty image props preserve the existing arrays; product edit also ignores identical media emissions, preventing a parent/child update loop for products without images.
 - Image views: `front`, `back`, `side`, `extra` — user can change via dropdown
 - File input uses `accept="image/*"` without a `capture` attribute, allowing the mobile system chooser to offer Camera, Photos, or Files.
 - Images stored on AWS S3 — accessed via `https://images.markit.co.in/{uuid}`
@@ -246,3 +248,11 @@ Both add and purchase pages send those choices to their save endpoint; the serve
 snapshot inside the same transaction. Existing same-supplier purchase edits update
 the linked journal in place before commit; deferred triggers handle first postings
 and other source transitions. See `ARCH-pages-distributor.md` for import and reconciliation.
+
+### Related variables on product labels
+
+Product add, purchase and edit label payloads carry the saved item ID and the form company ID. `utils/load-label-variables.client.ts` batches distinct identities by company before custom preview/printing, reuses each result for quantity copies, and rejects missing/ambiguous items. Canvas preview, WebUSB and native Bluetooth printing share this enrichment. Product add, edit and purchase actions call `usePrint().printLabel`, which resolves the company default design and its paper dimensions at print time. The USB device (web), selected Bluetooth printer (native) and TSPL/CPCL language are configured in Settings > Printer; no print action opens a device chooser or browser print dialog. CPCL has no fixed-command fallback. Related fields require an online lookup unless the supplied label data is already enriched; legacy flat-field labels keep their existing offline behavior. Company, product relations and supplier values come from the authorized label-variable API, not a global session company or arbitrary table traversal.
+
+Product-list Date cells use the explicit en-IN locale and Asia/Kolkata timezone. Ambient Node/browser locale settings must not change the hydrated cell text.
+
+Product-label barcode resolution accepts both flat `barcode` and enriched `item.barcode`. If a configured item-barcode element has no value but a saved item ID exists, label-variable loading looks up the barcode within that company, even for a flat-only design. Missing barcode values reject the job before transmission instead of silently omitting the symbol. Barcode errors do not trigger the native TSPL fallback. Legacy TSPL labels measure CODE128 modules and reduce bar width to fit a 50 mm label with quiet zones, rather than always using three-dot bars.

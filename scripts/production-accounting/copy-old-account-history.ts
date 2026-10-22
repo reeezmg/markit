@@ -53,6 +53,7 @@ try {
         const r: any = { companyId };
         const company = (await db.query('SELECT id,name FROM companies WHERE id=$1', [companyId])).rows[0];
         if (!company || (reset && company.name !== 'ORIGINALS CLOTHING')) throw Error('Company target does not match authorized rebuild');
+        if ((await db.query("SELECT id FROM accountant_v2_accountant_audit WHERE company_id=$1 AND resource='source-accounting-rebuild' AND action='rebuilt' LIMIT 1", [companyId])).rowCount) throw Error('Source accounting has been rebuilt; historical adoption/reset must not replay archived journals');
         r.companyName = company.name;
         const config = mappings[companyId] || mappings;
         if (reset) {

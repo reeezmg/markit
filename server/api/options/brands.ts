@@ -1,19 +1,16 @@
 import { getReadCompanyIds } from '~/server/utils/organizationReadScope';
+import { prisma } from '~/server/prisma';
 
 export default defineEventHandler(async (event) => {
   const companyIds = await getReadCompanyIds(event);
-  const brands = await prisma.product.findMany({
+  const brands = await prisma.brand.findMany({
     where: { 
       status: true,
       companyId: { in: companyIds },
     },
-    select: { brand: true },
-    distinct: ['brand'],
-    orderBy: { brand: 'asc' }
+    select: { id: true, name: true },
+    orderBy: { name: 'asc' }
   })
 
-  return brands
-    .map(b => b.brand)
-    .filter(Boolean)
-    .map(brand => ({ label: brand, value: brand }))
+  return brands.map(brand => ({ label: brand.name, value: brand.id }))
 })

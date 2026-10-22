@@ -1,0 +1,75 @@
+{
+  "route": "/products/brands",
+  "hydrating": false,
+  "server": [
+    {
+      "op": [
+        "zenstack",
+        "Brand",
+        "findMany"
+      ],
+      "hash": "ab98554f",
+      "status": "error",
+      "fetch": "idle"
+    },
+    {
+      "op": [
+        "zenstack",
+        "Brand",
+        "count"
+      ],
+      "hash": "9b44e8a0",
+      "status": "error",
+      "fetch": "idle"
+    }
+  ],
+  "client": [
+    {
+      "op": [
+        "zenstack",
+        "Brand",
+        "findMany"
+      ],
+      "hash": "ab98554f",
+      "status": "success",
+      "fetch": "idle",
+      "count": 1
+    },
+    {
+      "op": [
+        "zenstack",
+        "Brand",
+        "count"
+      ],
+      "hash": "9b44e8a0",
+      "status": "success",
+      "fetch": "idle"
+    }
+  ],
+  "warnings": [
+    {
+      "kind": "node",
+      "controls": [
+        "#comment"
+      ],
+      "hints": []
+    },
+    {
+      "kind": "class",
+      "controls": [
+        "span"
+      ],
+      "hints": []
+    },
+    {
+      "kind": "text content",
+      "controls": [
+        "p"
+      ],
+      "hints": [
+        "Loading",
+        "No items"
+      ]
+    }
+  ]
+}

@@ -70,6 +70,8 @@ Cancellation restores available quantity and reduces sold quantity by the same a
 ---
 
 ### `pages/order/pack.vue` — Pack Try N Buy Order
+
+Requires a nonempty string `?id=`. Opening the bare route redirects to `/order/trynbuy`; the record query stays disabled until the ID and authenticated company are available. The browser audit selects an existing company-owned Trynbuy for record-detail checks and marks missing records untested.
 Accessed via `/order/pack?id={trynbuyId}`.
 
 **Data fetching:** `useFindUniqueTrynbuy` with `orderId = route.query.id`
@@ -154,6 +156,8 @@ Accessed via `/order/pack?id={trynbuyId}`.
 ---
 
 ### `pages/order/ready.vue` — Pack Booking Order
+
+Requires a nonempty string `?id=`. Opening the bare route redirects to `/erp/online`; bill loading requires both ID and authenticated company. Barcode lookup waits for input, and optional category/variant display fields tolerate missing relations.
 Accessed via `/order/ready?id={billId}`. Booking variant of the pack page.
 
 **Data fetching:** `useFindUniqueBill` with full detail select — entries with barcode, name, qty, rate, discount, tax, value, size, outOfStock, category name, variant images
@@ -187,15 +191,15 @@ Accessed via `/order/ready?id={billId}`. Booking variant of the pack page.
 ### `pages/receipt/[id].vue` — Thermal Receipt Viewer
 Route: `/receipt/:id`
 
-**Purpose:** Renders a printable thermal receipt for a given bill ID.
+**Purpose:** Renders a printable thermal receipt for a given bill ID, with PDF download and Copy PDF link. Authenticated staff create a cloud-stored PDF from the same rendered receipt image before copying its signed link; recipients need no staff login. Receipt download actions no longer offer HTML. Sales offers View / share receipt.
 
-**Data:** `GET /api/billSale/receipt?id={id}` — fetches bill data for receipt
+**Data:** Authenticated `GET /api/billSale/receipt?id={id}` (optional authorized companyFilter). Links with a share token use `GET /api/receipt-share?token=...`; HMAC binds bill/company and expires after 30 days. `POST /api/billSale/share-receipt` verifies access before issuing the token. Ordinary viewer reads call `server/utils/receiptData.ts` and use the current company receipt default. PDF links include `pdf=1` and a signed `documentKey`: the receipt page opens `/api/receipt-share?token=...&pdf=1`, which checks token expiry and bill existence before redirecting to a one-hour signed R2 PDF download. The stored PDF retains the appearance at sharing time even when the company design later changes. Deleted bills remain unavailable. Receipt pages suppress referrers and indexing, and are excluded from last-route persistence/restoration. Signing uses RECEIPT_SHARE_SECRET or NUXT_SESSION_SECRET/SESSION_SECRET (minimum 32 characters); missing configuration fails closed. `GET /api/billSale/receipt?id={id}` — fetches bill data for receipt
 
-**Rendering:** Passes response data to `<ThermalReceipt :data="printData" />` component
+**Rendering:** Passes response data to `<ThermalReceipt :data="printData" />` component. For custom receipt table columns, `server/utils/receiptData.ts` resolves related item/product/variant data inside the bill company and returns only the configured formatted cell values. Receipt data includes the bill company's isTaxIncluded setting for the tax summary. Billed quantity/rate/amount fields remain the bill values; product relations are current catalogue values. Unmatched or ambiguous product links produce blank related cells.
 
 `definePageMeta({ layout: false })` — no app shell
 
-**Bugs:** `console.log('PRINT DATA:', res)` on every load
+**Validation:** Shared links expose one signed bill/document only, with no-store API responses; PDF generation and ordinary downloads run in the browser. PDF uploads validate MIME, header/EOF and an 8 MiB data-URI limit; server-generated unique keys prevent overwriting older documents. Storage credentials remain server-side. No database changes are involved.
 
 ---
 
@@ -230,6 +234,8 @@ Route: `/saleshistory/:billId`
 ## Cleanup Page
 
 ### `pages/cleanup.vue` — Bill Cleanup / Bulk Delete Tool
+
+The tool has a local page-form Company / branch selector for authorized head-office admins. Selecting a target remounts its form/previews and scopes every cleanup request. This does not bypass the existing cleanup entitlement/code gate or authorize cleanup execution during a read-only page audit.
 **Purpose:** Admin tool to selectively delete old bills to reduce data volume while preserving a target total revenue amount.
 
 **Access control (fully in-page — middleware no longer guards this route):**
@@ -298,4 +304,9 @@ Exchange-request queue. Uses the returns/request data with exchange filtering; s
 
 ### `pages/order/pickup.vue`
 
-Pickup operations and origin-address configuration. Staff create/edit/delete pickup locations, choose a default and sync/register a location with Delhivery. The page also loads parcels awaiting pickup, raises carrier pickups through `/api/ecommerce-cms/shipping/pickup/raise`, and reviews/updates pickup requests and status. A Storetools pickup location and a carrier-registered location can differ until synchronization succeeds.
+Pickup operations and origin-address configuration. Staff create/edit/delete pickup locations, choose a default and sync/register a location with Delhivery. The page also loads parcels awaiting pickup, raises carrier pickups through `/api/ecommerce-cms/shipping/pickup/raise`, and reviews/updates pickup requests and status. A Storetools pickup location and a carrier-registered location can differ until synchronization succeeds. The shipping service's provider list returns an empty list when no configuration exists; actual carrier operations still require configuration. The pickup page shows setup guidance for an empty list and a retry alert for request failures, while location management remains available. `server/shipping_service/tests/test_routes.py` checks this distinction.
+
+
+### Pickup location read snapshot
+
+The pickup page captures seller auth during setup and awaits its current-company location read during SSR. Carrier registration and provider operations remain separate user actions.

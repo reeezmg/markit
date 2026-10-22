@@ -84,15 +84,7 @@ Used on native platform at login — see `ARCH-pages-auth-settings.md`.
 
 ### `composables/usePrintBill.ts` — `usePrint()`
 
-Platform-aware print dispatcher. Checks `Capacitor.isNativePlatform()`:
-- **Native:** delegates to `useReceiptPrinter()` (BLE)
-- **Web:** prefers WebUSB direct printing, then falls back to the local print server at `localhost:3001`
-
-| Method | Web behavior | Native handler |
-|---|---|---|
-| `printBill(printData)` | If `webUsbPrinterRoles.receipt` exists, tries WebUSB first, then falls back to `POST /api/print-bill` on `http://localhost:3001` with a short timeout. Earned coupon vouchers print their `code` as the barcode. | `printMobileBill(printData)` |
-| `printReport(printData)` | `POST /api/print-report` on `http://localhost:3001` | `printMobileReport(printData)` |
-| `printLabel(labelData, printerLabelSize)` | If `webUsbPrinterRoles.barcode` exists, tries WebUSB first, then falls back to `POST /api/print-label` on `http://localhost:3001` | `printMobileLabel(labelData, size)` |
+Platform dispatcher: the native mobile app uses the selected Bluetooth printer; web uses assigned WebUSB devices from Settings > Printer. There is no localhost service, automatic device chooser or browser print-dialog path. `printBill` preserves explicit design overrides; otherwise `useWebUsbPrinter` loads the company default. Product label calls use the same shared default loader.
 
 ### `composables/useWebUsbPrinter.ts` â€” `useWebUsbPrinter()`
 
@@ -119,32 +111,21 @@ Key exports:
 - `printBillViaUsb(printData)`
 - `printLabelViaUsb(labelData, printerLabelSize)`
 
+### `composables/useReceiptPrinter.ts`
+
+Native Bluetooth receipt, label and report output uses the previous BLE service `000018f0-0000-1000-8000-00805f9b34fb` and characteristic `00002af1-0000-1000-8000-00805f9b34fb`. It reads `selectedPrinter` at print time, shares `prepareReceiptPrint`/`prepareLabelPrint` with WebUSB, writes 512-byte chunks with 50 ms spacing and disconnects in finally. A failed label aborts the job and surfaces the error; no partial-success result or transport retry. A module-level busy guard rejects overlapping native jobs. TSPL/CPCL and default designs apply on Bluetooth too.
+
 ### `composables/printCommands.ts`
 
-Shared print-byte builders used by both native BLE printing and WebUSB printing.
+Company designs use `utils/load-print-template.client.ts` (company-scoped persistent cache first, fetching only when missing/invalid; Printer Settings load and successful saves refresh the cache). `utils/print-template-renderer.client.ts` renders one monochrome canvas for preview, PDF and raster commands. `usePrint` and WebUSB methods accept optional unsaved design overrides for test prints. Receipts use ESC/POS; labels use TSPL BITMAP or CPCL CG according to device-local `markit-label-printer-language` (default TSPL). CPCL uses raw binary graphic data followed by FORM/PRINT, as documented in Zebra's CPCL programming guide.
 
-- `buildBillReceiptBytes(bill)` â€” ESC/POS receipt bytes via `@point-of-sale/receipt-printer-encoder`
-- `buildLabelPrintJobs(items, printerLabelSize)` â€” TSPL label command buffers for `50x25mm` and `50x38mm`
+The fixed builders remain internal failsafes when no default exists or rendering a saved design fails. Explicit editor tests expose rendering errors. Missing label barcode errors also propagate without falling back to a blank native label. CPCL requires a selected design and has no fallback. Default-loading and label-enrichment errors are surfaced. All jobs are prepared before USB transmission; failed or incomplete transfers never retry using another format. USB writes use 4096-byte chunks and check status and bytes written.
 
-### `composables/useReceiptPrinter.ts` — `useReceiptPrinter()`
+Custom receipt table columns use `utils/receipt-table.ts` for variable resolution and `utils/load-receipt-table.client.ts` for related catalogue lookup. The renderer loads required product/variant/item relations through the existing company-scoped label-variable API; billed row values remain separate from current catalogue values. Shared receipt data is pre-resolved server-side into only the configured `receiptTableValues`, so public viewers need no private catalogue request. Manual entries without linked products leave related fields blank. New tables wrap headings and cells with shared column geometry; legacy items without column configuration keep the old layout.
 
-Full BLE thermal printer implementation using `@point-of-sale/receipt-printer-encoder` and `@capacitor-community/bluetooth-le`. Reads selected printer from `localStorage('selectedPrinter')` on native.
+The Classic Tax Receipt preset uses `utils/receipt-summary.ts` for discount/savings and rate-grouped tax amounts, following existing thermal tax-inclusive/exclusive behavior. `tableColumnLines` partitions table columns by layout line and `tableColumnTotal` sums configured billed values; both header and item cells use the same per-line geometry. `fontFamily: thermal` uses condensed Consolas/Liberation Mono fallback. Built-in and editable copies use the normal raster/PDF renderer, including earned coupons. `renderedTemplatePDF` embeds an already rendered canvas in a PDF, `createTemplatePDF` renders then returns a reusable PDF document, and `downloadTemplatePDF` saves that document. `createThermalReceiptPDF` uses this same path for selected designs; the legacy Original format retains its fixed generator. `utils/share-receipt.client.ts` uploads the PDF data URI through the company-authorized share endpoint before returning a PDF link. No Tax Receipt is the built-in `taxlessReceiptTemplate` variant of Tax Receipt: thermal font, matching non-table sections, a six-column table and no tax summary. It renders through the ordinary template element loop; the former separate Courier drawing branch has been removed. Its in-app preview uses the same canvas image as PDF and thermal output. Receipt download actions offer PDF; the internal standalone HTML export utility remains available.
 
-BLE services: `SERVICE = 000018f0-...`, `CHARACTERISTIC = 00002af1-...`
-Sends data in 512-byte chunks with 50ms delay between chunks.
-Uses `printCommands.ts` for shared receipt and label byte generation, so native BLE and WebUSB render the same bill/label format.
-
-| Method | Description |
-|---|---|
-| `printMobileBill(bill)` | ESC/POS bill receipt: header, line items, totals, UPI QR code, footer |
-| `printMobileLabel(items[], printerLabelSize)` | TSPL label printing; supports `50x38mm` and `50x25mm` label sizes with barcode (CODE128) |
-| `printMobileReport(report)` | ESC/POS report print: revenue, expenses, expense detail rows |
-
-**Bug:** `item.createdAty` typo in `printMobileReport` expense rows (should be `item.createdAt`).
-
-### `composables/usePrinter.ts` — `usePrinter()`
-
-Low-level BLE printer utility (connect/disconnect/test print). Sends raw ESC/POS via `BleClient.write`. Used for printer setup/testing, not for actual bill printing (use `useReceiptPrinter` for that).
+The internal `printCommands.ts` builders retain fixed ESC/POS bills/reports and TSPL labels. Direct receipts, coupons and reports read `utils/receipt-finishing.ts`: device-local `markit-receipt-finishing` stores bottomLines (0-30, default 7) and autoCut (default true). Labels and PDF downloads do not include receipt finishing. The localhost print transport remains removed. Native Bluetooth uses the same prepared receipt/label bytes and finishing settings as WebUSB.
 
 ---
 
@@ -152,10 +133,11 @@ Low-level BLE printer utility (connect/disconnect/test print). Sends raw ESC/POS
 
 ### `composables/useNotifications.ts` — `useNotifications()`
 
-Full in-app notification system with WebSocket real-time updates.
+In-app notifications refreshed through the authenticated REST API.
 
-**Setup:** On mount: fetches notifications from REST, opens WebSocket connection.
-**WebSocket host:** `localhost:3004` (dev) or `'your-fly-app.fly.dev'` (production placeholder — hardcoded, not yet configured).
+**Setup:** Fetches on mount, every 30 seconds while visible, and on window focus or visibility restoration. Company/user changes abort the old request, clear prior-company results, and fetch the new scope. Late responses cannot replace the current company's notifications. Unmount cancels requests, timers and listeners. The client no longer connects to the placeholder WebSocket service; `isConnected` reflects successful API refresh.
+
+`markAllAsRead()` captures the selected company and sender before its PATCH. It returns false on failure or a scope change, and only updates the local list when both still match after the response. Opening the notification page does not invoke this mutation automatically.
 
 Returns:
 ```ts
@@ -174,7 +156,7 @@ Plays `/sounds/notification.mp3` on new unread messages.
 - `PATCH /api/notifications/:id/read`
 - `PATCH /api/notifications/read-all?companyId=`
 
-**Bug:** `console.log(notification)` on every WebSocket message. Production WebSocket host still set to placeholder string `'your-fly-app.fly.dev'`.
+Refresh errors set `error` and `isConnected` without discarding previously fetched notifications. Successful refresh clears the error; sound plays only for newly received unread notifications after the initial load.
 
 Used by: `components/NotificationsSlideover.vue`, `components/NotificationIcon.vue`
 
@@ -361,6 +343,12 @@ Call once at app init; read global state with `useState('taxdata')` anywhere.
 
 ---
 
+### `composables/useCompanyScope.ts` - Query SSR readiness
+
+Each authenticated scope also loads current company settings, including for the active login company. Its local auth view therefore picks up another administrator's saved configuration on a new page load without rewriting the cookie. Late active-company context responses cannot replace a newer selected-company snapshot. `refreshSettings()` reloads only the local context. `useSelectedAccounts()` awaits scope readiness and reads these company-owned defaults; explicit refresh updates the login snapshot only for its own company, then refreshes the matching local context.
+
+Company query SSR readiness: `useCompanyScope.ready` waits for accessible companies and any selected record/company context. `withCompanyRead` awaits that readiness during `onServerPrefetch`, then awaits the final SDK query key even if an earlier fetch already settled. Disabled queries are skipped so prefetch does not force an intentionally disabled read. Client query setup also needs the final company key: supplier and expense tables await scope.ready at component setup before creating observers, avoiding a narrow pending key while the payload contains only the aggregate error key. This keeps serialized Vue Query rows aligned with server-rendered rows. `app.vue` uses the relative `/api/model` endpoint; the SSR transport resolves it against the current request origin and forwards its cookie only to that app model API.
+
 ## Bugs Summary
 
 | File | Bug |
@@ -368,8 +356,7 @@ Call once at app init; read global state with `useState('taxdata')` anywhere.
 | `composables/aws.ts` | Worker URL and upload secret hardcoded in source |
 | `composables/firebase.ts` | Firebase API key and appId hardcoded in source |
 | `composables/usePushNotifications.ts` | VAPID key hardcoded in source |
-| `composables/useNotifications.ts` | Production WebSocket host is placeholder `'your-fly-app.fly.dev'`; `console.log` on every WS message |
-| `composables/useReceiptPrinter.ts` | `item.createdAty` typo (should be `item.createdAt`) in `printMobileReport` |
 | `composables/getTax.ts` | `id` param accepted but ignored; fetches `/api/gettax/` regardless |
 | `composables/date.ts` | `console.error` after `return ''` in catch — unreachable code |
-| `lib/api/useDashboardData.ts` | `console.log(newVal)` in company and expenses watchers |
+
+SSR query waits use refetch with cancelRefetch:false rather than Vue Query suspense. The suspense options watcher can survive its settled promise and restart a failed read when nested scope references refresh, leaving the query pending at payload capture. The scoped adapter compares initial/final query hashes, preserves fresh completed reads, and awaits pending or changed-key reads without canceling their in-flight request. The raw expense list also awaits its pending read through refetch.

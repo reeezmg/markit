@@ -1719,7 +1719,7 @@ enum EcommGalleryType {
     YOUTUBE
 }
 
-// Table provisioned at runtime via server/utils/ecommGallery.ts (CREATE TABLE IF NOT EXISTS).
+// Authoritative gallery definition; server/utils/ecommGallery.ts only checks readiness.
 // Mirrored here so `prisma migrate` never drops it. Keep the two definitions in sync.
 //
 // `mediaKey` (uploaded R2 object) and `url` (external link — YouTube for VIDEO,
@@ -3709,9 +3709,9 @@ model StorefrontPage {
 // server/utils/aiUsage.ts (ensureAiUsageEventsTable) — mirrored here so
 // prisma db push does not drop the table.
 model AiUsageEvent {
-    // DDL owner is server/utils/aiUsage.ts (raw SQL). @db types and dbgenerated
-    // defaults are pinned to match it — plain @default(uuid()) is client-side
-    // only, so push would DROP the live column default.
+    // Schema is owned here; server/utils/aiUsage.ts only checks table readiness.
+    // Native types and database defaults match the deployed table so callers
+    // outside Prisma retain server-generated IDs and timestamps.
     id             String   @id @default(dbgenerated("(gen_random_uuid())::text"))
     source         String   @default("storefront_agent")
     conversationId String?  @map("conversation_id")
@@ -3753,10 +3753,8 @@ model StorefrontMemory {
 // ---------------------------------------------------------------------------
 // Storefront agent tables.
 //
-// DDL owner is storetools' own raw SQL (server/utils/storefrontAgent.ts and
-// storefrontSource.ts, via their ensure*Table() functions). Mirrored here only
-// so `prisma db push` doesn't DROP them — before this block, a push would have
-// deleted both tables along with their live rows.
+// These definitions are authoritative. Storetools ensure*Table helpers only
+// inspect readiness; page requests never create or alter these tables.
 //
 // No @@allow: these are server-side only, never read through the ZenStack
 // client. ZenStack denies by default.

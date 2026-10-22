@@ -1,20 +1,23 @@
 
-import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue'
 import { NOTIFICATION_TYPES, type AppNotification, type NotificationType ,type NotificationConfig } from '~/types/notification'
 
-export const useNotifications = () => {
+export const useNotifications = (scope?: ReturnType<typeof useCompanyScope>) => {
+  const request = scope?.fetch || $fetch
   const notifications: Ref<AppNotification[]> = ref([])
   const unreadCount = computed(() => notifications.value.filter(n => !n.read).length)
   const isLoading = ref(false)
   const isConnected = ref(false)
   const error = ref<Error | null>(null)
   
-  let ws: WebSocket | null = null
-  let reconnectAttempt = 0
-  const maxReconnectAttempts = 5
-  const auth = useNuxtApp().$auth
-  const companyId = auth?.session.value?.companyId
-  const senderId = auth?.session.value?.id
+  let refreshTimer: ReturnType<typeof setInterval> | undefined
+  let mounted = false
+  let requestId = 0
+  let controller: AbortController | undefined
+  let initialized = false
+  const auth = scope?.auth || useNuxtApp().$auth
+  const companyId = computed(() => auth?.session.value?.companyId)
+  const senderId = computed(() => auth?.session.value?.id)
 
   // Add this to your composable
 const typeConfigs: Record<NotificationType, NotificationConfig> = {
@@ -58,7 +61,7 @@ const typeConfigs: Record<NotificationType, NotificationConfig> = {
   const validateNotification = (data: any): AppNotification => {
     return {
       id: data.id || '',
-      companyId: data.companyId || companyId || '',
+      companyId: data.companyId || companyId.value || '',
       userId: data.userId || undefined,
       clientId: data.clientId || undefined,
       type: NOTIFICATION_TYPES.includes(data.type) ? data.type : 'SYSTEM_ALERT',
@@ -89,27 +92,39 @@ const typeConfigs: Record<NotificationType, NotificationConfig> = {
   }
 
   const fetchNotifications = async () => {
+    const selectedCompany = companyId.value
+    if (!selectedCompany || !senderId.value) return
+    const currentRequest = ++requestId
+    controller?.abort()
+    controller = new AbortController()
     try {
       isLoading.value = true
-      const data = await $fetch<any[]>(`/api/notifications?companyId=${companyId}&userId=${senderId}`)
-      // Ensure we always set an array
-      notifications.value = Array.isArray(data)
+      const data = await request<any[]>('/api/notifications', {
+        query: { companyId: selectedCompany, userId: senderId.value }, signal: controller.signal,
+      })
+      if (currentRequest !== requestId || selectedCompany !== companyId.value) return
+      const previousIds = new Set(notifications.value.map(notification => notification.id))
+      const next = Array.isArray(data)
         ? data.map(validateNotification)
             .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
         : []
+      if (initialized && next.some(notification => !notification.read && !previousIds.has(notification.id))) playNotificationSound()
+      notifications.value = next
+      initialized = true
+      error.value = null
+      isConnected.value = true
     } catch (err) {
+      if (currentRequest !== requestId || controller?.signal.aborted) return
       error.value = err as Error
-      console.error('Failed to fetch notifications:', err)
-      // Ensure we have fallback array
-      notifications.value = []
+      isConnected.value = false
     } finally {
-      isLoading.value = false
+      if (currentRequest === requestId) isLoading.value = false
     }
   }
 
   const markAsRead = async (id: string) => {
     try {
-      await $fetch(`/api/notifications/${id}/read`, { method: 'PATCH' })
+      await request(`/api/notifications/${id}/read`, { method: 'PATCH' })
       notifications.value = notifications.value.map(n => 
         n.id === id ? { ...n, read: true } : n
       )
@@ -119,15 +134,20 @@ const typeConfigs: Record<NotificationType, NotificationConfig> = {
   }
 
   const markAllAsRead = async () => {
+    const selectedCompany = companyId.value
+    const selectedSender = senderId.value
+    if (!selectedCompany || !selectedSender) return false
     try {
-      await $fetch(`/api/notifications/read-all?companyId=${companyId}`, { 
-        method: 'PATCH' 
-      })
-      notifications.value = notifications.value.map(n => ({ ...n, read: true }))
+      await request(`/api/notifications/read-all?companyId=${selectedCompany}`, { method: 'PATCH' })
+      if (selectedCompany !== companyId.value || selectedSender !== senderId.value) return false
+      notifications.value = notifications.value.map(notification => ({ ...notification, read: true }))
+      return true
     } catch (err) {
       console.error('Failed to mark all notifications as read:', err)
+      return false
     }
   }
+
 
   const playNotificationSound = () => {
     try {
@@ -139,64 +159,36 @@ const typeConfigs: Record<NotificationType, NotificationConfig> = {
     }
   }
 
-  const setupWebSocket = () => {
-    if (!companyId || ws) return
-    const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://'
-
-    const isLocalhost = window.location.hostname === 'localhost'
-
-    // 👇 If on localhost, use port 3003; otherwise use hosted domain (e.g. Fly.io)
-    const host = isLocalhost
-      ? 'localhost:3004'
-      : 'your-fly-app.fly.dev' // ✅ Replace with your Fly.io WebSocket domain
-
-    const url = `${protocol}${host}?companyId=${companyId}&clientId=${senderId}`
-
-    ws = new WebSocket(url)
-
-    ws.onopen = () => {
-      isConnected.value = true
-      reconnectAttempt = 0
-      console.log('✅ WebSocket connected')
-    }
-
-
-    ws.onmessage = (event) => {
-      try {
-        const notification = validateNotification(JSON.parse(event.data))
-        console.log(notification)
-        notifications.value = [notification, ...notifications.value]
-        if (!notification.read) playNotificationSound()
-      } catch (err) {
-        console.error('Failed to process WebSocket message:', err)
-      }
-    }
-
-    ws.onclose = () => {
-      isConnected.value = false
-      if (reconnectAttempt < maxReconnectAttempts) {
-        const delay = Math.min(1000 * (reconnectAttempt + 1), 10000)
-        console.log(`Reconnecting in ${delay}ms...`)
-        setTimeout(setupWebSocket, delay)
-        reconnectAttempt++
-      }
-    }
-
-    ws.onerror = (err) => {
-      console.error('WebSocket error:', err)
-    }
+  const refreshWhenVisible = () => {
+    if (document.visibilityState === 'visible' && !isLoading.value) void fetchNotifications()
   }
 
+  watch([companyId, senderId], () => {
+    ++requestId
+    controller?.abort()
+    notifications.value = []
+    initialized = false
+    isConnected.value = false
+    isLoading.value = false
+    error.value = null
+    if (mounted) void fetchNotifications()
+  })
+
   onMounted(() => {
-    fetchNotifications()
-    setupWebSocket()
+    mounted = true
+    void fetchNotifications()
+    refreshTimer = setInterval(refreshWhenVisible, 30000)
+    window.addEventListener('focus', refreshWhenVisible)
+    document.addEventListener('visibilitychange', refreshWhenVisible)
   })
 
   onUnmounted(() => {
-    if (ws) {
-      ws.close()
-      ws = null
-    }
+    mounted = false
+    ++requestId
+    controller?.abort()
+    if (refreshTimer) clearInterval(refreshTimer)
+    window.removeEventListener('focus', refreshWhenVisible)
+    document.removeEventListener('visibilitychange', refreshWhenVisible)
   })
 
   return {

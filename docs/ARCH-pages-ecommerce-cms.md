@@ -2,6 +2,8 @@
 
 These are seller-facing Storetools pages under `pages/ecommerce-cms/`. They manage content, customers, integrations and campaigns for a company's customer storefront; they are not the public storefront pages. The page files below are the source of truth for what the UI currently exposes.
 
+The FAQ/blog/feedback, contact-message, gallery and review helpers check required table availability through `server/utils/schemaReadiness.ts`. These checks use SELECT only, cache successful readiness and retry after failure; missing tables return 503 with `DATABASE_SETUP_REQUIRED`. Opening a CMS page does not create tables/indexes, alter contact columns or rewrite legacy gallery rows. Gallery reads still normalize legacy `YOUTUBE` media to `VIDEO`. Database structure belongs in `schema.zmodel`; these helpers do not provision it.
+
 ### `pages/ecommerce-cms/blogs.vue`
 
 Blog management. Lists posts and opens a create/edit form with title, content, image and publication state. The editor supports image upload. It loads and creates posts through `/api/ecommerce-cms/blogs`, updates/deletes individual posts, and uploads images through `/api/upload`. Publishing is controlled by the saved status, not by visiting this page.
@@ -26,11 +28,15 @@ Gallery manager for storefront photos and videos. Users may upload files or ente
 
 Campaign and automation dashboard. Loads segment counts, campaigns and delivery-job state from `/api/ecommerce-cms/marketing`. Staff can save campaign drafts, queue or cancel campaigns, and configure abandoned-cart and post-purchase automations. The eligible audience is based on confirmed marketing consent; the UI exposes segments such as all, new, repeat, inactive and cart. Queuing schedules delivery work; opening the page does not itself send a campaign.
 
+The authenticated legacy `/marketing` index replaces its empty page with a history-replacing redirect to this workspace. The sidebar-selected company remains the campaign owner.
+
 ### `pages/ecommerce-cms/messages.vue`
 
 Contact-message inbox. Lists messages from customers, tracks their status, allows deletion, and offers email or WhatsApp reply shortcuts only when the message has the relevant contact detail. The reply buttons launch a reply path; changing inbox status is a separate API action via `/api/ecommerce-cms/messages`.
 
 ### `pages/ecommerce-cms/payment.vue`
+
+Payment settings await the active preference query on the server before deriving provider configuration, so saved provider/enabled values agree in HTML and hydrated form state.
 
 Payment gateway connection settings. Shows provider-specific credential fields for Razorpay, Cashfree, PhonePe, PayU and Paytm, plus Razorpay webhook guidance. Cashfree payments use storefront return verification and authenticated recovery; the seller UI no longer offers a Cashfree webhook URL. Reads/writes the company `GeneralPreference` record with page name `ecomm_payment` and key `gateway_config`; tests credentials via `/api/ecommerce-cms/payment/test` before saving. Only one gateway is selected as active in this UI. Treat values entered here as secrets; the page does not establish that storage is encrypted.
 
@@ -45,3 +51,5 @@ Verified-purchase product-review list. Shows product, customer, rating, review t
 ### `pages/ecommerce-cms/shipping.vue`
 
 Shipping-provider connection settings. Reads/writes company `GeneralPreference` data (`ecomm_shipping` / `provider_config`), displays provider credential forms and connection order, tests supported providers via `/api/ecommerce-cms/shipping/test`, and allows save/disconnect. The first connected provider is treated as primary in the displayed priority chain. Provider-specific webhooks and test capability differ; a configured card alone does not prove live carrier connectivity.
+
+Shipping preferences await their initial server query before deriving connected providers, matching the payment-settings initialization pattern. This keeps the initial provider controls consistent with the hydrated query payload.

@@ -1,0 +1,429 @@
+{
+  "databaseMode": "test database: only run-prefixed coupon/brand/collection fixtures may be mutated",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 6448,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/notifications",
+      "status": "passed",
+      "landed": "/notifications",
+      "expectedPath": "/notifications",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 10729,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "status": "passed",
+      "landed": "/products",
+      "expectedPath": "/products",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 13775,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/erp/sales",
+      "status": "failed",
+      "landed": "/erp/sales",
+      "expectedPath": "/erp/sales",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "children",
+          "nodeTags": [
+            "tr"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "td"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 8084,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/CrVMpdCs.js",
+          "line": 16
+        },
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        },
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        },
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/products/brands/add",
+      "status": "failed",
+      "landed": "/products/brands/add",
+      "expectedPath": "/products/brands/add",
+      "settled": false,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [
+        "/api/model/coupon/count",
+        "/api/model/coupon/findMany"
+      ],
+      "pendingApiScopes": [
+        {
+          "path": "/api/model/coupon/count",
+          "sameDocument": false,
+          "documentKnown": true
+        },
+        {
+          "path": "/api/model/coupon/findMany",
+          "sameDocument": false,
+          "documentKnown": true
+        }
+      ],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 180055,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products/collections/add",
+      "status": "passed",
+      "landed": "/products/collections/add",
+      "expectedPath": "/products/collections/add",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 6449,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products/collections",
+      "status": "passed",
+      "landed": "/products/collections",
+      "expectedPath": "/products/collections",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 6857,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products/collections/edit/:record",
+      "status": "passed",
+      "landed": "/products/collections/edit/:record",
+      "expectedPath": "/products/collections/edit/:record",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 9612,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products/collections",
+      "status": "failed",
+      "landed": "/products/collections",
+      "expectedPath": "/products/collections",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 21805,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/CrVMpdCs.js",
+          "line": 16
+        }
+      ]
+    }
+  ],
+  "switches": [],
+  "errors": [
+    "Audit stopped by control request"
+  ],
+  "startedAt": "2026-10-20T19:30:05.480Z",
+  "forms": [
+    {
+      "company": "head",
+      "form": "coupon",
+      "code": "BRANCH_E2E_MVH2V9JA_HEAD",
+      "status": "passed",
+      "steps": [
+        "required discount rejected",
+        "created through browser form and verified in database",
+        "edited through browser form and verified after reload",
+        "deleted through confirmation and verified in database"
+      ],
+      "errors": [],
+      "hydrationWarnings": []
+    },
+    {
+      "company": "head",
+      "targetCompany": "branch",
+      "form": "brand",
+      "name": "BRANCH_E2E_MVH2V9JA_HEAD_BRAND",
+      "status": "failed",
+      "steps": [],
+      "errors": [],
+      "hydrationWarnings": [],
+      "error": "Form page must pass: /products/brands/add\n\n'failed' !== 'passed'\n"
+    },
+    {
+      "company": "head",
+      "targetCompany": "head",
+      "form": "collection",
+      "name": "BRANCH_E2E_MVH2V9JA_HEAD_COLLECTION",
+      "status": "failed",
+      "steps": [
+        "required name rejected",
+        "created through browser form in the correct company",
+        "edited through row action and verified after reload"
+      ],
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/CrVMpdCs.js",
+          "line": 16
+        }
+      ],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "error": "Form page must pass: /products/collections\n\n'failed' !== 'passed'\n"
+    }
+  ],
+  "bundleFingerprint": "e63504f13a403ffaa8386bd1993c00edd7e22ecf4e99e1f538768021d921728b",
+  "serverProcessId": 6400,
+  "actualServerTestModeVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [
+    "coupon",
+    "brand",
+    "collection"
+  ],
+  "currentPage": {
+    "company": "head",
+    "route": "/products/collections",
+    "startedAt": "2026-10-20T19:35:22.174Z"
+  },
+  "interactions": [
+    {
+      "company": "head",
+      "route": "/notifications",
+      "action": "switch unread/all tabs without marking notifications read",
+      "status": "passed",
+      "initial": {
+        "count": 2,
+        "selected": 0
+      },
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "action": "expand product row",
+      "status": "passed",
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    },
+    {
+      "company": "head",
+      "route": "/products/collections",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    }
+  ],
+  "recoveries": [
+    {
+      "company": "head",
+      "route": "/products/brands/add",
+      "time": "2026-10-20T19:34:30.215Z"
+    }
+  ],
+  "catalogFixtureCleanup": "verified",
+  "fixtureCleanup": "verified"
+}

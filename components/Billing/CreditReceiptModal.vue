@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { receiptStatus } from '~/utils/bill-credit'
-const props = defineProps<{modelValue:boolean;bill:any}>()
+const props = withDefaults(defineProps<{modelValue:boolean;bill:any;mode?:'collect'|'reverse'}>(), {mode:'collect'})
 const emit = defineEmits(['update:modelValue','saved'])
 const open = computed({get:()=>props.modelValue,set:(v)=>emit('update:modelValue',v)})
 const state = ref<any>(null), error = ref(''), loading = ref(false), saving = ref(false)
@@ -68,13 +68,14 @@ async function reverse() {
         <template v-if="state">
           <p class="font-semibold">Outstanding: {{ state.outstanding.toFixed(2) }}</p>
           <p class="text-sm text-gray-500">Payments use their own date. The original invoice and sales date stay unchanged.</p>
-          <div v-if="state.outstanding > 0 && !reversal" class="space-y-3">
+          <p v-if="mode === 'reverse' && !state.payments.some((p:any) => p.status === receiptStatus)" class="text-sm text-gray-500">No active collections to reverse.</p>
+          <div v-if="mode === 'collect' && state.outstanding > 0 && !reversal" class="space-y-3">
             <UFormGroup label="Amount received"><UInput v-model="amount" type="number" min="0.01" step="0.01" :max="state.outstanding" :disabled="saving" /></UFormGroup>
             <UFormGroup label="Payment date"><UInput v-model="date" type="date" :max="today()" :disabled="saving" /></UFormGroup>
             <UFormGroup label="Payment method"><USelect v-model="method" :options="['Cash','UPI','Card','Bank','Cheque']" :disabled="saving" /></UFormGroup>
             <UFormGroup label="Receiving account"><USelect v-model="accountId" :options="accounts" :disabled="saving" /></UFormGroup>
             <UFormGroup label="Reference (optional)"><UInput v-model="reference" maxlength="100" :disabled="saving" /></UFormGroup>
-            <UButton :loading="saving" :disabled="loading || !accountId" label="Record payment" @click="save" />
+            <UButton :loading="saving" :disabled="loading || !accountId" label="Collect" @click="save" />
           </div>
           <div v-if="reversal" class="space-y-3">
             <p>Reverse {{ Number(reversal.amount).toFixed(2) }} received by {{ reversal.payment_mode }}. This reopens the amount due and records an opposite account movement.</p>

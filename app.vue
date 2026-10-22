@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { provideHooksContext } from './lib/hooks';
+import { provideHooksContext } from '@zenstackhq/tanstack-query/runtime-v5/vue';
+import { createModelRequestFetch } from '~/utils/model-request-fetch';
 import { VueQueryDevtools } from '@tanstack/vue-query-devtools';
 import { Capacitor } from '@capacitor/core'
 import { BleClient } from '@capacitor-community/bluetooth-le'
@@ -8,7 +9,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 const config = useRuntimeConfig();
 const useAuth = () => useNuxtApp().$auth;
 // Provide tanstack-query context
-// Use an absolute endpoint so server-side fetch works too
+// Model routes belong to this app; the SSR transport resolves this path against the request origin.
 const categoryStore = useCategoryStore()
 const userStore = useUserStore()
 useCheckoutEvents()
@@ -90,7 +91,12 @@ onMounted(() => {
 });
 
 provideHooksContext({
-  endpoint: config.public.baseUrl
+  endpoint: '/api/model',
+  fetch: import.meta.server ? createModelRequestFetch({
+    endpoint: '/api/model',
+    requestURL: useRequestURL().toString(),
+    cookie: useRequestHeaders(['cookie']).cookie,
+  }) : undefined,
 });
 
 // provideHooksContext({

@@ -1,0 +1,8 @@
+{
+  "finishedAt": "2026-10-21T07:59:01.399Z",
+  "sourceHash": "ee98a2ac4eb7af904383f28dadbe5b941fc290643dc0319155d52dac8fa45bee",
+  "status": "passed",
+  "existingRowsUnchanged": true,
+  "historicalImports": false,
+  "source": "scripts/production-accounting/lib/purchase-order-authority.sql"
+}

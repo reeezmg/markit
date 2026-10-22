@@ -1,6 +1,7 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { GoogleAuth } from 'google-auth-library'
+import { assertCompanyAccess } from '~/server/utils/companyRequestScope'
 
 const projectId = process.env.GOOGLE_PROJECT_ID
 const clientEmail = process.env.GOOGLE_CLIENT_EMAIL
@@ -9,6 +10,7 @@ const privateKey = process.env.GOOGLE_PRIVATE_KEY?.replace(/\\n/g, '\n')
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
   const { companyId, excludeDeviceId, title, body: msgBody } = body
+  await assertCompanyAccess(event, companyId)
 
   if (!companyId || !title || !msgBody) {
     throw createError({ statusCode: 400, message: 'Missing required fields' })

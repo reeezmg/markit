@@ -1075,6 +1075,7 @@ const handleEdit = async () => {
 
     // 5. Prepare print data
     const preparedPrintData = {
+      companyId: bill.value.companyId || useAuth().session.value?.companyId,
       invoiceNumber: bill.value.invoiceNumber || '',
       date: new Date(date.value).toISOString(),
       phone:useAuth().session.value?.companyPhone,
@@ -1319,7 +1320,9 @@ const send = async() => {
     if(!printData?.clientPhone){
       throw new Error('Client phone number is missing')
     }
-      await $fetch('/api/whatsapp/send-payment-template', {
+      const { shareReceiptPDF } = await import('~/utils/share-receipt.client')
+      const receiptShare = await shareReceiptPDF(printData, String(bill.value?.id || route.params.salesId))
+      const sent = await $fetch('/api/whatsapp/send-payment-template', {
         method: 'POST',
         body: {
           phone: printData.clientPhone,
@@ -1327,9 +1330,11 @@ const send = async() => {
           billName: printData.companyName,
           amount: printData.grandTotal,
           paymentDate: printData.date,
-          receiptId: bill.value?.invoiceNumber || uuidv4(),
+          receiptId: receiptShare.receiptId,
+          companyId: printData.companyId,
         },
       })
+      if (!sent?.success) throw new Error(sent?.message || 'Could not send the receipt PDF. Please retry.')
       if (Array.isArray(printData.generatedCoupons) && printData.generatedCoupons.length) {
         await $fetch('/api/whatsapp/send-coupon-message', {
           method: 'POST',
@@ -2045,7 +2050,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 <template>
 
   <UDashboardPanelContent class="pb-8">
-      <CompanyFormField />
+      <CompanyFormField toolbar />
     <div v-if="dataLoading" class="flex min-h-[300px] items-center justify-center">
       <UIcon name="i-heroicons-arrow-path" class="h-8 w-8 animate-spin text-primary-500" />
     </div>

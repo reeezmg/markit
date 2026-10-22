@@ -1,0 +1,320 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 17008,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/products/brands",
+      "status": "passed",
+      "landed": "/products/brands",
+      "expectedPath": "/products/brands",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 14494,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/distributor",
+      "status": "failed",
+      "landed": "/distributor",
+      "expectedPath": "/distributor",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 2,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "div"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 20676,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/DZ1nKup-.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "query-state",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/erp/online",
+      "status": "passed",
+      "landed": "/erp/online",
+      "expectedPath": "/erp/online",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 8145,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/shipping",
+      "status": "passed",
+      "landed": "/ecommerce-cms/shipping",
+      "expectedPath": "/ecommerce-cms/shipping",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4771,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/products/brands",
+      "status": "passed",
+      "landed": "/products/brands",
+      "expectedPath": "/products/brands",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4413,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/distributor",
+      "status": "passed",
+      "landed": "/distributor",
+      "expectedPath": "/distributor",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4061,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/erp/online",
+      "status": "passed",
+      "landed": "/erp/online",
+      "expectedPath": "/erp/online",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4130,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/ecommerce-cms/shipping",
+      "status": "passed",
+      "landed": "/ecommerce-cms/shipping",
+      "expectedPath": "/ecommerce-cms/shipping",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4373,
+      "errors": []
+    }
+  ],
+  "switches": [
+    {
+      "direction": "head-to-branch",
+      "status": 200,
+      "persisted": true
+    },
+    {
+      "direction": "branch-to-head",
+      "status": 200,
+      "persisted": true
+    }
+  ],
+  "errors": [],
+  "startedAt": "2026-10-21T02:04:28.980Z",
+  "bundleFingerprint": "e8af54a242c998ad3b72b94a4bdfe9b3f6470a82f7f2096459dfde9381da4036",
+  "serverProcessId": 11632,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [],
+  "currentPage": {
+    "company": "branch",
+    "route": "/ecommerce-cms/shipping",
+    "startedAt": "2026-10-21T02:05:57.096Z"
+  },
+  "serverTimingMaxBytes": 0,
+  "interactions": [
+    {
+      "company": "head",
+      "route": "/products/brands",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed",
+      "restrictedQueries": 2
+    },
+    {
+      "company": "head",
+      "route": "/erp/online",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    }
+  ],
+  "pageSummary": {
+    "passed": 7,
+    "failed": 1
+  },
+  "formSummary": {},
+  "interactionSummary": {
+    "passed": 2
+  },
+  "pageAuditStatus": "failed",
+  "finishedAt": "2026-10-21T02:06:04.882Z"
+}

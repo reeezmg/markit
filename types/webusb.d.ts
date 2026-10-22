@@ -20,6 +20,7 @@ declare interface USBConfiguration {
 
 declare interface USBOutTransferResult {
   status: string;
+  bytesWritten: number;
 }
 
 declare interface USBDeviceFilter {

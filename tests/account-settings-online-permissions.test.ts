@@ -25,8 +25,8 @@ await assert.rejects(call(ecommerceAccountingRouter,'PUT','/settings',{mappings:
 assert.equal(writes,1,'Invalid selections must not save');
 await assert.rejects(call(investorProfitRouter,'PUT','/settings',{accountId:'equity'},'a','accountant'),/manager or admin/);
 const settingsPage=fs.readFileSync('pages/settings/account.vue','utf8');
-assert.ok(settingsPage.includes('v-if="canManageProfit"'));
-assert.ok(settingsPage.includes('if (!canManageProfit.value) return'));
+assert.ok(settingsPage.includes(':disabled="!!busy || !canManageProfit"'));
+assert.ok(settingsPage.includes("key === 'investments' && canManageProfit.value ? { profitDistributionAccountId:"));
 assert.ok(settingsPage.includes("['admin', 'manager'].includes"));
 const result={at:new Date().toISOString(),method:'Actual ecommerce settings and profit settings routers with request context and mocked database; no real database calls.',onlineRoles:Object.keys(ecommerceRoles).length,selectedMappingsSaved:true,saveDoesNotActivate:true,invalidSelectionsRejected:rejected,accountantCannotSaveProfitDistribution:true,profitSaveVisibleToAccountant:false};
 fs.writeFileSync(`${process.env.ACCOUNTING_REVIEW_DIR||'scripts/production-accounting/runs/account-settings-review-2026-10-06'}/online-permissions.json`,JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));

@@ -1,9 +1,11 @@
 <script setup lang="ts">
+const settingsCompany = await useSettingsCompany();
+const $fetch = settingsCompany.fetch;
+const { startNewYear, updatePrefixes } = settingsCompany;
 import { useUpdateCompany } from '~/lib/hooks/company';
-import { startNewYear, updatePrefixes } from '~/auth/composables/auth';
 
 const UpdateCompany = useUpdateCompany({ optimisticUpdate: true });
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => settingsCompany.auth;
 const toast = useToast();
 
 // ── Financial Year ──
@@ -13,6 +15,7 @@ const isStartingNewYear = ref(false);
 const isNewYearConfirmOpen = ref(false);
 
 const onStartNewYear = async () => {
+  if (isStartingNewYear.value) return;
   if (!newClosingDate.value) {
     toast.add({ title: 'Please select a closing date', color: 'red', icon: 'i-heroicons-x-circle' });
     return;
@@ -23,7 +26,8 @@ const onStartNewYear = async () => {
       throw createError({ statusCode: 0, statusMessage: 'No internet connection' });
     }
     const companyId = useAuth().session.value?.companyId;
-    const closingDateValue = new Date(newClosingDate.value).toISOString();
+    const submittedDate = newClosingDate.value;
+    const closingDateValue = new Date(submittedDate).toISOString();
 
     await $fetch('/api/bill/startNewYear', {
       method: 'POST',
@@ -31,7 +35,7 @@ const onStartNewYear = async () => {
     });
 
     await startNewYear(closingDateValue);
-    closingDate.value = newClosingDate.value;
+    closingDate.value = submittedDate;
     isNewYearConfirmOpen.value = false;
     toast.add({ title: 'New financial year started! Bill numbering has been reset.', icon: 'i-heroicons-check-circle' });
   } catch (error) {
@@ -75,6 +79,7 @@ const prefixItems = computed(() => [
 ]);
 
 const onPrefixSave = async () => {
+  if (isUpdatingPrefixes.value) return;
   isUpdatingPrefixes.value = true;
   try {
     if (!navigator.onLine) {
@@ -92,7 +97,7 @@ const onPrefixSave = async () => {
       accountPrefix: accountPrefix.value,
     };
 
-    UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: { id: companyId },
       data: prefixData,
     });

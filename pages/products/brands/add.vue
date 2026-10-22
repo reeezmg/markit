@@ -71,7 +71,7 @@ const handleSubmit = async () => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
-      <CompanyFormField />
+      <CompanyFormField toolbar />
     <UPageCard class="m-3">
       <div class="text-xl mb-4">Brand</div>
       <hr class="h-px my-6 bg-gray-200 border-0 dark:bg-gray-700" />

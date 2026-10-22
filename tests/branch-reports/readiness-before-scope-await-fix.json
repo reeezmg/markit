@@ -1,0 +1,596 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 15484,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/distributor",
+      "status": "failed",
+      "landed": "/distributor",
+      "expectedPath": "/distributor",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 2,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "div"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 29321,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BNSdj2a2.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "query-state",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/distributor/credit",
+      "status": "failed",
+      "landed": "/distributor/credit",
+      "expectedPath": "/distributor/credit",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 2,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "div"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 21046,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BNSdj2a2.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "query-state",
+          "count": 2
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/erp/expenses",
+      "status": "failed",
+      "landed": "/erp/expenses",
+      "expectedPath": "/erp/expenses",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 1,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 20536,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BNSdj2a2.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "query-state",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/products/brands",
+      "status": "passed",
+      "landed": "/products/brands",
+      "expectedPath": "/products/brands",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 6858,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/erp/online",
+      "status": "passed",
+      "landed": "/erp/online",
+      "expectedPath": "/erp/online",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 6805,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/shipping",
+      "status": "passed",
+      "landed": "/ecommerce-cms/shipping",
+      "expectedPath": "/ecommerce-cms/shipping",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4766,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/distributor",
+      "status": "passed",
+      "landed": "/distributor",
+      "expectedPath": "/distributor",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3867,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/distributor/credit",
+      "status": "passed",
+      "landed": "/distributor/credit",
+      "expectedPath": "/distributor/credit",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3506,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/erp/expenses",
+      "status": "failed",
+      "landed": "/erp/expenses",
+      "expectedPath": "/erp/expenses",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 1,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": [],
+          "controlAttributes": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": [],
+          "controlAttributes": []
+        }
+      ],
+      "durationMs": 13499,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BNSdj2a2.js",
+          "line": 16,
+          "category": "hydration-mismatch"
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "query-state",
+          "count": 1
+        }
+      ]
+    },
+    {
+      "company": "branch",
+      "route": "/products/brands",
+      "status": "passed",
+      "landed": "/products/brands",
+      "expectedPath": "/products/brands",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4290,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/erp/online",
+      "status": "passed",
+      "landed": "/erp/online",
+      "expectedPath": "/erp/online",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4395,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/ecommerce-cms/shipping",
+      "status": "passed",
+      "landed": "/ecommerce-cms/shipping",
+      "expectedPath": "/ecommerce-cms/shipping",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3243,
+      "errors": []
+    }
+  ],
+  "switches": [
+    {
+      "direction": "head-to-branch",
+      "status": 200,
+      "persisted": true
+    },
+    {
+      "direction": "branch-to-head",
+      "status": 200,
+      "persisted": true
+    }
+  ],
+  "errors": [],
+  "startedAt": "2026-10-21T02:33:01.074Z",
+  "bundleFingerprint": "0b94387c3ac34ffba03de68a227ed15d1743394e4d1061ea643fa3f81858f5ab",
+  "serverProcessId": 14660,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [],
+  "currentPage": {
+    "company": "branch",
+    "route": "/ecommerce-cms/shipping",
+    "startedAt": "2026-10-21T02:35:28.424Z"
+  },
+  "serverTimingMaxBytes": 0,
+  "interactions": [
+    {
+      "company": "head",
+      "route": "/products/brands",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed",
+      "restrictedQueries": 2
+    },
+    {
+      "company": "head",
+      "route": "/erp/online",
+      "action": "filter branch without switching sidebar company",
+      "status": "passed"
+    }
+  ],
+  "pageSummary": {
+    "failed": 4,
+    "passed": 8
+  },
+  "formSummary": {},
+  "interactionSummary": {
+    "passed": 2
+  },
+  "pageAuditStatus": "failed",
+  "finishedAt": "2026-10-21T02:35:35.570Z"
+}

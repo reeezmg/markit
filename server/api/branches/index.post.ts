@@ -19,7 +19,7 @@ export default eventHandler(async (event) => {
   }
   return prisma.$transaction(async (tx) => {
     const parent = await tx.company.findUnique({ where: { id: session.data.companyId } });
-    if (!parent?.isHeadOffice || parent.parentCompanyId) {
+    if (!parent?.status || !parent.isHeadOffice || parent.parentCompanyId) {
       throw createError({ statusCode: 409, statusMessage: 'Select a head office before adding branches' });
     }
     const branch = await tx.company.create({

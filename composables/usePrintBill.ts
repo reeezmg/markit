@@ -1,114 +1,31 @@
 import { Capacitor } from '@capacitor/core';
 import { useReceiptPrinter } from '~/composables/useReceiptPrinter';
 import { useWebUsbPrinter } from '~/composables/useWebUsbPrinter';
+import type { PrintTemplate } from '~/utils/print-templates';
 
-const LOCAL_PRINT_SERVER = 'http://localhost:3001';
-const LOCAL_PRINT_TIMEOUT = 1500;
-
-function normalizeError(err: any, fallbackMessage: string): Error {
-  if (err instanceof Error) return err;
-  if (typeof err === 'string') return new Error(err);
-  return new Error(err?.message || fallbackMessage);
-}
-
+/** All app print actions use the devices assigned in Settings > Printer. */
 export const usePrint = () => {
-  const { printMobileBill, printMobileLabel, printMobileReport } = useReceiptPrinter();
-  const {
-    isWebUsbSupported,
-    hasAssignedPrinter,
-    printBillViaUsb,
-    printLabelViaUsb,
-    printReportViaUsb,
-  } = useWebUsbPrinter();
-
-  const printViaLocalServer = async (path: string, body: any) =>
-    $fetch(path, {
-      method: 'POST',
-      body,
-      baseURL: LOCAL_PRINT_SERVER,
-      timeout: LOCAL_PRINT_TIMEOUT,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-    });
-
-  const printBill = async (printData: any) => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        const res = await printMobileBill(printData);
-        if (!res.success) {
-          throw new Error(res.message);
-        }
-      } else {
-        if (isWebUsbSupported() && hasAssignedPrinter('receipt')) {
-          try {
-            return await printBillViaUsb(printData);
-          } catch (usbError) {
-            console.warn('WebUSB receipt print failed, falling back to localhost:3001', usbError);
-          }
-        }
-
-        return await printViaLocalServer('/api/print-bill', printData);
-      }
-    } catch (err: any) {
-      const error = normalizeError(err, 'Failed to print bill.');
-      console.error('Print Bill error:', error.message);
-      throw error;
-    }
-  };
-
-  const printReport = async (printData: any) => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        const res = await printMobileReport(printData);
-        if (!res.success) {
-          throw new Error(res.message);
-        }
-      } else {
-        if (isWebUsbSupported() && hasAssignedPrinter('receipt')) {
-          try {
-            return await printReportViaUsb(printData);
-          } catch (usbError) {
-            console.warn('WebUSB report print failed, falling back to localhost:3001', usbError);
-          }
-        }
-        return await printViaLocalServer('/api/print-report', printData);
-      }
-    } catch (err: any) {
-      const error = normalizeError(err, 'Failed to print report.');
-      console.error('Print Report error:', error.message);
-      throw error;
-    }
-  };
-
-  const printLabel = async (labelData: any, printerLabelSize: any) => {
-    try {
-      if (Capacitor.isNativePlatform()) {
-        const res = await printMobileLabel(labelData, printerLabelSize);
-        if (!res.success) {
-          throw new Error(res.message);
-        }
-      } else {
-        if (isWebUsbSupported() && hasAssignedPrinter('barcode')) {
-          try {
-            return await printLabelViaUsb(labelData, printerLabelSize);
-          } catch (usbError) {
-            console.warn('WebUSB barcode print failed, falling back to localhost:3001', usbError);
-          }
-        }
-
-        return await printViaLocalServer('/api/print-label', labelData);
-      }
-    } catch (err: any) {
-      const error = normalizeError(err, 'Failed to print labels.');
-      console.error('Print Label error:', error.message);
-      throw error;
-    }
-  };
-
+  const usb = useWebUsbPrinter();
+  const bluetooth = useReceiptPrinter();
+  function requirePrinter(role: 'receipt' | 'barcode') {
+    if (!usb.isWebUsbSupported()) throw new Error('WebUSB printing requires Chrome or Edge. Connect your printer in Settings > Printer.');
+    if (!usb.hasAssignedPrinter(role)) throw new Error(`Assign a USB ${role === 'barcode' ? 'label' : 'receipt'} printer in Settings > Printer, then retry.`);
+  }
   return {
-    printBill,
-    printLabel,
-    printReport,
+    async printBill(data: any, design?: PrintTemplate | null) {
+      if (Capacitor.isNativePlatform()) return bluetooth.printMobileBill(data, design === undefined ? data.printTemplate : design);
+      requirePrinter('receipt');
+      return usb.printBillViaUsb(data, design === undefined ? data.printTemplate : design);
+    },
+    async printLabel(data: any[], size: string, design?: PrintTemplate | null) {
+      if (Capacitor.isNativePlatform()) return bluetooth.printMobileLabel(data, size, design);
+      requirePrinter('barcode');
+      return usb.printLabelViaUsb(data, size, design);
+    },
+    async printReport(data: any) {
+      if (Capacitor.isNativePlatform()) return bluetooth.printMobileReport(data);
+      requirePrinter('receipt');
+      return usb.printReportViaUsb(data);
+    },
   };
 };

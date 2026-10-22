@@ -31,7 +31,12 @@ router = APIRouter()
 
 @router.get("/{company_id}/shipping/providers")
 def list_providers(company_id: str, conn=Depends(db), _svc: bool = Depends(require_service)):
-    cfg = _common._get_config(conn, company_id)
+    try:
+        cfg = _common._get_config(conn, company_id)
+    except HTTPException as error:
+        if error.status_code != 404:
+            raise
+        return {"providers": [], "priority": [], "primary": ""}
     primary = cfg.get("primary", "")
     priority = [p for p in (cfg.get("priority") or []) if p] or ([primary] if primary else [])
     out = []

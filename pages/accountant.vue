@@ -8,9 +8,9 @@ const allowed = computed(() => ['admin', 'manager', 'accountant'].includes(scope
 <template>
   <UDashboardPage>
     <UDashboardPanel grow>
-      <UDashboardNavbar title="Account" />
+      <ErpPageNavbar title="Account" />
       <div v-if="allowed" class="flex flex-col min-h-0 flex-1 overflow-auto">
-        <div class="px-4 pt-4 sm:px-6"><CompanyFormField /></div>
+        <CompanyFormField toolbar />
         <main class="flex-1 min-w-0 p-4 sm:p-6 overflow-auto">
           <NuxtPage :key="`${scope.companyId.value}:${route.fullPath}`" />
         </main>

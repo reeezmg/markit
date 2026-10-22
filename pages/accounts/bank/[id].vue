@@ -1,11 +1,13 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
 import { ref, computed, watch } from 'vue'
 import { format, sub, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
 
 const route = useRoute()
 const toast = useToast()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 
 /* ---------------------------------------------------
    ROUTE PARAM
@@ -58,6 +60,7 @@ const ledgerUrl = computed(() =>
 const { data, pending, error, refresh } = await useFetch(
   ledgerUrl,
   {
+    headers: companyScope.headers(), key: 'archive:pages/accounts/bank/[id].vue:' + companyScope.companyId.value,
     query: computed(() => ({
       ...(bankId.value && { bankId: bankId.value }),
       from: startOfDay(selectedDate.value.start).toISOString(),

@@ -9,7 +9,9 @@ import {
     isSameDay,
 } from 'date-fns';
 
-const auth = useNuxtApp().$auth;
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+const auth = companyScope.auth;
 const toast = useToast();
 const { printReport } = usePrint();
 const route = useRoute();

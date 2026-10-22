@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
 import { ref, computed, watch } from 'vue'
 import { format, sub, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
@@ -36,6 +38,7 @@ function selectRange(duration: Duration) {
 const { data, pending, error, refresh } = await useFetch(
   '/api/accounts/creditledger',
   {
+    headers: companyScope.headers(), key: 'archive:pages/accounts/credit.vue:' + companyScope.companyId.value,
     query: computed(() => ({
       from: selectedDate.value.start.toISOString(),
       to: selectedDate.value.end.toISOString(),

@@ -2,6 +2,7 @@
 .output
 .data
 .nuxt
+.nuxt-branch-e2e/
 .nitro
 .cache
 dist
@@ -36,6 +37,7 @@ lib/hooks/*
 zenstack/
 
 # Deployment / generated tooling folders
+.output-branch-e2e/
 .vercel/
 .zenstack/
 electron-dist/

@@ -1,0 +1,62 @@
+{
+  "updatedAt": "2026-10-21T08:58:44.701Z",
+  "status": "passed",
+  "results": [
+    {
+      "name": "billing",
+      "exitCode": 0,
+      "log": "accounting-billing.log",
+      "finishedAt": "2026-10-21T08:49:35.174Z"
+    },
+    {
+      "name": "expenses",
+      "exitCode": 0,
+      "log": "accounting-expenses.log",
+      "finishedAt": "2026-10-21T08:49:56.092Z"
+    },
+    {
+      "name": "staff-head",
+      "exitCode": 0,
+      "log": "accounting-staff-head.log",
+      "finishedAt": "2026-10-21T08:50:41.743Z"
+    },
+    {
+      "name": "staff-branch",
+      "exitCode": 0,
+      "log": "accounting-staff-branch.log",
+      "finishedAt": "2026-10-21T08:51:25.101Z"
+    },
+    {
+      "name": "purchases-head",
+      "exitCode": 0,
+      "log": "accounting-purchases-head.log",
+      "finishedAt": "2026-10-21T08:53:02.242Z"
+    },
+    {
+      "name": "purchases-branch",
+      "exitCode": 0,
+      "log": "accounting-purchases-branch.log",
+      "finishedAt": "2026-10-21T08:58:34.498Z"
+    },
+    {
+      "name": "integrity",
+      "exitCode": 0,
+      "log": "accounting-integrity.log",
+      "finishedAt": "2026-10-21T08:58:44.701Z"
+    }
+  ],
+  "previousAttempts": [
+    {
+      "name": "purchases-branch",
+      "exitCode": 1,
+      "log": "accounting-purchases-branch-initial-fixture-failure.log",
+      "finishedAt": "2026-10-21T08:53:05.931Z"
+    }
+  ],
+  "periodLocks": {
+    "name": "period-locks",
+    "exitCode": 0,
+    "log": "accounting-period-locks.log",
+    "finishedAt": "2026-10-21T08:58:41.977Z"
+  }
+}

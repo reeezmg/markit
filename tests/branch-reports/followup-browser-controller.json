@@ -1,0 +1,67 @@
+{
+  "startedAt": "2026-10-21T06:58:28.970Z",
+  "phase": "complete",
+  "jobs": [
+    {
+      "name": "catalog-followup",
+      "exitCode": 0,
+      "pageSummary": {
+        "passed": 26
+      },
+      "forms": [
+        {
+          "company": "head",
+          "form": "coupon",
+          "status": "passed"
+        },
+        {
+          "company": "head",
+          "form": "brand",
+          "status": "passed"
+        },
+        {
+          "company": "head",
+          "form": "collection",
+          "status": "passed"
+        },
+        {
+          "company": "head",
+          "form": "category",
+          "status": "passed"
+        },
+        {
+          "company": "branch",
+          "form": "coupon",
+          "status": "passed"
+        },
+        {
+          "company": "branch",
+          "form": "brand",
+          "status": "passed"
+        },
+        {
+          "company": "branch",
+          "form": "collection",
+          "status": "passed"
+        },
+        {
+          "company": "branch",
+          "form": "category",
+          "status": "passed"
+        }
+      ],
+      "fixtureCleanup": "verified",
+      "catalogFixtureCleanup": "verified"
+    },
+    {
+      "name": "detail-pages-followup",
+      "exitCode": 0,
+      "pageSummary": {
+        "passed": 38
+      },
+      "detailFixtureCleanup": "verified"
+    }
+  ],
+  "bundleFingerprint": "393506d71ac9517c6ee151660c6c8a0bd36518f4e260254cb2065a3a7db50d26",
+  "finishedAt": "2026-10-21T07:23:02.769Z"
+}

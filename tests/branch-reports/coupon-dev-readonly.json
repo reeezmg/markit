@@ -1,0 +1,18 @@
+{
+  "databaseMode": "read-only bootstrap; GET requests only",
+  "checkedAt": "2026-10-21T11:57:32.360Z",
+  "pages": [
+    {
+      "context": "head",
+      "status": 200,
+      "hasNuxtContextError": false,
+      "hasCouponTable": true
+    },
+    {
+      "context": "branch",
+      "status": 200,
+      "hasNuxtContextError": false,
+      "hasCouponTable": true
+    }
+  ]
+}

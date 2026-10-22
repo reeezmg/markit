@@ -63,6 +63,19 @@ def test_selected_provider_is_used_for_seller_operations(client):
     assert request.call_args.kwargs["params"] == {"waybill": "AWB1"}
 
 
+def test_provider_list_is_empty_until_shipping_is_configured(client, monkeypatch):
+    def missing_config(*_):
+        raise HTTPException(status_code=404, detail="Shipping not configured")
+
+    monkeypatch.setattr(_common, "_get_config", missing_config)
+    providers = client.get(f"{BASE}/providers", headers=HEADERS)
+    assert providers.status_code == 200
+    assert providers.json() == {"providers": [], "priority": [], "primary": ""}
+    # Operations still require configuration; listing never pretends a carrier
+    # is enabled or that tracking succeeded.
+    assert client.get(f"{BASE}/track/AWB1", headers=HEADERS).status_code == 404
+
+
 def test_storetools_shared_routes_are_present(client):
     paths = {(method, route.path) for route in app.routes for method in getattr(route, "methods", [])}
     for method, path in (

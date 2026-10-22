@@ -104,6 +104,8 @@
 ## Offline Page
 
 ### `pages/offline/index.vue`
+
+Offline billing category reads use the company-scoped adapter in form mode, keeping the current company restriction and awaiting active category reads during SSR.
 A **simplified billing page** for free/lite plan users — no customer tracking, no payment types, no points, no tax. Only captures item + qty + category for stock deduction.
 
 **Purpose:** Allow stock to be marked as sold without creating a full bill record (no `bills` table entry).
@@ -114,7 +116,7 @@ A **simplified billing page** for free/lite plan users — no customer tracking,
 ```
 Missing vs billing.vue: no `discount`, `tax`, `value`, `user`, `userCode`, `userId`, `cost`, `paymentType`
 
-**Draft bill system:** Identical to `billing.vue` — `localStorage['bills']`, multiple concurrent drafts, billNo re-sequencing on create/delete.
+**Draft bill system:** Uses `companyStorageKey('bills', companyId, activeCompanyId)` like full billing, so each company has `bills:<companyId>` drafts. The legacy `bills` key is adopted once with a legacy-owner marker; switching stores cannot adopt the same legacy draft again. Multiple concurrent drafts retain billNo re-sequencing on create/delete. This is browser draft storage and does not change the paused ElectricSQL stack.
 
 **Barcode lookup:** `GET /api/bill/by-barcode?barcode=` — same endpoint as billing.vue. Sets item name, category, rate, sizes, variantId.
 
@@ -157,3 +159,9 @@ ID with its draft, waits for storage synchronization and disables overlapping Sa
 inside the stock transaction. The same payload returns its saved receipt without
 moving quantities or native valuation twice; a changed payload under that ID
 requires review (409). This does not change the paused ElectricSQL/offline stack.
+
+Offline stock adjustment now uses a page form company scope and Company / branch
+field. Requests carry the selected company, and drafts use that company's key.
+Legacy draft adoption compares against the actual login company, preventing a
+branch selected from head office from adopting old head-office drafts. The parent
+remounts the child on route changes so selections load the correct draft context.

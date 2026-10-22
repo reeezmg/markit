@@ -5,6 +5,7 @@ const $fetch = companyScope.fetch;
 
 import { BillingAddClient } from '#components';
 import { billingErrorMessage } from '~/utils/billing-error';
+import { billSaveActionIcon, billSaveActionIcons } from '~/utils/bill-save-action-icon';
 import '~/assets/css/billing-layout.css';
 import { v4 as uuidv4 } from 'uuid';
 import { Capacitor } from '@capacitor/core';
@@ -510,10 +511,10 @@ const openRecentBill = async () => {
 
 const actionItems = [
   [
-    { label: 'Print', click: () => selectAction('print') },
-    { label: 'Send', click: () => selectAction('send') },
-    { label: 'Download', click: () => selectAction('download') },
-    { label: 'None', click: () => selectAction(null) }
+    { label: 'Print', icon: billSaveActionIcons.print, click: () => selectAction('print') },
+    { label: 'Send', icon: billSaveActionIcons.send, click: () => selectAction('send') },
+    { label: 'Download', icon: billSaveActionIcons.download, click: () => selectAction('download') },
+    { label: 'None', icon: billSaveActionIcons.none, click: () => selectAction(null) }
   ]
 ]
 
@@ -570,7 +571,9 @@ const send = async() => {
     if(!printData.clientPhone){
       throw new Error('Client phone number is missing')
     }
-      await $fetch('/api/whatsapp/send-payment-template', {
+      const { shareReceiptPDF } = await import('~/utils/share-receipt.client')
+      const receiptShare = await shareReceiptPDF(printData, String(printData.billId || uuid.value))
+      const sent = await $fetch('/api/whatsapp/send-payment-template', {
         method: 'POST',
         body: {
           phone: printData.clientPhone,
@@ -578,9 +581,11 @@ const send = async() => {
           billName: printData.companyName,
           amount: printData.grandTotal,
           paymentDate: printData.date,
-          receiptId: uuid.value,
+          receiptId: receiptShare.receiptId,
+          companyId: printData.companyId,
         },
       })
+      if (!sent?.success) throw new Error(sent?.message || 'Could not send the receipt PDF. Please retry.')
       if (Array.isArray(printData.generatedCoupons) && printData.generatedCoupons.length) {
         await $fetch('/api/whatsapp/send-coupon-message', {
           method: 'POST',
@@ -736,6 +741,7 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
   const showUnit = Array.isArray(units) && units.length > 1
   return {
     invoiceNumber: billInv,
+    companyId: session.companyId,
     phone: session?.companyPhone,
     description: session?.description,
     thankYouNote: session?.thankYouNote,
@@ -880,6 +886,7 @@ const handleSave = async () => {
     // Invoice number is assigned by the create transaction — use it for the receipt
     const billInv = result?.invoiceNumber
     printData = buildPrintData({ billInv, session, finalitems, refs: draftRefs })
+    printData.billId = result?.billId || uuid.value
     printData.generatedCoupons = result?.generatedCoupons || []
     fireFcmNotification(companyId, billInv, grandTotal.value, session)
 
@@ -1186,7 +1193,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 
 <template>
   <UDashboardPanelContent class="billing-page p-1">
-      <CompanyFormField />
+      <CompanyFormField toolbar />
                   
       <UCard :style="billingTableStyle"
     :ui="{
@@ -1231,7 +1238,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
     </div>
      <div class="w-full flex flex-wrap gap-4 lg:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block :disabled="!canCreateDraft" @click="handleCreateNewDraft" >New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton  :loading="isSaving" :icon="billSaveActionIcon(selectedAction)" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
     
@@ -1667,6 +1674,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
     <!-- Save -->
     <UButton
       :loading="isSaving"
+      :icon="billSaveActionIcon(selectedAction)"
       ref="saveref" :title="selectedAction ? 'Save & ' + selectedAction : 'Save'"
       color="green"
       class="flex-1 rounded-r-none"
@@ -1968,7 +1976,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block :disabled="!canCreateDraft" @click="handleCreateNewDraft" >New</UButton>
-          <UButton  :loading="isSaving" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton  :loading="isSaving" :icon="billSaveActionIcon(selectedAction)" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
           <UButton  class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
         </template>

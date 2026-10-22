@@ -24,6 +24,10 @@ These Vue files are route parents. Each renders `<NuxtPage />` for its child rou
 
 `pages/settings.vue` is the settings shell; its tabs are General, Store, Company & Branches (root companies only), Products, Account, Printer, Numbering and Requests. `pages/blogs.vue` is the public blog route shell with its own navigation/layout and `<NuxtPage />`, not the seller's CMS blog editor. `pages/products.vue` and the other dashboard shells use auth page metadata; verify child authorization independently for new pages.
 
+ERP route shells use `ErpPageNavbar.vue`, whose right side hosts page company selectors while preserving the original title on the left. `CompanyTableFilter` and full-page `CompanyFormField toolbar` controls move there after hydration through `CompanyControlPlacement`; embedded forms and modal/slideover form fields keep their selectors inside the form or dialog. This changes placement only: table/report filtering, form ownership, record locks, transfers and the logged-in sidebar company retain their existing behavior. Repeated copies for the same purpose in mounted tabs display once. Notifications and statement processing use the same navbar.
+
+Settings uses that same top-right position for its existing route-driven selector. Its tab links retain `entryCompany`; the Company & Branches link clears it. Offline stock adjustments key their child by route so selecting another company recreates its draft/form context. Legacy Accounts supplies a form company scope and recreates its read-only child when the selected company changes. These controls do not call the sidebar session switch.
+
 `layouts/default.vue` separates ERP and Storefront navigation. Expense and
 Investments are inserted into both full and simplified ERP menus. The final ERP
 filter removes Ecom, AI, Orders and Bookings; order operations appear under

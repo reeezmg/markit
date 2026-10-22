@@ -1126,11 +1126,17 @@ accountantManagementRouter.get(
   asyncHandler(async (req, res) => {
     const companyId = req.user!.companyId!;
     res.json(
-      await prisma.accountantPreference.upsert({
-        where: { companyId },
-        update: {},
-        create: { companyId },
-      }),
+      (await prisma.accountantPreference.findUnique({ where: { companyId } })) ?? {
+        companyId,
+        fyStartMonth: 4,
+        recurringChildStatus: "DRAFT",
+        allowThirteenthMonth: false,
+        journalApprovalType: "NONE",
+        allowSelfApproval: false,
+        unrealizedGainAccountId: null,
+        unrealizedLossAccountId: null,
+        journalCustomFields: [],
+      },
     );
   }),
 );

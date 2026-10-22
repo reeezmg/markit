@@ -90,7 +90,7 @@ watch(scope.companyId, () => { modal.value = false; form.value = defaults(); });
         <UButton icon="i-heroicons-plus" @click="open()">Add recurring expense</UButton>
       </div>
     </div>
-    <div class="flex flex-wrap items-center justify-between gap-3"><CompanyFormField /></div>
+    <div class="flex flex-wrap items-center justify-between gap-3"><CompanyFormField toolbar /></div>
     <UAlert color="blue" title="Generated as pending expenses" description="Due entries appear in Daily Expense, where you can edit the amount and record payment. Schedules run daily at 6:00 AM India time. Resuming a paused schedule catches up from its next due date; edit that date to skip paused months. Use Daily Expense for bills whose amount changes each month." />
     <UAlert v-if="error" color="red" title="Could not load recurring expenses" :description="errorMessage(error)" :actions="[{ label: 'Retry', click: () => refresh() }]" />
     <UTable :rows="schedules || []" :columns="columns" :loading="pending" :empty-state="{ icon: 'i-heroicons-arrow-path', label: 'No recurring expenses yet. Add your first monthly schedule.' }">

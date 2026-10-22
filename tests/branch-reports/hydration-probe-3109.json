@@ -1,0 +1,624 @@
+{
+  "route": "/distributor",
+  "hydrating": false,
+  "server": [
+    {
+      "op": [
+        "zenstack",
+        "DistributorCompany",
+        "findMany"
+      ],
+      "hash": "86906ec6",
+      "status": "error",
+      "fetch": "idle"
+    }
+  ],
+  "client": [
+    {
+      "op": [
+        "zenstack",
+        "DistributorCompany",
+        "findMany"
+      ],
+      "hash": "86906ec6",
+      "status": "error",
+      "fetch": "idle"
+    },
+    {
+      "op": [
+        "zenstack",
+        "DistributorCompany",
+        "findMany"
+      ],
+      "hash": "55b3a4e7",
+      "status": "error",
+      "fetch": "idle"
+    }
+  ],
+  "serverHash": "ff57b776",
+  "warnings": [
+    {
+      "kind": "node",
+      "controls": [
+        "div"
+      ],
+      "hints": []
+    },
+    {
+      "kind": "node",
+      "controls": [
+        "#comment"
+      ],
+      "hints": []
+    },
+    {
+      "kind": "class",
+      "controls": [
+        "span"
+      ],
+      "hints": []
+    },
+    {
+      "kind": "text content",
+      "controls": [
+        "p"
+      ],
+      "hints": [
+        "Loading",
+        "No items"
+      ]
+    }
+  ],
+  "observations": [
+    {
+      "hash": "7439b9ab",
+      "status": "pending",
+      "fetch": "idle",
+      "retryOnMount": false,
+      "enabled": "undefined",
+      "hydrating": true,
+      "stack": [
+        {
+          "name": "jx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 107393
+        },
+        {
+          "name": "S0",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 107518
+        },
+        {
+          "name": "createResult",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 103118
+        },
+        {
+          "name": "updateResult",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 105096
+        },
+        {
+          "name": "setOptions",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 101816
+        },
+        {
+          "name": "Dm",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 100581
+        },
+        {
+          "name": "Xx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 114912
+        },
+        {
+          "name": "Zx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 115772
+        },
+        {
+          "name": "cT",
+          "file": "BrsnW-TA.js",
+          "line": 86,
+          "column": 15622
+        },
+        {
+          "name": "d",
+          "file": "GH9tBMXT.js",
+          "line": 0,
+          "column": 136
+        },
+        {
+          "name": "",
+          "file": "nNrZtHOu.js",
+          "line": 0,
+          "column": 3966
+        },
+        {
+          "name": "setup",
+          "file": "DRPapfc9.js",
+          "line": 2,
+          "column": 11763
+        }
+      ]
+    },
+    {
+      "hash": "7439b9ab",
+      "status": "pending",
+      "fetch": "idle",
+      "retryOnMount": false,
+      "enabled": "undefined",
+      "hydrating": true,
+      "stack": [
+        {
+          "name": "jx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 107393
+        },
+        {
+          "name": "S0",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 107518
+        },
+        {
+          "name": "onSubscribe",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 100715
+        },
+        {
+          "name": "subscribe",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 73935
+        },
+        {
+          "name": "Xx.be.immediate",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 115043
+        },
+        {
+          "name": "Oo",
+          "file": "BrsnW-TA.js",
+          "line": 16,
+          "column": 654
+        },
+        {
+          "name": "_n",
+          "file": "BrsnW-TA.js",
+          "line": 16,
+          "column": 725
+        },
+        {
+          "name": "a.call",
+          "file": "BrsnW-TA.js",
+          "line": 29,
+          "column": 28870
+        },
+        {
+          "name": "v",
+          "file": "BrsnW-TA.js",
+          "line": 9,
+          "column": 16190
+        },
+        {
+          "name": "Sb",
+          "file": "BrsnW-TA.js",
+          "line": 9,
+          "column": 16404
+        },
+        {
+          "name": "ec",
+          "file": "BrsnW-TA.js",
+          "line": 29,
+          "column": 29071
+        },
+        {
+          "name": "be",
+          "file": "BrsnW-TA.js",
+          "line": 29,
+          "column": 28577
+        },
+        {
+          "name": "Xx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 115010
+        },
+        {
+          "name": "Zx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 115772
+        }
+      ]
+    },
+    {
+      "hash": "ff57b776",
+      "status": "error",
+      "fetch": "idle",
+      "retryOnMount": false,
+      "enabled": "undefined",
+      "hydrating": true,
+      "stack": [
+        {
+          "name": "jx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 107393
+        },
+        {
+          "name": "S0",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 107518
+        },
+        {
+          "name": "createResult",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 103118
+        },
+        {
+          "name": "updateResult",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 105096
+        },
+        {
+          "name": "setOptions",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 101816
+        },
+        {
+          "name": "Dm",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 100581
+        },
+        {
+          "name": "Xx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 114912
+        },
+        {
+          "name": "Zx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 115772
+        },
+        {
+          "name": "cT",
+          "file": "BrsnW-TA.js",
+          "line": 86,
+          "column": 15622
+        },
+        {
+          "name": "d",
+          "file": "GH9tBMXT.js",
+          "line": 0,
+          "column": 136
+        },
+        {
+          "name": "",
+          "file": "nNrZtHOu.js",
+          "line": 0,
+          "column": 3966
+        },
+        {
+          "name": "setup",
+          "file": "D87_rgtz.js",
+          "line": 0,
+          "column": 2014
+        },
+        {
+          "name": "Oo",
+          "file": "BrsnW-TA.js",
+          "line": 16,
+          "column": 654
+        },
+        {
+          "name": "U3",
+          "file": "BrsnW-TA.js",
+          "line": 29,
+          "column": 42445
+        }
+      ]
+    },
+    {
+      "hash": "ff57b776",
+      "status": "error",
+      "fetch": "idle",
+      "retryOnMount": false,
+      "enabled": "undefined",
+      "hydrating": true,
+      "stack": [
+        {
+          "name": "jx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 107393
+        },
+        {
+          "name": "S0",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 107518
+        },
+        {
+          "name": "onSubscribe",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 100715
+        },
+        {
+          "name": "subscribe",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 73935
+        },
+        {
+          "name": "Xx.be.immediate",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 115043
+        },
+        {
+          "name": "Oo",
+          "file": "BrsnW-TA.js",
+          "line": 16,
+          "column": 654
+        },
+        {
+          "name": "_n",
+          "file": "BrsnW-TA.js",
+          "line": 16,
+          "column": 725
+        },
+        {
+          "name": "a.call",
+          "file": "BrsnW-TA.js",
+          "line": 29,
+          "column": 28870
+        },
+        {
+          "name": "v",
+          "file": "BrsnW-TA.js",
+          "line": 9,
+          "column": 16190
+        },
+        {
+          "name": "Sb",
+          "file": "BrsnW-TA.js",
+          "line": 9,
+          "column": 16404
+        },
+        {
+          "name": "ec",
+          "file": "BrsnW-TA.js",
+          "line": 29,
+          "column": 29071
+        },
+        {
+          "name": "be",
+          "file": "BrsnW-TA.js",
+          "line": 29,
+          "column": 28577
+        },
+        {
+          "name": "Xx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 115010
+        },
+        {
+          "name": "Zx",
+          "file": "BrsnW-TA.js",
+          "line": 66,
+          "column": 115772
+        }
+      ]
+    }
+  ],
+  "diffs": [
+    {
+      "path": "initialVsServer.3.where.companyId",
+      "fromType": "object",
+      "toType": "string",
+      "toLength": 36
+    },
+    {
+      "path": "initialVsServer.3.where.AND.0.companyId.in.0",
+      "fromType": "string",
+      "toType": "string",
+      "fromLength": 36,
+      "toLength": 36
+    },
+    {
+      "path": "initialVsServer.3.where.AND.0.companyId.in.1",
+      "fromType": "string",
+      "toType": "undefined",
+      "fromLength": 36
+    },
+    {
+      "path": "initialVsServer.3.select.companyId",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.company",
+      "fromType": "object",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributorNumber",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.openingDue",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.openingDueDate",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributor.select.id",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributor.select.gstin",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributor.select.upiId",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributor.select.accHolderName",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributor.select.ifsc",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributor.select.accountNo",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributor.select.bankName",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributor.select.address",
+      "fromType": "object",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributorCredits",
+      "fromType": "object",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.distributorPayments",
+      "fromType": "object",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseReturns",
+      "fromType": "object",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.createdAt",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.paymentType",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.subTotalAmount",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.discount",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.tax",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.adjustment",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.paymentAllocations.select.payment.select.amount",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.paymentAllocations.select.payment.select.paymentType",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.paymentAllocations.select.payment.select.billNo",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.paymentAllocations.select.payment.select.createdAt",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.paymentAllocations.select.payment.select.remarks",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.distributorPayment.select.paymentType",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.distributorPayment.select.billNo",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.distributorPayment.select.createdAt",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.distributorPayment.select.remarks",
+      "fromType": "boolean",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.distributorPayment.orderBy",
+      "fromType": "object",
+      "toType": "undefined"
+    },
+    {
+      "path": "initialVsServer.3.select.purchaseOrders.select.products",
+      "fromType": "object",
+      "toType": "undefined"
+    }
+  ]
+}

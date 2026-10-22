@@ -6,9 +6,15 @@ export async function getReadCompanyIds(event: H3Event): Promise<string[]> {
   const session = await requireAuthSession(event);
   const ids = await getAuthorizedCompanyIds(event);
   const selected = getHeader(event, 'x-company-filter') ?? getQuery(event).companyFilter;
+  if (selected !== undefined && typeof selected !== 'string') {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid company filter' });
+  }
   if (selected === '*') return ids;
   const companyId = typeof selected === 'string' && selected
-    ? selected : getHeader(event, 'x-company-id') || session.data.companyId;
+    ? selected : getHeader(event, 'x-company-id') || getQuery(event).companyId || session.data.companyId;
+  if (typeof companyId !== 'string' || !companyId) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid company' });
+  }
   return [await assertCompanyAccess(event, companyId)];
 }
 
@@ -20,7 +26,11 @@ export async function getAuthorizedCompanyIds(event: H3Event): Promise<string[]>
 export async function getReadCompanyId(event: H3Event, requestedId?: string): Promise<string> {
   const session = await requireAuthSession(event);
   const ids = await getAuthorizedCompanyIds(event);
-  const id = requestedId || getHeader(event, 'x-company-id') || session.data.companyId;
+  const queryId = getQuery(event).companyId;
+  if (queryId !== undefined && (typeof queryId !== 'string' || !queryId)) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid company' });
+  }
+  const id = requestedId || getHeader(event, 'x-company-id') || queryId || session.data.companyId;
   if (!ids.includes(id)) {
     throw createError({ statusCode: 403, statusMessage: 'Store access denied' });
   }

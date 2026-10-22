@@ -1,0 +1,46 @@
+{
+  "at": "2026-10-21T09:28:41.025Z",
+  "readOnly": true,
+  "companies": [
+    {
+      "role": "head",
+      "settings": {
+        "erp": true,
+        "staff": true
+      },
+      "erp": {
+        "lineMismatches": 0,
+        "historicalexcluded": 0,
+        "currentpostings": 216
+      },
+      "staff": {
+        "lineMismatches": 0,
+        "historicalexcluded": 0,
+        "currentpostings": 0
+      },
+      "unbalancedJournals": 0,
+      "foreignCompanyLines": 0
+    },
+    {
+      "role": "branch",
+      "settings": {
+        "erp": true,
+        "staff": true
+      },
+      "erp": {
+        "lineMismatches": 0,
+        "historicalexcluded": 4,
+        "currentpostings": 0
+      },
+      "staff": {
+        "lineMismatches": 0,
+        "historicalexcluded": 0,
+        "currentpostings": 0
+      },
+      "unbalancedJournals": 0,
+      "foreignCompanyLines": 0
+    }
+  ],
+  "issues": [],
+  "passed": true
+}

@@ -1,83 +1,9 @@
 import { createError } from 'h3'
-import { pool } from '~/server/db'
+import { createTableReadinessCheck } from '~/server/utils/schemaReadiness'
 
-/**
- * Lazily provisions the ecomm_gallery table (mirrors the ecommFaqs pattern).
- * Uses CREATE TABLE IF NOT EXISTS so we never run a destructive `prisma db push`
- * against the shared production DB.
- *
- * A gallery row is either a PHOTO or a VIDEO (`type`), and carries an uploaded
- * R2 object (`media_key`) and/or an external link (`url`) — at least one of the
- * two must be present, both may be set at once:
- *   - VIDEO: `media_key` = uploaded video in R2, `url` = YouTube video/Short link
- *   - PHOTO: `media_key` = uploaded image in R2, `url` = external image URL
- *
- * Legacy rows were YouTube-only and stored `type = 'YOUTUBE'`; they are migrated
- * to 'VIDEO' here (their link already lives in `url`).
- */
-const provisionEcommGalleryTable = async () => {
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS ecomm_gallery (
-      id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
-      created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      company_id TEXT NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      type TEXT NOT NULL DEFAULT 'VIDEO',
-      media_key TEXT,
-      url TEXT,
-      sort_order INTEGER NOT NULL DEFAULT 0,
-      status BOOLEAN NOT NULL DEFAULT TRUE
-    )
-  `)
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS ecomm_gallery_company_status_sort_idx
-    ON ecomm_gallery (company_id, status, sort_order)
-  `)
-
-  // Legacy YouTube-only rows → VIDEO (idempotent).
-  await pool.query(`UPDATE ecomm_gallery SET type = 'VIDEO' WHERE type = 'YOUTUBE'`)
-
-  await pool.query(`ALTER TABLE ecomm_gallery ALTER COLUMN type SET DEFAULT 'VIDEO'`)
-
-  // A row is meaningless without something to render — enforce it in the DB too.
-  // NOT VALID so a stray legacy row with neither can't make this statement (and
-  // with it every gallery request) fail; inserts and updates are still checked.
-  await pool.query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_constraint WHERE conname = 'ecomm_gallery_media_present_chk'
-      ) THEN
-        ALTER TABLE ecomm_gallery
-        ADD CONSTRAINT ecomm_gallery_media_present_chk
-        CHECK (media_key IS NOT NULL OR url IS NOT NULL) NOT VALID;
-      END IF;
-    END
-    $$;
-  `)
-
-  await pool.query(`
-    CREATE INDEX IF NOT EXISTS ecomm_gallery_company_type_status_sort_idx
-    ON ecomm_gallery (company_id, type, status, sort_order)
-  `)
-}
-
-// Provisioning now includes migration statements, so run it once per process
-// rather than on every gallery request. A failure clears the memo so the next
-// request retries instead of inheriting a broken table.
-let provisioned: Promise<void> | null = null
-
-export const ensureEcommGalleryTable = () => {
-  if (!provisioned) {
-    provisioned = provisionEcommGalleryTable().catch((error) => {
-      provisioned = null
-      throw error
-    })
-  }
-  return provisioned
-}
+// Schema belongs to schema.zmodel. Legacy YouTube types normalize on read;
+// opening the gallery never migrates stored rows or changes constraints.
+export const ensureEcommGalleryTable = createTableReadinessCheck(['ecomm_gallery'], 'Gallery')
 
 export const GALLERY_TYPES = ['PHOTO', 'VIDEO'] as const
 export type GalleryType = (typeof GALLERY_TYPES)[number]

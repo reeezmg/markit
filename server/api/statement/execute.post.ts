@@ -1,9 +1,10 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { executeStatementRow } from '~/server/utils/statement-execution'
 import { randomUUID } from 'node:crypto'
 export default defineEventHandler(async(event)=>{
-  const session=await useAuthSession(event), companyId=session.data?.companyId
+  const session=await useCompanyRequestSession(event), companyId=session.data?.companyId
   if (!companyId) throw createError({statusCode:401,statusMessage:'Not authenticated'})
   const body=await readBody<{batchId:string;bankAccountId:string}>(event)
   if (!body?.batchId || !body.bankAccountId) throw createError({statusCode:400,statusMessage:'batchId and bankAccountId are required'})

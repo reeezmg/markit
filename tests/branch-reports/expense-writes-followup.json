@@ -1,0 +1,40 @@
+{
+  "startedAt": "2026-10-21T10:59:09.683Z",
+  "schemaChanges": false,
+  "mode": "actual handlers; rollback-only",
+  "results": [
+    {
+      "company": "head",
+      "status": "passed",
+      "nativeAccounting": "posted amounts and reversals verified",
+      "checks": [
+        "create",
+        "owner-and-amount",
+        "included-tax-and-partial-recovery",
+        "edit",
+        "invalid-recovery-rejected",
+        "status-changes",
+        "branch-cross-company-update-rejected",
+        "delete",
+        "legacy-archive-unchanged"
+      ]
+    },
+    {
+      "company": "branch",
+      "status": "passed",
+      "nativeAccounting": "posted amounts and reversals verified",
+      "checks": [
+        "create",
+        "owner-and-amount",
+        "included-tax-and-partial-recovery",
+        "edit",
+        "invalid-recovery-rejected",
+        "status-changes",
+        "delete",
+        "legacy-archive-unchanged"
+      ]
+    }
+  ],
+  "cleanup": "verified: expense fixtures and all transaction effects rolled back",
+  "finishedAt": "2026-10-21T10:59:47.179Z"
+}

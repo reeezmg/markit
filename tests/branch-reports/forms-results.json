@@ -1,0 +1,96 @@
+{
+  "databaseMode": "test database: only run-prefixed coupon fixtures may be mutated",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 13516,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/coupon",
+      "status": "passed",
+      "landed": "/coupon",
+      "expectedPath": "/coupon",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 115930,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/coupon",
+      "status": "passed",
+      "landed": "/coupon",
+      "expectedPath": "/coupon",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 23021,
+      "errors": []
+    }
+  ],
+  "switches": [
+    {
+      "direction": "head-to-branch",
+      "status": 200
+    },
+    {
+      "direction": "branch-to-head",
+      "status": 200
+    }
+  ],
+  "errors": [],
+  "startedAt": "2026-10-20T14:42:52.047Z",
+  "forms": [
+    {
+      "company": "head",
+      "form": "coupon",
+      "code": "BRANCH_E2E_MVGSLW59_HEAD",
+      "status": "passed",
+      "steps": [
+        "required discount rejected",
+        "created through browser form and verified in database",
+        "edited through browser form and verified after reload",
+        "deleted through confirmation and verified in database"
+      ],
+      "errors": [],
+      "hydrationWarnings": []
+    },
+    {
+      "company": "branch",
+      "form": "coupon",
+      "code": "BRANCH_E2E_MVGSLW59_BRANCH",
+      "status": "passed",
+      "steps": [
+        "required discount rejected",
+        "created through browser form and verified in database",
+        "edited through browser form and verified after reload",
+        "deleted through confirmation and verified in database"
+      ],
+      "errors": [],
+      "hydrationWarnings": []
+    }
+  ],
+  "serverProcessId": 13540,
+  "actualServerTestModeVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/landing": "/",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "currentPage": {
+    "company": "branch",
+    "route": "/coupon",
+    "startedAt": "2026-10-20T14:51:30.828Z"
+  },
+  "finishedAt": "2026-10-20T14:52:44.413Z",
+  "fixtureCleanup": "verified"
+}

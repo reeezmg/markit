@@ -1,4 +1,7 @@
 <script setup lang="ts">
+const settingsCompany = await useSettingsCompany();
+const $fetch = settingsCompany.fetch;
+const { updateProfileDetails } = settingsCompany;
 import type { FormError, FormSubmitEvent } from '#ui/types';
 import { useFindUniqueCompanyUser, useUpdateCompanyUser } from '~/lib/hooks/company-user';
 import { useFindUniqueUser, useUpdateUser } from '~/lib/hooks/user';
@@ -15,7 +18,7 @@ const UpdateCompanyUser = useUpdateCompanyUser();
 const fileRef = ref<HTMLInputElement>();
 const awsService = new AwsService();
 const isDeleteAccountModalOpen = ref(false);
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => settingsCompany.auth;
 const selectedFile = ref<ImageData | null>(null);
 const showOtpInput = ref(false)
 const isSendingOtp = ref(false);
@@ -119,65 +122,27 @@ function handleAddImageChange(e: Event) {
 }
 
 const onProfileUpdate = async () => {
-    try{
-    // The avatar being replaced, if the user picked a new one.
-    const replacedAvatar = selectedFile.value?.file ? useAuth().session.value?.image : null;
-
-    await UpdateUser.mutateAsync({
-        where: {
-            id: useAuth().session.value?.id,
-        },
-        data: {
-            ...(selectedFile.value?.file && {
-                image: selectedFile.value?.uuid,
-            }),
-        }
-    });
-
-    await UpdateCompanyUser.mutateAsync({
-        where: {
-            companyId_userId: {
-            companyId: useAuth().session.value?.companyId!,
-            userId: useAuth().session.value?.id!,
-            },
-        },
-        data: {
-            name: state.name,
-        },
-        });
-
-
-    
-    if (selectedFile.value) {
-        const base64 = await prepareFileForApi(selectedFile.value.file);
-        const base64file = { base64, uuid: selectedFile.value.uuid };
-
-        console.log(base64file);
-
-        await awsService.uploadBase64File(base64file.base64, base64file.uuid);
+  if (isUpdatingProfile.value) return;
+  isUpdatingProfile.value = true;
+  try {
+    const selected = selectedFile.value;
+    const replacedAvatar = selected?.file ? useAuth().session.value?.image : null;
+    if (selected?.file) {
+      const base64 = await prepareFileForApi(selected.file);
+      await awsService.uploadBase64File(base64, selected.uuid);
     }
-
-    await updateProfileDetails(state.name,null,selectedFile.value?.uuid)
-
-    if (replacedAvatar && replacedAvatar !== selectedFile.value?.uuid) {
-        await awsService.deleteObjects([replacedAvatar]);
-    }
-}catch(error){
-    console.error(error);
-    toast.add({
-        title: 'Error updating profile',
-        icon: 'i-heroicons-exclamation-circle',
-        color: 'red',
-    });
-}finally {
-        isUpdatingProfile.value = false;
-        toast.add({
-            title: 'Profile updated successfully',
-            icon: 'i-heroicons-check-circle',
-            color: 'green',
-        });
-    }
-
+    await UpdateUser.mutateAsync({ where: { id: useAuth().session.value?.id },
+      data: { ...(selected?.file && { image: selected.uuid }) } });
+    await UpdateCompanyUser.mutateAsync({ where: { companyId_userId: {
+      companyId: useAuth().session.value?.companyId!, userId: useAuth().session.value?.id!,
+    } }, data: { name: state.name } });
+    await updateProfileDetails(state.name, null, selected?.uuid);
+    if (replacedAvatar && replacedAvatar !== selected?.uuid) await awsService.deleteObjects([replacedAvatar]);
+    toast.add({ title: 'Profile updated successfully', icon: 'i-heroicons-check-circle', color: 'green' });
+  } catch (error: any) {
+    toast.add({ title: 'Error updating profile', description: error?.statusMessage || error?.message,
+      icon: 'i-heroicons-exclamation-circle', color: 'red' });
+  } finally { isUpdatingProfile.value = false; }
 };
 
 const onPasswordUpdate = async () => {
@@ -532,7 +497,7 @@ const onVerifyOtp = async () => {
                 <UButton
                     label="Check"
                     size="md"
-                   @click=" () => router.push(`./saleshistory`)"
+                   :to="{ path: '/saleshistory', query: { entryCompany: settingsCompany.scope.companyId.value } }"
                 />
            </template>
         </UDashboardSection>

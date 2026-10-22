@@ -1,0 +1,308 @@
+{
+  "recordPrefix": "BRANCH_E2E_MVHRVOGG_",
+  "existingRecords": [],
+  "snapshots": [
+    {
+      "at": "2026-10-21T07:11:55.638Z",
+      "records": {
+        "brand": [
+          {
+            "id": "4f3a9b87-dc38-4104-a54b-02793caf005d",
+            "createdAt": "2026-10-21T07:11:53.726Z",
+            "updatedAt": "2026-10-21T07:11:53.726Z",
+            "name": "BRANCH_E2E_MVHRVOGG_HEAD_BRAND",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "b028764d-20ab-4343-a992-743f3e4309f7"
+          }
+        ],
+        "collection": [],
+        "category": []
+      }
+    },
+    {
+      "at": "2026-10-21T07:12:20.479Z",
+      "records": {
+        "brand": [
+          {
+            "id": "4f3a9b87-dc38-4104-a54b-02793caf005d",
+            "createdAt": "2026-10-21T07:11:53.726Z",
+            "updatedAt": "2026-10-21T07:12:17.171Z",
+            "name": "BRANCH_E2E_MVHRVOGG_HEAD_BRAND",
+            "description": "Edited and reloaded BRANCH_E2E_MVHRVOGG_HEAD_BRAND",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "b028764d-20ab-4343-a992-743f3e4309f7"
+          }
+        ],
+        "collection": [],
+        "category": []
+      }
+    },
+    {
+      "at": "2026-10-21T07:12:52.733Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "cb840241-9aa6-4c76-ad14-e35190b74c47",
+            "createdAt": "2026-10-21T07:12:51.020Z",
+            "updatedAt": "2026-10-21T07:12:51.020Z",
+            "name": "BRANCH_E2E_MVHRVOGG_HEAD_COLLECTION",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "writeId": "68940283-4b8e-48c8-833c-9ecad2eba030"
+          }
+        ],
+        "category": []
+      }
+    },
+    {
+      "at": "2026-10-21T07:13:17.213Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "cb840241-9aa6-4c76-ad14-e35190b74c47",
+            "createdAt": "2026-10-21T07:12:51.020Z",
+            "updatedAt": "2026-10-21T07:13:13.648Z",
+            "name": "BRANCH_E2E_MVHRVOGG_HEAD_COLLECTION",
+            "description": "Edited and reloaded BRANCH_E2E_MVHRVOGG_HEAD_COLLECTION",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "writeId": "68940283-4b8e-48c8-833c-9ecad2eba030"
+          }
+        ],
+        "category": []
+      }
+    },
+    {
+      "at": "2026-10-21T07:13:50.099Z",
+      "records": {
+        "brand": [],
+        "collection": [],
+        "category": [
+          {
+            "id": "85f4b89a-7be7-40f6-9bad-d029eb2fac3b",
+            "createdAt": "2026-10-21T07:13:46.781Z",
+            "updatedAt": "2026-10-21T07:13:46.781Z",
+            "name": "BRANCH_E2E_MVHRVOGG_HEAD_CATEGORY",
+            "description": "",
+            "status": false,
+            "image": null,
+            "banner": null,
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "shortCut": null,
+            "hsn": "6109",
+            "taxType": "VARIABLE",
+            "fixedTax": null,
+            "thresholdAmount": 1000,
+            "taxBelowThreshold": 5,
+            "taxAboveThreshold": 12,
+            "margin": null,
+            "targetAudience": null,
+            "writeId": "d963e3f2-ee44-4939-8f43-fbb3788832bc"
+          }
+        ]
+      }
+    },
+    {
+      "at": "2026-10-21T07:14:17.818Z",
+      "records": {
+        "brand": [],
+        "collection": [],
+        "category": [
+          {
+            "id": "85f4b89a-7be7-40f6-9bad-d029eb2fac3b",
+            "createdAt": "2026-10-21T07:13:46.781Z",
+            "updatedAt": "2026-10-21T07:14:13.888Z",
+            "name": "BRANCH_E2E_MVHRVOGG_HEAD_CATEGORY",
+            "description": "",
+            "status": false,
+            "image": null,
+            "banner": null,
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "shortCut": null,
+            "hsn": "6205",
+            "taxType": "VARIABLE",
+            "fixedTax": null,
+            "thresholdAmount": 1000,
+            "taxBelowThreshold": 5,
+            "taxAboveThreshold": 12,
+            "margin": null,
+            "targetAudience": null,
+            "writeId": "d963e3f2-ee44-4939-8f43-fbb3788832bc"
+          }
+        ]
+      }
+    },
+    {
+      "at": "2026-10-21T07:15:10.688Z",
+      "records": {
+        "brand": [
+          {
+            "id": "1d869e39-2589-488f-a31b-cc56f56487d8",
+            "createdAt": "2026-10-21T07:15:09.327Z",
+            "updatedAt": "2026-10-21T07:15:09.327Z",
+            "name": "BRANCH_E2E_MVHRVOGG_BRANCH_BRAND",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "ceed5a43-92a0-4174-93a0-d476b369dbb3"
+          }
+        ],
+        "collection": [],
+        "category": []
+      }
+    },
+    {
+      "at": "2026-10-21T07:15:25.266Z",
+      "records": {
+        "brand": [
+          {
+            "id": "1d869e39-2589-488f-a31b-cc56f56487d8",
+            "createdAt": "2026-10-21T07:15:09.327Z",
+            "updatedAt": "2026-10-21T07:15:22.593Z",
+            "name": "BRANCH_E2E_MVHRVOGG_BRANCH_BRAND",
+            "description": "Edited and reloaded BRANCH_E2E_MVHRVOGG_BRANCH_BRAND",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "ceed5a43-92a0-4174-93a0-d476b369dbb3"
+          }
+        ],
+        "collection": [],
+        "category": []
+      }
+    },
+    {
+      "at": "2026-10-21T07:15:43.469Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "e1a01715-8f1f-473d-9c73-2dd2cbf19fe2",
+            "createdAt": "2026-10-21T07:15:42.187Z",
+            "updatedAt": "2026-10-21T07:15:42.187Z",
+            "name": "BRANCH_E2E_MVHRVOGG_BRANCH_COLLECTION",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "e616ae00-8cfe-46f9-b92f-205946b7e390"
+          }
+        ],
+        "category": []
+      }
+    },
+    {
+      "at": "2026-10-21T07:15:58.540Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "e1a01715-8f1f-473d-9c73-2dd2cbf19fe2",
+            "createdAt": "2026-10-21T07:15:42.187Z",
+            "updatedAt": "2026-10-21T07:15:55.847Z",
+            "name": "BRANCH_E2E_MVHRVOGG_BRANCH_COLLECTION",
+            "description": "Edited and reloaded BRANCH_E2E_MVHRVOGG_BRANCH_COLLECTION",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "writeId": "e616ae00-8cfe-46f9-b92f-205946b7e390"
+          }
+        ],
+        "category": []
+      }
+    },
+    {
+      "at": "2026-10-21T07:16:17.254Z",
+      "records": {
+        "brand": [],
+        "collection": [],
+        "category": [
+          {
+            "id": "f9816962-fd25-4a57-afa9-1610e65d4b13",
+            "createdAt": "2026-10-21T07:16:15.929Z",
+            "updatedAt": "2026-10-21T07:16:15.929Z",
+            "name": "BRANCH_E2E_MVHRVOGG_BRANCH_CATEGORY",
+            "description": "",
+            "status": false,
+            "image": null,
+            "banner": null,
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "shortCut": null,
+            "hsn": "6109",
+            "taxType": "VARIABLE",
+            "fixedTax": null,
+            "thresholdAmount": 1000,
+            "taxBelowThreshold": 5,
+            "taxAboveThreshold": 12,
+            "margin": null,
+            "targetAudience": null,
+            "writeId": "4cebcacb-e41c-45a2-83c8-dbf9a5db33d1"
+          }
+        ]
+      }
+    },
+    {
+      "at": "2026-10-21T07:16:36.878Z",
+      "records": {
+        "brand": [],
+        "collection": [],
+        "category": [
+          {
+            "id": "f9816962-fd25-4a57-afa9-1610e65d4b13",
+            "createdAt": "2026-10-21T07:16:15.929Z",
+            "updatedAt": "2026-10-21T07:16:33.918Z",
+            "name": "BRANCH_E2E_MVHRVOGG_BRANCH_CATEGORY",
+            "description": "",
+            "status": false,
+            "image": null,
+            "banner": null,
+            "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+            "shortCut": null,
+            "hsn": "6205",
+            "taxType": "VARIABLE",
+            "fixedTax": null,
+            "thresholdAmount": 1000,
+            "taxBelowThreshold": 5,
+            "taxAboveThreshold": 12,
+            "margin": null,
+            "targetAudience": null,
+            "writeId": "4cebcacb-e41c-45a2-83c8-dbf9a5db33d1"
+          }
+        ]
+      }
+    }
+  ],
+  "cleanup": "verified: no run-owned catalog fixtures remain",
+  "remainingBeforeCleanup": {
+    "brand": [],
+    "collection": [],
+    "category": []
+  }
+}

@@ -12,7 +12,7 @@ const bodySchema = z.object({
     startDate: z.string().nullable(),
     endDate: z.string().nullable()
   }),
-  groupBy: z.string()
+  groupBy: z.enum(['product', 'date', 'category', 'brand', 'rating', 'distributor'])
 })
 
 export default defineEventHandler(async (event) => {
@@ -25,21 +25,17 @@ export default defineEventHandler(async (event) => {
     product: {
       status: true,
       ...(filters.category && { categoryId: filters.category }),
-      ...(filters.brand && { brand: filters.brand }),
+      ...(filters.brand && { brandId: filters.brand }),
       ...(filters.rating && { rating: parseFloat(filters.rating) }),
-      ...(filters.distributor && {
+      ...((filters.distributor || filters.startDate || filters.endDate) && {
         purchaseorder: {
-          distributorId: filters.distributor
-        }
-      }),
-      ...(filters.startDate || filters.endDate) && {
-        purchaseorder: {
-          createdAt: {
+          ...(filters.distributor && { distributorId: filters.distributor }),
+          ...((filters.startDate || filters.endDate) && { createdAt: {
             ...(filters.startDate && { gte: new Date(filters.startDate) }),
             ...(filters.endDate && { lte: new Date(filters.endDate) })
-          }
+          } })
         }
-      }
+      })
     }
   };
 
@@ -50,6 +46,7 @@ export default defineEventHandler(async (event) => {
       product: {
         include: {
           category: true,
+          brand: true,
           subcategory: true,
           purchaseorder: {
             include: {
@@ -65,10 +62,7 @@ export default defineEventHandler(async (event) => {
     }
   });
 
-  const grouped: Record<string, { stock: number; purchaseStock: number; qty: number }> = {};
-
-  // ⭐ New nested structure for subcategory + variant breakdown
-  const categoryBreakdown: Record<string, Record<string, Record<string, number>>> = {};
+  const grouped: Record<string, { stock: number; purchaseStock: number; qty: number }> = Object.create(null);
 
   for (const variant of variants) {
     const product = variant.product;
@@ -76,7 +70,7 @@ export default defineEventHandler(async (event) => {
     const key = (() => {
       switch (groupBy) {
         case 'category': return product.category?.name?.toLowerCase() || 'uncategorized';
-        case 'brand': return product.brand?.toLowerCase() || 'unbranded';
+        case 'brand': return product.brand?.name?.toLowerCase() || 'unbranded';
         case 'rating': return product.rating?.toString() || 'unrated';
         case 'date': return product.purchaseorder?.createdAt?.toISOString().split('T')[0] || 'unknown date';
         case 'distributor': return product.purchaseorder?.distributorCompany?.distributor?.name?.toLowerCase() || 'unknown distributor';
@@ -96,39 +90,6 @@ export default defineEventHandler(async (event) => {
     grouped[key].purchaseStock += purchaseStockValue;
     grouped[key].qty += itemQty;
 
-    // ⭐ Subcategory + variant breakdown (only when grouped by category)
-    if (groupBy === "category") {
-      const subKey = product.subcategory?.name?.toLowerCase() || "no-subcategory";
-      const variantKey = variant.name.toLowerCase();
-
-      if (!categoryBreakdown[key]) categoryBreakdown[key] = {};
-      if (!categoryBreakdown[key][subKey]) categoryBreakdown[key][subKey] = {};
-      if (!categoryBreakdown[key][subKey][variantKey]) categoryBreakdown[key][subKey][variantKey] = 0;
-
-      categoryBreakdown[key][subKey][variantKey] += itemQty;
-    }
-  }
-
-  // 🔥 Console Output
-  if (groupBy === "category") {
-    console.log("===== Category → Subcategory → Variant Breakdown =====");
-
-    for (const categoryName in categoryBreakdown) {
-      console.log(`Category: ${categoryName}`);
-
-      for (const sub in categoryBreakdown[categoryName]) {
-        const totalSubQty = Object.values(categoryBreakdown[categoryName][sub]).reduce((a, b) => a + b, 0);
-        console.log(`  Subcategory: ${sub}  --> Total Qty: ${totalSubQty}`);
-
-        for (const variantName in categoryBreakdown[categoryName][sub]) {
-          console.log(
-            `     Variant: ${variantName} --> Qty: ${categoryBreakdown[categoryName][sub][variantName]}`
-          );
-        }
-      }
-    }
-
-    console.log("=====================================================");
   }
 
   return Object.entries(grouped).map(([key, { stock, purchaseStock, qty }]) => ({

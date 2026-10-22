@@ -1,7 +1,8 @@
 <script setup lang="ts">
+import CompanyControlPlacement from './CompanyControlPlacement.vue';
 import { useQueryClient } from '@tanstack/vue-query';
 const emit = defineEmits(['transferred']);
-defineProps<{ locked?: boolean }>();
+defineProps<{ locked?: boolean; toolbar?: boolean }>();
 const scope = useCompanyScope();
 const queryClient = useQueryClient();
 const toast = useToast();
@@ -51,9 +52,11 @@ async function move() {
 }
 </script>
 <template>
-  <UFormGroup v-if="scope.enabled.value" label="Company / branch" required class="mb-4">
-    <USelect :model-value="scope.companyId.value" :options="options" :disabled="locked || scope.busy.value" class="min-w-40" @update:model-value="change" />
+  <CompanyControlPlacement v-if="scope.enabled.value" :toolbar="toolbar">
+  <UFormGroup :label="toolbar ? undefined : 'Company / branch'" required class="mb-4">
+    <USelect aria-label="Company / branch" :model-value="scope.companyId.value" :options="options" :disabled="locked || scope.busy.value" class="min-w-40" @update:model-value="change" />
   </UFormGroup>
+  </CompanyControlPlacement>
   <UModal :model-value="!!transfer" @update:model-value="value => { if (!value && !saving) transfer = null; }">
     <UCard v-if="transfer">
       <template #header><h3 class="font-semibold">Move to {{ options.find(o => o.value === destination)?.label }}</h3></template>

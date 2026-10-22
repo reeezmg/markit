@@ -1,0 +1,27 @@
+{
+  "at": "2026-10-21T08:58:41.860Z",
+  "schemaChanges": false,
+  "results": [
+    {
+      "company": "head",
+      "status": "passed",
+      "checks": [
+        "locked-period-rejected",
+        "source-and-number-counter-unchanged",
+        "journals-unchanged",
+        "legacy-ledger-unchanged"
+      ]
+    },
+    {
+      "company": "branch",
+      "status": "passed",
+      "checks": [
+        "locked-period-rejected",
+        "source-and-number-counter-unchanged",
+        "journals-unchanged",
+        "legacy-ledger-unchanged"
+      ]
+    }
+  ],
+  "cleanup": "All lock fixtures and transaction effects rolled back"
+}

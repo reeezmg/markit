@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form');
+await companyScope.ready;
 const cartStore = useCartStore();
 const cartItemCount = computed(() => cartStore.cartItemCount);
 const useAuth = () => useNuxtApp().$auth;
@@ -11,10 +13,11 @@ definePageMeta({
 <template>
     <UDashboardPage>
         <UDashboardPanel grow>
-            <UDashboardNavbar title="Legacy Accounts">
-            </UDashboardNavbar>
+            <ErpPageNavbar title="Legacy Accounts">
+            </ErpPageNavbar>
             <UAlert class="m-4" title="Read-only accounting history" description="Source changes post to Accountant. These historical ledgers no longer receive updates." />
-            <NuxtPage />
+            <CompanyFormField toolbar />
+            <NuxtPage :key="companyScope.companyId.value" />
         </UDashboardPanel>
     </UDashboardPage>
 </template>

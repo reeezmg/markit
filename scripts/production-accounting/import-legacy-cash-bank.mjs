@@ -107,6 +107,7 @@ try{
  if(apply)await db.query('LOCK TABLE account_ledger_entries IN SHARE MODE');
  const companyIds=[...new Set(requested.length?requested:(await db.query('SELECT company_id FROM accountant_v2_erp_settings WHERE enabled UNION SELECT company_id FROM accountant_v2_distributor_settings WHERE enabled')).rows.map(r=>r.company_id))].sort();
  if(!companyIds.length)throw Error('No connected companies');
+ if((await db.query("SELECT id FROM accountant_v2_accountant_audit WHERE company_id=ANY($1::text[]) AND resource='source-accounting-rebuild' AND action='rebuilt' LIMIT 1",[companyIds])).rowCount)throw Error('Source accounting has been rebuilt; archived cash migration rows must not be imported again');
  if((await db.query("SELECT 1 FROM accountant_v2_manual_journals WHERE company_id=ANY($1::text[]) AND source_type='TRANSFER_HISTORY_MIGRATION_REVERSAL' AND deleted_at IS NULL LIMIT 1",[companyIds])).rowCount)throw Error('Transfer history has replaced cash migration entries. Rerun import-transfers, not the old cash import.');
  if(companyIds.length>1&&(get('cash-account')||get('bank-account')||get('offset-account')))throw Error('Explicit account IDs require one company per invocation');
  const cutoff=through?`${through} 23:59:59.999`:(await db.query("SELECT (CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::timestamp(3)::text AS date")).rows[0].date;

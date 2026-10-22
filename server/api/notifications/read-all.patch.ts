@@ -1,9 +1,10 @@
 // server\api\notifications\read-all.patch.ts
 import { defineEventHandler, getQuery } from 'h3'
 import { prisma } from '~/server/utils/prisma'
+import { getReadCompanyId } from '~/server/utils/organizationReadScope'
 
 export default defineEventHandler(async (event) => {
-  const { companyId } = getQuery(event)
+  const companyId = await getReadCompanyId(event)
   if (!companyId || typeof companyId !== 'string') return
 
   await prisma.notification.updateMany({

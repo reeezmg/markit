@@ -176,9 +176,11 @@ const liveValue = (data: any) => {
 };
 
 const fileValue = (data: any) => {
-   console.log(data)
-    variants.value[data.index].images = [...data.files]; 
-  
+  const variant = variants.value[data.index];
+  if (!variant) return;
+  const incoming = data.files || [];
+  if (variant.images.length === incoming.length && variant.images.every((image: any, index: number) => image === incoming[index])) return;
+  variant.images = [...incoming];
 };
 
 
@@ -574,6 +576,8 @@ const printBarcodesVariant = async (variant: any) => {
     const qty = Number(item.qty) || 1;   // default to 1 if missing
 
     const base = {
+      itemId: item.id,
+      companyId: useAuth().session.value?.companyId,
       barcode: item.barcode ?? "",
       code: variant.code ?? "",
       shopname: auth.session.value?.companyName,
@@ -635,6 +639,8 @@ const confirmPrint = async () => {
       if (qty <= 0) return []
 
       const base = {
+        itemId: item.id,
+        companyId: useAuth().session.value?.companyId,
         barcode: item.barcode ?? "",
         code: variant.code ?? "",
         shopname: auth.session.value?.companyName,
@@ -695,7 +701,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
 </div>
     
     <UDashboardPanelContent v-else class="pb-24">
-      <CompanyFormField />
+      <CompanyFormField toolbar />
       <div class="flex sm:flex-row flex-col gap-4">
         <div class="sm:w-1/2 w-full ">
   <UPageCard class="m-3">

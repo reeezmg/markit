@@ -15,7 +15,7 @@ export const erpRoles:Record<string,{type:string;code?:string}>={
 export async function erpAccountingSettings() {
  const {db,companyId}=context();
  await ensureDefaults(companyId);
- await accountantPrisma.accountingAccount.createMany({data:[{name:'Accrued Expenses',code:'2250',accountType:'OTHER_CURRENT_LIABILITY',category:'LIABILITY',isSystem:true}],skipDuplicates:true});
+ if (!context().readOnly) await accountantPrisma.accountingAccount.createMany({data:[{name:'Accrued Expenses',code:'2250',accountType:'OTHER_CURRENT_LIABILITY',category:'LIABILITY',isSystem:true}],skipDuplicates:true});
  const [settings]=await db.$queryRawUnsafe('SELECT * FROM accountant_v2_erp_settings WHERE company_id=$1',companyId) as {
    accounts: Record<string,string> | null;
    enabled: boolean;

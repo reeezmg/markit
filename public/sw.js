@@ -34,12 +34,11 @@ try {
 // ===================================================
 // ✅ Cache Configuration
 // ===================================================
-const CACHE_VERSION = 'v5';
+const CACHE_VERSION = 'v6';
 const CACHE_NAME = `markit-${CACHE_VERSION}`;
 const OFFLINE_URL = '/nonetwork.html';
 
 const PRECACHE_URLS = [
-  '/',
   OFFLINE_URL,
   '/icons/icon-192.png',
   '/icons/icon-512.png',
@@ -104,6 +103,11 @@ self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
 
   const request = event.request;
+  const url = new URL(request.url);
+  // Sessions and model responses belong to the current authenticated company.
+  // Let networking fail normally instead of replaying another company's data.
+  if (url.origin !== self.location.origin || url.pathname === '/api' || url.pathname.startsWith('/api/')) return;
+  const isDocument = request.mode === 'navigate' || request.headers.get('accept')?.includes('text/html');
 
   event.respondWith(
     (async () => {
@@ -112,22 +116,19 @@ self.addEventListener('fetch', (event) => {
       try {
         // Try network first
         const networkResponse = await fetch(request);
-        if (networkResponse && networkResponse.status === 200) {
-          cache.put(request, networkResponse.clone());
+        if (!isDocument && networkResponse && networkResponse.status === 200) {
+          await cache.put(request, networkResponse.clone());
         }
         return networkResponse;
       } catch (error) {
         // On network failure, fallback to cache or offline page
-        const cachedResponse = await cache.match(request);
-        if (cachedResponse) return cachedResponse;
-
-        if (
-          request.mode === 'navigate' ||
-          request.headers.get('accept')?.includes('text/html')
-        ) {
+        if (isDocument) {
           console.warn('[SW] Network failed, showing offline page');
           return await cache.match(OFFLINE_URL);
         }
+
+        const cachedResponse = await cache.match(request);
+        if (cachedResponse) return cachedResponse;
 
         // For non-HTML assets (e.g., images), fallback to offline icon
         return await cache.match('/icons/icon-192.png');

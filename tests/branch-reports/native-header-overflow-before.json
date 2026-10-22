@@ -1,0 +1,16 @@
+{
+  "observedAt": "2026-10-21T01:48:00.873Z",
+  "probe": "artifacts/storetools-branch-e2e-run/probe-native-model.mjs 3107",
+  "request": "GET /api/model/brand/findMany with take:0; existing local test session held only in memory",
+  "nativeFetch": {
+    "name": "TypeError",
+    "message": "fetch failed",
+    "causeCode": "UND_ERR_HEADERS_OVERFLOW"
+  },
+  "nodeHttpWith128KiBHeaderLimit": {
+    "status": 200,
+    "serverTimingBytes": 18073,
+    "setCookieBytes": 0
+  },
+  "databaseChanges": false
+}

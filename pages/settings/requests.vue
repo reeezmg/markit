@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const settingsCompany = await useSettingsCompany();
+const $fetch = settingsCompany.fetch;
 import { useFindFirstGeneralPreference, useUpsertGeneralPreference } from '~/lib/hooks/general-preference';
 
 definePageMeta({ auth: true });
@@ -24,7 +26,7 @@ type RequestSettings = Record<RequestKey, RequestRule> & {
   allowPartialItemRequests: boolean;
 };
 
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => settingsCompany.auth;
 const toast = useToast();
 const companyId = computed(() => useAuth().session.value?.companyId || '');
 

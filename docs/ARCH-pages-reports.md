@@ -2,6 +2,12 @@
 
 All reports use custom API routes (no ZenStack direct queries). Dates default to today (start/end of day). All pages share a `UDateRangePicker` for filtering.
 
+Head-office admins can choose a company for Daily, Summary, GST and Users in the report shell. These reports retain single-company document/tax/staff semantics; requests and exports use that company's header and settings. The shell remounts the child when its company changes, discarding prior-company results and tab caches. Accounts, Profit and Online retain independent table filters with authorized combined-company reads. Dashboard also has a single-company selector; its queries, settings and Daily/Billing links retain the selected company. Local selectors never change the sidebar/auth company.
+
+Dashboard low-stock quantities sum the selected company's `Item.qty` rows by `variantId`; `Variant` has no quantity column. Sales entries with a missing variant use an unknown-product label, and invalid bill dates are skipped by category totals. Category totals remain a computed value rather than an initial snapshot. Queries project only fields used by dashboard calculations and cards; they do not download entire product, expense, customer, address and nested bill-entry records.
+
+`npm run test:branches` checks shared scope behavior, every page's Vue template/script syntax, model ownership boundaries and real Vue company controls in Chrome using fixture data. `tests/branch-reports/page-audit.json` records all 146 page files and their scope mechanism; compilation is not a live authenticated CRUD walkthrough. `tests/report-pages.integration.test.ts` separately exercises report APIs/exports in a read-only database transaction. Schema-writing integration suites remain excluded.
+
 ### Accounting basis (verified 2026-09-30)
 
 `server/utils/report-accounting.ts` is the shared financial reader for Accounts, Profit, Daily, Summary and their financial exports. It reads published, non-deleted `accountant_v2_manual_journals` / lines, including reversal entries and historical lines on inactive accounts. Amounts use each journal's exchange rate, rounded per line. Opening is before the start instant; activity is inside the selected inclusive range. ISO SQL parameters preserve timestamp boundaries. Explicit company scope is required; combined reports reject different base currencies.
@@ -160,6 +166,8 @@ Tabbed page: client is a thin wrapper that lazy-fetches each report via `$fetch`
 ### `pages/dashboard/index.vue` — Main Dashboard
 Store overview page. It calls `useCompanyDashboard()` for revenue, expenses, sales/stock data and refresh, computes displayed profit as revenue minus expenses, and renders KPI cards, charts and recent activity directly in this page. The header links to daily reports and new POS billing. It is not the old thin wrapper that only rendered `DashboardCards` and separate chart components.
 
+`pages/dashboard.vue` provides the form company scope and remounts the dashboard child on a company change. `lib/api/useDashboardData.ts` consumes this inherited scope instead of the sidebar session snapshot.
+
 ---
 
 ### `pages/reports/summary.vue` â€” Business Summary
@@ -192,6 +200,7 @@ The maintained client/CRM guide is `ARCH-pages-client.md`; staff, attendance and
 ## Sales History Pages
 
 ### `pages/saleshistory/index.vue` — Sales History / Audit Trail
+Head-office lists use scoped Bill hooks, a local company filter and company labels. Restore submits the row's owning company. The detail page resolves BillHistory's bill owner through `/api/organization/context` before loading category/account options. Generic model reads constrain BillHistory through its optional `bill` relation; orphan history cannot match company scope, and generic history mutations are rejected.
 **Data model:** Bills that have at least one `BillHistory` record — `useFindManyBill({ where: { billHistories: { some: {} } } })`
 - Includes deleted bills (history preserved even after deletion)
 - **Soft-deleted bill filtering:** when `cleanup = false` (session), adds `{ precedence: { not: true } }` to the `AND` filter — excludes soft-deleted bills from the list. When `cleanup = true`, no filter added (all bills visible including soft-deleted).
@@ -216,14 +225,15 @@ The maintained client/CRM guide is `ARCH-pages-client.md`; staff, attendance and
 ## Notification Pages
 
 ### `pages/notifications.vue` — Notification Center
+
+Head-office admins have a local Company / branch form selector. The page passes its scope into `useNotifications(scope)` so reads and explicit mark-read actions carry the same authorized company. The composable's optional scope preserves active-session behavior in global notification widgets. Changing the page selection remounts its state; existing stale-response guards still protect unread counts.
 **Data source:** `useNotifications()` composable — returns `notifications` (array), `markAllAsRead()`, `markAsRead(id)`, `unreadCount`
 
-**Tabs:** Unread / All
-- Switching to Unread tab: `watchEffect` auto-calls `markAllAsRead()` (marks all as read when the tab is viewed)
+**Tabs:** Unread / All, using the numeric index expected by Nuxt UI 2. The script declares TypeScript explicitly. Viewing or switching tabs does not mutate notifications; the explicit Mark all as read button performs that action and reports failure.
 
 **Per-notification rendering:**
 - Icon + title + body + relative timestamp (`formatRelativeTime()`)
-- Action button via `getAction(notification)` — returns route/label based on notification `type` field (e.g., new order → `/order/trynbuy`, new booking → `/order/bookings`)
+- Each computed row stores its own `getAction(notification)` result, so lazy button slots cannot read another row's action. The action supplies the route and label.
 
 **Unread badge:** shown in navbar via `unreadCount` from composable
 

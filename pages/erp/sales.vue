@@ -26,6 +26,12 @@ const isMobile = ref(false);
 const isOpen = ref(false);
 const creditReceiptOpen = ref(false);
 const creditReceiptBill = ref<any>(null);
+const creditReceiptMode = ref<'collect' | 'reverse'>('collect');
+const openCreditCollection = (bill: any, mode: 'collect' | 'reverse') => {
+  creditReceiptBill.value = { ...bill };
+  creditReceiptMode.value = mode;
+  creditReceiptOpen.value = true;
+};
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref({})
 const paymentMethod = ref('Cash');
@@ -56,7 +62,7 @@ const selectedDate = ref({
     end: new Date() 
 });
 
-const getColumns = (isMobile) => {
+const getColumns = (isMobile: boolean) => {
   if (!isMobile) {
     const desktopColumns = [
       { key: 'invoiceNumber', label: 'Inv#', sortable: true },
@@ -181,6 +187,11 @@ const action = (row: any) => {
         icon: 'i-heroicons-printer',
         click: () => print(row.id),
       },
+      {
+        label: 'View / share receipt',
+        icon: 'i-heroicons-share',
+        click: () => navigateTo(`/receipt/${encodeURIComponent(row.id)}${row.companyId ? `?companyId=${encodeURIComponent(row.companyId)}` : ''}`),
+      },
     ],
   ]
 
@@ -239,14 +250,14 @@ const todoStatus = [
 
 
 
-const selectedColumns = ref([]);
+const selectedColumns = ref<ReturnType<typeof getColumns>>([]);
 watch(columns, (newColumns) => {
   selectedColumns.value = [...newColumns];
 }, { immediate: true });
 const selectedColumnKeys = computed(() => selectedColumns.value.map((c: any) => c.key))
 
 const columnsTable = computed(() =>
-  columns.value.filter((column) => selectedColumns.value.includes(column))
+  columns.value.filter((column) => selectedColumns.value.some(selected => selected.key === column.key))
 );
 // Selected Rows
 const selectedRows = ref([]);
@@ -393,6 +404,18 @@ const fetchSales = async () => {
   }
 }
 
+await companyScope.ready;
+const initialSales = await useAsyncData('erp-sales:' + companyScope.readIds.value.join(','), async () => {
+  await fetchSales();
+  return { rows: sales.value, total: pageTotal.value, totals: salesTotals.value, collections: collectionsTotal.value };
+});
+if (initialSales.data.value) {
+  sales.value = initialSales.data.value.rows;
+  pageTotal.value = initialSales.data.value.total;
+  salesTotals.value = initialSales.data.value.totals;
+  collectionsTotal.value = initialSales.data.value.collections;
+}
+
 const styledSales = computed(() =>
   (sales.value || []).map(row => ({
     ...row,
@@ -531,13 +554,7 @@ onMounted(() => {
 
 
 
-watch(
-  () => billStore.lastUpdate,
-  async () => {
-    const res = await fetchSales()
-  },
-  { immediate: true }
-)
+watch(() => billStore.lastUpdate, fetchSales)
 
 const fetchFilteredSalesForExport = async () => {
   const allRows: any[] = []
@@ -1153,7 +1170,7 @@ const handleEnterPayment = (id:string, status:string, billNo:string, companyId:s
     }else{
         const bill = sales.value.find((b:any)=>b.id===id);
         if (bill && (bill.paymentMethod === 'Credit' || bill.splitPayments?.some(p=>p.method==='Credit'))) {
-          creditReceiptBill.value={...bill,companyId};creditReceiptOpen.value=true;return;
+          openCreditCollection({...bill,companyId}, 'collect');return;
         }
         isOpen.value = true
         activeBillInfo.value = {id,billNo,companyId}
@@ -1519,8 +1536,15 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
 
 
                <template #paymentStatus-data="{ row }">
-                        <UButton v-if="row.paymentMethod === 'Credit' || row.splitPayments?.some(p => p.method === 'Credit')" label="Payments" size="xs" variant="ghost" @click="handleEnterPayment(row.id,'PAID',row.invoiceNumber,row.companyId)" />
+                    <div v-if="row.paymentMethod === 'Credit' || row.splitPayments?.some(p => p.method === 'Credit')" class="space-y-1">
+                      <div class="inline-flex items-center gap-1 rounded-md border border-gray-200 p-0.5 dark:border-gray-700">
+                        <UButton label="Collect" size="xs" variant="ghost" :disabled="row.paymentStatus === 'PAID'" @click="openCreditCollection(row, 'collect')" />
+                        <UButton label="Reverse" size="xs" color="red" variant="ghost" @click="openCreditCollection(row, 'reverse')" />
+                      </div>
+                      <div class="text-xs text-gray-500">{{ row.paymentStatus }}</div>
+                    </div>
                     <USelect
+                        v-else
                         v-model="row.paymentStatus"
                         :options="['PAID', 'PENDING']"
                         @update:model-value="status => handleEnterPayment(row.id, status,row.invoiceNumber,row.companyId)"
@@ -1683,7 +1707,7 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
     </UModal>
 
       
-  <BillingCreditReceiptModal v-model="creditReceiptOpen" :bill="creditReceiptBill" @saved="fetchSales()" />
+  <BillingCreditReceiptModal v-model="creditReceiptOpen" :bill="creditReceiptBill" :mode="creditReceiptMode" @saved="fetchSales()" />
   <UModal v-model="isOpen">
     <UCard :ui="{ ring: '', divide: 'divide-y divide-gray-100 dark:divide-gray-800' }">
     <template #header>

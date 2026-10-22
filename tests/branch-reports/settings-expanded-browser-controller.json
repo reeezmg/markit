@@ -1,0 +1,14 @@
+{
+  "startedAt": "2026-10-21T09:40:44.995Z",
+  "phase": "complete",
+  "bundleFingerprint": "5a1230e4cd5856b087ae216253ae748e715eeaa99e0e6c731bd5dcffae58b8e0",
+  "rawAuditExitCode": 1,
+  "pageSummary": {
+    "passed": 28,
+    "failed": 2
+  },
+  "rejectedSavesPassed": 14,
+  "externalMapsBlockedVisits": 2,
+  "finishedAt": "2026-10-21T09:45:09.957Z",
+  "ownedShippingStopped": true
+}

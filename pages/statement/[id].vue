@@ -1,4 +1,7 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+const $fetch = companyScope.fetch;
+await companyScope.ready;
 import { useFindUniqueStatementBatch } from '~/lib/hooks/statement-batch'
 import { useDeleteStatementRow } from '~/lib/hooks/statement-row'
 
@@ -6,7 +9,7 @@ definePageMeta({ auth: true })
 
 const route = useRoute()
 const toast = useToast()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 const companyId = computed(() => useAuth().session.value?.companyId)
 const batchId = computed(() => route.params.id as string)
 
@@ -20,7 +23,9 @@ const { data: batch, isLoading, refetch } = useFindUniqueStatementBatch({
 
 // ─── Bank account select ───
 const selectedBankId = ref<string>('')
-const { data: banks } = await useFetch<Array<{id:string;name:string}>>('/api/statement/banks')
+const { data: banks } = await useFetch<Array<{id:string;name:string}>>('/api/statement/banks', {
+  headers: companyScope.headers(), key: 'statement-banks:' + companyScope.companyId.value,
+})
 const bankOptions = computed(() => (banks.value || []).map(bank => ({label:bank.name,value:bank.id})))
 const bankStorageKey = computed(() => 'statement-bank:' + companyId.value + ':' + batchId.value)
 onMounted(() => {
@@ -231,7 +236,7 @@ function opColor(operation: string | null): string {
 <template>
   <UDashboardPage>
     <UDashboardPanel grow>
-      <UDashboardNavbar title="Bank Statement Processing">
+      <ErpPageNavbar title="Bank Statement Processing">
         <template #right>
           <UButton
             v-if="assignedNotExecuted > 0"
@@ -246,9 +251,10 @@ function opColor(operation: string | null): string {
             <UIcon name="i-heroicons-check-circle" class="mr-1" /> All Executed
           </UBadge>
         </template>
-      </UDashboardNavbar>
+      </ErpPageNavbar>
 
       <div class="p-4 space-y-4 overflow-auto h-[calc(100vh-64px)]">
+    <CompanyFormField toolbar locked />
         <!-- Stats bar -->
         <div class="flex flex-wrap items-center gap-4 text-sm">
           <div v-if="batch?.sourceFileName" class="text-gray-500">

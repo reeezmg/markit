@@ -1,0 +1,70 @@
+2026-10-20 follow-up: raise Node memory and retry end-to-end.
+
+The full 8192 MB typecheck FINISHED without OOM, returning 1389 TypeScript errors (vue-tsc exit 2).
+Log: typecheck-8gb.log. Session 76219 and PID 20356 are finished, not running.
+Confirmed cause of many errors: tests/print-template-globals.d.ts replaces real Nuxt globals
+with minimal $auth/session/router mocks. nuxt.config.ts prepare:types now excludes tests,
+cypress and the isolated test build from application type checks. Dedicated test configs
+retain their mocks. Application check must be rerun to measure remaining genuine errors.
+New reproducible command: npm run typecheck:large (8192 MB, override TYPECHECK_MEMORY_MB,
+Nuxt prepare, then full vue-tsc with incremental cache in .nuxt/cache).
+
+New source change: organizationAccess.ensureHeadOfficeBranchMemberships now updates only
+inactive delegated branch memberships; already-current membership refresh performs no writes.
+All 11 tests/branch-flow.test.ts regressions passed, including a new check for this behavior.
+
+tests/run-branch-e2e.ts now provides actual Nuxt/Chrome walkthroughs using an encrypted local
+test session for an existing authorized head-office admin. It verifies PostgreSQL and Prisma
+READ ONLY modes before doing anything, forces local model APIs, and never logs credentials
+or cookies. Preflight passed. It can visit all static seller routes, all 28 Accountant views,
+and dynamic record routes for which existing records are available.
+
+Earlier smoke attempts failed during startup, not page behavior. All those test processes
+were cleaned up with verified taskkill /T; the existing user dev server on port 3000 was preserved.
+Build output now uses storetools/.nuxt-branch-e2e (ignored), separate from the normal .nuxt.
+Outside-project build output broke Tailwind bare-module resolution and was abandoned.
+Generated logs/reports caused dev-watch activity: runtime log/results now go outside the
+watched project to C:/markit-v1/artifacts/storetools-branch-e2e-run/{server.log,results.json}.
+Final results are copied back to tests/branch-reports/e2e-results.json after cleanup.
+Nuxt ignores isolated build outputs, report files and logs. Audit mode disables eager
+warmup/debug and loads tests/helpers/readonly-nitro-plugin.ts. This refuses to serve unless
+the actual Nitro PostgreSQL and Prisma clients both verify READ ONLY, not only parent clients.
+The active clean 5-route smoke run is exec session 76593. Read live results/logs from the
+outside-project artifact directory. Its server PID is in that live results.json. No page
+success has been established yet; wait for actual read-only proof and browser results.
+Runner has a 15-minute startup deadline, strict settle/API/module/JS checks and owned
+process-tree cleanup. Stop only confirmed test processes if necessary, never user apps.
+
+Additional fixes this follow-up: coupon bulk activation now maps selected rows to explicit
+IDs and skips an empty selection (old code used selectedRows.id on an array). Status filter
+uses labeled boolean value options; basic coupon types and count fallback are corrected.
+All 11 branch-flow regressions pass including bulk ID guarding and no-op membership refresh.
+app.vue imports provideHooksContext directly from the runtime, and Dashboard imports only
+its specific generated model modules instead of the entire hooks barrel.
+
+Run smoke after the full checker returns:
+  $env:BRANCH_E2E_ROUTES='/dashboard,/settings/branches,/products,/reports/daily,/erp/billing'
+  node --import tsx tests/run-branch-e2e.ts
+Then remove BRANCH_E2E_ROUTES and run the same command for the full walkthrough.
+Use sequential heavy checks on this 6 GB machine. Investigate actual failures and rerun.
+No database schema changes or production data writes are authorized by this testing setup.
+
+CURRENT UPDATE (supersedes the earlier process IDs/status):
+- User asked to raise Node memory and retry end-to-end. No agents spawned, no commits or deploys.
+- Two raised-heap full typechecks completed without OOM: first 1389 errors; application-only check after excluding test globals returned 988 errors. Latest source fixes have NOT yet had another full typecheck. Log: typecheck-app.log. Checker is no longer running.
+- scripts/typecheck-large.mjs now preserves its incremental cache in node_modules/.cache/markit-typecheck.tsbuildinfo because Nuxt prepare clears .nuxt. Previous cache was copied there.
+- All 19 branch-flow fixture regressions pass. All 146 pages compiled in the last page audit; the shared real-Vue Chrome fixture test passed earlier. Re-run appropriate final checks after remaining fixes.
+- Additional real fixes: coupon mutations await success, preserve failed form values, prevent duplicate submits, save targetType; detail queries explicitly use enabled instead of undefined args; dashboard stock sums Item.qty and tolerates missing variants, projects only necessary data; notifications use 30-second/focus REST refresh with stale-company/cleanup guards; obsolete broadcast removed, low-stock ownership and item quantities corrected.
+- Real smoke finished 8 passed / 2 failed, both company switches 200. Head Dashboard failed with hydration/placeholder WS errors; branch settings intentionally redirected but old harness expected original path. Subsequent broad run confirmed Head Dashboard PASS after fixes.
+- First broader run stopped on unresponsive distributor page: 16 passed, 6 failed, 6 dynamic fixtures unavailable. Preserved in e2e-full-first-attempt.json. Failing areas: pure accountant redirect, manual-journal form accounting-accounts GET writes defaults, AI provider/usage GET runtime DDL, distributor nested allocation query.
+- AI provider/usage helpers now only SELECT readiness, reset failed cache and return 503 if table absent. Their schema definitions already existed. Only comments changed in schema.zmodel; generated prisma/schema.prisma untouched.
+- Accountant context now marks GET/HEAD readOnly; ensureDefaults and ERP/user/ecommerce extra-account seed calls skip writes for reads. GET users no longer locks Company FOR UPDATE. Existing mutation contexts retain provisioning. New regressions pass.
+- Live catalog audit (tests/branch-schema.readonly.ts) checked 175 models. Exactly one missing table: distributor_payment_allocations (DistributorPaymentAllocation). Two missing columns: expenses.distributor_id and expenses.client_id. No missing implicit joins. See schema-compatibility.json. Do not apply DB changes; user explicitly prohibits them.
+- Real production distributor query regression (tests/branch-page-queries.readonly.test.ts) fails head main query with P2021 for public.distributor_payment_allocations; other five cases pass. This is a genuine DB dependency, not something to hide by deleting financial fields. Main supplier page now shows failure + Retry instead of misleading empty data.
+- Second broad run currently running: exec session 14198, started 13:05:37 UTC, owned Nuxt root PID 17736 (verify current results.json before terminating). It is still starting as of 13:13 UTC. Runtime log/results remain outside watched project at ../artifacts/storetools-branch-e2e-run/.
+- Harness now supports real Vue router navigation, explicit encrypted-session verification, 8 GB server heap, 180s pages, module/API quiet checks, known branch/plan redirects and pure literal redirect aliases. Latest additions after session 14198 started: mutation guard verification, audit-blocked classification and origin initialization after recovery; those driver changes only affect the NEXT invocation. Recovery itself is already in 14198: stuck tabs are closed and replaced while retaining profile/cookies.
+- Test-only Nitro plugin now blocks non-read requests except auth/switch-company, and blocks storefront-source/agent/design workflows. Actual source GET can PATCH Vercel project settings; do not let a read-only test change cloud settings. Plugin edited during startup of 14198; verify it is active with POST /api/branch-e2e-readonly-probe -> x-branch-audit-blocked: mutation. First probe returned 503 while server still starting, not a guard failure. Guard is only in isolated test build, not normal app.
+- Latest harness cleans its own Chrome process tree and temporary profile (realpath containment verified before recursive removal). Existing dev server PID 2456 / port 3000 must remain running.
+- Async question pending: whether an existing test/staging environment is configured for true create/edit/delete tests; user may provide an env-file path. No reply is approval, and no live CRUD is authorized against current production records. Continue read-only audit independently.
+- Architecture docs updated for coupon, dashboard, REST notifications, AI readiness, GET accounting context; some audit-mode docs still need final guard/recovery/report update. summary.txt is a checkpoint, not a final all-pass report.
+- Need: finish actual broad page audit, fix genuine code issues that can be fixed without DB schema/data changes, retry failures, rerun raised full typecheck after latest fixes, run final relevant regressions and git diff --check, update final audit summary honestly. Do not claim all pages/CRUD pass; DB dependencies and guarded external/mutation workflows remain material limits.

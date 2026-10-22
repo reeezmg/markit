@@ -1,0 +1,326 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 14136,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/settings",
+      "status": "passed",
+      "landed": "/settings",
+      "expectedPath": "/settings",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 12823,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/settings/store",
+      "status": "failed",
+      "landed": "/settings/store",
+      "expectedPath": "/settings/store",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 10724,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "https://maps.googleapis.com/maps/api/js",
+          "line": 2559,
+          "category": "maps-billing-required"
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/settings/store",
+      "status": "failed",
+      "landed": "/settings/store",
+      "expectedPath": "/settings/store",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5912,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "https://maps.googleapis.com/maps/api/js",
+          "line": 2559,
+          "category": "maps-billing-required"
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/settings",
+      "status": "passed",
+      "landed": "/settings",
+      "expectedPath": "/settings",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5839,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/settings",
+      "status": "passed",
+      "landed": "/settings",
+      "expectedPath": "/settings",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4768,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/settings/store",
+      "status": "passed",
+      "landed": "/settings/store",
+      "expectedPath": "/settings/store",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4214,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/settings/store",
+      "status": "passed",
+      "landed": "/settings/store",
+      "expectedPath": "/settings/store",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4468,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/settings",
+      "status": "passed",
+      "landed": "/settings",
+      "expectedPath": "/settings",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3215,
+      "errors": []
+    }
+  ],
+  "switches": [
+    {
+      "direction": "head-to-branch",
+      "status": 200,
+      "persisted": true
+    },
+    {
+      "direction": "branch-to-head",
+      "status": 200,
+      "persisted": true
+    }
+  ],
+  "errors": [],
+  "startedAt": "2026-10-21T07:38:17.970Z",
+  "bundleFingerprint": "9b9eae8be7489e1745d363448ed0139489f8714e9be275a616bbf124ebaf1dea",
+  "serverProcessId": 18712,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [],
+  "currentPage": {
+    "company": "branch",
+    "route": "/settings",
+    "startedAt": "2026-10-21T07:39:43.247Z"
+  },
+  "serverTimingMaxBytes": 0,
+  "settingsFailureForms": [
+    {
+      "company": "head",
+      "form": "store-identity-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/company/update",
+      "externalMapErrors": [
+        {
+          "kind": "console-error",
+          "source": "https://maps.googleapis.com/maps/api/js",
+          "line": 2559,
+          "category": "maps-billing-required"
+        }
+      ],
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/company/update",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    },
+    {
+      "company": "head",
+      "form": "profile-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/user/update",
+      "externalMapErrors": [],
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/user/update",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    },
+    {
+      "company": "branch",
+      "form": "store-identity-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/company/update",
+      "externalMapErrors": [],
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/company/update",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    },
+    {
+      "company": "branch",
+      "form": "profile-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/user/update",
+      "externalMapErrors": [],
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/user/update",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    }
+  ],
+  "pageSummary": {
+    "passed": 6,
+    "failed": 2
+  },
+  "formSummary": {},
+  "interactionSummary": {},
+  "pageAuditStatus": "failed",
+  "finishedAt": "2026-10-21T07:39:53.524Z"
+}

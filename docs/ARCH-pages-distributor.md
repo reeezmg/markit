@@ -37,6 +37,10 @@ mutation paths. Return account choices follow date/supplier/PO fields, and filte
 amounts have persistent labels. Payment, PO, expense, detail and filter forms retain
 their shared implementations.
 
+The main supplier query includes payment allocations and requires the
+`DistributorPaymentAllocation` schema dependency. A failed supplier fetch shows
+an error alert with Retry rather than silently presenting an empty supplier list.
+
 #### Charge Credit (2026-10-12)
 
 Add Credit offers Product, Amount and Charge Credit. Charge Credit requires a
@@ -69,9 +73,11 @@ but their actions route to Payments to prevent source divergence.
 
 Accounts also includes current posted ERP expense journals linked to this supplier,
 with company expense-prefix references and Expense as a filter type. It excludes
-DP-linked expenses already represented by Payment. Expense debits include the full
-expense plus recoverable tax; running purchase due changes only for actual Accounts
-Payable lines, so ordinary expenses do not clear PO balances. Journal details show
+DP-linked expenses already represented by Payment. The statement includes only
+journals with nonzero Accounts Payable debits or credits, and those payable lines
+alone supply displayed amounts and running due. Ordinary expenses remain in the
+Expenses tab; Charge Credits remain in Accounts with their payable credit.
+Counterpart lines remain available in journal details. Journal details show
 the party snapshot. Edits refresh both tables without a page reload.
 
 This requires the local Expense party fields in `schema.zmodel`; no database schema
@@ -157,8 +163,23 @@ Purchase orders are the purchase source, for both Credit and paid purchases. Sav
 a Credit PO creates no DistributorCredit. `server/utils/purchase-order-source.ts`
 registers PO-header authority in the existing accounting audit mechanism inside the
 source transaction; the installed deferred posting then reads the PO directly.
-This uses data writes only, without runtime schema/view/trigger changes. PO-linked
-credit records were removed with a backup; standalone Add Credit records remain.
+This uses data writes only, without runtime schema/view/trigger changes.
+
+On 2026-10-21 the test database's older projection was found to omit new credit
+POs registered through this authority mechanism. With separate user authorization,
+`scripts/deploy-purchase-authority-test.mjs` installed the repository's
+`scripts/production-accounting/lib/purchase-order-authority.sql` definitions.
+The deployment backed up the prior views/functions/triggers and verified that
+existing source, stock, journal and audit rows, plus the historical event projection,
+were unchanged before committing; it performed no historical import or rewrite.
+`tests/products-distributor-accounting-api.integration.test.ts` then passed the
+purchase/payment/receipt/return/sale/stock and deletion lifecycle against actual
+handlers and native triggers on an enabled ERP company. Every new journal balanced;
+all test records, counters, stocks and journals were rolled back. Deployment evidence
+is in `tests/branch-reports/purchase-authority-deployment.json`, with the object backup
+beside it and lifecycle results in `product-distributor-writes-followup.log`.
+
+PO-linked credit records were removed with a backup; standalone Add Credit records remain.
 Where a PO previously inferred its supplier solely from those credits, the existing
 source supplier was carried onto the PO before deleting them.
 Distributor totals and statements add positive PO totals and standalone credits,
@@ -414,3 +435,7 @@ Create a purchase return for a chosen distributor and optional purchase order. S
 ### `pages/distributor/edit-purchase-return/[id].vue`
 
 Loads the return by route ID from `/api/purchasereturn/{id}`, pre-fills the same distributor/order/item/date/remarks form, and submits changes to `/api/purchasereturn/update`. The UI loads categories and can re-check scanned items; it is an edit of an existing return, not a second return creation.
+
+The main supplier page waits for onNuxtReady before its explicit initial refresh. Activation refreshes are skipped until that boundary, preserving the server-rendered error/loading state while asynchronous hydration completes. The legacy credit route shares this page.
+
+The page also awaits companyScope.ready before creating query observers on either side. Without that boundary, the client can create a narrow pending query before accessible-company data resolves, while SSR rendered the final aggregate error query.

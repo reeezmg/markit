@@ -1,0 +1,23 @@
+{
+  "before": {
+    "pid": 19984,
+    "gc": "function",
+    "memory": {
+      "rss": 686563328,
+      "heapTotal": 1786474496,
+      "heapUsed": 1727281912,
+      "external": 24513929,
+      "arrayBuffers": 17515273
+    }
+  },
+  "after": {
+    "pid": 19984,
+    "memory": {
+      "rss": 611348480,
+      "heapTotal": 1704923136,
+      "heapUsed": 1327310808,
+      "external": 24513969,
+      "arrayBuffers": 9498932
+    }
+  }
+}

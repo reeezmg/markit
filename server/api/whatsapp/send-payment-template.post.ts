@@ -1,4 +1,6 @@
-import { defineEventHandler, readBody } from 'h3'
+import { defineEventHandler, readBody, createError } from 'h3'
+import { getReadCompanyId } from '~/server/utils/organizationReadScope'
+import { verifyReceiptShare } from '~/server/utils/receiptShare'
 
 // ✅ Safe date formatter (DD/MM/YYYY)
 const formatDate = (date: string) => {
@@ -14,6 +16,15 @@ const formatDate = (date: string) => {
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
+  const companyId = await getReadCompanyId(event, body?.companyId)
+  // Only send PDF links issued for a bill in the authorized company.
+  const receiptPath = typeof body?.receiptId === 'string' ? body.receiptId : ''
+  const [billId, query] = receiptPath.split('?')
+  const params = new URLSearchParams(query)
+  const share = verifyReceiptShare(params.get('share') || '')
+  if (share.companyId !== companyId || encodeURIComponent(share.billId) !== billId || !share.documentKey || params.get('pdf') !== '1') {
+    throw createError({ statusCode: 400, statusMessage: 'A stored receipt PDF link is required' })
+  }
 
   const {
     phone,

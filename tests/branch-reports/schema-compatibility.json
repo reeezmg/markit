@@ -1,0 +1,9 @@
+{
+  "checkedAt": "2026-10-21T06:49:44.981Z",
+  "schema": "public",
+  "modelsChecked": 175,
+  "databaseMode": "read-only (verified)",
+  "missingTables": [],
+  "missingColumns": [],
+  "missingImplicitJoinTables": []
+}

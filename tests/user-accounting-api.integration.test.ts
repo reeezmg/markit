@@ -39,7 +39,12 @@ try {
  const schema=new URL(process.env.DATABASE_URL!).searchParams.get('schema')||'public';assert.match(schema,/^[A-Za-z_][A-Za-z0-9_]*$/);
  await db.query(`SET LOCAL search_path TO "${schema}"`);
  assertLegacyUnchanged = await legacyLedgerGuard(db);
- const {rows:[f]}=await db.query(`SELECT s.company_id,s.accounts,(SELECT user_id FROM company_users WHERE company_id=s.company_id AND NOT deleted LIMIT 1) user_id FROM accountant_v2_user_settings s WHERE enabled ORDER BY company_id LIMIT 1`);
+ const targetRole=process.env.ACCOUNTING_TEST_COMPANY_ROLE;
+ assert.ok(!targetRole || ['head','branch'].includes(targetRole));
+ const {rows:[f]}=await db.query(`SELECT s.company_id,s.accounts,(SELECT user_id FROM company_users WHERE company_id=s.company_id AND NOT deleted LIMIT 1) user_id
+   FROM accountant_v2_user_settings s JOIN companies c ON c.id=s.company_id WHERE s.enabled
+   AND ($1::text IS NULL OR CASE WHEN $1='branch' THEN c.parent_company_id IS NOT NULL ELSE c.is_head_office AND c.parent_company_id IS NULL END)
+   ORDER BY s.company_id LIMIT 1`,[targetRole||null]);
  assert.ok(f?.user_id,'Enable staff accounting before this rollback-only API test');
  const session={data:{id:f.user_id,companyId:f.company_id,role:'manager'}};
  Object.assign(globalThis,{createError,defineEventHandler,getHeader,getQuery,getRequestURL,readBody,requireAuthSession:async()=>session});

@@ -130,6 +130,7 @@ export const coreAccountDefaults = [
 ] as const;
 
 export async function ensureDefaults(companyId: string) {
+  if (context().readOnly) return;
   await prisma.accountingAccount.createMany({
     data: coreAccountDefaults.map(([name, code, accountType]) => ({
       companyId,

@@ -1,0 +1,67 @@
+{
+  "recordPrefix": "BRANCH_E2E_MVH2V9JA_",
+  "existingRecords": [],
+  "snapshots": [
+    {
+      "at": "2026-10-20T19:34:43.999Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "96d635a9-487e-45b3-ba47-1075bcdb2901",
+            "createdAt": "2026-10-20T19:34:41.639Z",
+            "updatedAt": "2026-10-20T19:34:41.639Z",
+            "name": "BRANCH_E2E_MVH2V9JA_HEAD_COLLECTION",
+            "description": "Created through the seller browser form",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "writeId": "6e01aaa4-df60-46af-9bd2-29d0484c052e"
+          }
+        ]
+      }
+    },
+    {
+      "at": "2026-10-20T19:35:11.797Z",
+      "records": {
+        "brand": [],
+        "collection": [
+          {
+            "id": "96d635a9-487e-45b3-ba47-1075bcdb2901",
+            "createdAt": "2026-10-20T19:34:41.639Z",
+            "updatedAt": "2026-10-20T19:35:06.593Z",
+            "name": "BRANCH_E2E_MVH2V9JA_HEAD_COLLECTION",
+            "description": "Edited and reloaded BRANCH_E2E_MVH2V9JA_HEAD_COLLECTION",
+            "status": true,
+            "image": null,
+            "banner": null,
+            "targetAudience": "all",
+            "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+            "writeId": "6e01aaa4-df60-46af-9bd2-29d0484c052e"
+          }
+        ]
+      }
+    }
+  ],
+  "cleanup": "verified: no run-owned catalog fixtures remain",
+  "remainingBeforeCleanup": {
+    "brand": [],
+    "collection": [
+      {
+        "id": "96d635a9-487e-45b3-ba47-1075bcdb2901",
+        "createdAt": "2026-10-20T19:34:41.639Z",
+        "updatedAt": "2026-10-20T19:35:06.593Z",
+        "name": "BRANCH_E2E_MVH2V9JA_HEAD_COLLECTION",
+        "description": "Edited and reloaded BRANCH_E2E_MVH2V9JA_HEAD_COLLECTION",
+        "status": true,
+        "image": null,
+        "banner": null,
+        "targetAudience": "all",
+        "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+        "writeId": "6e01aaa4-df60-46af-9bd2-29d0484c052e"
+      }
+    ]
+  }
+}

@@ -9,6 +9,8 @@ definePageMeta({
 })
 
 const VChart = defineAsyncComponent(() => import('vue-echarts'))
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
 
 const loading = ref(true)
 const pdfLoading = ref(false)

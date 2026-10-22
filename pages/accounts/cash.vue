@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
 import { ref, computed, watch } from 'vue'
 import { format, sub, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
@@ -42,6 +44,7 @@ function selectRange(duration: Duration) {
 const { data, pending, error, refresh } = await useFetch(
   '/api/accounts/cashledger',
   {
+    headers: companyScope.headers(), key: 'archive:pages/accounts/cash.vue:' + companyScope.companyId.value,
     query: computed(() => ({
       from: selectedDate.value.start.toISOString(),
       to: selectedDate.value.end.toISOString(),
@@ -64,7 +67,7 @@ watch(error, e => {
 /* ---------------------------------------------------
    COMPUTED
 --------------------------------------------------- */
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 const account = computed(() => data.value?.cash)
 const ledger = computed(() => data.value?.ledger ?? [])
 const closingBalance = computed(() => data.value?.closingBalance ?? 0)

@@ -1,25 +1,35 @@
 <script setup lang="ts">
-import { useFindManyCoupon, useCountCoupon, useUpdateManyCoupon } from '~/lib/hooks/coupon';
-import type { Prisma } from '@prisma/client'
+import { useFindManyCoupon, useCountCoupon, useUpdateManyCoupon } from '~/lib/company-hooks/coupon';
+import type { Prisma, CouponType, CouponAudience } from '@prisma/client'
 import { format} from 'date-fns'
 
 const props = defineProps<{
     selectedCoupon?: any
 }>()
 const emit = defineEmits(['edit','delete','open','select']);
-const useAuth = () => useNuxtApp().$auth;
+const companyScope = useCompanyScope();
+const useAuth = () => companyScope.auth;
 const UpdateManyCoupon = useUpdateManyCoupon({ optimisticUpdate: true });
-const selectedRows = ref([]);
-const selectedType = ref([]);
-const selectedAudienceType = ref([]);
-const selectedStatus = ref([]);
+const selectedRows = ref<Array<{ id: string }>>([]);
+const selectedType = ref<CouponType[]>([]);
+const selectedAudienceType = ref<CouponAudience[]>([]);
+const selectedStatus = ref<boolean[]>([]);
 const isDeleteModalOpen = ref(false)
-const deletingRowIdentity = ref({})
+const deletingRowIdentity = ref({ id: '', code: '' })
 const sort = ref({ column: 'id', direction: 'asc' as const });
 const page = ref(1);
-const pageCount = ref(localStorage.getItem('couponList_pageCount') || '10');
+const pageCount = ref('10');
+onMounted(() => {
+  try {
+    const saved = localStorage.getItem('couponList_pageCount');
+    if (saved && ['3', '5', '10', '20', '30', '40'].includes(saved)) pageCount.value = saved;
+  } catch {}
+});
 
-watch(pageCount, (v) => { localStorage.setItem('couponList_pageCount', v); page.value = 1 })
+watch(pageCount, (v) => {
+  try { localStorage.setItem('couponList_pageCount', v); } catch {}
+  page.value = 1;
+});
 
 const columns = [
     {
@@ -88,15 +98,15 @@ const action = (row:any) => [
     ],
 ];
 
-const active = (selectedRows) => [
+const active = (rows: Array<{ id: string }>) => [
     [
         {
             label: 'Activate',
-            click: () => multiUpdate(true, selectedRows.id),
+            click: () => multiUpdate(true, rows.map(row => row.id)),
         },
         {
             label: 'Deactivate',
-            click: () => multiUpdate(false, selectedRows.id),
+            click: () => multiUpdate(false, rows.map(row => row.id)),
         },
     ],
 ];
@@ -108,15 +118,15 @@ const queryArgs = computed<Prisma.CouponFindManyArgs>(() => {
             companyId: useAuth().session.value?.companyId,
             
             ...(selectedType.value.length && {
-                OR: selectedType.value.map((item) => ({ type: item }))
+                type: { in: selectedType.value }
             }),
 
             ...(selectedAudienceType.value.length && {
-                OR: selectedAudienceType.value.map((item) => ({ audienceType: item }))
+                audienceType: { in: selectedAudienceType.value }
             }),
 
-            ...(selectedStatus.value.length && {
-                OR: selectedStatus.value.map((item) => ({ isActive: item }))
+            ...(selectedStatus.value.length === 1 && {
+                isActive: selectedStatus.value[0]
             }),
         },
         orderBy: {
@@ -125,10 +135,11 @@ const queryArgs = computed<Prisma.CouponFindManyArgs>(() => {
         skip: (page.value - 1) * parseInt(pageCount.value),
         take: parseInt(pageCount.value),
     };
-},{ enabled: !!useAuth().session.value?.companyId });
+});
 
 const { data: coupons, isLoading, error, refetch } = useFindManyCoupon(queryArgs);
-const pageTotal = computed(() => coupons.value?.length);
+const { data: pageTotal } = useCountCoupon(computed(() => ({ where: queryArgs.value.where })));
+watch(companyScope.readIds, () => { page.value = 1; selectedRows.value = []; emit('select', null); });
 
 const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1);
 const pageTo = computed(() =>
@@ -136,13 +147,8 @@ const pageTo = computed(() =>
 );
 const selectedColumns = ref(columns);
 const columnsTable = computed(() =>
-    columns.filter((column) => selectedColumns.value.includes(column)),
+    companyScope.columns(columns.filter((column) => selectedColumns.value.includes(column))),
 );
-
-watchEffect(() => {
-    console.log(coupons.value);
-    console.log(pageTotal.value);
-});
 
 const resetFilters = () => {
     selectedType.value = [];
@@ -151,7 +157,8 @@ const resetFilters = () => {
 };
 
 
-const multiUpdate = async(status: boolean, ids: any) => {
+const multiUpdate = async(status: boolean, ids: string[]) => {
+    if (!ids.length) return;
     await UpdateManyCoupon.mutateAsync({
         where: {
             id: { in: ids },        
@@ -234,7 +241,9 @@ const isCurrentlyActive = (row: any) => {
                         <USelectMenu
                             v-if="!selectedCoupon"
                             v-model="selectedStatus"
-                            :options="[true, false]"
+                            :options="[{ label: 'Active', value: true }, { label: 'Inactive', value: false }]"
+                            value-attribute="value"
+                            option-attribute="label"
                             multiple
                             placeholder="Status"
                             class="w-28"
@@ -247,7 +256,7 @@ const isCurrentlyActive = (row: any) => {
                                 </span>
                             </template>
                             <template #option="{ option }">
-                                {{ option ? 'Active' : 'Inactive' }}
+                                {{ option.label }}
                             </template>
                         </USelectMenu>
 
@@ -335,8 +344,9 @@ const isCurrentlyActive = (row: any) => {
                     :ui="{
                         tr: { base: 'cursor-pointer' },
                     }"
-                    @select="(row) => emit('select', row)"
+                    @select="(row: any) => emit('select', row)"
                 >
+                    <template #companyId-data="{ row }">{{ companyScope.companyName(row.companyId) }}</template>
                     <template #type-data="{ row }">
                        <UBadge
                             size="sm"
@@ -459,7 +469,7 @@ const isCurrentlyActive = (row: any) => {
                     <UPagination
                         v-model="page"
                         :page-count="parseInt(pageCount)"
-                        :total="pageTotal"
+                        :total="pageTotal || 0"
                         size="xs"
                         :ui="{
                             wrapper: 'flex items-center gap-1',

@@ -1,0 +1,22 @@
+{
+  "at": "2026-10-21T07:25:48.485Z",
+  "baselineFingerprint": "393506d71ac9517c6ee151660c6c8a0bd36518f4e260254cb2065a3a7db50d26",
+  "applied": [
+    {
+      "path": "pages/settings/store.vue",
+      "before": "99174ad2df6593b817129d916ec0c6edd80c494a4bd11fdeb5390b12808aa296",
+      "after": "02d958e9353b74563a98e823dd17ac2481eb019cd75b726bccf78f9b66edba54"
+    },
+    {
+      "path": "pages/settings/index.vue",
+      "before": "edfe90bfc820d35785b1629755f4d70fb6f6c034ad98e827f00fff3e013523f7",
+      "after": "f95aac3e9d8cd55554ae543b8423eca2dd659da6aae343e66913f8ddbb1fa3c2"
+    }
+  ],
+  "packageChange": "Added settings-save regression test to test:branches",
+  "candidateTests": {
+    "passed": 43,
+    "failed": 0,
+    "log": "settings-save-candidate.log"
+  }
+}

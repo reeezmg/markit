@@ -33,30 +33,30 @@ function manager() {
         );
 }
 
-export async function investmentSettings() {
+async function readInvestmentSettings() {
     const saved = await db.auditLog.findFirst({
         where: { resource: 'investor-profit-settings', action: 'configured' },
         orderBy: [{ createdAt: 'desc' }, { id: 'desc' }],
     });
-    let id = saved?.after?.accountId;
-    if (!id) {
-        let account = await db.accountingAccount.findFirst({
-            where: { code: 'INV-DISTRIBUTION' },
-        });
-        if (!account)
-            account = await db.accountingAccount.create({
-                data: {
-                    name: 'Investor profit distributions',
-                    code: 'INV-DISTRIBUTION',
-                    category: 'EQUITY',
-                    accountType: 'EQUITY',
-                    currency: (await db.company.findUnique()).currency,
-                    isSystem: true,
-                },
-            });
-        id = account.id;
-    }
-    return fundingAccount(id);
+    const id = saved?.after?.accountId ?? (await db.accountingAccount.findFirst({
+        where: { code: 'INV-DISTRIBUTION' },
+    }))?.id;
+    return id ? fundingAccount(id) : null;
+}
+export async function investmentSettings() {
+    const existing = await readInvestmentSettings();
+    if (existing) return existing;
+    const account = await db.accountingAccount.create({
+        data: {
+            name: 'Investor profit distributions',
+            code: 'INV-DISTRIBUTION',
+            category: 'EQUITY',
+            accountType: 'EQUITY',
+            currency: (await db.company.findUnique()).currency,
+            isSystem: true,
+        },
+    });
+    return fundingAccount(account.id);
 }
 export async function investmentProfit(input: unknown) {
     const p = period(input);
@@ -267,16 +267,17 @@ investorProfitRouter.get('/history', async (_req, res) => {
     );
 });
 investorProfitRouter.get('/settings', async (_req, res) => {
-    const current = await investmentSettings();
+    const current = await readInvestmentSettings();
     const owned = await query(
         'SELECT accounts FROM accountant_v2_investors WHERE company_id=$1'
     );
-    const ids = owned.flatMap((p) => Object.values(p.accounts));
+    const ids = owned.flatMap((p) => Object.values(p.accounts ?? {}))
+        .filter((id): id is string => typeof id === 'string' && id.length > 0);
     const accounts = await db.accountingAccount.findMany({
         where: { category: 'EQUITY', isActive: true, id: { notIn: ids } },
         orderBy: { name: 'asc' },
     });
-    res.json({ accountId: current.id, accounts });
+    res.json({ accountId: current?.id ?? null, accounts });
 });
 investorProfitRouter.put('/settings', async (req, res) => {
     manager();

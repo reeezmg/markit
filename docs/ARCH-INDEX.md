@@ -30,7 +30,7 @@ delivery and Express-server documentation remains under `docs/`.
 | `ARCH-pages-ai-editor.md` | AI provider/usage pages, bank statement page and storefront editor |
 | `ARCH-pages-navigation.md` | Dashboard parent routes, page shells and settings navigation |
 | `ARCH-components.md` | All shared components: notifications, barcode/receipt, dashboard charts, store frontend, checkout, category form, finance, settings modals, template stubs |
-| `ARCH-composables.md` | All custom composables and lib/api utilities: cloud storage, Firebase, printing (BLE/ESC/POS), notifications, Socket.io events, dashboard data, store products, coupons, utilities |
+| `ARCH-composables.md` | All custom composables and lib/api utilities: cloud storage, Firebase, printing (WebUSB/Bluetooth/ESC/POS/TSPL/CPCL), notifications, Socket.io events, dashboard data, store products, coupons, utilities |
 | `ARCH-storetools-internals.md` | Plugins, middleware, services, Pinia stores, types, and utils in storetools root |
 | `ARCH-storetools-auth.md` | Auth layer: seller/client session types, all `/api/auth/*` + `/api/clientauth/*` routes, auth plugins, auth composables, nuxt.config.ts |
 | `ARCH-storetools-api.md` | All ~80 Nuxt server API routes under `storetools/server/api/`: bill, accounts, products, coupons, reports, cart, notifications, WhatsApp, TikTok, Shopify, upload |
@@ -45,6 +45,7 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 
 | Looking for... | Go to |
 |---|---|
+| Head-office branch settings without a company switch / current company settings | `ARCH-pages-settings.md` + `ARCH-composables.md` |
 | DB table fields / schema | `ARCH-schema.md` |
 | Prisma model names, enums | `ARCH-schema.md` + `ARCH-patterns.md` |
 | ZenStack hooks pattern | `ARCH-patterns.md` |
@@ -180,7 +181,7 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | Known bugs / issues | Each topic file has a Bugs section; see below for consolidated list |
 | Notification bell / slideover | `ARCH-components.md` — NotificationIcon, NotificationsSlideover |
 | Thermal receipt rendering | `ARCH-components.md` — ThermalReceipt |
-| Barcode label print | `ARCH-components.md` — BarcodeComponent, PrintBarcodeComponent |
+| Barcode label print | `ARCH-components.md` — BarcodeComponent, PrintTemplateLabels |
 | Company switcher | `ARCH-components.md` — TeamsDropdown |
 | Dashboard charts (ECharts) | `ARCH-components.md` — RevenueEChart, CategoryRevenuePie, billsOverTimeChart, etc. |
 | Store product card | `ARCH-components.md` — products/ProductCard.vue |
@@ -194,12 +195,12 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | Firebase auth setup | `ARCH-composables.md` — firebase.ts |
 | Web push notifications (FCM) | `ARCH-composables.md` — usePushNotifications, useMessaging |
 | Native push notifications (Capacitor) | `ARCH-composables.md` — useCapPush |
-| BLE thermal printer (native print) | `ARCH-composables.md` — useReceiptPrinter, usePrinter |
 | Print bill/label/report (platform-aware) | `ARCH-composables.md` — usePrintBill |
+| Company receipt / label designer, print templates | `ARCH-pages-settings.md` — Printer; `ARCH-composables.md` — custom template rendering |
 | Socket.io bill/checkout sound + store update | `ARCH-composables.md` — useBillEvents, useCheckoutEvents |
 | Dashboard data (revenue, expenses, charts) | `ARCH-composables.md` — useCompanyDashboard (lib/api/useDashboardData) |
 | Keyboard shortcuts (global nav) | `ARCH-composables.md` — useDashboard |
-| Notification WebSocket + REST | `ARCH-composables.md` — useNotifications |
+| Notification refresh + REST | `ARCH-composables.md` — useNotifications |
 | Store frontend product pagination + filters | `ARCH-composables.md` — useStoreProducts |
 | Coupon generation for cart | `ARCH-composables.md` — useGenerateCoupons |
 | Category tax config (global state) | `ARCH-composables.md` — initTaxData (lib/api/useCategoryTax) |
@@ -241,6 +242,11 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 
 | Location | Bug |
 |---|---|
+| `composables/useCompanyScope.ts`, `useSelectedAccounts.ts`, `server/utils/companyRequestScope.ts` | **FIXED (2026-10-21):** active-company pages/requests could retain old cookie settings after another authorized admin edited that branch. Contexts now load current database settings without changing the login company, and account-default reads use that page context. |
+| `pages/settings/numbering.vue`, `pages/settings/printer.vue` | **FIXED** — prefix/label saves showed success and changed sessions before persistence; now await mutation/session, retain loading and guard duplicate saves. |
+| `pages/settings/products.vue`, `server/api/product-custom-fields/index.post.ts` | **FIXED** — built-in/dimension settings used separate writes; now one nested upsert. Custom-field replacement now rejects missing arrays, duplicate IDs and foreign-company IDs atomically. |
+| `server/api/bill/startNewYear.post.ts` | **FIXED** — financial-year action now checks role, company and date, locks its company and uses typed timestamp/integer parameters. |
+| `nuxt.config.ts` | **FIXED** — prefetch-preservation module added `vue: []` in development, activating an empty Nuxt tree-shaking regex and causing Vite zero-length overwrite errors; now filters only an existing list. |
 | `pages/client/index.vue` | **Fixed locally (2026-10-06):** bill deletion uses the full owner-scoped service to restore stock and reverse native journals. Client removal marks only its membership inactive, preserving client/bill/account links and financial history. |
 | `pages/accounts/bank/index.vue` | **Resolved by retirement:** bank mutation forms/handlers are removed; bank history is read-only. |
 | `server/api/billSale/updatePaymentMethod.post.ts` | **Resolved by retirement:** all source workflows leave old ledgers frozen and maintain native journals. |
@@ -264,8 +270,8 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | `pages/order/pack.vue` + `ready.vue` | ~~`handleSave` dead code in pack.vue~~ **FIXED** (removed); unused `item` import from `@unovis/ts` (still in pack.vue); `handleSave` dead code still in ready.vue |
 | `pages/order/bookings.vue` | `useUpdateManyCategory` dead import; `action()` delete not wired |
 | `pages/login.vue` | Two `console.log` statements; `route.query.code` read but unused |
-| `pages/settings/index.vue` | Success toast references `error.statusMessage` (out of scope variable) |
-| `pages/settings/store.vue` | Same `error.statusMessage` bug in `onaccSubmit` success branch |
+| `pages/settings/index.vue` | **Fixed locally (2026-10-21):** profile loading spans persistence/session updates; failures show only an error. Avatar uploads finish before their key is saved. |
+| `pages/settings/store.vue` | **Fixed locally (2026-10-21):** saves await database/session updates before success; combined saves retain submitted fields across query refreshes. Logo uploads precede persistence and zero address coordinates survive reload. |
 | `components/Expense/ExpenseList.vue` | ~~"Mark as" bulk status passed `selectedRows.id` (always `undefined`)~~ **FIXED** — now passes `selectedRows.map(r => r.id)` to `/api/accounts/expenses/status`. Whole expense feature migrated off ZenStack to raw-pg `/api/accounts/expense*` endpoints; add flow moved to inline `ExpenseQuickAdd` bar with Add-button spinner (modal now edit-only, also with Save spinner). |
 | `pages/reports/online.vue` | Multiple `console.log(res)` after data fetch |
 | `pages/reports/users.vue` | `console.log` on every date change and data update |
@@ -278,8 +284,6 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | `composables/aws.ts` | Worker URL and upload secret hardcoded in source |
 | `composables/firebase.ts` | Firebase API key and appId hardcoded in source |
 | `composables/usePushNotifications.ts` | VAPID key hardcoded in source |
-| `composables/useNotifications.ts` | Production WebSocket host is placeholder `'your-fly-app.fly.dev'`; `console.log` on every WS message |
-| `composables/useReceiptPrinter.ts` | `item.createdAty` typo in `printMobileReport` expense rows (should be `item.createdAt`) |
 | `composables/getTax.ts` | `id` param accepted but ignored; always fetches `/api/gettax/` |
 | `composables/date.ts` | `console.error` after `return ''` in catch block — unreachable code |
 | `lib/api/useDashboardData.ts` | `console.log(newVal)` in company and expenses watchers |

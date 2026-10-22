@@ -1,0 +1,209 @@
+{
+  "prefix": "BRANCH_E2E_PREFLIGHT_1792565374502_",
+  "existingRecords": [],
+  "records": [
+    {
+      "model": "collection",
+      "id": "fe213f5d-5dab-4f3c-b10d-4d3612448313",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "data": {
+        "name": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "description": "Run-owned detail-page fixture"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "product",
+      "id": "44c28a44-8aa8-4c23-8978-4f202a666aa9",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "data": {
+        "name": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "description": "Run-owned detail-page fixture"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "bankAccount",
+      "id": "80aa0d86-74ec-4775-a80a-434706a93ba0",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "data": {
+        "bankName": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "accHolderName": "Run-owned archive fixture",
+        "openingBalance": 0
+      },
+      "state": "removed"
+    },
+    {
+      "model": "statementBatch",
+      "id": "b0f1f472-c117-40be-986b-c9194c9116b9",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "data": {
+        "userId": "de505401-800f-4560-aba2-00571ea30e7c",
+        "sourceFileName": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL.csv",
+        "rows": {
+          "create": [
+            {
+              "sno": 1,
+              "date": "2026-10-01",
+              "description": "Run-owned unexecuted statement row",
+              "debit": 0,
+              "credit": 0,
+              "balance": 0
+            }
+          ]
+        }
+      },
+      "state": "removed"
+    },
+    {
+      "model": "payrollCycle",
+      "id": "e879f92a-2cab-4d84-8ec7-128d198bdef0",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "data": {
+        "name": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "month": 10,
+        "year": 2060,
+        "status": "DRAFT",
+        "paymentDate": "2060-10-31T00:00:00.000Z",
+        "periodStart": "2060-10-01T00:00:00.000Z",
+        "periodEnd": "2060-10-31T00:00:00.000Z",
+        "lines": {
+          "create": [
+            {
+              "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+              "userId": "de505401-800f-4560-aba2-00571ea30e7c",
+              "baseSalary": 0,
+              "netPay": 0
+            }
+          ]
+        }
+      },
+      "state": "removed"
+    },
+    {
+      "model": "accountantManualJournal",
+      "id": "756c7807-d1f6-4ede-8b0a-633ac436db61",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "data": {
+        "entryNumber": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "notes": "Run-owned unposted draft",
+        "journalDate": "2026-10-01T00:00:00.000Z",
+        "status": "DRAFT"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "accountantInvestor",
+      "id": "5f940c80-0abd-4d1e-a7e9-3289523ad95a",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "data": {
+        "name": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "profile": {},
+        "accounts": {}
+      },
+      "state": "removed"
+    },
+    {
+      "model": "collection",
+      "id": "33ce8aa1-9415-45bf-9c39-d7e7fe4a7a11",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "name": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "description": "Run-owned detail-page fixture"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "product",
+      "id": "8005cdfe-b288-4f88-a739-e7b645c54170",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "name": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "description": "Run-owned detail-page fixture"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "bankAccount",
+      "id": "62575b15-7e7e-418a-b617-1abc3de70573",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "bankName": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "accHolderName": "Run-owned archive fixture",
+        "openingBalance": 0
+      },
+      "state": "removed"
+    },
+    {
+      "model": "statementBatch",
+      "id": "04db2ced-ffcd-4318-81bb-60b051b53ab8",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "userId": "de505401-800f-4560-aba2-00571ea30e7c",
+        "sourceFileName": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL.csv",
+        "rows": {
+          "create": [
+            {
+              "sno": 1,
+              "date": "2026-10-01",
+              "description": "Run-owned unexecuted statement row",
+              "debit": 0,
+              "credit": 0,
+              "balance": 0
+            }
+          ]
+        }
+      },
+      "state": "removed"
+    },
+    {
+      "model": "payrollCycle",
+      "id": "cf7e39f7-d036-4afa-85d8-eb3e8a1f4e5f",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "name": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "month": 10,
+        "year": 2060,
+        "status": "DRAFT",
+        "paymentDate": "2060-10-31T00:00:00.000Z",
+        "periodStart": "2060-10-01T00:00:00.000Z",
+        "periodEnd": "2060-10-31T00:00:00.000Z",
+        "lines": {
+          "create": [
+            {
+              "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+              "userId": "de505401-800f-4560-aba2-00571ea30e7c",
+              "baseSalary": 0,
+              "netPay": 0
+            }
+          ]
+        }
+      },
+      "state": "removed"
+    },
+    {
+      "model": "accountantManualJournal",
+      "id": "623578b7-165e-4cf7-96f9-881a8b21f2ec",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "entryNumber": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "notes": "Run-owned unposted draft",
+        "journalDate": "2026-10-01T00:00:00.000Z",
+        "status": "DRAFT"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "accountantInvestor",
+      "id": "3a00a26d-ca54-4237-a467-44d1adf98653",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "name": "BRANCH_E2E_PREFLIGHT_1792565374502_DETAIL",
+        "profile": {},
+        "accounts": {}
+      },
+      "state": "removed"
+    }
+  ],
+  "cleanup": "verified: all run-owned detail fixtures removed"
+}

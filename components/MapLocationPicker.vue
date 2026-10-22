@@ -28,6 +28,9 @@
       </UButton>
     </div>
 
+    <UAlert v-if="locationError" color="amber" :title="locationError" class="my-2" />
+    <p class="px-3 text-sm text-gray-500">Search, click the map, or choose Use Current Location.</p>
+
     <!-- Map Area -->
     <div class="relative flex-1 min-h-[400px]">
       <div ref="mapContainer" class="absolute inset-0 z-0" />
@@ -36,6 +39,8 @@
         icon="i-heroicons-map-pin"
         color="primary"
         size="md"
+        :loading="isLocating"
+        :disabled="!mapReady"
         @click="useCurrentLocation"
       >
         Use Current Location
@@ -81,7 +86,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { UInput, UButton, USlideover } from '#components'
+import { UInput, UButton, USlideover, UAlert } from '#components'
 
 const emit = defineEmits(['locationSelected'])
 
@@ -95,30 +100,44 @@ const selectedLocation = ref(null) // ✅ store latest selection
 const searchQuery = ref('')
 const searchResults = ref([])
 const isSearching = ref(false)
+const locationError = ref('')
+const isLocating = ref(false)
+const mapReady = ref(false)
 
 let map, marker, geocoder, placesService
 
 const useAuth = () => useNuxtApp().$auth
 
 function useCurrentLocation() {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords
-        const location = { lat: latitude, lng: longitude }
-        map.setCenter(location)
-        map.setZoom(15)
-        marker.setPosition(location)
-        updateAddressFromMarker(location)
-      },
-      () => alert('Unable to retrieve your location.')
-    )
-  } else {
-    alert('Geolocation is not supported by this browser.')
+  locationError.value = ''
+  if (!mapReady.value) {
+    locationError.value = 'Map is still loading. Please try again.'
+    return
   }
+  if (!navigator.geolocation) {
+    locationError.value = 'Location is not supported by this browser. Search or click the map instead.'
+    return
+  }
+  isLocating.value = true
+  navigator.geolocation.getCurrentPosition(
+    (position) => {
+      isLocating.value = false
+      const location = { lat: position.coords.latitude, lng: position.coords.longitude }
+      map.setCenter(location)
+      map.setZoom(15)
+      marker.setPosition(location)
+      updateAddressFromMarker(location)
+    },
+    () => {
+      isLocating.value = false
+      locationError.value = 'Unable to retrieve your location. Search or click the map, or allow location access and try again.'
+    },
+    { timeout: 10000, maximumAge: 60000 }
+  )
 }
 
 function updateAddressFromMarker(pos) {
+  locationError.value = ''
   if (geocoder) {
     geocoder.geocode({ location: pos }, (results, status) => {
       if (status === 'OK' && results && results.length > 0) {
@@ -132,6 +151,7 @@ function updateAddressFromMarker(pos) {
           formattedAddress: formattedAddress.value,
         }
       } else {
+        locationError.value = status === 'ZERO_RESULTS' ? 'No address found at this point. Choose another location.' : 'The address service is unavailable. Please try again.'
         name.value = ''
         formattedAddress.value = ''
         selectedLocation.value = null
@@ -141,6 +161,10 @@ function updateAddressFromMarker(pos) {
 }
 
 function openSearchModal() {
+  if (!mapReady.value) {
+    locationError.value = 'Map is still loading. Please try again.'
+    return
+  }
   isSearchModalOpen.value = true
   searchQuery.value = ''
   searchResults.value = []
@@ -266,30 +290,39 @@ function initMap() {
   })
 
   // ✅ Prefer saved session address if available
-  const savedLat = useAuth().session.value?.address.lat
-  const savedLng = useAuth().session.value?.address.lng
+  mapReady.value = true
+  const savedLat = useAuth().session.value?.address?.lat
+  const savedLng = useAuth().session.value?.address?.lng
 
-  if (savedLat && savedLng) {
+  if (Number.isFinite(savedLat) && Number.isFinite(savedLng)) {
     const location = { lat: savedLat, lng: savedLng }
     map.setCenter(location)
     map.setZoom(15)
     marker.setPosition(location)
     updateAddressFromMarker(location)
-  } else {
-    useCurrentLocation()
+  }
+}
+
+function initializeMap() {
+  try { initMap() } catch {
+    mapReady.value = false
+    locationError.value = 'The map could not load. You can still enter the address details below.'
   }
 }
 
 onMounted(() => {
   if (typeof google !== 'undefined' && google.maps) {
-    initMap()
+    initializeMap()
   } else {
     const script = document.createElement('script')
     script.src =
       'https://maps.googleapis.com/maps/api/js?key=AIzaSyBeWxeRsZk7YjElaKxfVH__UYOUI3qyMWM&libraries=places'
     script.async = true
     script.defer = true
-    script.onload = initMap
+    script.onload = initializeMap
+    script.onerror = () => {
+      locationError.value = 'The map could not load. You can still enter the address details below.'
+    }
     document.head.appendChild(script)
   }
 })

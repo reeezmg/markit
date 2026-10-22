@@ -37,4 +37,13 @@ const receiptCredit = distributorAccountingTransactions({ledger:[line('credit','
   events:[{source_key:'credit:dc',kind:'RECEIPT',source_kind:'CREDIT',source_reference:'CUSTOM-4'}]});
 assert.equal(receiptCredit[0].type,'CREDIT');assert.equal(receiptCredit[0].reference,'CUSTOM-4');assert.equal(receiptCredit[0].due,500);
 assert.equal(rows[0].reference,'purchase:po','Missing references fall back to the source key, never DIST');
-console.log('Current source transactions passed: grouping, running due, edited purchases, deleted/unlinked sources, reversal exclusion, supplier isolation and opening due.');
+const withExpenses = distributorAccountingTransactions({
+  ledger: [...data.ledger, line('expense','DEBIT',250,'EXPENSE'), line('expense','DEBIT',50,'INPUT_TAX'), line('expense','CREDIT',300,'BANK'), line('charge','DEBIT',300,'EXPENSE'), line('charge','CREDIT',300)],
+  sources: [...data.sources, {journal_id:'expense',source_key:'expense:ex'}, {journal_id:'charge',source_key:'credit:charge',accounts:{expense:'charges-account'}}],
+  events: [...data.events, {source_key:'expense:ex',kind:'EXPENSE'}, {source_key:'credit:charge',kind:'PURCHASE',source_kind:'CREDIT'}],
+});
+assert.deepEqual(withExpenses.map(r=>[r.id,r.debit,r.credit,r.due]), [['purchase',0,100,100],['payment',30,0,70],['charge',0,300,370]], 'Ordinary expenses and tax must not appear as supplier settlement; Charge Credit must remain');
+assert.equal(withExpenses[2].type,'CHARGE_CREDIT');
+assert.equal(withExpenses[2].lines.length,2,'Charge details retain the expense counterpart');
+assert.equal(withExpenses.reduce((sum,r)=>sum+r.credit-r.debit,0),withExpenses.at(-1)?.due,'Displayed credits minus debits tally with closing due');
+console.log('Distributor ledger regression checks passed, including expense exclusion and Charge Credit.');

@@ -1,8 +1,12 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope('form', true);
+const $fetch = companyScope.fetch;
+await companyScope.ready;
+definePageMeta({ auth: true, key: route => route.path + String(route.query.entryCompany || '') });
 import { ref, computed } from 'vue'
 import { useFetch } from '#app'
 
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 
 const showCodeInput = ref(false)
 const codeInputVal = ref('')
@@ -193,6 +197,7 @@ async function handleBulkPaymentPreview(dryRun = true) {
 
   try {
     const { data, error } = await useFetch('/api/cleanup/bulkPaymentMethod', {
+      headers: companyScope.headers(),
       method: 'POST',
       body: {
         ...bulkPaymentForm.value,
@@ -271,6 +276,7 @@ async function handleDelete(deleteType: 'permanent' | 'soft' | 'reduce') {
 
   try {
     const { data, error } = await useFetch('/api/cleanup/deleteCleanupBill', {
+      headers: companyScope.headers(),
       method: 'POST',
       body: {
         startDate: new Date(form.value.startDate),
@@ -354,7 +360,8 @@ const previewColumns = computed(() => {
 <template>
   <UDashboardPage>
     <UDashboardPanel grow>
-      <UDashboardNavbar v-if="hasAccess" title="Markit"></UDashboardNavbar>
+      <ErpPageNavbar v-if="hasAccess" title="Markit"></ErpPageNavbar>
+      <div v-if="hasAccess" class="px-4 py-3"><CompanyFormField toolbar /></div>
 
       <!-- 404 screen — shown when cleanup access is off or code is missing/wrong -->
       <div v-if="!hasAccess" class="flex flex-col items-center justify-center h-full gap-4 text-center">

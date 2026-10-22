@@ -1,16 +1,16 @@
-import {
-    useFindManyProduct,
-    useFindUniqueCompany,
-    useFindManyItem,
-    useFindManyBill,
-    useFindManyExpense,
-    useFindManyEntry, 
-    useFindManyVariant,
-  } from '@/lib/hooks'
+import { useFindManyProduct } from '@/lib/hooks/product';
+import { useFindUniqueCompany } from '@/lib/hooks/company';
+import { useFindManyItem } from '@/lib/hooks/item';
+import { useFindManyBill } from '@/lib/hooks/bill';
+import { useFindManyExpense } from '@/lib/hooks/expense';
+import { useFindManyEntry } from '@/lib/hooks/entry';
+import { useFindManyVariant } from '@/lib/hooks/variant';
   import { computed } from 'vue'
-  const useAuth = () => useNuxtApp().$auth;
+
   
 export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
+    const companyScope = useCompanyScope();
+    const useAuth = () => companyScope.auth;
     const closingDate = useAuth().session.value?.closingDate ?? null
 
     const companyQuery = useFindUniqueCompany({
@@ -24,17 +24,17 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
     const productsQuery = useFindManyProduct({
         where: {
         AND: [
-            { companyId: useAuth().session.value?.companyId },]}})
+            { companyId: useAuth().session.value?.companyId },]}, select: { id: true }})
 
     const itemsQuery = useFindManyItem({
         where: {
         AND: [
-            { companyId: useAuth().session.value?.companyId },]}})
+            { companyId: useAuth().session.value?.companyId },]}, select: { variantId: true, qty: true }})
 
     const variantsQuery = useFindManyVariant({
       where: {
       AND: [
-          { companyId: useAuth().session.value?.companyId },]}})
+          { companyId: useAuth().session.value?.companyId },]}, select: { id: true, name: true }})
 
 
 
@@ -46,15 +46,10 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
             ...(closingDate ? [{ createdAt: { gt: new Date(closingDate) } }] : []),
           ]
           },
-          include: {
-            client: true,
-            address: true,
-            entries:{
-              select: {
-                rate: true,
-                qty: true,
-              },
-            },
+          select: {
+            id: true, createdAt: true, invoiceNumber: true, grandTotal: true,
+            paymentStatus: true, clientId: true,
+            client: { select: { name: true } },
           },
 
         })
@@ -66,9 +61,7 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
             { companyId: useAuth().session.value?.companyId },
             ...(closingDate ? [{ createdAt: { gt: new Date(closingDate) } }] : []),
           ]},
-            include:{
-              expensecategory:true
-            }
+            select: { totalAmount: true }
           }
           )
 
@@ -80,15 +73,11 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
               ...(closingDate ? { createdAt: { gt: new Date(closingDate) } } : {}),
             },
           },
-          include: {
-            variant: {
-              include: {
-                product: true,
-              },
-            },
-            category: true,
-            bill: true,
-       
+          select: {
+            qty: true, rate: true, tax: true, value: true, return: true,
+            variant: { select: { product: { select: { name: true } } } },
+            category: { select: { name: true } },
+            bill: { select: { createdAt: true } },
           },
         }
     )
@@ -101,10 +90,9 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
       const bills = ref(billsQuery.data.value)
       const expenses = ref(expensesQuery.data.value)
       const entries = ref(entriesQuery.data.value)
-      const variants = ref(variantsQuery.data)
+      const variants = ref(variantsQuery.data.value)
 
       watch(() => companyQuery.data.value, (newVal) => {
-        console.log(newVal)
         company.value = newVal
       })
     
@@ -122,7 +110,6 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
     
       watch(() => expensesQuery.data.value, (newVal) => {
         expenses.value = newVal
-        console.log(newVal)
       })
     
       watch(() => entriesQuery.data.value, (newVal) => {
@@ -146,8 +133,12 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
 
     const lowStockEntries = computed(() => {
     if (!variants.value) return []
-  
-    return variants.value.filter(entry =>  (entry.qty ?? 0) < 5).sort((a, b) => (a.qty ?? 0) - (b.qty ?? 0))
+    const quantities = new Map<string, number>()
+    for (const item of items.value ?? []) {
+      quantities.set(item.variantId, (quantities.get(item.variantId) ?? 0) + (item.qty ?? 0))
+    }
+    return variants.value.map(entry => ({ ...entry, qty: quantities.get(entry.id) ?? 0 }))
+    .filter(entry => entry.qty < 5).sort((a, b) => a.qty - b.qty)
     .slice(0, 6)
   })
 
@@ -166,7 +157,7 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
     const productMap = new Map<string, { name: string; total: number }>()
   
     for (const entry of entries.value) {
-      const name = entry.variant.product?.name || 'Unknown'
+      const name = entry.variant?.product?.name || 'Unknown'
       const key = name
   
       if (!productMap.has(key)) {
@@ -191,7 +182,7 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
       if (entry.return) continue
 
       const createdAt = new Date(entry.bill?.createdAt || '')
-      if (isNaN(createdAt)) continue
+      if (Number.isNaN(createdAt.getTime())) continue
 
       // ✅ Apply date filter only if startDate/endDate are defined
       if (startDate && createdAt < startDate) continue
@@ -342,7 +333,7 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
       totalExpenses,
       revenueGraph,
       topProducts,
-      categorySales:categorySales.value,
+      categorySales,
       lowStockEntries,
       recentTransactions,
       revenueByCategory,
@@ -359,4 +350,4 @@ export function useCompanyDashboard(startDate?: Date, endDate?: Date) {
     refreshAll
     }
   }
-  
+

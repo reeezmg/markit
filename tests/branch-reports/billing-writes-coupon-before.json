@@ -1,0 +1,146 @@
+{
+  "startedAt": "2026-10-21T06:50:34.891Z",
+  "schemaChanges": false,
+  "mode": "actual handlers and database triggers; rollback-only",
+  "results": [
+    {
+      "company": "head",
+      "method": "Cash",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "head",
+      "method": "UPI",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "head",
+      "method": "Credit",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "head",
+      "method": "Split",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "method": "Cash",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "accounting-not-enabled",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "method": "UPI",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "accounting-not-enabled",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "method": "Credit",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "accounting-not-enabled",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "method": "Split",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "accounting-not-enabled",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "status": "passed",
+      "check": "cross-company-bill-write-rejected"
+    }
+  ],
+  "cleanup": "verified: all test bills and transaction effects rolled back",
+  "error": {
+    "name": "AssertionError",
+    "message": "A company coupon must combine only its own company bills\n+ actual - expected\n\n+ [\n+   {\n+     code: 'BRANCH_E2E_a3d04f05-946c-4c69-bdfd-07f410ffb002',\n+     couponId: 'a3d04f05-946c-4c69-bdfd-07f410ffb002',\n+     couponNumber: 'BRANCH_E2E_a3d04f05-946c-4c69-bdfd-07f410ffb002',\n+     discountValue: null,\n+     endDate: 2026-10-22T01:20:34.520Z,\n+     generatedFromBillId: '212f7158-d35a-4fc2-84f3-57b98ddcf1c6',\n+     id: '444ba8c0-9410-4102-aeb9-942dc5f1b9d8',\n+     maxDiscountAmount: null,\n+     minOrderValue: null,\n+     type: 'FLAT',\n+     usageLimit: 1\n+   }\n+ ]\n- []\n"
+  },
+  "finishedAt": "2026-10-21T06:51:58.284Z"
+}

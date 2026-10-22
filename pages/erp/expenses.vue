@@ -45,7 +45,7 @@ const saveExpense = async (form: any) => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
-    <div class="flex items-center justify-between gap-3"><CompanyFormField /></div>
+    <div class="flex items-center justify-between gap-3"><CompanyFormField toolbar /></div>
     <div>
       <ExpenseList
         @edit="openForm"

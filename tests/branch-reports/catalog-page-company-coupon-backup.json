@@ -1,0 +1,89 @@
+{
+  "recordPrefix": "BRANCH_E2E_MVH345FQ_",
+  "existingRecords": [],
+  "createdRecords": [
+    {
+      "id": "bee2507b-dfbe-4da6-886b-f93eebef7302",
+      "code": "BRANCH_E2E_MVH345FQ_HEAD",
+      "type": "PERCENTAGE",
+      "discountValue": 17,
+      "giftBarcode": null,
+      "maxDiscountAmount": null,
+      "minOrderValue": null,
+      "startDate": "2026-10-21T00:00:00.000Z",
+      "endDate": "2026-11-20T00:00:00.000Z",
+      "isActive": true,
+      "minBillAmount": null,
+      "isBillCombine": false,
+      "usageLimit": null,
+      "perClientLimit": null,
+      "timesUsed": 0,
+      "targetType": "ALL",
+      "audienceType": "ALL",
+      "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+      "createdAt": "2026-10-20T19:37:59.499Z",
+      "updatedAt": "2026-10-20T19:38:04.156Z",
+      "isMarkit": false
+    }
+  ],
+  "cleanup": "verified: no run-owned fixtures remain",
+  "snapshots": [
+    {
+      "at": "2026-10-20T19:38:00.836Z",
+      "records": [
+        {
+          "id": "bee2507b-dfbe-4da6-886b-f93eebef7302",
+          "code": "BRANCH_E2E_MVH345FQ_HEAD",
+          "type": "PERCENTAGE",
+          "discountValue": 12,
+          "giftBarcode": null,
+          "maxDiscountAmount": null,
+          "minOrderValue": null,
+          "startDate": "2026-10-21T00:00:00.000Z",
+          "endDate": "2026-11-20T00:00:00.000Z",
+          "isActive": true,
+          "minBillAmount": null,
+          "isBillCombine": false,
+          "usageLimit": null,
+          "perClientLimit": null,
+          "timesUsed": 0,
+          "targetType": "ALL",
+          "audienceType": "ALL",
+          "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+          "createdAt": "2026-10-20T19:37:59.499Z",
+          "updatedAt": "2026-10-20T19:37:59.499Z",
+          "isMarkit": false
+        }
+      ]
+    },
+    {
+      "at": "2026-10-20T19:38:05.384Z",
+      "records": [
+        {
+          "id": "bee2507b-dfbe-4da6-886b-f93eebef7302",
+          "code": "BRANCH_E2E_MVH345FQ_HEAD",
+          "type": "PERCENTAGE",
+          "discountValue": 17,
+          "giftBarcode": null,
+          "maxDiscountAmount": null,
+          "minOrderValue": null,
+          "startDate": "2026-10-21T00:00:00.000Z",
+          "endDate": "2026-11-20T00:00:00.000Z",
+          "isActive": true,
+          "minBillAmount": null,
+          "isBillCombine": false,
+          "usageLimit": null,
+          "perClientLimit": null,
+          "timesUsed": 0,
+          "targetType": "ALL",
+          "audienceType": "ALL",
+          "companyId": "5271d5cb-2e97-4303-85c0-3fc9e3e6bb05",
+          "createdAt": "2026-10-20T19:37:59.499Z",
+          "updatedAt": "2026-10-20T19:38:04.156Z",
+          "isMarkit": false
+        }
+      ]
+    }
+  ],
+  "remainingBeforeCleanup": []
+}

@@ -784,6 +784,8 @@ const handleSave = async () => {
           item.qty === 0
             ? []
             : Array.from({ length: item.qty ?? 1 }, () => ({
+                itemId: item.id,
+                companyId: useAuth().session.value?.companyId,
                 barcode: item.barcode ?? '',
                 code: variant.code ?? '',
                 shopname: useAuth().session.value?.companyName,
@@ -924,8 +926,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
 
 <template>
     <UDashboardPanelContent>
-      <CompanyFormField />
-      <CompanyFormField />
+      <CompanyFormField toolbar />
        
           <AddProductTopBar  ref="addProductTopBarRef" @update="handleDistributorValue" :totalAmount="subTotalAmount" :distributorId="items?.distributorId" :paymentType="items?.paymentType" :billNo="items?.billNo" :discount="items?.discount" :tax="items?.tax" :adjustment="items?.adjustment" :billDate="items?.createdAt" />   
 

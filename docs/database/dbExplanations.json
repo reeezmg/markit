@@ -1661,9 +1661,9 @@
       "purpose": "Records a company expense.",
       "fields": {
         "id": "Primary key identifying this Expense record.",
-        "distributorId": "Optional distributor party, company-scoped through DistributorCompany. Mutually exclusive with userId/clientId.",
+        "distributorId": "Optional distributor party, company-scoped through DistributorCompany. Mutually exclusive with userId/clientId. Local schema addition pending deployment.",
         "distributor": "Company membership for the selected expense distributor.",
-        "clientId": "Optional client party, company-scoped through CompanyClient. Mutually exclusive with userId/distributorId.",
+        "clientId": "Optional client party, company-scoped through CompanyClient. Mutually exclusive with userId/distributorId. Local schema addition pending deployment.",
         "client": "Company membership for the selected expense client.",
         "recurringOccurrence": "Optional schedule occurrence that generated this expense; the occurrence survives expense deletion.",
         "recoverableTaxAmount": "Explicit recoverable part of taxAmount, included in totalAmount; only this amount posts to Input GST. Defaults to zero for new raw records.",

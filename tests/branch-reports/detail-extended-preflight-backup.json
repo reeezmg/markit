@@ -1,0 +1,169 @@
+{
+  "prefix": "BRANCH_E2E_EXTENDED_1792565651353_",
+  "existingRecords": [],
+  "records": [
+    {
+      "model": "collection",
+      "id": "35e59c6c-916e-4e83-8dfd-76fc82aecc2e",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "name": "BRANCH_E2E_EXTENDED_1792565651353_DETAIL",
+        "description": "Run-owned detail-page fixture"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "product",
+      "id": "0c4df426-6e27-460c-af02-03db01117339",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "name": "BRANCH_E2E_EXTENDED_1792565651353_DETAIL",
+        "description": "Run-owned detail-page fixture"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "bankAccount",
+      "id": "078b1506-58a7-429a-8d2a-3779989aede1",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "bankName": "BRANCH_E2E_EXTENDED_1792565651353_DETAIL",
+        "accHolderName": "Run-owned archive fixture",
+        "openingBalance": 0
+      },
+      "state": "removed"
+    },
+    {
+      "model": "statementBatch",
+      "id": "ff0b0d5d-26bf-443b-9038-05a47fe0fc1e",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "userId": "de505401-800f-4560-aba2-00571ea30e7c",
+        "sourceFileName": "BRANCH_E2E_EXTENDED_1792565651353_DETAIL.csv",
+        "rows": {
+          "create": [
+            {
+              "sno": 1,
+              "date": "2026-10-01",
+              "description": "Run-owned unexecuted statement row",
+              "debit": 0,
+              "credit": 0,
+              "balance": 0
+            }
+          ]
+        }
+      },
+      "state": "removed"
+    },
+    {
+      "model": "payrollCycle",
+      "id": "0d598d5a-5096-49e5-88e4-5486f7c7c675",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "name": "BRANCH_E2E_EXTENDED_1792565651353_DETAIL",
+        "month": 10,
+        "year": 2060,
+        "status": "DRAFT",
+        "paymentDate": "2060-10-31T00:00:00.000Z",
+        "periodStart": "2060-10-01T00:00:00.000Z",
+        "periodEnd": "2060-10-31T00:00:00.000Z",
+        "lines": {
+          "create": [
+            {
+              "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+              "userId": "de505401-800f-4560-aba2-00571ea30e7c",
+              "baseSalary": 0,
+              "netPay": 0
+            }
+          ]
+        }
+      },
+      "state": "removed"
+    },
+    {
+      "model": "accountantManualJournal",
+      "id": "ec2c1ba1-8df5-42b8-bfd6-5dcee9d43545",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "entryNumber": "BRANCH_E2E_EXTENDED_1792565651353_DETAIL",
+        "notes": "Run-owned unposted draft",
+        "journalDate": "2026-10-01T00:00:00.000Z",
+        "status": "DRAFT"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "accountantInvestor",
+      "id": "6ef53c52-6ced-4df9-9e76-fef68d073df7",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "name": "BRANCH_E2E_EXTENDED_1792565651353_DETAIL",
+        "profile": {},
+        "accounts": {}
+      },
+      "state": "removed"
+    },
+    {
+      "model": "distributor",
+      "id": "a8ec0879-13de-4475-bd46-00822ee3dc56",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "name": "BRANCH_E2E_EXTENDED_1792565651353_DETAIL",
+        "companies": {
+          "create": [
+            {
+              "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+              "openingDue": 0
+            }
+          ]
+        }
+      },
+      "state": "removed"
+    },
+    {
+      "model": "purchaseReturn",
+      "id": "6d248773-b4dd-4683-a932-ae0db304992e",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "distributorId": "a8ec0879-13de-4475-bd46-00822ee3dc56",
+        "remarks": "BRANCH_E2E_EXTENDED_1792565651353_DETAIL",
+        "totalAmount": 0
+      },
+      "state": "removed"
+    },
+    {
+      "model": "bill",
+      "id": "124d0ae4-2ad1-43e3-9a05-da841ba02114",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "createdAt": "2026-10-21T06:54:19.237Z",
+        "isMarkit": true,
+        "type": "STANDARD",
+        "subtotal": 0,
+        "grandTotal": 0,
+        "paymentStatus": "PENDING",
+        "paymentMethod": "Cash"
+      },
+      "state": "removed"
+    },
+    {
+      "model": "trynbuy",
+      "id": "ece0cdb9-952a-4aef-b3e5-1b0423cab572",
+      "companyId": "cbbc74af-a72c-47a0-b92e-18af76d32221",
+      "data": {
+        "checkoutMethod": "trynbuy",
+        "deliveryType": "pickup",
+        "subtotal": 0,
+        "company": {
+          "connect": [
+            {
+              "id": "cbbc74af-a72c-47a0-b92e-18af76d32221"
+            }
+          ]
+        }
+      },
+      "state": "removed"
+    }
+  ],
+  "cleanup": "verified: all run-owned detail fixtures removed"
+}

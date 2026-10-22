@@ -8,7 +8,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   }
 
   const { data: session, refresh: updateSession } = await useFetch<AuthSession>(
-    '/api/auth/session',
+    '/api/auth/session' as string,
     { credentials: 'include' }
   )
 
@@ -24,52 +24,54 @@ export default defineNuxtPlugin(async (nuxtApp) => {
   // ✅ Route persistence key
   const LAST_ROUTE_KEY = 'lastRoute'
 
+  // Apply auth and plan redirects before SSR and on client navigation.
+  addRouteMiddleware(
+    'auth',
+    (to) => {
+      const plan = session.value?.plan
+
+      if (loggedIn.value && ['/login', '/register'].includes(to.path)) {
+        return fallbackUrl.value
+      }
+
+      if (
+        loggedIn.value &&
+        to.path.startsWith('/erp/billing') &&
+        (plan === 'free' || plan === 'lite')
+      ) {
+        return '/offline'
+      }
+      if (
+        loggedIn.value &&
+        to.path.startsWith('/offline') &&
+        plan === 'pro'
+      ) {
+        return '/erp/billing'
+      }
+
+      if (to.meta.auth && !loggedIn.value && session.value?.type !== 'USER') {
+        redirectTo.value = to.path
+        return '/login'
+      }
+    },
+    { global: true }
+  )
+
+
   if (process.client) {
     // 🔹 Save last route on each navigation
     addRouteMiddleware(
       'persist-last-route',
       (to) => {
         // Don’t persist auth-related pages
-        if (!['/login', '/register'].includes(to.path)) {
+        if (!['/login', '/register'].includes(to.path) && !to.path.startsWith('/receipt/')) {
           localStorage.setItem(LAST_ROUTE_KEY, to.fullPath)
         }
       },
       { global: true }
     )
 
-    // 🔹 Auth & plan restrictions middleware
-    addRouteMiddleware(
-      'auth',
-      (to) => {
-        const plan = session.value?.plan
-
-        if (loggedIn.value && ['/login', '/register'].includes(to.path)) {
-          return fallbackUrl.value
-        }
-
-        if (
-          loggedIn.value &&
-          to.path.startsWith('/erp/billing') &&
-          (plan === 'free' || plan === 'lite')
-        ) {
-          return '/offline'
-        }
-        if (
-          loggedIn.value &&
-          to.path.startsWith('/offline') &&
-          plan === 'pro'
-        ) {
-          return '/erp/billing'
-        }
-
-        if (to.meta.auth && !loggedIn.value && session.value?.type !== 'USER') {
-          redirectTo.value = to.path
-          return '/login'
-        }
-      },
-      { global: true }
-    )
-
+    // React to login/logout after the initial navigation.
     const route = useRoute()
     watch(loggedIn, async (isLoggedIn) => {
       const isStoreRoute = route.path.startsWith('/store/')
@@ -91,8 +93,10 @@ export default defineNuxtPlugin(async (nuxtApp) => {
       const currentRoute = useRoute()
 
       if (
+        currentRoute.path === '/' &&
         savedRoute &&
         savedRoute !== currentRoute.fullPath &&
+        !currentRoute.path.startsWith('/receipt/') &&
         !['/login', '/register'].includes(currentRoute.path)
       ) {
         await navigateTo(savedRoute)

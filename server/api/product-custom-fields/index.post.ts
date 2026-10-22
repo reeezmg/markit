@@ -1,6 +1,7 @@
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope'
 
 type IncomingField = {
   id?: string
@@ -32,12 +33,13 @@ const slugify = (value: string) =>
 // Order in the array becomes sort_order. Definitions missing from the array are
 // deleted (values already stored on products/variants are left untouched).
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId as string | undefined
   if (!companyId) throw createError({ statusCode: 401, statusMessage: 'Unauthorized' })
 
   const body = await readBody<{ fields?: IncomingField[] }>(event)
-  const incoming = Array.isArray(body?.fields) ? body!.fields! : []
+  if (!Array.isArray(body?.fields)) throw createError({ statusCode: 400, statusMessage: 'Provide the custom fields array' })
+  const incoming = body.fields
 
   // ── validate + normalize ───────────────────────────────────────────────
   const usedKeys = new Map<string, Set<string>>() // scope → keys
@@ -98,6 +100,10 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     await client.query('BEGIN')
+    const ids = normalized.map(field => field.id)
+    if (new Set(ids).size !== ids.length) throw createError({ statusCode: 400, statusMessage: 'Custom field IDs must be unique' })
+    const existing = await client.query('SELECT id,company_id FROM product_custom_fields WHERE id=ANY($1::text[]) FOR UPDATE', [ids])
+    if (existing.rows.some(row => row.company_id !== companyId)) throw createError({ statusCode: 403, statusMessage: 'Custom field belongs to another company' })
 
     await client.query(
       `DELETE FROM product_custom_fields
@@ -106,7 +112,7 @@ export default defineEventHandler(async (event) => {
     )
 
     for (const field of normalized) {
-      await client.query(
+      const saved = await client.query(
         `INSERT INTO product_custom_fields
            (id, company_id, scope, key, label, type, options, required, active, sort_order, created_at, updated_at)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10, now(), now())
@@ -119,12 +125,14 @@ export default defineEventHandler(async (event) => {
            required = EXCLUDED.required,
            active = EXCLUDED.active,
            sort_order = EXCLUDED.sort_order,
-           updated_at = now()`,
+           updated_at = now()
+         WHERE product_custom_fields.company_id = EXCLUDED.company_id`,
         [
           field.id, companyId, field.scope, field.key, field.label, field.type,
           field.options, field.required, field.active, field.sortOrder,
         ],
       )
+      if (!saved.rowCount) throw createError({ statusCode: 403, statusMessage: 'Custom field belongs to another company' })
     }
 
     await client.query('COMMIT')

@@ -11,9 +11,9 @@ definePageMeta({
 <template>
     <UDashboardPage>
         <UDashboardPanel grow>
-            <UDashboardNavbar title="Coupon">
+            <ErpPageNavbar title="Coupon">
 
-            </UDashboardNavbar>
+            </ErpPageNavbar>
 
             <NuxtPage />
         </UDashboardPanel>

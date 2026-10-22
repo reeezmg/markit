@@ -8,7 +8,7 @@ const models = new Map(Prisma.dmmf.datamodel.models.map(m => [m.name, m]));
 const delegateName = (name: string) => name[0].toLowerCase() + name.slice(1);
 const owned = (name: string) => models.get(name)?.fields.some(f => f.name === 'companyId');
 const ownershipParent = (name: string) => owned(name) ? undefined : models.get(name)?.fields.find(f =>
-  f.kind === 'object' && !f.isList && f.isRequired && owned(f.type) && f.relationFromFields?.length === 1);
+  f.kind === 'object' && !f.isList && (f.isRequired || (name === 'BillHistory' && f.name === 'bill')) && owned(f.type) && f.relationFromFields?.length === 1);
 const reads = new Set(['findMany', 'findFirst', 'findUnique', 'findFirstOrThrow', 'findUniqueOrThrow', 'count', 'aggregate', 'groupBy']);
 const writes = new Set(['create', 'createMany', 'update', 'updateMany', 'delete', 'deleteMany', 'upsert']);
 const legacyArchives = new Set(['AccountLedgerEntry', 'MoneyTransaction', 'AccountTransfer', 'Investment', 'BankAccount', 'CashAccount']);
@@ -63,6 +63,9 @@ async function validateData(modelName: string, data: any, ids: string[], parentC
     if (['Bill','Entry','Payment'].includes(field.type) && ['connect','delete','deleteMany','disconnect','set'].some(k=>relation[k])) throw sourceWriteDenied();
     if (legacyArchives.has(field.type) && ['create', 'createMany', 'update', 'updateMany', 'upsert', 'connectOrCreate', 'delete', 'deleteMany'].some(operation => relation[operation])) throw archiveWriteDenied();
     if (field.type === 'Company') {
+      if (['create', 'createMany', 'update', 'updateMany', 'upsert', 'connectOrCreate', 'delete', 'deleteMany'].some(operation => relation[operation])) {
+        throw createError({ statusCode: 409, statusMessage: 'Use company settings or Company & Branches to change a company' });
+      }
       if (relation.connect?.id && !ids.includes(relation.connect.id)) throw denied();
       continue;
     }
@@ -131,6 +134,13 @@ export function scopeOrganizationModelReads<T extends object>(client: T, activeI
           if (typeof operation !== 'string' || typeof method !== 'function' || (!reads.has(operation) && !writes.has(operation) && !((legacyArchives.has(model.name) || financialSources.has(model.name)) && archiveMutations.has(operation)))) return method;
           return async (args: any = {}) => {
             if (legacyArchives.has(model.name) && archiveMutations.has(operation)) throw archiveWriteDenied();
+            if (model.name === 'BillHistory' && writes.has(operation)) {
+              throw createError({ statusCode: 409, statusMessage: 'Bill history is read-only. Use the bill source API.' });
+            }
+            if (model.name === 'Company' && writes.has(operation) && [args.data, args.create, args.update].some(data =>
+              data && ['isHeadOffice', 'parentCompanyId', 'parentCompany', 'branches'].some(field => field in data))) {
+              throw createError({ statusCode: 409, statusMessage: 'Use Company & Branches to change the organization structure' });
+            }
             if (['Payment','Entry'].includes(model.name) && archiveMutations.has(operation)) throw sourceWriteDenied();
             if (financialSources.has(model.name) && ['createManyAndReturn','updateManyAndReturn'].includes(operation)) {
               if (model.name === 'Item') throw createError({ statusCode: 409, statusMessage: 'Use product forms to create or edit stock' });
@@ -185,7 +195,7 @@ export function scopeOrganizationModelReads<T extends object>(client: T, activeI
             return db[key][operation](scopeRelations(model.name, filtered, ids));
             };
             return writes.has(operation)
-              ? (client as any).$transaction(run, { isolationLevel: 'Serializable' })
+              ? (client as any).$transaction(run, { isolationLevel: 'Serializable', maxWait: 15000, timeout: 30000 })
               : run(client);
           };
         },

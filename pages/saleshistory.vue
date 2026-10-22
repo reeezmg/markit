@@ -11,10 +11,10 @@ definePageMeta({
 <template>
     <UDashboardPage>
         <UDashboardPanel grow>
-            <UDashboardNavbar title="Bill History">
+            <ErpPageNavbar title="Bill History">
 
-            </UDashboardNavbar>
-            <NuxtPage />
+            </ErpPageNavbar>
+            <NuxtPage :page-key="route => route.path + String(route.query.entryCompany || '')" />
         </UDashboardPanel>
     </UDashboardPage>
 </template>

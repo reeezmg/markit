@@ -1,0 +1,1358 @@
+{
+  "pages": 146,
+  "problems": [],
+  "inventory": [
+    {
+      "page": "accountant/index.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accountant/manual-journals/add.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accountant/manual-journals/[id]/edit.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accountant/[view].vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accountant.vue",
+      "mode": "route shell",
+      "scope": "'form'",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accounts/bank/index.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accounts/bank/[id].vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [
+        "/api/accounts/secondaryledger",
+        "/api/accounts/primaryledger",
+        "/api/accounts/bank-ledger"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accounts/cash.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [
+        "/api/accounts/cashledger",
+        "/api/accounts/cash-ledger"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accounts/credit.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [
+        "/api/accounts/creditledger"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accounts/investment.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accounts/tax.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [
+        "/api/accounts/taxledger"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accounts/transaction.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accounts/transfer.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "accounts.vue",
+      "mode": "route shell",
+      "scope": "'form'",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ai/models.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/v1",
+        "/api/ai/providers",
+        "/api/ai/providers/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ai/usage.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ai/usage"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ai.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "blogs/index.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "blogs/what_is_try_n_buy.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "blogs/[slug].vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "blogs.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "checkout/index.vue",
+      "mode": "redirect/stub",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "checkout/[orderId].vue",
+      "mode": "redirect/stub",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "checkout.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "cleanup.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/cleanup/bulkPaymentMethod",
+        "/api/cleanup/getCleanupBill",
+        "/api/cleanup/deleteCleanupBill"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "client/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/billSale/deleteBill",
+        "/api/clients/pipeline"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "client.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "coupon/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "coupon.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "dashboard/index.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [
+        "/api/useDashboardData"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "dashboard.vue",
+      "mode": "route shell",
+      "scope": "'form'",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "distributor/add-purchase-return.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/bill/findManyCategory",
+        "/api/purchasereturn/findItem",
+        "/api/purchasereturn/create",
+        "/api/downloads/purchase-return"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "distributor/credit.vue",
+      "mode": "redirect/stub",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "distributor/edit-purchase-return/[id].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/purchasereturn/findItem",
+        "/api/purchasereturn/",
+        "/api/bill/findManyCategory",
+        "/api/purchasereturn/update"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "distributor/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/accountant/distributors/balances",
+        "/api/distributor/credits/",
+        "/api/distributor/payments/",
+        "/api/purchasereturn/",
+        "/api/purchaseorder/create",
+        "/api/purchaseorder/due-cleared",
+        "/api/distributor/credits",
+        "/api/downloads/distributor-po",
+        "/api/downloads/distributor-credits",
+        "/api/downloads/distributor-payments",
+        "/api/downloads/purchase-return",
+        "/api/accountant/distributors/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "distributor/payments.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/downloads/distributor-payments",
+        "/api/distributor/payments/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "distributor/purchase-return.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/purchasereturn/",
+        "/api/downloads/purchase-return"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "distributor/purchaseOrder.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/downloads/purchase-orders",
+        "/api/purchaseorder/due-cleared"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "distributor.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/blogs.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/blogs",
+        "/api/upload",
+        "/api/ecommerce-cms/blogs/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/customers.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/customers",
+        "/api/ecommerce-cms/customers/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/faq.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/faq",
+        "/api/ecommerce-cms/faq/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/feedback.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/feedback",
+        "/api/ecommerce-cms/feedback/clients",
+        "/api/ecommerce-cms/feedback/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/gallery.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/gallery",
+        "/api/r2/upload-url",
+        "/api/ecommerce-cms/gallery/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/marketing.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/marketing",
+        "/api/ecommerce-cms/marketing/campaigns",
+        "/api/ecommerce-cms/marketing/campaigns/",
+        "/api/ecommerce-cms/marketing/automations"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/messages.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/messages",
+        "/api/ecommerce-cms/messages/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/payment.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/payment/test",
+        "/api/payment/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/policies.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/reviews.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/reviews",
+        "/api/ecommerce-cms/reviews/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "ecommerce-cms/shipping.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/v1",
+        "/api/webhooks/shipping/",
+        "/api/ecommerce-cms/shipping/test"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "erp/accounts.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/billSale/deleteBill",
+        "/api/billSale/updatePaymentStatus",
+        "/api/whatsapp/send-pending-template",
+        "/api/counter/increment"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "erp/billing.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/bill/findManyCategory",
+        "/api/whatsapp/send-payment-template",
+        "/api/whatsapp/send-coupon-message",
+        "/api/notifyfcm",
+        "/api/bill/findUniqueClient",
+        "/api/bill/create",
+        "/api/bill/findManyAccount"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "erp/edit/[salesId].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/bill/findManyClient",
+        "/api/bill/findManyCategory",
+        "/api/billEdit/findUniqueBill",
+        "/api/billEdit/findEntriesToDelete",
+        "/api/billEdit/deleteBill",
+        "/api/bill/findFirstItem",
+        "/api/bill/update",
+        "/api/bill/findManyAccount",
+        "/api/bill/createAccount",
+        "/api/whatsapp/send-payment-template",
+        "/api/whatsapp/send-coupon-message",
+        "/api/bill/findManyCoupon"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "erp/expenses.vue",
+      "mode": "local company scope",
+      "scope": "'form'",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "erp/online/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/report/online",
+        "/api/billSale/findManyBills",
+        "/api/billSale/updateBillNotes"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "erp/online/[salesId].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/bill/findManyClient",
+        "/api/bill/findManyCategory",
+        "/api/billEdit/findUniqueBill",
+        "/api/billEdit/findEntriesToDelete",
+        "/api/billEdit/deleteBill",
+        "/api/bill/findFirstItem",
+        "/api/bill/update",
+        "/api/bill/findManyAccount",
+        "/api/bill/createAccount",
+        "/api/whatsapp/send-payment-template",
+        "/api/whatsapp/send-coupon-message",
+        "/api/bill/findManyCoupon"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "erp/recurring-expenses.vue",
+      "mode": "local company scope",
+      "scope": "'form'",
+      "apiPaths": [
+        "/api/accounts/recurring-expenses",
+        "/api/accounts/recurring-expenses/",
+        "/api/accounts/recurring-expenses/process"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "erp/sales.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/billSale/findManyBills",
+        "/api/billSale/deleteBill",
+        "/api/billSale/updateBillNotes",
+        "/api/billSale/updatePaymentMethod",
+        "/api/billSale/updatePaymentStatus",
+        "/api/billSale/receipt",
+        "/api/whatsapp/send-payment-template"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "erp.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "forgot-password.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [
+        "/api/auth/existinguser",
+        "/api/send-otp",
+        "/api/auth/resetPassword"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "index.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments/allocate.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments/capital.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments/index.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments/investors/index.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments/investors/[investorId].vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments/overview.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments/ownership.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments/payouts.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments/settings.vue",
+      "mode": "parent company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "investments.vue",
+      "mode": "route shell",
+      "scope": "'form'",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "landing.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "launching.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "login.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "marketing/index.vue",
+      "mode": "redirect/stub",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "marketing.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "marketplace.vue",
+      "mode": "component/session scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "nonetwork.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "notifications.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "offline/index.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/bill/by-barcode",
+        "/api/bill/offline"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "offline.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/bookings.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/create.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/orders/client-search",
+        "/api/ecommerce-cms/orders/product-search",
+        "/api/ecommerce-cms/orders/coupons",
+        "/api/ecommerce-cms/orders/create"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/ecomorders.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/shipping/track-bulk",
+        "/api/ecommerce-cms/shipping/track",
+        "/api/ecommerce-cms/orders/cancel",
+        "/api/ecommerce-cms/orders/status",
+        "/api/ecommerce-cms/pickup/exclude",
+        "/api/ecommerce-cms/shipping/bulk-preview",
+        "/api/ecommerce-cms/shipping/bulk-create"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/exchange.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/returns",
+        "/api/ecommerce-cms/shipping/track-bulk",
+        "/api/ecommerce-cms/returns/status",
+        "/api/ecommerce-cms/shipping/exchange",
+        "/api/ecommerce-cms/shipping/ndr"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/index.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/ndr.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/shipping/ndr-list",
+        "/api/ecommerce-cms/shipping/ndr",
+        "/api/ecommerce-cms/shipping/ndr-status"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/pack.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/pack/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/pickup.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/shipping/pickup-locations/",
+        "/api/ecommerce-cms/pickup/remaining",
+        "/api/ecommerce-cms/pickup/pending",
+        "/api/ecommerce-cms/pickup/raise",
+        "/api/ecommerce-cms/pickup/requests",
+        "/api/ecommerce-cms/pickup/status",
+        "/api/ecommerce-cms/shipping/providers"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/ready.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/requests.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/returns.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/returns",
+        "/api/ecommerce-cms/shipping/track-bulk",
+        "/api/ecommerce-cms/returns/status",
+        "/api/ecommerce-cms/shipping/reverse",
+        "/api/ecommerce-cms/shipping/ndr"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order/trynbuy.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "order.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/add.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/products/delete",
+        "/api/products/create",
+        "/api/products/update",
+        "/api/purchaseorder/",
+        "/api/products/category-tax",
+        "/api/products/save-batch",
+        "/api/purchaseorder/recalculate",
+        "/api/purchaseorder/update"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/brands/add.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/brands/edit/[id].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/brands/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/categories/add.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/categories/edit/[id].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/categories/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/category/stock-by-category"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/collections/add.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/collections/edit/[id].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/collections/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/dimensions/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/dimensions",
+        "/api/dimensions/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/edit/[id].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/products/category-tax",
+        "/api/products/",
+        "/api/products/update"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/discount/apply",
+        "/api/products/delete"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/purchase.vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/products/create",
+        "/api/products/update",
+        "/api/purchaseorder/update",
+        "/api/purchaseorder/create"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products/stocks/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/stock-aggregate",
+        "/api/options/categories",
+        "/api/options/brands",
+        "/api/options/ratings",
+        "/api/options/distributors"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "products.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "receipt/[id].vue",
+      "mode": "record owner/public share",
+      "scope": null,
+      "apiPaths": [
+        "/api/billSale/share-receipt",
+        "/api/receipt-share",
+        "/api/billSale/receipt"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "register.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [
+        "/api/send-otp",
+        "/api/verify-otp"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "reports/accounts.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/report/account"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "reports/daily.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [
+        "/api/report/report",
+        "/api/report/generate-sales",
+        "/api/report/expenses"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "reports/gst.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [
+        "/api/report/gstr1",
+        "/api/report/generate-gstr1",
+        "/api/report/gstr3b",
+        "/api/report/generate-gstr3b",
+        "/api/report/gstr2b",
+        "/api/report/generate-gstr2b"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "reports/online.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/report/online"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "reports/profit.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/report/generate-profit",
+        "/api/report/profit"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "reports/summary.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [
+        "/api/report/summary",
+        "/api/report/generate-summary"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "reports/users.vue",
+      "mode": "local company scope",
+      "scope": "",
+      "apiPaths": [
+        "/api/user/report"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "reports.vue",
+      "mode": "route shell",
+      "scope": "'form'",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "saleshistory/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/billSale/restoreBill"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "saleshistory/[billId].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "saleshistory.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "settings/account.vue",
+      "mode": "local company scope",
+      "scope": null,
+      "apiPaths": [
+        "/api/accountant"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "settings/branches.vue",
+      "mode": "head-office organization management",
+      "scope": null,
+      "apiPaths": [
+        "/api/branches",
+        "/api/branches/head-office"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "settings/index.vue",
+      "mode": "local company scope",
+      "scope": null,
+      "apiPaths": [
+        "/api/send-otp",
+        "/api/verify-otp"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "settings/numbering.vue",
+      "mode": "local company scope",
+      "scope": null,
+      "apiPaths": [
+        "/api/bill/startNewYear"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "settings/printer.vue",
+      "mode": "local company scope",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/shipping/label-size"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "settings/products.vue",
+      "mode": "local company scope",
+      "scope": null,
+      "apiPaths": [
+        "/api/product-inputs",
+        "/api/product-custom-fields"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "settings/requests.vue",
+      "mode": "local company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "settings/store.vue",
+      "mode": "local company scope",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "settings.vue",
+      "mode": "route shell",
+      "scope": "'form'",
+      "apiPaths": [
+        "/api/branches"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "statement/[id].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/statement/banks",
+        "/api/statement/find-operation",
+        "/api/statement/execute-row",
+        "/api/statement/execute",
+        "/api/statement/row/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "storefront/editor.vue",
+      "mode": "sidebar company",
+      "scope": null,
+      "apiPaths": [
+        "/api/ecommerce-cms/storefront-pages/",
+        "/api/ecommerce-cms/storefront-pages/seed-defaults",
+        "/api/ecommerce-cms/storefront-source",
+        "/api/ecommerce-cms/storefront-design",
+        "/api/ecommerce-cms/storefront-source/publish"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "storelanding.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "terms.vue",
+      "mode": "public/auth",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users/attendance.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/attendance/punch",
+        "/api/attendance/manual",
+        "/api/attendance/calendar",
+        "/api/attendance/request",
+        "/api/attendance/decision",
+        "/api/attendance/import"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users/credit-bills.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/users/credit-ledger",
+        "/api/users/credit-bills",
+        "/api/users/credit-ledger/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users/holidays.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/users/holidays",
+        "/api/users/holidays/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users/index.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/salary/dues",
+        "/api/salary/config",
+        "/api/downloads/user-sales",
+        "/api/downloads/user-expenses",
+        "/api/counter/increment"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users/leaves.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/users/leaves",
+        "/api/users/leave-balances",
+        "/api/users/leaves/"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users/ledger.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/users/ledger"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users/salary/cycle/[id].vue",
+      "mode": "local company scope",
+      "scope": "'form', true",
+      "apiPaths": [
+        "/api/salary/payroll/cycle/",
+        "/api/salary/pay-with-credit",
+        "/api/salary/clear-cycle"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users/salary.vue",
+      "mode": "route shell",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/salary/dues",
+        "/api/salary/pay",
+        "/api/salary/payment/",
+        "/api/salary/adjustment",
+        "/api/salary/payroll/run",
+        "/api/salary/payroll/cycle/",
+        "/api/salary/final-settlement",
+        "/api/salary/clear-cycle"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users/shift.vue",
+      "mode": "local company scope",
+      "scope": "'table'",
+      "apiPaths": [
+        "/api/users/shifts/",
+        "/api/users/shifts"
+      ],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    },
+    {
+      "page": "users.vue",
+      "mode": "route shell",
+      "scope": null,
+      "apiPaths": [],
+      "verification": "Vue template + script syntax; not an authenticated browser walkthrough"
+    }
+  ]
+}

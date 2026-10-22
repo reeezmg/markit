@@ -1,4 +1,6 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
 import { ref, computed, watch } from 'vue'
 import { format, sub, isSameDay, type Duration, startOfDay, endOfDay } from 'date-fns'
 
@@ -33,6 +35,7 @@ function selectRange(duration: Duration) {
 }
 
 const { data, pending, error, refresh } = await useFetch('/api/accounts/taxledger', {
+    headers: companyScope.headers(), key: 'archive:pages/accounts/tax.vue:' + companyScope.companyId.value,
   query: computed(() => ({
     from: startOfDay(selectedDate.value.start).toISOString(),
     to: endOfDay(selectedDate.value.end).toISOString(),
@@ -178,7 +181,7 @@ const rateColumns = [
         </template>
 
         <template #description-data="{ row }">
-          <NuxtLink :to="`/erp/sales/${row.ref}`" class="text-primary hover:underline">
+          <NuxtLink :to="{ path: `/erp/edit/${row.ref}`, query: { entryCompany: companyScope.companyId.value } }" class="text-primary hover:underline">
             {{ row.description }}
           </NuxtLink>
         </template>

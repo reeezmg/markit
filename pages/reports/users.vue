@@ -1,5 +1,7 @@
 <script setup lang="ts">
-const useAuth = () => useNuxtApp().$auth;
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+const useAuth = () => companyScope.auth;
 const companyName = computed(() => useAuth().session.value?.companyName);
 const entries = ref<any>(null)
 const loading = ref(false)

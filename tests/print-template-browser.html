@@ -1,0 +1,483 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Print template rendering checks</title>
+<style>
+* { box-sizing: border-box; } body { margin: 0; font: 14px/1.5 Arial, sans-serif; color: #0f172a; }
+button, input, select, textarea { font: inherit; color: inherit; } button { cursor: pointer; background: transparent; border: 0; } h3, p { margin: 0; }
+.test-button { padding: 7px 11px; border-radius: 6px; background: #fff7ed; color: #ea580c; font-size: 13px; }
+.workspace-actions .test-button { color: white; background: #f97316; } .text-xs { font-size: 12px; } .text-gray-500 { color: #64748b; } .mb-3 { margin-bottom: 12px; }
+</style></head><body>
+<pre id="result">RUNNING</pre>
+<script type="module">
+import { STANDARD_LABEL_ID, activeTemplate, defaultTemplate, monochromeBytes, noTaxReceiptTemplate } from '../utils/print-templates.ts';
+import { noTaxReceiptHtml } from '../utils/no-tax-receipt.ts';
+import { classicReceiptTemplate, taxlessReceiptTemplate } from '../utils/print-templates.ts';
+import { receiptPhotoFixture } from './receipt-photo-fixture.ts';
+import { cachePrintSettings } from '../utils/load-print-template.client.ts';
+import { labelSampleData } from '../utils/label-variables.ts';
+import { receiptPaperSizes, labelPaperSizes, resizePrintPaper } from '../utils/print-paper.ts';
+import { renderPrintTemplate, templatePrintBytes, downloadTemplatePDF, createTemplatePDF, renderedTemplatePDF } from '../utils/print-template-renderer.client.ts';
+import { shareReceiptPDF } from '../utils/share-receipt.client.ts';
+import jsPDF from 'jspdf';
+import { createApp, defineComponent, h, nextTick } from 'vue';
+import Designer from '../components/PrinterTemplateDesigner.vue';
+import LabelPreview from '../components/PrintTemplateLabels.vue';
+import ReceiptPreview from '../components/PrintTemplateReceipt.vue';
+const check = (value, message) => { if (!value) throw Error(message); };
+const data = { companyName: 'Markit Sample Store', shopname: 'Markit', companyAddress: { street: 'Main Road', city: 'Kochi' }, gstin: 'SAMPLE', invoiceNumber: 'TEST-001', date: '2026-10-07T12:00:00Z', clientName: 'Sample Customer', productName: 'Cotton shirt', size: 'M', name: 'Sample', code: 'TEST-Printer', dprice: 1299, sprice: 1440, barcode: '313063057461', grandTotal: 99, paymentMethod: 'Cash', thankYouNote: 'Thank you for shopping!', entries: [{ description: 'Cotton shirt', qty: 1, mrp: 99, tvalue: 99, unit: 'Nos', tax: 5, hsn: '6109' }] };
+const logs = [];
+window.useToast = () => ({ add: () => {} });
+async function run() {
+try {
+  const classic = classicReceiptTemplate();
+  const classicRender = await renderPrintTemplate(classic, receiptPhotoFixture);
+  const positioned = structuredClone(classic); positioned.elements[0].gapBefore = 12; positioned.elements[0].x = 3; positioned.elements[0].width = 60;
+  const positionedRender = await renderPrintTemplate(positioned, receiptPhotoFixture);
+  check(Math.abs(positionedRender.bounds[0].x - 3) < 0.01 && Math.abs(positionedRender.bounds[0].y - classicRender.bounds[0].y - 12) < 0.01, 'Renderer ignored box position');
+  check(positionedRender.height >= classicRender.height + 11.9, 'Vertical box position did not extend receipt paper');
+  logs.push('PASS receipt box positions affect rendered geometry and paper length');
+  const taxSection = classic.elements.find(e => e.type === 'taxsummary');
+  const qrSection = classic.elements.find(e => e.type === 'qrcode');
+  check(classicRender.bounds.some(b => b.id === taxSection.id) && classicRender.bounds.some(b => b.id === qrSection.id), 'Photo receipt omits tax summary or QR');
+  check(classicRender.width === 72 && classicRender.height > 190 && classicRender.height < 240, 'Photo receipt proportions changed');
+  const noUpi = await renderPrintTemplate(classic, { ...receiptPhotoFixture, upiId: '' });
+  check(!noUpi.bounds.some(b => b.id === qrSection.id), 'Receipt prints an empty or fabricated QR');
+  const noTaxSummary = await renderPrintTemplate(classic, { ...receiptPhotoFixture, entries: receiptPhotoFixture.entries.map(e => ({ ...e, tax: 0 })) });
+  check(!noTaxSummary.bounds.some(b => b.id === taxSection.id), 'Zero-tax receipt shows a tax summary');
+  const longClassic = await renderPrintTemplate(classic, { ...receiptPhotoFixture, entries: Array.from({ length: 12 }, () => ({ ...receiptPhotoFixture.entries[0], description: 'Long product description that wraps on the first line before its price and quantity line' })) });
+  const longTableBounds = longClassic.bounds.find(b => b.id === classic.elements.find(e => e.type === 'items').id);
+  const grandBounds = longClassic.bounds.find(b => b.id === classic.elements.find(e => e.field === 'grandTotal').id);
+  check(grandBounds.y > longTableBounds.y + longTableBounds.height && longClassic.height > classicRender.height, 'Two-line item wrapping overlaps totals');
+  logs.push('PASS photo receipt sections, proportions, conditional QR/tax and growing two-line items');
+  if (new URLSearchParams(location.search).get('preview') === 'classic') {
+    document.body.style.background = '#f1f5f9';
+    document.body.insertAdjacentHTML('beforeend', `<img id="receipt-artifact" style="display:block;width:340px;margin:24px auto" src="${classicRender.canvas.toDataURL()}" />`);
+    jsPDF.API.save = function() {
+      const artifact = document.createElement('textarea'); artifact.id = 'receipt-pdf-artifact'; artifact.hidden = true;
+      artifact.textContent = this.output('datauristring').split('base64,')[1]; document.body.append(artifact); return this;
+    };
+    await downloadTemplatePDF(classic, receiptPhotoFixture, 'classic-tax-receipt.pdf');
+    document.querySelector('#result').textContent = 'PREVIEW READY'; return;
+  }
+  const noTaxData = { ...data, companyName: 'ORIGINALS CLOTHING', companyAddress: { name: 'DOOR NO 15-1-23/1 MUROOR CENTRE', locality: 'Bendoorwell', city: 'Mangaluru', state: 'Karnataka', pincode: '575002' }, gstin: '29AAHFO3959P1ZA', invoiceNumber: '692', clientName: 'bilal', clientPhone: '+918050700769', phone: '7026666644', grandTotal: 500, subtotal: 500, ttvalue: 500, tvalue: 500, tdiscount: 0, tqty: 1, discount: 0, thankYouNote: 'Thank You', returnPolicy: 'Return accepted before 7 days of purchase', refundPolicy: 'No Refund', entries: [{ description: 'SUPER DRY Light Blue Shirt', qty: 1, mrp: 500, discount: 0, tvalue: 500, tax: 5, hsn: '6109' }] };
+  const noTax = noTaxReceiptTemplate();
+  const noTaxRender = await renderPrintTemplate(noTax, noTaxData);
+  const taxlessRender = await renderPrintTemplate(taxlessReceiptTemplate(), noTaxData);
+  check(noTaxRender.canvas.toDataURL() === taxlessRender.canvas.toDataURL(), 'Built-in no-tax receipt does not use Tax Receipt styling');
+  check(noTaxRender.width === 72 && noTaxRender.height > 70, 'No-tax receipt dimensions are wrong');
+  check(templatePrintBytes(noTaxRender, noTax).length > 1000, 'No-tax printer raster is empty');
+  const noTaxHtml = noTaxReceiptHtml(noTaxData);
+  check(!noTaxHtml.includes('HSN') && !noTaxHtml.includes('Tax:') && noTaxHtml.includes('500.00'), 'No-tax HTML differs from expected receipt content');
+  logs.push('PASS built-in no-tax receipt renders HTML and printer raster');
+  if (new URLSearchParams(location.search).get('preview') === 'no-tax') {
+    document.body.style.background = '#f1f5f9';
+    document.body.insertAdjacentHTML('beforeend', `<img style="display:block;width:420px;max-width:100%;margin:24px auto" src="${noTaxRender.canvas.toDataURL()}" />`);
+    document.querySelector('#result').textContent = 'PREVIEW READY';
+    return;
+  }
+  const receipt = defaultTemplate('receipt'), label = defaultTemplate('label');
+  const a = await renderPrintTemplate(receipt, data), b = await renderPrintTemplate(label, data);
+  const long = await renderPrintTemplate(receipt, { ...data, entries: Array.from({length: 30}, () => ({...data.entries[0], description: 'A long product description that must wrap over several lines without overlapping totals'})) });
+  check(long.height > a.height * 2, 'Receipt does not expand for long item lists');
+  const itemsBounds = long.bounds.find(x => x.id === receipt.elements.find(e => e.type === 'items').id);
+  const totalsBounds = long.bounds.find(x => x.id === receipt.elements.find(e => e.field === 'grandTotal').id);
+  check(totalsBounds.y >= itemsBounds.y + itemsBounds.height, 'Totals overlap expanded item list');
+  logs.push('PASS receipt grows and totals follow item list');
+  const wrappedTable = structuredClone(receipt);
+  const tableElement = wrappedTable.elements.find(e => e.type === 'items');
+  tableElement.columns[0].header = 'Product\nBrand\nCollection\nDetails';
+  tableElement.columns[0].field = 'product.brand.name';
+  const wrappedData = { ...data, entries: [{ ...data.entries[0], labelVariablesLoaded: true, product: { brand: { name: 'A very long brand name that wraps within the first column' } } }] };
+  const wrappedResult = await renderPrintTemplate(wrappedTable, wrappedData);
+  const wrappedBounds = wrappedResult.bounds.find(b => b.id === tableElement.id);
+  const originalBounds = a.bounds.find(b => b.id === tableElement.id);
+  check(wrappedBounds.height > originalBounds.height, 'Multiline table headings and values did not expand rows');
+  const wrappedTotal = wrappedResult.bounds.find(b => b.id === wrappedTable.elements.find(e => e.field === 'grandTotal').id);
+  check(wrappedTotal.y >= wrappedBounds.y + wrappedBounds.height, 'Wrapped table overlaps receipt totals');
+  logs.push('PASS customizable table wraps headings and related values without overlapping totals');
+  const coupon = await renderPrintTemplate(receipt, { ...data, generatedCoupons: [{ code: 'COUPON123', type: 'FLAT', discountValue: 100 }] });
+  check(coupon.height > a.height, 'Earned voucher omitted');
+  logs.push('PASS earned vouchers remain printable');
+  for (const preset of labelPaperSizes) {
+    const resized = resizePrintPaper(label, preset.width, preset.height);
+    await renderPrintTemplate(resized, data);
+  }
+  logs.push('PASS all standard label dimensions render without clipping');
+  for (const preset of receiptPaperSizes) {
+    await renderPrintTemplate(resizePrintPaper(classicReceiptTemplate(), preset.width), data);
+    await renderPrintTemplate(resizePrintPaper(taxlessReceiptTemplate(), preset.width), data);
+  }
+  logs.push('PASS all standard receipt widths render for tax and no-tax templates');
+
+  const labelBytes = templatePrintBytes(b, label);
+  const prefix = new TextEncoder().encode(`SIZE 50 mm,38 mm\r\nGAP 2 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\nBITMAP 0,0,${Math.ceil(b.canvas.width / 8)},${b.canvas.height},0,`);
+  const expected = monochromeBytes(b.canvas.getContext('2d').getImageData(0,0,b.canvas.width,b.canvas.height).data,b.canvas.width,b.canvas.height,true);
+  check(prefix.every((v,i) => labelBytes[i] === v), 'TSPL dimensions differ from preview');
+  check(expected.every((v,i) => labelBytes[prefix.length + i] === v), 'Label print pixels differ from preview');
+  logs.push('PASS label raster exactly matches preview pixels');
+  const nestedBarcode = await renderPrintTemplate(label, {...data,barcode:'',item:{barcode:data.barcode}});
+  check(nestedBarcode.canvas.toDataURL()===b.canvas.toDataURL(),'Nested product barcode disappeared from label');
+  let missingBarcodeRejected=false;
+  try { await renderPrintTemplate(label,{...data,barcode:''}); } catch(error) { missingBarcodeRejected=error.message.includes('no barcode'); }
+  check(missingBarcodeRejected,'Missing barcode silently printed an incomplete label');
+  const barcodeElement=label.elements.find(e=>e.type==='barcode');
+  const scale=Number(label.dpi)/25.4;
+  const barcodePixels=b.canvas.getContext('2d').getImageData(Math.round(barcodeElement.x*scale),Math.round(barcodeElement.y*scale),Math.round(barcodeElement.width*scale),Math.round(barcodeElement.height*scale)).data;
+  check(barcodePixels.some((value,index)=>index%4===0&&value===0),'Barcode region contains no black pixels');
+  logs.push('PASS product barcode is present in raster; nested values resolve and missing values reject printing');
+
+  const priceBox = label.elements.find(e=>e.field==='sprice'), discountBox=label.elements.find(e=>e.field==='dprice');
+  const noDiscountRender = await renderPrintTemplate(label,{...data,dprice:null});
+  check(!noDiscountRender.bounds.some(b=>b.id===discountBox.id),'Discount text should be omitted without a discount');
+  const noStrikeLabel=structuredClone(label); noStrikeLabel.elements.find(e=>e.field==='sprice').strikeThrough='never';
+  const noStrikeRender=await renderPrintTemplate(noStrikeLabel,data);
+  check(noStrikeRender.canvas.toDataURL()!==b.canvas.toDataURL(),'MRP strike-through has no raster effect');
+  const noDiscountNoStrike=await renderPrintTemplate(noStrikeLabel,{...data,dprice:null});
+  check(noDiscountNoStrike.canvas.toDataURL()===noDiscountRender.canvas.toDataURL(),'MRP is struck without a discount');
+  logs.push('PASS original label layout, conditional discount visibility and configurable strike-through');
+
+  const relatedLabel=structuredClone(label);
+  const relatedKeys=['company.name','','product.name','labelVariantSize','variant.sprice','variant.dprice','variant.code','item.barcode'];
+  relatedLabel.elements.forEach((element,index)=>element.field=relatedKeys[index]);
+  const relatedSource=labelSampleData(data);
+  const relatedRender=await renderPrintTemplate(relatedLabel,relatedSource);
+  check(relatedRender.canvas.toDataURL()===b.canvas.toDataURL(),'Related variables change printed label values');
+  check(templatePrintBytes(relatedRender,relatedLabel).every((value,index)=>value===labelBytes[index]),'Related label print bytes differ from preview');
+  logs.push('PASS related company/product/variant/item variables produce matching preview and printer pixels');
+  const bytes = templatePrintBytes(a, receipt), stride = Math.ceil(a.canvas.width / 8);
+  let offset = 2;
+  for (let y=0; y<a.canvas.height; y+=128) {
+    const h = Math.min(128,a.canvas.height-y);
+    check(bytes[offset] === 29 && bytes[offset+1] === 118 && bytes[offset+4] + bytes[offset+5]*256 === stride, 'Invalid receipt raster band');
+    offset += 8;
+    const pixels = a.canvas.getContext('2d').getImageData(0,y,a.canvas.width,h).data;
+    const packed = monochromeBytes(pixels,a.canvas.width,h);
+    check(packed.every((v,i)=>bytes[offset+i] === v), 'Receipt print pixels differ from preview'); offset += packed.length;
+  }
+  check(Array.from(bytes.slice(offset)).join(',') === '27,50,27,100,7,29,86,0', 'Receipt must feed seven default lines before cutting');
+  logs.push('PASS receipt raster exactly matches preview pixels across all bands and feeds before cut');
+  for (const [kind, design, source] of [['label',label,b],['receipt',receipt,a],['no-tax',noTax,noTaxRender],['classic',classic,classicRender]]) {
+    jsPDF.API.save = function() { check(Math.abs(this.internal.pageSize.getWidth() - source.width)<0.1, 'PDF width differs'); check(Math.abs(this.internal.pageSize.getHeight()-source.height)<0.1, 'PDF height differs'); return this; };
+    await downloadTemplatePDF(design,kind === 'classic' ? receiptPhotoFixture : kind === 'no-tax' ? noTaxData : data,`${kind}.pdf`);
+  }
+  logs.push('PASS receipt and label PDFs use the rendered physical dimensions');
+  const originalAddImage = jsPDF.API.addImage;
+  let embeddedImage;
+  jsPDF.API.addImage = function(image, ...args) { embeddedImage = image; return originalAddImage.call(this, image, ...args); };
+  try {
+    for (const [design, source, values] of [[noTax, noTaxRender, noTaxData], [classic, classicRender, receiptPhotoFixture]]) {
+      const pdf = await createTemplatePDF(design, values);
+      check(embeddedImage === source.canvas.toDataURL('image/png'), 'PDF does not embed the exact preview pixels');
+      check(pdf.output().startsWith('%PDF-'), 'PDF creation did not return a reusable document');
+    }
+    const pdf = await renderedTemplatePDF(a);
+    check(embeddedImage === a.canvas.toDataURL('image/png') && pdf.output('blob').type === 'application/pdf', 'Existing rendered image cannot be reused for PDF');
+  } finally { jsPDF.API.addImage = originalAddImage; }
+  const previousFetch = window.$fetch;
+  let uploadedPdf;
+  window.$fetch = async (url, options) => {
+    check(url === '/api/billSale/share-receipt' && options.method === 'POST', 'PDF share uses an unexpected endpoint');
+    uploadedPdf = options.body;
+    return { path: '/receipt/test?share=token&pdf=1', receiptId: 'test?share=token&pdf=1', expiresInDays: 30 };
+  };
+  const shared = await shareReceiptPDF({ ...noTaxData, companyId: 'sample-company', printTemplate: noTax }, 'test');
+  check(uploadedPdf.billId === 'test' && uploadedPdf.companyId === 'sample-company' && uploadedPdf.pdf.startsWith('data:application/pdf'), 'PDF share loses bill/company or uploads an image');
+  check(atob(uploadedPdf.pdf.split('base64,')[1]).startsWith('%PDF-') && shared.path.includes('pdf=1'), 'Shared file is not a PDF');
+  window.$fetch = async () => { throw Error('Upload unavailable'); };
+  let failedUpload = false;
+  try { await shareReceiptPDF({ ...noTaxData, companyId: 'sample-company', printTemplate: noTax }, 'test'); } catch { failedUpload = true; }
+  check(failedUpload, 'Failed PDF upload was reported as success');
+  window.$fetch = previousFetch;
+  logs.push('PASS PDFs embed exact receipt pixels; sharing uploads PDF data and propagates failures');
+  const overflow = structuredClone(label); overflow.elements[0].text = 'A very long heading '.repeat(30); overflow.elements[0].type='text';
+  let rejected=false; try { await renderPrintTemplate(overflow,data); } catch { rejected=true; }
+  check(rejected,'Overflowing label silently clipped');
+  logs.push('PASS overflowing labels are rejected');
+  const blackLogo = document.createElement('canvas'); blackLogo.width=20; blackLogo.height=20; blackLogo.getContext('2d').fillRect(0,0,20,20);
+  const logo = structuredClone(label); logo.elements[0].type='logo'; logo.elements[0].image=blackLogo.toDataURL(); await renderPrintTemplate(logo,data);
+  logs.push('PASS uploaded logo renders');
+  const qr = structuredClone(label); qr.elements[0].type='qrcode'; qr.elements[0].field='barcode'; qr.elements[0].width=20; qr.elements[0].height=20;
+  await renderPrintTemplate(qr,data); logs.push('PASS QR code renders');
+  let stored = { version:1, templates:[], receiptId:null, labelId:null }, saves=0;
+  const designerPreview = new URLSearchParams(location.search).get('preview') === 'designer';
+  if (designerPreview) {
+    stored.templates = [{ ...defaultTemplate('label'), name: 'Product label' }, { ...taxlessReceiptTemplate(), name: 'Store receipt' }];
+    stored.receiptId = stored.templates[1].id; stored.labelId = stored.templates[0].id;
+  }
+  window.useNuxtApp = () => ({ $auth:{session:{value:{role:'admin',companyId:'sample-company'}}} });
+  window.useCompanyScope = () => ({ fetch: (...args) => window.$fetch(...args), auth: window.useNuxtApp().$auth });
+  window.$fetch = async (url, options) => { if(url==='/api/settings/label-variables')return [{key:'product.customFields.fabric',label:'Fabric',group:'Product custom fields',sample:'Cotton'}]; check(url==='/api/settings/print-templates','Unexpected app request'); if(options?.method==='PUT'){stored=structuredClone(options.body);saves++;} return structuredClone(stored); };
+  const host=document.createElement('div');document.body.append(host);
+  const app=createApp(Designer,{receiptData:data,labelData:data,hideOriginalReceipt:designerPreview});
+  app.component('UButton',defineComponent({props:['label','disabled','loading'],setup(props,{attrs}) {return ()=>h('button',{...attrs,class:'test-button',disabled:props.disabled||props.loading},props.label);} }));
+  app.mount(host);
+  const wait = async predicate => {for(let i=0;i<100;i++){await new Promise(resolve=>setTimeout(resolve,30));await nextTick();if(predicate())return;}throw Error('Designer interaction timed out');};
+  const button = name => Array.from(host.querySelectorAll('button')).find(e=>e.textContent===name);
+  await wait(()=>button('New label'));
+  if (new URLSearchParams(location.search).get('preview') === 'editor') {
+    button('New receipt').click();await nextTick();host.querySelector('.receipt-base-card').click();await nextTick();
+    await wait(()=>host.querySelector('dialog[open] .preview-image'));
+    host.querySelector('dialog[open] .preview-hit-area').click();await nextTick();
+    document.querySelector('#result').textContent='PREVIEW READY';document.querySelector('#result').style.display='none';return;
+  }
+  if (designerPreview) {
+    document.body.style.background = '#f8fafc';
+    host.style.cssText = 'max-width:1100px;margin:24px auto;padding:24px;background:white;border:1px solid #e2e8f0;border-radius:14px';
+    button('New receipt').click(); await nextTick();
+    document.querySelector('#result').textContent = 'PREVIEW READY'; document.querySelector('#result').style.display = 'none';
+    return;
+  }
+  button('New label').focus();button('New label').click();await nextTick();
+  await wait(()=>host.querySelector('dialog[open] img'));
+  const dialog=host.querySelector('dialog');
+  await wait(()=>dialog.querySelector('.canvas-workbench').scrollHeight<=dialog.querySelector('.canvas-workbench').clientHeight+1);
+  check(dialog.open&&dialog.getBoundingClientRect().width>=window.innerWidth-1&&dialog.getBoundingClientRect().height>=window.innerHeight-1,'Label editor is not fullscreen');
+  check(dialog.contains(document.activeElement)&&document.body.style.overflow==='hidden','Modal does not contain focus or lock page scrolling');
+  const sidebar=dialog.querySelector('.editor-sidebar').getBoundingClientRect(), previewPanel=dialog.querySelector('.editor-preview').getBoundingClientRect();
+  if(window.innerWidth>760) {
+    check(previewPanel.width>sidebar.width&&previewPanel.left<sidebar.left,'Canvas should be larger with properties on the right');
+    check(previewPanel.bottom<=dialog.querySelector('.workspace-content').getBoundingClientRect().bottom,'Preview extends behind the footer');
+    const content=dialog.querySelector('.workspace-content');
+    check(content.scrollHeight<=content.clientHeight+1,'Desktop workspace needs page scrolling');
+  } else {
+    check(previewPanel.top<sidebar.top,'Mobile preview is not above the controls');
+    check(dialog.scrollWidth<=window.innerWidth+1,'Mobile workspace overflows horizontally');
+  }
+  check(dialog.querySelector('.setup-controls').getBoundingClientRect().height>0&&dialog.querySelector('.content-controls').getBoundingClientRect().height===0,'Setup controls are not shown by default');
+  check(dialog.querySelector('.editor-tabs button').dataset.editorTab==='setup','Setup tab is not first');
+  if(new URLSearchParams(location.search).has('preview')) {
+    document.getElementById('result').textContent='PREVIEW READY';
+    return;
+  }
+  dialog.querySelector('[data-editor-tab="setup"]').click();await nextTick();
+  check(dialog.querySelector('.setup-controls').getBoundingClientRect().height>0,'Setup tab does not open');
+  const modalName=Array.from(dialog.querySelectorAll('label')).find(e=>e.firstChild.textContent==='Design name').querySelector('input');
+  modalName.value='Warehouse label';modalName.dispatchEvent(new Event('input',{bubbles:true}));await nextTick();
+  const previewPaper=dialog.querySelector('.canvas-workbench > div');const beforeZoom=previewPaper.getBoundingClientRect().width;
+  dialog.querySelector('[aria-label="Zoom in"]').click();await nextTick();
+  check(previewPaper.getBoundingClientRect().width>beforeZoom,'Canvas zoom does not work');
+  dialog.querySelector('.fit-button').click();await nextTick();
+  check(Math.abs(previewPaper.getBoundingClientRect().width-beforeZoom)<1,'Fit does not restore the full-label preview');
+  dialog.querySelector('.preview-hit-area').click();await nextTick();
+  check(dialog.querySelector('.content-controls').getBoundingClientRect().height>0,'Selecting canvas content does not open its controls');
+  check(dialog.querySelectorAll('.resize-handle').length===8,'Selected label element is missing resize handles');
+  const resize = async (dx,dy) => {
+    const handle=dialog.querySelector('[data-handle="se"]');
+    // Synthetic pointer events do not have a native active pointer to capture.
+    handle.setPointerCapture=()=>{};handle.hasPointerCapture=()=>false;
+    const paper=previewPaper.getBoundingClientRect();
+    handle.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:7,button:0,clientX:100,clientY:100}));
+    handle.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:7,clientX:100+dx*paper.width/50,clientY:100+dy*paper.height/38}));
+    handle.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:7}));await nextTick();
+  };
+  const selection=dialog.querySelector('.resize-selection');
+  await resize(1,2);
+  check(Math.abs(parseFloat(selection.style.width)-94)<0.1&&Math.abs(parseFloat(selection.style.height)-7/38*100)<0.1,'Dragging a corner did not resize in paper dimensions');
+  await resize(-1,-2);
+  const edge=dialog.querySelector('[data-handle="e"]');
+  edge.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',shiftKey:true,bubbles:true}));await nextTick();
+  check(Math.abs(parseFloat(selection.style.width)-90)<0.1,'Keyboard edge resize did not change width');
+  edge.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowRight',shiftKey:true,bubbles:true}));await nextTick();
+  check(Math.abs(parseFloat(selection.style.width)-92)<0.1,'Resize did not restore original dimensions');
+  logs.push('PASS corner dragging and keyboard edge resizing use zoom-independent paper dimensions');
+  const originalVariable = 'shopname';
+  for(const [search, label] of [['company address','City'],['category','Name'],['collection','Name'],['variant','Size label (Size, Shade, etc.)'],['distributor','Distributor name'],['fabric','Fabric']]) {
+    dialog.querySelector('.variable-trigger').click();await nextTick();
+    const input=dialog.querySelector('.variable-picker input');input.value=search;input.dispatchEvent(new Event('input',{bubbles:true}));await nextTick();
+    const option=Array.from(dialog.querySelectorAll('.variable-results button')).find(b=>b.textContent===label);
+    check(option,`Missing variable: ${search} / ${label}`);option.click();await nextTick();
+    check(dialog.querySelector('.variable-trigger').textContent.includes(label),'Variable selection was not applied');
+    check(dialog.querySelector('.variable-note').textContent.includes('Sample:'),'Variable sample is missing');
+  }
+  dialog.querySelector('.variable-trigger').click();await nextTick();
+  const search=dialog.querySelector('.variable-picker input');search.value=originalVariable;search.dispatchEvent(new Event('input',{bubbles:true}));await nextTick();
+  dialog.querySelector('.variable-results button').click();await nextTick();
+  logs.push('PASS grouped variable search, related fields, custom fields and sample values');
+  logs.push('PASS canvas-first desktop panels, fitted preview, setup tab and canvas selection');
+  dialog.dispatchEvent(new Event('cancel',{cancelable:true}));await wait(()=>!dialog.open);
+  check(document.activeElement===button('New label')&&document.body.style.overflow!=='hidden','Closing did not restore focus or scrolling');
+  check(host.querySelector('.editor-layout').getBoundingClientRect().width===0,'Label editor remains visible inline');
+  host.querySelector('.template-card').click();await wait(()=>dialog.open);
+  check(modalName.value==='Warehouse label','Closing lost the unsaved draft');
+  dialog.querySelector('[aria-label="Close label designer"]').click();await wait(()=>!dialog.open);
+  logs.push('PASS fullscreen label modal, focus restoration, draft retention and canvas zoom');
+  const defaultLabel=Array.from(host.querySelectorAll('label')).find(e=>e.firstChild.textContent.includes('Default product label')).querySelector('select');
+  defaultLabel.value=defaultLabel.querySelector('optgroup[label="Your label designs"] option').value;defaultLabel.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
+  button('Save designs').click();await wait(()=>saves===1&&!button('Discard changes'));
+  check(stored.templates.length===1&&stored.labelId===stored.templates[0].id,'Company default was not saved');
+  logs.push('PASS designer creates a label and saves the company default');
+  button('New receipt').click();await nextTick();host.querySelector('.receipt-base-card').click();await nextTick();await wait(()=>host.querySelector('img')&&button('Save designs')&&!button('Save designs').disabled);
+  host.querySelector('[data-editor-tab="setup"]').click();await nextTick();
+  const nameInput=Array.from(host.querySelectorAll('label')).find(e=>e.firstChild.textContent==='Design name').querySelector('input');
+  nameInput.value='Custom company receipt';nameInput.dispatchEvent(new Event('input',{bubbles:true}));await nextTick();
+  host.querySelector('[data-editor-tab="content"]').click();await nextTick();
+  Array.from(host.querySelectorAll('.element-select')).find(button => button.textContent.includes('Table')).click();await nextTick();
+  const heading = host.querySelector('.table-column textarea');
+  heading.value = 'Product\nBrand'; heading.dispatchEvent(new Event('input', { bubbles:true }));
+  const columnVariable = host.querySelector('.table-column select');
+  columnVariable.value = 'product.brand.name'; columnVariable.dispatchEvent(new Event('change', { bubbles:true }));
+  const columnWidth = host.querySelector('.table-column input[type="number"]');
+  columnWidth.value = '40'; columnWidth.dispatchEvent(new Event('change', { bubbles:true }));
+  await nextTick();
+  const widths = Array.from(host.querySelectorAll('.table-column input[type="number"]')).map(input => Number(input.value));
+  check(Math.abs(widths.slice(0,4).reduce((a,b)=>a+b,0)-100)<0.2, 'Column widths do not fill the table');
+  button('Add column').click();await nextTick();
+  check(host.querySelectorAll('.table-column').length===10, 'Could not add a table column');
+  Array.from(host.querySelectorAll('.table-column [aria-label="Remove column"]')).at(-1).click();
+  await nextTick();
+  check(host.querySelectorAll('.table-column').length===9, 'Could not remove a table column');
+  logs.push('PASS table column heading, product variable, width and add controls');
+  const firstSection=host.querySelector('div[draggable="true"] button').textContent;
+  host.querySelector('button[aria-label="Move section down"]').click();await nextTick();
+  check(host.querySelector('div[draggable="true"] button').textContent!==firstSection,'Receipt section order did not change');
+  await wait(()=>!button('Save designs').disabled);button('Save designs').click();await wait(()=>saves===2);
+  check(stored.templates[1].name==='Custom company receipt','Receipt name was not saved');
+  host.querySelector('[data-editor-tab="setup"]').click();await nextTick();
+  button('Duplicate').click();await nextTick();check(button('Discard changes'),'Duplicate was not marked unsaved');
+  button('Discard changes').click();await nextTick();check(!button('Discard changes'),'Discard did not restore saved designs');
+  logs.push('PASS designer edits and reorders receipts, duplicates, and discards unsaved changes');
+  button('New receipt').click(); await nextTick();host.querySelector('.receipt-base-card').click();await nextTick();
+  await wait(() => host.querySelector('dialog[open] .preview-image'));
+  host.querySelector('[data-editor-tab="content"]').click(); await nextTick();
+  Array.from(host.querySelectorAll('.element-select')).find(e => e.textContent.includes('Table')).click(); await nextTick();
+  check(host.querySelectorAll('.table-column').length === 9, 'Photo preset does not contain nine columns');
+  const lineWidths = () => Array.from(host.querySelectorAll('.table-column')).map(card => Number(card.querySelector('input[type="number"]').value));
+  const secondLineWidths = lineWidths().slice(4);
+  const firstWidth = host.querySelector('.table-column input[type="number"]');
+  firstWidth.value = '10'; firstWidth.dispatchEvent(new Event('change', { bubbles:true })); await nextTick();
+  check(JSON.stringify(lineWidths().slice(4)) === JSON.stringify(secondLineWidths), 'Changing line 1 changed line 2 widths');
+  check(Math.abs(lineWidths().slice(0,4).reduce((a,b)=>a+b,0)-100)<0.2, 'First layout line does not fill table width');
+  logs.push('PASS editable photo preset and independent widths for each layout line');
+  button('Taxless').click(); await nextTick();
+  await wait(() => host.querySelector('dialog[open] .preview-image'));
+  Array.from(host.querySelectorAll('.element-select')).find(e => e.textContent.includes('Table')).click(); await nextTick();
+  check(host.querySelectorAll('.table-column').length === 6, 'Taxless needs six columns');
+  check(!Array.from(host.querySelectorAll('.element-select')).some(e => e.textContent.includes('Tax summary')), 'Taxless contains tax summary');
+  check(Array.from(host.querySelectorAll('.table-column textarea')).map(e=>e.value).join(',') === 'SL,DESCRIPTION,QTY,MRP,DISC,VALUE', 'Taxless headers differ from reference');
+  button('Undo').click(); await nextTick();
+  check(Array.from(host.querySelectorAll('.element-select')).some(e => e.textContent.includes('Tax summary')), 'Undo did not restore tax layout');
+  button('Taxless').click(); await nextTick(); button('Tax').click(); await nextTick();
+  check(Array.from(host.querySelectorAll('.element-select')).some(e => e.textContent.includes('Tax summary')), 'Tax selector did not restore tax summary');
+  logs.push('PASS tax/taxless selection, six-column layout, summary removal and undo');
+
+  const previousLabelDefault=stored.labelId;
+  const labelSelect=host.querySelector('[aria-label="Default product label"]');
+  check(labelSelect.querySelector('optgroup[label="Base templates"] option').value===STANDARD_LABEL_ID,'Standard label base option missing');
+  check(labelSelect.querySelector('optgroup[label="Your label designs"] option'),'Saved label group missing');
+  labelSelect.value=STANDARD_LABEL_ID;labelSelect.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
+  await wait(()=>!button('Save designs').disabled);const savesBeforeBase=saves;button('Save designs').click();await wait(()=>saves>savesBeforeBase);
+  check(stored.labelId===STANDARD_LABEL_ID,'Standard label default did not save');
+  const baseLabel=activeTemplate(stored,'label');check(baseLabel?.id===STANDARD_LABEL_ID,'Saved label base cannot resolve for printing');
+  await renderPrintTemplate(baseLabel,data);
+  logs.push('PASS grouped label defaults select, save and render the base label');
+  labelSelect.value=previousLabelDefault;labelSelect.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
+  await wait(()=>!button('Save designs').disabled);const savesBeforeRestore=saves;button('Save designs').click();await wait(()=>saves>savesBeforeRestore);
+  app.unmount();host.remove();
+  const presetsHost=document.createElement('div');document.body.append(presetsHost);
+  const presetsApp=createApp(Designer,{receiptData:data,labelData:data,hideOriginalReceipt:true});
+  presetsApp.component('UButton',defineComponent({props:['label','disabled','loading'],setup(props,{attrs}) {return ()=>h('button',{...attrs,class:'test-button',disabled:props.disabled||props.loading},props.label);} }));
+  presetsApp.mount(presetsHost);
+  await wait(()=>presetsHost.querySelector('[aria-label="Default receipt"]'));
+  const receiptSelect=presetsHost.querySelector('[aria-label="Default receipt"]');
+  check(Array.from(receiptSelect.querySelector('optgroup[label="Base templates"]').children).map(o=>o.textContent).join(',')==='No Tax Receipt,Tax Receipt','Only Tax and No Tax should be offered as base templates');
+  check(!Array.from(presetsHost.querySelectorAll('button')).some(b=>b.textContent==='Preview Original receipt'), 'Original receipt preview is visible');
+  check(presetsHost.querySelector('optgroup[label="Your receipt designs"]'), 'Saved custom receipts are missing from defaults');
+  const newReceipt=Array.from(presetsHost.querySelectorAll('button')).find(b=>b.textContent==='New receipt');
+  const priorCount=stored.templates.length;
+  newReceipt.click();await nextTick();
+  check(presetsHost.querySelectorAll('.receipt-base-card').length===2,'New receipt must offer two starting templates');
+  check(document.activeElement===presetsHost.querySelector('.receipt-base-chooser'),'Base chooser did not receive keyboard focus');
+  presetsHost.querySelector('.receipt-base-chooser .section-heading button').click();await nextTick();
+  check(!presetsHost.querySelector('.receipt-base-chooser')&&document.activeElement===newReceipt,'Cancel did not close the chooser and restore focus');
+  newReceipt.click();await nextTick();presetsHost.querySelectorAll('.receipt-base-card')[1].click();await nextTick();
+  await wait(()=>presetsHost.querySelector('dialog[open] .preview-image'));
+  const newDialog=presetsHost.querySelector('dialog[open]');
+  const newName=Array.from(newDialog.querySelectorAll('label')).find(e=>e.textContent.startsWith('Design name')).querySelector('input');
+  check(newName.value==='My No Tax Receipt','No Tax base did not create the correct receipt');
+  newName.value='My shop receipt';newName.dispatchEvent(new Event('input',{bubbles:true}));await nextTick();
+  const receiptButton = text => Array.from(newDialog.querySelectorAll('button')).find(b=>b.textContent===text);
+  const firstHit = newDialog.querySelector('.preview-hit-area'); firstHit.click(); await nextTick();
+  check(newDialog.querySelectorAll('.resize-handle').length===5, 'Receipt needs side and bottom resize handles');
+  const widthInput = () => Array.from(newDialog.querySelectorAll('.position-controls label')).find(l=>l.firstChild.textContent==='Width').querySelector('input');
+  const widthBefore = Number(widthInput().value);
+  const rightHandle = newDialog.querySelector('[data-handle="e"]');
+  rightHandle.setPointerCapture=()=>{}; rightHandle.hasPointerCapture=()=>false;
+  const pixelsPerMm = newDialog.querySelector('.preview-paper').getBoundingClientRect().width / 72;
+  rightHandle.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:9,button:0,clientX:200,clientY:100}));
+  rightHandle.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:9,clientX:200-5*pixelsPerMm,clientY:100}));
+  rightHandle.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:9})); await nextTick();
+  check(Math.abs(Number(widthInput().value)-(widthBefore-5))<0.2,'Receipt border resize did not change paper width');
+  receiptButton('Undo').click();await nextTick();check(Number(widthInput().value)===widthBefore,'Receipt resize is not one undo step');
+  const dragHit=newDialog.querySelector('.preview-hit-area'); const paperRect=newDialog.querySelector('.preview-paper').getBoundingClientRect();
+  dragHit.setPointerCapture=()=>{};dragHit.hasPointerCapture=()=>false;
+  const spaceInput=()=>Array.from(newDialog.querySelectorAll('.position-controls label')).find(l=>l.firstChild.textContent==='Space above (mm)').querySelector('input');
+  dragHit.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,pointerId:10,button:0,clientX:100,clientY:100}));
+  dragHit.dispatchEvent(new PointerEvent('pointermove',{bubbles:true,pointerId:10,clientX:100,clientY:100+10*pixelsPerMm}));
+  dragHit.dispatchEvent(new PointerEvent('pointerup',{bubbles:true,pointerId:10}));await nextTick();
+  check(Number(spaceInput().value)===10,'Dragging down did not move the receipt box');
+  receiptButton('Undo').click();await nextTick();
+  check(Number(spaceInput().value)===0,'Undo did not restore vertical position');
+  rightHandle.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',shiftKey:true,bubbles:true}));await nextTick();
+  const leftInput=()=>Array.from(newDialog.querySelectorAll('.position-controls label')).find(l=>l.firstChild.textContent==='From left').querySelector('input');
+  const textAlignment=()=>Array.from(newDialog.querySelectorAll('label')).find(l=>l.firstChild.textContent==='Alignment').querySelector('select').value;
+  const originalAlignment=textAlignment();
+  newDialog.querySelector('[aria-label="Align box right"]').click();await nextTick();
+  check(Number(leftInput().value)===72-Number(widthInput().value),'Right alignment did not move the box');
+  newDialog.querySelector('[aria-label="Align box left"]').click();await nextTick();
+  check(Number(leftInput().value)===0&&textAlignment()===originalAlignment,'Box alignment changed text alignment');
+  const countBefore=newDialog.querySelectorAll('.element-row').length;
+  receiptButton('Duplicate item').click();await nextTick();check(newDialog.querySelectorAll('.element-row').length===countBefore+1,'Duplicate section failed');
+  receiptButton('Delete item').click();await nextTick();check(newDialog.querySelectorAll('.element-row').length===countBefore,'Delete section failed');
+  const zoomSelect=newDialog.querySelector('[aria-label="Preview zoom"]');zoomSelect.value='75';zoomSelect.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
+  check(Math.abs(newDialog.querySelector('.preview-paper').getBoundingClientRect().width-216)<1,'Zoom preset failed');
+  newDialog.querySelector('.canvas-workbench').dispatchEvent(new WheelEvent('wheel',{bubbles:true,cancelable:true,deltaY:-100}));await nextTick();
+  check(newDialog.querySelector('.preview-paper').getBoundingClientRect().width>216,'Mouse-wheel zoom failed');
+  newDialog.querySelector('.fit-button').click();await nextTick();
+  logs.push('PASS receipt box positioning, alignment, resize, undo, duplication, deletion and mouse-wheel zoom');
+  const receiptDefault=Array.from(newDialog.querySelectorAll('label')).find(e=>e.textContent.includes('Use as default receipt')).querySelector('input');
+  receiptDefault.click();await nextTick();
+  const presetSave=Array.from(newDialog.querySelectorAll('button')).find(b=>b.textContent==='Save designs');
+  await wait(()=>!presetSave.disabled);const priorSaves=saves;presetSave.click();await wait(()=>saves===priorSaves+1);
+  const savedReceipt=stored.templates.find(t=>t.name==='My shop receipt');
+  check(savedReceipt&&stored.templates.length===priorCount+1&&stored.receiptId===savedReceipt.id,'Custom receipt or its default was not saved');
+  check(savedReceipt.elements.find(e=>e.type==='items').columns.length===6&&!savedReceipt.elements.some(e=>e.type==='taxsummary'),'No Tax starter lost its six-column table or gained tax summary');
+  check(Array.from(receiptSelect.options).some(o=>o.value===savedReceipt.id),'New custom receipt is missing from default selector');
+  newDialog.querySelector('[aria-label="Close receipt designer"]').click();await nextTick();
+  check(Array.from(presetsHost.querySelectorAll('.template-card')).some(e=>e.textContent.includes('My shop receipt')), 'Custom receipt is missing from the library');
+  presetsApp.unmount();presetsHost.remove();
+  logs.push('PASS two receipt bases, chooser cancellation, No Tax creation, custom editing and saved defaults');
+  stored.templates.find(t=>t.kind==='label').elements.forEach((element,index)=>element.field=relatedKeys[index]);
+  cachePrintSettings('sample-company', stored); // Simulate the successful settings save for this fixture change.
+  const originalFetch=window.$fetch;
+  let labelLookups=0;
+  window.$fetch=async(url,options)=>{
+    if(url==='/api/settings/label-variables'&&options?.method==='POST') {
+      labelLookups++;check(options.headers['x-company-id']==='sample-company','Label lookup used wrong company');
+      return [{itemId:'sample-item',barcode:data.barcode,variables:relatedSource}];
+    }
+    return originalFetch(url,options);
+  };
+  const labelHost=document.createElement('div');document.body.append(labelHost);
+  const labelApp=createApp(LabelPreview,{items:[data]});labelApp.mount(labelHost);
+  await wait(()=>labelHost.querySelector('img'));
+  check(labelHost.querySelector('img').src===b.canvas.toDataURL(),'Product preview differs from saved label renderer');
+  check(labelLookups===1,'Product preview did not load related label variables');
+  labelApp.unmount();labelHost.remove();
+  const receiptHost=document.createElement('div');document.body.append(receiptHost);
+  const receiptDesign=stored.templates.find(t=>t.kind==='receipt');
+  const receiptExpected=await renderPrintTemplate(receiptDesign,data);
+  const receiptApp=createApp(ReceiptPreview,{data:{...data,printTemplate:receiptDesign}});receiptApp.mount(receiptHost);
+  await wait(()=>receiptHost.querySelector('img'));
+  check(receiptHost.querySelector('img').src===receiptExpected.canvas.toDataURL(),'Receipt preview differs from saved receipt renderer');
+  receiptApp.unmount();receiptHost.remove();
+  const noTaxHost=document.createElement('div');document.body.append(noTaxHost);
+  const noTaxApp=createApp(ReceiptPreview,{data:{...noTaxData,printTemplate:noTax}});noTaxApp.mount(noTaxHost);
+  await wait(()=>noTaxHost.querySelector('img'));
+  check(noTaxHost.querySelector('img').src===noTaxRender.canvas.toDataURL(), 'No-tax preview differs from thermal/PDF pixels');
+  noTaxApp.unmount();noTaxHost.remove();
+  logs.push('PASS product label and receipt previews use the saved design pixels');
+
+  document.body.append(a.canvas,b.canvas);
+  document.getElementById('result').textContent = logs.join('\n') + '\nALL PASSED';
+} catch(error) { document.getElementById('result').textContent = logs.join('\n') + '\nFAILED: ' + error.stack; }
+}
+run();
+</script></body></html>

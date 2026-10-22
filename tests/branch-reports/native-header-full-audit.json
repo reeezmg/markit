@@ -1,0 +1,39 @@
+{
+  "passed": true,
+  "observedAt": "2026-10-21T03:27:26.421Z",
+  "bundleFingerprint": "1e4a44b190b51e21c56d23572024a220ae9299a2451250b0b380571571d9bfb3",
+  "observations": [
+    {
+      "native": true,
+      "status": 200,
+      "cookieResponseBytes": 0
+    },
+    {
+      "native": false,
+      "status": 200,
+      "headerSizes": [
+        {
+          "name": "date",
+          "bytes": 29
+        },
+        {
+          "name": "content-type",
+          "bytes": 16
+        },
+        {
+          "name": "connection",
+          "bytes": 10
+        },
+        {
+          "name": "keep-alive",
+          "bytes": 9
+        },
+        {
+          "name": "content-length",
+          "bytes": 2
+        }
+      ],
+      "cookieResponseBytes": 0
+    }
+  ]
+}

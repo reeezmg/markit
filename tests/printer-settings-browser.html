@@ -1,0 +1,44 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Printer settings checks</title><style>
+*{box-sizing:border-box}body{font:14px/1.5 Arial;color:#0f172a;margin:24px auto;max-width:1180px;padding:16px;background:#f8fafc}button,input,select{font:inherit}button{cursor:pointer;padding:8px 12px;border:0;border-radius:6px;background:#fff7ed;color:#ea580c}button:disabled{opacity:.5}h1,h2,h3,p{margin:0}.grid{display:grid}.gap-4{gap:16px}.gap-5{gap:20px}.gap-3{gap:12px}.flex{display:flex}.flex-wrap{flex-wrap:wrap}.items-center{align-items:center}.items-end{align-items:end}.justify-between{justify-content:space-between}.text-sm{font-size:14px}.text-xs{font-size:12px}.text-gray-500{color:#64748b}.font-semibold{font-weight:600}.text-lg{font-size:18px}.text-2xl{font-size:24px}.mb-6{margin-bottom:24px}.mb-5{margin-bottom:20px}.mt-4{margin-top:16px}.mt-5{margin-top:20px}.my-3{margin:12px 0}.printer-section{background:white}@media(min-width:768px){.md\:grid-cols-2{grid-template-columns:repeat(2,1fr)}.md\:grid-cols-3{grid-template-columns:repeat(3,1fr)}}
+</style></head><body><pre id="result">RUNNING</pre><div id="app"></div><script type="module">
+import {createApp,defineComponent,h,Suspense,nextTick} from 'vue';
+import Page from '../pages/settings/printer.vue';
+import Designer from '../components/PrinterTemplateDesigner.vue';
+import {originalLabelTemplate,CLASSIC_RECEIPT_ID} from '../utils/print-templates.ts';
+const check=(v,m)=>{if(!v)throw Error(m)};
+const wait=async f=>{for(let i=0;i<150;i++){await new Promise(r=>setTimeout(r,30));await nextTick();if(f())return}throw Error('UI timed out')};
+let choices=0,stored={version:1,templates:[originalLabelTemplate()],receiptId:CLASSIC_RECEIPT_ID,labelId:null};stored.labelId=stored.templates[0].id;
+const notices=[],writes=[];
+const device={vendorId:1,productId:2,serialNumber:'fixture',productName:'Test USB printer',opened:true,configuration:{interfaces:[{interfaceNumber:0,alternates:[{alternateSetting:0,endpoints:[{direction:'out',endpointNumber:1}]}]}]},claimInterface:async()=>{},releaseInterface:async()=>{},close:async()=>{},transferOut:async(ep,bytes)=>{writes.push(bytes);return{status:'ok',bytesWritten:bytes.length}}};
+Object.defineProperty(navigator,'usb',{configurable:true,value:{requestDevice:async()=>{choices++;return device},getDevices:async()=>[device]}});
+window.print=()=>{throw Error('Browser print must not open')};
+window.useNuxtApp=()=>({$auth:{session:{value:{role:'admin',companyId:'fixture-company',companyName:'Sample Store'}}}});
+window.$fetch=async(url,options)=>{if(url.includes('label-variables'))return [];if(url.includes('shipping/label-size'))return {size:'A4'};check(url==='/api/settings/print-templates','Unexpected request '+url);if(options?.method==='PUT')stored=structuredClone(options.body);return structuredClone(stored)};
+window.useCompanyScope=()=>({fetch:window.$fetch,auth:window.useNuxtApp().$auth});
+window.useSettingsCompany=async()=>window.useCompanyScope();window.useToast=()=>({add:n=>notices.push(n)});
+const app=createApp({render:()=>h(Suspense,null,{default:()=>h(Page)})});
+app.component('PrinterTemplateDesigner',Designer);app.component('UDashboardPanelContent',{setup:(_,ctx)=>()=>h('main',ctx.attrs,ctx.slots.default?.())});
+app.component('UButton',defineComponent({props:['label','disabled','loading'],setup:(p,ctx)=>()=>h('button',{...ctx.attrs,disabled:p.disabled||p.loading},p.label||ctx.slots.default?.())}));
+app.component('UToggle',defineComponent({props:['modelValue'],emits:['update:modelValue'],setup:(p,{emit,attrs})=>()=>h('input',{...attrs,type:'checkbox',checked:p.modelValue,onChange:e=>emit('update:modelValue',e.target.checked)})}));
+app.mount('#app');
+const button=n=>Array.from(document.querySelectorAll('button')).find(b=>b.textContent===n);
+try {
+ await wait(()=>button('Connect USB printer')&&!button('Connect USB printer').disabled);
+ check(choices===0,'Device chooser opened on page load');
+ button('Connect USB printer').click();await wait(()=>notices.length===1);
+ const roles=document.querySelectorAll('.device-card select:not([aria-label="Test label command language"])');
+ for(const select of roles){select.value='serial:fixture';select.dispatchEvent(new Event('change'));await nextTick()}
+ check(JSON.parse(localStorage.getItem('webUsbPrinterRoles')).barcode==='serial:fixture','Label role not saved');
+ const language=Array.from(document.querySelectorAll('select')).find(s=>s.getAttribute('aria-label')!=='Test label command language'&&Array.from(s.options).some(o=>o.value==='cpcl'));language.value='cpcl';language.dispatchEvent(new Event('change'));await nextTick();check(button('Test label').disabled,'Unsaved language can be tested accidentally');button('Save device settings').click();await nextTick();
+ check(JSON.parse(localStorage.getItem('markit-label-printer-language'))==='cpcl','CPCL not saved');
+ const testLanguage=document.querySelector('[aria-label="Test label command language"]');testLanguage.value='cpcl';testLanguage.dispatchEvent(new Event('change'));await nextTick();
+ button('Test label').click();await wait(()=>notices.some(n=>n.title==='Barcode printer test sent'||n.title==='Barcode printer test failed'));
+ check(notices.at(-1).title==='Barcode printer test sent',JSON.stringify(notices.at(-1)));
+ check(new TextDecoder().decode(writes[0]).startsWith('! 0 203 203'),'Label test did not use CPCL');
+ writes.length=0;button('Test receipt').click();await wait(()=>notices.some(n=>n.title==='Receipt printer test sent'||n.title==='Receipt printer test failed'));
+ check(notices.at(-1).title==='Receipt printer test sent',JSON.stringify(notices.at(-1)));check(writes[0][0]===27&&writes[0][1]===64,'Receipt did not use ESC/POS');
+ check(choices===1,'Test print reopened USB chooser');
+ const text=document.body.textContent;check(!text.includes('Bluetooth Printers')&&!text.includes('localhost')&&!text.includes('Original label'),'Removed transport/legacy choice visible');
+ document.querySelector('#result').textContent=new URLSearchParams(location.search).has('preview')?'PREVIEW READY':'ALL PASSED: WebUSB connection, assignments, saved language, CPCL label and ESC/POS receipt test buttons';
+} catch(e){document.querySelector('#result').textContent='FAIL '+e.stack}
+</script></body></html>

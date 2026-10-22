@@ -1,0 +1,241 @@
+{
+  "startedAt": "2026-10-21T10:56:19.057Z",
+  "schemaChanges": false,
+  "mode": "actual handlers and database triggers; rollback-only",
+  "results": [
+    {
+      "company": "head",
+      "method": "Cash",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "head",
+      "method": "UPI",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "head",
+      "method": "Credit",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "head",
+      "method": "Split",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "head",
+      "method": "Card",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "mixed-sale-and-return-net-stock",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "head",
+      "status": "passed",
+      "form": "catalog-product",
+      "checks": [
+        "batch-create-with-stock",
+        "metadata-edit-preserves-sold-stock",
+        "delete"
+      ]
+    },
+    {
+      "company": "head",
+      "status": "passed",
+      "form": "customer-credit-receipts",
+      "checks": [
+        "partial-cash",
+        "idempotent-retry",
+        "foreign-account-rejected",
+        "overcollection-rejected",
+        "invoice-delete-protected",
+        "full-bank",
+        "dated-reversal",
+        "exact-journal-lines"
+      ]
+    },
+    {
+      "company": "branch",
+      "method": "Cash",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "method": "UPI",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "method": "Credit",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "method": "Split",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "method": "Card",
+      "status": "passed",
+      "checks": [
+        "create",
+        "owner",
+        "invoice-number",
+        "idempotent-retry",
+        "changed-retry-rejected",
+        "entries",
+        "stock-sale-delete-restore",
+        "mixed-sale-and-return-net-stock",
+        "balanced-native-journal",
+        "delete",
+        "restore"
+      ]
+    },
+    {
+      "company": "branch",
+      "status": "passed",
+      "form": "catalog-product",
+      "checks": [
+        "batch-create-with-stock",
+        "metadata-edit-preserves-sold-stock",
+        "delete"
+      ]
+    },
+    {
+      "company": "branch",
+      "status": "passed",
+      "check": "cross-company-bill-write-rejected"
+    },
+    {
+      "company": "branch",
+      "status": "passed",
+      "form": "customer-credit-receipts",
+      "checks": [
+        "partial-cash",
+        "idempotent-retry",
+        "foreign-account-rejected",
+        "overcollection-rejected",
+        "invoice-delete-protected",
+        "full-bank",
+        "dated-reversal",
+        "exact-journal-lines"
+      ]
+    },
+    {
+      "company": "head",
+      "status": "passed",
+      "check": "combined-coupon-excludes-branch-turnover"
+    }
+  ],
+  "cleanup": "verified: all test bills and transaction effects rolled back",
+  "finishedAt": "2026-10-21T10:59:02.198Z"
+}

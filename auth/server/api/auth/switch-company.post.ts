@@ -54,9 +54,9 @@ export default eventHandler(async (event) => {
   });
   if (!purchaseCategory) throw createError({ statusCode: 409, statusMessage: 'Company setup is incomplete' });
   await session.update({
+    ...session.data,
     selectedAccounts: undefined,
     selectedAccountsPacked: packSelectedAccounts(await loadSelectedAccounts(companyId)),
-    ...session.data,
     companyId: c.id, companyName: c.name, companyType: c.type,
     name: membership.name, code: String(membership.code ?? ''), role, type: role,
     delegatedHeadOfficeId: delegatedHeadOfficeId ?? undefined,
@@ -73,6 +73,7 @@ export default eventHandler(async (event) => {
     deliveryRadius: c.deliveryRadius ?? 0, deliveryDiscount: c.deliveryDiscount ?? 0,
     codCharge: c.codCharge ?? 0, commissionRate: c.commissionRate ?? undefined,
     pointsValue: c.pointsValue, currency: c.currency, plan: c.plan,
+    category: c.category, isLite: c.plan === 'free' || c.plan === 'lite',
     address: c.address ?? {}, openTime: c.openTime, closeTime: c.closeTime,
     gstin: c.gstin ?? '', accHolderName: c.accHolderName ?? '', ifsc: c.ifsc ?? '',
     accountNo: c.accountNo ?? '', bankName: c.bankName ?? '', upiId: c.upiId ?? '',

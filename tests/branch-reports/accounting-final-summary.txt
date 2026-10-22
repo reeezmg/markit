@@ -1,0 +1,13 @@
+Head-office and branch accounting verification
+Updated: 2026-10-21T08:59:25.344Z
+PASS: ERP and staff accounting are active for both offices on the authorized .env test database.
+Branch setup: 38 chart accounts created through existing application services. Preview rolled back first; configuration/source backups retained. Existing financial records, stock and head-office books unchanged. No schema changes.
+Billing: 16 both-role scenarios passed, including exact payment/tax account amounts, retry safety, stock effects, customer partial/full collections, dated receipt reversals, foreign-account and overcollection rejection.
+Expenses: 2 role suites passed with exact tax recovery, accrued liabilities, bank/cash payments, status changes and deletion reversals.
+Staff: actual salary/credit/repayment and payroll-credit settlement lifecycle passed for head and branch, including native bank selection and invalid-account rejection.
+Purchases: 26 lifecycle checks passed per office (52 total): purchases, cost edits, supplier payments/receipts, returns, stock/COGS, sales, deletion and catalog-only actions. All journals balanced.
+Accounting controls: 2 role checks passed; locked periods reject the entire expense save without changing sources, counters, journals or archived ledgers.
+Read-only integrity: existing ERP/staff source expectations match posted lines; no unbalanced journals or cross-company accounting lines.
+All scenario fixtures and transaction effects rolled back. Branch purchase tests used an owned zero-history supplier connection; no historical supplier adoption.
+Scope: new transactions. Historical source baselines remain excluded; opening balances/history were not imported. External Maps/storefront provisioning limits from the previous browser audit remain separate.
+Evidence: branch-accounting-activation.json; branch-accounting-suite.json; billing-writes-followup.json; expense-writes-followup.json; branch-accounting-locks.json; branch-accounting-readonly.json; accounting-staff-{head,branch}.log; accounting-purchases-{head,branch}.log.

@@ -1,3 +1,4 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import { defineEventHandler, readBody, createError } from 'h3'
 import { GoogleGenAI } from '@google/genai'
 import { pool } from '~/server/db'
@@ -9,7 +10,7 @@ import crypto from 'crypto'
  * Called from the bank detail page — no AI chat involved.
  */
 export default defineEventHandler(async (event) => {
-  const session = await useAuthSession(event)
+  const session = await useCompanyRequestSession(event)
   const companyId = session.data?.companyId as string | undefined
   const userId = session.data?.id as string | undefined
   if (!companyId || !userId) throw createError({ statusCode: 401, statusMessage: 'Not authenticated' })

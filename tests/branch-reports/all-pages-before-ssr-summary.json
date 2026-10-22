@@ -1,0 +1,154 @@
+{
+  "scope": "Read-only page loading in head and branch, not all form submissions",
+  "summary": {
+    "no-existing-record": 18,
+    "passed": 233,
+    "failed": 36,
+    "blocked-read-only": 2
+  },
+  "interactions": {
+    "passed": 21,
+    "no-visible-expandable-record": 1
+  },
+  "byArea": {
+    "products": {
+      "passed": 24,
+      "failed": 3,
+      "skipped": 3,
+      "blocked": 0
+    },
+    "users": {
+      "passed": 13,
+      "failed": 3,
+      "skipped": 2,
+      "blocked": 0
+    },
+    "accounts": {
+      "passed": 16,
+      "failed": 0,
+      "skipped": 2,
+      "blocked": 0
+    },
+    "statement": {
+      "passed": 0,
+      "failed": 0,
+      "skipped": 2,
+      "blocked": 0
+    },
+    "investments": {
+      "passed": 16,
+      "failed": 0,
+      "skipped": 2,
+      "blocked": 0
+    },
+    "erp": {
+      "passed": 9,
+      "failed": 7,
+      "skipped": 2,
+      "blocked": 0
+    },
+    "order": {
+      "passed": 23,
+      "failed": 2,
+      "skipped": 3,
+      "blocked": 0
+    },
+    "settings": {
+      "passed": 9,
+      "failed": 7,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "accountant": {
+      "passed": 57,
+      "failed": 4,
+      "skipped": 1,
+      "blocked": 0
+    },
+    "ai": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "cleanup": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "client": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "coupon": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "dashboard": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "distributor": {
+      "passed": 7,
+      "failed": 6,
+      "skipped": 1,
+      "blocked": 0
+    },
+    "ecommerce-cms": {
+      "passed": 21,
+      "failed": 1,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "marketing": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "notifications": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "offline": {
+      "passed": 0,
+      "failed": 2,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "reports": {
+      "passed": 16,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "saleshistory": {
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0,
+      "blocked": 0
+    },
+    "storefront": {
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 2
+    },
+    "receipt": {
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "blocked": 0
+    }
+  },
+  "postFixRetest": "pending"
+}

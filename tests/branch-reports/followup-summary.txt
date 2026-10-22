@@ -1,0 +1,25 @@
+Seller head-office / branch follow-up
+Updated: 2026-10-21T08:00:54.528Z
+Status: billing dependencies, record-page coverage and purchase-accounting SQL dependency resolved on the authorized test database.
+
+Schema: user-authorized schema.zmodel -> ZenStack generation -> Prisma db push succeeded. Existing affected-table data unchanged; backups retained. Read-only audit: 175 models, no missing tables/columns.
+Billing: create-bill-source.ts replaces the missing stored create function with parameterized source DML. Native invoice/accounting triggers retained. Both-role Cash/UPI/Credit/Split/Card, mixed sale/return stock, retry protection, product metadata edit/delete and company/coupon isolation passed (14 cases).
+Expenses: both-role create/edit/status/delete, partial tax recovery and validation passed. Enabled head-office accounting amounts and reversals verified; branch ERP connection was disabled during that earlier run; subsequent activation and both-role posting verification passed (see accounting-final-summary.txt).
+Settings: early-success and loading bugs fixed across store saves; profile errors no longer display success. Uploads finish before their keys are stored. Combined saves retain submitted fields through query refreshes; zero coordinates survive reload. 43 focused regressions, 2 real model-write role suites and 4 browser rejection cases passed.
+Staff: actual salary/credit CRUD, repayment, balances and journal rendering suite passed.
+All transactional test fixtures rolled back. Catalog/detail fixtures removed and cleanup verified; normal fixture-generated numbering gaps are not rewound.
+
+Regression checks: 137 passed, zero failed; all 146 Vue pages compile. Billing component suite: 157 passed. Final production build passed with 8192 MB Node heap.
+Browser: 8 catalog CRUD flows, 26 catalog page visits, 38 detail/dependency page retests and 4 real rejected-save interactions passed.
+Consolidated page evidence: {"passed":286,"failed":1,"blocked-read-only":2}. This combines the complete earlier audit with targeted retests, not one fresh run of every route on the final bundle. Per-page report/fingerprint and unchanged-source proofs are in all-pages-followup.json.
+
+Purchase accounting: separately authorized SQL deployment succeeded using scripts/deploy-purchase-authority-test.mjs and repository purchase-order-authority definitions. Existing SQL definitions backed up; source/stock/journal/audit data and the existing historical projection remained unchanged. No historical import or rewrite.
+Purchase lifecycle: 26 API/accounting checks passed on the existing enabled ERP company: credit and bank-paid purchases, cost edits, payment transitions and guards, supplier payment/receipt CRUD, return CRUD, sales/COGS, stock preservation, catalog-only CRUD and cascading PO deletion. All new journals balanced; all test records, counters, stocks and journals rolled back.
+Other remaining limits: Maps Cloud billing, 2 external storefront-provisioning pages blocked by read-only mode, actual password/OTP login, live media/carrier actions, every save variation, and full-project typecheck.
+Earlier three policy-blocked browser-profile folders remain untouched; deletion was not retried.
+
+Evidence: all-pages-followup.json; catalog-followup.json; detail-pages-followup.json; settings-browser-final.json; billing-writes-followup.json; expense-writes-followup.json; settings-writes-followup.json; schema-push-followup.json; purchase-authority-deployment.json; product-distributor-writes-followup.log; current-status.json.
+
+Latest accounting follow-up: ERP/staff enabled for the test branch; both-role accounting lifecycle and integrity checks passed. See accounting-final-summary.txt for current evidence and historical-scope limits.
+
+Latest settings verification: settings-final-summary.txt / settings-final-verification.json (145 regressions, both-role settings APIs/models and 14 browser rejected saves passed).

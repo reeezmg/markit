@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const companyScope = useCompanyScope('table');
+await companyScope.ready;
 const $fetch = companyScope.fetch;
 const props = defineProps<{ distributorId?: string; companyId?: string }>();
 watch(() => props.companyId, id => { if (id) companyScope.filter(id); }, { immediate: true });

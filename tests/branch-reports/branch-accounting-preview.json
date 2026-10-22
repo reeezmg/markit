@@ -1,0 +1,12 @@
+{
+  "at": "2026-10-21T08:44:02.749Z",
+  "applied": false,
+  "schemaChanges": false,
+  "historyImported": false,
+  "existingFinancialRowsUnchanged": true,
+  "headOfficeUnchanged": true,
+  "erpEnabled": true,
+  "staffEnabled": true,
+  "createdAccounts": 38,
+  "backup": "branch-accounting-preview-backup.json"
+}

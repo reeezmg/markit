@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Capacitor } from '@capacitor/core';
+import { companySwitchLocation } from '~/utils/companySwitchLocation';
 
 type CompanyOption = { id: string; name: string; logo: string | null; parentCompanyId: string | null; isHeadOffice: boolean };
 const auth = useNuxtApp().$auth;
@@ -19,7 +20,7 @@ async function changeView(companyId?: string) {
       throw new Error('The selected store was not saved in your session');
     }
     if (Capacitor.isNativePlatform()) await SplashScreen.show({ autoHide: false });
-    window.location.reload();
+    window.location.assign(companySwitchLocation(window.location.pathname + window.location.search));
   } catch (error: any) {
     toast.add({ title: 'Could not change store view', description: error?.data?.statusMessage ?? error?.message ?? 'Please try again', color: 'red' });
     switching.value = false;

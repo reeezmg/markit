@@ -1,0 +1,790 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 4300,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/notifications",
+      "status": "failed",
+      "landed": "/notifications",
+      "expectedPath": "/notifications",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        }
+      ],
+      "durationMs": 10938,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BkPP0sIc.js",
+          "line": 16
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/products",
+      "status": "failed",
+      "landed": "/products",
+      "expectedPath": "/products",
+      "settled": false,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [
+        "/api/notifications",
+        "/api/notifications"
+      ],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "label"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "select"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        }
+      ],
+      "durationMs": 180567,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BkPP0sIc.js",
+          "line": 16
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/erp/sales",
+      "status": "failed",
+      "landed": "/erp/sales",
+      "expectedPath": "/erp/sales",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "label"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "select"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "children",
+          "nodeTags": [
+            "tr"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "td"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        }
+      ],
+      "durationMs": 16742,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BkPP0sIc.js",
+          "line": 16
+        }
+      ]
+    },
+    {
+      "company": "branch",
+      "route": "/notifications",
+      "status": "failed",
+      "landed": "/notifications",
+      "expectedPath": "/notifications",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        }
+      ],
+      "durationMs": 4077,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BkPP0sIc.js",
+          "line": 16
+        }
+      ]
+    },
+    {
+      "company": "branch",
+      "route": "/products",
+      "status": "failed",
+      "landed": "/products",
+      "expectedPath": "/products",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "tr"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "class",
+          "nodeTags": [
+            "span"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "text content",
+          "nodeTags": [
+            "p"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        }
+      ],
+      "durationMs": 4725,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BkPP0sIc.js",
+          "line": 16
+        }
+      ]
+    },
+    {
+      "company": "branch",
+      "route": "/erp/sales",
+      "status": "failed",
+      "landed": "/erp/sales",
+      "expectedPath": "/erp/sales",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "node",
+          "nodeTags": [
+            "#comment"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "children",
+          "nodeTags": [
+            "tr"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "td"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        },
+        {
+          "mismatch": "attribute",
+          "nodeTags": [
+            "div"
+          ],
+          "components": []
+        }
+      ],
+      "durationMs": 4988,
+      "errors": [
+        {
+          "kind": "console-error",
+          "source": "/_nuxt/BkPP0sIc.js",
+          "line": 16
+        }
+      ]
+    }
+  ],
+  "switches": [
+    {
+      "direction": "head-to-branch",
+      "status": 200,
+      "persisted": true
+    },
+    {
+      "direction": "branch-to-head",
+      "status": 200,
+      "persisted": true
+    }
+  ],
+  "errors": [],
+  "startedAt": "2026-10-20T18:58:38.806Z",
+  "bundleFingerprint": "d3ac5c3359d198a8c9db9ba126a3d50c134aeec76d06dfd83ab0f28677e535c4",
+  "serverProcessId": 15856,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [],
+  "currentPage": {
+    "company": "branch",
+    "route": "/erp/sales",
+    "startedAt": "2026-10-20T19:02:47.861Z"
+  },
+  "recoveries": [
+    {
+      "company": "head",
+      "route": "/products",
+      "time": "2026-10-20T19:02:14.672Z"
+    }
+  ],
+  "pageSummary": {
+    "failed": 6
+  },
+  "formSummary": {},
+  "interactionSummary": {},
+  "pageAuditStatus": "failed",
+  "finishedAt": "2026-10-20T19:02:57.029Z"
+}

@@ -11,6 +11,18 @@ Datasource/admin alignment (2026-10-06): `schema.zmodel` uses pooled `DATABASE_U
 for application Prisma access and direct `DIRECT_URL` for Prisma schema commands.
 Both must target the same database; direct administration avoids stale pooled session
 search paths from disposable schemas. Production schema changes remain separate from builds.
+On 2026-10-21 the user authorized the existing test database to synchronize through
+`schema.zmodel` -> `npx zenstack generate` -> `npx prisma db push`. The already-declared
+distributor payment allocation table and expense party columns were installed through
+that workflow. Backups and row comparisons verified existing affected-table data was
+unchanged; a fresh read-only audit found no missing tables/columns across 175 models.
+Prisma schema push does not deploy SQL views, posting functions or triggers.
+The user separately authorized purchase-accounting SQL deployment on this test
+database on the same date. `scripts/deploy-purchase-authority-test.mjs` installed
+the repository PO-header-authority definitions after backing up existing SQL objects.
+Before commit it verified unchanged source/stock/journal/audit rows and historical
+event projection; no historical records were imported or rewritten. This deployment
+is separate from the zmodel/schema-push workflow and is not a production deployment.
 Accounting relations explicitly preserve the installed SQL foreign keys' `NoAction`
 update rules and existing delete rules. Supplier mappings retain their existing composite
 constraint name; supplier settings retain the database `updated_at` default alongside
@@ -628,9 +640,9 @@ Controls which variant form fields are visible, per company.
 Flexible per-company, per-page preference storage for reusable page rules/settings.
 - Fields: `companyId`, `pageName` (`page_name`), `key` (`preference_key`), `value` (`preference_value` JSON), `active`
 - Unique constraint: `[companyId, pageName, key]`
-- Current active storetools usage: none after the 2026-06-15 cleanup moved the settings preferences page and `/api/general-preferences` route out of active source.
+  - Current active Storetools usage: company print designs at `pageName = printer`, `key = templates`; `templates-backup` retains the preceding saved JSON. `GET/PUT /api/settings/print-templates` provides authorized company reads and admin/manager writes. The older preferences page and `/api/general-preferences` route remain removed.
 - Historical intent: approval settings, custom fields, validation rules, custom actions, and record-locking rules could be stored as additional page/key JSON preferences without adding one-off tables for every preference family.
-- **Used in:** no active storetools source confirmed in the 2026-06-15 cleanup.
+  - **Used in:** `server/utils/printTemplateSettings.ts`, `server/api/settings/print-templates.{get,put}.ts`, `components/PrinterTemplateDesigner.vue`.
 
 #### `storefront_sources` (runtime-managed)
 Private storefront source-provisioning state, created defensively by `storetools/server/utils/storefrontSource.ts`.
@@ -647,8 +659,8 @@ Company-scoped storefront editor conversation state, created defensively by `sto
 - Unique constraint: `(company_id, conversation_id)` prevents conversation IDs from crossing company boundaries.
 - **Used in:** Storetools storefront-agent routes, `orchestrator/server.js`, and the edit-sandbox Pi lifecycle.
 
-#### `ai_provider_credentials` (runtime-managed)
-Company-scoped seller BYOK model connections, created by `storetools/server/utils/aiProviders.ts` and mirrored in both ORM schemas.
+#### `ai_provider_credentials`
+Company-scoped seller BYOK model connections defined by `AiProviderCredential` in `schema.zmodel`. `server/utils/aiProviders.ts` checks the existing table using SELECT; it does not create or alter schema during requests.
 - Fields: `company_id` (FK to `companies`, cascade delete), seller-facing `name`, `provider` (`openai`, `openrouter`, `gemini`, or `custom`), HTTPS `base_url`, provider `model_id`, AES-256-GCM `encrypted_api_key`, seller-declared `supports_images`, `enabled`, and timestamps.
 - Unique constraint: `(company_id, name)`. API responses never return the encrypted value or plaintext key.
 - **Used in:** `/api/ai/providers`, the AI Models page, storefront-agent model selection, and the ephemeral Pi model relay.

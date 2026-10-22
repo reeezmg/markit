@@ -1,5 +1,7 @@
 import jsPDF from "jspdf";
 import JsBarcode from "jsbarcode";
+import { loadPrintTemplate } from './load-print-template.client';
+import { createTemplatePDF } from './print-template-renderer.client';
 
 function formatCouponDiscount(coupon: any) {
   if (!coupon) return "";
@@ -27,8 +29,10 @@ function createBarcodeDataUrl(value: string) {
   return canvas.toDataURL("image/png");
 }
 
-export async function generateThermalReceiptPDF(data: any, filename = "receipt.pdf") {
-  if (typeof window === "undefined") return;
+export async function createThermalReceiptPDF(data: any) {
+  if (typeof window === "undefined") throw new Error('Receipt PDFs must be generated in the browser');
+  const template = data.printTemplate === undefined ? await loadPrintTemplate('receipt', data.companyId) : data.printTemplate;
+  if (template) return createTemplatePDF(template, data);
 
   const pageWidth = 127; // 5-inch thermal width
 
@@ -323,6 +327,11 @@ if(data.refundPolicy){
   }
   
 
-  doc.save(filename);
+  return doc;
+}
+
+export async function generateThermalReceiptPDF(data: any, filename = "receipt.pdf") {
+  const pdf = await createThermalReceiptPDF(data);
+  pdf.save(filename);
 }
 

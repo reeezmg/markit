@@ -3,6 +3,7 @@ import { purchaseOrderPayments, purchaseOrderDue } from '~/utils/purchase-order-
 import { distributorPurchaseTransactions } from '~/utils/distributor-purchase-transactions';
 import { distributorCreditKind, creditAccountRoles, type DistributorCreditKind } from '~/utils/distributor-credit-kind';
 const companyScope = useCompanyScope('table');
+await companyScope.ready;
 const $fetch = companyScope.fetch;
 const { invalidateModels } = useModelCache();
 
@@ -283,7 +284,7 @@ const queryArgs = computed<Prisma.DistributorCompanyFindManyArgs>(() => ({
       : { [sort.value.column]: sort.value.direction },
 }))
 
-const { data, isLoading, refetch } = useFindManyDistributorCompany(queryArgs)
+const { data, isLoading, error: distributorLoadError, refetch } = useFindManyDistributorCompany(queryArgs)
 const postedDues = ref<Record<string, number>>({})
 let dueRequest = 0
 watch([data, companyScope.readIds], async () => {
@@ -302,12 +303,13 @@ watch([data, companyScope.readIds], async () => {
   if (results.some(result => result.status === 'rejected')) toast.add({title:'Could not refresh accounting dues',description:'Showing source balances for unavailable companies.',color:'red'})
 }, { immediate: true })
 
-onMounted(() => {
+let supplierHydrated = false
+onNuxtReady(() => {
+  supplierHydrated = true
   refetch()
 })
-
 onActivated(() => {
-  refetch()
+  if (supplierHydrated) refetch()
 })
 
 // ─── Helpers ───
@@ -1228,6 +1230,15 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
 
 <template>
   <UDashboardPanelContent class="p-4">
+    <UAlert
+      v-if="distributorLoadError"
+      color="red"
+      icon="i-heroicons-exclamation-triangle"
+      title="Supplier data could not be loaded"
+      description="Supplier history is currently unavailable. Retry to load it again."
+      :actions="[{ label: 'Retry', click: () => refetch() }]"
+      class="mb-4"
+    />
     <div class="flex border border-gray-200 dark:border-gray-700 rounded-md ">
 
       <!-- ─── Left: Distributor List ─── -->

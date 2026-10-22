@@ -78,6 +78,7 @@ export type AuthSession = {
         name: boolean;
         brand: boolean;
         category: boolean;
+        subcategory?: boolean;
         description: boolean;
     };
 

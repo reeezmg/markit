@@ -41,13 +41,35 @@ try {
   await db.query(`SET LOCAL search_path TO "${schema}"`);
   assertLegacyUnchanged = await legacyLedgerGuard(db);
   await db.query("SET LOCAL lock_timeout='5s'");
+  const targetRole=process.env.ACCOUNTING_TEST_COMPANY_ROLE;
+  assert.ok(!targetRole || ['head','branch'].includes(targetRole));
   const {rows:[f]} = await db.query(`SELECT s.company_id, s.accounts,
     (SELECT user_id FROM company_users WHERE company_id=s.company_id AND NOT deleted LIMIT 1) AS user_id,
     (SELECT client_id FROM company_clients WHERE company_id=s.company_id LIMIT 1) AS client_id,
     (SELECT id FROM categories WHERE company_id=s.company_id LIMIT 1) AS category_id,
     (SELECT distributor_id FROM accountant_v2_distributor_settings WHERE company_id=s.company_id AND enabled LIMIT 1) AS distributor_id,
     (SELECT id FROM expense_categories WHERE company_id=s.company_id LIMIT 1) AS expense_category_id
-    FROM accountant_v2_erp_settings s WHERE s.enabled ORDER BY s.company_id LIMIT 1`);
+    FROM accountant_v2_erp_settings s JOIN companies c ON c.id=s.company_id WHERE s.enabled
+    AND ($1::text IS NULL OR CASE WHEN $1='branch' THEN c.parent_company_id IS NOT NULL ELSE c.is_head_office AND c.parent_company_id IS NULL END)
+    ORDER BY s.company_id LIMIT 1`,[targetRole||null]);
+  if (targetRole==='branch' && f && !f.distributor_id) {
+    // Owned, zero-history supplier connection; never adopt a real supplier's
+    // history merely to exercise branch posting. Entire fixture rolls back.
+    f.distributor_id=randomUUID(); fixtureIds.add(f.distributor_id);
+    await db.query('INSERT INTO distributors(id,name) VALUES($1,$2)',[f.distributor_id,'BRANCH_ACCOUNTING_FIXTURE_SUPPLIER']);
+    await db.query('INSERT INTO distributor_companies(company_id,distributor_id,opening_due) VALUES($1,$2,0)',[f.company_id,f.distributor_id]);
+    const contactId=randomUUID();fixtureIds.add(contactId);
+    await db.query(`INSERT INTO accountant_v2_accountant_contact(id,company_id,name,type,updated_at) VALUES($1,$2,$3,'VENDOR',now())`,[contactId,f.company_id,'BRANCH_ACCOUNTING_FIXTURE_SUPPLIER']);
+    await db.query('INSERT INTO accountant_v2_distributor_settings(company_id,distributor_id,contact_id,enabled,updated_at) VALUES($1,$2,$3,true,now())',[f.company_id,f.distributor_id,contactId]);
+    const defaults=(await db.query(`SELECT "after" FROM accountant_v2_accountant_audit WHERE company_id=$1 AND resource='account-defaults' AND "resourceId"='purchase' AND action='configured' AND deleted_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 1`,[f.company_id])).rows[0]?.after;
+    assert.ok(defaults?.payable && defaults?.stock && defaults?.tax && defaults?.bank);
+    for (const [role,id] of Object.entries(defaults)) await db.query('INSERT INTO accountant_v2_distributor_mappings(company_id,distributor_id,role,account_id) VALUES($1,$2,$3,$4)',[f.company_id,f.distributor_id,role,id]);
+    if(!f.client_id) {
+      f.client_id=randomUUID(); fixtureIds.add(f.client_id);
+      await db.query('INSERT INTO clients(id,name,phone) VALUES($1,$2,$3)',[f.client_id,'BRANCH_ACCOUNTING_FIXTURE_CLIENT','E2E_'+f.client_id]);
+      await db.query('INSERT INTO company_clients(company_id,client_id) VALUES($1,$2)',[f.company_id,f.client_id]);
+    }
+  }
   assert.ok(f?.distributor_id && f?.user_id && f.client_id && f.category_id && f.expense_category_id, 'An enabled company with staff, client and categories is required');
   // Enable stock control inside this rollback-only transaction, including the initial baseline.
   await db.query(`INSERT INTO accountant_v2_stock_control(company_id,stock_account_id,opening_account_id,adjustment_account_id,enabled)
@@ -63,6 +85,13 @@ try {
     requireAuthSession:async()=>session,useAuthSession:async()=>session});
   (pool as any).connect=async()=>({query,release(){}});
   (pool as any).query=query;
+  const originalSupplierLink=prisma.distributorCompany.findUnique.bind(prisma.distributorCompany);
+  (prisma.distributorCompany as any).findUnique=async(args:any)=>{
+    const link=args.where.distributorId_companyId;
+    if(link && fixtureIds.has(link.distributorId)) return (await db.query('SELECT * FROM distributor_companies WHERE company_id=$1 AND distributor_id=$2',[link.companyId,link.distributorId])).rows[0]??null;
+    return originalSupplierLink(args);
+  };
+  restores.push(()=>{prisma.distributorCompany.findUnique=originalSupplierLink;});
   // Real company ownership checks read our uncommitted fixture records.
   for(const [model,table] of Object.entries({product:'products',variant:'variants',item:'items',purchaseOrder:'purchase_orders',purchaseReturn:'purchase_returns',bill:'bills'})) {
     const delegate=(prisma as any)[model], original=delegate.findUnique.bind(delegate);

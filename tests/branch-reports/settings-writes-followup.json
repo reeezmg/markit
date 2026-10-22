@@ -1,0 +1,59 @@
+{
+  "startedAt": "2026-10-21T09:08:22.422Z",
+  "mode": "real enhanced model writes; rollback-only",
+  "schemaChanges": false,
+  "existingRecords": [],
+  "fixtureIds": {
+    "companies": [
+      "c5e305a8-08be-40b6-bbba-de54c0841934",
+      "317d6d73-05f2-4185-bb82-0e3fd3cb66d3"
+    ],
+    "user": "beaaf0c8-1602-463c-a1ee-c8f6df7e76ca"
+  },
+  "results": [
+    {
+      "company": "head",
+      "status": "passed",
+      "checks": [
+        "store-identity",
+        "contact",
+        "descriptions-and-policies",
+        "bank-details",
+        "feature-toggles",
+        "zero-points",
+        "delivery-settings",
+        "address-create-edit-zero-coordinates",
+        "company-user-alias",
+        "profile-image-model-write",
+        "document-prefixes",
+        "printer-label-size",
+        "atomic-product-fields-dimensions-units-size-labels-create-edit",
+        "request-preferences-create-edit",
+        "head-office-edits-authorized-branch"
+      ]
+    },
+    {
+      "company": "branch",
+      "status": "passed",
+      "checks": [
+        "store-identity",
+        "contact",
+        "descriptions-and-policies",
+        "bank-details",
+        "feature-toggles",
+        "zero-points",
+        "delivery-settings",
+        "address-create-edit-zero-coordinates",
+        "company-user-alias",
+        "profile-image-model-write",
+        "document-prefixes",
+        "printer-label-size",
+        "atomic-product-fields-dimensions-units-size-labels-create-edit",
+        "request-preferences-create-edit",
+        "branch-cannot-edit-head-office"
+      ]
+    }
+  ],
+  "cleanup": "verified: all run-owned settings companies/user and related records rolled back",
+  "finishedAt": "2026-10-21T09:08:45.032Z"
+}

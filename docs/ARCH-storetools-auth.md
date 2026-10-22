@@ -126,10 +126,12 @@ Full seller/staff session. Login selects an active direct company membership fir
 
 **Auth check:** `requireAuthSession` throws 401 if `session.data.email` is empty.
 
-Company switching in `TeamsDropdown` calls `POST /api/auth/switch-company`. The server verifies an active `CompanyUser` membership, loads the destination company and its settings, and rebuilds the company-specific session fields. The general session PUT route rejects changes to `companyId`.
+Company switching in `TeamsDropdown` calls `POST /api/auth/switch-company`. The server verifies an active direct membership or valid delegated head-office access, loads the destination company and settings, and rebuilds company-specific session fields. Destination packed account defaults replace the previous company's defaults after spreading existing session data; category and plan flags are also replaced. The dropdown verifies the saved company and reloads a safe destination using `utils/companySwitchLocation.ts`. The general session PUT route rejects changes to `companyId`.
+
+Head-office membership provisioning creates missing delegated memberships and reactivates inactive delegated memberships. When access is already current, `ensureHeadOfficeBranchMemberships` performs no database writes; direct memberships are preserved.
 
 **Session config:**
-- Cookie name: `NUXT_AUTH_PASSWORD` env var (warns and uses fallback secret if missing)
+- Cookie name: `nuxt-session`; encryption password comes from `NUXT_AUTH_PASSWORD` (the layer warns and supplies a fallback when it is missing)
 - `maxAge`: 31536000 (1 year)
 - `secure`: true in production, `sameSite`: `'none'` in prod / `'lax'` in dev
 - Storage: filesystem at `./.data/auth` (Nitro storage driver)
@@ -205,7 +207,7 @@ All routes use `useAuthSession` / `requireAuthSession` from `auth/server/utils/s
 | `/api/auth/resetPassword` | POST | No | Forgot-password reset. Accepts `{ email, otp, password }`, validates `email_otps`, then updates `users.password` and deletes the OTP in one transaction. |
 | `/api/auth/cleanup` | POST | — | Empty file (1 line, no content) |
 
-**Note on login:** Always uses `user.companies[0]` — multi-company users are not supported at login. `isAiImage` defaults to `true` even if DB value is `false` (bug: `|| true` instead of `?? false`).
+**Note on login:** Selects the first active direct company membership, falling back to an active delegated membership only after checking that its head-office authority remains valid. `isAiImage` uses `?? true`, preserving an explicit `false`.
 
 **Note on register:** `code` is hardcoded to `1` (integer, not a custom code).
 
@@ -268,16 +270,16 @@ Runs on every app init (SSR + client). Provides `nuxtApp.$auth`.
 - Exposes: `{ session, loggedIn: computed(() => !!session.email), updateSession }`
 - `redirectTo` — `useState<string>('redirectTo')`, default `'/erp/billing'`
 
-**Route middleware registered (client-only):**
+**Route middleware:** Auth and plan guards run during SSR and client navigation; route persistence uses browser storage only.
 
-1. `persist-last-route` — saves `to.fullPath` to `localStorage('lastRoute')` unless on `/login` or `/register`
-2. `auth` — plan-aware route guard:
+1. `persist-last-route` (client only) — saves `to.fullPath` to `localStorage('lastRoute')` unless on `/login` or `/register`
+2. `auth` (server and client) — plan-aware route guard:
    - Logged-in user at `/login`/`/register` → redirect to `homeUrl`
    - `free`/`lite` plan hitting `/erp/billing` → redirect to `/offline`
    - `pro` plan hitting `/offline` → redirect to `/erp/billing`
    - Route with `meta.auth` and not logged in → redirect to `/login`, saves `redirectTo`
 
-**Session restore on init:** If logged in and a `lastRoute` is saved in localStorage, navigates to it. Preserves query string from current route. The root page (`pages/index.vue`) handles the `/` → `/erp/billing` redirect for logged-in users.
+**Session restore on init:** A saved last route is restored from browser storage only when entering `/`. Explicit seller deep links keep their requested path. Logged-in login/register navigation uses the plan fallback; the root page handles its normal authenticated entry redirect.
 
 `homeUrl`: `/offline` for `free`/`lite` plans, `/erp/billing` for `pro`.
 
@@ -371,6 +373,37 @@ Inherits `@nuxt/ui-pro` (Nuxt UI Pro component library) and `./auth` (session au
 
 - `ssr: true` — server-side rendering enabled
 
+The isolated local audit build disables server sourcemaps and `/nonetwork` prerendering to reduce memory use. It disables Nitro dependency tracing because its output runs alongside the existing installed dependencies, and resolves Prisma's generated `.prisma/client` import to its installed directory. This output is a local test artifact, not a standalone deployment package; the regular deployment configuration keeps its existing settings.
+
+The `preserveServerPrefetchIds` inline module removes `onServerPrefetch` from Nuxt's client composable removal list before build plugins initialize. Vue 3.5 uses registration of that hook to allocate async `useId` boundaries. Removing icon registrations only on the client shifts subsequent menu/control IDs; preserving registration does not execute server-prefetch callbacks in the browser. The Chrome regression has a negative control reproducing shifted IDs and checks the configured build's label/input IDs against SSR.
+
+The module only filters an existing `client.vue` list. Development defaults to an
+empty map; adding `vue: []` activates the installed Nuxt composable transform with
+an empty regex alternative. Dependency modules containing a line starting with `(`
+then trigger `Cannot overwrite a zero-length range` during Vite pre-transform.
+`tests/composable-tree-shake-config.test.ts` checks that development retains the
+empty map while production preserves prefetch registration and other removal lists.
+
+Application type preparation excludes standalone `tests/` and `cypress/` projects, whose ambient mocks must not replace Nuxt's real app/session/router types. Dedicated test configurations, such as `tests/tsconfig.print-templates.json`, continue to include their own mocks. `npm run typecheck:large` prepares Nuxt types and runs the complete application check with an 8192 MB Node heap; `TYPECHECK_MEMORY_MB` overrides that limit. Its incremental cache is in `node_modules/.cache`, since Nuxt preparation clears its build folder. The isolated browser server also defaults to an 8192 MB heap (`BRANCH_E2E_MEMORY_MB` overrides it).
+
+The isolated browser audit registers H3 middleware that blocks mutations except company switching and blocks storefront source/agent/design workflows. Before opening Chrome, the runner requires a real HTTP probe to return 409 with the audit-blocked header; a Nitro request hook alone did not stop handlers. The manually registered middleware path uses forward slashes for Windows Nitro imports. Audit browser profiles live under `node_modules/.cache/branch-e2e-profiles` with containment-checked cleanup. Startup allows 30 minutes by default on constrained machines. The external run directory's `control.json` can request a graceful stop using the exact active `driverProcessId` as `stopDriver` and the matching `startedAt`; cleanup stops only resources owned by that run. This audit cannot establish create/edit/delete form success because those writes are blocked.
+
+`npm run build:branches:e2e` prepares a local bundled audit server with an 8192 MB build heap and read-only database options. Only the isolated build uses Nitro's `node-server` preset, `.output-branch-e2e` and Vite's default route splitting; normal deployment keeps its existing preset and chunk policy. `npm run test:branches:bundled` runs the same guarded browser audit against that bundle, avoiding development-time module transformations on every page. `npm run test:branches:forms:bundled` selects the existing opt-in coupon fixture scenario. Production hydration mismatch details remain enabled in the audit bundle so a bundled test cannot conceal those failures. Rebuild after changing application source.
+
+The audit build hashes its application/configuration inputs before and after compilation and writes `bundled-manifest.json`. A changed source produces a stale manifest, not a verified build. The bundled runner checks that fingerprint before startup and again after its final company switch. Reports, architecture prose and browser-driver edits do not change the application fingerprint; the registered server guard/plugin do. The build can explicitly collect garbage between completed Vite stages to limit retained memory on the local test machine.
+
+Read-only audit mode permits the verified POST reader `/api/billSale/findManyBills` (its body supplies filters and its SQL queries only SELECT). Coupon fixture mode keeps that POST exception disabled. Each audited page gets a fresh document and query client. Readiness requires Vue mounting, the expected destination, settled API/module requests, settled active queries and settled Nuxt async data; failed query or SSR payload data also fail the page. API failures belong to request IDs and document loader IDs for that visit. These boundaries prevent late supplier responses or cancelled cached queries affecting another page. Per-page hydration warnings are snapshotted rather than sharing mutable arrays. Literal redirects and query-preserving object redirects are recognized as aliases. The seller walkthrough excludes the legacy buyer marketplace/checkout routes, as requested, and selects undeleted records for dynamic pages where the model supports soft deletion.
+
+For an explicitly authorized test database, `BRANCH_E2E_FORM_TESTS=1` enables the runner's coupon browser create/edit/delete scenario in both companies. The parent inspection clients remain read-only; the actual server verifies write capability, and middleware permits only scalar coupon mutations whose code starts with that run's unique `BRANCH_E2E_` prefix. Existing ordinary coupons, bulk writes and nested record creation stay blocked. The runner records fixture snapshots in `tests/branch-reports/form-fixture-backup.json`, checks saved values in the database and after a browser reload, and deletes only remaining run-owned fixtures in its final cleanup. This mode does not apply any schema changes and must not be used against production.
+
+`npm run test:branches:catalog:bundled` adds brand/collection browser form scenarios to coupon fixture mode. The additional `--catalog` opt-in enables only run-prefixed brand/collection scalar mutations; ordinary records, nested writes and bulk actions remain blocked. Catalog snapshots and cleanup results are separate in `catalog-fixture-backup.json`. `tests/fixture-guard.test.ts` checks these restrictions without database mutations. These scenarios being available does not establish a passing browser result; consult the run report.
+
+Native select interaction in these scenarios emits both `input` and `change`: Nuxt UI 2 updates its model on `input`. Page-form selection must also update `entryCompany` before the scenario proceeds. Product, ERP and distributor parent pages already key nested pages by path and entry company; the Chrome component regression uses the product page's actual key expression. Change-only simulated selection is not evidence that the form or table filter changed scope.
+
+`npm run test:branches:create` calls the real branch-creation handler against the explicitly selected test environment, inside an outer transaction that always rolls back. It checks blank-name and nested-branch rejection, saved parent ownership, admin membership, Purchase category, pipeline/input defaults and branch-owned accounting selections. The report snapshots only the new fixture and verifies its company, membership, expense category and accounts are absent after rollback. It does not test browser clicks or password login.
+
+The read-only browser runner can set `MARKIT_E2E_BUILD_DIR` to isolate its generated files from the normal `.nuxt` dev server. That mode disables eager page warmup and loads `tests/helpers/readonly-nitro-plugin.ts`, which refuses startup unless the actual PostgreSQL and Prisma clients both report read-only transactions. Generated test reports, log files and both generated build folders are excluded from dev watching so the two dev servers cannot trigger each other's rebuilds. Live E2E logs/results are written outside the project under `artifacts/storetools-branch-e2e-run`, with a final result copied to `tests/branch-reports/e2e-results.json` after server cleanup. Cold page navigation and settling allow 180 seconds by default (`BRANCH_E2E_PAGE_MS` overrides this); navigation timeouts are failed pages, not successes or silent skips. The runner bootstraps an encrypted session for an existing authorized member; it does not test password login or live business mutations.
+
 ### App Head
 
 - PWA manifest: `/manifest.json`
@@ -434,7 +467,7 @@ in `scripts/production-accounting`; generating or building does not apply those 
 - `serverUrl` — `SERVER_URL` (Express + Socket.io server URL, used by `$socket` plugin)
 - `electricApiUrl` — `ELECTRIC_API_URL` (ElectricSQL — paused)
 
-**Security bug:** R2 credentials (`r2Id`, `r2Secret`) are in `public` — they are accessible to browser clients. Should be server-only.
+R2 credentials (`r2Id`, `r2Secret`, `r2Bucket`, `r2AccountId`) are in private `runtimeConfig`; the current configuration does not expose them through `runtimeConfig.public`.
 
 ### Other Settings
 
@@ -449,8 +482,6 @@ in `scripts/production-accounting`; generating or building does not apply those 
 
 | File | Bug |
 |---|---|
-| `auth/server/utils/session.ts` | `console.log('Auth Config:', runtimeAuth)` fires at module load — logs session secret config |
-| `auth/server/api/auth/login.post.ts` | `isAiImage: user.companies[0].company.isAiImage \|\| true` — always `true` even if DB is `false` |
 | `auth/server/api/auth/register.post.ts` | `code` hardcoded to integer `1` instead of a configurable code |
 | `auth/server/api/auth/session.put.ts` | `console.log("session", session.data)` on every call |
 | `auth/server/api/auth/session.put.ts` | ~~`undefined` fields in PUT body overwrote existing session fields (e.g. cleared `cleanup`/`cleanupCode` on company switch → redirect to login)~~ **FIXED** — body is now filtered with `Object.entries(body).filter(([_, v]) => v !== undefined)` and merged with `{ ...session.data, ...updates }` |
@@ -460,4 +491,4 @@ in `scripts/production-accounting`; generating or building does not apply those 
 | `auth/server/api/clientauth/login.post.ts` | No password check — any caller with a known phone number gets a session; `console.log("session", session.data)` |
 | `auth/composables/auth.ts` | `updateSession()` and `updateProfileDetails()` have `console.log('Session updated')` |
 | `auth/composables/auth.ts` | `updateCompanySession()` silently swallows errors (only `console.log(err)`) |
-| `nuxt.config.ts` | `r2Id`, `r2Secret` in `runtimeConfig.public` — exposed to browser |
+| `nuxt.config.ts` | R2 credentials remain in private runtime configuration |

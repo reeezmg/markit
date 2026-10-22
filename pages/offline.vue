@@ -11,10 +11,10 @@ definePageMeta({
 <template>
     <UDashboardPage>
         <UDashboardPanel grow>
-            <UDashboardNavbar title="Offline">
+            <ErpPageNavbar title="Offline">
                 
-            </UDashboardNavbar>
-            <NuxtPage />
+            </ErpPageNavbar>
+            <NuxtPage :key="$route.fullPath" />
         </UDashboardPanel>
     </UDashboardPage>
 </template>

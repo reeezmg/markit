@@ -1,6 +1,8 @@
 <template>
+  <PrintTemplateReceipt v-if="!originalReceipt" :data="data" @original="originalReceipt = true" />
   <!-- SCALE WRAPPER (for responsiveness) -->
   <div
+    v-else
     class="flex justify-center origin-top
            scale-[0.95] sm:scale-100"
   >
@@ -129,7 +131,8 @@
 
 <script setup lang="ts">
 const props = defineProps<{ data: any }>()
-console.log('Receipt data:', props.data)
+const originalReceipt = ref(false)
+watch(() => props.data, () => { originalReceipt.value = false }, { deep: true })
 
 const showUnit = computed(() => Boolean(props.data?.showUnit))
 // Entries carry their variant's sizeLabel when available; otherwise this falls

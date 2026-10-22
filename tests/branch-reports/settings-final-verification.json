@@ -1,0 +1,26 @@
+{
+  "at": "2026-10-21T09:45:27.715Z",
+  "status": "passed-with-external-maps-blocker",
+  "regressions": {
+    "passed": 145,
+    "failed": 0,
+    "vuePagesCompiled": 146
+  },
+  "focusedSettingsChecks": 50,
+  "accountingRouterUnitSuites": 2,
+  "modelRoleSuites": 2,
+  "apiRoleSuites": 2,
+  "accountDefaultSelectorsPerRole": 20,
+  "browserRejectedSaves": 14,
+  "browserPageSummary": {
+    "passed": 28,
+    "failed": 2
+  },
+  "buildFingerprint": "5a1230e4cd5856b087ae216253ae748e715eeaa99e0e6c731bd5dcffae58b8e0",
+  "fixtureCleanup": "verified: all owned fixture graphs and transaction effects rolled back",
+  "temporaryServices": "Owned browser/audit server cleaned by harness; owned shipping service stopped",
+  "limitations": [
+    "Maps reverse geocoding requires external Cloud billing",
+    "Actual OTP email delivery, media uploads and physical USB/Bluetooth printer output were not exercised"
+  ]
+}

@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { Switch } from '@headlessui/vue'
 import type { Period, Range } from '~/types'
-import { useFindManyBill, useCountBill } from '~/lib/hooks/bill';
+import { useFindManyBill, useCountBill } from '~/lib/company-hooks/bill';
+const companyScope = useCompanyScope('table');
+await companyScope.ready;
+const historyCompany = useRoute().query.entryCompany;
+if (typeof historyCompany === 'string' && companyScope.companies.value.some(company => company.id === historyCompany)) companyScope.filter(historyCompany);
 
 import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 
 const router = useRouter()
-const useAuth = () => useNuxtApp().$auth
+const useAuth = () => companyScope.auth
 const toast = useToast()
 
 // 🔹 Date ranges
@@ -19,7 +23,8 @@ const ranges = [
   { label: 'Last 6 months', duration: { months: 6 } },
   { label: 'Last year', duration: { years: 1 } }
 ]
-const selectedDate = ref({ start: sub(new Date(), { days: 14 }), end: new Date() })
+const historyAsOf = useState<string>('sales-history:initial-date', () => new Date().toISOString())
+const selectedDate = ref({ start: sub(new Date(historyAsOf.value), { days: 14 }), end: new Date(historyAsOf.value) })
 
 // 🔹 Columns
 const columns = [
@@ -51,7 +56,7 @@ const todoStatus = [
 
 // 🔹 Selected Columns
 const selectedColumns = ref(columns)
-const columnsTable = computed(() => columns.filter((c) => selectedColumns.value.includes(c)))
+const columnsTable = computed(() => companyScope.columns(columns.filter((c) => selectedColumns.value.includes(c))));
 
 // 🔹 Filters
 const search = ref<number | null>(null)
@@ -133,13 +138,15 @@ const styledBills = computed(() =>
 )
 
 // 🔹 Restore Action
-const restoreBill = async (id: string) => {
+watch(companyScope.readIds, () => { page.value = 1; expand.value = { openedRows: [], row: null }; });
+const restoreBill = async (row: any) => {
   try {
-    await $fetch('/api/billSale/restoreBill', {
+    await companyScope.selectOwner(row.companyId);
+    await companyScope.fetch('/api/billSale/restoreBill', {
       method: 'POST',
       body: {
-        billId: id,
-        companyId: useAuth().session.value?.companyId,
+        billId: row.id,
+        companyId: row.companyId,
       },
     })
     toast.add({ title: 'Bill Restored!', color: 'green' })
@@ -156,6 +163,7 @@ const restoreBill = async (id: string) => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
+    <CompanyTableFilter />
     <UCard
             class="w-full"
             :ui="{
@@ -249,12 +257,13 @@ const restoreBill = async (id: string) => {
         v-model:sort="sort"
         v-model:expand="expand"
         :rows="styledBills"
-        :columns="columns"
+        :columns="columnsTable"
         :loading="isLoading"
         :multiple-expand="false"
         sort-mode="manual"
         class="w-full"
       >
+        <template #companyId-data="{ row }">{{ companyScope.companyName(row.companyId) }}</template>
         <template #createdAt-data="{ row }">
           {{ new Date(row.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }}
         </template>
@@ -265,7 +274,7 @@ const restoreBill = async (id: string) => {
             color="primary"
             variant="ghost"
             icon="i-heroicons-arrow-path"
-            @click="restoreBill(row.id)"
+            @click="restoreBill(row)"
           />
         </template>
 

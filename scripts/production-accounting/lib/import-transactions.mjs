@@ -40,7 +40,10 @@ export async function importTransactions(db, companyId, {through, mappings={}, c
   }
   if(mappings.money?.[row.payment_mode])moneyId=mappings.money[row.payment_mode];
   const candidates=(await db.query(`SELECT j.*,j.journal_date::text AS source_date FROM accountant_v2_manual_journals j WHERE j.company_id=$1 AND j.deleted_at IS NULL AND
-   ((j.source_type='LEGACY_CASH_BANK_HISTORY' AND j.reference_number=$2) OR (j.source_type IN ('LEGACY_MONEY_RECEIVE','LEGACY_MONEY_PAY') AND j.source_id=$3))`,[companyId,key,row.id])).rows;
+   ((j.source_type='LEGACY_CASH_BANK_HISTORY' AND j.reference_number=$2) OR (j.source_type IN ('LEGACY_MONEY_RECEIVE','LEGACY_MONEY_PAY') AND j.source_id=$3)
+    OR (j.source_type IN ('MONEY_RECEIVE','MONEY_PAY') AND j.source_id=$3 AND EXISTS (
+      SELECT 1 FROM accountant_v2_accountant_audit a WHERE a.company_id=j.company_id AND a.resource='transaction-history-import'
+      AND a.action='imported' AND a."resourceId"=$3 AND a."after"->>'journalId'=j.id)))`,[companyId,key,row.id])).rows;
   if(candidates.length>1)throw Error('Multiple journals already represent '+row.id);
   let journal=candidates[0];
   if(prior.length && (!journal || journal.id!==prior[0].after.journalId))throw Error('Imported journal missing or replaced: '+row.id);

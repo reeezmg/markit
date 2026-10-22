@@ -47,8 +47,8 @@ watch(
   () => props.editFile,
   (newVal) => {
     if (!newVal || newVal.length === 0) {
-      selectedFiles.value = []
-      imagePreviewUrls.value = []
+      if (selectedFiles.value.length) selectedFiles.value = []
+      if (imagePreviewUrls.value.length) imagePreviewUrls.value = []
       return
     }
 

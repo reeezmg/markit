@@ -1,0 +1,24 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler",
+    "strictNullChecks": true, "skipLibCheck": true, "noEmit": true,
+    "allowSyntheticDefaultImports": true, "baseUrl": "..",
+    "paths": { "~/*": ["./*"] }, "types": ["node"], "lib": ["ES2022", "DOM"]
+  },
+  "include": [
+    "print-template-globals.d.ts", "../utils/print-templates.ts",
+    "../utils/print-template-renderer.client.ts", "../utils/load-print-template.client.ts",
+    "../utils/thermal-receipt.client.ts", "../components/PrinterTemplateDesigner.vue",
+    "../components/PrinterDesignerWorkspace.vue",
+    "../pages/receipt/[id].vue", "../pages/settings/printer.vue",
+    "../components/PrintTemplateReceipt.vue", "../composables/usePrintBill.ts",
+    "../components/PrintTemplateLabels.vue", "../components/BarcodeComponent.vue",
+    "../composables/useWebUsbPrinter.ts",
+    "../components/ThermalReceipt.vue", "../types/webusb.d.ts",
+    "../server/api/settings/print-templates.get.ts", "../server/api/settings/print-templates.put.ts",
+    "../server/api/settings/label-variables.get.ts", "../server/api/settings/label-variables.post.ts",
+    "../server/api/billSale/receipt.get.ts",
+    "../server/api/billSale/share-receipt.post.ts", "../server/api/receipt-share.get.ts",
+    "../server/api/whatsapp/send-payment-template.post.ts"
+  ]
+}

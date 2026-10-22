@@ -1,0 +1,957 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 10888,
+  "pages": [
+    {
+      "company": "head",
+      "route": "/products/collections/edit/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/users/salary/cycle/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/accounts/bank/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/statement/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/investments/investors/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/erp/online/:id",
+      "status": "no-existing-record"
+    },
+    {
+      "company": "head",
+      "route": "/settings/branches",
+      "status": "passed",
+      "landed": "/settings/branches",
+      "expectedPath": "/settings/branches",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 78486,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accountant",
+      "status": "passed",
+      "landed": "/accountant/chart-of-accounts",
+      "expectedPath": "/accountant/chart-of-accounts",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 25966,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accountant/manual-journals/add",
+      "status": "passed",
+      "landed": "/accountant/manual-journals/add",
+      "expectedPath": "/accountant/manual-journals/add",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 9842,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/bank",
+      "status": "passed",
+      "landed": "/accounts/bank",
+      "expectedPath": "/accounts/bank",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 9752,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/cash",
+      "status": "passed",
+      "landed": "/accounts/cash",
+      "expectedPath": "/accounts/cash",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4190,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/credit",
+      "status": "passed",
+      "landed": "/accounts/credit",
+      "expectedPath": "/accounts/credit",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3555,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/investment",
+      "status": "passed",
+      "landed": "/accounts/investment",
+      "expectedPath": "/accounts/investment",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5122,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/tax",
+      "status": "passed",
+      "landed": "/accounts/tax",
+      "expectedPath": "/accounts/tax",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 6471,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/transaction",
+      "status": "passed",
+      "landed": "/accounts/transaction",
+      "expectedPath": "/accounts/transaction",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3659,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts/transfer",
+      "status": "passed",
+      "landed": "/accounts/transfer",
+      "expectedPath": "/accounts/transfer",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5383,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/accounts",
+      "status": "passed",
+      "landed": "/accounts",
+      "expectedPath": "/accounts",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2544,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ai/models",
+      "status": "passed",
+      "landed": "/ai/models",
+      "expectedPath": "/ai/models",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2748,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ai/usage",
+      "status": "failed",
+      "landed": "/ai/usage",
+      "expectedPath": "/ai/usage",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 9600,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/ai/usage",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/ai/usage",
+          "status": 500
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/ai",
+      "status": "passed",
+      "landed": "/ai",
+      "expectedPath": "/ai",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2733,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/checkout",
+      "status": "passed",
+      "landed": "/checkout",
+      "expectedPath": "/checkout",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2777,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/cleanup",
+      "status": "passed",
+      "landed": "/cleanup",
+      "expectedPath": "/cleanup",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 8932,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/client",
+      "status": "passed",
+      "landed": "/client",
+      "expectedPath": "/client",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 19449,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/coupon",
+      "status": "passed",
+      "landed": "/coupon",
+      "expectedPath": "/coupon",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 57235,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/dashboard",
+      "status": "passed",
+      "landed": "/dashboard",
+      "expectedPath": "/dashboard",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 10674,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/distributor/add-purchase-return",
+      "status": "passed",
+      "landed": "/distributor/add-purchase-return",
+      "expectedPath": "/distributor/add-purchase-return",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 8491,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/distributor/credit",
+      "status": "failed",
+      "landed": "/distributor/credit",
+      "expectedPath": "/distributor/credit",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 25029,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/distributor",
+      "status": "failed",
+      "landed": "/distributor",
+      "expectedPath": "/distributor",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 6259,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/distributor/payments",
+      "status": "failed",
+      "landed": "/distributor/payments",
+      "expectedPath": "/distributor/payments",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5544,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/distributor/purchase-return",
+      "status": "passed",
+      "landed": "/distributor/purchase-return",
+      "expectedPath": "/distributor/purchase-return",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2981,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/distributor/purchaseOrder",
+      "status": "failed",
+      "landed": "/distributor/purchaseOrder",
+      "expectedPath": "/distributor/purchaseOrder",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5063,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        },
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/blogs",
+      "status": "failed",
+      "landed": "/ecommerce-cms/blogs",
+      "expectedPath": "/ecommerce-cms/blogs",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 8857,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/model/distributorCompany/findMany",
+          "status": 400
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/customers",
+      "status": "passed",
+      "landed": "/ecommerce-cms/customers",
+      "expectedPath": "/ecommerce-cms/customers",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 7000,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/faq",
+      "status": "passed",
+      "landed": "/ecommerce-cms/faq",
+      "expectedPath": "/ecommerce-cms/faq",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4665,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/feedback",
+      "status": "passed",
+      "landed": "/ecommerce-cms/feedback",
+      "expectedPath": "/ecommerce-cms/feedback",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2929,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/gallery",
+      "status": "passed",
+      "landed": "/ecommerce-cms/gallery",
+      "expectedPath": "/ecommerce-cms/gallery",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2775,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/marketing",
+      "status": "passed",
+      "landed": "/ecommerce-cms/marketing",
+      "expectedPath": "/ecommerce-cms/marketing",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2583,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/messages",
+      "status": "passed",
+      "landed": "/ecommerce-cms/messages",
+      "expectedPath": "/ecommerce-cms/messages",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2691,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/payment",
+      "status": "passed",
+      "landed": "/ecommerce-cms/payment",
+      "expectedPath": "/ecommerce-cms/payment",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3176,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/policies",
+      "status": "passed",
+      "landed": "/ecommerce-cms/policies",
+      "expectedPath": "/ecommerce-cms/policies",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2694,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/reviews",
+      "status": "passed",
+      "landed": "/ecommerce-cms/reviews",
+      "expectedPath": "/ecommerce-cms/reviews",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2581,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/ecommerce-cms/shipping",
+      "status": "passed",
+      "landed": "/ecommerce-cms/shipping",
+      "expectedPath": "/ecommerce-cms/shipping",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2973,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/erp/accounts",
+      "status": "passed",
+      "landed": "/erp/accounts",
+      "expectedPath": "/erp/accounts",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4579,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/erp/billing",
+      "status": "passed",
+      "landed": "/erp/billing",
+      "expectedPath": "/erp/billing",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 18042,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/erp/expenses",
+      "status": "failed",
+      "landed": "/erp/expenses",
+      "expectedPath": "/erp/expenses",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 7464,
+      "errors": [
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        },
+        {
+          "kind": "api",
+          "path": "/api/accounts/expenses",
+          "status": 500
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/erp/online",
+      "status": "blocked-read-only",
+      "landed": "/erp/online",
+      "expectedPath": "/erp/online",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3319,
+      "errors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        },
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        },
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ]
+    },
+    {
+      "company": "head",
+      "route": "/erp/recurring-expenses",
+      "status": "passed",
+      "landed": "/erp/recurring-expenses",
+      "expectedPath": "/erp/recurring-expenses",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4035,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/erp/sales",
+      "status": "failed",
+      "durationMs": 106862,
+      "errors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        },
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        },
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        },
+        {
+          "kind": "audit-blocked",
+          "path": "/api/billSale/findManyBills",
+          "status": 409,
+          "reason": "mutation"
+        },
+        {
+          "kind": "browser",
+          "detail": "Chrome command timed out: Runtime.evaluate"
+        }
+      ],
+      "hydrationWarnings": []
+    },
+    {
+      "company": "head",
+      "route": "/erp",
+      "status": "passed",
+      "landed": "/erp",
+      "expectedPath": "/erp",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 115022,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/investments/allocate",
+      "status": "passed",
+      "landed": "/investments/allocate",
+      "expectedPath": "/investments/allocate",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4946,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/investments/capital",
+      "status": "passed",
+      "landed": "/investments/capital",
+      "expectedPath": "/investments/capital",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 5247,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/investments",
+      "status": "passed",
+      "landed": "/investments/overview",
+      "expectedPath": "/investments/overview",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2938,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/investments/investors",
+      "status": "passed",
+      "landed": "/investments/investors",
+      "expectedPath": "/investments/investors",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4170,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/investments/overview",
+      "status": "passed",
+      "landed": "/investments/overview",
+      "expectedPath": "/investments/overview",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2846,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/investments/ownership",
+      "status": "failed",
+      "landed": "/investments/investors",
+      "expectedPath": "/investments/ownership",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 3481,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/investments/payouts",
+      "status": "passed",
+      "landed": "/investments/payouts",
+      "expectedPath": "/investments/payouts",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 4684,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/investments/settings",
+      "status": "passed",
+      "landed": "/investments/settings",
+      "expectedPath": "/investments/settings",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2630,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/marketing",
+      "status": "passed",
+      "landed": "/marketing",
+      "expectedPath": "/marketing",
+      "settled": true,
+      "readyState": "complete",
+      "pendingApiPaths": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 2684,
+      "errors": []
+    },
+    {
+      "company": "head",
+      "route": "/marketplace",
+      "status": "failed",
+      "durationMs": 6657,
+      "errors": [
+        {
+          "kind": "browser",
+          "detail": "Audit stopped by control request"
+        }
+      ],
+      "hydrationWarnings": []
+    }
+  ],
+  "switches": [],
+  "errors": [
+    "Audit stopped by control request",
+    "Temporary test-browser profile cleanup failed"
+  ],
+  "startedAt": "2026-10-20T14:53:28.919Z",
+  "serverProcessId": 21040,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/landing": "/",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "currentPage": {
+    "company": "head",
+    "route": "/marketplace",
+    "startedAt": "2026-10-20T15:12:28.713Z"
+  },
+  "recoveries": [
+    {
+      "company": "head",
+      "route": "/erp/sales",
+      "time": "2026-10-20T15:09:40.013Z"
+    },
+    {
+      "company": "head",
+      "route": "/marketplace",
+      "time": "2026-10-20T15:12:35.372Z"
+    }
+  ]
+}

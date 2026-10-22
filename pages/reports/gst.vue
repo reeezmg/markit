@@ -9,7 +9,9 @@ import { format, startOfDay, endOfDay, isSameDay, sub, type Duration } from 'dat
 const selectedDate = ref({ start: new Date(), end: new Date() })
 const activeTab = ref(0)
 
-const auth = useNuxtApp().$auth
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
+const auth = companyScope.auth;
 const toast = useToast()
 
 /* =========================

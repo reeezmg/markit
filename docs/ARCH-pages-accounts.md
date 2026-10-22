@@ -2,6 +2,8 @@
 
 ## Independent Accountant area (`/accountant`)
 
+Accountant preferences GET reads saved preferences or returns schema defaults without persisting them. Investor profit settings GET reads configured/default existing accounts and returns a null account ID when none exists; it does not provision accounts. Explicit investment actions retain their existing provisioning behavior. Null investor account maps are ignored when excluding dedicated accounts.
+
 The main ERP sidebar has an **Account** group. It renders the Accounts, Journals,
 Planning and controls, Fixed assets and Setup headings and page links from
 `utils/accountant-navigation.ts` through `components/Accountant/SidebarNavigation.vue`.
@@ -12,6 +14,13 @@ start collapsed. It is available to admin, manager and accountant
 roles across plans. Legacy Accounts is hidden from navigation; its history routes remain.
 The previous `/accounts` pages are read-only history. Operational sources no longer
 write, delete, move or recalculate `account_ledger_entries`.
+The Legacy Accounts shell now supplies a local company selector for head-office
+admins. Its bank, cash, tax, credit, investment, transaction and transfer children
+inherit that scope. Ledger readers/PDF endpoints authorize the requested company;
+Nuxt data keys include the selected company so archive snapshots do not cross over.
+Links from these archive pages to Accountant or Investments retain `entryCompany`.
+Tax-history bill links use the existing `/erp/edit/:id` route, whose form resolves
+the saved bill owner, rather than the absent `/erp/sales/:id` path.
 Sales and expenses connect through ERP Accounting settings. Salary and staff credit
 connect through Staff Accounting for new activity; bank statement posting remains independent. See `ARCH-pages-erp.md` for rollout rules.
 Distributors are connected through Settings → Account → Purchase. Company account
@@ -30,11 +39,38 @@ Profit distribution has a separate shared equity default. New integration settin
 remain disabled until explicitly enabled. Provisioning does not post journals or
 replay source history. New accounts use the company currency; a newly created
 Primary Bank carries existing company bank details when available.
+
+On 2026-10-21 the authorized test branch had no chart accounts and both ERP and
+staff integrations disabled. `scripts/activate-branch-accounting-test.ts` provisioned
+38 standard accounts and activated both integrations through `enableErpAccounting`
+and `enableUserAccounting`. It ran a rollback preview before applying, backed up
+the branch configuration/source snapshots, and verified unchanged existing financial
+records, stock and head-office books. Existing source rows were preserved; newly
+created historical baselines are excluded and have no journal. No history or opening
+balances were imported. This is a test-database configuration change, not an automatic
+change to the disabled-by-default policy for future companies.
+
+Follow-up verification passed with ERP/staff enabled in both offices: 16 billing/
+collection scenarios, expense create/edit/status/delete for both roles, staff
+salary/credit/repayment/payroll-credit settlements, and 26 purchase lifecycle checks
+per office. Branch purchase fixtures use an owned, zero-history connected supplier;
+the branch has no existing suppliers. All scenario transaction effects roll back.
+`tests/branch-accounting-locks.integration.test.ts` verifies that a locked period
+rejects the whole expense save, preserving source rows, numbering and journals.
+`scripts/verify-branch-accounting-readonly.mjs` found no existing ERP/staff source-line
+mismatches, unbalanced/empty published journals, or cross-company journal/account
+lines. Results are in `tests/branch-reports/accounting-final-summary.txt` and the
+linked activation, suite, lock and read-only reports. This verifies the covered
+new-transaction flows; it does not adopt historical branch balances.
 `scripts/provision-all-company-account-defaults.ts` backfills existing companies
 using the same helper, with preview rollback by default and explicit `--apply`.
 The script backs up chart/configuration data before each company update and verifies
 unchanged existing accounts, financial-row hashes, activation flags and idempotence.
 It performs data writes only; it does not create or alter database schemas.
+GET/HEAD Accountant requests carry a read-only context. Core, ERP, staff and
+ecommerce setup loaders do not provision accounts in that context, and staff
+GET requests do not lock the company row for update. Account provisioning remains
+part of registration, branch creation and authorized mutation contexts.
 Connected distributor purchases, credits, payments, returns and opening dues post
 balanced journals in the same database transaction as the source write. Existing
 history can be imported idempotently without replaying stock quantity changes.
@@ -255,7 +291,13 @@ product, PO, item quantity and unit cost; journal details expose product/PO link
 Production commands and repeat behavior: `scripts/STOCK-ACCOUNTING.md`.
 
 `scripts/reconcile-originals-stock-rows.mjs` is the company-scoped stock-row
-correction for ORIGINALS CLOTHING. Its default preview is read-only and tallies
+correction for ORIGINALS CLOTHING.
+An explicitly authorized company can be selected instead by providing all three
+options: `--company-id=<uuid>`, `--company-name=<exact name>` and
+`--report-prefix=<lowercase filename prefix>`. The database company name must match
+before either preview or apply proceeds; the prefix names its separate backups and
+reports. Omitting these options retains the original company default.
+Its default preview is read-only and tallies
 every item against `initial_qty - sold_qty - supplier-return quantity`, alongside
 new Stock-account valuation, all published journal balances, ERP source lines and
 supplier postings/payables. `--apply` backs up company items and accounting rows
@@ -771,6 +813,56 @@ Credit-account ledger for the selected date range. Calls `/api/accounts/creditle
 
 ### Authorized old-account rebuild
 
+`scripts/production-accounting/rebuild-source-accounts.mjs` is a separate,
+task-scoped data-only rebuild for its three hard-coded company targets. Its default
+preview uses a read-only transaction. Apply requires an exclusively created JSONL
+backup, streamed with exact database JSON values and a SHA-256 digest before any
+data changes. It locks source tables and company accounting writers, preserves
+source/account-archive fingerprints, and uses existing ERP, supplier, purchase and
+stock synchronizers; it installs no database objects.
+
+The rebuild archives only matched published original/reversal pairs by setting
+the existing journal `deleted_at`. Their stored lines and reversal links remain
+available for history, while normal accounting readers exclude those journals.
+Physical deletion is not used: the existing self-reversal foreign key has no
+supporting `reversed_from_id` index in the inspected database, and adding an index
+is outside this data-only operation. Selected pairs must share
+date, currency and exchange rate and cancel by account and effective party identity.
+Distributor identity may be recorded in `distributor_id` or the source-party
+snapshot. Current journal links, other reversal references and locked dates block
+archiving. Verified older investor/payment journals can be reclassified by their
+existing source/event links without changing their amounts. Each company's rebuild
+audit records the archived pairs, reclassified IDs and backup reference. A complete
+backup from a rolled-back or interrupted run may be reused only after every
+backed-up table's exact row hashes/counts match the locked live snapshot; the file's
+checksum is recorded. When a completed failed-run report is supplied, its checksum
+and additional source fingerprints must also match.
+
+Before commit, current ERP/supplier lines must match expected source amounts,
+repeat synchronization must produce no new ERP/supplier postings, pair removal
+must preserve account balances, stock must need no further adjustment, original
+sources/archives must remain unchanged, and published journals must balance. The
+old cash import, ERP-history import and copy-old-account-history entrypoints reject
+companies with a completed `source-accounting-rebuild` audit to prevent replaying
+archived migration rows. This cleanup does not change live correction behavior:
+later source edits can still create legitimate reversal/repost journals.
+
+`scripts/check-account-source-tally.mjs --report=<path>` checks the same three
+companies in a repeatable-read, read-only transaction without invoking repair
+functions. It compares current ERP/supplier/purchase lines, native and adopted
+transfers, investments, old money movements and their bank/cash accounts, opening
+balances and offsets, current inventory valuation and stock-adjustment evidence.
+It also checks journal totals, tenant/account links, duplicate source identifiers,
+reversal cancellation and active journals without source/audit links. Monetary
+source tables absent from the current postings are counted separately in coverage;
+this is not a claim that every possible business workflow has been exercised.
+Recorded historical money-purpose classifications can supersede their migration
+clearing account: the checker validates the source identity, amount, direction,
+notes and current counterpart against the existing verified purpose evidence.
+`verify-rebuild-sources.mjs --report=<path>` separately reevaluates ERP source
+signatures under database-enforced read-only mode; a required write is reported
+instead of applied. Both commands preserve prior reports when given a new path.
+
 `production-accounting/copy-old-account-history.ts --reset` replaces all native and
 imported transfers, standalone money postings and investor events for ORIGINALS
 CLOTHING only. All deletions and recopy share one transaction; apply requires an
@@ -803,6 +895,17 @@ syncing: new standalone activity belongs in Receive/Pay money.
 
 ### Old transfer history adoption (2026-09-30)
 
+`components/Accountant/AccountTransfersPage.vue` presents `/accountant/account-transfers`
+as a Sales-style table with date, transfer number, source/destination accounts,
+amount, reference, description and row actions. Search filters transfer numbers,
+references, account names and descriptions locally; pagination offers 10/25/50/100
+rows and resets when search or page size changes. Transfer numbers and Details
+open a dialog with the full description and `SalesJournalEntries`. Native rows
+retain Edit/Delete actions; imported rows expose Details only. The existing
+create/edit form and company-scoped Accountant API remain in use.
+
+
+
 `production-accounting/copy-old-account-history.ts --only=transfers` and `lib/import-transfers.mjs` create
 `accountant_v2_account_transfers` and balanced ACCOUNT_TRANSFER journals from old
 `account_transfers`. Verified LEGACY_CASH_BANK_HISTORY postings are preserved and
@@ -818,3 +921,9 @@ blocked after replacement. New-page imported rows hide Edit/Delete; the router a
 old transfer PUT/DELETE also reject imported-history mutation. Native new transfers
 retain their existing edit/delete workflow. The old `/accounts/transfer` page shows read-only original `account_transfers`, with named banks and a link to `/accountant/account-transfers` for current entries. Source
 tables remain intact.
+
+
+
+### Legacy bank hydration
+
+The bank history page captures its auth context during setup and waits for both the current company and bank queries during SSR. Its primary-bank labels and row loading state therefore use the same snapshot as the hydrated client.

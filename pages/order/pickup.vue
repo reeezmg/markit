@@ -4,18 +4,22 @@ import { useFindManyEcommPickupLocation, useCreateEcommPickupLocation, useUpdate
 
 definePageMeta({ auth: true });
 
-const useAuth = () => useNuxtApp().$auth;
+const auth = useNuxtApp().$auth;
+const useAuth = () => auth;
 const toast = useToast();
 const companyId = computed(() => useAuth().session.value?.companyId || '');
 
 // ─── Pickup locations (warehouses) ──────────────────────────────────────────
-const { data: locations, isLoading, refetch } = useFindManyEcommPickupLocation(
+const locationRead = useFindManyEcommPickupLocation(
   computed(() => ({
     where: { companyId: companyId.value },
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'asc' }],
   })),
   { enabled: computed(() => Boolean(companyId.value)) },
 );
+const { data: locations, isLoading, refetch } = locationRead;
+onServerPrefetch(async () => { if (companyId.value) await locationRead.suspense().catch(() => {}); });
+
 
 const { mutate: createLocation, isPending: isCreating } = useCreateEcommPickupLocation();
 const { mutate: updateLocation, isPending: isUpdating } = useUpdateEcommPickupLocation();
@@ -149,6 +153,7 @@ function registerWithCarrier(loc: any) {
 
 // ─── Raise pickup request ───────────────────────────────────────────────────
 const pickupProviders = ref<any[]>([]);
+const providerError = ref('');
 const loadingProviders = ref(true);
 const raising = ref(false);
 const remainingCount = ref(0);
@@ -289,10 +294,13 @@ async function updateStatus(req: any, status: string) {
 
 async function loadProviders() {
   loadingProviders.value = true;
+  providerError.value = '';
   try {
     const res: any = await $fetch('/api/ecommerce-cms/shipping/providers');
     pickupProviders.value = (res.providers || []).filter((p: any) => p.supportsPickup);
-  } catch { /* no shipping config yet */ }
+  } catch (error: any) {
+    providerError.value = carrierError(error);
+  }
   finally { loadingProviders.value = false; }
 }
 
@@ -315,6 +323,16 @@ onMounted(() => {
       </div>
       <UButton icon="i-heroicons-plus" color="gray" variant="soft" @click="openCreate">Add Location</UButton>
     </div>
+
+    <UAlert v-if="providerError" color="red" title="Couldn’t load shipping carriers" :description="providerError">
+      <template #actions><UButton color="red" variant="soft" @click="loadProviders">Retry</UButton></template>
+    </UAlert>
+    <UAlert
+      v-else-if="!loadingProviders && !pickupProviders.length"
+      icon="i-heroicons-truck"
+      title="Connect a shipping carrier to raise pickups"
+      description="You can manage pickup locations below while you set up a carrier."
+    />
 
     <!-- Raise pickup -->
     <UCard v-if="loadingProviders || pickupProviders.length">

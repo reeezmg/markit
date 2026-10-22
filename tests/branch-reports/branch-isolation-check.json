@@ -1,0 +1,112 @@
+{
+  "databaseMode": "read-only (verified for pg and Prisma)",
+  "bootstrap": "local encrypted test session, existing authorized membership",
+  "serverMode": "bundled node server",
+  "serverHeapLimitMB": 8192,
+  "driverProcessId": 15448,
+  "pages": [
+    {
+      "company": "branch",
+      "route": "/notifications",
+      "status": "passed",
+      "landed": "/notifications",
+      "expectedPath": "/notifications",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 13780,
+      "errors": []
+    },
+    {
+      "company": "branch",
+      "route": "/products/brands",
+      "status": "passed",
+      "landed": "/products/brands",
+      "expectedPath": "/products/brands",
+      "settled": true,
+      "readyState": "complete",
+      "mounted": true,
+      "loadingQueries": 0,
+      "failedQueries": 0,
+      "loadingAsyncData": 0,
+      "failedAsyncData": 0,
+      "pendingApiPaths": [],
+      "pendingApiScopes": [],
+      "pendingModulePaths": [],
+      "hydrationWarnings": [],
+      "durationMs": 9941,
+      "errors": []
+    }
+  ],
+  "switches": [
+    {
+      "direction": "head-to-branch",
+      "status": 200,
+      "persisted": true
+    },
+    {
+      "direction": "branch-to-head",
+      "status": 200,
+      "persisted": true
+    }
+  ],
+  "errors": [],
+  "startedAt": "2026-10-20T23:47:49.556Z",
+  "bundleFingerprint": "a2063bd4c56225d10a7580b95732f8b4ed21d5b3f85d12b8a2a02fd36ab8a22c",
+  "serverProcessId": 11680,
+  "actualServerReadOnlyVerified": true,
+  "mutationGuardVerified": true,
+  "authenticatedSessionVerified": true,
+  "staticRedirects": {
+    "/accountant": "/accountant/chart-of-accounts",
+    "/investments": "/investments/overview",
+    "/investments/ownership": "/investments/investors",
+    "/landing": "/",
+    "/marketing": "/ecommerce-cms/marketing",
+    "/order": "/order/ecomorders",
+    "/storelanding": "/"
+  },
+  "navigationMode": "fresh document and query client for each page",
+  "excludedBuyerRoutes": [
+    "/marketplace",
+    "/checkout",
+    "/checkout/:orderId"
+  ],
+  "pageAuditScope": "requested routes and form visits only",
+  "formsScope": [],
+  "currentPage": {
+    "company": "branch",
+    "route": "/products/brands",
+    "startedAt": "2026-10-20T23:48:24.726Z"
+  },
+  "interactions": [
+    {
+      "company": "branch",
+      "route": "/notifications",
+      "action": "switch unread/all tabs without marking notifications read",
+      "status": "passed",
+      "initial": {
+        "count": 2,
+        "selected": 0
+      },
+      "errors": []
+    }
+  ],
+  "pageSummary": {
+    "passed": 2
+  },
+  "formSummary": {},
+  "interactionSummary": {
+    "passed": 1
+  },
+  "pageAuditStatus": "passed",
+  "finishedAt": "2026-10-20T23:48:44.011Z"
+}

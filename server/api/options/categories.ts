@@ -1,3 +1,4 @@
+import { prisma } from '~/server/prisma';
 import { getReadCompanyIds } from '~/server/utils/organizationReadScope';
 
 export default defineEventHandler(async (event) => {

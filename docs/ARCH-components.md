@@ -6,6 +6,13 @@ All components are in `storetools/components/`. This file covers components not 
 
 ## Global / Layout Components
 
+### ERP company selector placement
+- `ErpPageNavbar.vue` preserves the dashboard navbar's original left title and named slots and supplies `#company-page-topbar` at the far right, after any existing right-side actions.
+- Top-bar company selectors show only the dropdown, with an accessible `aria-label`; embedded/modal form selectors retain their visible field label.
+- `CompanyControlPlacement.vue` moves its slot to that anchor with Vue Teleport after mount. It retains the originating component's scope and handlers, falls back to the original position when no anchor exists, and removes the teleported control when its owner unmounts. The server and initial client render both use the original position.
+- `CompanyTableFilter.vue` uses that placement by default. `CompanyFormField.vue` opts in with `toolbar` for forms occupying the whole page; embedded forms, modals and slideovers omit the prop and remain inline. Salary payment/adjustment forms and the leave-balance subform keep their own selectors in the form while their page table filter moves to the navbar. Transfer confirmation keeps existing locks and transfer behavior.
+- Mounted tabs can contain repeated selectors; the navbar displays one copy per existing purpose (`table` filtering or `form` ownership), without merging their state. `tests/branch-browser.ts` verifies DOM placement, navigation cleanup, independent modal scope and scoped request headers in Chrome.
+
 ### `UserDropdown.vue`
 Seller-side account dropdown rendered in the sidebar footer.
 - **Auth:** `useNuxtApp().$auth` (seller session)
@@ -65,28 +72,23 @@ Not read — assumed to be a Nuxt UI starter template stub (triggered by `isHelp
 ## Print / Barcode Components
 
 ### `ThermalReceipt.vue`
+Custom receipt designs are rendered through `PrintTemplateReceipt.vue`; the original layout below is used when no receipt default is selected. Bill receipt API data includes the owning company's template and `companyId`, so cross-store previews do not use the viewer's default company. Locally built print payloads load their company default through the settings API. Rendering failures are displayed rather than silently changing the design.
 Renders a thermal receipt for printing. Used by `pages/receipt/[id].vue` and the `usePrint` composable.
 - **Props:** `data: any` — receipt payload from `GET /api/billSale/receipt`
 - **Layout:** 90mm wide, monospace font, dashed borders — matches typical 80mm thermal paper
 - **Sections:** store name + address + GSTIN, invoice info + client, line items table (SL/Description/QTY/MRP/DISC/VALUE) with an optional UNIT column when the selected billing units include more than one value, totals row, round-off, GRAND TOTAL, savings box, footer (thankYouNote, returnPolicy, refundPolicy, phone). HSN and tax render as compact metadata below the description.
 - Product descriptions stay on one line and use CSS ellipsis when they exceed the description column. The item rows and totals use the same six-column grid (seven with UNIT), right-aligned tabular numeric cells, and totals map directly beneath QTY/MRP/DISC/VALUE.
 - **Print CSS:** removes border + scale transform during `@media print`
-- **Bug:** `console.log('Receipt data:', props.data)` fires on every render
 
 ### `BarcodeComponent.vue`
+When a company product-label default is active, `PrintTemplateLabels.vue` renders the actual label payload with the same canvas renderer used by printing/PDF. Otherwise the legacy product label grid below is shown. Used by product add and purchase pages.
 Displays a grid of barcode labels with product info. Used for barcode preview/display (not print).
 - **Props:** `barcodes: BarcodeItem[]` — `{ barcode, productName, variantName, sprice, color?, size? }`
 - **Library:** `jsbarcode` — CODE128 format, SVG output, width=2, height=50
-- **Each label:** barcode SVG + product name + variant name + color/size + price (displayed as `$` — **Bug:** should be `₹`)
+- **Each legacy label:** barcode SVG + product name + variant name + color/size + price displayed as `₹`.
 - Barcodes regenerated on `watch(barcodes, ..., { deep: true })`
 
-### `PrintBarcodeComponent.vue`
-Print-ready barcode label sheet. Triggers `window.print()` automatically on `onMounted`.
-- **Props:** `barcodes: BarcodeItem[]` — `{ barcode, productName, variantName?, price, color?, size? }`
-- **Print layout:** each label is 2in × 2in, `page-break-after: always`, `@page { size: 2in 2in; margin: 0 }`
-- **Library:** `jsbarcode` — CODE128, width=1.5, height=40
-- **Auto-print:** `printLabels()` called in `onMounted` with 500ms delay (waits for barcode generation)
-- Used in: `pages/products/edit/[id].vue` barcode print modal
+The unused browser auto-print barcode component was removed. Product labels print through `usePrint()` and the assigned WebUSB device on web, or the selected Bluetooth printer in the native app.
 
 ---
 
@@ -330,8 +332,10 @@ v-calendar date picker wrapper with Nuxt UI theming.
 Google Maps location picker with text search and GPS.
 - **Map:** Google Maps JS API (`mapId: 85423aee1b59e235e896d3e7`), draggable marker, click-to-place
 - **Search:** `USlideover` with text input → Google Places `textSearch` (biased to India bounding box) → `getDetails` on selection
-- **GPS:** `navigator.geolocation.getCurrentPosition` → centers map + reverse geocode via `Geocoder`
-- **Pre-fill:** on init, uses `session.address.lat/lng` if available (session company address); falls back to GPS
+- **GPS:** Requested from the location button with a bounded wait; denied/unsupported location displays an inline error. `navigator.geolocation.getCurrentPosition` → centers map + reverse geocode via `Geocoder`
+- **Pre-fill:** Uses finite saved session coordinates, including zero. Missing address/coordinates keeps the overview without requesting location automatically.
 - **Emits:** `locationSelected({ lat, lng, name, formattedAddress, street, locality, city, state, pincode, placeId })`
-- **API key:** hardcoded in source — `AIzaSyCfmQAcnCd3rUdLXxC9Hg9NiowG0ovHbfQ`
+- **API key:** Existing browser key is embedded in the component; required Google services/configuration must be available.
 - Used in: `pages/settings/store.vue` (address section)
+
+MapLocationPicker displays an inline address-service failure when reverse geocoding fails, distinguishes an empty result from service unavailability, and clears the error on retry. The existing Maps project reported that billing must be enabled; this code change does not enable Cloud billing.

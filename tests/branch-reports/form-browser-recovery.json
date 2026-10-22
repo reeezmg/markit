@@ -1,0 +1,24 @@
+{
+  "reason": "Inspect whether Create works after hydration",
+  "response": {
+    "id": 1,
+    "result": {
+      "result": {
+        "type": "string",
+        "value": "retried Create after mount"
+      }
+    }
+  },
+  "branchRetry": {
+    "at": "2026-10-20T14:39:01.878Z",
+    "response": {
+      "id": 1,
+      "result": {
+        "result": {
+          "type": "string",
+          "value": "retried Create after mount"
+        }
+      }
+    }
+  }
+}

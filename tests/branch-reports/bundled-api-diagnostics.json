@@ -1,0 +1,338 @@
+[
+  {
+    "at": "2026-10-20T20:38:24.827Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:38:25.676Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:38:27.456Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:38:28.301Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:38:31.568Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:38:32.730Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:38:37.524Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:38:38.659Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:45:03.199Z",
+    "path": "/api/accountant/investor-profits/settings",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:45:05.376Z",
+    "path": "/api/accountant/investor-profits/settings",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:45:39.743Z",
+    "path": "/api/ecommerce-cms/storefront-source",
+    "status": 409,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:45:39.975Z",
+    "path": "/api/ecommerce-cms/storefront-source",
+    "status": 409,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:49:10.653Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:49:12.049Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:49:14.844Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:49:16.754Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:49:20.646Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:49:22.867Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:49:28.252Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:49:29.616Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:51:23.852Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:51:25.312Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:51:27.849Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:51:30.277Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:51:33.720Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:51:35.082Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:51:40.363Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:51:41.827Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:58:51.719Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:58:51.970Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:58:53.281Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:58:53.692Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:58:56.143Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:58:56.478Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:59:01.235Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T20:59:01.947Z",
+    "path": "/api/accounts/expenses",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:02:45.943Z",
+    "path": "/api/accountant/investor-profits/settings",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:02:46.834Z",
+    "path": "/api/accountant/investor-profits/settings",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:04:17.239Z",
+    "path": "/api/ecommerce-cms/storefront-source",
+    "status": 409,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:04:17.247Z",
+    "path": "/api/ecommerce-cms/storefront-source",
+    "status": 409,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:06:22.592Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:06:23.353Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:06:25.190Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:06:26.040Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:06:28.728Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:06:29.750Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:06:34.888Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:06:35.571Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:08:11.882Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:08:14.210Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:08:16.750Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:08:18.121Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:08:21.054Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:08:21.939Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:08:26.534Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  },
+  {
+    "at": "2026-10-20T21:08:27.264Z",
+    "path": "/api/accountant/accountant-management/preferences",
+    "status": 500,
+    "prisma": false
+  }
+]

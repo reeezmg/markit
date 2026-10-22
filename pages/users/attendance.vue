@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const companyScope = useCompanyScope('table');
+await companyScope.ready;
 const $fetch = companyScope.fetch;
 
 import { attendanceCalendarStatus } from '~/utils/attendance-status'

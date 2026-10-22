@@ -7,7 +7,7 @@ import { scopeOrganizationModelReads } from '~/server/utils/organizationModelSco
 
 export default createEventHandler({
     getPrisma: async (event) => {
-        const session = await useAuthSession(event);
+        const session = await requireAuthSession(event);
         const client = enhance(
             prisma,
             {
@@ -23,8 +23,6 @@ export default createEventHandler({
                 transactionMaxWait: 3000000,
             }
         );
-        return session.data.id
-            ? scopeOrganizationModelReads(client, session.data.companyId, await authorizedCompanyIds(event))
-            : client;
+        return scopeOrganizationModelReads(client, session.data.companyId, await authorizedCompanyIds(event));
     },
 });

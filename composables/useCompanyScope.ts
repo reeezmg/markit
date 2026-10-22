@@ -1,5 +1,6 @@
 import { appendCompanyWhere } from '~/utils/companyWhere';
-import { computed, getCurrentInstance, inject, provide, ref, shallowRef, unref, toValue, type InjectionKey } from 'vue';
+import { useQueryClient } from '@tanstack/vue-query';
+import { computed, getCurrentInstance, onServerPrefetch, inject, provide, ref, shallowRef, unref, toValue, type InjectionKey } from 'vue';
 
 type Store = { id: string; name: string; parentCompanyId: string | null; isHeadOffice: boolean };
 type ScopeMode = 'table' | 'form';
@@ -20,7 +21,8 @@ function createCompanyScope(mode: ScopeMode, pageForm = false) {
   const settings = shallowRef<Record<string, any>>({});
   const busy = ref(false);
   const record = shallowRef<{ model: string; id: string; companyId: string } | null>(null);
-  const { data: accessible } = useFetch<Store[]>('/api/auth/accessible-companies', { credentials: 'include' });
+  const accessibleRequest = useFetch<Store[]>('/api/auth/accessible-companies', { credentials: 'include' });
+  const { data: accessible } = accessibleRequest;
   const activeId = computed(() => actualAuth.session.value?.companyId || '');
   const enabled = computed(() => actualAuth.session.value?.role === 'admin' &&
     Boolean(accessible.value?.some(c => c.id === activeId.value && c.isHeadOffice && !c.parentCompanyId)));
@@ -30,20 +32,25 @@ function createCompanyScope(mode: ScopeMode, pageForm = false) {
   const readIds = computed(() => mode === 'form' ? [companyId.value]
     : selected.value ? [selected.value] : enabled.value ? companies.value.map(c => c.id) : [activeId.value]);
   const session = computed(() => ({ ...actualAuth.session.value,
+    ...(companyId.value !== activeId.value ? { selectedAccounts: undefined, selectedAccountsPacked: undefined } : {}),
     ...(settings.value.companyId === companyId.value ? settings.value : {}), companyId: companyId.value }));
   const auth = { ...actualAuth, session } as typeof actualAuth;
-  const recordId = pageForm ? String(route.params.id || route.params.salesId || route.query.poId || '') : '';
-  const recordModel = route.path.startsWith('/users/salary/cycle/') ? 'PayrollCycle' : route.path.startsWith('/erp/') ? 'Bill'
+  const recordId = pageForm ? String(route.params.id || route.params.salesId || route.params.billId || route.query.poId || '') : '';
+  const recordModel = route.path.startsWith('/saleshistory/') ? 'BillHistory'
+    : route.path.startsWith('/statement/') ? 'StatementBatch'
+    : route.path.startsWith('/users/salary/cycle/') ? 'PayrollCycle' : route.path.startsWith('/erp/') ? 'Bill'
     : route.path.includes('edit-purchase-return') ? 'PurchaseReturn'
     : route.path.includes('/brands/') ? 'Brand' : route.path.includes('/categories/') ? 'Category'
     : route.path.includes('/collections/') ? 'Collection' : route.query.poId ? 'PurchaseOrder' : 'Product';
-  const ready = recordId || (selected.value && selected.value !== activeId.value)
+  const contextReady = recordId || (selected.value && selected.value !== activeId.value)
     ? requestFetch<Record<string, any>>('/api/organization/context', { query: recordId
         ? { model: recordModel, id: recordId } : { companyId: selected.value } }).then(data => {
           settings.value = data;
           if (data.record) { record.value = data.record; owner.value = data.companyId; selected.value = data.companyId; }
         })
-    : Promise.resolve();
+    : activeId.value ? requestFetch<Record<string, any>>('/api/organization/context', { query: { companyId: activeId.value } })
+        .then(data => { if (data.companyId === companyId.value) settings.value = data; }) : Promise.resolve();
+  const ready = Promise.all([accessibleRequest, contextReady]).then(() => {});
 
   async function selectCompany(id: string) {
     if (!companies.value.some(c => c.id === id)) throw new Error('Company access denied');
@@ -64,6 +71,11 @@ function createCompanyScope(mode: ScopeMode, pageForm = false) {
       owner.value = id;
       if (mode === 'form') selected.value = id;
     } finally { busy.value = false; }
+  }
+  async function refreshSettings() {
+    const id = companyId.value;
+    const data = await requestFetch<Record<string, any>>('/api/organization/context', { query: { companyId: id } });
+    if (id === companyId.value) settings.value = data;
   }
   async function beginForm(existing?: { model: string; id: string; companyId: string } | null) {
     record.value = existing ?? null;
@@ -98,7 +110,7 @@ function createCompanyScope(mode: ScopeMode, pageForm = false) {
     return `${url}${separator}companyFilter=${encodeURIComponent(mode === 'table' ? selected.value || '*' : companyId.value)}&companyId=${encodeURIComponent(companyId.value)}`;
   }
   return { mode, pageForm, ready, enabled, companies, selected, companyId, readIds, auth, busy, record,
-    selectCompany, selectOwner, beginForm, filter, companyName, columns, fetch: scopedFetch, readArgs, headers, downloadUrl };
+    selectCompany, selectOwner, refreshSettings, beginForm, filter, companyName, columns, fetch: scopedFetch, readArgs, headers, downloadUrl };
 }
 
 /** One scope per table/form instance; never writes the logged-in session. */
@@ -119,7 +131,7 @@ export function withCompanyRead<T extends (...args: any[]) => any>(hook: T, mode
     const scope = useCompanyScope();
     const exact = options?.companyScope === 'form' || model === 'BankAccount';
     const hookOptions = options?.companyScope ? Object.fromEntries(Object.entries(options).filter(([key]) => key !== 'companyScope')) : options;
-    return hook(computed(() => {
+    const result = hook(computed(() => {
       const ids = exact ? [scope.companyId.value] : scope.readIds.value;
       const value = scope.readArgs(toValue(args), ids) ?? {};
       if (!model || model === 'Client') return value;
@@ -128,5 +140,20 @@ export function withCompanyRead<T extends (...args: any[]) => any>(hook: T, mode
         : { companyId: { in: ids } };
       return { ...value, where: appendCompanyWhere(value.where, cap) };
     }), hookOptions);
+    if (typeof result?.refetch === 'function') {
+      const client = useQueryClient();
+      const initialHash = result.queryKey ? client.getQueryCache().find({ queryKey: result.queryKey, exact: true })?.queryHash : undefined;
+      onServerPrefetch(async () => {
+        await scope.ready;
+        if (toValue(toValue(options)?.enabled) === false) return;
+        const current = result.queryKey ? client.getQueryCache().find({ queryKey: result.queryKey, exact: true }) : undefined;
+        if (result.queryKey ? !current || current.queryHash !== initialHash || current.state.status === 'pending' || current.state.fetchStatus === 'fetching' : unref(result.isFetching)) {
+          // Vue Query suspense leaves an options watcher that can retry settled
+          // errors during nested SSR rendering, after the parent HTML is fixed.
+          await result.refetch({ cancelRefetch: false }).catch(() => {});
+        }
+      });
+    }
+    return result;
   }) as T;
 }

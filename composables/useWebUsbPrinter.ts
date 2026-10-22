@@ -1,5 +1,13 @@
+import { MissingLabelBarcodeError } from '~/utils/label-barcode';
 import { Capacitor } from '@capacitor/core';
 import { buildBillReceiptBytes, buildLabelPrintJobs, buildReportReceiptBytes } from '~/composables/printCommands';
+import { loadPrintTemplate } from '~/utils/load-print-template.client';
+import { loadLabelVariables } from '~/utils/load-label-variables.client';
+import { renderPrintTemplate, templatePrintBytes } from '~/utils/print-template-renderer.client';
+import type { PrintTemplate } from '~/utils/print-templates';
+
+export type LabelPrinterLanguage = 'tspl' | 'cpcl';
+const LABEL_LANGUAGE_KEY = 'markit-label-printer-language';
 
 export type WebUsbPrinterRole = 'receipt' | 'barcode';
 
@@ -18,7 +26,7 @@ const SAVED_USB_PRINTERS_KEY = 'savedWebUsbPrinters';
 const USB_PRINTER_ROLES_KEY = 'webUsbPrinterRoles';
 
 function isClientSide(): boolean {
-  return process.client && typeof window !== 'undefined';
+  return typeof window !== 'undefined';
 }
 
 function createErrorMessage(message: string): Error {
@@ -117,22 +125,37 @@ async function closePrinterDevice(device: USBDevice, interfaceNumber?: number) {
 }
 
 async function writeToPrinter(device: USBDevice, jobs: Uint8Array[]) {
-  const endpoint = await openPrinterDevice(device);
-
+  let endpoint: Awaited<ReturnType<typeof openPrinterDevice>> | undefined;
   try {
+    endpoint = await openPrinterDevice(device);
     for (const job of jobs) {
-      const result = await device.transferOut(endpoint.endpointNumber, job);
-      if (result.status !== 'ok') {
-        throw createErrorMessage('USB printer rejected the print job.');
+      for (let offset = 0; offset < job.length; offset += 4096) {
+        const chunk = job.slice(offset, offset + 4096);
+        const result = await device.transferOut(endpoint.endpointNumber, chunk);
+        if (result.status !== 'ok' || result.bytesWritten !== chunk.length) {
+          throw createErrorMessage('USB printer rejected the print job.');
+        }
       }
       await new Promise((resolve) => setTimeout(resolve, 150));
     }
   } finally {
-    await closePrinterDevice(device, endpoint.interfaceNumber);
+    await closePrinterDevice(device, endpoint?.interfaceNumber);
   }
 }
 
 export function useWebUsbPrinter() {
+  const toast = useToast();
+  const initiatePrint = async (role: WebUsbPrinterRole) => {
+    if (!isSupported() || !hasAssignedPrinter(role)) throw new Error('Connect and assign your printer in Settings > Printer.');
+    toast.add({ title: 'Print initiated', icon: 'i-heroicons-printer', description: 'Preparing your print job. Please wait.' });
+    // Let the UI display feedback before canvas preparation starts.
+    await new Promise(resolve => setTimeout(resolve, 0));
+  };
+  const getLabelPrinterLanguage = (): LabelPrinterLanguage => readJson<LabelPrinterLanguage>(LABEL_LANGUAGE_KEY, 'tspl') === 'cpcl' ? 'cpcl' : 'tspl';
+  const setLabelPrinterLanguage = (language: LabelPrinterLanguage) => {
+    if (!['tspl', 'cpcl'].includes(language)) throw new Error('Unsupported label printer language');
+    writeJson(LABEL_LANGUAGE_KEY, language);
+  };
   const isSupported = () =>
     isClientSide() &&
     !Capacitor.isNativePlatform() &&
@@ -244,21 +267,28 @@ export function useWebUsbPrinter() {
     return device;
   };
 
-  const printBillViaUsb = async (printData: any) => {
-    const device = await getUsbPrinterByRole('receipt');
-    const bytes = buildBillReceiptBytes(printData);
+  const printBillViaUsb = async (printData: any, design?: PrintTemplate | null) => {
+    await initiatePrint('receipt');
+    const [bytes, device] = await Promise.all([
+      prepareReceiptPrint(printData, design), getUsbPrinterByRole('receipt'),
+    ]);
     await writeToPrinter(device, [bytes]);
     return { success: true };
   };
 
-  const printLabelViaUsb = async (labelData: any[], printerLabelSize: string) => {
-    const device = await getUsbPrinterByRole('barcode');
-    const jobs = buildLabelPrintJobs(labelData, printerLabelSize);
+  const printLabelViaUsb = async (labelData: any[], printerLabelSize: string, design?: PrintTemplate | null, testLanguage?: LabelPrinterLanguage) => {
+    await initiatePrint('barcode');
+    const [jobs, device] = await Promise.all([
+      prepareLabelPrint(labelData, printerLabelSize, testLanguage ?? getLabelPrinterLanguage(), design),
+      getUsbPrinterByRole('barcode'),
+    ]);
+    // Never retry/fallback once transmission starts: the printer may have printed part of the job.
     await writeToPrinter(device, jobs);
     return { success: true };
   };
 
   const printReportViaUsb = async (reportData: any) => {
+    await initiatePrint('receipt');
     const device = await getUsbPrinterByRole('receipt');
     const bytes = buildReportReceiptBytes(reportData);
     await writeToPrinter(device, [bytes]);
@@ -266,6 +296,8 @@ export function useWebUsbPrinter() {
   };
 
   return {
+    getLabelPrinterLanguage,
+    setLabelPrinterLanguage,
     isWebUsbSupported: isSupported,
     getSavedWebUsbPrinters,
     getWebUsbPrinterRoles,
@@ -280,4 +312,46 @@ export function useWebUsbPrinter() {
     printLabelViaUsb,
     printReportViaUsb,
   };
+}
+
+export async function prepareReceiptPrint(printData: any, design?: PrintTemplate | null) {
+    const template = design === undefined ? await loadPrintTemplate('receipt', printData.companyId) : design;
+    let bytes: Uint8Array;
+    try {
+      bytes = template ? templatePrintBytes(await renderPrintTemplate(template, printData), template) : buildBillReceiptBytes(printData);
+    } catch (error) {
+      if (design !== undefined) throw error; // An editor test must expose design errors.
+      console.warn('Receipt rendering failed; using the built-in receipt.', error);
+      bytes = buildBillReceiptBytes(printData);
+    }
+    return bytes;
+}
+
+export async function prepareLabelPrint(labelData: any[], printerLabelSize: string, language: LabelPrinterLanguage, design?: PrintTemplate | null) {
+    const template = design === undefined ? await loadPrintTemplate('label', labelData[0]?.companyId) : design;
+    if (language === 'cpcl' && !template) throw new Error('Choose and save a default label design in Settings > Printer before printing with CPCL.');
+    if (template) labelData = await loadLabelVariables(labelData, template);
+    let jobs: Uint8Array[];
+    try {
+      if (template) {
+        // Scope reuse to this job: changed prices/designs must never reuse old pixels.
+        const renderedCopies = new Map<string, Promise<Uint8Array>>();
+        jobs = await Promise.all(labelData.map(item => {
+          // Non-JSON caller data is still renderable, but cannot safely share a cache key.
+          let key: string | undefined;
+          try { key = JSON.stringify(item); } catch { /* Render independently. */ }
+          let bytes = key === undefined ? undefined : renderedCopies.get(key);
+          if (!bytes) {
+            bytes = renderPrintTemplate(template, item).then(rendered => templatePrintBytes(rendered, template, language));
+            if (key !== undefined) renderedCopies.set(key, bytes);
+          }
+          return bytes;
+        }));
+      } else jobs = buildLabelPrintJobs(labelData, printerLabelSize);
+    } catch (error) {
+      if (error instanceof MissingLabelBarcodeError || language === 'cpcl' || design !== undefined) throw error;
+      console.warn('Label rendering failed; using the built-in TSPL label.', error);
+      jobs = buildLabelPrintJobs(labelData, printerLabelSize);
+    }
+    return jobs;
 }

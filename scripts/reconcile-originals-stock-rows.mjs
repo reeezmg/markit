@@ -8,8 +8,20 @@ import { createHash } from 'node:crypto';
 // Authorized Originals stock-row and new-account reconciliation, 2026-10-11.
 // Preview is strictly read-only. Apply changes quantities, then invokes the
 // installed stock-control function; it never installs or changes DB schemas.
-const companyId = '6980e6e4-7d5d-413c-9554-24f385c9b853';
-assert.ok(process.argv.slice(2).every(arg => arg === '--apply'), 'Unknown option');
+const args = process.argv.slice(2);
+assert.ok(args.every(arg => arg === '--apply' || /^--(company-id|company-name|report-prefix)=.+$/.test(arg)), 'Unknown option');
+const option = name => {
+  const matches = args.filter(arg => arg.startsWith(`--${name}=`));
+  assert.ok(matches.length <= 1, `Duplicate ${name}`);
+  return matches[0]?.slice(name.length + 3);
+};
+const target = [option('company-id'), option('company-name'), option('report-prefix')];
+assert.ok(target.every(Boolean) || target.every(value => value === undefined), 'Custom target requires company-id, company-name and report-prefix');
+const companyId = target[0] || '6980e6e4-7d5d-413c-9554-24f385c9b853';
+const companyName = target[1] || 'ORIGINALS CLOTHING';
+const prefix = target[2] || 'originals';
+assert.match(companyId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
+assert.match(prefix, /^[a-z0-9-]+$/);
 const apply = process.argv.includes('--apply');
 const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
 const pool = new Pool({ connectionString: url, connectionTimeoutMillis: 15000 });
@@ -17,7 +29,7 @@ const db = await pool.connect();
 const dir = new URL('../../artifacts/stock-reconciliation/', import.meta.url);
 mkdirSync(dir, { recursive: true });
 const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-const reportFile = new URL(`originals-${apply ? 'repaired' : 'audit'}-${stamp}.json`, dir);
+const reportFile = new URL(`${prefix}-${apply ? 'repaired' : 'audit'}-${stamp}.json`, dir);
 const report = { companyId, at: new Date().toISOString(), applied: false,
   rule: 'qty = initial_qty - sold_qty - supplier_return_qty' };
 const stockCtes = `supplier_returns AS (
@@ -155,7 +167,7 @@ try {
   await db.query("SET LOCAL statement_timeout='60s'");
   await db.query("SET LOCAL lock_timeout='10s'");
   report.company = (await query('SELECT name FROM companies WHERE id=$1'))[0]?.name;
-  assert.equal(report.company, 'ORIGINALS CLOTHING');
+  assert.equal(report.company, companyName);
   report.stockControl = (await query('SELECT company_id,enabled,revision,initialized_at FROM accountant_v2_stock_control WHERE company_id=$1'))[0];
   assert.ok(report.stockControl?.enabled, 'Existing stock control must be enabled');
   if (apply) {
@@ -171,7 +183,7 @@ try {
     const items = await query('SELECT * FROM items WHERE company_id=$1 ORDER BY id');
     const accounting = await accountingBackup();
     assert.ok(accounting.stockControl[0].initialized_at, 'This correction requires existing initialized stock control');
-    const backupFile = new URL(`originals-backup-${stamp}.json`, dir);
+    const backupFile = new URL(`${prefix}-backup-${stamp}.json`, dir);
     writeFileSync(backupFile, JSON.stringify({ companyId, at: report.at, items, accounting, preservedSources, audit: report.before }, null, 2), { flag: 'wx' });
     report.backup = fileURLToPath(backupFile);
     console.log('Backup saved. Correcting quantity mismatches and reconciling the existing Stock account.');
@@ -222,8 +234,8 @@ try {
   } else await db.query('ROLLBACK');
   const final = report.committed || report.before;
   const csv = (rows, keys) => [keys.join(','), ...rows.map(row=>keys.map(key=>'"'+String(row[key]??'').replaceAll('"','""')+'"').join(','))].join('\r\n')+'\r\n';
-  report.rowCsv = fileURLToPath(new URL(`originals-rows-${stamp}.csv`,dir));
-  report.accountCsv = fileURLToPath(new URL(`originals-accounts-${stamp}.csv`,dir));
+  report.rowCsv = fileURLToPath(new URL(`${prefix}-rows-${stamp}.csv`,dir));
+  report.accountCsv = fileURLToPath(new URL(`${prefix}-accounts-${stamp}.csv`,dir));
   writeFileSync(report.rowCsv,csv(final.rows,['barcode','product_name','size','initial_qty','sold_qty','supplier_return_qty','current_qty','expected_qty','mismatch','billed_qty','p_price']));
   writeFileSync(report.accountCsv,csv(final.accounts,['code','name','account_type','debit','credit','balance']));
   writeFileSync(reportFile, JSON.stringify(report, null, 2), { flag: 'wx' });

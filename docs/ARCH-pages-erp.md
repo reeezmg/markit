@@ -1,5 +1,15 @@
 ### ERP (`/erp`)
 
+Head-office administration uses local table filters or form company fields across
+billing/sales/expenses, products/purchases, suppliers, staff, clients, coupons,
+reports, Accountant and Investments. Settings now retains its own `entryCompany`
+selection across tabs through `useSettingsCompany`, without a sidebar switch.
+Offline stock, notifications, cleanup and legacy account-history pages also have
+local company controls. Statement review resolves the saved statement's owner.
+Organization management and global user credentials remain organization/user
+operations. The separate Storefront navigation (CMS/orders/editor/AI) is not part
+of this ERP company-control change.
+
 #### Expense parties (2026-10-12)
 
 `Expense/PartySelect.vue` is shared by quick-add and edit. Its searchable menu has
@@ -8,8 +18,9 @@ Users, Distributors and Clients headings and one optional selection. The scoped
 validate and lock that membership and category in the source transaction.
 `from_id` remains the staff link; the local `schema.zmodel` adds nullable
 `distributor_id` and `client_id` relations to company memberships. At most one
-party is allowed. This schema has not been applied; deploy the fields through a
-separately authorized schema release before deploying the dependent APIs.
+party is allowed. These fields were synchronized to the authorized `.env` test
+database on 2026-10-21 through the zmodel/generate/db-push workflow. Other database
+deployments require their own authorized schema release before using the APIs.
 
 Expense lists/search/exports display Party and accept typed `partyKeys`; legacy
 `userIds` remain supported. Edit uses `expenseDate`, preserving the document date.
@@ -35,6 +46,13 @@ Settings → Account; their Accounting buttons have been removed.
 `server/utils/accountant/erp.ts`. Setup requires admin/manager/accountant access.
 Enabling records existing bills/expenses as excluded; only new documents auto-post.
 Billing and Sales share one bill source, not separate journals.
+The 2026-10-21 test-branch activation also provisioned its company-owned chart and
+enabled staff accounting without importing history (see `ARCH-pages-accounts.md`).
+`tests/branch-billing-write.integration.test.ts` and
+`tests/branch-expense-write.integration.test.ts` now require ERP enabled for both
+offices instead of skipping branch journal assertions. Billing checks exact mapped
+sales/tax/settlement amounts and customer receipt/reversal lines; expenses check
+exact recovery/accrual/payment amounts through creation, edits and deletion.
 Ordinary ERP posting requires bill `type = BILL` (null defaults to BILL). A linked
 ecommerce invoice with `type = STANDARD` does not post through ordinary ERP history.
 Its accounting belongs to the separate ecommerce connection; disabled connections
@@ -130,7 +148,7 @@ Head-office admins default to the active head office plus active direct branches
 | Route | Method | Implementation | Purpose |
 |---|---|---|---|
 | `/api/bill/findBillCounter` | POST | Raw SQL (pg pool) | Deprecated for billing saves. Invoice numbering belongs to the bill INSERT trigger. |
-| `/api/bill/create` | POST | PostgreSQL `create_bill_source_plpgsql(jsonb)` function via shared `pg` pool | Creates the source, stock and staff-credit effects; native deferred triggers post financial entries. Invoice number is assigned by the INSERT trigger. No legacy ledger writes. |
+| `/api/bill/create` | POST | Parameterized source DML through `server/utils/create-bill-source.ts` and shared `pg` pool | Creates source/entries and applies stock, staff credit, loyalty and coupons in the request transaction. Native deferred triggers post financial entries; the INSERT trigger assigns the invoice number. No stored create function or legacy ledger writes. |
 | `/api/bill/update` | POST | Raw SQL / pg transaction | Edit bill entries |
 | `/api/bill/offline` | POST | Raw SQL (pg pool) | Offline stock updates (qty/soldQty sync) |
 | `/api/bill/findUniqueClient` | GET | Prisma | Look up client by phone |
@@ -192,7 +210,7 @@ and duplicate submissions before issuing requests.
 Desktop billing/edit share `assets/css/billing-layout.css`: the card gives remaining panel space to a scrolling table, while the header and payment/action footer keep their natural height. `useBillingTableLayout` measures the table header plus one row and padding as its minimum height. The panel scrolls only when those minimum contents cannot fit; the table header stays visible during table scrolling. Mobile retains the stacked form.
 
 The desktop summary uses five columns sharing three rows. The first is Subtotal / Discount / Save (including receipt-action dropdown); the second is Grand Total / Payment Method / Delete, with both total labels above their values. The third contains return-redeemed amounts / account / Sales Return, the fourth coupon selection / count-value / New and Search, and the last column client phone / name-points / loyalty actions. Sales Return and Delete use solid variants. New and Search are text-only buttons at the bottom of the fourth column; Add Client is a solid person-plus icon button beside the Cell No. input, and Add Account is a plus beside its selector. Qty/Invoice stays in a separate compact information strip. The measured footer height automatically gives the saved space to the table.
-Field labels, input values and select triggers on billing/edit use a consistent 12px font with 20px line height, matching the compact summary labels. Visible summary labels and button captions use one word; Account/Coupon placeholders follow the same convention. Save retains its selected receipt action in the tooltip and dropdown.
+Field labels, input values and select triggers on billing/edit use a consistent 12px font with 20px line height, matching the compact summary labels. Visible summary labels and button captions use one word; Account/Coupon placeholders follow the same convention. Save retains its selected receipt action in the tooltip and dropdown. The action dropdown and Save buttons share Print, Send, Download and None icons; the selected action icon appears beside Save on desktop and mobile, with a check icon for None.
 The desktop Cell No. controls use an explicit non-wrapping horizontal row: input and Add Client icon in billing; input, clear-client X and Add Client icon in bill edit. The input shrinks while the icon buttons remain 32px square with centered icons.
  The account selector uses "Account" as its placeholder and "Account Name" as its accessible label instead of a separate visible label; adjacent desktop actions reserve only button height.
 The account selector aligns with the second row of inputs; Save, Delete, Sales Return and loyalty actions occupy the third row.
@@ -331,6 +349,8 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 
 **After-save action** (persisted to `localStorage` key `markit_selected_action`):
 - `print` → `usePrint` composable (thermal receipt)
+- Billing and bill-edit receipt actions use the company default design (including its printable width), loaded by `useWebUsbPrinter` through `usePrint`. Web requires a receipt WebUSB assignment; the native mobile app uses the selected Bluetooth printer in Settings > Printer. There is no localhost or browser-dialog transport. Fixed ESC/POS commands remain an internal pre-transmission rendering failsafe; USB errors never trigger a second print.
+
 - `send` -> `POST /api/whatsapp/send-payment-template` (WhatsApp bill) plus `POST /api/whatsapp/send-coupon-message` when earned coupons exist
 - `download` -> `generateThermalReceiptPDF` (dynamic import from `~/utils/thermal-receipt.client`; appends earned coupon voucher barcodes)
 - `null` → no action after save
@@ -353,16 +373,16 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 
 ---
 
-#### `POST /api/bill/create` — Bill Creation (PL/pgSQL)
-Bill creation uses the shared `pg` pool and lazily installs/calls the source-only `create_bill_source_plpgsql(jsonb)`. First-process setup ensures `bills.discount_type` and the function; it does not install the old ledger schema. The save calls `SELECT create_bill_source_plpgsql($1::jsonb)` inside the source transaction. The distinct function name prevents older server processes from replacing this source-only definition.
+#### `POST /api/bill/create` — Bill Creation (source transaction)
+Bill creation uses the shared `pg` pool and `server/utils/create-bill-source.ts` (2026-10-21). Parameterized application DML replaces the missing `create_bill_source_plpgsql(jsonb)` dependency. The handler retains ownership locks, the atomic request receipt and transient transaction retries. Shared `applyBillStock`, staff-credit and generated-coupon helpers run on that same transaction; native database triggers retain invoice numbering and financial posting. Neither the handler nor helper executes schema DDL. Combined coupon eligibility filters the bill total by the owning company, so a shared customer's branch purchases cannot earn a head-office voucher.
 
-**Function flow:**
+**Source transaction flow:**
 1. INSERT bill into `bills`; `trigger_generate_invoice_number` assigns `invoice_number`
 2. INSERT all entries into `entries` from `payload.entries.create` JSONB
 3. Update staff credit `user_ledger_entries` and recalculate balances when `credit_user_id` is present
 4. Deferred native accounting triggers post Cash/UPI/Card/Credit/Split sources; old ledger rows are untouched
 5. Apply `company_clients.points += billPoints - redeemedPoints` when a valid client exists
-6. Update `items.qty` + `items.sold_qty` through set-based JSONB stock deltas for sold and returned items
+6. Derive sold/return stock deltas from the entries actually saved through `applyBillStock`, with stable item locks and company checks
 7. Apply coupon usage, decrement generated-voucher usage when applicable, increment `coupons.times_used`, and create earned GENERATE vouchers in `coupon_clients`
 8. Return `{ success, billId, invoiceNumber, generatedCoupons }`
 
@@ -374,6 +394,8 @@ Bill creation uses the shared `pg` pool and lazily installs/calls the source-onl
 ---
 
 #### `pages/erp/sales.vue` — Sales List
+
+Sales and online-sales selected columns compare stable column keys, so recreated responsive column objects preserve the same table columns during SSR and hydration.
 
 - Fetches bills via `POST /api/billSale/findManyBills` — **raw SQL** with `pg` pool
 - Search logic:
@@ -390,6 +412,7 @@ Bill creation uses the shared `pg` pool and lazily installs/calls the source-onl
 - Table columns omit `subtotal`; the sales grid now shows a `Method` column with plain text, and clicking `Split` opens the shared split modal instead of a hover popover
 - Cleanup sessions (`session.cleanup === true`) render a cleanup-only `Cleaned values` toggle. Off is the original cleanup view: bill `subtotal`, `discount`, and `grandTotal` use saved original columns where available; entry `rate`, `discount`, and `value` use saved original entry columns; `precedence=true` rows are included. On switches the same sales list/export API to current cleaned values and filters out `precedence=true` rows. The API returns explicit original fields only for the original cleanup view. Non-cleanup sessions continue to read current visible values and never render the toggle.
 - Summary cards use the totals response from `/api/billSale/findManyBills`; `Split` bills are broken down by `split_payments` and their amounts are folded into the existing Cash/Card/UPI/Credit totals so the top cards reflect mixed payments.
+- Credit and credit-containing Split rows show Collect / Reverse actions with a read-only payment status. Collect opens the receipt form and is disabled for fully paid bills; Reverse opens receipt history to choose an active collection and confirm its dated reversal. Other rows retain the PAID/PENDING dropdown. The receipt modal's optional `mode` defaults to `collect`.
 - The date/search toolbar shows Collections on its right: credit repayments only, net of dated reversals, from the API's `collections.creditRepayments`. Direct sale payments are excluded from this toolbar total. This uses the selected dates and authorized store scope independently of invoice search, status/method filters and pagination; older bills repaid in the selected dates are included. Collections do not increase the sales cards. Loading and request failures hide the previous total.
 - Bills with `isMarkit = true` → show only "Open" action (no edit/print — marketplace orders)
 - Bill actions: Print (via `usePrint`), Change method (opens payment-method modal; choosing `Split` opens the shared split modal before save, then prompts for Print/Send/Download), Details (expand entries inline), Edit (→ `edit/[salesId].vue`), Delete (soft delete via `POST /api/billEdit/deleteBill`)
@@ -586,3 +609,23 @@ transaction/journal tests and compiled Vue/form regressions. `npm run test:bill-
 inside a PostgreSQL read-only transaction, checks the existing schema/ERP function,
 and compares screen/export totals. `npm run test:customer-accounting` combines
 these safe suites. Neither creates schemas nor modifies database records.
+
+
+Sales history tolerates absent account objects and category data that arrives after the history snapshot. Its watcher updates category labels when categories load, and reads the stored `return_Amt` field with the older `return_amt` fallback. Category/account options use scoped query adapters.
+
+
+Sales-history list query callbacks use the captured company scope rather than looking up the Nuxt app after setup, preventing an unavailable-instance error during SSR.
+
+Sales-history initial date filters use a timestamp serialized through Nuxt state, so server rendering and client hydration retain the same query key.
+
+Online sales await the initial company scope, rows and report totals through useAsyncData. The browser restores that initial snapshot before mounted refreshes or persisted filters run. Bill-store updates continue to refresh the page without an immediate setup-time fetch.
+
+useExpenseList awaits company scope and the initial query in onServerPrefetch. Successful rows and failed-query loading states therefore finish before the Nuxt payload is transferred. Missing database columns remain backend errors; the hook does not alter the schema.
+
+ExpenseList awaits companyScope.ready before creating its query observer. This aligns the initial client company-filter key with the server-rendered cache when the query fails and canceled earlier keys are absent from the payload.
+
+The ordinary sales list also awaits its initial company-scoped rows, page count, payment totals and credit-collection total through useAsyncData. Bill-store changes refresh later without an immediate setup-time fetch, keeping SSR and client hydration aligned.
+
+#### Receipt PDF sending
+
+Billing, bill edit and online bill detail generate the selected receipt PDF in the browser, using the same monochrome canvas as preview and ESC/POS for Tax, No Tax and custom designs. Send uploads the PDF through `shareReceiptPDF` and passes the resulting signed PDF suffix to the existing WhatsApp `invoice_1` URL button. It sends a PDF download link, rather than a WhatsApp document attachment; the approved template is unchanged. Online detail uses the bill ID for sharing. Upload and WhatsApp failures show an error instead of receipt-send success. Generated coupon messages remain after successful invoice notification. Legacy Original receipt retains its existing PDF layout.

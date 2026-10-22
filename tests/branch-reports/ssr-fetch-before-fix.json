@@ -1,0 +1,463 @@
+[
+  {
+    "stage": "main-query-fetch",
+    "status": "pending",
+    "fetch": "idle",
+    "observers": 1,
+    "stack": [
+      {
+        "name": "fetch",
+        "file": "query.js",
+        "line": 142
+      },
+      {
+        "name": "#executeFetch",
+        "file": "queryObserver.js",
+        "line": 172
+      },
+      {
+        "name": "onSubscribe",
+        "file": "queryObserver.js",
+        "line": 55
+      },
+      {
+        "name": "subscribe",
+        "file": "subscribable.js",
+        "line": 8
+      },
+      {
+        "name": "watch.immediate",
+        "file": "useBaseQuery.js",
+        "line": 42
+      },
+      {
+        "name": "callWithErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 85
+      },
+      {
+        "name": "callWithAsyncErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 92
+      },
+      {
+        "name": "baseWatchOptions.call",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 4846
+      },
+      {
+        "name": "job",
+        "file": "reactivity.cjs.prod.js",
+        "line": 1673
+      },
+      {
+        "name": "watch",
+        "file": "reactivity.cjs.prod.js",
+        "line": 1704
+      },
+      {
+        "name": "doWatch",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 4874
+      },
+      {
+        "name": "watch",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 4825
+      },
+      {
+        "name": "useBaseQuery",
+        "file": "useBaseQuery.js",
+        "line": 37
+      },
+      {
+        "name": "useQuery",
+        "file": "useQuery.js",
+        "line": 4
+      },
+      {
+        "name": "useModelQuery",
+        "file": "vue.mjs",
+        "line": 322
+      }
+    ]
+  },
+  {
+    "stage": "main-query-fetch",
+    "status": "pending",
+    "fetch": "fetching",
+    "observers": 1,
+    "stack": [
+      {
+        "name": "fetch",
+        "file": "query.js",
+        "line": 142
+      },
+      {
+        "name": "fetchOptimistic",
+        "file": "queryObserver.js",
+        "line": 159
+      },
+      {
+        "name": "run",
+        "file": "useBaseQuery.js",
+        "line": 74
+      },
+      {
+        "name": "",
+        "file": "useBaseQuery.js",
+        "line": 90
+      },
+      {
+        "name": "suspense",
+        "file": "useBaseQuery.js",
+        "line": 62
+      },
+      {
+        "name": "",
+        "file": "useCompanyScope-xi4Xery4.mjs",
+        "line": 169
+      }
+    ]
+  },
+  {
+    "stage": "main-query-fetch",
+    "status": "error",
+    "fetch": "idle",
+    "observers": 1,
+    "stack": [
+      {
+        "name": "fetch",
+        "file": "query.js",
+        "line": 142
+      },
+      {
+        "name": "fetchOptimistic",
+        "file": "queryObserver.js",
+        "line": 159
+      },
+      {
+        "name": "run",
+        "file": "useBaseQuery.js",
+        "line": 74
+      },
+      {
+        "name": "callWithErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 85
+      },
+      {
+        "name": "callWithAsyncErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 92
+      },
+      {
+        "name": "baseWatchOptions.call",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 4846
+      },
+      {
+        "name": "job",
+        "file": "reactivity.cjs.prod.js",
+        "line": 1673
+      },
+      {
+        "name": "callWithErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 85
+      },
+      {
+        "name": "flushJobs",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 257
+      }
+    ]
+  },
+  {
+    "stage": "payload",
+    "queries": [
+      {
+        "selectKeys": [
+          "distributorId",
+          "companyId",
+          "company",
+          "distributorNumber",
+          "openingDue",
+          "openingDueDate",
+          "distributor",
+          "distributorCredits",
+          "distributorPayments",
+          "purchaseReturns",
+          "purchaseOrders"
+        ],
+        "operation": [
+          "zenstack",
+          "DistributorCompany",
+          "findMany"
+        ],
+        "status": "pending",
+        "fetch": "fetching",
+        "observers": 1
+      },
+      {
+        "selectKeys": [
+          "distributorId",
+          "distributor",
+          "purchaseOrders"
+        ],
+        "operation": [
+          "zenstack",
+          "DistributorCompany",
+          "findMany"
+        ],
+        "status": "error",
+        "fetch": "idle",
+        "observers": 1,
+        "errorName": "Error",
+        "code": "P2021"
+      }
+    ]
+  },
+  {
+    "stage": "main-query-fetch",
+    "status": "pending",
+    "fetch": "idle",
+    "observers": 1,
+    "stack": [
+      {
+        "name": "fetch",
+        "file": "query.js",
+        "line": 142
+      },
+      {
+        "name": "#executeFetch",
+        "file": "queryObserver.js",
+        "line": 172
+      },
+      {
+        "name": "onSubscribe",
+        "file": "queryObserver.js",
+        "line": 55
+      },
+      {
+        "name": "subscribe",
+        "file": "subscribable.js",
+        "line": 8
+      },
+      {
+        "name": "watch.immediate",
+        "file": "useBaseQuery.js",
+        "line": 42
+      },
+      {
+        "name": "callWithErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 85
+      },
+      {
+        "name": "callWithAsyncErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 92
+      },
+      {
+        "name": "baseWatchOptions.call",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 4846
+      },
+      {
+        "name": "job",
+        "file": "reactivity.cjs.prod.js",
+        "line": 1673
+      },
+      {
+        "name": "watch",
+        "file": "reactivity.cjs.prod.js",
+        "line": 1704
+      },
+      {
+        "name": "doWatch",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 4874
+      },
+      {
+        "name": "watch",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 4825
+      },
+      {
+        "name": "useBaseQuery",
+        "file": "useBaseQuery.js",
+        "line": 37
+      },
+      {
+        "name": "useQuery",
+        "file": "useQuery.js",
+        "line": 4
+      },
+      {
+        "name": "useModelQuery",
+        "file": "vue.mjs",
+        "line": 322
+      }
+    ]
+  },
+  {
+    "stage": "main-query-fetch",
+    "status": "pending",
+    "fetch": "fetching",
+    "observers": 1,
+    "stack": [
+      {
+        "name": "fetch",
+        "file": "query.js",
+        "line": 142
+      },
+      {
+        "name": "fetchOptimistic",
+        "file": "queryObserver.js",
+        "line": 159
+      },
+      {
+        "name": "run",
+        "file": "useBaseQuery.js",
+        "line": 74
+      },
+      {
+        "name": "",
+        "file": "useBaseQuery.js",
+        "line": 90
+      },
+      {
+        "name": "suspense",
+        "file": "useBaseQuery.js",
+        "line": 62
+      },
+      {
+        "name": "",
+        "file": "useCompanyScope-xi4Xery4.mjs",
+        "line": 169
+      }
+    ]
+  },
+  {
+    "stage": "main-query-fetch",
+    "status": "error",
+    "fetch": "idle",
+    "observers": 1,
+    "stack": [
+      {
+        "name": "fetch",
+        "file": "query.js",
+        "line": 142
+      },
+      {
+        "name": "fetchOptimistic",
+        "file": "queryObserver.js",
+        "line": 159
+      },
+      {
+        "name": "run",
+        "file": "useBaseQuery.js",
+        "line": 74
+      },
+      {
+        "name": "callWithErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 85
+      },
+      {
+        "name": "callWithAsyncErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 92
+      },
+      {
+        "name": "baseWatchOptions.call",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 4846
+      },
+      {
+        "name": "job",
+        "file": "reactivity.cjs.prod.js",
+        "line": 1673
+      },
+      {
+        "name": "callWithErrorHandling",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 85
+      },
+      {
+        "name": "flushJobs",
+        "file": "runtime-core.cjs.prod.js",
+        "line": 257
+      }
+    ]
+  },
+  {
+    "stage": "payload",
+    "queries": [
+      {
+        "selectKeys": [
+          "distributorId",
+          "companyId",
+          "company",
+          "distributorNumber",
+          "openingDue",
+          "openingDueDate",
+          "distributor",
+          "distributorCredits",
+          "distributorPayments",
+          "purchaseReturns",
+          "purchaseOrders"
+        ],
+        "operation": [
+          "zenstack",
+          "DistributorCompany",
+          "findMany"
+        ],
+        "status": "pending",
+        "fetch": "fetching",
+        "observers": 1
+      },
+      {
+        "selectKeys": [
+          "distributorId",
+          "distributor",
+          "purchaseOrders"
+        ],
+        "operation": [
+          "zenstack",
+          "DistributorCompany",
+          "findMany"
+        ],
+        "status": "error",
+        "fetch": "idle",
+        "observers": 1,
+        "errorName": "Error",
+        "code": "P2021"
+      }
+    ]
+  },
+  {
+    "stage": "payload",
+    "queries": [
+      {
+        "selectKeys": [],
+        "operation": [
+          "expenses",
+          "list",
+          {
+            "from": "2026-10-20T18:30:00.000Z",
+            "to": "2026-10-21T18:29:59.999Z",
+            "sortColumn": "expenseNumber",
+            "sortDirection": "desc",
+            "page": 1,
+            "pageCount": 10
+          }
+        ],
+        "status": "pending",
+        "fetch": "fetching",
+        "observers": 1
+      }
+    ]
+  }
+]

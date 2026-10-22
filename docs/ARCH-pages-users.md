@@ -135,7 +135,7 @@ management access. The Users role selector also includes Investor.
 
 Native bank selection (2026-10-06): salary and payroll forms use
 `useSalaryPaymentAccounts` and manager-scoped `GET /api/salary/payment-options`.
-Options are active company-native BANK accounts. `bankAccountId` in payout/edit,
+Options are active company-native BANK accounts. The composable waits for its initial server read and serializes bank options and errors per company through Nuxt state. Client setup retains that snapshot; mounted refresh and company changes preserve the existing stale-response guard. `bankAccountId` in payout/edit,
 cycle clearing and final settlement requests means a native account ID; omitted
 choices use Staff Accounting defaults or the existing source snapshot.
 `selectStaffPaymentAccount` snapshots that choice in the source transaction before
@@ -312,3 +312,8 @@ Staff-credit workspace with a credit-ledger tab and source-bills tab. Loads `/ap
 ### `pages/users/ledger.vue`
 
 Read-only complete per-staff financial ledger from `/api/users/ledger`. Shows credit, debit and running balance, including payroll accruals, salary payments and staff-credit movements. This is broader than the filtered staff-credit page.
+
+
+### Server-rendered staff data
+
+Attendance, holiday and salary pages await company-access readiness before creating their queries. Salary assignment queries share an initial Nuxt-state timestamp during hydration and refresh that timestamp after mounting, so a new client timestamp does not discard the SSR query cache.

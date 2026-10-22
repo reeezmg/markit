@@ -379,7 +379,7 @@ const downloadPdf = async (id?: string) => {
 
 <template>
   <UDashboardPanelContent class="p-1 flex flex-col gap-2">
-      <CompanyFormField />
+      <CompanyFormField toolbar />
     <div class="flex items-center gap-2 px-1">
       <UButton icon="i-heroicons-arrow-left" color="gray" variant="ghost" size="sm" @click="router.push('/distributor/purchase-return')" />
       <span class="text-sm font-semibold text-gray-700 dark:text-gray-200">New Purchase Return</span>

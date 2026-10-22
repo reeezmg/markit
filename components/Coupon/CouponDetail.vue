@@ -11,7 +11,6 @@ const props = defineProps<{
 
 const emit = defineEmits(['close'])
 
-const useAuth = () => useNuxtApp().$auth;
 const toast = useToast();
 const activeTab = ref(0)
 const isAddClientModalOpen = ref(false)
@@ -62,12 +61,12 @@ const daysRemaining = computed(() => {
 
 // ─── Usage History Tab ───
 const usagePage = ref(1)
-const usagePageCount = ref(parseInt(localStorage.getItem(LS_USAGE_PAGE_COUNT) || '10'))
+const usagePageCount = ref(parseInt(typeof localStorage === 'undefined' ? '10' : localStorage.getItem(LS_USAGE_PAGE_COUNT) || '10'))
 const usageSearch = ref('')
 
 watch(usagePageCount, (v) => { localStorage.setItem(LS_USAGE_PAGE_COUNT, String(v)); usagePage.value = 1 })
 
-const usageWhereArgs = computed(() => ({
+const usageWhereArgs = computed<Prisma.CouponUsageWhereInput>(() => ({
     couponId: props.coupon?.id,
     ...(usageSearch.value.trim() && {
         client: {
@@ -76,7 +75,7 @@ const usageWhereArgs = computed(() => ({
     }),
 }))
 
-const usageQueryArgs = computed<Prisma.CouponUsageFindManyArgs>(() => ({
+const usageQueryArgs = computed(() => ({
     where: usageWhereArgs.value,
     include: {
         client: true,
@@ -91,14 +90,14 @@ const usageQueryArgs = computed<Prisma.CouponUsageFindManyArgs>(() => ({
     orderBy: { usedAt: 'desc' },
     skip: (usagePage.value - 1) * usagePageCount.value,
     take: Number(usagePageCount.value),
-}))
+} satisfies Prisma.CouponUsageFindManyArgs))
 
 const { data: couponUsages, isLoading: usageLoading } = useFindManyCouponUsage(
-    computed(() => props.coupon?.id ? usageQueryArgs.value : undefined)
+    usageQueryArgs, { enabled: computed(() => Boolean(props.coupon?.id)) }
 )
 
 const { data: usageTotalCount } = useCountCouponUsage(
-    computed(() => props.coupon?.id ? { where: usageWhereArgs.value } : undefined)
+    computed(() => ({ where: usageWhereArgs.value })), { enabled: computed(() => Boolean(props.coupon?.id)) }
 )
 
 const usageColumns = [
@@ -121,12 +120,12 @@ const formattedUsages = computed(() => {
 
 // ─── Allowed / Generated Clients Tab (shared query) ───
 const allowedPage = ref(1)
-const allowedPageCount = ref(parseInt(localStorage.getItem(LS_ALLOWED_PAGE_COUNT) || '10'))
+const allowedPageCount = ref(parseInt(typeof localStorage === 'undefined' ? '10' : localStorage.getItem(LS_ALLOWED_PAGE_COUNT) || '10'))
 const allowedSearch = ref('')
 
 watch(allowedPageCount, (v) => { localStorage.setItem(LS_ALLOWED_PAGE_COUNT, String(v)); allowedPage.value = 1 })
 
-const allowedWhereArgs = computed(() => ({
+const allowedWhereArgs = computed<Prisma.CouponClientWhereInput>(() => ({
     couponId: props.coupon?.id,
     ...(allowedSearch.value.trim() && {
         client: {
@@ -135,7 +134,7 @@ const allowedWhereArgs = computed(() => ({
     }),
 }))
 
-const allowedQueryArgs = computed<Prisma.CouponClientFindManyArgs>(() => ({
+const allowedQueryArgs = computed(() => ({
     where: allowedWhereArgs.value,
     include: {
         client: true,
@@ -143,14 +142,14 @@ const allowedQueryArgs = computed<Prisma.CouponClientFindManyArgs>(() => ({
     orderBy: { createdAt: 'desc' },
     skip: (allowedPage.value - 1) * allowedPageCount.value,
     take: Number(allowedPageCount.value),
-}))
+} satisfies Prisma.CouponClientFindManyArgs))
 
 const { data: allowedClients, isLoading: allowedLoading } = useFindManyCouponClient(
-    computed(() => props.coupon?.id && props.coupon?.audienceType !== 'ALL' ? allowedQueryArgs.value : undefined)
+    allowedQueryArgs, { enabled: computed(() => Boolean(props.coupon?.id && props.coupon?.audienceType !== 'ALL')) }
 )
 
 const { data: allowedTotalCount } = useCountCouponClient(
-    computed(() => props.coupon?.id && props.coupon?.audienceType !== 'ALL' ? { where: allowedWhereArgs.value } : undefined)
+    computed(() => ({ where: allowedWhereArgs.value })), { enabled: computed(() => Boolean(props.coupon?.id && props.coupon?.audienceType !== 'ALL')) }
 )
 
 const allowedColumns = computed(() => {
@@ -175,9 +174,9 @@ const formattedAllowed = computed(() => {
     }))
 })
 
-const removeClient = (couponClientId: string) => {
+const removeClient = async (couponClientId: string) => {
     try {
-        DeleteCouponClient.mutate({
+        await DeleteCouponClient.mutateAsync({
             where: { id: couponClientId },
         })
         toast.add({ title: 'Client removed from coupon', color: 'green' })
@@ -187,9 +186,9 @@ const removeClient = (couponClientId: string) => {
 }
 
 // ─── Add Client Modal (only for SPECIFIC) ───
-const companyClientsArgs = computed<Prisma.CompanyClientFindManyArgs>(() => ({
+const companyClientsArgs = computed(() => ({
     where: {
-        companyId: useAuth().session.value?.companyId,
+        companyId: props.coupon?.companyId,
         ...(clientSearch.value.trim() && {
             client: {
                 OR: [
@@ -203,20 +202,20 @@ const companyClientsArgs = computed<Prisma.CompanyClientFindManyArgs>(() => ({
         client: true,
     },
     take: 20,
-}))
+} satisfies Prisma.CompanyClientFindManyArgs))
 
 const { data: companyClients, isLoading: clientsLoading } = useFindManyCompanyClient(
-    computed(() => isAddClientModalOpen.value ? companyClientsArgs.value : undefined)
+    companyClientsArgs, { enabled: computed(() => Boolean(isAddClientModalOpen.value && props.coupon?.companyId)) }
 )
 
 // All coupon clients (no pagination) for checking added state in modal
-const allAllowedArgs = computed<Prisma.CouponClientFindManyArgs>(() => ({
+const allAllowedArgs = computed(() => ({
     where: { couponId: props.coupon?.id },
     select: { id: true, clientId: true },
-}))
+} satisfies Prisma.CouponClientFindManyArgs))
 
 const { data: allAllowedClients } = useFindManyCouponClient(
-    computed(() => isAddClientModalOpen.value && props.coupon?.id ? allAllowedArgs.value : undefined)
+    allAllowedArgs, { enabled: computed(() => Boolean(isAddClientModalOpen.value && props.coupon?.id)) }
 )
 
 const addedClientMap = computed(() => {
@@ -235,9 +234,9 @@ const toggleClient = (clientId: string) => {
     }
 }
 
-const addClient = (clientId: string) => {
+const addClient = async (clientId: string) => {
     try {
-        CreateCouponClient.mutate({
+        await CreateCouponClient.mutateAsync({
             data: {
                 coupon: { connect: { id: props.coupon.id } },
                 client: { connect: { id: clientId } },

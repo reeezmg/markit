@@ -1,10 +1,12 @@
 
 <script setup>
-import { useFindManyAccount } from '~/lib/hooks/account';
+import { useFindManyAccount } from '~/lib/company-hooks/account';
 import { useFindUniqueBillHistory } from '~/lib/hooks/bill-history';
-import { useFindManyCategory } from '~/lib/hooks/category';
+import { useFindManyCategory } from '~/lib/company-hooks/category';
 
-const useAuth = () => useNuxtApp().$auth;
+const companyScope = useCompanyScope('form', true);
+await companyScope.ready;
+const useAuth = () => companyScope.auth;
 const route = useRoute();
 const toast = useToast();
 const router = useRouter();
@@ -153,11 +155,10 @@ const billArgs = computed(() => ({
 const { data: bill ,refetch:billRefetch} = useFindUniqueBillHistory(billArgs,{enabled:false});
 
 
-watch(() => bill.value, (newData) => {
-  console.log(newData?.data);
-  if (!newData || !newData) return;
+watch([bill, categories], ([newData]) => {
+  if (!newData?.data) return;
   discount.value = newData.data.discount
-    selected.value = newData.data.account.id
+    selected.value = newData.data.account?.id || newData.data.account_id || ''
     clientId.value = newData.data.client?.id
     clientName.value = newData.data.client?.name
     phoneNo.value = newData.data.client?.phone
@@ -165,12 +166,12 @@ watch(() => bill.value, (newData) => {
     date.value = new Date(newData.changedAt).toISOString().split('T')[0]
     grandTotal.value = newData.data.grand_total || 0
   subtotal.value = newData.data.subtotal || 0
-  returnAmt.value = newData.data.return_amt || 0
+  returnAmt.value = newData.data.return_Amt ?? newData.data.return_amt ?? 0
   voucherNo.value = newData.data.voucher_no || ''
   paymentMethod.value = newData.data.payment_method || 'Cash'
 
 
-  items.value = newData.data.entries.map((entry, index) => {
+  items.value = (newData.data.entries || []).map((entry, index) => {
     return {
       entryId: entry.id || '',
       id:entry.item?.id || '',
@@ -178,7 +179,7 @@ watch(() => bill.value, (newData) => {
       sn: index + 1,
       name:entry.name || '',
       barcode: entry.barcode || '', 
-      category:  categories.value.filter(category =>category.id === entry.category_id),
+      category:  (categories.value || []).filter(category =>category.id === entry.category_id),
       size: entry.item?.size || '',
       sizes: entry.sizes || null,
       qty: entry.qty || 1,

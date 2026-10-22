@@ -1,0 +1,54 @@
+{
+  "at": "2026-10-21T07:58:59.270Z",
+  "before": {
+    "purchase_orders": {
+      "count": "2821",
+      "hash": "cda82c7acda0c43cfd02fbf561d756d3"
+    },
+    "distributor_credits": {
+      "count": "93",
+      "hash": "09688d5c87690e86777e44f521060381"
+    },
+    "distributor_payments": {
+      "count": "95",
+      "hash": "6d4c33deaf1a27674370323b68fb0d00"
+    },
+    "purchase_returns": {
+      "count": "1",
+      "hash": "5a505de60d67ae7d603afe7572cc4c74"
+    },
+    "items": {
+      "count": "10830",
+      "hash": "2c536b7caaad50f57f4dd5859c777d92"
+    },
+    "accountant_v2_distributor_sources": {
+      "count": "185",
+      "hash": "850bd4effe3b307e125346121886ff0f"
+    },
+    "accountant_v2_manual_journals": {
+      "count": "7009",
+      "hash": "6dc7d8aba4cb32b06a01b4435e0802e7"
+    },
+    "accountant_v2_manual_journal_lines": {
+      "count": "18014",
+      "hash": "5b4418d6c0e4596f7fab7191980775a5"
+    },
+    "accountant_v2_accountant_audit": {
+      "count": "7017",
+      "hash": "0b241115f704950a805075960593b123"
+    },
+    "accountant_v2_distributor_events": {
+      "count": "176",
+      "hash": "846e05921309e5d0e165bbc8db670bac"
+    }
+  },
+  "views": [
+    {
+      "relname": "accountant_v2_distributor_events",
+      "definition": " SELECT company_id,\n    distributor_id,\n    source_key,\n    kind,\n    event_date,\n    amount,\n    tax,\n    mode,\n    bank_id,\n    description,\n    reference\n   FROM ( SELECT c.company_id,\n            c.distributor_id,\n            'credit:'::text || c.id AS source_key,\n                CASE\n                    WHEN c.money_transaction_id IS NOT NULL THEN 'RECEIPT'::text\n                    ELSE 'PURCHASE'::text\n                END AS kind,\n            c.created_at AS event_date,\n            round(c.amount::numeric, 2) AS amount,\n            0::numeric AS tax,\n            COALESCE(m.payment_mode::text, 'CASH'::text) AS mode,\n            m.account_id AS bank_id,\n            COALESCE(c.remarks, ''::text) AS description,\n            COALESCE(c.\"billNo\", 'DC-'::text || c.credit_no::text, c.id) AS reference\n           FROM distributor_credits c\n             LEFT JOIN money_transactions m ON m.id = c.money_transaction_id AND m.company_id = c.company_id\n          WHERE c.purchase_order_id IS NULL\n        UNION ALL\n         SELECT c.company_id,\n            c.distributor_id,\n            'purchase:'::text || c.purchase_order_id AS source_key,\n            'PURCHASE'::text AS kind,\n            min(c.created_at) AS event_date,\n            round(sum(c.amount)::numeric, 2) AS amount,\n                CASE\n                    WHEN round(sum(c.amount)::numeric, 2) = round(max(p.total_amount)::numeric, 2) THEN max(accountant_v2_purchase_tax(p.*))\n                    ELSE 0::numeric\n                END AS tax,\n            NULL::text AS mode,\n            NULL::text AS bank_id,\n            'Purchase credit'::text AS description,\n            COALESCE(max(p.bill_no), 'PO-'::text || max(p.purchase_order_no)::text, c.purchase_order_id) AS reference\n           FROM distributor_credits c\n             LEFT JOIN purchase_orders p ON p.id = c.purchase_order_id AND p.company_id = c.company_id\n          WHERE c.purchase_order_id IS NOT NULL\n          GROUP BY c.company_id, c.distributor_id, c.purchase_order_id\n        UNION ALL\n         SELECT p.company_id,\n            p.distributor_id,\n            'purchase:'::text || p.id AS source_key,\n            'PURCHASE'::text AS kind,\n            p.created_at AS event_date,\n            round(p.total_amount::numeric, 2) AS amount,\n            accountant_v2_purchase_tax(p.*) AS tax,\n            NULL::text AS mode,\n            NULL::text AS bank_id,\n            'Paid purchase (legacy purchase side missing)'::text AS description,\n            COALESCE(p.bill_no, 'PO-'::text || p.purchase_order_no::text, p.id) AS reference\n           FROM purchase_orders p\n          WHERE p.distributor_id IS NOT NULL AND p.payment_type IS NOT NULL AND p.total_amount <> 0::double precision AND NOT (EXISTS ( SELECT 1\n                   FROM distributor_credits c\n                  WHERE c.purchase_order_id = p.id AND c.company_id = p.company_id)) AND (EXISTS ( SELECT 1\n                   FROM distributor_payments dp\n                  WHERE dp.purchase_order_id = p.id AND dp.company_id = p.company_id AND dp.distributor_id = p.distributor_id AND dp.payment_type::text <> 'RETURN'::text))\n        UNION ALL\n         SELECT p.company_id,\n            p.distributor_id,\n            'payment:'::text || p.id AS source_key,\n                CASE\n                    WHEN p.payment_type::text = 'RETURN'::text THEN 'RETURN'::text\n                    ELSE 'PAYMENT'::text\n                END AS kind,\n            COALESCE(r.created_at, p.created_at) AS event_date,\n            round(p.amount::numeric, 2) AS amount,\n            round(COALESCE(r.tax_amount, 0::double precision)::numeric, 2) AS tax,\n            COALESCE(p.payment_type::text, 'CASH'::text) AS mode,\n            NULL::text AS bank_id,\n            COALESCE(p.remarks, ''::text) AS description,\n            COALESCE('PR-'::text || r.return_no::text, 'DP-'::text || p.payment_no::text, p.id) AS reference\n           FROM distributor_payments p\n             LEFT JOIN purchase_returns r ON r.id = p.purchase_return_id AND r.company_id = p.company_id\n        UNION ALL\n         SELECT d.company_id,\n            d.distributor_id,\n            'opening'::text AS source_key,\n            'OPENING'::text AS kind,\n            COALESCE(d.opening_due_date, (( SELECT min(x.created_at) AS min\n                   FROM ( SELECT distributor_credits.created_at\n                           FROM distributor_credits\n                          WHERE distributor_credits.company_id = d.company_id AND distributor_credits.distributor_id = d.distributor_id\n                        UNION ALL\n                         SELECT distributor_payments.created_at\n                           FROM distributor_payments\n                          WHERE distributor_payments.company_id = d.company_id AND distributor_payments.distributor_id = d.distributor_id) x)) - '00:00:00.001'::interval, '1970-01-01 00:00:00'::timestamp without time zone) AS event_date,\n            round(COALESCE(d.opening_due, 0::double precision)::numeric, 2) AS amount,\n            0 AS tax,\n            NULL::text AS mode,\n            NULL::text AS bank_id,\n            'Distributor opening balance'::text AS description,\n            'Opening'::text AS reference\n           FROM distributor_companies d\n          WHERE COALESCE(d.opening_due, 0::double precision) <> 0::double precision) v\n  WHERE NOT (EXISTS ( SELECT 1\n           FROM accountant_v2_accountant_audit a\n          WHERE a.company_id = v.company_id AND a.resource = 'authorized-distributor-exclusion'::text AND a.action = 'excluded'::text AND a.\"resourceId\" = ((v.distributor_id || ':'::text) || v.source_key)));"
+    }
+  ],
+  "functions": [],
+  "triggers": [],
+  "sourceHash": "ee98a2ac4eb7af904383f28dadbe5b941fc290643dc0319155d52dac8fa45bee"
+}

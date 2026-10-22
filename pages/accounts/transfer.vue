@@ -1,7 +1,9 @@
 <script setup lang="ts">
+const companyScope = useCompanyScope();
+const $fetch = companyScope.fetch;
 import { useFindManyAccountTransfer } from '~/lib/hooks/account-transfer';
 import { useFindManyBankAccount } from '~/lib/hooks/bank-account';
-const auth = useNuxtApp().$auth;
+const auth = companyScope.auth;
 const companyId = computed(() => auth.session.value?.companyId);
 const { data, isLoading, error, refetch } = useFindManyAccountTransfer(computed(() => ({ where: { companyId: companyId.value }, orderBy: { createdAt: 'desc' as const } })), computed(() => ({ enabled: Boolean(companyId.value) })));
 const { data: banks } = useFindManyBankAccount(computed(() => ({ where: { companyId: companyId.value } })), computed(() => ({ enabled: Boolean(companyId.value) })));
@@ -13,7 +15,7 @@ const columns = [{ key: 'date', label: 'Date' }, { key: 'from', label: 'From acc
   <div class="p-6 space-y-4">
     <h1 class="text-xl font-semibold">Old account transfers</h1>
     <p class="text-sm text-gray-500">Original transfer history · {{ rows.length }} entries · Read only</p>
-    <div class="flex gap-3"><UButton to="/accountant/account-transfers">New account transfers</UButton><UButton variant="outline" @click="refetch()">Refresh</UButton></div>
+    <div class="flex gap-3"><UButton :to="{ path: '/accountant/account-transfers', query: { entryCompany: companyScope.companyId.value } }">New account transfers</UButton><UButton variant="outline" @click="refetch()">Refresh</UButton></div>
     <p v-if="error" role="alert">Could not load transfer history. Please refresh.</p>
     <UTable :rows="rows" :columns="columns" :loading="isLoading" />
   </div>

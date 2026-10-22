@@ -27,7 +27,7 @@ test('customer pending totals subtract partial receipts and preserve split cash'
 })
 
 test('sales opens dated receipts for credit without calling status mutation',t=>{
-  const h=harness('pages/erp/sales.vue',['handleEnterPayment'],{sales:ref([{id:'bill',paymentMethod:'Credit'}]),creditReceiptBill:ref(null),creditReceiptOpen:ref(false),isOpen:ref(false),activeBillInfo:ref(null),onPaymentStatusChange:()=>{throw Error('Unexpected status mutation')}});t.after(h.stop)
+  const h=harness('pages/erp/sales.vue',['openCreditCollection','handleEnterPayment'],{sales:ref([{id:'bill',paymentMethod:'Credit'}]),creditReceiptBill:ref(null),creditReceiptMode:ref('collect'),creditReceiptOpen:ref(false),isOpen:ref(false),activeBillInfo:ref(null),onPaymentStatusChange:()=>{throw Error('Unexpected status mutation')}});t.after(h.stop)
   h.context.handleEnterPayment('bill','PAID','1','owner')
   assert.equal(h.context.creditReceiptOpen.value,true)
   assert.equal(h.context.creditReceiptBill.value.companyId,'owner')

@@ -1,0 +1,252 @@
+diff --git a/composables/useCompanyScope.ts b/composables/useCompanyScope.ts
+index 4b370ba..507a651 100644
+--- a/composables/useCompanyScope.ts
++++ b/composables/useCompanyScope.ts
+@@ -1,5 +1,5 @@
+ import { appendCompanyWhere } from '~/utils/companyWhere';
+-import { computed, getCurrentInstance, inject, provide, ref, shallowRef, unref, toValue, type InjectionKey } from 'vue';
++import { computed, getCurrentInstance, onServerPrefetch, inject, provide, ref, shallowRef, unref, toValue, type InjectionKey } from 'vue';
+ 
+ type Store = { id: string; name: string; parentCompanyId: string | null; isHeadOffice: boolean };
+ type ScopeMode = 'table' | 'form';
+@@ -30,10 +30,12 @@ function createCompanyScope(mode: ScopeMode, pageForm = false) {
+   const readIds = computed(() => mode === 'form' ? [companyId.value]
+     : selected.value ? [selected.value] : enabled.value ? companies.value.map(c => c.id) : [activeId.value]);
+   const session = computed(() => ({ ...actualAuth.session.value,
++    ...(companyId.value !== activeId.value ? { selectedAccounts: undefined, selectedAccountsPacked: undefined } : {}),
+     ...(settings.value.companyId === companyId.value ? settings.value : {}), companyId: companyId.value }));
+   const auth = { ...actualAuth, session } as typeof actualAuth;
+-  const recordId = pageForm ? String(route.params.id || route.params.salesId || route.query.poId || '') : '';
+-  const recordModel = route.path.startsWith('/users/salary/cycle/') ? 'PayrollCycle' : route.path.startsWith('/erp/') ? 'Bill'
++  const recordId = pageForm ? String(route.params.id || route.params.salesId || route.params.billId || route.query.poId || '') : '';
++  const recordModel = route.path.startsWith('/saleshistory/') ? 'BillHistory'
++    : route.path.startsWith('/users/salary/cycle/') ? 'PayrollCycle' : route.path.startsWith('/erp/') ? 'Bill'
+     : route.path.includes('edit-purchase-return') ? 'PurchaseReturn'
+     : route.path.includes('/brands/') ? 'Brand' : route.path.includes('/categories/') ? 'Category'
+     : route.path.includes('/collections/') ? 'Collection' : route.query.poId ? 'PurchaseOrder' : 'Product';
+@@ -119,7 +121,7 @@ export function withCompanyRead<T extends (...args: any[]) => any>(hook: T, mode
+     const scope = useCompanyScope();
+     const exact = options?.companyScope === 'form' || model === 'BankAccount';
+     const hookOptions = options?.companyScope ? Object.fromEntries(Object.entries(options).filter(([key]) => key !== 'companyScope')) : options;
+-    return hook(computed(() => {
++    const result = hook(computed(() => {
+       const ids = exact ? [scope.companyId.value] : scope.readIds.value;
+       const value = scope.readArgs(toValue(args), ids) ?? {};
+       if (!model || model === 'Client') return value;
+@@ -128,5 +130,10 @@ export function withCompanyRead<T extends (...args: any[]) => any>(hook: T, mode
+         : { companyId: { in: ids } };
+       return { ...value, where: appendCompanyWhere(value.where, cap) };
+     }), hookOptions);
++    if (typeof result?.suspense === 'function') onServerPrefetch(async () => {
++      // Disabled queries never resolve suspense; only wait for active fetches.
++      if (unref(result.isFetching)) await result.suspense().catch(() => {});
++    });
++    return result;
+   }) as T;
+ }
+diff --git a/pages/offline/index.vue b/pages/offline/index.vue
+index 2aec1e9..c0f992e 100644
+--- a/pages/offline/index.vue
++++ b/pages/offline/index.vue
+@@ -1,7 +1,8 @@
+ 
+ <script setup>
+ import { BillingAddClient } from '#components';
+-import { useFindManyCategory } from '~/lib/hooks/category';
++import { companyStorageKey } from '~/utils/companyStorageKey';
++import { useFindManyCategory } from '~/lib/company-hooks/category';
+ import { useFindFirstItem } from '~/lib/hooks/item';
+ import { v4 as uuidv4 } from 'uuid';
+ import { useQueryClient } from '@tanstack/vue-query';
+@@ -63,7 +64,7 @@ const items = ref([
+ 
+ const selectedDraft = ref(null);
+ const draftBills = ref([]);
+-const LOCAL_BILLS_KEY = 'bills';
++const LOCAL_BILLS_KEY = companyStorageKey('bills', useAuth().session.value?.companyId || '', useAuth().session.value?.companyId || '');
+ 
+ 
+ const result = ref('')
+@@ -565,7 +566,8 @@ const {
+       name:true,
+       hsn:true,
+     }
+-}
++},
++{ companyScope: 'form' }
+ );
+ 
+ const itemdata = ref(null)
+diff --git a/pages/settings/printer.vue b/pages/settings/printer.vue
+index a99d174..eb7bb6d 100644
+--- a/pages/settings/printer.vue
++++ b/pages/settings/printer.vue
+@@ -5,6 +5,7 @@ import { BleClient } from '@capacitor-community/bluetooth-le';
+ import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
+ import { useUpdateCompany } from '~/lib/hooks/company';
+ import { useWebUsbPrinter } from '~/composables/useWebUsbPrinter';
++import { labelSampleData } from '~/utils/label-variables';
+ 
+ const UpdateCompany = useUpdateCompany({ optimisticUpdate: true });
+ const useAuth = () => useNuxtApp().$auth;
+@@ -237,7 +238,7 @@ const webUsbRoles = ref<{ receipt: string | null; barcode: string | null }>({
+   barcode: null,
+ });
+ const webUsbStatus = ref('');
+-const webUsbSupported = computed(() => isWebUsbSupported());
++const webUsbSupported = ref(false);
+ const showWebUsbSection = computed(() => !Capacitor.isNativePlatform());
+ 
+ const refreshWebUsbState = () => {
+@@ -283,6 +284,7 @@ const removeWebUsbPrinter = (printerId: string) => {
+ };
+ 
+ const buildSampleReceipt = () => ({
++  isTaxIncluded: useAuth().session.value?.isTaxIncluded ?? true,
+   invoiceNumber: 'TEST-001',
+   phone: useAuth().session.value?.companyPhone || '9999999999',
+   thankYouNote: 'Printer test',
+@@ -350,7 +352,7 @@ const testWebUsbReceiptPrinter = async () => {
+ const testWebUsbBarcodePrinter = async () => {
+   webUsbStatus.value = 'testing-barcode';
+   try {
+-    await printLabelViaUsb(buildSampleLabel(), selectedPrinterLabelSize.value || '50x25mm');
++    await printLabelViaUsb(buildSampleLabel().map(item => labelSampleData(item)), selectedPrinterLabelSize.value || '50x25mm');
+     toast.add({ title: 'Barcode printer test sent', color: 'green' });
+   } catch (error: any) {
+     toast.add({
+@@ -371,6 +373,7 @@ const getWebUsbRoleBadges = (printerId: string) => {
+ };
+ 
+ onMounted(async () => {
++  webUsbSupported.value = isWebUsbSupported();
+   refreshWebUsbState();
+ 
+   if (Capacitor.isNativePlatform()) {
+@@ -387,6 +390,7 @@ onMounted(async () => {
+ 
+ <template>
+   <UDashboardPanelContent class="pb-24">
++    <PrinterTemplateDesigner :receipt-data="buildSampleReceipt()" :label-data="buildSampleLabel()[0]" />
+     <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">
+       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Shipping Label Settings</h2>
+       <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Size for courier (Delhivery) shipping labels</p>
+@@ -415,7 +419,7 @@ onMounted(async () => {
+ 
+     <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">
+       <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Label Settings</h2>
+-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Configure label size for barcode printing</p>
++      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Size for the original barcode label format. Custom designs use their own dimensions above.</p>
+ 
+       <UFormGroup
+         name="PrinterLabelSize"
+diff --git a/server/api/stock-aggregate.post.ts b/server/api/stock-aggregate.post.ts
+index 88b4933..0066a32 100644
+--- a/server/api/stock-aggregate.post.ts
++++ b/server/api/stock-aggregate.post.ts
+@@ -12,7 +12,7 @@ const bodySchema = z.object({
+     startDate: z.string().nullable(),
+     endDate: z.string().nullable()
+   }),
+-  groupBy: z.string()
++  groupBy: z.enum(['product', 'date', 'category', 'brand', 'rating', 'distributor'])
+ })
+ 
+ export default defineEventHandler(async (event) => {
+@@ -25,21 +25,17 @@ export default defineEventHandler(async (event) => {
+     product: {
+       status: true,
+       ...(filters.category && { categoryId: filters.category }),
+-      ...(filters.brand && { brand: filters.brand }),
++      ...(filters.brand && { brandId: filters.brand }),
+       ...(filters.rating && { rating: parseFloat(filters.rating) }),
+-      ...(filters.distributor && {
++      ...((filters.distributor || filters.startDate || filters.endDate) && {
+         purchaseorder: {
+-          distributorId: filters.distributor
+-        }
+-      }),
+-      ...(filters.startDate || filters.endDate) && {
+-        purchaseorder: {
+-          createdAt: {
++          ...(filters.distributor && { distributorId: filters.distributor }),
++          ...((filters.startDate || filters.endDate) && { createdAt: {
+             ...(filters.startDate && { gte: new Date(filters.startDate) }),
+             ...(filters.endDate && { lte: new Date(filters.endDate) })
+-          }
++          } })
+         }
+-      }
++      })
+     }
+   };
+ 
+@@ -50,6 +46,7 @@ export default defineEventHandler(async (event) => {
+       product: {
+         include: {
+           category: true,
++          brand: true,
+           subcategory: true,
+           purchaseorder: {
+             include: {
+@@ -65,10 +62,7 @@ export default defineEventHandler(async (event) => {
+     }
+   });
+ 
+-  const grouped: Record<string, { stock: number; purchaseStock: number; qty: number }> = {};
+-
+-  // ⭐ New nested structure for subcategory + variant breakdown
+-  const categoryBreakdown: Record<string, Record<string, Record<string, number>>> = {};
++  const grouped: Record<string, { stock: number; purchaseStock: number; qty: number }> = Object.create(null);
+ 
+   for (const variant of variants) {
+     const product = variant.product;
+@@ -76,7 +70,7 @@ export default defineEventHandler(async (event) => {
+     const key = (() => {
+       switch (groupBy) {
+         case 'category': return product.category?.name?.toLowerCase() || 'uncategorized';
+-        case 'brand': return product.brand?.toLowerCase() || 'unbranded';
++        case 'brand': return product.brand?.name?.toLowerCase() || 'unbranded';
+         case 'rating': return product.rating?.toString() || 'unrated';
+         case 'date': return product.purchaseorder?.createdAt?.toISOString().split('T')[0] || 'unknown date';
+         case 'distributor': return product.purchaseorder?.distributorCompany?.distributor?.name?.toLowerCase() || 'unknown distributor';
+@@ -96,39 +90,6 @@ export default defineEventHandler(async (event) => {
+     grouped[key].purchaseStock += purchaseStockValue;
+     grouped[key].qty += itemQty;
+ 
+-    // ⭐ Subcategory + variant breakdown (only when grouped by category)
+-    if (groupBy === "category") {
+-      const subKey = product.subcategory?.name?.toLowerCase() || "no-subcategory";
+-      const variantKey = variant.name.toLowerCase();
+-
+-      if (!categoryBreakdown[key]) categoryBreakdown[key] = {};
+-      if (!categoryBreakdown[key][subKey]) categoryBreakdown[key][subKey] = {};
+-      if (!categoryBreakdown[key][subKey][variantKey]) categoryBreakdown[key][subKey][variantKey] = 0;
+-
+-      categoryBreakdown[key][subKey][variantKey] += itemQty;
+-    }
+-  }
+-
+-  // 🔥 Console Output
+-  if (groupBy === "category") {
+-    console.log("===== Category → Subcategory → Variant Breakdown =====");
+-
+-    for (const categoryName in categoryBreakdown) {
+-      console.log(`Category: ${categoryName}`);
+-
+-      for (const sub in categoryBreakdown[categoryName]) {
+-        const totalSubQty = Object.values(categoryBreakdown[categoryName][sub]).reduce((a, b) => a + b, 0);
+-        console.log(`  Subcategory: ${sub}  --> Total Qty: ${totalSubQty}`);
+-
+-        for (const variantName in categoryBreakdown[categoryName][sub]) {
+-          console.log(
+-            `     Variant: ${variantName} --> Qty: ${categoryBreakdown[categoryName][sub][variantName]}`
+-          );
+-        }
+-      }
+-    }
+-
+-    console.log("=====================================================");
+   }
+ 
+   return Object.entries(grouped).map(([key, { stock, purchaseStock, qty }]) => ({

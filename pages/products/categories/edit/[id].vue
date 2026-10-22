@@ -299,6 +299,10 @@ const uploadImage = async (image?: ImageData) => {
 };
 
 const saveCategory = async () => {
+  if (!name.value?.trim()) {
+    toast.add({ title: 'Category name is required', color: 'red' });
+    return;
+  }
   isCategorySaving.value = true;
 
   try {
@@ -314,7 +318,7 @@ const saveCategory = async () => {
     await UpdateCategory.mutateAsync({
       where: { id: route.params.id as string },
       data: {
-        name: name.value,
+        name: name.value.trim(),
         description: description.value,
         status: live.value,
         image: files[0]?.uuid || category.value?.image,
@@ -353,7 +357,7 @@ const saveCategory = async () => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
-      <CompanyFormField />
+      <CompanyFormField toolbar />
     <div class="space-y-4">
       <UPageCard>
         <AddCategoryCreate

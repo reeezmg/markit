@@ -44,7 +44,7 @@ const margin = ref(0);
 const targetAudience = ref<string | null>(null); // ✅ Added here
 const isLoading = ref(false);
 
-const live = ref<boolean>();
+const live = ref(true);
 let files = ref<ImageData | null>(null);
 const bannerFile = ref<ImageData | null>(null);
 const subcategory = ref<Category[]>([]);
@@ -63,6 +63,7 @@ const createValue = (data: any) => {
   taxAboveThreshold.value = data.taxAboveThreshold;
   margin.value = data.margin;
   targetAudience.value = data.targetAudience || null; // ✅ Capture from emitted data
+  live.value = data.live ?? true;
 };
 
 const subcategoryValue = (index: number, data: Category) => {
@@ -90,25 +91,29 @@ const handleDeleteSubCategory = (index: number) => {
 };
 
 const handleSubmit = async (e: Event) => {
-  isLoading.value = true;
   e.preventDefault();
+  if (!name.value?.trim()) {
+    toast.add({ title: 'Category name is required', color: 'red' });
+    return;
+  }
+  isLoading.value = true;
 
   try {
     const res = await CreateCategory.mutateAsync({
       data: {
-        name: name.value || '',
+        name: name.value.trim(),
         hsn: hsn.value || '',
         description: description.value || '',
-        status: live.value || undefined,
+        status: live.value,
         ...(shortCut.value && { shortCut: shortCut.value }),
         image: files.value?.uuid,
         banner: bannerFile.value?.uuid,
         taxType: taxType.value || undefined,
-        fixedTax: fixedTax.value || undefined,
-        thresholdAmount: thresholdAmount.value || undefined,
-        taxBelowThreshold: taxBelowThreshold.value || undefined,
-        taxAboveThreshold: taxAboveThreshold.value || undefined,
-        margin: margin.value || undefined,
+        fixedTax: fixedTax.value ?? undefined,
+        thresholdAmount: thresholdAmount.value ?? undefined,
+        taxBelowThreshold: taxBelowThreshold.value ?? undefined,
+        taxAboveThreshold: taxAboveThreshold.value ?? undefined,
+        margin: margin.value ?? undefined,
         targetAudience: targetAudience.value || undefined, // ✅ Include in payload
         company: {
           connect: {
@@ -182,7 +187,7 @@ const scrollToSection = (sectionId: string) => {
 
 <template>
   <UDashboardPanelContent class="pb-24">
-      <CompanyFormField />
+      <CompanyFormField toolbar />
     <div class="flex flex-row">
       <div class="w-1/4 sm:block hidden">
         <UPageCard class="m-3">

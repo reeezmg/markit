@@ -1,0 +1,224 @@
+{
+  "finishedAt": "2026-10-21T11:12:41.008Z",
+  "status": "passed-with-known-external-maps-limitation",
+  "bundleFingerprint": "3558d7897da570995003541933b9035db9032768fed7807abf441af88c00ac63",
+  "scope": "Seller ERP navigation, settings and ERP utility/record pages; separate Storefront routes excluded",
+  "regressionChecksPassed": 151,
+  "focusedIsolationChecksPassed": 14,
+  "vuePagesCompiled": 146,
+  "erpPagesInStaticScopeInventory": 99,
+  "staticScopeGaps": 0,
+  "realDatabaseSettingsContexts": [
+    {
+      "company": "head",
+      "status": "passed",
+      "accountDefaultSelectors": 20
+    },
+    {
+      "company": "branch-managed-from-head",
+      "status": "passed",
+      "accountDefaultSelectors": 20
+    }
+  ],
+  "databaseCleanup": "verified: all owned companies/users/accounts/fields/preferences and transaction effects rolled back",
+  "billingScenariosPassed": 16,
+  "expenseContextsPassed": 2,
+  "billingCleanup": "verified: all test bills and transaction effects rolled back",
+  "expenseCleanup": "verified: expense fixtures and all transaction effects rolled back",
+  "browserSelection": [
+    {
+      "company": "head",
+      "action": "select branch in settings and retain it across tabs",
+      "status": "passed",
+      "sessionUnchanged": true,
+      "branchValuesLoaded": true,
+      "tabSelectionRetained": true
+    }
+  ],
+  "browserRejectedSaves": [
+    {
+      "company": "head",
+      "form": "store-identity-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/company/update",
+      "externalMapErrors": [
+        {
+          "kind": "console-error",
+          "source": "https://maps.googleapis.com/maps/api/js",
+          "line": 2559,
+          "category": "maps-billing-required"
+        }
+      ],
+      "scope": "branch-managed-with-head-office-session",
+      "relatedLinkRetainsBranch": true,
+      "branchMutationVerified": true,
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/company/update",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    },
+    {
+      "company": "head",
+      "form": "profile-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/user/update",
+      "externalMapErrors": [],
+      "scope": "branch-managed-with-head-office-session",
+      "relatedLinkRetainsBranch": true,
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/user/update",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    },
+    {
+      "company": "head",
+      "form": "numbering-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/company/update",
+      "externalMapErrors": [],
+      "scope": "branch-managed-with-head-office-session",
+      "branchMutationVerified": true,
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/company/update",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    },
+    {
+      "company": "head",
+      "form": "product-inputs-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/company/update",
+      "externalMapErrors": [],
+      "scope": "branch-managed-with-head-office-session",
+      "branchMutationVerified": true,
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/company/update",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    },
+    {
+      "company": "head",
+      "form": "requests-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/generalPreference/upsert",
+      "externalMapErrors": [],
+      "scope": "branch-managed-with-head-office-session",
+      "branchMutationVerified": true,
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/generalPreference/upsert",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    },
+    {
+      "company": "head",
+      "form": "printer-label-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/model/company/update",
+      "externalMapErrors": [],
+      "scope": "branch-managed-with-head-office-session",
+      "branchMutationVerified": true,
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/model/company/update",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    },
+    {
+      "company": "head",
+      "form": "account-mapping-rejected-save",
+      "status": "passed",
+      "expectedMutationBlock": "/api/accountant/erp",
+      "externalMapErrors": [],
+      "scope": "branch-managed-with-head-office-session",
+      "relatedLinkRetainsBranch": true,
+      "branchMutationVerified": true,
+      "observedErrors": [
+        {
+          "kind": "audit-blocked",
+          "path": "/api/accountant/erp",
+          "status": 409,
+          "reason": "mutation"
+        }
+      ],
+      "checks": [
+        "native-http-409",
+        "error-without-success",
+        "loading-released",
+        "session-unchanged"
+      ]
+    }
+  ],
+  "pageSummary": {
+    "passed": 23,
+    "failed": 2
+  },
+  "externalMapVisits": 2,
+  "ownedShippingStopped": true,
+  "limits": [
+    "Static page inventory is not a new CRUD walkthrough of every page.",
+    "Browser saves deliberately rejected by the read-only audit; persistence verified separately with rollback-only database API/model tests.",
+    "Google Maps Cloud billing remains external.",
+    "Storefront CMS/order/editor/AI navigation excluded from this ERP change.",
+    "Email/password/avatar remain user-wide; company hierarchy is managed at head office.",
+    "Current settings are read on new page loads and server requests; already open forms have no realtime push."
+  ]
+}

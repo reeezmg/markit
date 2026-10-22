@@ -1,4 +1,7 @@
 <script setup lang="ts">
+const settingsCompany = await useSettingsCompany();
+const $fetch = settingsCompany.fetch;
+const { updateStoreUniqueName, updateStorePhone, updateStoreNote, updateAccountDetails, updateAddress, updateIsTaxIncluded, updateIsAiImage, updateIsUserTrackIncluded, updateIsCostIncluded, updatePointsValue, updateTimeValue, updateCategoryValue, updatePrinterLabelSize, updateLogo, updateDeliveryConfig, updateDeliveryType } = settingsCompany;
 import type { FormError, FormSubmitEvent } from '#ui/types';
 import { useUpsertAddress } from '~/lib/hooks/address';
 import { useUpdateCompany, useFindUniqueCompany } from '~/lib/hooks/company';
@@ -12,7 +15,7 @@ interface ImageData {
 
 const UpdateCompany = useUpdateCompany({ optimisticUpdate: true });
 const UpsertAddress = useUpsertAddress({ optimisticUpdate: true });
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => settingsCompany.auth;
 const awsService = new AwsService();
 
 const fileRef = ref<HTMLInputElement>();
@@ -373,15 +376,15 @@ watch(info, (newInfo) => {
       addstate.city = newInfo.address.city || '';
       addstate.state = newInfo.address.state || '';
       addstate.pincode = newInfo.address.pincode || '';
-      addstate.lat = newInfo.address.lat || null;
-      addstate.lng = newInfo.address.lng || null;
+      addstate.lat = newInfo.address.lat ?? null;
+      addstate.lng = newInfo.address.lng ?? null;
     }
   }
 },{ deep: true, immediate: true });
 
 
 
-function onNameUpdate() {
+async function onNameUpdate() {
   isUpdatingName.value = true;
   try {
   if (!navigator.onLine) {
@@ -390,7 +393,7 @@ function onNameUpdate() {
       statusMessage: 'No internet connection',
     })
   }
-   UpdateCompany.mutate({
+   await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -400,7 +403,7 @@ function onNameUpdate() {
     });
     toast.add({ title: 'Store name updated', icon: 'i-heroicons-check-circle' });
     isNameChanged.value = false;
-    updateStoreUniqueName(storeUniqueName.value)
+    await updateStoreUniqueName(storeUniqueName.value)
   } catch (error) {
     toast.add({ title: 'Error updating store name',
                 description: error.statusMessage,
@@ -413,7 +416,7 @@ function onNameUpdate() {
 
 const isContactDetailsChanged = computed(() => isPhoneChanged.value || isContactChanged.value);
 
-function onContactDetailsSave() {
+async function onContactDetailsSave() {
   isUpdatingContact.value = true;
   try {
   if (!navigator.onLine) {
@@ -427,7 +430,7 @@ function onContactDetailsSave() {
     if (isContactChanged.value) Object.assign(data, { ...contactState });
 
     if (Object.keys(data).length) {
-      UpdateCompany.mutate({
+      await UpdateCompany.mutateAsync({
         where: {
           id: useAuth().session.value?.companyId,
         },
@@ -435,7 +438,7 @@ function onContactDetailsSave() {
       });
     }
 
-    if (isPhoneChanged.value) { updateStorePhone(storePhone.value); isPhoneChanged.value = false; }
+    if ('phone' in data) { await updateStorePhone(data.phone); isPhoneChanged.value = false; }
     if (isContactChanged.value) { savedContact.value = { ...contactState }; isContactChanged.value = false; }
     toast.add({ title: 'Contact details updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
@@ -445,7 +448,7 @@ function onContactDetailsSave() {
   }
 }
 
-function onNotesUpdate() {
+async function onNotesUpdate() {
   isUpdatingDescription.value = true;
   try {
   if (!navigator.onLine) {
@@ -454,7 +457,7 @@ function onNotesUpdate() {
       statusMessage: 'No internet connection',
     })
   }
-    UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -467,7 +470,7 @@ function onNotesUpdate() {
     });
     toast.add({ title: 'Store description updated', icon: 'i-heroicons-check-circle' });
     isUpdatingDescription.value = false;
-    updateStoreNote(
+    await updateStoreNote(
       storeDescription.value,
       storeThankYouNote.value,
       storeRefundPolicy.value,
@@ -481,7 +484,7 @@ function onNotesUpdate() {
   }
 }
 
-function onaccSubmit(event: FormSubmitEvent<AccountState>) {
+async function onaccSubmit(event: FormSubmitEvent<AccountState>) {
     isUpdatingAccount.value = true;
   try {
   if (!navigator.onLine) {
@@ -491,7 +494,7 @@ function onaccSubmit(event: FormSubmitEvent<AccountState>) {
     })
   }
   
-    UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -505,7 +508,7 @@ function onaccSubmit(event: FormSubmitEvent<AccountState>) {
       }
     });
     // Keep the session in sync so GSTIN / bank details show up on receipts immediately
-    updateAccountDetails({
+    await updateAccountDetails({
       accHolderName: accstate.accHolderName,
       ifsc: accstate.ifsc,
       accountNo: accstate.accountNo,
@@ -522,7 +525,7 @@ function onaccSubmit(event: FormSubmitEvent<AccountState>) {
   }
 }
 
-function onaddSubmit(event: FormSubmitEvent<AddressState>) {
+async function onaddSubmit(event: FormSubmitEvent<AddressState>) {
     isUpdatingAddress.value = true;
   try {
   if (!navigator.onLine) {
@@ -531,7 +534,7 @@ function onaddSubmit(event: FormSubmitEvent<AddressState>) {
       statusMessage: 'No internet connection',
     })
   }
-  UpsertAddress.mutate({
+  await UpsertAddress.mutateAsync({
       where: {
         companyId: useAuth().session.value?.companyId,
       },
@@ -561,7 +564,7 @@ function onaddSubmit(event: FormSubmitEvent<AddressState>) {
         placeId: addstate.placeId,
       }
     });
-    updateAddress(addstate);
+    await updateAddress(addstate);
     toast.add({ title: 'Address updated', color: 'green', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating address',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
@@ -570,7 +573,7 @@ function onaddSubmit(event: FormSubmitEvent<AddressState>) {
   }
 }
 
-const onTaxIncludeChange = () => {
+const onTaxIncludeChange = async () => {
   try {
     if (!navigator.onLine) {
     throw createError({
@@ -578,7 +581,7 @@ const onTaxIncludeChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-    UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -586,7 +589,7 @@ const onTaxIncludeChange = () => {
         isTaxIncluded: isTaxInclude.value,
       },
     });
-    updateIsTaxIncluded(isTaxInclude.value);
+    await updateIsTaxIncluded(isTaxInclude.value);
     toast.add({ title: 'Tax include updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating tax setting', color: 'red', icon: 'i-heroicons-x-circle' });
@@ -595,7 +598,7 @@ const onTaxIncludeChange = () => {
 
 
 
-const onAiImageChange = () => {
+const onAiImageChange = async () => {
   try {
     if (!navigator.onLine) {
     throw createError({
@@ -603,7 +606,7 @@ const onAiImageChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-    UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -611,7 +614,7 @@ const onAiImageChange = () => {
         isAiImage: isAiImage.value,
       },
     });
-    updateIsAiImage(isAiImage.value);
+    await updateIsAiImage(isAiImage.value);
     toast.add({ title: 'AI Image setting updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating AI Image setting', color: 'red', icon: 'i-heroicons-x-circle' });
@@ -619,7 +622,7 @@ const onAiImageChange = () => {
 };
 
 
-const onUserTrackIncludeChange = () => {
+const onUserTrackIncludeChange = async () => {
   try {
       if (!navigator.onLine) {
     throw createError({
@@ -627,7 +630,7 @@ const onUserTrackIncludeChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-    UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -635,7 +638,7 @@ const onUserTrackIncludeChange = () => {
         isUserTrackIncluded: isUserTrackInclude.value,
       },
     });
-    updateIsUserTrackIncluded(isUserTrackInclude.value);
+    await updateIsUserTrackIncluded(isUserTrackInclude.value);
     toast.add({ title: 'UserTrack include updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating UserTrack setting', color: 'red', icon: 'i-heroicons-x-circle' });
@@ -643,7 +646,7 @@ const onUserTrackIncludeChange = () => {
 };
 
 
-const onCostIncludeChange = () => {
+const onCostIncludeChange = async () => {
   try {
       if (!navigator.onLine) {
     throw createError({
@@ -651,7 +654,7 @@ const onCostIncludeChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-    UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -659,14 +662,14 @@ const onCostIncludeChange = () => {
         isCostIncluded: isCostInclude.value,
       },
     });
-    updateIsCostIncluded(isCostInclude.value);
+    await updateIsCostIncluded(isCostInclude.value);
     toast.add({ title: 'Cost include updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating Cost setting', color: 'red', icon: 'i-heroicons-x-circle' });
   }
 };
 
-const onPointsValueChange = () => {
+const onPointsValueChange = async () => {
   isUpdatingPointsValue.value = true;
   try {
       if (!navigator.onLine) {
@@ -675,7 +678,7 @@ const onPointsValueChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-    UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -683,7 +686,7 @@ const onPointsValueChange = () => {
         pointsValue: pointsValue.value,
       },
     });
-   updatePointsValue(pointsValue.value);
+   await updatePointsValue(pointsValue.value);
     toast.add({ title: 'Points value updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating points value',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
@@ -691,7 +694,7 @@ const onPointsValueChange = () => {
     isUpdatingPointsValue.value = false;
   }
 };
-const ontimingChange = () => {
+const ontimingChange = async () => {
   isUpdatingtiming.value = true;
   try {
       if (!navigator.onLine) {
@@ -700,7 +703,7 @@ const ontimingChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-   UpdateCompany.mutate({
+   await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -709,7 +712,7 @@ const ontimingChange = () => {
         closeTime: timing.close,
       },
     });
-    updateTimeValue(timing.open,timing.close);
+    await updateTimeValue(timing.open,timing.close);
     toast.add({ title: 'Timing updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     toast.add({ title: 'Error updating Timing',description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
@@ -718,7 +721,7 @@ const ontimingChange = () => {
   }
 };
 
-const onCategoryChange = () => {
+const onCategoryChange = async () => {
   isUpdatingCategory.value = true;
   try {
       if (!navigator.onLine) {
@@ -727,7 +730,7 @@ const onCategoryChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-   UpdateCompany.mutate({
+   await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -735,7 +738,7 @@ const onCategoryChange = () => {
         category: selectedCategory.value,
       },
     });
-    updateCategoryValue(selectedCategory.value);
+    await updateCategoryValue(selectedCategory.value);
     toast.add({ title: 'Category updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.error(error);
@@ -745,7 +748,7 @@ const onCategoryChange = () => {
   }
 };
 
-const onPrinterLabelSizeChange = () => {
+const onPrinterLabelSizeChange = async () => {
   isUpdatingPrinterLabelSize.value = true;
   try {
       if (!navigator.onLine) {
@@ -754,7 +757,7 @@ const onPrinterLabelSizeChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-   UpdateCompany.mutate({
+   await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -762,7 +765,7 @@ const onPrinterLabelSizeChange = () => {
         printerLabelSize: selectedPrinterLabelSize.value,
       },
     });
-    updatePrinterLabelSize(selectedPrinterLabelSize.value);
+    await updatePrinterLabelSize(selectedPrinterLabelSize.value);
     toast.add({ title: 'Printer label size updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.error(error);
@@ -775,53 +778,26 @@ const onPrinterLabelSizeChange = () => {
 
 const onLogoUpdate = async () => {
   isUpdatingLogo.value = true;
-    try{
-        if (!navigator.onLine) {
-    throw createError({
-      statusCode: 0,
-      statusMessage: 'No internet connection',
-    })
-  }
-    // The logo being replaced, if a new file was picked.
-    const replacedLogo = selectedFile.value?.file ? useAuth().session.value?.logo : null;
-
-    await UpdateCompany.mutateAsync({
-        where: {
-            id: useAuth().session.value?.companyId,
-        },
-        data: {
-            ...(selectedFile.value?.file && {
-                logo: selectedFile.value?.uuid,
-            }),
-        }
-    });
-
-
-
-    if (selectedFile.value) {
-        const base64 = await prepareFileForApi(selectedFile.value.file);
-        const base64file = { base64, uuid: selectedFile.value.uuid };
-        await awsService.uploadBase64Object(base64file.base64, base64file.uuid);
+  try {
+    if (!navigator.onLine) throw createError({ statusCode: 0, statusMessage: 'No internet connection' });
+    const selected = selectedFile.value;
+    const replacedLogo = selected?.file ? useAuth().session.value?.logo : null;
+    if (selected?.file) {
+      const base64 = await prepareFileForApi(selected.file);
+      await awsService.uploadBase64Object(base64, selected.uuid);
     }
-
-updateLogo(selectedFile.value?.uuid);
-
-if (replacedLogo && replacedLogo !== selectedFile.value?.uuid) {
-    await awsService.deleteObjects([replacedLogo]);
-}
-toast.add({ title: 'Logo updated', icon: 'i-heroicons-check-circle' });
-}catch(error){
-    console.error(error);
-    toast.add({
-        title: 'Error updating profile',
-        icon: 'i-heroicons-exclamation-circle',
-        color: 'red',
-        description: error.statusMessage,
-    });
-}finally {
-        isUpdatingLogo.value = false;
-    }
-
+    await UpdateCompany.mutateAsync({ where: { id: useAuth().session.value?.companyId },
+      data: { ...(selected?.file && { logo: selected.uuid }) } });
+    await updateLogo(selected?.uuid);
+    if (replacedLogo && replacedLogo !== selected?.uuid) await awsService.deleteObjects([replacedLogo]);
+    isImageChanged.value = false;
+    toast.add({ title: 'Logo updated', icon: 'i-heroicons-check-circle' });
+    return true;
+  } catch (error: any) {
+    toast.add({ title: 'Error updating logo', description: error?.statusMessage || error?.message,
+      icon: 'i-heroicons-exclamation-circle', color: 'red' });
+    return false;
+  } finally { isUpdatingLogo.value = false; }
 };
 
 
@@ -858,7 +834,7 @@ const normalizeCodCharge = () => {
   return codCharge.value;
 };
 
-const saveDeliveryConfig = () => {
+const saveDeliveryConfig = async () => {
   isUpdatingDeliveryConfig.value = true;
   const normalizedDeliveryDiscount = normalizeDeliveryDiscount();
   const normalizedCodCharge = normalizeCodCharge();
@@ -868,7 +844,6 @@ const saveDeliveryConfig = () => {
     deliveryDiscount: normalizedDeliveryDiscount,
     codCharge: normalizedCodCharge
   }
-   isUpdatingAccount.value = true;
   try {
       if (!navigator.onLine) {
     throw createError({
@@ -876,7 +851,7 @@ const saveDeliveryConfig = () => {
       statusMessage: 'No internet connection',
     })
   }
-    UpdateCompany.mutate({
+    await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -887,7 +862,7 @@ const saveDeliveryConfig = () => {
         codCharge: normalizedCodCharge
       }
     });
-    updateDeliveryConfig(payload);
+    await updateDeliveryConfig(payload);
     toast.add({ title: 'Account details updated', color: 'green', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.log(error);
@@ -897,7 +872,7 @@ const saveDeliveryConfig = () => {
   }
 }
 
-const onDeliveryTypeChange = () => {
+const onDeliveryTypeChange = async () => {
   isUpdatingDeliveryType.value = true;
   try {
       if (!navigator.onLine) {
@@ -906,7 +881,7 @@ const onDeliveryTypeChange = () => {
       statusMessage: 'No internet connection',
     })
   }
-   UpdateCompany.mutate({
+   await UpdateCompany.mutateAsync({
       where: {
         id: useAuth().session.value?.companyId,
       },
@@ -914,7 +889,7 @@ const onDeliveryTypeChange = () => {
         deliveryType: deliveryType.value,
       },
     });
-    updateDeliveryType(deliveryType.value);
+    await updateDeliveryType(deliveryType.value);
     toast.add({ title: 'Delivery Type updated', icon: 'i-heroicons-check-circle' });
   } catch (error) {
     console.error(error);
@@ -930,76 +905,55 @@ const isUpdatingStoreIdentity = ref(false);
 const onStoreIdentitySave = async () => {
   isUpdatingStoreIdentity.value = true;
   try {
-    if (!navigator.onLine) {
-      throw createError({ statusCode: 0, statusMessage: 'No internet connection' });
-    }
-    const companyId = useAuth().session.value?.companyId;
+    if (!navigator.onLine) throw createError({ statusCode: 0, statusMessage: 'No internet connection' });
     const data: Record<string, any> = {};
-
     if (isNameChanged.value) data.storeUniqueName = storeUniqueName.value;
     if (isCategoryChanged.value) data.category = selectedCategory.value;
-
-    if (Object.keys(data).length) {
-      UpdateCompany.mutate({ where: { id: companyId }, data });
+    const selected = selectedFile.value;
+    const hasLogo = isImageChanged.value && selected?.file;
+    const replacedLogo = hasLogo ? useAuth().session.value?.logo : null;
+    if (hasLogo) {
+      const base64 = await prepareFileForApi(selected.file);
+      await awsService.uploadBase64Object(base64, selected.uuid);
+      data.logo = selected.uuid;
     }
-
-    if (isNameChanged.value) { updateStoreUniqueName(storeUniqueName.value); isNameChanged.value = false; }
-    if (isCategoryChanged.value) { updateCategoryValue(selectedCategory.value); isCategoryChanged.value = false; }
-    if (isImageChanged.value) await onLogoUpdate();
-
+    if (Object.keys(data).length) await UpdateCompany.mutateAsync({ where: { id: useAuth().session.value?.companyId }, data });
+    if ('storeUniqueName' in data) { await updateStoreUniqueName(data.storeUniqueName); isNameChanged.value = false; }
+    if ('category' in data) { await updateCategoryValue(data.category); isCategoryChanged.value = false; }
+    if ('logo' in data) {
+      await updateLogo(data.logo); isImageChanged.value = false;
+      if (replacedLogo && replacedLogo !== data.logo) await awsService.deleteObjects([replacedLogo]);
+    }
     toast.add({ title: 'Store identity updated', icon: 'i-heroicons-check-circle' });
-  } catch (error) {
-    toast.add({ title: 'Error updating store identity', description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
-  } finally {
-    isUpdatingStoreIdentity.value = false;
-  }
+  } catch (error: any) {
+    toast.add({ title: 'Error updating store identity', description: error?.statusMessage || error?.message,
+      color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally { isUpdatingStoreIdentity.value = false; }
 };
 
 const isAllDeliveryChanged = computed(() => isDeliveryTypeChanged.value || isDeliveryConfigChanged.value);
 const isUpdatingAllDelivery = ref(false);
 
-const onAllDeliverySave = () => {
+const onAllDeliverySave = async () => {
   isUpdatingAllDelivery.value = true;
-  const normalizedDeliveryDiscount = normalizeDeliveryDiscount();
-  const normalizedCodCharge = normalizeCodCharge();
   try {
-    if (!navigator.onLine) {
-      throw createError({ statusCode: 0, statusMessage: 'No internet connection' });
-    }
-    const companyId = useAuth().session.value?.companyId;
+    if (!navigator.onLine) throw createError({ statusCode: 0, statusMessage: 'No internet connection' });
     const data: Record<string, any> = {};
-
     if (isDeliveryTypeChanged.value) data.deliveryType = deliveryType.value;
-    if (isDeliveryConfigChanged.value) {
-      Object.assign(data, {
-        deliveryMode: deliveryMode.value,
-        deliveryRadius: deliveryRadius.value,
-        deliveryDiscount: normalizedDeliveryDiscount,
-        codCharge: normalizedCodCharge,
-      });
-    }
-
-    if (Object.keys(data).length) {
-      UpdateCompany.mutate({ where: { id: companyId }, data });
-    }
-
-    if (isDeliveryTypeChanged.value) { updateDeliveryType(deliveryType.value); isDeliveryTypeChanged.value = false; }
-    if (isDeliveryConfigChanged.value) {
-      updateDeliveryConfig({
-        deliveryMode: deliveryMode.value,
-        deliveryRadius: deliveryRadius.value,
-        deliveryDiscount: normalizedDeliveryDiscount,
-        codCharge: normalizedCodCharge,
-      });
+    if (isDeliveryConfigChanged.value) Object.assign(data, { deliveryMode: deliveryMode.value,
+      deliveryRadius: deliveryRadius.value, deliveryDiscount: normalizeDeliveryDiscount(), codCharge: normalizeCodCharge() });
+    if (Object.keys(data).length) await UpdateCompany.mutateAsync({ where: { id: useAuth().session.value?.companyId }, data });
+    if ('deliveryType' in data) { await updateDeliveryType(data.deliveryType); isDeliveryTypeChanged.value = false; }
+    if ('deliveryMode' in data) {
+      await updateDeliveryConfig({ deliveryMode: data.deliveryMode, deliveryRadius: data.deliveryRadius,
+        deliveryDiscount: data.deliveryDiscount, codCharge: data.codCharge });
       isDeliveryConfigChanged.value = false;
     }
-
     toast.add({ title: 'Delivery settings updated', icon: 'i-heroicons-check-circle' });
-  } catch (error) {
-    toast.add({ title: 'Error updating delivery settings', description: error.statusMessage, color: 'red', icon: 'i-heroicons-x-circle' });
-  } finally {
-    isUpdatingAllDelivery.value = false;
-  }
+  } catch (error: any) {
+    toast.add({ title: 'Error updating delivery settings', description: error?.statusMessage || error?.message,
+      color: 'red', icon: 'i-heroicons-x-circle' });
+  } finally { isUpdatingAllDelivery.value = false; }
 };
 
 </script>
@@ -1565,7 +1519,7 @@ const onAllDeliverySave = () => {
       <div class="my-4 flex w-full justify-end">
         <UButton
             label="Manage Opening Balances"
-            to="/accountant/opening-balances"
+            :to="{ path: '/accountant/opening-balances', query: { entryCompany: settingsCompany.scope.companyId.value } }"
             size="md"
           />
       </div>

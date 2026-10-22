@@ -44,9 +44,14 @@ Provides `nuxtApp.$razorpay.load()` — lazy-loads the Razorpay checkout JS from
 
 Registers `/sw.js` as the app's Service Worker (enables PWA features, background push, offline caching).
 
+`public/sw.js` cache version v6 bypasses all API requests and foreign origins. It never saves authenticated HTML documents or precaches `/`; failed document navigation uses the public offline page. Static resources keep network-first caching and offline fallback. Activation removes the previous cache, including its potentially stale session responses. `tests/service-worker-scope.test.ts` verifies that offline requests cannot replay a cached head-office session after a company change.
+
 ### `plugins/vue-query.ts` — TanStack Vue Query
 
-Installs `VueQueryPlugin` globally with a shared `QueryClient`. Default `staleTime`: 5 minutes (`1000 * 60 * 5`).
+Installs `VueQueryPlugin` with a fresh `QueryClient` for each Nuxt application/request. Default `staleTime`: 5 minutes (`1000 * 60 * 5`). After server rendering, `dehydrate` writes successful query data and settled error states into the request's `useState('vue-query')` payload; the browser hydrates that cache before page setup. ZenStack's serializer wraps the complete dehydrated state so financial Decimal values and dates survive Nuxt payload serialization. Company-specific query keys remain separate. Error payloads contain a generic message without server stack traces or database details. The browser suppresses failed-query mount retries only during initial hydration, then restores ordinary mount retries after `onNuxtReady` confirms that asynchronous route hydration has finished. Pending queries are omitted. `tests/query-hydration.test.ts` checks rendered-row parity, no immediate refetch, isolation between requests/companies, and Decimal/date round trips through Nuxt's actual payload serializer.
+
+`app.vue` provides the ZenStack model context. On the server, `utils/model-request-fetch.ts` forwards the active request's session cookie only to model API paths on the app's own origin. It preserves native Response handling, caller headers and explicit credential omission; other origins/API paths never inherit the session cookie. This allows authenticated SSR reads to populate the request's query cache. Browser requests use the SDK's native fetch behavior. `tests/model-request-fetch.test.ts` verifies authentication and cookie boundaries with a local HTTP server.
+
 
 ### `plugins/vue-tel-input.client.ts` — Phone input component
 
@@ -358,3 +363,5 @@ or financial changes. Non-financial bill fields remain available through scoped
 CRUD. Source bill APIs own original tender changes; dated receipt APIs own customer
 collections. `companyTransfer.ts` and cleanup utilities lock affected bills and
 reject any POS receipt history, preserving company/date/party accounting links.
+
+Nuxt explicitly disables Nitro timing diagnostics. A warmed audit server emitted an 18,073-byte Server-Timing header: native Node fetch failed with UND_ERR_HEADERS_OVERFLOW while the same read returned HTTP 200 through a client accepting larger headers. This can break SSR model reads while browser reads succeed. The browser audit records the maximum timing-header size and rejects headers above its budget.

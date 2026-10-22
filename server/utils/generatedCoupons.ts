@@ -101,15 +101,16 @@ export async function generateCouponsForBill(db: Queryable, input: GenerateCoupo
         WHERE client_id = $1
           AND created_at >= $2
           AND created_at <= $3
+          AND ($4::text IS NULL OR company_id = $4::text)
         `,
-        [clientId, coupon.start_date, coupon.end_date],
+        [clientId, coupon.start_date, coupon.end_date, companyId],
       )
       totalValue = toNumber(billsResult.rows[0]?.total)
 
       if (input.billId) {
         const currentBillIncluded = await db.query(
-          `SELECT 1 FROM bills WHERE id = $1 AND client_id = $2`,
-          [input.billId, clientId],
+          `SELECT 1 FROM bills WHERE id = $1 AND client_id = $2 AND ($3::text IS NULL OR company_id = $3::text)`,
+          [input.billId, clientId, companyId],
         )
         if (!currentBillIncluded.rowCount) {
           totalValue += grandTotal

@@ -4,6 +4,12 @@
 
 ## Server Utilities (`storetools/server/`)
 
+### Company print designs
+
+`GET /api/settings/print-templates` returns version-1 templates and receipt/label default IDs for the authorized request company. `PUT` requires admin/manager and validates IDs, dimensions, element bounds, logo data and matching default kinds through `utils/print-templates.ts`. It updates only that company's existing preference namespace (`printer/templates`) and backs up the prior JSON under `printer/templates-backup` in one Prisma transaction. Limits: 12 templates, 40 elements each, 2 MB request JSON; logos are inline PNG/JPEG data URLs. No DDL or database schema changes. `GET /api/billSale/receipt` also returns `companyId` and `printTemplate` from the bill's owning company for consistent cross-store receipt rendering.
+
+`GET /api/settings/label-variables` returns active product/variant custom-field picker definitions for the authorized request company. `POST` accepts up to 500 combined item IDs/barcodes and returns only the catalogue-selected label values. `server/utils/labelVariables.ts` scopes item, variant and product to the request company, discards foreign category/brand/collection/purchase relations, and derives the distributor through the company-linked purchase order. The routes are read-only; no schema changes.
+
 ### Salary writes and historical rates
 
 - `GET /api/salary/payment-options?paymentId` requires salary-manager permission and company scope. It returns active native BANK accounts and the recorded native bank for an optional historical payment. Payout/edit `bankAccountId` now selects a native account, validated and snapshotted by `staff-payment-account.ts` in the source transaction; it is never written into legacy bank foreign-key columns.
@@ -136,10 +142,10 @@ not call this API during the independent adoption phase.
 
 - `clients: Map<companyId, Set<WebSocket>>` — tracks connected clients per company
 - Connection: client must pass `?companyId=` query param, else closed with code 4001
-- `broadcastToCompany(companyId, notification)` — sends `Notification` JSON to all open sockets for a company. Called by notification API routes after creating a notification.
+- `broadcastToCompany(companyId, notification)` sends `Notification` JSON to open company sockets. No active notification API route imports it.
 - Cleans up empty company sets on disconnect
 
-Used by: `useNotifications` composable (connects to `localhost:3003` in dev).
+Legacy standalone module. The active `useNotifications` client refreshes through authenticated REST instead.
 
 ---
 
@@ -160,11 +166,17 @@ Auth: most routes call `useAuthSession(event)` and read `session.data.companyId`
 `POST /api/auth/switch-company` is in the auth Nuxt layer; it checks active user membership or head-office admin access before rebuilding the company-scoped session.
 `GET /api/auth/accessible-companies` lists permitted companies. Only admins of the actual active head office receive direct active branch access. `POST /api/auth/switch-company` changes the actual sidebar/session company; `keepOrganization` is rejected. The obsolete `read-scope` and `view-scope` endpoints return 410.
 
-`useCompanyScope.ts` and `useCompanyFetch.ts` send `x-company-filter` (one ID or `*`) for table reads and `x-company-id` for form/row operations. `organizationReadScope.ts` expands `*` to authorized IDs. `organizationModelScope.ts` caps generated reads and included company-owned lists without broadening explicit filters. Generated writes validate ownership/relations inside a serializable transaction. `company-request.ts` checks custom SQL request relations; `lockCompanyRequest.ts` holds referenced ownership locks through writes. `companyRequestScope.ts` provides authorized request-local company settings without session updates. Accounts and Reports UI retain their existing company selection.
+`useCompanyScope.ts` and `useCompanyFetch.ts` send `x-company-filter` (one ID or `*`) for table reads and `x-company-id` for form/row operations. `organizationReadScope.ts` expands `*` to authorized IDs and authorizes URL `companyId` selections for single-company exports. Invalid array filters are rejected. `organizationModelScope.ts` caps generated reads and included company-owned lists without broadening explicit filters. Generated writes validate ownership/relations inside a serializable transaction with a 30-second execution deadline and a 15-second maximum connection wait. `company-request.ts` checks custom SQL request relations, rejects conflicting header/query/body ownership and retains the selected company in request context; `lockCompanyRequest.ts` holds referenced ownership locks through writes. `companyRequestScope.ts` supplies company-owned settings and selected account defaults without changing the login session. Daily, GST, Summary, Users and Dashboard use one-company selectors; Accounts, Profit and Online support table filters.
+
+The seller `/api/model/*` endpoint requires authentication before constructing the enhanced client. BillHistory reads inherit the optional bill's company; generic history mutations and generic Company hierarchy changes are rejected. Nested company mutations through another model are rejected; use company settings or the branch APIs. Existing BillHistory detail pages resolve the bill owner through `/api/organization/context`. Orphan history has no authorized company scope. Bill creation and bill-edit loading no longer issue runtime `ALTER TABLE`; schema changes belong in `schema.zmodel`.
+
+`POST /api/coupons/generate` requires an authorized request company and a customer membership in that company. Coupon candidates and combined bill totals are company-scoped. Notification list/read-all/individual-read endpoints authorize their company; notification creation authorizes the company and uses the authenticated sender, and push notification sends authorize the target company. Cleanup requests additionally require the cleanup session flag.
 
 `GET /api/organization/context` returns an authorized company settings whitelist; model/id lookup resolves existing form ownership from the database. `POST /api/organization/transfer` accepts a preview or confirmed transfer. `companyTransfer.ts` discovers dependent records from schema relationships and logical ledger source IDs, returns explicit destination mapping requirements, and fingerprints the preview. Confirmation locks company counters and affected records, checks the fingerprint/mappings, moves linked documents, allocates destination numbers, reuses supplier/customer identities through destination links, adjusts stock and customer points, and recalculates source/destination account and staff ledgers. Supplier invoice references are retained. After moving linked documents, each transferred PO registers its header as the destination company purchase source; no PO-linked DC is needed. Failures roll back the transaction; serialization/deadlock conflicts return 409 for a fresh preview. Transfer confirmation moves the saved record immediately; forms reload or close afterward.
 
 Verification: `npm run test:company-scope` exercises request filters/authorization and real PostgreSQL transfer fixtures, including missing mappings, insufficient-stock rollback, stale preview rejection, stock/ledger reconciliation, purchase-return stock reversal, and linked payment/expense create-update-delete handlers. Fixtures are rolled back. `scripts/check-company-scope.mjs` checks changed Vue/TypeScript syntax.
+`npm run test:branches` is the database-free branch regression entrypoint (shared scopes, 133 model read boundaries, history ownership, API rejections, all-page syntax and real Chrome company controls). The read-only report API/export suite is `node --import tsx --test tests/report-pages.integration.test.ts`. Other integration suites must be inspected before execution; some older accounting/report fixtures create schemas and remain prohibited.
+`node --import tsx --test tests/branch-readonly.test.ts` checks an existing active head-office admin and its branches using SELECT-only inspection: accessible companies, request filters, URL selection, generated model counts and outside-company rejection. It skips without creating fixtures when no existing head-office admin is available.
 DB: routes use either `pool` from `~/server/db` (raw SQL) or `prisma` from `~/server/prisma` / `~/server/utils/prisma`.
 
 ---
@@ -176,7 +188,7 @@ DB: routes use either `pool` from `~/server/db` (raw SQL) or `prisma` from `~/se
 | `~/server/db.ts` | `pool` — `pg.Pool` for raw SQL (accounts/ledger/bill routes) |
 | `~/server/prisma.ts` | `prisma` - bare `PrismaClient`; no payment middleware is registered |
 | `~/server/utils/prisma.ts` | `prisma` (separate instance) with `$use` auto-notification middleware: creates `Notification` on Bill.create (ORDER_RECEIVED) and Expense.create (EXPENSE_CREATED) |
-| `~/server/ws/server.ts` | Raw `ws` WebSocket on port 3003; `broadcastToCompany(companyId, notification)` used by notify.post.ts |
+| `~/server/ws/server.ts` | Legacy raw `ws` WebSocket on port 3003; no active notification API caller |
 | `~/server/middleware/cors.ts` | CORS: allows Capacitor + localhost origins; OPTIONS preflight |
 | `~/server/middleware/force-logout.ts` | Compares `session.authSessionVersion` vs `AUTH_SESSION_VERSION` env; deletes cookie + redirects on mismatch |
 
@@ -205,7 +217,7 @@ Billing (POS) operations. Core transaction routes.
 
 | Route | Method | Auth | Description |
 |---|---|---|---|
-| `bill/create` | POST | — | **Main bill creation transaction** now runs through lazily installed PL/pgSQL function `create_bill_source_plpgsql(jsonb)` inside a request-receipt transaction (`SELECT create_bill_source_plpgsql($1::jsonb)`). Body: `{ payload, items, returnedItems, billPoints, clientId, companyId, couponId, uuid }`. The function inserts the bill row (including optional `account_id` for B2B credit or `credit_user_id` for staff credit), inserts entries set-wise from JSONB, updates stock with set-based JSONB deltas (`items.qty`, `items.sold_qty`), applies loyalty point mutations on save (`+billPoints`, `-redeemedPoints` when present), records coupon usage + increments `timesUsed`, creates earned GENERATE coupon vouchers in `coupon_clients` (single-use, `usage_limit = 1`), writes/recalculates staff credit `user_ledger_entries`, and leaves historical `account_ledger_entries` untouched; native deferred triggers post the financial source. **`invoice_number` is assigned by the DB trigger `trigger_generate_invoice_number` (BEFORE INSERT on `bills`), not by app code** — the insert passes `null` and reads the trigger value back via `RETURNING invoice_number`. Returns `{ success, billId, invoiceNumber, generatedCoupons }`. The company-specific draft keeps uuid on retry/reload; saveSourceRequest returns its saved result or rejects changed details (409), with source, receipt and journals committed together. Retry on transient PG errors (up to 3×, exponential backoff). Logs failures to `save_error_requests` table. |
+| `bill/create` | POST | company-scoped | Parameterized source DML in `create-bill-source.ts`, inside the handler's ownership-locked, idempotent transaction. Inserts bill/entries, applies entry-derived stock, staff credit, loyalty and coupon effects. Native triggers retain invoice numbering and financial posting; no stored create function or runtime schema setup. Combined coupon spending is restricted to its owning company. Returns `{ success, billId, invoiceNumber, generatedCoupons }`; changed retries return 409 and transient failures retain transaction retries. |
 | `bill/offline` | POST | session | Stock-only update: `{ requestId, items, returnedItems, companyId }`. Changes `items.qty` and `sold_qty` equally in opposite directions in one transaction, including net negative sold quantities after returns; enabled stock-control triggers post inventory adjustments. A durable request receipt prevents duplicate stock/native valuation on identical retries; changed details under the same ID return 409. Verified by rollback sidebar regression. Uses `pool` from `~/server/db` |
 | `bill/update` | POST | session | Full bill edit in a raw SQL / pg transaction. **Batched (O(1) round-trips):** one batched SELECT of old entries, one bulk entry `UPDATE … FROM unnest(...)`, one bulk stock `UPDATE`, one batched DELETE — instead of per-row queries. Creates new entries, updates existing, prunes removed, adjusts stock, updates bill header (including separate `account_id` and `credit_user_id` credit-party columns), syncs the linked `user_credit_transactions` BILL/CREDIT row when staff credit is present or removes it when staff credit is cleared, reconciles loyalty points, and creates earned GENERATE coupon vouchers (`coupon_clients`, single-use). Returns `{ success, generatedCoupons }`. |
 | `bill/status-history` | GET | session + authorized company read scope | `?id=&type=bill\|order\|checkout` (type defaults to bill). Returns `{ document: { id, companyId, paidAt } \| null, history }`. History includes sequence (string), field, previousStatus, status, changedAt, source and actorId; ordered by sequence. A deleted document can have retained history and a null document. Missing/out-of-scope records return 404; invalid type/id returns 400. Requires the document-status-history migration. |
@@ -260,6 +272,8 @@ behavior is preserved. In-memory regression coverage:
 | `billSale/receipt` | GET | Print data for a bill receipt: `?id=`. Returns formatted print payload with entries, company info, totals, UPI ID, GSTIN, tqty/tvalue/ttvalue/tdiscount. **Bug:** `console.log('SALE ENTRIES:', sale.entries)` |
 | `billSale/updateBillNotes` | POST | Update bill notes: `{ billId, companyId, notes }` |
 | `billSale/updatePaymentStatus` | POST | Scoped non-credit status correction; preserves `created_at`. Credit settlement returns 409 and directs to dated receipts. Active receipts block changing/reopening the bill; unchanged status is a no-op. |
+| `billSale/share-receipt` | POST | Authenticated, authorized bill/company lookup; issues a 30-day HMAC receipt link without database writes. |
+| `receipt-share` | GET | Public bearer token; validates signature/expiry and reads only its bill/company via receiptData. Returns current company receipt template; no-store response. |
 | `billSale/receipts` | GET | Company-scoped `?billId=` returns outstanding, immutable payment history and active native CASH/BANK choices. Only active customer POS credit bills are supported. |
 | `billSale/receipts` | POST | `{ billId, amount, paymentDate, paymentMethod, accountId, reference?, requestId, companyId? }`. Validates amount/date/account, locks the bill, inserts Payment + published balanced receipt journal and derives PENDING/PAID. Retains invoice date/method/splits and uses durable idempotency. Requires a posted ERP receivable source. |
 | `billSale/reverseReceipt` | POST | `{ billId, receiptId, paymentDate, reference?, requestId, companyId? }`. Admin/manager/accountant only. Posts opposite journal on reversal date, retains original receipt/journal, marks source receipt reversed and reopens due. |
@@ -358,12 +372,12 @@ Store frontend wishlist (mirrors cart/ pattern).
 
 ## notifications/
 
-In-app notification system. Uses `utils/prisma` + WebSocket broadcast.
+In-app notification system. Uses authenticated Prisma operations; clients refresh through REST every 30 seconds while visible and on focus.
 
 | Route | Method | Description |
 |---|---|---|
-| `notifications/index` | GET | List notifications: `?companyId=&userId=`. Returns last 50 notifications for company **excluding** the requesting user's own notifications. **Bug:** `console.log(userId)` |
-| `notifications/notify` | POST | Manually create a notification. Body: `{ type: 'BILL'\|'EXPENSE'\|'ORDER'\|'LOW_STOCK', companyId, userId?, ... }`. Creates `Notification` record then POSTs to `http://localhost:3004/broadcast`. **Note:** uses `broadcastToCompany` import but calls HTTP instead |
+| `notifications/index` | GET | Requires seller authentication and authorizes `companyId`. Returns the last 50 company notifications excluding the authenticated user's own records; a supplied `userId` cannot impersonate another user. |
+| `notifications/notify` | POST | Requires seller authentication and access to `companyId`; uses the authenticated user ID. Body type is `BILL`, `EXPENSE`, `ORDER` or `LOW_STOCK`. Returns after saving, with no placeholder broadcast dependency. Low-stock lookup requires a variant belonging to that company and sums its item quantities; missing variants return 404. |
 | `notifications/[id]/read` | PATCH | Mark single notification read: route param `id` |
 | `notifications/read-all` | PATCH | Mark all company notifications read: `?companyId=` |
 
@@ -493,7 +507,7 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `tiktok/getShopName` | GET | — | Get TikTok shop name. **Bugs:** `app_key`/`app_secret` hardcoded; hardcoded `x-tts-access-token`; calls `generateSign(requestOption, app_secret)` but signature function expects `(path, timestamp)` — wrong call signature |
 | `updateCompany.put` | PUT | — | Update company with Shopify store name + access token: `{ shopifyStoreName, shopifyAccessToken, companyId }`. Delegates to `utils/db.updateCompany` |
 | `upload.ts` | POST | — | **Main image upload handler** (fire-and-forget). Accepts `{ base64, key, isAiImage?, view?, categoryName?, targetAudience? }`. Responds immediately with `{ received: true }`, then processes in background via `setTimeout`. Background: if `isAiImage=true`, sends to Gemini (3 retries), resizes to 1024×1024 WebP, uploads to R2. If `isAiImage=false`, uploads original directly |
-| `whatsapp/send-payment-template` | POST | — | Send WhatsApp invoice notification. Body: `{ phone, name, billName, amount, paymentDate, receiptId }`. Uses `invoice_1` template via Facebook Graph API v25.0. Env: `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN` |
+| `whatsapp/send-payment-template` | POST | — | Send WhatsApp invoice notification with a stored PDF link. Body: `{ phone, name, billName, amount, paymentDate, receiptId, companyId }`; receiptId is the signed PDF path suffix returned by share-receipt. Requires company access and a matching signed bill/document token. Uses `invoice_1` template via Facebook Graph API v25.0. Env: `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN` |
 | `whatsapp/send-coupon-message` | POST | — | Sends a free-form WhatsApp text message for earned generated coupons after receipt send. Body: `{ phone, name, companyName, coupons[] }`. Includes coupon numbers/details; barcode image sending requires a hosted media/template flow and is not implemented here. |
 | `whatsapp/send-pending-template` | POST | — | Send WhatsApp pending invoice reminder. Body: `{ phone, name, billName, amount, dueDate, receiptUrl, paymentUrl }`. Uses `pending_invoice_1` template via Facebook Graph API v25.0. Two URL buttons: receipt link + UPI payment link. Phone auto-prefixed with `91`. Env: `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN` |
 | `whatsapp/webhook` | GET/POST | — | WhatsApp webhook. GET: verification (hardcoded `VERIFY_TOKEN = 'markit123'`). POST: handles incoming text, voice note, image, and PDF messages, resolves sender phone to `CompanyUser`, routes the session through Gemini + MCP, and sends the AI reply back to WhatsApp. **Bug:** verify token hardcoded |
@@ -519,7 +533,6 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `cart/merge.post.ts` | Fallback `clientId` hardcoded to a real UUID (`1db12f74-8805-42be-95a6-26d807151000`) |
 | `applyPromoCode.post.ts` | Calls `prisma.promoCode` but model is `Coupon` — runtime crash |
 | `notifications/index.get.ts` | `console.log(userId)` on every request |
-| `notifications/notify.post.ts` | Imports `broadcastToCompany` but calls `http://localhost:3004/broadcast` HTTP instead — duplicate/inconsistent |
 | `purchaseorder/create.post.ts` | `console.log('res', res)` |
 | `getuser.get.ts` | **FIXED** — calls `assertCompanyAccess` before returning active staff in the requested company. |
 | `item.post.ts` | Stock initialization only; existing items cannot be deleted/recreated by this endpoint. |
@@ -531,3 +544,7 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `whatsapp/webhook.ts` | `VERIFY_TOKEN = 'markit123'` hardcoded (should be env var); inbound WhatsApp AI reply flow still depends on this token being configured in Meta webhook settings |
 | `accounts/primaryledger.get.ts` | `console.log({...openingBalance breakdown})` on every request |
 | `shopifyRegister.post.ts` | References `shopifyLogin` which is not imported |
+
+### Receipt PDF sharing
+
+`POST /api/billSale/share-receipt` accepts `{ billId, companyId?, pdf? }`. It authorizes company access and reads the owned bill before accepting a bounded PDF data URI. PDFs are stored as `application/pdf` under server-generated `receipts/{companyId}/{billId}/{uuid}.pdf` keys in R2. Returns `{ path, receiptId, expiresInDays: 30 }`; PDF paths include `pdf=1`. Calls without a PDF retain the previous signed viewer link behavior. `GET /api/receipt-share?token=...&pdf=1` verifies the signed document key, checks the bill still exists and redirects to a short-lived R2 download URL. Ordinary token reads still return receipt data. Upload/signing failures do not return a share link.

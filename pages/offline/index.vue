@@ -1,7 +1,11 @@
 
 <script setup>
+const companyScope = useCompanyScope('form', true);
+const $fetch = companyScope.fetch;
+await companyScope.ready;
 import { BillingAddClient } from '#components';
-import { useFindManyCategory } from '~/lib/hooks/category';
+import { companyStorageKey } from '~/utils/companyStorageKey';
+import { useFindManyCategory } from '~/lib/company-hooks/category';
 import { useFindFirstItem } from '~/lib/hooks/item';
 import { v4 as uuidv4 } from 'uuid';
 import { useQueryClient } from '@tanstack/vue-query';
@@ -14,7 +18,7 @@ const queryClient = useQueryClient();
 
 const currentRequestIds = ref({});
 const lastResponse  = ref({});
-const useAuth = () => useNuxtApp().$auth;
+const useAuth = () => companyScope.auth;
 const toast = useToast();
 const router = useRouter();
 const billNo = ref('1');
@@ -63,7 +67,7 @@ const items = ref([
 
 const selectedDraft = ref(null);
 const draftBills = ref([]);
-const LOCAL_BILLS_KEY = 'bills';
+const LOCAL_BILLS_KEY = companyStorageKey('bills', companyScope.companyId.value, useNuxtApp().$auth.session.value?.companyId || '');
 
 
 const result = ref('')
@@ -565,7 +569,8 @@ const {
       name:true,
       hsn:true,
     }
-}
+},
+{ companyScope: 'form' }
 );
 
 const itemdata = ref(null)
@@ -913,6 +918,7 @@ onMounted(() => {
 
 <template>
   <UDashboardPanelContent class="p-1">
+    <CompanyFormField toolbar />
       <UCard 
     :ui="{
       base: 'h-full flex flex-col',

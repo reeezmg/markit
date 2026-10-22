@@ -1,9 +1,12 @@
 // server\api\notifications\index.get.ts
 import { defineEventHandler, getQuery } from 'h3'
 import { prisma } from '~/server/utils/prisma'
+import { getReadCompanyId } from '~/server/utils/organizationReadScope'
 
 export default defineEventHandler(async (event) => {
-  const { companyId,userId } = getQuery(event)
+  const session = await requireAuthSession(event)
+  const companyId = await getReadCompanyId(event)
+  const userId = session.data.id
   
   if (!companyId || typeof companyId !== 'string') {
     return []
@@ -11,7 +14,6 @@ export default defineEventHandler(async (event) => {
   if (!userId || typeof userId !== 'string') {
     return []
   }
-console.log(userId)
   return await prisma.notification.findMany({
       where: {
         companyId,

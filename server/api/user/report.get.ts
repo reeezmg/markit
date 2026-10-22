@@ -1,6 +1,7 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { prisma } from '~/server/prisma'
 import { calculateNetSalesByKey } from '~/server/utils/user-sales'
+import { getReadCompanyId } from '~/server/utils/organizationReadScope'
 
 export default defineEventHandler(async (event) => {
   const session = await useAuthSession(event)
@@ -12,6 +13,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const cleanup = (session.data as any).cleanup ?? false
+  const companyId = await getReadCompanyId(event)
   const query = getQuery(event)
 
 const startDate = query.startDate ? new Date(query.startDate as string) : undefined
@@ -19,7 +21,7 @@ const endDate = query.endDate ? new Date(query.endDate as string) : undefined
 
   const companyUsers = await prisma.companyUser.findMany({
     where: {
-      companyId: session.data.companyId,
+      companyId,
       deleted: false,
       status: true,
     },
@@ -33,7 +35,7 @@ const endDate = query.endDate ? new Date(query.endDate as string) : undefined
 
   const entries = await prisma.entry.findMany({
     where: {
-      companyId: session.data.companyId,
+      companyId,
       bill: {
         deleted: false,
         ...(!cleanup && { precedence: { not: true } }),
@@ -87,7 +89,7 @@ const endDate = query.endDate ? new Date(query.endDate as string) : undefined
   const [payrollLines, salaryPayments, attendances] = await Promise.all([
     prisma.payrollCycleLine.findMany({
       where: {
-        companyId: session.data.companyId,
+        companyId,
         ...payrollWhere,
       },
       select: {
@@ -102,7 +104,7 @@ const endDate = query.endDate ? new Date(query.endDate as string) : undefined
     }),
     prisma.salaryPayment.findMany({
       where: {
-        companyId: session.data.companyId,
+        companyId,
         ...(startDate && endDate && {
           paymentDate: {
             gte: startDate,
@@ -117,7 +119,7 @@ const endDate = query.endDate ? new Date(query.endDate as string) : undefined
     }),
     prisma.attendance.findMany({
       where: {
-        companyId: session.data.companyId,
+        companyId,
         ...(startDate && endDate && {
           date: {
             gte: startDate,

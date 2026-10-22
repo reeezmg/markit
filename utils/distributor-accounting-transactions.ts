@@ -23,13 +23,12 @@ export function distributorAccountingTransactions(data: any) {
       row[line.side === 'DEBIT' ? 'debit' : 'credit'] += cents;
       row.payableChange += line.side === 'CREDIT' ? cents : -cents;
     }
-    // Expense is shown at its total debit (including recoverable tax). It does
-    // not settle PO payable: only actual payable lines change the running due.
-    if (row.type === 'EXPENSE' && line.side === 'DEBIT' && line.account_type !== 'ACCOUNTS_PAYABLE') row.debit += cents;
   }
   // Preserve API order within a date for current source transactions.
   let balance = 0;
-  return [...groups.values()].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(row => {
+  // Keep counterpart lines for details, but only payable activity belongs in
+  // the party statement. Ordinary expenses remain in the Expenses tab.
+  return [...groups.values()].filter(row => row.debit !== 0 || row.credit !== 0).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime()).map(row => {
     balance += row.payableChange;
     return { ...row, debit: row.debit / 100, credit: row.credit / 100, due: balance / 100 };
   });
