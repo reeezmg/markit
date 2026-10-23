@@ -19,7 +19,17 @@ export default defineEventHandler(async (event) => {
   if (session.data.allStores && path !== '/api/auth/session') {
     if (!await getHeadOfficeAdmin(session.data.id,
         session.data.companyId)) {
-      throw createError({ statusCode: 403, statusMessage: 'Head office access has been removed' });
+      // A company can stop being a head office while its direct admin remains
+      // valid. SSR subrequests may also still carry the pre-refresh cookie.
+      const membership = await prisma.companyUser.findUnique({
+        where: { companyId_userId: { companyId: session.data.companyId, userId: session.data.id } },
+        include: { company: { select: { status: true } } },
+      });
+      if (session.data.delegatedHeadOfficeId || !membership || membership.role !== 'admin' ||
+          !membership.status || membership.deleted || membership.delegatedHeadOfficeId || !membership.company.status) {
+        throw createError({ statusCode: 403, statusMessage: 'Head office access has been removed' });
+      }
+      await session.update({ allStores: false, organizationHeadOfficeId: undefined, readCompanyId: undefined });
     }
   }
 });

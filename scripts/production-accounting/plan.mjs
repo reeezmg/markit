@@ -14,7 +14,8 @@ export const migrations = [
   '20260929110000_stock_control',
   '20260930130000_user_accounting',
   '20260930131000_user_credit_cut_baseline',
-  '20260930140000_customer_account_links'
+  '20260930140000_customer_account_links',
+  '20261022180000_source_posting_edits'
 ];
 export const digest = value => createHash('sha256').update(value).digest('hex');
 export function validateConfig(config) {
@@ -38,7 +39,7 @@ export function commandsFor(stage, config, apply, report, review) {
   switch(stage) {
     case 'schema': return [
       ['apply-accountant-v2.mjs'], ['apply-distributor-accounting.mjs'],
-      ...['--history-projection','--purchase-tax','--receipt-consistency','--erp','--erp-deleted-sources','--expense-tax','--erp-parties','--stock','--users','--user-credit-baseline','--customer-accounts'].map(flag => ['apply-distributor-accounting.mjs',flag])
+      ...['--history-projection','--purchase-tax','--receipt-consistency','--erp','--erp-deleted-sources','--expense-tax','--erp-parties','--stock','--users','--user-credit-baseline','--customer-accounts','--source-edits'].map(flag => ['apply-distributor-accounting.mjs',flag])
     ];
     case 'setup': return [['connect-erp-accounting.ts',...args]];
     case 'distributors': return [['import-distributor-accounting.ts',...args]];

@@ -3,7 +3,8 @@ import { createHash, randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { Pool } from 'pg';
 
-const migrations = ['20261001120000_document_status_history', '20261001130000_ecommerce_accounting'];
+const sourceEdits = '20261022180000_source_posting_edits';
+const migrations = ['20261001120000_document_status_history', '20261001130000_ecommerce_accounting', sourceEdits];
 if (process.argv.slice(2).some(arg => arg !== '--apply')) throw Error('Only --apply is supported');
 if (!process.argv.includes('--apply')) {
   console.log(`Preview: install ${migrations.join(', ')}. Existing Accountant/ERP migrations are required. No companies are enabled and no history is imported. Add --apply to install.`);
@@ -22,6 +23,9 @@ if (!process.argv.includes('--apply')) {
       const prior = await db.query('SELECT checksum FROM _prisma_migrations WHERE migration_name=$1 AND finished_at IS NOT NULL AND rolled_back_at IS NULL', [name]);
       if (prior.rowCount) {
         if (prior.rows[0].checksum !== checksum) throw Error(`Applied migration checksum differs: ${name}`);
+        // This may previously have run before the optional ecommerce functions
+        // existed. Reapplying is idempotent and keeps their edits in place too.
+        if (name === sourceEdits) await db.query(sql);
       } else {
         await db.query(sql);
         await db.query('INSERT INTO _prisma_migrations(id,checksum,migration_name,finished_at,applied_steps_count) VALUES($1,$2,$3,now(),1)', [randomUUID(), checksum, name]);

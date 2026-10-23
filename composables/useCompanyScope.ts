@@ -51,6 +51,9 @@ function createCompanyScope(mode: ScopeMode, pageForm = false) {
     : activeId.value ? requestFetch<Record<string, any>>('/api/organization/context', { query: { companyId: activeId.value } })
         .then(data => { if (data.companyId === companyId.value) settings.value = data; }) : Promise.resolve();
   const ready = Promise.all([accessibleRequest, contextReady]).then(() => {});
+  // Some callers only use scoped requests and never await ready. Observe the
+  // eager context failure now while keeping ready rejected for awaiting callers.
+  void ready.catch(() => {});
 
   async function selectCompany(id: string) {
     if (!companies.value.some(c => c.id === id)) throw new Error('Company access denied');

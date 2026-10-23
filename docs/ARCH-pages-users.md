@@ -201,8 +201,12 @@ advisory lock through `runAccountant`'s optional `lockCompany` argument.
 
 Migrations `20260930130000_user_accounting` and
 `20260930131000_user_credit_cut_baseline` install deferred triggers on
-`user_ledger_entries`, `salary_payments` and `money_transactions`. Source edits reverse
-and replace published journals; deletes reverse them. Period locks reject the whole
+`user_ledger_entries`, `salary_payments` and `money_transactions`. Installed original
+functions reverse/repost edits and reverse deletes. The locally prepared
+`20261022180000_source_posting_edits` migration instead updates the current journal,
+withdraws its posting on deletion, and retains its pointer for restoration, without
+automatic reversals. See `ARCH-pages-accounts.md` for implementation/deployment and
+offline-test boundaries. Period locks reject the whole
 source transaction. All lines snapshot the staff member in `source_parties.user`.
 Generated UserLedgerEntry writes are denied; dedicated source APIs remain owners.
 

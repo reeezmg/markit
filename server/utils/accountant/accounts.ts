@@ -499,7 +499,7 @@ accountingAccountRouter.get(
       openingBalancesFor([account]),
     ]);
     const opening = openings.get(account.id);
-    res.json({ ...ledger, account: { ...ledger.account,
+    res.json({ ...ledger, companyName: company.name, account: { ...ledger.account,
       openingBalance: opening?.amount ?? null, openingBalanceDate: opening?.date ?? null } });
   }),
 );

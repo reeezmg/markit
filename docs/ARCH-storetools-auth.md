@@ -130,6 +130,8 @@ Company switching in `TeamsDropdown` calls `POST /api/auth/switch-company`. The 
 
 Head-office membership provisioning creates missing delegated memberships and reactivates inactive delegated memberships. When access is already current, `ensureHeadOfficeBranchMemberships` performs no database writes; direct memberships are preserved.
 
+`server/middleware/organization-access.ts` revalidates delegated branch authority and All Stores access. If a stale All Stores cookie outlives a company's head-office designation, an active, nondeleted direct admin membership in an active company allows the request after clearing `allStores` and legacy scope fields. Revoked, downgraded, inactive or delegated memberships cannot use this fallback. Branch requests still require current authorization in `companyRequestScope.ts`; the fallback grants no branch access. This also handles SSR subrequests carrying a cookie from before session refresh. Regression coverage: `tests/organization-access.test.ts` (in-memory; no database writes).
+
 **Session config:**
 - Cookie name: `nuxt-session`; encryption password comes from `NUXT_AUTH_PASSWORD` (the layer warns and supplies a fallback when it is missing)
 - `maxAge`: 31536000 (1 year)

@@ -26,6 +26,7 @@ RETURNS integer LANGUAGE plpgsql AS $$
 DECLARE p purchase_orders; approval jsonb; prev jsonb; sig jsonb; cfg jsonb; cur text;
  gross numeric; tax numeric; net numeric; rev integer; jid text; rid text; oldj accountant_v2_manual_journals;
  reference text; l jsonb; lines jsonb; unassigned boolean; source_exists boolean;
+-- source-posting-edits-v1
 BEGIN
  SELECT a."after" INTO approval FROM accountant_v2_accountant_audit a
  WHERE a.company_id=c AND a.resource='purchase-order-header-authority' AND a."resourceId"=pid LIMIT 1;
@@ -53,18 +54,12 @@ BEGIN
    SELECT * INTO oldj FROM accountant_v2_manual_journals WHERE company_id=c AND id=prev->>'journalId';
    IF NOT FOUND THEN RAISE EXCEPTION 'Missing previous source journal %',pid; END IF;
    PERFORM accountant_v2_distributor_check_date(c,oldj.journal_date,false);
-   rid:='c'||substr(md5(c||pid||rev||':source-po-reversal'),1,24);
-   INSERT INTO accountant_v2_manual_journals(id,company_id,entry_number,journal_date,notes,currency,total,status,published_at,
-      is_system_generated,source_type,source_id,reversed_from_id,updated_at)
-   VALUES(rid,c,'PO-R-'||rid,oldj.journal_date,'Reversal: '||oldj.notes,oldj.currency,oldj.total,'PUBLISHED',now(),
-      true,'PURCHASE_ORDER_SOURCE_REVERSAL',pid||':'||rev,oldj.id,now());
-   INSERT INTO accountant_v2_manual_journal_lines(id,company_id,journal_id,account_id,side,amount,description,source_parties,updated_at)
-   SELECT 'c'||substr(md5(rid||jl.id),1,24),c,rid,jl.account_id,
-      (CASE jl.side WHEN 'DEBIT' THEN 'CREDIT' ELSE 'DEBIT' END)::"AccountantJournalEntrySide",
-      jl.amount,'Reversal: '||COALESCE(jl.description,''),jl.source_parties,now()
-   FROM accountant_v2_manual_journal_lines jl WHERE jl.company_id=c AND jl.journal_id=oldj.id AND jl.deleted_at IS NULL;
+   UPDATE accountant_v2_manual_journals SET deleted_at=now(),updated_at=now()
+     WHERE company_id=c AND id=oldj.id;
+   UPDATE accountant_v2_manual_journal_lines SET deleted_at=now(),updated_at=now()
+     WHERE company_id=c AND journal_id=oldj.id;
  END IF;
- jid:=NULL;
+ jid:=prev->>'journalId';
  IF unassigned AND gross>0 THEN
    PERFORM accountant_v2_distributor_check_date(c,p.created_at,false);
    FOR l IN SELECT value FROM jsonb_array_elements(jsonb_build_array(
@@ -79,15 +74,22 @@ BEGIN
    lines:=jsonb_build_array(jsonb_build_object('account',cfg->>'payable','side','CREDIT','amount',gross));
    IF net>0 THEN lines:=lines||jsonb_build_array(jsonb_build_object('account',cfg->>'stock','side','DEBIT','amount',net)); END IF;
    IF tax>0 THEN lines:=lines||jsonb_build_array(jsonb_build_object('account',cfg->>'tax','side','DEBIT','amount',tax)); END IF;
-   jid:='c'||substr(md5(c||pid||rev||':source-po-post'),1,24);
+   jid:=COALESCE(prev->>'journalId','c'||substr(md5(c||pid||rev||':source-po-post'),1,24));
    INSERT INTO accountant_v2_manual_journals(id,company_id,entry_number,journal_date,reference_number,notes,currency,total,status,
       published_at,is_system_generated,source_type,source_id,updated_at)
    VALUES(jid,c,'PO-'||jid,p.created_at,reference,'Purchase order #'||COALESCE(p.purchase_order_no::text,pid)||
-      ': source supplier not recorded',cur,gross,'PUBLISHED',now(),true,'PURCHASE_ORDER_SOURCE',pid||':'||rev,now());
+      ': source supplier not recorded',cur,gross,'PUBLISHED',now(),true,'PURCHASE_ORDER_SOURCE',pid||':'||rev,now())
+   ON CONFLICT(id) DO UPDATE SET journal_date=EXCLUDED.journal_date,reference_number=EXCLUDED.reference_number,
+     notes=EXCLUDED.notes,currency=EXCLUDED.currency,total=EXCLUDED.total,status=EXCLUDED.status,
+     source_id=EXCLUDED.source_id,updated_at=EXCLUDED.updated_at,deleted_at=NULL
+   WHERE accountant_v2_manual_journals.company_id=EXCLUDED.company_id;
    FOR l IN SELECT value FROM jsonb_array_elements(lines) LOOP
      INSERT INTO accountant_v2_manual_journal_lines(id,company_id,journal_id,account_id,side,amount,description,source_parties,updated_at)
      VALUES('c'||substr(md5(jid||l::text),1,24),c,jid,l->>'account',(l->>'side')::"AccountantJournalEntrySide",
-       (l->>'amount')::numeric,reference,jsonb_build_object('purchaseOrderId',pid,'purchaseOrderNumber',p.purchase_order_no,'supplierMissing',true),now());
+       (l->>'amount')::numeric,reference,jsonb_build_object('purchaseOrderId',pid,'purchaseOrderNumber',p.purchase_order_no,'supplierMissing',true),now())
+     ON CONFLICT(id) DO UPDATE SET account_id=EXCLUDED.account_id,side=EXCLUDED.side,amount=EXCLUDED.amount,
+       description=EXCLUDED.description,source_parties=EXCLUDED.source_parties,updated_at=EXCLUDED.updated_at,deleted_at=NULL
+     WHERE accountant_v2_manual_journal_lines.company_id=EXCLUDED.company_id;
    END LOOP;
  END IF;
  INSERT INTO accountant_v2_accountant_audit(id,company_id,"userId",action,resource,"resourceId","after",updated_at)

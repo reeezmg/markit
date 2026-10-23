@@ -25,7 +25,7 @@
         </template>
         <div class="max-h-64 overflow-y-auto xl:max-h-[72vh]">
           <div v-if="loading && !accounts.length" class="p-6 text-sm text-gray-500">Loading accounts...</div>
-          <p v-else-if="!visibleAccounts.length" class="p-6 text-sm text-gray-500">No matching accounts. Try another name or clear the filters.</p>
+          <p v-else-if="!visibleAccounts.length" class="p-6 text-sm text-gray-500">No accounts found. Try another name or clear the filters.</p>
           <template v-for="category in visibleCategories" :key="category">
             <div class="sticky top-0 bg-gray-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-gray-500 dark:bg-gray-800">{{ title(category) }}</div>
             <button v-for="account in accountsFor(category)" :key="account.id" type="button"
@@ -51,6 +51,9 @@
             </div>
           </div>
           <div class="flex flex-wrap gap-2">
+            <UDropdown :items="downloadActions">
+              <UButton color="gray" variant="outline" icon="i-heroicons-arrow-down-tray" :loading="exporting" :disabled="!ledger || ledgerLoading || exporting || ledgerQuery.isError.value" label="Download" />
+            </UDropdown>
             <UButton color="gray" variant="outline" icon="i-heroicons-pencil-square" :disabled="!ledger || ledgerLoading" @click="openEdit(selected)">Edit account</UButton>
             <UDropdown :items="accountActions">
               <UButton color="gray" variant="outline" icon="i-heroicons-ellipsis-horizontal" aria-label="Account actions" />
@@ -62,8 +65,8 @@
         </UAlert>
         <div class="grid gap-3 sm:grid-cols-3">
           <UCard :ui="{ body: { padding: 'p-4' } }"><p class="text-xs text-gray-500">Balance {{ ledgerTo ? 'as of ' + formatDate(ledgerTo) : 'to date' }}</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ ledger ? ledgerMoney(ledger.closingBalance) : '—' }} <span class="text-sm">{{ ledger?.balanceSide }}</span></p></UCard>
-          <UCard :ui="{ body: { padding: 'p-4' } }"><p class="text-xs text-gray-500">Debits · matching transactions</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ ledger ? ledgerMoney(ledger.filteredDebitTotal) : '—' }}</p></UCard>
-          <UCard :ui="{ body: { padding: 'p-4' } }"><p class="text-xs text-gray-500">Credits · matching transactions</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ ledger ? ledgerMoney(ledger.filteredCreditTotal) : '—' }}</p></UCard>
+          <UCard :ui="{ body: { padding: 'p-4' } }"><p class="text-xs text-gray-500">Debits shown</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ ledger ? ledgerMoney(ledger.filteredDebitTotal) : '—' }}</p></UCard>
+          <UCard :ui="{ body: { padding: 'p-4' } }"><p class="text-xs text-gray-500">Credits shown</p><p class="mt-1 text-xl font-semibold tabular-nums">{{ ledger ? ledgerMoney(ledger.filteredCreditTotal) : '—' }}</p></UCard>
         </div>
         <UCard :ui="{ body: { padding: '' }, header: { padding: 'px-4 py-4' }, footer: { padding: 'p-4' } }">
           <template #header>
@@ -100,7 +103,7 @@
           </div>
           <UTable :rows="ledger?.data || []" :columns="ledgerColumns" :loading="ledgerLoading" :empty-state="{ icon: 'i-heroicons-document-magnifying-glass', label: 'No transactions match these filters.' }" :ui="{ td: { base: 'align-top', padding: 'px-4 py-3' } }">
             <template #date-data="{ row }"><span class="whitespace-nowrap text-gray-500">{{ formatDate(row.date) }}</span></template>
-            <template #transactionDetails-data="{ row }"><div class="max-w-sm whitespace-normal"><p class="font-medium">{{ row.referenceNumber || row.journalNumber }}</p><p class="mt-1 text-sm text-gray-500">{{ row.transactionDetails || '—' }}</p><p v-for="(party, key) in row.sourceParties || {}" :key="key" class="text-xs text-gray-500">{{ party?.name }}</p></div></template>
+            <template #transactionDetails-data="{ row }"><div class="max-w-sm whitespace-normal"><p class="font-medium">{{ row.referenceNumber || row.journalNumber }}</p><p v-if="row.transactionDetails" class="mt-1 whitespace-pre-wrap text-sm text-gray-500">{{ row.transactionDetails }}</p><p v-for="(party, key) in row.sourceParties || {}" :key="key" class="text-xs text-gray-500">{{ party?.name }}</p><p v-if="row.sourceNote" class="mt-1 whitespace-pre-wrap text-sm text-gray-500">{{ row.sourceNote }}</p></div></template>
             <template #type-data="{ row }"><UBadge color="gray" variant="subtle" class="whitespace-nowrap">{{ row.type }}</UBadge></template>
             <template #debit-data="{ row }"><span class="block text-right tabular-nums whitespace-nowrap">{{ row.debit ? ledgerMoney(row.debit) : '—' }}</span></template>
             <template #credit-data="{ row }"><span class="block text-right tabular-nums whitespace-nowrap">{{ row.credit ? ledgerMoney(row.credit) : '—' }}</span></template>
@@ -434,13 +437,33 @@ const ledgerParams = computed(() => ({
   ...(ledgerMax.value !== '' ? { maxAmount: Number(ledgerMax.value) } : {}),
 }));
 const ledgerQuery = useQuery({
-  queryKey: ['accountant-v2', api.companyId, 'chart-ledger', selectedId, ledgerParams],
+  queryKey: ['accountant-v2', api.companyId, 'chart-ledger', 'labels-v3', selectedId, ledgerParams],
   queryFn: () => api.get(`/accounting-accounts/${selectedId.value}/ledger`, { query: ledgerParams.value }),
   enabled: computed(() => Boolean(api.companyId.value && selectedId.value) &&
     (!ledgerFrom.value || !ledgerTo.value || ledgerFrom.value <= ledgerTo.value)),
   staleTime: 60_000, gcTime: 300_000,
 });
 const ledger = ledgerQuery.data, ledgerLoading = ledgerQuery.isFetching;
+const exporting = ref(false);
+const downloadActions = computed(() => [[
+  { label: 'Download PDF', icon: 'i-heroicons-document-arrow-down', click: () => exportLedger('pdf') },
+  { label: 'Download Excel', icon: 'i-heroicons-table-cells', click: () => exportLedger('excel') },
+]]);
+async function exportLedger(format: 'pdf' | 'excel') {
+  if (exporting.value || !selectedId.value || !api.companyId.value || ledgerLoading.value || ledgerQuery.isError.value) return;
+  const accountId = selectedId.value, companyId = api.companyId.value;
+  const filters = { ...ledgerParams.value, search: ledgerSearch.value.trim(), page: 1, export: 'all' };
+  exporting.value = true;
+  try {
+    const data = await api.get(`/accounting-accounts/${accountId}/ledger`, { query: filters });
+    if (companyId !== api.companyId.value || accountId !== selectedId.value) return;
+    if (data.data.length !== data.total) throw new Error('The full ledger could not be downloaded. Please try again.');
+    const { downloadAccountLedger } = await import('~/utils/account-ledger-export.client');
+    await downloadAccountLedger(format, data, filters);
+  } catch (error: any) {
+    toast.add({ title: 'Could not download account ledger', description: error.message, color: 'red' });
+  } finally { exporting.value = false; }
+}
 const sourceTypeOptions = computed(() => [{ label: 'All transaction types', value: '' }, ...(ledger.value?.sourceTypes || [])]);
 const accountActions = computed(() => [[
   { label: selected.value?.isActive ? 'Mark inactive' : 'Mark active', disabled: selected.value?.isSystem && selected.value?.isActive, click: toggleStatus },

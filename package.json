@@ -55,6 +55,7 @@
         "test:stock-accounting": "node tests/stock-accounting.integration.test.mjs",
         "db:production-accounting": "node scripts/production-accounting/run.mjs",
         "test:production-accounting": "node tests/production-accounting.test.mjs",
+        "test:source-posting-edits": "node tests/source-posting-edits.test.mjs",
         "test:user-accounting": "tsx tests/user-accounting.integration.test.ts",
         "test:user-accounting:api": "tsx tests/user-accounting-api.integration.test.ts",
         "db:user-accounting": "node scripts/production-accounting/apply-distributor-accounting.mjs --users && node scripts/production-accounting/apply-distributor-accounting.mjs --user-credit-baseline",

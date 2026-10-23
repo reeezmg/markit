@@ -9,6 +9,24 @@ are compatibility entry points to these same implementations.
 
 ## Run
 
+The local `20261022180000_source_posting_edits` migration implements the journal
+contract documented first in `schema.zmodel`: source edits reuse current postings
+without automatic reversal entries. It adds no tables/columns/triggers and no audit
+subsystem. It is included last in the adoption schema plan and available through
+the installer's `--source-edits` selector. Preparing it does not authorize running
+an installer against Neon or another database. Nothing in this change was applied
+to a database. Existing history is not consolidated or removed.
+
+The migration preserves installed source/account-selection code and fails on
+unrecognized function layouts. It may run before optional ecommerce/purchase
+functions exist; the ecommerce installer reapplies it idempotently afterward and
+the purchase-authority helper already contains the new behavior. After authorized
+deployment, validate real source updates, deletes/restores, changed mappings/dates,
+account balances, source idempotency and stock reconciliation inside rollback-only
+transactions using existing schema. The offline suite
+`npm run test:source-posting-edits` transforms function text only; it does not run
+source writes or create database schemas.
+
 Ecommerce accounting is a separate prospective connection: after the existing ERP
 schema is installed, run `node scripts/apply-ecommerce-accounting.mjs --apply` from
 Storetools and activate each company under Accountant > Ecommerce accounting.

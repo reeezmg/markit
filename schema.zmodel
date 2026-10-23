@@ -4058,6 +4058,13 @@ model AccountantAccountingAccount {
   @@deny('all', true)
 }
 
+// Source posting contract: a source edit updates its current journal and lines
+// atomically, retaining the journal ID/number without automatic reversal entries.
+// Deleted/unposted sources withdraw the current posting; a restore reuses it.
+// Keep company scope, accounting locks, balanced lines and source idempotency.
+// Existing history and explicit financial reversals are separate operations.
+// PostgreSQL implementation: prisma/migrations/20261022180000_source_posting_edits.
+// This policy adds no fields. New source/account edit auditing is deferred.
 model AccountantManualJournal {
   distributorSources AccountantDistributorSource[]
   createdById String? @map("created_by_id")

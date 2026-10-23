@@ -2,6 +2,37 @@
 
 ## Independent Accountant area (`/accountant`)
 
+### Source correction policy (prepared locally, 2026-10-22)
+
+`schema.zmodel` documents the `AccountantManualJournal` source-edit contract.
+Local migration `20261022180000_source_posting_edits` changes ERP bills/expenses,
+supplier, staff, ecommerce and unassigned-purchase synchronizers to reuse the
+current journal ID/number. Edits withdraw its old lines and upsert the corrected
+header/lines in the source transaction, without automatic opposite/replacement
+journals. Deleted, zero or unposted sources withdraw their current posting and
+retain the projection pointer so restoration can reuse the journal. Locks on old
+and new dates, company scope, account validation, signature idempotency, existing
+mapping logic and source exclusions remain. ERP notes/currency enter its posting
+signature so note-only edits refresh the journal too.
+
+This is local implementation, not evidence of installation in any database.
+Until separately authorized deployment, installed functions retain their previous
+behavior. The migration transforms installed function bodies and rejects unknown
+layouts, preserving account-selection/history patches. Optional ecommerce and
+purchase functions are patched when present. The ecommerce installer reapplies
+the idempotent patch after installing its functions; the purchase-authority SQL
+already implements the new policy. Existing historical reversal pairs and explicit
+financial/manual reversals are preserved. No new audit subsystem or fields are
+introduced; existing projection/audit metadata remains.
+
+`npm run test:source-posting-edits` checks the migration's actual text transforms
+offline in an embedded PostgreSQL engine. It executes no DDL, creates no application
+tables/functions/schemas, and contacts no database service. It covers the five
+function families, older ERP definitions, identity/pointer reuse, tenant guards,
+retained locks/custom logic, repeat application and unknown-layout rejection.
+It does not establish live source-write/balance integration; that verification
+remains pending authorized database deployment.
+
 Accountant preferences GET reads saved preferences or returns schema defaults without persisting them. Investor profit settings GET reads configured/default existing accounts and returns a null account ID when none exists; it does not provision accounts. Explicit investment actions retain their existing provisioning behavior. Null investor account maps are ignored when excluding dedicated accounts.
 
 The main ERP sidebar has an **Account** group. It renders the Accounts, Journals,
@@ -83,7 +114,9 @@ ledger dependency. Bill creation uses the distinct source-only
 inserts the full source/tax recovery in one transactional CTE without runtime DDL.
 Company transfers exclude AccountLedgerEntry and legacy Investment/AccountTransfer
 from graph traversal. Original archive rows stay in their original company while
-native source journals reverse/repost. When old investments reference a transferred
+native source journals synchronize in the destination/source company. Before the
+source-edit migration, correction uses reversal/repost; afterward it replaces the
+current posting. When old investments reference a transferred
 staff member, the original CompanyUser link is retained inactive/deleted for history;
 the destination gets the active membership. Staff operational sources still move.
 
@@ -205,7 +238,8 @@ to prevent double credit/restock; further received returns remain available.
 
 Ecommerce-prefixed `accountant_v2_erp_sources` snapshots link balanced `ECOMMERCE` /
 `ECOMMERCE_REVERSAL` journals with customer/order dimensions. Source corrections
-reverse/repost at the source date under existing locks. Collections are retained
+update postings at the source date under existing locks after the source-edit
+migration (installed older functions reverse/repost). Collections are retained
 separately; refund-payable changes append dated adjustments. Journal links use the
 existing viewer. Manual activities have no edit/delete endpoint, and their system
 journals remain protected from generic edits. `npm run test:ecommerce-accounting`
@@ -249,9 +283,10 @@ differs from the header in those selected companies. It adds `purchase-order-hea
 audit markers and a wrapper around the installed distributor event projection:
 approved purchase amounts, GST, dates and suppliers follow PO headers; unapproved
 sources keep normal credit precedence and existing exclusions. Native distributor
-sync reverses/reposts mapped purchases. POs with no header/credit supplier use the
+sync updates current mapped purchase postings after the source-edit migration;
+installed older functions reverse/repost. POs with no header/credit supplier use the
 existing company Accounts Payable, ERP Stock and Input GST accounts, with null
-supplier/contact IDs and immutable `PURCHASE_ORDER_SOURCE` journals linked through
+supplier/contact IDs and source-owned `PURCHASE_ORDER_SOURCE` journals linked through
 `purchase-order-source-state` audit revisions. Deferred PO/credit triggers maintain
 approved authority on edits, supplier assignment and deletion. Physical quantities,
 old sources, credits and payments remain unchanged; stock control retains source
@@ -310,6 +345,26 @@ history are reported separately without changing those counters. No schemas are
 created or changed by this command.
 
 ### Legacy Cash / Primary Bank history import
+
+`scripts/production-accounting/clean-originals-reversal-pairs.mjs` is the
+company-scoped data cleanup for ORIGINALS CLOTHING. It selects cancelling ERP
+history, transfer-history and ERP-correction pairs only when an active current
+replacement is linked through the source projection/import provenance, or the
+source projection explicitly records an empty/withdrawn posting. Supplier deletion
+corrections are eligible only with a DELETED source signature and no current journal.
+It removes
+the original/reversal journals and cascaded lines, preserving the replacement.
+Each pair must cancel on the same posting date/currency/rate and every account,
+contact, project, supplier and source-party dimension. Referenced pairs, overlapping
+chains and locked dates are rejected. It requires explicit environment/output
+paths plus an expected endpoint hostname and native primary-bank ID, defaults to
+rollback preview, and needs task-specific authorization for
+`--apply`. It writes and reads back an exclusive backup before deletion, checks
+unchanged account movements at each exact posting timestamp, current sources,
+retained accounting rows and posting-function definitions, and records one existing
+audit-log receipt on apply. It runs no schema changes or source resynchronization.
+This removes existing correction pairs only; the separately prepared source-edit
+migration still controls whether future edits create new reversals.
 
 `scripts/production-accounting/remove-originals-nine-payments.mjs` is a narrowly
 scoped, user-authorized correction for nine ORIGINALS CLOTHING supplier postings
@@ -567,6 +622,39 @@ creates a disposable schema.
   one company/account and returns only the requested page. Window balances are computed
   before display filters; currency conversion rounds each line to cents. The lightweight
   directory omits balances; the existing full-list endpoint still supports period totals.
+  The selected account's **Download** menu exports PDF or Excel (`.xlsx`) using
+  `utils/account-ledger-export.client.ts`. It requests the same ledger endpoint with
+  `export=all`: one SQL snapshot returns every matching row in the selected order,
+  rather than the current page. The ordinary page-size limit remains 200. Exports
+  use the current date/search/type/side/amount filters to select transactions but
+  omit search/type/side/amount/order filter metadata from the files. Both formats
+  retain the readable statement period and include company and
+  account/bank information, base currency, opening balance before the period,
+  closing balance through the end date, matching debit/credit totals, parties,
+  source notes and running balances. Excel also includes journal numbers and
+  original currency/amount/exchange rates as separate columns; its amounts remain
+  numeric and source-note text is not interpreted as formulas. PDF uses a navy
+  account header with a prominent period, compact account details and four balance/
+  debit/credit summary cards, then a striped transaction table. It repeats table
+  headings, account context, period and page numbering. Empty periods still export metadata.
+  The read route returns `companyName`, `openingBalance`, `openingBalanceSide` and
+  each row's `sourceNote`; `account.openingBalance` remains the configured opening
+  entry, distinct from the report's opening balance before its date range.
+  Transaction types use readable labels in the table, type selector and exports:
+  `ERP_BILL` displays as Invoice and `ERP_EXPENSE` as Expense. Other ERP labels omit
+  the internal ERP prefix; underlying source values remain unchanged for filtering.
+  Chart ledger caches include a label-version key so accounts opened before this
+  label update refetch their existing rows with the readable names.
+  Ledger details read live bill/expense notes, native transfer descriptions and
+  supplier payment/credit remarks with company-scoped joins. Other sources use
+  their journal notes. Search includes notes. A reference identical to its line
+  description is displayed only in the heading; identical detail/note text is
+  likewise shown once. These are read/export changes without database writes or DDL.
+  `node tests/accountant-ledger-download.test.mjs` exercises the real chart setup,
+  full filtered downloads, partial-result errors and company-switch protection.
+  `node --import tsx tests/accountant-ledger-export.test.ts` generates and reads
+  Excel/PDF fixtures, checking all rows, literal notes, numeric amounts, empty
+  periods and multiple PDF pages.
   Both account-list and ledger endpoints accept date-only `from`/`to` filters,
   include the entire end day and reject invalid or reversed ranges.
   `node tests/accountant-date-filter.test.mjs` verifies lazy loading, cache reuse,
@@ -845,7 +933,9 @@ sources/archives must remain unchanged, and published journals must balance. The
 old cash import, ERP-history import and copy-old-account-history entrypoints reject
 companies with a completed `source-accounting-rebuild` audit to prevent replaying
 archived migration rows. This cleanup does not change live correction behavior:
-later source edits can still create legitimate reversal/repost journals.
+later source edits follow the installed correction policy. Applying the separately
+prepared source-edit migration changes future edits to replace current postings;
+it does not remove old correction pairs.
 
 `scripts/check-account-source-tally.mjs --report=<path>` checks the same three
 companies in a repeatable-read, read-only transaction without invoking repair
