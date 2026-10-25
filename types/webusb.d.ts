@@ -1,10 +1,12 @@
 declare interface USBEndpoint {
   direction: 'in' | 'out';
+  type: 'bulk' | 'interrupt' | 'isochronous';
   endpointNumber: number;
 }
 
 declare interface USBAlternateInterface {
   alternateSetting: number;
+  interfaceClass: number;
   endpoints: USBEndpoint[];
 }
 

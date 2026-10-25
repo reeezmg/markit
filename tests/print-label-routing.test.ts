@@ -44,13 +44,13 @@ test('unsupported and disconnected printers fail without browser or server fallb
   }
 });
 
-function usbFixture(options: { cpcl?: boolean; renderFails?: boolean; writeFails?: boolean; noDesign?: boolean; loadFails?: boolean } = {}) {
+function usbFixture(options: { cpcl?: boolean; renderFails?: boolean; writeFails?: boolean; noDesign?: boolean; loadFails?: boolean; byteLength?: number } = {}) {
   const calls: string[] = [];
   const notices: any[] = [];
   const printer = { id: 'usb', serialNumber: 's', vendorId: 1, productId: 2, productName: 'Test' };
   const values: Record<string, any> = { savedWebUsbPrinters: [printer], webUsbPrinterRoles: { receipt: 'usb', barcode: 'usb' }, 'markit-label-printer-language': options.cpcl ? 'cpcl' : 'tspl' };
-  const device = { ...printer, opened: true, configuration: { interfaces: [{ interfaceNumber: 0, alternates: [{ alternateSetting: 0, endpoints: [{ direction: 'out', endpointNumber: 1 }] }] }] },
-    claimInterface: async () => {}, releaseInterface: async () => {}, close: async () => {},
+  const device = { ...printer, opened: true, configuration: { interfaces: [{ interfaceNumber: 0, alternates: [{ alternateSetting: 0, interfaceClass: 7, endpoints: [{ direction: 'out', type: 'bulk', endpointNumber: 1 }] }] }] },
+    claimInterface: async (_iface: number) => {}, selectAlternateInterface: async (_iface: number, _alternate: number) => {}, releaseInterface: async (_iface: number) => {}, close: async () => {},
     transferOut: async (_ep: any, bytes: Uint8Array) => { calls.push('write'); if (options.writeFails) throw new Error('Transfer failed'); return { status: 'ok', bytesWritten: bytes.length }; } };
   const modules: Record<string, any> = {
     '~/utils/label-barcode': { MissingLabelBarcodeError: class extends Error {} },
@@ -58,15 +58,58 @@ function usbFixture(options: { cpcl?: boolean; renderFails?: boolean; writeFails
     '~/composables/printCommands': { buildBillReceiptBytes: () => { calls.push('legacy-receipt'); return new Uint8Array([1]); }, buildLabelPrintJobs: () => { calls.push('legacy-label'); return [new Uint8Array([1])]; }, buildReportReceiptBytes: () => new Uint8Array([1]) },
     '~/utils/load-print-template.client': { loadPrintTemplate: async (kind: string, companyId: string) => { assert.equal(companyId, 'company-a'); calls.push('load-' + kind); if (options.loadFails) throw new Error('Unauthorized'); return options.noDesign ? null : { id: 'saved', kind }; } },
     '~/utils/load-label-variables.client': { loadLabelVariables: async (items: any) => items },
-    '~/utils/print-template-renderer.client': { renderPrintTemplate: async () => { calls.push('render'); if (options.renderFails) throw new Error('Invalid design'); return {}; }, templatePrintBytes: (_render: any, _template: any, language = 'escpos') => { calls.push(language); return new Uint8Array([2]); } },
+    '~/utils/print-template-renderer.client': { renderPrintTemplate: async () => { calls.push('render'); if (options.renderFails) throw new Error('Invalid design'); return {}; }, templatePrintBytes: (_render: any, _template: any, language = 'escpos') => { calls.push(language); return new Uint8Array(options.byteLength ?? 1); } },
   };
   const source = readFileSync(new URL('../composables/useWebUsbPrinter.ts', import.meta.url), 'utf8');
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const exports: any = {};
-  vm.runInNewContext(compiled, { exports, useToast: () => ({ add: (n: any) => notices.push(n) }), Uint8Array, require: (key: string) => modules[key], window: {}, navigator: { usb: { getDevices: async () => [device] } }, localStorage: { getItem: (key: string) => JSON.stringify(values[key]), setItem() {} }, console: { warn() {} }, setTimeout: (fn: any) => fn() });
+  vm.runInNewContext(compiled, { exports, Error, useToast: () => ({ add: (n: any) => notices.push(n) }), Uint8Array, require: (key: string) => modules[key], window: {}, navigator: { usb: { getDevices: async () => [device] } }, localStorage: { getItem: (key: string) => JSON.stringify(values[key]), setItem() {} }, console: { warn() {} }, setTimeout: (fn: any) => fn() });
   const usb = exports.useWebUsbPrinter();
-  return { calls, notices, receipt: () => usb.printBillViaUsb({ companyId: 'company-a' }), label: (override?: any, language?: string, items = [{ companyId: 'company-a' }]) => usb.printLabelViaUsb(items, '50x38mm', override, language) };
+  return { calls, notices, device, receipt: () => usb.printBillViaUsb({ companyId: 'company-a' }), label: (override?: any, language?: string, items = [{ companyId: 'company-a' }]) => usb.printLabelViaUsb(items, '50x38mm', override, language) };
 }
+
+test('USB skips interrupt/status and serial endpoints in favor of printer bulk output', async () => {
+  const f = usbFixture(); const selected: number[][] = [];
+  f.device.configuration.interfaces.unshift({ interfaceNumber: 2, alternates: [
+    { alternateSetting: 0, interfaceClass: 255, endpoints: [{ direction: 'out', type: 'interrupt', endpointNumber: 3 }] },
+    { alternateSetting: 1, interfaceClass: 255, endpoints: [{ direction: 'out', type: 'bulk', endpointNumber: 4 }] },
+  ] });
+  f.device.claimInterface = async n => { selected.push([n]); };
+  f.device.selectAlternateInterface = async (n, alt) => { selected.push([n, alt]); };
+  f.device.transferOut = async (ep, bytes) => { selected.push([ep]); return { status: 'ok', bytesWritten: bytes.length }; };
+  await f.receipt(); assert.deepEqual(selected, [[0], [0, 0], [1]]);
+  // Vendor-class printers remain supported when no printer-class interface exists.
+  f.device.configuration.interfaces.pop(); selected.length = 0;
+  await f.receipt(); assert.deepEqual(selected, [[2], [2, 1], [4]]);
+});
+
+test('USB stops at a failed chunk, retains its cause and closes without retry', async () => {
+  const f = usbFixture({ byteLength: 9000 }); const sizes: number[] = []; const cleanup: string[] = [];
+  const cause = new Error("Failed to execute 'transferOut' on 'USBDevice': A transfer error has occured");
+  f.device.transferOut = async (_ep, bytes) => { sizes.push(bytes.length); if (sizes.length === 2) throw cause; return { status: 'ok', bytesWritten: bytes.length }; };
+  f.device.releaseInterface = async () => { cleanup.push('release'); };
+  f.device.close = async () => { cleanup.push('close'); };
+  await assert.rejects(f.receipt(), (error: any) => {
+    assert.match(error.message, /interface 0, endpoint 1 after 4096 confirmed bytes/);
+    assert.match(error.message, /Some data may already have reached/);
+    assert.equal(error.cause, cause); return true;
+  });
+  assert.deepEqual(sizes, [4096, 4096]); assert.deepEqual(cleanup, ['release', 'close']);
+});
+
+test('USB rejects stalled or short writes and releases a claim if alternate selection fails', async () => {
+  for (const result of [{ status: 'stall', bytesWritten: 0 }, { status: 'ok', bytesWritten: 2 }]) {
+    const f = usbFixture({ byteLength: 10 }); let writes = 0;
+    f.device.transferOut = async () => { writes++; return result; };
+    await assert.rejects(f.receipt(), /USB transfer status:/); assert.equal(writes, 1);
+  }
+  const f = usbFixture(); const cleanup: string[] = [];
+  f.device.selectAlternateInterface = async () => { throw new Error('Alternate failed'); };
+  f.device.releaseInterface = async () => { cleanup.push('release'); };
+  f.device.close = async () => { cleanup.push('close'); f.device.opened = false; };
+  await assert.rejects(f.receipt(), /Alternate failed/);
+  assert.deepEqual(cleanup, ['release', 'close']); assert.equal(f.calls.includes('write'), false);
+});
 test('company defaults are loaded for receipt and label printing', async () => {
   const f = usbFixture(); await f.receipt(); await f.label();
   assert.deepEqual(f.calls, ['load-receipt', 'render', 'escpos', 'write', 'load-label', 'render', 'tspl', 'write']);

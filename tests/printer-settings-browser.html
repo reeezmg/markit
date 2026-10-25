@@ -9,7 +9,7 @@ const check=(v,m)=>{if(!v)throw Error(m)};
 const wait=async f=>{for(let i=0;i<150;i++){await new Promise(r=>setTimeout(r,30));await nextTick();if(f())return}throw Error('UI timed out')};
 let choices=0,stored={version:1,templates:[originalLabelTemplate()],receiptId:CLASSIC_RECEIPT_ID,labelId:null};stored.labelId=stored.templates[0].id;
 const notices=[],writes=[];
-const device={vendorId:1,productId:2,serialNumber:'fixture',productName:'Test USB printer',opened:true,configuration:{interfaces:[{interfaceNumber:0,alternates:[{alternateSetting:0,endpoints:[{direction:'out',endpointNumber:1}]}]}]},claimInterface:async()=>{},releaseInterface:async()=>{},close:async()=>{},transferOut:async(ep,bytes)=>{writes.push(bytes);return{status:'ok',bytesWritten:bytes.length}}};
+const device={vendorId:1,productId:2,serialNumber:'fixture',productName:'Test USB printer',opened:true,configuration:{interfaces:[{interfaceNumber:0,alternates:[{alternateSetting:0,interfaceClass:7,endpoints:[{direction:'out',type:'bulk',endpointNumber:1}]}]}]},claimInterface:async()=>{},selectAlternateInterface:async()=>{},releaseInterface:async()=>{},close:async()=>{},transferOut:async(ep,bytes)=>{writes.push(bytes);return{status:'ok',bytesWritten:bytes.length}}};
 Object.defineProperty(navigator,'usb',{configurable:true,value:{requestDevice:async()=>{choices++;return device},getDevices:async()=>[device]}});
 window.print=()=>{throw Error('Browser print must not open')};
 window.useNuxtApp=()=>({$auth:{session:{value:{role:'admin',companyId:'fixture-company',companyName:'Sample Store'}}}});

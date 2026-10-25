@@ -71,20 +71,24 @@ function getOutEndpoint(device: USBDevice) {
   const configuration = device.configuration;
   if (!configuration) return null;
 
+  const candidates: { interfaceNumber: number; alternateSetting: number; endpointNumber: number; priority: number }[] = [];
   for (const iface of configuration.interfaces) {
     for (const alternate of iface.alternates) {
-      const endpoint = alternate.endpoints.find((candidate: USBEndpoint) => candidate.direction === 'out');
+      // A composite device may also expose serial/status endpoints. Print data
+      // belongs on a bulk endpoint, preferably on the USB printer interface.
+      const endpoint = alternate.endpoints.find((candidate: USBEndpoint) => candidate.direction === 'out' && candidate.type === 'bulk');
       if (endpoint) {
-        return {
+        candidates.push({
           interfaceNumber: iface.interfaceNumber,
           alternateSetting: alternate.alternateSetting,
           endpointNumber: endpoint.endpointNumber,
-        };
+          priority: alternate.interfaceClass === 7 ? 0 : alternate.interfaceClass === 255 ? 1 : 2,
+        });
       }
     }
   }
 
-  return null;
+  return candidates.sort((a, b) => a.priority - b.priority)[0] || null;
 }
 
 async function openPrinterDevice(device: USBDevice) {
@@ -99,12 +103,16 @@ async function openPrinterDevice(device: USBDevice) {
 
   const endpoint = getOutEndpoint(device);
   if (!endpoint) {
-    throw createErrorMessage('The USB printer does not expose a writable endpoint.');
+    throw createErrorMessage('The USB printer does not expose a writable bulk endpoint.');
   }
 
   await device.claimInterface(endpoint.interfaceNumber);
-  if (endpoint.alternateSetting > 0) {
+  try {
+    // Setting zero must also be selected if a previous session used another alternate.
     await device.selectAlternateInterface(endpoint.interfaceNumber, endpoint.alternateSetting);
+  } catch (error) {
+    await closePrinterDevice(device, endpoint.interfaceNumber);
+    throw error;
   }
 
   return endpoint;
@@ -126,14 +134,26 @@ async function closePrinterDevice(device: USBDevice, interfaceNumber?: number) {
 
 async function writeToPrinter(device: USBDevice, jobs: Uint8Array[]) {
   let endpoint: Awaited<ReturnType<typeof openPrinterDevice>> | undefined;
+  let bytesWritten = 0;
   try {
     endpoint = await openPrinterDevice(device);
     for (const job of jobs) {
       for (let offset = 0; offset < job.length; offset += 4096) {
         const chunk = job.slice(offset, offset + 4096);
-        const result = await device.transferOut(endpoint.endpointNumber, chunk);
-        if (result.status !== 'ok' || result.bytesWritten !== chunk.length) {
-          throw createErrorMessage('USB printer rejected the print job.');
+        try {
+          const result = await device.transferOut(endpoint.endpointNumber, chunk);
+          if (result.status !== 'ok' || result.bytesWritten !== chunk.length) {
+            throw createErrorMessage(`USB transfer status: ${result.status}; wrote ${result.bytesWritten} of ${chunk.length} bytes.`);
+          }
+          bytesWritten += result.bytesWritten;
+        } catch (error) {
+          const detail = error instanceof Error ? error.message : String(error);
+          throw new Error(
+            `${device.productName || 'USB printer'} transfer failed on interface ${endpoint.interfaceNumber}, endpoint ${endpoint.endpointNumber} after ${bytesWritten} confirmed bytes. ` +
+            'Some data may already have reached the printer. Check paper, cover and error lights, close other printing apps/tabs, then power-cycle and reconnect the printer in Settings > Printer. ' +
+            `USB detail: ${detail}`,
+            { cause: error },
+          );
         }
       }
       await new Promise((resolve) => setTimeout(resolve, 150));

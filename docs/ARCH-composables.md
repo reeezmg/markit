@@ -99,7 +99,8 @@ Browser-only printer manager used by `usePrint()` and `pages/settings/printer.vu
 - Same USB printer can be assigned to both roles
 - `connectUsbPrinter()` opens `navigator.usb.requestDevice({ filters: [] })` and stores a lightweight printer record (`vendorId`, `productId`, `serialNumber`, `manufacturerName`, `productName`)
 - Reconnect uses `navigator.usb.getDevices()` and matches by `serialNumber` when available, otherwise vendor/product/name
-- Print flow opens the device, selects a configuration, claims the first interface exposing an `out` endpoint, writes bytes with `transferOut()`, then releases/closes the device
+- Print flow opens the device, selects a configuration, chooses a bulk `out` endpoint (printer-class interfaces first, then vendor-class, then other bulk interfaces), claims its interface and explicitly selects its alternate setting, including zero. Interrupt/status endpoints are excluded. It writes bytes with `transferOut()`, then releases/closes the device; alternate-selection failures also release the claim.
+- Transfer failures report the device name, interface/endpoint, confirmed byte count and original USB error, with paper/cover/error-light, competing-app and reconnect checks. A failed chunk may have reached the printer even if no bytes were confirmed; jobs are never automatically replayed. `tests/print-label-routing.test.ts` covers endpoint selection, vendor-class support, short/stalled/rejected writes and cleanup. These mocked checks do not establish the cause of a physical printer failure.
 
 Key exports:
 - `isWebUsbSupported()`
