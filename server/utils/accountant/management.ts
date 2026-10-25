@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { Router, asyncHandler, badRequest, notFound, requireAuth, rbac } from './router';
 import { accountantPrisma as prisma, logActivity, context } from './context';
 import { assertAccountingDateUnlocked, replaceSystemJournal, voidSystemJournal, validatePosting, assertJournalApproval, cents } from './posting';
-import { ensureDefaults, syncOpeningBalance } from './accounts';
+import { ensureDefaults, syncOpeningBalance, assertAccountParentsActive } from './accounts';
 
 export const accountantManagementRouter = Router();
 accountantManagementRouter.use(requireAuth, rbac("ACCOUNT", "READ"));
@@ -137,7 +137,14 @@ accountantManagementRouter.get(
       where: { companyId, deletedAt: null },
       include: {
         parent: { select: { id: true, name: true } },
-        _count: { select: { children: true, journalLines: true } },
+        _count: { select: {
+          children: true,
+          journalLines: { where: {
+            companyId,
+            deletedAt: null,
+            journal: { companyId, status: "PUBLISHED", deletedAt: null },
+          } },
+        } },
       },
       orderBy: [{ category: "asc" }, { name: "asc" }],
     });
@@ -1245,6 +1252,10 @@ accountantManagementRouter.post(
         )
         .parse(req.body);
     if (await prisma.accountingAccount.count({ where: { id: { in: [...new Set(body.accountIds)] }, deletedAt: null } }) !== new Set(body.accountIds).size) throw badRequest('Invalid accounts');
+    if (body.isActive === true) await assertAccountParentsActive(await prisma.accountingAccount.findMany({
+      where: { id: { in: [...new Set(body.accountIds)] } },
+      select: { id: true, parentId: true, isActive: true },
+    }));
     if (body.isActive === false && await prisma.accountingAccount.count({ where: { parentId: { in: body.accountIds }, id: { notIn: body.accountIds }, isActive: true, deletedAt: null } })) throw badRequest('Mark active sub-accounts inactive first');
     const { accountIds, ...data } = body;
     const result = await prisma.accountingAccount.updateMany({

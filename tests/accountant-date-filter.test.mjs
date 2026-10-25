@@ -46,7 +46,7 @@ const prisma = {
 const { baseAmount, baseCurrencyTotals } = evaluate('server/utils/accountant/reporting.ts', { prisma, badRequest, balancedTotal() {} }, 'baseAmount,baseCurrencyTotals');
 const routes = new Map();
 const router = { use() {}, get(path, ...handlers) { routes.set(path, handlers.at(-1)); }, post() {}, patch() {}, delete() {} };
-evaluate('server/utils/accountant/accounts.ts', { z, prisma, journalDateRange, baseAmount, baseCurrencyTotals, readAccountLedger: async () => { throw Error('Ledger SQL is covered by accountant-ledger-query.test.mjs'); }, Router: () => router, asyncHandler: fn => fn, rbac: () => () => {}, requireAuth() {}, badRequest, notFound: badRequest, context() {}, logActivity() {}, assertAccountingDateUnlocked() {}, replaceSystemJournal() {}, voidSystemJournal() {}, cents() {} }, 'accountingAccountRouter');
+evaluate('server/utils/accountant/accounts.ts', { z, prisma, journalDateRange, baseAmount, baseCurrencyTotals, readAccountLedger: async () => { throw Error('Ledger SQL is covered by accountant-ledger-query.test.mjs'); }, Router: () => router, asyncHandler: fn => fn, rbac: () => () => {}, requireAuth() {}, badRequest, notFound: badRequest, context() { return { readOnly: false }; }, logActivity() {}, assertAccountingDateUnlocked() {}, replaceSystemJournal() {}, voidSystemJournal() {}, cents() {} }, 'accountingAccountRouter');
 const call = async (path, query) => { let result; await routes.get(path)({ user: { companyId: 'company' }, params: { id: 'cash' }, query }, { json(value) { result = value; } }); return result; };
 const query = { from: '2026-10-01', to: '2026-10-02' };
 assert.equal((await call('/', query)).data[0].balance, 35, 'Chart shows period movement in base currency');

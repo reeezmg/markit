@@ -661,6 +661,19 @@ creates a disposable schema.
   company isolation and table filtering. `node tests/accountant-ledger-query.test.mjs
   --read-only-sql` checks the real SQL against CTE fixtures in a read-only transaction;
   it creates no tables and changes no data or schema.
+- Account activation requires all ancestors to be active. Single status changes
+  and bulk updates enforce the same check, including ancestors above the direct
+  parent. A bulk activation may include inactive parents when their entire
+  ancestor chain is also active or included. Missing, archived, foreign-company
+  parents and cycles reject the activation before writes. Deactivation ignores
+  archived children but requires live children to be inactive or included in the
+  same bulk deactivation. `node tests/accountant-account-status.test.mjs` exercises
+  both real handlers with in-memory fixtures and makes no database changes.
+- The Account Details table is a read-only summary; its
+  Transactions column counts non-deleted lines in published, non-deleted journals
+  for the selected company, matching an account's unfiltered, all-dates chart ledger.
+  Draft and archived entries do not count. A published reversal counts separately
+  from the entry it cancels because both remain visible in the ledger.
 - Account-editor and opening-balance-screen writes share one `OPENING_BALANCE`
   journal per account. Opening values are entered in company base currency and
   offset against `Opening Balance Adjustments`. Used accounts cannot be deleted;

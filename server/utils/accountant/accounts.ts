@@ -605,6 +605,34 @@ accountingAccountRouter.patch(
   }),
 );
 
+/** Activation must leave the entire parent chain active, including bulk changes. */
+export async function assertAccountParentsActive(
+  accounts: Array<{ id: string; parentId?: string | null; isActive?: boolean }>,
+) {
+  const activating = new Set(accounts.map(account => account.id));
+  const cache = new Map(accounts.map(account => [account.id, account]));
+  for (const account of accounts) {
+    const seen = new Set([account.id]);
+    let parentId = account.parentId;
+    while (parentId) {
+      if (seen.has(parentId)) throw badRequest("A circular account hierarchy is not allowed");
+      seen.add(parentId);
+      let parent = cache.get(parentId);
+      if (!parent) {
+        parent = await prisma.accountingAccount.findFirst({
+          where: { id: parentId },
+          select: { id: true, parentId: true, isActive: true },
+        });
+        if (parent) cache.set(parentId, parent);
+      }
+      if (!parent || (!activating.has(parent.id) && !parent.isActive)) {
+        throw badRequest("Activate the parent account first");
+      }
+      parentId = parent.parentId;
+    }
+  }
+}
+
 accountingAccountRouter.post(
   "/:id/status",
   rbac("ACCOUNT", "UPDATE"),
@@ -617,10 +645,11 @@ accountingAccountRouter.post(
     if (!existing) throw notFound("Account");
     if (existing.isSystem && !body.isActive)
       throw badRequest("System accounts cannot be marked inactive");
+    if (body.isActive) await assertAccountParentsActive([existing]);
     if (
       !body.isActive &&
       (await prisma.accountingAccount.count({
-        where: { parentId: id, isActive: true },
+        where: { parentId: id, isActive: true, deletedAt: null },
       }))
     ) {
       throw badRequest("Mark active sub-accounts inactive first");

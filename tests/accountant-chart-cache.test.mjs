@@ -13,7 +13,14 @@ const load = (file, bindings, name) => {
 const keys = [ ['accountant-v2', 'company', 'chart-directory'], ['accountant-v2', 'company', 'chart-ledger', 'cash'], ['accountant-v2', 'branch', 'chart-ledger', 'cash'] ];
 const seed = () => { client.clear(); for (const key of keys) client.setQueryData(key, { data: [] }); };
 const stale = key => client.getQueryState(key).isInvalidated;
-const useModelCache = load('composables/useModelCache.ts', { useQueryClient: () => client }, 'useModelCache');
+const state = new Map();
+const useModelCache = load('composables/useModelCache.ts', {
+  useQueryClient: () => client,
+  useState: (key, initial) => {
+    if (!state.has(key)) state.set(key, ref(initial()));
+    return state.get(key);
+  },
+}, 'useModelCache');
 for (const source of ['PurchaseOrder', 'DistributorPayment', 'Bill', 'Expense']) {
   seed(); await useModelCache().invalidateModels(source);
   assert.ok(keys.every(stale), `${source} refreshes cached charts`);
@@ -22,6 +29,7 @@ seed();
 let fail = false;
 const useAccountantApi = load('composables/useAccountantApi.ts', {
   useQueryClient: () => client, useToast: () => ({ add() {} }),
+  useSelectedAccounts: () => ({ get: async () => ({}), refresh: async () => ({}) }),
   useCompanyScope: () => ({ companyId: ref('company'), fetch: async () => { if (fail) throw Error('failed'); return {}; } }),
 }, 'useAccountantApi');
 await useAccountantApi().post('/manual-journals', {});
