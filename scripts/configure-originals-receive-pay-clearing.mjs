@@ -9,7 +9,7 @@ const dir='scripts/production-accounting/runs/originals-settings-selection-2026-
 const code='MONEY-CLEARING',name='Receive / Pay clearing';
 const description='Shared balancing ledger for standalone Receive / Pay documents. Entries retain person links and references without settling other source documents.';
 const apply=process.argv.includes('--apply');
-const pool=new Pool({connectionString:process.env.DIRECT_URL||process.env.DATABASE_URL,connectionTimeoutMillis:15000});
+const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:15000});
 const db=await pool.connect();
 try{
   await db.query(apply?'BEGIN ISOLATION LEVEL REPEATABLE READ':'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');

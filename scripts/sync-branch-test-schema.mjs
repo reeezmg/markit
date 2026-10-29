@@ -45,7 +45,7 @@ try {
   const schemaHash = sourceHash(), prismaHash = generatedHash();
   writeFileSync(folder + '/schema-push-backup.json', JSON.stringify({ at: new Date().toISOString(), schemaHash, prismaHash, tables, ...before }, null, 2));
   const result = spawnSync(process.execPath, ['node_modules/prisma/build/index.js', 'db', 'push', '--skip-generate', '--schema', 'prisma/schema.prisma'], {
-    env: { ...process.env, DATABASE_URL: target, DIRECT_URL: target, PRISMA_HIDE_UPDATE_MESSAGE: '1' },
+    env: { ...process.env, DATABASE_URL: target, PRISMA_HIDE_UPDATE_MESSAGE: '1' },
     encoding: 'utf8', windowsHide: true, maxBuffer: 4 * 1024 * 1024,
   });
   const redact = value => String(value || '').replace(/postgres(?:ql)?:\/\/[^\s"']+/g, '[database URL redacted]');

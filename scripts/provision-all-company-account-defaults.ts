@@ -6,7 +6,7 @@ import {provisionCompanyAccountDefaults} from '../server/utils/accountant/compan
 dotenv.config({quiet:true});
 const apply=process.argv.includes('--apply');
 const dir='scripts/production-accounting/runs/all-company-defaults-2026-10-06';fs.mkdirSync(dir,{recursive:true});
-const pool=new Pool({connectionString:process.env.DIRECT_URL||process.env.DATABASE_URL,connectionTimeoutMillis:15000});
+const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:15000});
 const db=await pool.connect();
 const reports:any[]=[],blocked:any[]=[];
 try{

@@ -130,8 +130,10 @@ Accounts Payable subaccounts. `server/utils/accountant/distributors.ts` owns the
 authenticated `/api/accountant/distributors/:id` GET/PUT and `/:id/import` POST.
 Accountant roles and company authorization apply to configuration and import.
 
-For new sources, company purchase defaults overlay supplier mappings for identical
-roles, and explicit transaction choices overlay both. The company `opening`
+For new sources, saved supplier mappings overlay company purchase defaults for identical
+roles, and explicit transaction choices overlay both. Recorded source snapshots remain
+the base for edits, so changing supplier/company defaults does not remap posted entries.
+`AccountSelection.vue` uses the same precedence as `selectDistributorAccounts`. The company `opening`
 default is now suggested by embedded supplier setup and snapshotted for first
 opening postings during import. Additive migration
 `20261006120000_supplier_opening_account_default` covers generated opening writes
@@ -295,7 +297,7 @@ and writes `remaining-due.json` in the same directory.
 - `index.vue`: `useFindManyDistributorCompany`, `useDeleteDistributorCompany`, `useDeletePurchaseOrder`, `useCreateDistributorPayment`, `useUpdateDistributorPayment`, `useDeleteDistributorPayment`, `useCreateDistributorCredit`, `useUpdateDistributorCredit`, `useDeleteDistributorCredit`, `useDeletePurchaseReturn`, `useFindManyBankAccount`, `useCreateMoneyTransaction`, `useUpdateMoneyTransaction`, `useDeleteMoneyTransaction`
 - `List.vue`: `useFindManyDistributorCompany`, `useCreateDistributorPayment`, `useUpdateDistributorPayment`, `useDeleteDistributorPayment`, `useCreateDistributorCredit`, `useUpdateDistributorCredit`, `useDeleteDistributorCredit`, `useDeleteDistributorCompany`
 - `purchaseOrder.vue`: `useFindManyPurchaseOrder`, `useCountPurchaseOrder`, `useDeletePurchaseOrder`, `useCreateDistributorPayment`
-- `Form.vue`: `useCreateDistributor`, `useUpdateDistributor`
+- `Form.vue`: no generated write hooks; `/api/distributor/form` loads profile/accounts and `/api/distributor/save` saves them atomically.
 
 **Tables touched:** `distributors`, `distributor_companies`, `distributor_payments`, `distributor_credits`, `purchase_orders`, `products`, `variants`, `items`, `expenses`, `addresses`
 
@@ -307,7 +309,7 @@ and writes `remaining-due.json` in the same directory.
 
 - All distributor list queries use `useFindManyDistributorCompany` (not `useFindManyDistributor`) — always filtered by `companyId` through the junction
 - Delete distributor → `useDeleteDistributorCompany` with compound key `distributorId_companyId` — **unlinks** the distributor from the company, does NOT delete the distributor entity itself
-- Create distributor → `useCreateDistributor` with nested `companies: { create: { company: { connect: { id: companyId } } } }` — creates + links in one call
+- Create distributor through `/api/distributor/save`: company-local numbering, profile/address creation and company membership commit together with the selected accounting setup.
 
 ---
 
@@ -391,13 +393,19 @@ A company-wide list of all purchase orders (not grouped by distributor).
 
 **Edit PO:** navigates to `/products/add?poId={id}&isEdit=true&from=distributor-purchase-order`
 
+The shared `/products/add` editor can search and stage saved products without a PO, alongside new product drafts. Product-list Add purchase order / Link to Purchase order actions preselect a saved product there. Adding/selecting/removing a pending product changes only the local draft; Save attaches the selections and recalculates the PO atomically. Existing settlements are preserved. See `ARCH-pages-products.md` for the draft and ownership checks. Product/variant numbers use the installed `20261029120000_catalog_numbers` migration.
+
 ---
 
 #### `components/Distributor/Form.vue` — Add/Edit Distributor
 
-- Create: `useCreateDistributor` with nested `address.create` + `companies.create` → links distributor to current company in one call
-- Update: `useUpdateDistributor` with `address.create` — **Bug: creates a NEW address record instead of updating the existing one on edit. Should use `upsert` or `update`.**
-- Fields: name, address (street, locality, city, state, pincode), GSTIN, bank details (accHolderName, bankName, accountNo, ifsc, upiId)
+- The distributor list and purchase-information quick-add (`AddProduct/TopBar.vue`) use the same fullscreen modal. The form has a fixed header/footer and a scrolling responsive two-column section grid; account inputs span the width. Quick-add selects the saved distributor in the enclosing purchase form.
+- Fields: name, active status, contact phone, GSTIN; building/house, street, locality, landmark, city, state and pincode; account-holder/bank names, account number, IFSC and UPI; opening due/date; payable, stock, tax, cash, bank and opening-offset accounts. Bank/address/tax details are optional. Existing distributor numbers are read-only.
+- `GET /api/distributor/form?id?` is a single-company read: it checks the membership for edits, returns profile/opening balance and compatible active accounts, and merges company purchase defaults with saved distributor mappings (saved choices win). Opening/canceling the form creates no records. Company changes reload that company's account options. Async generations prevent old responses replacing current data; load failures block Save and offer Retry.
+- `POST /api/distributor/save` calls `server/utils/distributor-form.ts` inside one `runAccountant` transaction with a company lock and 120-second timeout. Name/date/two-decimal opening balance, supplier membership and active account ownership/types are validated. Creation allocates the distributor number inside that transaction; editing upserts the existing address by `distributorId`, preserving its identity and unrelated fields.
+- Admin/manager/accountant forms require all six account choices. Save configures already-connected suppliers without another history import. For an unconnected supplier it calls the existing import/reconciliation service with the selected mappings, enabling automatic posting and including opening/unposted history. The form explains this before Save. Reconciliation failures roll back profile, address, membership, numbering and accounting together. Historical source-account snapshots are preserved. Vendor contact name/phone/status follows the saved supplier.
+- Other authenticated roles retain profile-only saves and cannot submit accounting selections. Each save audits the previous profile/address/opening/account choices, invalidates supplier/PO/accounting caches and emits `saved`; success closes the modal. Saving blocks closing; a failed Save retains the entire form for retry. No database schema or posting-function changes are needed.
+- Checks: `node --test tests/distributor-form.test.mjs tests/distributor-form-browser.test.mjs` covers defaults, edits, company/role/type rejection, address identity, rollback/retry and Chrome desktop/mobile layout. These tests use fixtures and do not connect to a database.
 
 ---
 

@@ -11,9 +11,10 @@ export async function selectDistributorAccounts(db:any,companyId:string,distribu
   }
   await db.query("SELECT pg_advisory_xact_lock(hashtext('accountant-v2:' || $1))",[companyId]);
   const recorded=await db.query('SELECT accounts FROM accountant_v2_distributor_sources WHERE company_id=$1 AND distributor_id=$2 AND source_key=$3',[companyId,distributorId,sourceKey]);
+  const defaults=await db.query('SELECT role,account_id FROM accountant_v2_distributor_mappings WHERE company_id=$1 AND distributor_id=$2',[companyId,distributorId]);
   if(!recorded.rows[0] || !Object.keys(recorded.rows[0].accounts||{}).length) {
     const saved=await db.query(`SELECT "after" FROM accountant_v2_accountant_audit WHERE company_id=$1 AND resource='account-defaults' AND action='configured' AND "resourceId"='purchase' AND deleted_at IS NULL ORDER BY created_at DESC,id DESC LIMIT 1`,[companyId]);
-    overrides={...(saved.rows[0]?.after||{}),...overrides};
+    overrides={...(saved.rows[0]?.after||{}),...Object.fromEntries(defaults.rows.map((m:any)=>[m.role,m.account_id])),...overrides};
   }
   if(!overrides || !Object.keys(overrides).length) return;
   const types:Record<string,string[]>={payable:['ACCOUNTS_PAYABLE'],stock:['STOCK'],cash:['CASH'],bank:['BANK'],tax:['OTHER_CURRENT_ASSET'],opening:['EQUITY','OTHER_CURRENT_LIABILITY'],...(chargeCredit?{expense:['EXPENSE','OTHER_EXPENSE']}: {})};
@@ -24,7 +25,6 @@ export async function selectDistributorAccounts(db:any,companyId:string,distribu
     if(!result.rowCount) throw fail(`Choose an active company account for ${role}`);
   }
   const original=await db.query('SELECT accounts FROM accountant_v2_distributor_sources WHERE company_id=$1 AND distributor_id=$2 AND source_key=$3',[companyId,distributorId,sourceKey]);
-  const defaults=await db.query('SELECT role,account_id FROM accountant_v2_distributor_mappings WHERE company_id=$1 AND distributor_id=$2',[companyId,distributorId]);
   const accounts={...Object.fromEntries(defaults.rows.map((m:any)=>[m.role,m.account_id])),...original.rows[0]?.accounts,...overrides};
   // Native standalone non-money credits use the `stock` slot as their debit
   // offset. For Charge Credit only, point that slot at the validated expense.

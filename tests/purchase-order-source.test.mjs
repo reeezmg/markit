@@ -12,6 +12,7 @@ function load(file,bindings,tail='') {
  return new Function(...Object.keys(bindings),code+tail)(...Object.values(bindings));
 }
 const helpers=load('server/utils/purchase-order-source.ts',{randomUUID},'\nreturn {ensurePurchaseOrderSource,createPurchaseOrderPayment};');
+const productLinks=load('server/utils/purchase-product-links.ts',{createError:options=>Object.assign(new Error(options.statusMessage),options)},'\nreturn {linkPurchaseProducts,purchaseProductIds};');
 let state,calls=[];
 const fixture=()=>({po:{id:'po',company_id:'company',payment_type:'CREDIT',total_amount:100,distributor_id:'vendor',created_at:new Date('2026-02-01')},audit:[],payments:[],counter:7});
 const result=rows=>({rows,rowCount:rows.length});
@@ -20,6 +21,7 @@ const db={release(){},async query(raw,args=[]){
  if(['BEGIN','COMMIT','ROLLBACK'].includes(sql))return result([]);
  if(sql.startsWith('SELECT pg_advisory'))return result([]);
  if(sql.startsWith('SELECT * FROM purchase_orders'))return result(args.includes('company')?[state.po]:[]);
+ if(sql.startsWith('SELECT id FROM purchase_orders'))return result([{id:state.po.id}]);
  if(sql.startsWith('SELECT 1 FROM accountant_v2_accountant_audit'))return result(state.audit.length?[{}]:[]);
  if(sql.startsWith('SELECT "after" FROM accountant_v2_accountant_audit'))return result([{after:{payable:'ap',stock:'stock',tax:'tax'}}]);
  if(sql.startsWith('INSERT INTO accountant_v2_accountant_audit')){state.audit.push(JSON.parse(args[3]));return result([]);}
@@ -36,7 +38,7 @@ const db={release(){},async query(raw,args=[]){
  if(sql.startsWith('INSERT INTO products'))return result([]);
  if(sql.startsWith('INSERT INTO variants'))return result([{id:args[0],product_id:args[12],p_price:args[5]}]);
  if(sql.startsWith('INSERT INTO items'))return result([{id:args[0],variant_id:args[5],qty:args[2],barcode:'TEST'}]);
- if(sql.startsWith('SELECT p.id, p.name'))return result([{id:'product',name:'Test'}]);
+ if(sql.startsWith('SELECT p.id, p.product_no'))return result([{id:'product',name:'Test',product_no:1}]);
  throw Error('Unexpected query '+sql);
 }};
 state=fixture();await helpers.ensurePurchaseOrderSource(db,'company','po');assert.equal(state.audit.length,1);assert.deepEqual(state.audit[0].accounts,{payable:'ap',stock:'stock',tax:'tax'});
@@ -45,7 +47,7 @@ assert.equal(await helpers.createPurchaseOrderPayment(db,'company','po'),null);a
 state.po.payment_type='BANK';await helpers.createPurchaseOrderPayment(db,'company','po');assert.equal(state.payments[0].payment_no,7);assert.equal(state.payments[0].amount,100);
 state.po.total_amount=150;await helpers.createPurchaseOrderPayment(db,'company','po');assert.equal(state.payments.length,1);assert.equal(state.payments[0].amount,100,'Existing payment stays at the recorded amount');
 await assert.rejects(helpers.ensurePurchaseOrderSource(db,'foreign-company','po'),/not found/);
-const bindings={...helpers,crypto:{randomUUID},defineEventHandler:x=>x,readBody:async e=>e.body,
+const bindings={...helpers,...productLinks,crypto:{randomUUID},defineEventHandler:x=>x,readBody:async e=>e.body,
  createError:options=>Object.assign(new Error(options.statusMessage),options),pool:{connect:async()=>db},
  useCompanyRequestSession:async()=>({data:{companyId:'company'}}),lockCompanyRequest:async()=>{},
  selectDistributorAccounts:async()=>{},updatePurchaseAccounting:async()=>true};

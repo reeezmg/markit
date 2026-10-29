@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 dotenv.config({quiet:true});
 const dir='scripts/production-accounting/runs/originals-settings-selection-2026-10-06';
 const saved=JSON.parse(fs.readFileSync(`${dir}/settings-saved.json`,'utf8'));
-const pool=new Pool({connectionString:process.env.DIRECT_URL||process.env.DATABASE_URL,connectionTimeoutMillis:15000});
+const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:15000});
 const db=await pool.connect();
 try {
   await db.query('BEGIN READ ONLY');

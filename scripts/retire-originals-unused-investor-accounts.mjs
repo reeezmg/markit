@@ -11,7 +11,7 @@ assert.equal(migration.company.id,companyId);assert.ok(migration.applied&&migrat
 const ids=Object.values(migration.beforeAccounts);
 assert.equal(ids.length,3);
 const apply=process.argv.includes('--apply');
-const pool=new Pool({connectionString:process.env.DIRECT_URL||process.env.DATABASE_URL,connectionTimeoutMillis:15000});
+const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:15000});
 const db=await pool.connect();
 try{
   await db.query(apply?'BEGIN ISOLATION LEVEL REPEATABLE READ':'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');

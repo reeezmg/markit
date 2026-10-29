@@ -5,6 +5,8 @@ import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
+import { linkPurchaseProducts, purchaseProductIds } from '~/server/utils/purchase-product-links'
+import { recalculatePurchaseOrderTotals } from '~/server/utils/purchase-order-totals'
 
 
 // Raw-SQL atomic replacement for add.vue's handleSaveWithPO (create flow):
@@ -19,6 +21,7 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event)
   const { productIds = [], payment = {} } = body || {}
+  const selectedProductIds = purchaseProductIds(productIds)
   const {
     paymentType = null, billNo = null, distributorId = null,
     totalAmount = 0, subTotalAmount = 0, discount = 0, tax = 0, adjustment = 0, createdAt,
@@ -53,12 +56,9 @@ export default defineEventHandler(async (event) => {
         ],
       )
 
-      if (productIds.length) {
-        await client.query(
-          `UPDATE products SET purchaseorder_id = $1, updated_at = now()
-           WHERE id = ANY($2::text[]) AND company_id = $3`,
-          [poId, productIds, companyId],
-        )
+      if (selectedProductIds.length) {
+        await linkPurchaseProducts(client, companyId, poId, selectedProductIds)
+        await recalculatePurchaseOrderTotals(client, { companyId, poId })
       }
 
       await ensurePurchaseOrderSource(client, companyId, poId)
@@ -86,7 +86,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     return await runTransaction()
-  } catch {
+  } catch (error: any) {
+    if (error.statusCode) throw error
     throw createError({ statusCode: 500, statusMessage: 'Failed to save purchase order' })
   }
 })

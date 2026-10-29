@@ -127,11 +127,11 @@ export async function configureDistributorAccounting(id: string, mappings: Recor
   return { success:true };
 }
 
-export async function importDistributorAccounting(id: string) {
+export async function importDistributorAccounting(id: string, mappings?: Record<string,string>) {
   const { companyId, db, userId } = context();
   const preview = await distributorAccountingPreview(id);
   if (preview.errors.length) throw badRequest(preview.errors.join('; '));
-  await configureDistributorAccounting(id,preview.mappings);
+  await configureDistributorAccounting(id,mappings ?? preview.mappings);
   await db.$executeRawUnsafe('UPDATE accountant_v2_distributor_settings SET enabled=true,updated_at=now() WHERE company_id=$1 AND distributor_id=$2',companyId,id);
   // Existing opening balances are first posted when the supplier is enabled.
   await selectDistributorAccounts(prismaSqlClient(db),companyId,id,'opening',undefined);

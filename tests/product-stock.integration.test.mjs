@@ -7,7 +7,7 @@ import ts from 'typescript';
 
 // Execute the product handler's actual item-upsert SQL against PostgreSQL.
 // Only one temporary item is written; all writes and trigger effects roll back.
-const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const url = process.env.DATABASE_URL;
 const pool = new Pool({ connectionString: url, connectionTimeoutMillis: 15000 });
 const db = await pool.connect();
 try {

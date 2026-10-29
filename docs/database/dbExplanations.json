@@ -81,6 +81,8 @@
         "pointsValue": "Value configured for customer loyalty points.",
         "billCounter": "Next company-local sequence number for bill records.",
         "purchaseCounter": "Next company-local sequence number for purchase records.",
+        "productCounter": "Next company-local product number; assigned transactionally by the catalog-number trigger. Starts at 1 and does not reset with the financial year.",
+        "variantCounter": "Next company-local variant number, independent of products; assigned transactionally by the catalog-number trigger.",
         "returnCounter": "Next company-local sequence number for return records.",
         "quoteCounter": "Next company-local sequence number for quote records.",
         "salesOrderCounter": "Next company-local sequence number for sales order records.",
@@ -1040,6 +1042,7 @@
       "purpose": "Stores a product identity and its catalog classification.",
       "fields": {
         "id": "Primary key identifying this Product record.",
+        "productNo": "Company-local sequential product reference, separate from its UUID; preserved on same-company edits and PO links. The catalog-number migration backfills existing records and allocates destination numbers on company transfers.",
         "createdAt": "Time this Product record was created.",
         "updatedAt": "Time this Product record was last updated.",
         "name": "Human-readable name of the product.",
@@ -1073,6 +1076,7 @@
       "purpose": "Stores a sellable product variation with prices and display data.",
       "fields": {
         "id": "Primary key identifying this Variant record.",
+        "variantNo": "Company-local sequential variant reference, independent of product numbers and the seller-entered code; preserved on same-company edits and installed by the catalog-number migration.",
         "createdAt": "Time this Variant record was created.",
         "updatedAt": "Time this Variant record was last updated.",
         "name": "Display name of this sellable variation.",

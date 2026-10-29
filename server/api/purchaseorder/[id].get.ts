@@ -22,7 +22,7 @@ export default defineEventHandler(async (event) => {
     const po = poRes.rows[0]
 
     const prodRes = await client.query(
-      `SELECT p.id, p.name, p.description, p.brand_id, p.category_id, p.subcategory_id,
+      `SELECT p.id, p.product_no, p.name, p.description, p.brand_id, p.category_id, p.subcategory_id,
               c.name AS category_name, c.target_audience AS category_target_audience,
               b.name AS brand_name, s.name AS subcategory_name
        FROM products p
@@ -39,7 +39,7 @@ export default defineEventHandler(async (event) => {
     const itemsByVariant = new Map<string, any[]>()
     if (productIds.length) {
       const vRes = await client.query(
-        `SELECT id, name, code, unit, s_price, p_price, d_price, discount, images, size_label, product_id
+        `SELECT id, variant_no, name, code, unit, s_price, p_price, d_price, discount, images, size_label, product_id
          FROM variants WHERE product_id = ANY($1::text[]) ORDER BY created_at ASC`,
         [productIds],
       )
@@ -77,6 +77,7 @@ export default defineEventHandler(async (event) => {
       createdAt: po.created_at,
       products: prodRes.rows.map((p) => ({
         id: p.id,
+        productNo: p.product_no,
         name: p.name,
         description: p.description,
         brandId: p.brand_id,
@@ -86,7 +87,7 @@ export default defineEventHandler(async (event) => {
         brand: p.brand_id ? { id: p.brand_id, name: p.brand_name } : null,
         subcategory: p.subcategory_id ? { id: p.subcategory_id, name: p.subcategory_name } : null,
         variants: (variantsByProduct.get(p.id) || []).map((v) => ({
-          id: v.id, name: v.name, code: v.code, unit: v.unit,
+          id: v.id, variantNo: v.variant_no, name: v.name, code: v.code, unit: v.unit,
           sprice: v.s_price, pprice: v.p_price, dprice: v.d_price, discount: v.discount,
           images: v.images || [], sizeLabel: v.size_label || 'Size',
           items: itemsByVariant.get(v.id) || [],

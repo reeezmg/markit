@@ -75,6 +75,14 @@ bounded, atomic processor. See `ARCH-pages-erp.md` for scheduling, setup and ret
 
 ### Independent Accountant API
 
+Distributor profile form routes use the same authenticated company context and
+`runAccountant` transaction while retaining ordinary supplier profile permissions:
+
+| Route | Contract |
+|---|---|
+| `GET /api/distributor/form?id?` | Read-only profile/opening/account options for one authorized company. An edit requires an existing company-distributor membership. Admin/manager/accountant responses include active company accounts, company purchase defaults overlaid by saved supplier mappings, and enabled status; other roles receive profile-only data. No setup or journal writes on load. |
+| `POST /api/distributor/save` | Atomic profile/address/membership/numbering save through `distributor-form.ts`. Only admin/manager/accountant may submit accounting selections, and those roles must choose all six compatible active same-company purchase accounts. Existing supplier mappings overlay company fallbacks. Already-connected suppliers update configuration without another import; unconnected suppliers configure and run the existing history import/reconciliation inside the same company-locked transaction. Failures roll back all changes. Other authenticated roles retain profile-only saves. The audit stores the previous profile/address/opening/mappings; edits upsert the existing address and update the linked vendor contact. Uses existing tables/functions, with no runtime DDL. |
+
 `server/api/accountant/[...path].ts` serves the new `/api/accountant/*` namespace.
 It resolves `useCompanyRequestSession`, restricts roles to admin/manager/accountant,
 and dispatches through the local route registry in `server/utils/accountant/router.ts`.
@@ -403,10 +411,11 @@ Dropdown option loaders for filter UIs. All require `useAuthSession`.
 | `products/create` | POST | **Product creation transaction** (raw SQL, own `Pool`). Body: `{ payload{name,brandId,description,status}, variants, companyId, poId?, category?, subcategory?, categoryTax?, deliveryType, productId? }`. One transaction, **batched** multi-row variant + item inserts (items seed `initial_qty = qty`). Writes `brand_id` (earlier `brand` non-existent-column bug fixed). Accepts optional caller `productId`. Retry on transient PG errors. Logs failures to `save_error_requests` |
 | `products/[id]` | GET | session | Raw SQL product read (product + brand/category/subcategory + variants + items including `initialQty` and `soldQty`), camelCase shape. Replaces `useFindUniqueProduct` (edit page) |
 | `products/update` | POST | session | Raw SQL product update (one txn): COALESCE product fields, prune removed variants/items, **batched** multi-row variant + item upserts (`ON CONFLICT`), server-side tax recalc. `initial_qty` seeded on INSERT. Existing item stock is computed as `initial_qty - sold_qty - supplier-return quantity` using the latest stored sold counter and company-scoped purchase-return rows. `updateInitialQty: true` interprets submitted qty as purchased qty; otherwise initial qty is preserved unless that item explicitly sends `updateInitialQty: true`. Item `initialQty` supplies the new baseline (legacy purchase callers supply `qty`). Incoming current/sold counters and `updateStockQty` cannot reset stored counters. Returns item `initialQty` and `soldQty` alongside `qty`. Used by normal product edit and purchase product edit; `syncPurchaseOrder: true` recalculates PO totals. Replaces nested `useUpdateProduct` |
-| `products/by-ids` | POST | session | Raw SQL product list by `{ ids }` (brand/category/subcategory + variants + items incl. `initialQty`). Replaces `useFindManyProduct` (draft table) |
+| `products/by-ids` | POST | session | Read-only company-scoped product list by `{ ids }`, including `companyId`, `purchaseorderId`, `productNo`, variant `variantNo`, brand/category/subcategory and items with `initialQty`. Used by the purchase draft to load selected saved products. |
+| `products/unassigned` | GET | Read-only, single authorized form company. Optional `search` matches product/variant name, variant code or product/variant number. Returns up to 50 product choices with no PO link. Selection does not reserve or modify records; Save validates again under locks. |
 | `products/delete` | POST | session | Raw SQL product delete `{ id }` (company-scoped; variants/items cascade). Replaces `useDeleteProduct` |
 | `products/category-tax` | GET | session | Category tax fields `?id=` for variant tax recalc. Replaces `useFindUniqueCategory` |
-| `products/save-batch` | POST | session | **Deferred batch save** (one txn): all staged products + variants + items (batched multi-row), optional new PO (`po`) or link to existing (`poId`), PO header purchase source and optional numbered payment; no PO-linked DC. Returns created products with trigger barcodes. **O(1) round-trips regardless of product count.** Used by the staged add-products flow |
+| `products/save-batch` | POST | One transaction saves new `products` and/or links `existingProductIds` to a new PO (`po`) or an existing PO (`poId`); rejects both PO options together. Existing-only saves are supported. `purchase-product-links.ts` locks the owning PO and selected company-scoped products, rejects missing/foreign records or another PO assignment, and permits idempotent links to the same PO. New records, links, server-recalculated totals and accounting commit/roll back together. Existing item quantities and settlements stay intact. Returns new products with `productNo`, `variantNo` and trigger barcodes. Requires the separately deployed catalog-number migration. |
 
 ---
 
@@ -415,9 +424,10 @@ Dropdown option loaders for filter UIs. All require `useAuthSession`.
 | Route | Method | Description |
 |---|---|---|
 | `purchaseorder/create` | POST | Creates empty `PurchaseOrder` for session company. Returns `{ id }`. Used by distributor/PO flows that route to `/products/purchase?poId=...`; `/products/add` no longer calls it up front. **Bug:** `console.log('res', res)` |
-| `purchaseorder/save` | POST (session) | Raw SQL atomic PO create: increment `companies.purchase_counter` (number = counter-1; the `assign_purchase_order_number` trigger no-ops since the number is preset), link `productIds`, register the PO header as purchase source. Credit POs create no DC; explicitly paid POs create one numbered DP. Replaces add.vue's `handleSaveWithPO` ZenStack chain |
+| `purchaseorder/save` | POST (session) | Atomic new PO: increments the company purchase counter (number = counter-1), validates and links selected `productIds` through `purchase-product-links.ts`, recalculates totals from linked products, and registers the PO source. Credit POs create no DC; paid POs create one numbered DP. Invalid/missing/foreign/other-PO selections roll back the entire transaction. |
+| `purchaseorder/options` | GET | Read-only single authorized form company. Searches saved PO number, supplier bill or supplier name; returns up to 50 choices for the product-list Link to Purchase order modal. |
 | `purchaseorder/update` | POST (session) | Raw SQL atomic PO edit: PO row/source update preserving actual payments and standalone credits. Replaces `syncEditedPurchasePayment`. Existing same-supplier purchase accounting is updated in place by `purchase-accounting-update.ts`, preserving journal identity and auditing its previous values before commit; the deferred trigger sees the synchronized signature. |
-| `purchaseorder/[id]` | GET (session) | Raw SQL PO read (PO + products + variants + items incl. `initialQty`). Replaces `useFindUniquePurchaseOrder` |
+| `purchaseorder/[id]` | GET (session) | Raw SQL PO read (PO + products with `productNo` + variants with `variantNo` + items incl. `initialQty`). Replaces `useFindUniquePurchaseOrder` |
 
 ---
 

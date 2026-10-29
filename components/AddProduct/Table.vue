@@ -10,10 +10,11 @@ const props = defineProps<{
   poId?: string;
   pendingProducts?: any[];
   products?: any[];   // single source of truth, fetched by the parent (raw-SQL)
+  localOnlyIds?: string[];
+  readOnlyIds?: string[];
+  disabled?: boolean;
   loading?: boolean;  // parent's fetch loading state
 }>();
-const route = useRoute();
-const isEdit = computed(() => String(route.query.isEdit || ''));
 const isSettled = (productId: string) => props.settledMap.get(productId) ?? true;
 const totalAmount = ref(0);
 const toast = useToast();
@@ -68,7 +69,7 @@ watch(
       if (!variant.items || !Array.isArray(variant.items)) return sum
 
       const variantTotal = variant.items.reduce((itemSum, item) => {
-        const qty = isEdit.value ? (item.initialQty || 0) : (item.qty || 0)
+        const qty = item.initialQty ?? item.qty ?? 0
         const pprice = variant.pprice || 0
         return itemSum + qty * pprice
       }, 0)
@@ -119,7 +120,11 @@ const expand = ref({ openedRows: [], row: null });
 //   4. On error → restore the row by removing the id from `deletingIds`,
 //      and surface the error via a toast.
 const removeProduct = (id: string) => {
-  if (!isSettled(id)) return;
+  if (props.disabled || !isSettled(id)) return;
+  if (props.localOnlyIds?.includes(id)) {
+    emit('product-deleted', id)
+    return
+  }
   if (deletingIds.value.has(id)) return;
   deletingIds.value = new Set([...deletingIds.value, id]);
   $fetch('/api/products/delete', { method: 'POST', body: { id } })
@@ -176,7 +181,8 @@ const normalizeProductForEdit = (product: any) => {
 };
 
 const editProduct = (id: string) => {
-  if (!isSettled(id)) return;
+  if (props.disabled || !isSettled(id)) return;
+  if (props.readOnlyIds?.includes(id)) return;
   const selected = sourceProducts.value?.find(p => p.id === id);
 
   if (selected) {
@@ -188,7 +194,8 @@ const editProduct = (id: string) => {
 };
 
 const editProductsm = (id: string) => {
-  if (!isSettled(id)) return;
+  if (props.disabled || !isSettled(id)) return;
+  if (props.readOnlyIds?.includes(id)) return;
   const selected = sourceProducts.value?.find(p => p.id === id);
 
   if (selected) {
@@ -206,14 +213,17 @@ const editProductsm = (id: string) => {
 <template>
   <div>
     <UTable class="w-full table-auto" :loading="showTableLoading" v-model:expand="expand" :rows="products" :columns="columns">
+       <template #name-data="{ row }">
+        {{ row.name }}
+        <p v-if="row.raw.productNo != null" class="text-xs text-gray-500">PROD-{{ row.raw.productNo }}</p>
+        <p v-if="readOnlyIds?.includes(row.id)" class="text-xs text-gray-500">Will be linked on Save</p>
+      </template>
        <template #qty-data="{ row }">
   {{
     row.variants?.reduce((variantTotal, variant) => {
       const itemTotal =
         variant.items?.reduce((sum, item) => {
-          const qty = isEdit
-            ? (item.initialQty || 0)
-            : (item.qty || 0)
+          const qty = item.initialQty ?? item.qty ?? 0
 
           return sum + qty
         }, 0) || 0
@@ -232,6 +242,8 @@ const editProductsm = (id: string) => {
         />
         <UButton
           v-if="isSettled(row.id)"
+          :disabled="disabled"
+          :title="localOnlyIds?.includes(row.id) ? 'Remove from this draft' : 'Delete product'"
           icon="i-heroicons-trash"
           size="sm"
           color="red"
@@ -242,6 +254,7 @@ const editProductsm = (id: string) => {
         />
         <UButton
          v-if="isSettled(row.id)"
+          :disabled="disabled || readOnlyIds?.includes(row.id)"
           icon="i-heroicons-pencil"
           size="sm"
           color="blue"
@@ -259,6 +272,8 @@ const editProductsm = (id: string) => {
         />
         <UButton
          v-if="isSettled(row.id)"
+          :disabled="disabled"
+          :title="localOnlyIds?.includes(row.id) ? 'Remove from this draft' : 'Delete product'"
           icon="i-heroicons-trash"
           size="sm"
           color="red"
@@ -269,6 +284,7 @@ const editProductsm = (id: string) => {
         />
         <UButton
          v-if="isSettled(row.id)"
+          :disabled="disabled || readOnlyIds?.includes(row.id)"
           icon="i-heroicons-pencil"
           size="sm"
           color="blue"
@@ -285,12 +301,13 @@ const editProductsm = (id: string) => {
             :rows="row.variants" 
             :columns="variantColumns"
           >
+          <template #name-data="{ row }">
+            {{ row.name }}<p v-if="row.variantNo != null" class="text-xs text-gray-500">VAR-{{ row.variantNo }}</p>
+          </template>
           <template #qty-data="{ row }">
             {{
               row.items?.reduce((variantTotal, item) => {
-                const qty = isEdit
-                  ? (item.initialQty || 0)
-                  : (item.qty || 0)
+                const qty = item.initialQty ?? item.qty ?? 0
 
                 return variantTotal + qty
               }, 0)

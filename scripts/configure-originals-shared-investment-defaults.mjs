@@ -7,7 +7,7 @@ dotenv.config({ quiet:true });
 const companyId='6980e6e4-7d5d-413c-9554-24f385c9b853';
 const dir='scripts/production-accounting/runs/originals-settings-selection-2026-10-06';
 const apply=process.argv.includes('--apply');
-const pool=new Pool({connectionString:process.env.DIRECT_URL||process.env.DATABASE_URL,connectionTimeoutMillis:15000});
+const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:15000});
 const db=await pool.connect();
 try {
   await db.query(apply?'BEGIN ISOLATION LEVEL REPEATABLE READ':'BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');

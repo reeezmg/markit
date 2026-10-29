@@ -4,9 +4,8 @@
 //////////////////////////////////////////////////////////////////////////////////////////////
 
 datasource db {
-  provider  = "postgresql"
-  url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -453,6 +452,8 @@ model Company {
   pointsValue                           Int                                 @default(0) @map("points_value")
   billCounter                           Int                                 @default(1) @map("bill_counter")
   purchaseCounter                       Int                                 @default(1) @map("purchase_counter")
+  productCounter                        Int                                 @default(1) @map("product_counter")
+  variantCounter                        Int                                 @default(1) @map("variant_counter")
   returnCounter                         Int                                 @default(1) @map("return_counter")
   quoteCounter                          Int                                 @default(1) @map("quote_counter")
   salesOrderCounter                     Int                                 @default(1) @map("sales_order_counter")
@@ -1458,6 +1459,7 @@ model Collection {
 
 model Product {
   id              String         @id() @default(uuid())
+  productNo       Int?           @map("product_no")
   createdAt       DateTime       @default(now()) @map("created_at")
   updatedAt       DateTime       @updatedAt() @map("updated_at")
   name            String
@@ -1486,6 +1488,7 @@ model Product {
   purchaseorderId String?        @map("purchaseorder_id")
   writeId         String?        @default(uuid()) @map("write_id")
 
+  @@unique([companyId, productNo])
   @@index([categoryId])
   @@index([subcategoryId])
   @@index([collectionId])
@@ -1495,6 +1498,7 @@ model Product {
 
 model Variant {
   id                 String                @id() @default(uuid())
+  variantNo          Int?                  @map("variant_no")
   createdAt          DateTime              @default(now()) @map("created_at")
   updatedAt          DateTime              @updatedAt() @map("updated_at")
   name               String
@@ -1530,6 +1534,7 @@ model Variant {
   quoteItems         QuoteItem[]
   salesOrderItems    SalesOrderItem[]
 
+  @@unique([companyId, variantNo])
   @@index([productId])
   @@index([companyId])
   @@map("variants")

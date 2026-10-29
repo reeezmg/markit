@@ -7,10 +7,12 @@ migration or deletion of historical financial data.
 
 # Markit v1 - Project Architecture Guide
 
-Datasource/admin alignment (2026-10-06): `schema.zmodel` uses pooled `DATABASE_URL`
-for application Prisma access and direct `DIRECT_URL` for Prisma schema commands.
-Both must target the same database; direct administration avoids stale pooled session
-search paths from disposable schemas. Production schema changes remain separate from builds.
+Datasource configuration (2026-10-29): `DATABASE_URL` is the single PostgreSQL
+connection variable for the application, ZenStack/Prisma and maintenance scripts.
+`schema.zmodel` declares only `url = env('DATABASE_URL')`; the separate direct URL
+override is removed. Tools that need a different endpoint supply `DATABASE_URL`
+for that process. Database schema application still requires separate explicit
+authorization and remains separate from builds.
 On 2026-10-21 the user authorized the existing test database to synchronize through
 `schema.zmodel` -> `npx zenstack generate` -> `npx prisma db push`. The already-declared
 distributor payment allocation table and expense party columns were installed through
@@ -256,6 +258,7 @@ Product brands.
 
 #### `products` (Product)
 Product master record (grouped under a PurchaseOrder).
+- `productNo` maps to `product_no`, unique with `companyId`. Migration `20261029120000_catalog_numbers` backfills each company's existing products in `created_at, id` order, then assigns numbers from `Company.productCounter` in a database trigger. UUIDs remain the record keys. Numbering does not reset with the financial year; same-company edits and PO links preserve the number. Company transfers allocate a destination-company number. On 2026-10-29 the migration was applied and recorded on both authorized Neon databases after affected-field backups; verification found no missing/misordered numbers or counter mismatches and confirmed both unique indexes and allocation triggers.
 - Fields: `name`, `companyId`, `categoryId`, `subcategoryId`, `brandId`, nullable `purchaseorderId`, `rating`
 - Note: Products can now be created before a `PurchaseOrder` is chosen. Draft add-product flow stores products with `purchaseorderId = null`; choosing to create a PO later links those products to the new purchase order.
 - `writeId`: used for offline sync
@@ -263,6 +266,7 @@ Product master record (grouped under a PurchaseOrder).
 
 #### `variants` (Variant)
 Sellable variant of a product (e.g. Red/XL).
+- `variantNo` maps to `variant_no`, unique with `companyId`, and uses the independent `Company.variantCounter` sequence. The same migration backfills and installs allocation for every insert path, including raw SQL and generated APIs. Supplied numbers cannot override database allocation; same-company edits preserve numbers. `code` remains a separate optional seller-entered field. The company counters store the next number, start at 1, and increment transactionally.
 - Fields: `name`, `code`, `unit`, `sprice` (selling price), `pprice` (purchase price), `dprice` (discounted price), `discount`, `tax`, `images[]`, `sold`, `deliveryType`, `companyId`, `productId`, `brandId`
 - `writeId`: used for offline sync
 - **Used in:** storetools (billing, inventory), server (cart, orders)

@@ -34,6 +34,10 @@ bun install
 
 ## Development Server
 
+Set `DATABASE_URL` in the local `.env` and the project's Vercel environment settings.
+It is the only PostgreSQL connection variable used by the app, Prisma/ZenStack and
+maintenance scripts.
+
 Start the development server on `http://localhost:3000`:
 
 ```bash

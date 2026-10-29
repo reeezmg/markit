@@ -6,6 +6,7 @@ import { selectDistributorAccounts } from '../server/utils/distributor-account-s
 
 const accounts = [
   { id: 'cash-a', companyId: 'a', accountType: 'CASH', isActive: true, deletedAt: null },
+  { id: 'supplier-cash', companyId: 'a', accountType: 'CASH', isActive: true, deletedAt: null },
   { id: 'bank-a', companyId: 'a', accountType: 'BANK', isActive: true, deletedAt: null },
   { id: 'equity-a', companyId: 'a', accountType: 'EQUITY', isActive: true, deletedAt: null },
   { id: 'cash-b', companyId: 'b', accountType: 'CASH', isActive: true, deletedAt: null },
@@ -60,7 +61,7 @@ await call('PUT','/receive-pay',{receiveAccountId:'',payAccountId:''});
 assert.deepEqual((await call('GET','/defaults')).defaults.receive,{});
 assert.deepEqual((await call('GET','/defaults')).defaults.pay,{});
 
-async function purchase(recorded: any, overrides: any, enabled = true) {
+async function purchase(recorded: any, overrides: any, enabled = true, mappings = { cash: 'supplier-cash' } as Record<string,string>) {
   let written: any = null;
   const connection = { query: async (sql: string, params: any[]) => {
     if(sql.includes('SELECT enabled')) return {rows:[{enabled}]};
@@ -68,14 +69,15 @@ async function purchase(recorded: any, overrides: any, enabled = true) {
     if(sql.includes('SELECT accounts')) return {rows:recorded ? [{accounts:recorded}] : []};
     if(sql.includes('SELECT "after"')) return {rows:[{after:{cash:'cash-a'}}]};
     if(sql.includes('SELECT 1 FROM accountant_v2_accounting_accounts')) return {rowCount: accounts.filter(a=>a.id===params[0]&&a.companyId===params[1]&&a.isActive&&params[2].includes(a.accountType)).length};
-    if(sql.includes('SELECT role')) return {rows:[{role:'cash',account_id:'previous'}]};
+    if(sql.includes('SELECT role')) return {rows:Object.entries(mappings).map(([role,account_id])=>({role,account_id}))};
     if(sql.includes('INSERT INTO accountant_v2_distributor_sources')) { written=JSON.parse(params[3]);return {rows:[]}; }
     throw Error('Unexpected query: '+sql);
   } };
   await selectDistributorAccounts(connection,'a','supplier','payment:test',overrides);
   return written;
 }
-assert.equal((await purchase(null,undefined)).cash,'cash-a','New payment uses configured default');
+assert.equal((await purchase(null,undefined,true,{})).cash,'cash-a','New payment uses company defaults when supplier choices are absent');
+assert.equal((await purchase(null,undefined)).cash,'supplier-cash','Saved supplier choices override company fallback defaults');
 assert.equal((await purchase(null,{cash:'cash-b'}).catch(()=>null)),null,'Invalid explicit override rejects');
 assert.equal(await purchase({cash:'previous'},undefined),null,'Existing payment is not remapped by new defaults');
 assert.equal((await purchase({cash:'previous'},{cash:'cash-a'})).cash,'cash-a','Explicit transaction edit wins');

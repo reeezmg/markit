@@ -7,6 +7,7 @@ import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { recalculatePurchaseOrderTotals } from '~/server/utils/purchase-order-totals'
+import { linkPurchaseProducts, purchaseProductIds } from '~/server/utils/purchase-product-links'
 
 // Atomic batch save for the deferred add-products flow: the client stages N
 // products locally (variable + localStorage) and calls this once on Save.
@@ -22,6 +23,7 @@ import { recalculatePurchaseOrderTotals } from '~/server/utils/purchase-order-to
 //   po?:   { paymentType, billNo, distributorId, totalAmount, subTotalAmount,
 //            discount, tax, adjustment, createdAt },   // create a new PO + link
 //   poId?: string,                                     // OR link to an existing PO
+//   existingProductIds?: string[],                      // saved unassigned products; linked only on Save
 // }
 // Returns { success, productIds, poId, purchaseOrderNo, products:[…with barcodes] }
 export default defineEventHandler(async (event) => {
@@ -31,7 +33,12 @@ export default defineEventHandler(async (event) => {
 
   const body = await readBody(event)
   const { products = [], po = null, poId: existingPoId = null } = body || {}
-  if (!Array.isArray(products) || !products.length) {
+  const existingProductIds = purchaseProductIds(body?.existingProductIds)
+  if (po && existingPoId) throw createError({ statusCode: 400, statusMessage: 'Choose a new or existing purchase order' })
+  if (existingProductIds.length && !po && !existingPoId) {
+    throw createError({ statusCode: 400, statusMessage: 'A purchase order is required to link existing products' })
+  }
+  if (!Array.isArray(products) || (!products.length && !existingProductIds.length)) {
     throw createError({ statusCode: 400, statusMessage: 'No products to save' })
   }
 
@@ -113,6 +120,9 @@ export default defineEventHandler(async (event) => {
         )
       }
 
+      // Read/selection never changes ownership. All links and totals commit with Save.
+      if (poId) await linkPurchaseProducts(client, companyId, poId, existingProductIds)
+
       // 2) assign ids, then batch-insert all products / variants / items
       const productRows: any[][] = []
       const variantRows: any[][] = []
@@ -156,7 +166,7 @@ export default defineEventHandler(async (event) => {
         }
       }
 
-      {
+      if (productRows.length) {
         const { sql, params } = multiRow(productRows, 'now(),now()')
         await client.query(
           `INSERT INTO products (id, name, brand_id, description, status, company_id, purchaseorder_id, category_id, subcategory_id, collection_id, weight, length, width, height, dimension_id, custom_fields, created_at, updated_at) VALUES ${sql}`,
@@ -169,7 +179,7 @@ export default defineEventHandler(async (event) => {
         const variantsRes = await client.query(
           `INSERT INTO variants (id, name, code, unit, s_price, p_price, d_price, discount, delivery_type, tax, images, company_id, product_id, weight, length, width, height, custom_fields, size_label, status, created_at, updated_at)
            VALUES ${sql}
-           RETURNING id, name, code, unit, s_price, p_price, d_price, discount, weight, size_label, product_id`,
+           RETURNING id, variant_no, name, code, unit, s_price, p_price, d_price, discount, weight, size_label, product_id`,
           params,
         )
         returnedVariants = variantsRes.rows
@@ -192,7 +202,7 @@ export default defineEventHandler(async (event) => {
 
       // 4) read back product names; variant/item rows already came from INSERT ... RETURNING.
       const prodMetaRes = await client.query(
-        `SELECT p.id, p.name, c.name AS category_name, b.name AS brand_name, s.name AS subcategory_name
+        `SELECT p.id, p.product_no, p.name, c.name AS category_name, b.name AS brand_name, s.name AS subcategory_name
          FROM products p
          LEFT JOIN categories c ON c.id = p.category_id
          LEFT JOIN brands b ON b.id = p.brand_id
@@ -220,7 +230,7 @@ export default defineEventHandler(async (event) => {
       for (const v of returnedVariants) {
         const list = variantsByProduct.get(v.product_id) || []
         list.push({
-          id: v.id, name: v.name, code: v.code, sprice: v.s_price, dprice: v.d_price,
+          id: v.id, variantNo: v.variant_no, name: v.name, code: v.code, sprice: v.s_price, dprice: v.d_price,
           sizeLabel: v.size_label || 'Size',
           items: itemsByVariant.get(v.id) || [],
         })
@@ -228,6 +238,7 @@ export default defineEventHandler(async (event) => {
       }
       const resultProducts = prodMetaRes.rows.map((p) => ({
         id: p.id,
+        productNo: p.product_no,
         name: p.name,
         category: { name: p.category_name },
         brand: { name: p.brand_name },
@@ -251,7 +262,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     return await runTransaction()
-  } catch {
+  } catch (error: any) {
+    if (error.statusCode) throw error
     throw createError({ statusCode: 500, statusMessage: 'Failed to save products' })
   }
 })

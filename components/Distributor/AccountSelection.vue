@@ -31,7 +31,7 @@ watch(()=>[props.companyId,props.distributorId,props.sourceKey,retry.value],asyn
     data.value=result;
     if(result.enabled) {
       const recorded=result.sources.find((s:any)=>s.source_key===props.sourceKey)?.accounts;
-      model.value=recorded && Object.keys(recorded).length ? {...recorded} : {...result.mappings,...settings.defaults.purchase};
+      model.value=recorded && Object.keys(recorded).length ? {...recorded} : {...settings.defaults.purchase,...result.mappings};
       // Historical named-bank source roles remain in snapshots, but new forms
       // select the native bank account directly instead of an archived bank ID.
       const event=result.events?.find((e:any)=>e.source_key===props.sourceKey);

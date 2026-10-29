@@ -3,7 +3,7 @@ import dotenv from 'dotenv';
 import { Pool } from 'pg';
 dotenv.config({quiet:true});
 const companyId='6980e6e4-7d5d-413c-9554-24f385c9b853';
-const pool=new Pool({connectionString:process.env.DIRECT_URL||process.env.DATABASE_URL,connectionTimeoutMillis:15000});
+const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:15000});
 const db=await pool.connect();
 try{
   await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY');

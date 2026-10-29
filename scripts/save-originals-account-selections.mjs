@@ -24,7 +24,7 @@ function constant(file, name) {
 const groups = constant('utils/account-defaults.ts', 'accountDefaultGroups');
 const onlineRoles = { ...Object.fromEntries(Object.entries(constant('server/utils/accountant/erp.ts','erpRoles')).filter(([key])=>key!=='expense')),
   ...constant('server/utils/accountant/ecommerce.ts','extraRoles') };
-const pool = new Pool({ connectionString: process.env.DIRECT_URL || process.env.DATABASE_URL, connectionTimeoutMillis: 15000 });
+const pool = new Pool({ connectionString: process.env.DATABASE_URL, connectionTimeoutMillis: 15000 });
 const db = await pool.connect();
 const saved = [];
 const proposed = {};

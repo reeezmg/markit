@@ -25,16 +25,20 @@
       </UBadge>
     </div>
 
-    <div
-      v-if="!forceOrderDeliveryType"
-      class="flex items-center gap-2"
-    >
-      <span class="whitespace-nowrap">Delivery Type</span>
-      <USelectMenu
-        v-model="deliveryType"
-        :options="deliveryTypeOptions"
-        placeholder="Select Delivery Type"
-      />
+    <div class="flex w-full flex-col gap-2 sm:w-auto sm:flex-row sm:items-center">
+      <slot name="product-search" />
+
+      <div
+        v-if="!forceOrderDeliveryType"
+        class="flex items-center gap-2"
+      >
+        <span class="whitespace-nowrap">Delivery Type</span>
+        <USelectMenu
+          v-model="deliveryType"
+          :options="deliveryTypeOptions"
+          placeholder="Select Delivery Type"
+        />
+      </div>
     </div>
   </div>
 
@@ -157,54 +161,9 @@
   </UModal>
 
   <!-- DISTRIBUTOR MODAL -->
-  <UModal v-model="isDistributorOpen">
-    <div class="p-4 space-y-3">
-      <h2 class="text-lg font-semibold">Add Distributor</h2>
-
-      <UFormGroup label="Name">
-        <UInput v-model="supplier.name" />
-      </UFormGroup>
-
-      <UFormGroup label="Street">
-        <UInput v-model="supplier.street" />
-      </UFormGroup>
-
-      <UFormGroup label="City">
-        <UInput v-model="supplier.city" />
-      </UFormGroup>
-
-      <UFormGroup label="State">
-        <UInput v-model="supplier.state" />
-      </UFormGroup>
-
-      <UFormGroup label="Pincode">
-        <UInput v-model="supplier.pincode" />
-      </UFormGroup>
-
-      <UFormGroup label="GSTIN">
-        <UInput v-model="supplier.gstin" />
-      </UFormGroup>
-
-      <UFormGroup label="Bank Name">
-        <UInput v-model="supplier.bankName" />
-      </UFormGroup>
-
-      <UFormGroup label="Account Number">
-        <UInput v-model="supplier.accountNo" />
-      </UFormGroup>
-
-      <UFormGroup label="IFSC Code">
-        <UInput v-model="supplier.ifsc" />
-      </UFormGroup>
-
-      <UFormGroup label="UPI ID">
-        <UInput v-model="supplier.upiId" />
-      </UFormGroup>
-
-      <UButton block @click="submitDistributor">
-        Submit
-      </UButton>
-    </div>
+  <UModal v-model="isDistributorOpen" fullscreen :prevent-close="supplierFormBusy">
+    <DistributorForm :company-id="companyScope.companyId.value" @cancel="isDistributorOpen = false"
+      @busy="supplierFormBusy = $event" @saved="onSupplierSaved" @transferred="isDistributorOpen = false" />
   </UModal>
 </template>
 
@@ -215,7 +174,7 @@ const accountingAccounts = ref<Record<string,string>>({});
 const accountingRoute = useRoute();
 const accountingSourceKey = computed(()=>typeof accountingRoute.query.poId==='string' ? `purchase:${accountingRoute.query.poId}` : undefined);
 
-import { useCreateDistributor, useFindManyDistributor } from '~/lib/company-hooks/distributor';
+import { useFindManyDistributor } from '~/lib/company-hooks/distributor';
 
 /* ------------------------------------
    PROPS (DB STATE)
@@ -256,6 +215,7 @@ const useAuth = () => companyScope.auth
 
 const isPurchaseInfoOpen = ref(false)
 const isDistributorOpen = ref(false)
+const supplierFormBusy = ref(false)
 const purchaseAccountsLoading = ref(false)
 const isPurchaseInfoSubmitPending = ref(false)
 const purchaseOrderNo = computed(() => props.purchaseOrderNo)
@@ -277,23 +237,6 @@ watch(
 /* ------------------------------------
    DISTRIBUTOR
 ------------------------------------ */
-const CreateDistributor = useCreateDistributor()
-
-const supplier = ref({
-  name: '',
-  street: '',
-  locality: '',
-  city: '',
-  state: '',
-  pincode: '',
-  gstin: '',
-  bankName: '',
-  accountNo: '',
-  upiId: '',
-  ifsc: '',
-  accHolderName: '',
-})
-
 /* ------------------------------------
    PURCHASE INFO STATE
 ------------------------------------ */
@@ -515,36 +458,9 @@ watch(
 /* ------------------------------------
    CREATE DISTRIBUTOR
 ------------------------------------ */
-const submitDistributor = async () => {
-  await CreateDistributor.mutateAsync({
-    data: {
-      name: supplier.value.name,
-      accHolderName: supplier.value.accHolderName,
-      ifsc: supplier.value.ifsc,
-      accountNo: supplier.value.accountNo,
-      bankName: supplier.value.bankName,
-      gstin: supplier.value.gstin,
-      upiId: supplier.value.upiId,
-      address: {
-        create: {
-          street: supplier.value.street,
-          locality: supplier.value.locality,
-          city: supplier.value.city,
-          state: supplier.value.state,
-          pincode: supplier.value.pincode,
-        },
-      },
-      companies: {
-        create: {
-          company: {
-            connect: { id: useAuth().session.value?.companyId },
-          },
-        },
-      },
-    },
-  })
-
-  toast.add({ title: 'Distributor added!' })
+const onSupplierSaved = (supplier: any) => {
+  selected.value = supplier
+  isDistributorInitialized.value = true
   isDistributorOpen.value = false
 }
 

@@ -61,6 +61,7 @@ function makeDefaultDraft(draftNo = '1') {
     // uuids only — files already uploaded to S3) and NOT yet written to the DB.
     // They are batch-saved on Save and cleared only after the transaction succeeds.
     stagedProducts: [],
+    existingProducts: [],
     form: makeEmptyForm(),
     purchaseInfo: makeEmptyPurchaseInfo(),
   }
@@ -98,6 +99,7 @@ export function useProductDraft() {
   const poId = ref<string | null>(null)
   const productIds = ref<string[]>([])
   const stagedProducts = ref<any[]>([])
+  const existingProducts = ref<any[]>([])
   const form = ref(makeEmptyForm())
   const purchaseInfo = ref(makeEmptyPurchaseInfo())
   const draftProducts = ref<any[]>([])
@@ -115,6 +117,7 @@ export function useProductDraft() {
     poId: poId.value,
     productIds: productIds.value,
     stagedProducts: stagedProducts.value,
+    existingProducts: existingProducts.value,
     form: form.value,
     purchaseInfo: purchaseInfo.value,
   }))
@@ -131,6 +134,7 @@ export function useProductDraft() {
     poId.value = draft.poId ?? null
     productIds.value = Array.isArray(draft.productIds) ? draft.productIds : []
     stagedProducts.value = Array.isArray(draft.stagedProducts) ? draft.stagedProducts : []
+    existingProducts.value = Array.isArray(draft.existingProducts) ? draft.existingProducts : []
     form.value = { ...makeEmptyForm(), ...(draft.form ?? {}) }
     form.value.variants = Array.isArray(form.value.variants) && form.value.variants.length
       ? form.value.variants.map((variant: any) => ({
@@ -185,6 +189,7 @@ export function useProductDraft() {
     poId.value = null
     productIds.value = []
     stagedProducts.value = []
+    existingProducts.value = []
   }
 
   watch(currentDraft, (draft) => {
@@ -228,6 +233,7 @@ export function useProductDraft() {
     poId,
     productIds,
     stagedProducts,
+    existingProducts,
     form,
     purchaseInfo,
     draftProducts,

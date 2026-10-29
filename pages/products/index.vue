@@ -372,7 +372,24 @@ const active = (selectedRows) => [
     ],
 ];
 
+const purchaseLinkProduct = ref<any>(null)
+const isPurchaseLinkOpen = ref(false)
 const action = (row) => [
+    ...(row.purchaseorderId ? [] : [[
+        {
+            label: 'Add purchase order',
+            icon: 'i-heroicons-document-plus',
+            click: () => router.push({ path: '/products/add', query: {
+                from: 'distributor-purchase-order', productId: row.id,
+                entryCompany: row.companyId, returnTo: '/products',
+            } }),
+        },
+        {
+            label: 'Link to Purchase order',
+            icon: 'i-heroicons-link',
+            click: () => { purchaseLinkProduct.value = row; isPurchaseLinkOpen.value = true },
+        },
+    ]]),
     [
         {
             label: 'Edit',
@@ -503,6 +520,13 @@ if (filters.status !== "" && filters.status !== null && filters.status !== undef
         {
           OR: [
             { name: { contains: search.value, mode: 'insensitive' } },
+            ...(/^(?:PROD-|VAR-)?[0-9]+$/i.test(search.value.trim())
+              && Number.isSafeInteger(Number(search.value.trim().replace(/^(?:PROD-|VAR-)/i, '')))
+              && Number(search.value.trim().replace(/^(?:PROD-|VAR-)/i, '')) <= 2147483647
+              ? [
+                  { productNo: Number(search.value.trim().replace(/^(?:PROD-|VAR-)/i, '')) },
+                  { variants: { some: { variantNo: Number(search.value.trim().replace(/^(?:PROD-|VAR-)/i, '')) } } },
+                ] : []),
 
             {
               variants: {
@@ -923,6 +947,7 @@ watch(companyScope.companyId, () => { itemBarcode.value = ''; discountFilters.ca
 
 <template>
     <UDashboardPanelContent class="pb-24">
+      <ProductsLinkPurchaseOrderModal v-model="isPurchaseLinkOpen" :product="purchaseLinkProduct" />
         <UCard
             class="w-full"
             :ui="{
@@ -1202,7 +1227,7 @@ watch(companyScope.companyId, () => { itemBarcode.value = ''; discountFilters.ca
                             :alt="row.name"
                             size="lg"
                         />
-                        <div class="ms-3">{{ row.name }}</div>
+                        <div class="ms-3">{{ row.name }}<p class="text-xs text-gray-500">PROD-{{ row.productNo ?? '—' }}</p></div>
                     </div>
                 </template>
                 <template #expand="{ row }">
@@ -1221,6 +1246,7 @@ watch(companyScope.companyId, () => { itemBarcode.value = ''; discountFilters.ca
           />
           <div class="ms-3">
             {{ variant.name }}
+            <p class="text-xs text-gray-500">VAR-{{ variant.variantNo ?? '—' }}</p>
            
           </div>
         </div>

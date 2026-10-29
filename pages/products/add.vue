@@ -45,6 +45,20 @@ const editPurchaseOrderId = computed(() => String(route.query.poId || ''))
 const isEditingPurchaseOrder = computed(
   () => route.query.isEdit === 'true' && !!editPurchaseOrderId.value
 )
+// Existing-PO additions are isolated from the normal new-product draft.
+const editStagedProducts = ref<any[]>([])
+const editExistingProducts = ref<any[]>([])
+const stagedProducts = computed({
+  get: () => isEditingPurchaseOrder.value ? editStagedProducts.value : draft.stagedProducts.value,
+  set: value => { if (isEditingPurchaseOrder.value) editStagedProducts.value = value; else draft.stagedProducts.value = value },
+})
+const existingProducts = computed({
+  get: () => isEditingPurchaseOrder.value ? editExistingProducts.value : draft.existingProducts.value,
+  set: value => { if (isEditingPurchaseOrder.value) editExistingProducts.value = value; else draft.existingProducts.value = value },
+})
+const selectingExisting = ref(false)
+const purchaseOrderLoading = ref(false)
+const purchaseOrderLoadError = ref(false)
 const activePurchaseOrderId = computed(() =>
   isEditingPurchaseOrder.value ? editPurchaseOrderId.value : draft.poId.value
 )
@@ -66,9 +80,13 @@ const stagedImageKeys = (product: any): string[] =>
   )
 
 const onDraftProductDeleted = async (id: string) => {
-  const removed = draft.stagedProducts.value.find((p: any) => p.id === id)
+  if (existingProducts.value.some((p: any) => p.id === id)) {
+    existingProducts.value = existingProducts.value.filter((p: any) => p.id !== id)
+    return
+  }
+  const removed = stagedProducts.value.find((p: any) => p.id === id)
   draft.productIds.value = draft.productIds.value.filter(productId => productId !== id)
-  draft.stagedProducts.value = draft.stagedProducts.value.filter((p: any) => p.id !== id)
+  stagedProducts.value = stagedProducts.value.filter((p: any) => p.id !== id)
   // Saved products are cleaned up by /api/products/delete; this covers the
   // staged-only case, and the server skips keys a row still references.
   await awsService.deleteObjects(stagedImageKeys(removed))
@@ -163,6 +181,8 @@ const refetchEditPurchaseOrder = async () => {
     editPurchaseOrder.value = null
     return { data: null }
   }
+  purchaseOrderLoading.value = true
+  purchaseOrderLoadError.value = false
   try {
     const purchaseOrder: any = await $fetch(`/api/purchaseorder/${editPurchaseOrderId.value}`)
     if (!await selectOwnerAndReload(purchaseOrder.companyId)) return { data: null }
@@ -170,10 +190,11 @@ const refetchEditPurchaseOrder = async () => {
   } catch (e) {
     console.error('Failed to load purchase order', e)
     editPurchaseOrder.value = null
-  }
+    purchaseOrderLoadError.value = true
+  } finally { purchaseOrderLoading.value = false }
   return { data: editPurchaseOrder.value }
 }
-watch(isEditingPurchaseOrder, (v) => { if (v) refetchEditPurchaseOrder() }, { immediate: true })
+watch(editPurchaseOrderId, () => { if (isEditingPurchaseOrder.value) refetchEditPurchaseOrder() }, { immediate: true })
 const awsService = new AwsService();
 const selectedProduct: Ref<Product> = ref({
   id: uuidv4(), 
@@ -607,7 +628,7 @@ const withFreshRowIds = (product: any) => ({
   })),
 })
 
-const stagedProductsForSave = () => draft.stagedProducts.value.map(withFreshRowIds)
+const stagedProductsForSave = () => stagedProducts.value.map(withFreshRowIds)
 
 const handleAdd = async (e: Event) => {
   isLoad.value = true
@@ -654,22 +675,7 @@ const handleAdd = async (e: Event) => {
 
     const stagedProduct = buildStagedProduct(productId, productSnapshot, snapshotCategoryTax)
 
-    if (isEditingPurchaseOrder.value) {
-      // An existing PO already has a database row, so Add Product can commit
-      // immediately and keep its stored totals/payment amount synchronized.
-      await $fetch('/api/products/save-batch', {
-        method: 'POST',
-        body: { products: [withFreshRowIds(stagedProduct)], poId: editPurchaseOrderId.value },
-      })
-      await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder')
-      await refetchEditPurchaseOrder()
-    } else {
-      // A new PO does not exist yet; retain the normal staged draft flow.
-      draft.stagedProducts.value = [
-        ...draft.stagedProducts.value,
-        stagedProduct,
-      ]
-    }
+    stagedProducts.value = [...stagedProducts.value, stagedProduct]
 
     handleReset();
     isOpenAdd.value = false;
@@ -768,8 +774,8 @@ const handleEdit = async (e: Event) => {
       await refetchEditPurchaseOrder()
     } else {
       // Unsaved products remain local until the purchase order is saved.
-      const previous = draft.stagedProducts.value.find((p: any) => p.id === productId);
-      draft.stagedProducts.value = draft.stagedProducts.value.map((p: any) => (p.id === productId ? updated : p));
+      const previous = stagedProducts.value.find((p: any) => p.id === productId);
+      stagedProducts.value = stagedProducts.value.map((p: any) => (p.id === productId ? updated : p));
 
       const keptKeys = new Set(stagedImageKeys(updated));
       await awsService.deleteObjects(stagedImageKeys(previous).filter(key => !keptKeys.has(key)));
@@ -1193,8 +1199,8 @@ watch(variants, (newVariants) => {
 const isLoading = ref(false)
 const tableProducts = computed(() =>
   isEditingPurchaseOrder.value
-    ? [...(editPurchaseOrder.value?.products || []), ...draft.stagedProducts.value]
-    : draft.stagedProducts.value
+    ? [...(editPurchaseOrder.value?.products || []), ...existingProducts.value, ...stagedProducts.value]
+    : [...existingProducts.value, ...stagedProducts.value]
 )
 
 
@@ -1259,7 +1265,12 @@ const generateBarcodes = (products: any[]) => {
 }
 
 const handleSave = () => {
-  const hasProducts = draft.stagedProducts.value.length > 0
+  if (isSave.value || selectingExisting.value || purchaseOrderLoading.value) return
+  if (isEditingPurchaseOrder.value && !editPurchaseOrder.value) {
+    toast.add({ title: 'Load the purchase order before saving', color: 'red' })
+    return
+  }
+  const hasProducts = stagedProducts.value.length > 0 || existingProducts.value.length > 0
     || (isEditingPurchaseOrder.value && !!editPurchaseOrder.value?.products?.length)
 
   if (!hasProducts) {
@@ -1272,7 +1283,7 @@ const handleSave = () => {
     return
   }
 
-  if (isDistributorPurchaseOrderFlow.value) {
+  if (isDistributorPurchaseOrderFlow.value || existingProducts.value.length) {
     openPurchaseInfoForSave()
     return
   }
@@ -1283,27 +1294,28 @@ const handleSave = () => {
 const handleSaveEditedPurchaseOrder = async () => {
   isSave.value = true
   try {
-    // PO-edit: batch-create any newly staged products into the existing PO, then
-    // refresh + print. Staged products are cleared only after the batch succeeds.
-    if (draft.stagedProducts.value.length) {
+    // Save all staged additions and links together with recalculated PO totals.
+    if (stagedProducts.value.length || existingProducts.value.length) {
       await $fetch('/api/products/save-batch', {
         method: 'POST',
-        body: { products: stagedProductsForSave(), poId: editPurchaseOrderId.value },
+        body: { products: stagedProductsForSave(), existingProductIds: existingProducts.value.map(p => p.id), poId: editPurchaseOrderId.value },
       })
-      draft.stagedProducts.value = []
-      await invalidateModels('Product', 'Variant', 'Item')
+      stagedProducts.value = []
+      existingProducts.value = []
+      await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder', 'DistributorCompany')
+    } else {
+      await $fetch('/api/purchaseorder/recalculate', {
+        method: 'POST',
+        body: { poId: editPurchaseOrderId.value },
+      })
     }
-    await $fetch('/api/purchaseorder/recalculate', {
-      method: 'POST',
-      body: { poId: editPurchaseOrderId.value },
-    })
     await invalidateModels('PurchaseOrder')
     const result = await refetchEditPurchaseOrder()
     generateBarcodes(result.data?.products || editPurchaseOrder.value?.products || [])
     isOpen.value = true
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to save products / prepare labels', error)
-    toast.add({ title: 'Failed to save products', color: 'red' })
+    toast.add({ title: 'Failed to save products', description: error?.data?.statusMessage, color: 'red' })
   } finally {
     isSave.value = false
   }
@@ -1410,6 +1422,7 @@ const handleSaveWithPO = async () => {
       method: 'POST',
       body: {
         products: stagedProductsForSave(),
+        existingProductIds: existingProducts.value.map(p => p.id),
         po: {
           accountingAccounts: purchaseAccountingAccounts.value,
           paymentType: paymentType.value || null,
@@ -1426,13 +1439,13 @@ const handleSaveWithPO = async () => {
     })
 
     if (!res?.poId) throw new Error('Purchase order was not created')
-    await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder')
-    generateBarcodes(res.products || [])
+    await invalidateModels('Product', 'Variant', 'Item', 'PurchaseOrder', 'DistributorCompany', 'DistributorPayment')
+    generateBarcodes([...(res.products || []), ...existingProducts.value])
     clearCurrentDraftForNextProducts()   // reset staged + PO info ONLY after success
     isOpen.value = true
-  } catch (error) {
+  } catch (error: any) {
     console.error('Failed to save purchase order', error)
-    toast.add({ title: 'Failed to save purchase order', color: 'red' })
+    toast.add({ title: 'Failed to save purchase order', description: error?.data?.statusMessage, color: 'red' })
     // keep staged products + purchase info as-is so the user can retry
   } finally {
     isSave.value = false
@@ -1442,6 +1455,8 @@ const handleSaveWithPO = async () => {
 
 const clearCurrentDraftForNextProducts = () => {
   draft.resetDraft()
+  stagedProducts.value = []
+  existingProducts.value = []
   pendingDraftProducts.value = []
   settledMap.value = new Map()
   distributorId.value = ''
@@ -1545,6 +1560,38 @@ const onDeleteDraft = (no: string) => {
 
 
 
+const selectedExistingIds = computed(() => existingProducts.value.map(p => p.id))
+const localOnlyIds = computed(() => [...selectedExistingIds.value, ...stagedProducts.value.map(p => p.id)])
+const unavailableProductIds = computed(() => tableProducts.value.map(p => p.id))
+const addExistingProduct = async (choice: any) => {
+  if (selectingExisting.value || isSave.value || unavailableProductIds.value.includes(choice.id)) return
+  selectingExisting.value = true
+  const companyId = companyScope.companyId.value
+  const poId = editPurchaseOrderId.value
+  try {
+    const rows: any[] = await $fetch('/api/products/by-ids', { method: 'POST', body: { ids: [choice.id] } })
+    if (companyId !== companyScope.companyId.value || poId !== editPurchaseOrderId.value) return
+    const product = rows.find(p => p.id === choice.id && p.companyId === companyId)
+    if (!product || product.purchaseorderId) throw new Error('This product is no longer available without a purchase order')
+    existingProducts.value = [...existingProducts.value, product]
+  } catch (error: any) {
+    toast.add({ title: 'Could not add product', description: error?.data?.statusMessage || error.message, color: 'red' })
+  } finally { selectingExisting.value = false }
+}
+// Navigation from the Products menu only stages the selected record.
+let seededProduct = ''
+watch([draft.isReady, companyScope.companyId, editPurchaseOrderId, () => route.query.productId], async ([ready]) => {
+  const id = typeof route.query.productId === 'string' ? route.query.productId : ''
+  const key = `${companyScope.companyId.value}:${editPurchaseOrderId.value}:${id}`
+  if (!ready || !id || seededProduct === key) return
+  seededProduct = key
+  await addExistingProduct({ id })
+}, { immediate: true })
+watch([companyScope.companyId, editPurchaseOrderId], () => {
+  editStagedProducts.value = []
+  editExistingProducts.value = []
+})
+
 watch(() => companyScope.auth.session.value?.variantInputs, value => { variantInputs.value = value; });
 </script>
 
@@ -1600,18 +1647,27 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
                 />
               </div>
             </template>
+            <template #product-search>
+              <AddProductExistingProducts
+                :excluded-ids="unavailableProductIds"
+                :disabled="selectingExisting || isSave || purchaseOrderLoading"
+                @selected="addExistingProduct"
+              />
+            </template>
           </AddProductTopBar>
 
           <UDivider class="py-4"/>
-
+          <div v-if="purchaseOrderLoadError" class="m-3 text-red-500">
+            Could not load the purchase order. <UButton label="Retry" variant="link" @click="refetchEditPurchaseOrder" />
+          </div>
         <div class="md:flex md:flex-row">
             <div class="md:w-1/2">
               <div  class="m-3">
                     <UButton
                         @click="handleSave"
                         color="green"
-                        :loading="isLoad && isSave"
-                        :disabled="isSaveDisable"
+                        :loading="isSave"
+                        :disabled="isSaveDisable || selectingExisting || purchaseOrderLoading || (isEditingPurchaseOrder && !editPurchaseOrder)"
                     >
                         Save Order
                     </UButton>
@@ -1624,20 +1680,23 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
                   @total-amount="(data) => subTotalAmount = data"
                   @product-deleted="onDraftProductDeleted"
                   :settledMap="settledMap"
+                  :local-only-ids="localOnlyIds"
+                  :read-only-ids="selectedExistingIds"
+                  :disabled="isSave"
                   :poId="editPurchaseOrderId"
                   :productIds="tableProductIds"
                   :pendingProducts="pendingDraftProducts"
                   :products="tableProducts"
-                  :loading="isLoading"
+                  :loading="isLoading || purchaseOrderLoading"
                 />
               </UPageCard>
 
               <div class="m-3">
                     <UButton
                         @click="handleSave"
-                        :loading="isLoad && isSave"
+                        :loading="isSave"
                         color="green"
-                        :disabled="isSaveDisable"
+                        :disabled="isSaveDisable || selectingExisting || purchaseOrderLoading || (isEditingPurchaseOrder && !editPurchaseOrder)"
                     >
                         Save Order
                     </UButton>

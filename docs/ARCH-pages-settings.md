@@ -69,9 +69,9 @@ Receive/Pay, transfer creation, asset categories and disposals prefill from thes
 settings. Existing posted source mappings remain unchanged. Ecommerce PUT `/settings`
 updates future-order defaults without enabling posting or changing existing orders.
 
-Verified selection precedence (2026-10-06): new supplier transaction forms merge
-supplier mappings, then company purchase defaults, then the user's transaction
-choices. Company defaults therefore override a supplier mapping for the same role;
+Selection precedence (updated 2026-10-29): new supplier transaction forms merge
+company purchase defaults, then saved supplier mappings, then the user's transaction
+choices. Saved supplier choices therefore override the company fallback for the same role;
 recorded source accounts take precedence when editing. Billing and expense sections
 share Cash/Bank mappings. Saving either section merges only its fields into current
 saved ERP settings so the other section's dedicated fields are preserved.

@@ -6,7 +6,6 @@ generator client {
 datasource db {
     provider = 'postgresql'
     url      = env('DATABASE_URL')
-    directUrl = env('DIRECT_URL')
 }
 
 plugin hooks {
@@ -195,6 +194,8 @@ model Company extends Base {
 
     billCounter               Int                        @default(1) @map("bill_counter")
     purchaseCounter           Int                        @default(1) @map("purchase_counter")
+    productCounter            Int                        @default(1) @map("product_counter")
+    variantCounter            Int                        @default(1) @map("variant_counter")
     returnCounter             Int                        @default(1) @map("return_counter")
     quoteCounter              Int                        @default(1) @map("quote_counter")
     salesOrderCounter         Int                        @default(1) @map("sales_order_counter")
@@ -1370,6 +1371,9 @@ model Collection {
 
 model Product {
     id              String         @id @default(uuid())
+    // Company-local, database-assigned on insert; stable across edits and PO links.
+    // Migration backfills by created_at/id. Transfers allocate a destination number.
+    productNo       Int?           @map("product_no")
     createdAt       DateTime       @default(now()) @map("created_at")
     updatedAt       DateTime       @updatedAt @map("updated_at")
     name            String
@@ -1401,6 +1405,7 @@ model Product {
     @@index([categoryId])
     @@index([subcategoryId])
     @@index([collectionId])
+    @@unique([companyId, productNo])
     @@index([companyId])
 
     @@allow('read', true)
@@ -1411,6 +1416,8 @@ model Product {
 
 model Variant {
     id                 String                @id @default(uuid())
+    // Independent company-local sequence; supplied values never override allocation.
+    variantNo          Int?                  @map("variant_no")
     createdAt          DateTime              @default(now()) @map("created_at")
     updatedAt          DateTime              @updatedAt @map("updated_at")
     name               String
@@ -1453,6 +1460,7 @@ model Variant {
     salesOrderItems    SalesOrderItem[]
 
     @@index([productId])
+    @@unique([companyId, variantNo])
     @@index([companyId])
     @@allow('read', true)
     @@allow('update', true)

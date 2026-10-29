@@ -24,6 +24,7 @@ const { forOwner } = useOrganizationActions()
 
 // ─── Add distributor modal ───
 const openModal = ref(false)
+const supplierFormBusy = ref(false)
 const selectedSupplier = ref<any>(null)
 const selectedSupplierDcData = ref<{ openingDue: number; openingDueDate: string; distributorId: string; companyId: string } | null>(null)
 
@@ -1900,8 +1901,9 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
     </div>
 
     <!-- ─── Add/Edit Distributor Modal ─── -->
-    <UModal v-model="openModal">
+    <UModal v-model="openModal" fullscreen :prevent-close="supplierFormBusy">
       <DistributorForm @transferred="openModal = false" @saved="openModal = false"
+        @cancel="openModal = false" @busy="supplierFormBusy = $event" :company-id="companyScope.companyId.value"
         :selectedSupplier="selectedSupplier"
         :openingDue="selectedSupplierDcData?.openingDue ?? 0"
         :openingDueDate="selectedSupplierDcData?.openingDueDate ?? ''"

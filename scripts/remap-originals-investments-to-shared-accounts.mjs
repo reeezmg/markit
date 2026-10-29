@@ -8,7 +8,7 @@ const companyId='6980e6e4-7d5d-413c-9554-24f385c9b853';
 const investorId='b0cdae03-95d4-4560-801c-8fe5a70ffb2d';
 const dir='scripts/production-accounting/runs/originals-settings-selection-2026-10-06';
 const apply=process.argv.includes('--apply');
-const pool=new Pool({connectionString:process.env.DIRECT_URL||process.env.DATABASE_URL,connectionTimeoutMillis:15000});
+const pool=new Pool({connectionString:process.env.DATABASE_URL,connectionTimeoutMillis:15000});
 const db=await pool.connect();
 const cents=n=>Math.round(Number(n)*100);
 try {

@@ -9,7 +9,7 @@ import { Pool } from 'pg';
 const companyId = '6980e6e4-7d5d-413c-9554-24f385c9b853';
 const barcode = '25A000607';
 const apply = process.argv.includes('--apply');
-const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const url = process.env.DATABASE_URL;
 const pool = new Pool({ connectionString: url, connectionTimeoutMillis: 15000 });
 const db = await pool.connect();
 try {

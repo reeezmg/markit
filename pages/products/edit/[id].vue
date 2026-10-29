@@ -702,6 +702,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
     
     <UDashboardPanelContent v-else class="pb-24">
       <CompanyFormField toolbar />
+      <p v-if="selectedProduct?.productNo != null" class="mx-3 text-sm text-gray-500">Product number: PROD-{{ selectedProduct.productNo }}</p>
       <div class="flex sm:flex-row flex-col gap-4">
         <div class="sm:w-1/2 w-full ">
   <UPageCard class="m-3">
@@ -719,7 +720,7 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
           class="block rounded-lg border border-gray-200 dark:border-gray-700 p-4 transition cursor-pointer"
         >
           <div class="flex flex-col space-y-2 sm:flex-row sm:justify-between sm:space-y-0">
-            <div class="text-gray-900 dark:text-gray-100 font-medium">{{ variant.name }}</div>
+            <div class="text-gray-900 dark:text-gray-100 font-medium">{{ variant.name }}<p v-if="variant.variantNo != null" class="text-xs text-gray-500">VAR-{{ variant.variantNo }}</p></div>
             <div class="text-gray-500 dark:text-gray-400 text-sm">Code: {{ variant.code || '-' }}</div>
           </div>
           <div  class="flex flex-col space-y-2 sm:flex-row sm:justify-between sm:space-y-0">

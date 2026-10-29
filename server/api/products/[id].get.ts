@@ -14,7 +14,7 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     const productRes = await client.query(
-      `SELECT p.id, p.company_id, p.updated_at, p.name, p.description, p.status,
+      `SELECT p.id, p.product_no, p.company_id, p.updated_at, p.name, p.description, p.status,
               p.category_id, p.subcategory_id, p.brand_id, p.collection_id, p.custom_fields,
               p.dimension_id,
               c.name AS category_name, c.target_audience AS category_target_audience,
@@ -33,7 +33,7 @@ export default defineEventHandler(async (event) => {
     const p = productRes.rows[0]
 
     const variantsRes = await client.query(
-      `SELECT id, name, code, unit, s_price, p_price, d_price, discount, weight, images, custom_fields, size_label
+      `SELECT id, variant_no, name, code, unit, s_price, p_price, d_price, discount, weight, images, custom_fields, size_label
        FROM variants WHERE product_id = $1 ORDER BY created_at ASC`,
       [id],
     )
@@ -55,6 +55,7 @@ export default defineEventHandler(async (event) => {
 
     return {
       id: p.id,
+      productNo: p.product_no,
       companyId: p.company_id,
       updatedAt: p.updated_at,
       name: p.name,
@@ -71,7 +72,7 @@ export default defineEventHandler(async (event) => {
       subcategory: p.subcategory_id ? { id: p.subcategory_id, name: p.subcategory_name } : null,
       collection: p.collection_id ? { id: p.collection_id, name: p.collection_name } : null,
       variants: variantsRes.rows.map((v) => ({
-        id: v.id,
+        id: v.id, variantNo: v.variant_no,
         name: v.name,
         code: v.code,
         unit: v.unit,

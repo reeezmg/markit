@@ -259,7 +259,7 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | `server/` `authMiddleware.js` | `console.log("JWT verification error:", err)` fires on every request including valid ones |
 | `pages/erp/billing.vue` | `console.log` statements left in production |
 | `pages/products/stocks/index.vue` | Debug `console.log` dumps full category breakdown on every load |
-| `components/Distributor/Form.vue` | Edit distributor uses `address: { create: {} }` — creates new address instead of updating |
+| `components/Distributor/Form.vue` | **Fixed (2026-10-29):** full-page profile/account form uses one scoped save transaction and address upsert; new forms prefill company defaults and edits preserve supplier choices. |
 | `pages/distributor/index.vue` | ~~`console.log(distributors.value)` on every data change~~ **FIXED** (page rewritten; old `Dlist.vue` console.log removed). Transactions tab rebuilt: Date·No·Type·Remarks·Debit·Credit columns, PURCHASE/CREDIT/PAYMENT/PURCHASE-RETURN taxonomy, Add-Credit modal gained PRODUCT vs AMOUNT toggle (AMOUNT path creates a linked MoneyTransaction → flows through cash/bank ledgers). |
 | `pages/distributor/purchaseOrder.vue` | `watch` logs all PO rows on every update |
 | `server/api/report/gstr2b.get.ts` + `generate-gstr2b.excel.get.ts` + `gstr3b.get.ts` (Table 4) + `generate-gstr3b.excel.get.ts` | ~~ITC sourced from `purchase_return_items / purchase_returns` (semantically inverted — returns reduce ITC, they shouldn't be the source)~~ **FIXED** — switched to `distributor_credits WHERE money_transaction_id IS NULL`, joined to `purchase_orders → products → variants → items` for per-rate tax breakdown. |

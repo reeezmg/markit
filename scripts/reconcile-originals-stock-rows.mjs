@@ -23,7 +23,7 @@ const prefix = target[2] || 'originals';
 assert.match(companyId, /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
 assert.match(prefix, /^[a-z0-9-]+$/);
 const apply = process.argv.includes('--apply');
-const url = process.env.DIRECT_URL || process.env.DATABASE_URL;
+const url = process.env.DATABASE_URL;
 const pool = new Pool({ connectionString: url, connectionTimeoutMillis: 15000 });
 const db = await pool.connect();
 const dir = new URL('../../artifacts/stock-reconciliation/', import.meta.url);

@@ -10,7 +10,7 @@ for (const [connection, databaseUrl] of [['pooled', original], ['direct', accoun
   const result = await new Promise(resolve => {
     const child = spawn(process.execPath, ['node_modules/prisma/build/index.js', 'migrate', 'diff',
       '--from-schema-datasource', 'prisma/schema.prisma', '--to-schema-datamodel', 'prisma/schema.prisma', '--script'],
-      { env: { ...process.env, DATABASE_URL: databaseUrl, DIRECT_URL: databaseUrl }, stdio: ['ignore', 'pipe', 'pipe'] });
+      { env: { ...process.env, DATABASE_URL: databaseUrl }, stdio: ['ignore', 'pipe', 'pipe'] });
     let output = '', error = '';
     child.stdout.on('data', chunk => output += chunk);
     child.stderr.on('data', chunk => error += chunk);
