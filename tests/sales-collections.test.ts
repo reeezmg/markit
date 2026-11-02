@@ -25,7 +25,7 @@ try {
 } finally { actions.stop() }
 
 const pending: ReturnType<typeof deferred>[] = []
-const h = harness(file, ['isLoading', 'lastFetchId', 'salesTotals', 'collectionsTotal', 'fetchSales'], {
+const h = harness(file, ['isLoading', 'lastFetchId', 'salesTotals', 'collectionsTotal', 'collectionsByMethod', 'fetchSales'], {
   $fetch: async () => { const request = deferred(); pending.push(request); return request.promise },
   useAuth: () => ({ session: { value: { companyId: 'store' } } }),
   search: { value: 'older invoice' }, selectedStatus: { value: [] }, selectedPaymentMethods: { value: [] },
@@ -38,18 +38,23 @@ const h = harness(file, ['isLoading', 'lastFetchId', 'salesTotals', 'collections
 try {
   const c = h.context
   const first = c.fetchSales(), second = c.fetchSales()
-  pending[1].resolve({ rows: [], total: 0, totals: { total: 100 }, collections: { total: 200, creditRepayments: 100 } })
+  const byMethod = { Cash: 80, UPI: 30, Card: 0, Bank: -10, Cheque: 0 }
+  pending[1].resolve({ rows: [], total: 0, totals: { total: 100 }, collections: { total: 200, creditRepayments: 100, byMethod } })
   await second
   assert.equal(c.collectionsTotal.value, 100, 'Collections shows credit repayments only, excluding the direct cash sale')
+  assert.equal(c.collectionsByMethod.value.Bank, -10, 'Dated reversals remain negative in the method breakdown')
+  assert.equal(Object.values(c.collectionsByMethod.value).reduce((sum: number, amount: any) => sum + amount, 0), 100)
   assert.equal(c.salesTotals.value.total, 100, 'Repayments do not increase sales')
   pending[0].resolve({ rows: [], total: 0, collections: { total: 999, creditRepayments: 999 } })
   await first
   assert.equal(c.collectionsTotal.value, 100, 'Stale responses cannot replace the selected-date total')
+  assert.equal(c.collectionsByMethod.value.Cash, 80, 'Stale responses cannot replace the method breakdown')
   const failed = c.fetchSales()
   assert.equal(c.isLoading.value, true)
   pending[2].reject(new Error('Request failed'))
   await failed
   assert.equal(c.collectionsTotal.value, null, 'Failure clears the previous total')
+  assert.equal(c.collectionsByMethod.value, null, 'Failure clears the previous method breakdown')
   assert.equal(c.isLoading.value, false)
   console.log('Sales Vue compilation and collections loading, stale response, failure and separate sales checks passed')
 } finally { h.stop() }

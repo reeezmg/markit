@@ -329,6 +329,8 @@ const isDownloadLoading = ref(false)
 const lastFetchId = ref(0)
 const salesTotals = ref({ total: 0, cash: 0, card: 0, upi: 0, credit: 0 })
 const collectionsTotal = ref<number | null>(null)
+const collectionMethods = ['Cash', 'UPI', 'Card', 'Bank', 'Cheque'] as const
+const collectionsByMethod = ref<Partial<Record<typeof collectionMethods[number], number>> | null>(null)
 
 const paymentMethodFilterOptions = [
   { label: 'Cash', value: 'Cash' },
@@ -392,11 +394,13 @@ const fetchSales = async () => {
     pageTotal.value = res.total   // ✅ REAL TOTAL
     if (res.totals) salesTotals.value = res.totals
     collectionsTotal.value = res.collections?.creditRepayments ?? null
+    collectionsByMethod.value = res.collections?.byMethod ?? null
   } catch (err) {
     if (fetchId !== lastFetchId.value) return
     sales.value = []
     pageTotal.value = 0
     collectionsTotal.value = null
+    collectionsByMethod.value = null
   } finally{
     if (fetchId === lastFetchId.value) {
       isLoading.value = false
@@ -407,13 +411,14 @@ const fetchSales = async () => {
 await companyScope.ready;
 const initialSales = await useAsyncData('erp-sales:' + companyScope.readIds.value.join(','), async () => {
   await fetchSales();
-  return { rows: sales.value, total: pageTotal.value, totals: salesTotals.value, collections: collectionsTotal.value };
+  return { rows: sales.value, total: pageTotal.value, totals: salesTotals.value, collections: collectionsTotal.value, collectionsByMethod: collectionsByMethod.value };
 });
 if (initialSales.data.value) {
   sales.value = initialSales.data.value.rows;
   pageTotal.value = initialSales.data.value.total;
   salesTotals.value = initialSales.data.value.totals;
   collectionsTotal.value = initialSales.data.value.collections;
+  collectionsByMethod.value = initialSales.data.value.collectionsByMethod;
 }
 
 const styledSales = computed(() =>
@@ -1374,16 +1379,33 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
                         class="w-full sm:w-52"
                       />
                     </div>
-                    <div
-                      class="ml-auto flex items-center gap-2 text-sm"
-                      title="Credit repayments received in the selected dates. Includes older credit invoices in the selected stores; excludes direct sale payments."
-                      aria-live="polite"
+                    <UPopover
+                      mode="hover"
+                      :popper="{ placement: 'bottom-end' }"
+                      class="ml-auto"
                     >
+                      <button type="button" class="flex items-center gap-2 rounded-md py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500" aria-label="Collections by payment method" aria-live="polite">
                       <span class="text-gray-500 dark:text-gray-400">Collections</span>
                       <span class="font-semibold tabular-nums text-gray-900 dark:text-white">
                         {{ isLoading ? '…' : collectionsTotal === null ? '—' : formatCurrency(collectionsTotal) }}
                       </span>
-                    </div>
+                      <UIcon name="i-heroicons-chevron-down" class="h-4 w-4 text-gray-400" />
+                      </button>
+                      <template #panel>
+                        <div class="w-64 p-3">
+                          <p class="text-sm font-semibold text-gray-900 dark:text-white">Collections by payment method</p>
+                          <p class="mt-1 text-xs text-gray-500 dark:text-gray-400">Credit repayments, net of reversals, for the selected stores and dates.</p>
+                          <p v-if="isLoading" class="py-3 text-sm text-gray-500" role="status">Loading collections…</p>
+                          <p v-else-if="collectionsByMethod === null" class="py-3 text-sm text-gray-500" role="status">Collection breakdown unavailable.</p>
+                          <dl v-else class="mt-2 divide-y divide-gray-100 dark:divide-gray-800">
+                            <div v-for="method in collectionMethods" :key="method" class="flex items-center justify-between gap-4 py-2 text-sm">
+                              <dt class="text-gray-600 dark:text-gray-300">{{ method }}</dt>
+                              <dd class="font-medium tabular-nums text-gray-900 dark:text-white">{{ formatCurrency(collectionsByMethod[method] ?? 0) }}</dd>
+                            </div>
+                          </dl>
+                        </div>
+                      </template>
+                    </UPopover>
             </div>
         </template>
             <!-- Header and Action buttons -->

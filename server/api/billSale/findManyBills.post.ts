@@ -436,6 +436,13 @@ export default defineEventHandler(async (event) => {
       collections: {
         total: Number(collectionsRes.rows[0]?.total_collections ?? 0),
         creditRepayments: Number(collectionsRes.rows[0]?.credit_collections ?? 0),
+        byMethod: {
+          Cash: Number(collectionsRes.rows[0]?.credit_collected_cash ?? 0),
+          UPI: Number(collectionsRes.rows[0]?.credit_collected_upi ?? 0),
+          Card: Number(collectionsRes.rows[0]?.credit_collected_card ?? 0),
+          Bank: Number(collectionsRes.rows[0]?.credit_collected_bank ?? 0),
+          Cheque: Number(collectionsRes.rows[0]?.credit_collected_cheque ?? 0),
+        },
       },
       totals: {
         total:  Number(t.total  ?? 0),

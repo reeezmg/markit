@@ -16,7 +16,7 @@ test('sales list hydrate the rendered rows and report totals without a competing
   const script=compileScript(descriptor,{id:'sales-list-fixture'}).content;
   const js=ts.transpileModule(script,{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
   let fetches=0;
-  const fetch=async(path:string)=>{fetches++;await new Promise(done=>setTimeout(done,20));return path.includes('findManyBills')?{rows:[{id:'fixture-sale'}],total:1,totals:{total:120,cash:120,card:0,upi:0,credit:0},collections:{creditRepayments:15}}:{totalSales:120,totalCommission:10,billCount:1};};
+  const fetch=async(path:string)=>{fetches++;await new Promise(done=>setTimeout(done,20));return path.includes('findManyBills')?{rows:[{id:'fixture-sale'}],total:1,totals:{total:120,cash:120,card:0,upi:0,credit:0},collections:{creditRepayments:15,byMethod:{Cash:10,UPI:5,Card:0,Bank:0,Cheque:0}}}:{totalSales:120,totalCommission:10,billCount:1};};
   const scope={ready:Promise.resolve(),readIds:Vue.ref(['branch']),auth:{session:Vue.ref({companyId:'branch'})},fetch};
   const bindings={ref:Vue.ref,computed:Vue.computed,watch:Vue.watch,onMounted:Vue.onMounted,
    useCompanyScope:()=>scope,useBillStore:()=>Vue.reactive({lastUpdate:0}),useSalesTableStore:()=>({$patch(){}}),
@@ -26,11 +26,11 @@ test('sales list hydrate the rendered rows and report totals without a competing
   const require=createRequire(import.meta.url),module={exports:{} as any};
   new Function('require','exports','module',...Object.keys(bindings),js)((name:string)=>name==='vue'?Vue:require(name),module.exports,module,...Object.values(bindings));
   const component=module.exports.default;
-  component.render=function(this:any){const s=this.$.setupState;return Vue.h('p',[s.isLoading,s.sales.length,s.pageTotal,s.salesTotals.total,s.collectionsTotal].join('|'));};
+  component.render=function(this:any){const s=this.$.setupState;return Vue.h('p',[s.isLoading,s.sales.length,s.pageTotal,s.salesTotals.total,s.collectionsTotal,JSON.stringify(s.collectionsByMethod)].join('|'));};
   const app=Vue.createSSRApp(component);app.use(VueQueryPlugin,{queryClient:new QueryClient()});return{app,fetches:()=>fetches};
  }
  const server=page(),html=await renderToString(server.app);
- assert.equal(html,'<p>false|1|1|120|15</p>','Initial server rendering waits for both sales and report totals');
+ assert.equal(html,'<p>false|1|1|120|15|{&quot;Cash&quot;:10,&quot;UPI&quot;:5,&quot;Card&quot;:0,&quot;Bank&quot;:0,&quot;Cheque&quot;:0}</p>','Initial server rendering waits for sales, report totals and the collection breakdown');
  const browser=page();assert.equal(await renderToString(browser.app),html);
  assert.equal(server.fetches(),1);assert.equal(browser.fetches(),0);
 });
