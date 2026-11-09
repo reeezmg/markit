@@ -252,7 +252,7 @@ export default defineEventHandler(async (event) => {
         b.notes,
         b.split_payments   AS "splitPayments",
         (SELECT COALESCE(json_agg(json_build_object('amount',p.amount,'status',p.status,'deleted',p.deleted)),'[]'::json)
-         FROM payments p WHERE p.company_id=b.company_id AND p.bill_id=b.id AND p.status='POS_CREDIT_RECEIPT' AND p.deleted=false) AS payments,
+         FROM payments p WHERE p.company_id=b.company_id AND p.bill_id=b.id AND p.status IN ('POS_CREDIT_RECEIPT','POS_CREDIT_REVERSED') AND p.deleted=false) AS payments,
 
         json_build_object(
           'name', c.name,

@@ -34,7 +34,7 @@ function fixture() {
   let deleted = false
   let failCommit = false
   let foreignItem = false
-  let hasReceipts = false
+  let receiptState: string | undefined
   let snapshot: any
   let stock = { shirt: { qty: 6, sold: 4 }, shoe: { qty: 12, sold: -2 } }
   const original = structuredClone(stock)
@@ -52,7 +52,8 @@ function fixture() {
         return { rows, rowCount: rows.length }
       } else if (sql.includes('FROM payments')) {
         assert.deepEqual(args,['company','bill',['POS_CREDIT_RECEIPT']])
-        return {rows:hasReceipts ? [{id:'receipt'}] : [],rowCount:hasReceipts ? 1 : 0}
+        const active=receiptState && args[2].includes(receiptState)
+        return {rows:active ? [{id:'receipt'}] : [],rowCount:active ? 1 : 0}
       } else if (sql.includes('FROM entries')) {
         assert.deepEqual(args, ['bill'])
         return { rows: entries, rowCount: entries.length }
@@ -89,10 +90,16 @@ function fixture() {
     return () => module.exports.default({ billId: 'bill', companyId: 'company' })
   }
   return { load, original, get stock() { return stock }, get deleted() { return deleted },
-    fail() { failCommit = true }, foreign() { foreignItem = true }, receipt() {hasReceipts=true} }
+    fail() { failCommit = true }, foreign() { foreignItem = true }, receipt(status='POS_CREDIT_RECEIPT') {receiptState=status} }
 }
 
 for (const route of ['billSale/deleteBill', 'billEdit/deleteBill']) {
+  test(`${route}: fully reversed receipts permit soft deletion and stock restoration`,async()=>{
+    const f=fixture();f.receipt('POS_CREDIT_REVERSED')
+    await f.load(route)()
+    assert.equal(f.deleted,true)
+    assert.deepEqual(f.stock,{shirt:{qty:10,sold:0},shoe:{qty:10,sold:0}})
+  })
   test(`${route}: recorded receipt prevents deleting the invoice or changing stock`,async()=>{
     const f=fixture();f.receipt()
     await assert.rejects(f.load(route)(),(e:any)=>e.statusCode===409)

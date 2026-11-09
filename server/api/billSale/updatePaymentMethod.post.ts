@@ -22,8 +22,10 @@ export default defineEventHandler(async (event) => {
     await client.query('BEGIN')
     const old = (await client.query('SELECT * FROM bills WHERE id=$1 AND company_id=$2 AND deleted=false FOR UPDATE', [billId,companyId])).rows[0]
     if (!old) throw createError({statusCode:404,statusMessage:'Bill not found'})
+    // Fully reversed collections remain in history and no longer block correction.
     await assertNoBillReceipts(client,companyId,billId)
-    if (billCreditCents(old) > 0) throw createError({statusCode:409,statusMessage:'Record a dated receipt for credit; edit the unpaid invoice to correct its original split'})
+    if (old.credit_user_id) throw createError({statusCode:409,statusMessage:'Edit staff credit through the bill editor or settle it through Staff Accounting'})
+    if (billCreditCents(old) > 0 && !['PAID','PENDING'].includes(old.payment_status)) throw createError({statusCode:409,statusMessage:'Only active paid or pending credit bills support payment-method corrections'})
     if (!['Cash','UPI','Card','Bank','Cheque','Credit','Split'].includes(paymentMethod)) throw createError({statusCode:400,statusMessage:'Invalid payment method'})
     const credit = billCreditCents({grandTotal:old.grand_total,paymentMethod,splitPayments})
     const res = await client.query(

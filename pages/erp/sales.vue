@@ -7,6 +7,8 @@ import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
 import { useQueryClient } from '@tanstack/vue-query'
+import { billingErrorMessage } from '~/utils/billing-error'
+import { receiptStatus } from '~/utils/bill-credit'
 import { getQueryKey } from '@zenstackhq/tanstack-query/runtime-v5'
 const paymentOptions = ['Cash', 'UPI', 'Card']
 const allPaymentOptions = ['Cash', 'UPI', 'Card', 'Credit', 'Split']
@@ -32,8 +34,26 @@ const openCreditCollection = (bill: any, mode: 'collect' | 'reverse') => {
   creditReceiptMode.value = mode;
   creditReceiptOpen.value = true;
 };
+const showRequiredReversal = (row: any) => {
+  isDeleteModalOpen.value = false;
+  isChangePaymentMethodOpen.value = false;
+  isSplitModalOpen.value = false;
+  toast.add({title:'Reverse collected payments first',description:'You need to reverse all collected payments first, then retry Delete or Change method.',color:'orange'});
+  openCreditCollection({...row,companyId:row.companyId || useAuth().session.value?.companyId}, 'reverse');
+};
+const requireReceiptReversal = (row: any, error?: any) => {
+  const code = error?.data?.data?.code || error?.data?.code;
+  if (code !== 'BILL_RECEIPTS_REQUIRE_REVERSAL' && !row?.payments?.some((p:any)=>p.status === receiptStatus && !p.deleted)) return false;
+  showRequiredReversal(row);
+  return true;
+};
+const openDeleteBill = (row: any) => {
+  if (requireReceiptReversal(row)) return;
+  deletingRowIdentity.value = {...row,name:row.invoiceNumber};
+  isDeleteModalOpen.value = true;
+};
 const isDeleteModalOpen = ref(false)
-const deletingRowIdentity = ref({})
+const deletingRowIdentity = ref<any>({})
 const paymentMethod = ref('Cash');
 const activeBillInfo = ref({});
 const isChangePaymentMethodOpen = ref(false)
@@ -195,6 +215,10 @@ const action = (row: any) => {
     ],
   ]
 
+  if (row.payments?.length) items.push([
+    {label:'Payment history',icon:'i-heroicons-clock',click:()=>openCreditCollection(row,'reverse')},
+  ])
+
   if (row?.paymentMethod) {
     items.push([
       {
@@ -224,10 +248,7 @@ const action = (row: any) => {
       {
         label: 'Delete',
         icon: 'i-heroicons-trash-20-solid',
-        click: () => {
-          isDeleteModalOpen.value = true;
-          deletingRowIdentity.value = { name: row.invoiceNumber, id: row.id };
-        },
+        click: () => openDeleteBill(row),
       },
     ],
   )
@@ -889,11 +910,13 @@ function selectRange(duration: Duration) {
 
 const deleteBill = async () => {
   try {
+    const companyId = deletingRowIdentity.value.companyId || useAuth().session.value?.companyId
     const res = await $fetch('/api/billSale/deleteBill', {
       method: 'POST',
+      headers: {'x-company-id':companyId},
       body: {
         billId: deletingRowIdentity.value.id,
-        companyId: useAuth().session.value?.companyId,
+        companyId,
       },
     })
 
@@ -905,9 +928,10 @@ const deleteBill = async () => {
     // 🔁 Refresh list after delete
     await fetchSales()
   } catch (error: any) {
+    if (requireReceiptReversal(deletingRowIdentity.value,error)) return
     toast.add({
       title: 'Error while deleting the bill',
-      description: error?.message || 'Something went wrong',
+      description: billingErrorMessage(error),
       color: 'red',
     })
   } finally {
@@ -1028,6 +1052,7 @@ const buildPrintDataFromSale = (sale: any, session: any) => ({
 })
 
 const openChangePaymentMethod = (row: any) => {
+  if (requireReceiptReversal(row)) return
   if (row?.paymentMethod === 'Split') {
     openSplitModal(row)
     return
@@ -1054,11 +1079,13 @@ const updateBillPaymentMethod = async () => {
   if (!changePaymentMethodBill.value) return
 
   try {
+    const companyId = changePaymentMethodBill.value.companyId || useAuth().session.value?.companyId
     await $fetch('/api/billSale/updatePaymentMethod', {
       method: 'POST',
+      headers: { 'x-company-id': companyId },
       body: {
         billId: changePaymentMethodBill.value.id,
-        companyId: useAuth().session.value?.companyId,
+        companyId,
         paymentMethod: changePaymentMethodDraft.value,
         splitPayments: null,
       },
@@ -1084,9 +1111,10 @@ const updateBillPaymentMethod = async () => {
 
     await fetchSales()
   } catch (error: any) {
+    if (requireReceiptReversal(changePaymentMethodBill.value,error)) return
     toast.add({
       title: 'Failed to update payment method',
-      description: error?.message || 'Something went wrong',
+      description: billingErrorMessage(error),
       color: 'red',
     })
   }
@@ -1098,11 +1126,13 @@ const onSplitConfirmed = async (confirmedPayments: Array<{ method: string; amoun
   const bill = splitBillContext.value || changePaymentMethodBill.value
 
   try {
+    const companyId = bill.companyId || useAuth().session.value?.companyId
     await $fetch('/api/billSale/updatePaymentMethod', {
       method: 'POST',
+      headers: { 'x-company-id': companyId },
       body: {
         billId: bill.id,
-        companyId: useAuth().session.value?.companyId,
+        companyId,
         paymentMethod: 'Split',
         splitPayments: confirmedPayments,
       },
@@ -1125,9 +1155,10 @@ const onSplitConfirmed = async (confirmedPayments: Array<{ method: string; amoun
 
     await fetchSales()
   } catch (error: any) {
+    if (requireReceiptReversal(bill,error)) return
     toast.add({
       title: 'Failed to update split payment',
-      description: error?.message || 'Something went wrong',
+      description: billingErrorMessage(error),
       color: 'red',
     })
   }
@@ -1786,6 +1817,9 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
           class="w-full"
           placeholder="Choose payment method"
         />
+        <p v-if="changePaymentMethodBill?.paymentMethod === 'Credit'" class="text-sm text-gray-500">
+          Correct the original payment method. Choosing UPI or another paid method marks this bill paid. For money received later, use Collect with the payment date.
+        </p>
       </div>
 
       <template #footer>

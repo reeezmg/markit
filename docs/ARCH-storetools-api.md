@@ -285,7 +285,7 @@ behavior is preserved. In-memory regression coverage:
 | `billSale/receipts` | GET | Company-scoped `?billId=` returns outstanding, immutable payment history and active native CASH/BANK choices. Only active customer POS credit bills are supported. |
 | `billSale/receipts` | POST | `{ billId, amount, paymentDate, paymentMethod, accountId, reference?, requestId, companyId? }`. Validates amount/date/account, locks the bill, inserts Payment + published balanced receipt journal and derives PENDING/PAID. Retains invoice date/method/splits and uses durable idempotency. Requires a posted ERP receivable source. |
 | `billSale/reverseReceipt` | POST | `{ billId, receiptId, paymentDate, reference?, requestId, companyId? }`. Admin/manager/accountant only. Posts opposite journal on reversal date, retains original receipt/journal, marks source receipt reversed and reopens due. |
-| `billSale/updatePaymentMethod` | POST | Scoped original-tender correction with a bill lock; existing credit or active receipts require the source/receipt workflow. New Credit/Split obligations derive PENDING. |
+| `billSale/updatePaymentMethod` | POST | Scoped original-tender correction with a bill lock. PAID/PENDING customer Credit/Split bills can be corrected once all active collections are reversed, or immediately if none exist. Zero remaining original credit derives PAID, otherwise PENDING. Active receipts return 409 with `data.code=BILL_RECEIPTS_REQUIRE_REVERSAL`, shared with delete guards, so Sales opens reversal first. Reversed receipts/journals remain intact and no longer block correction. Staff credit still uses its source workflow. |
 
 ---
 

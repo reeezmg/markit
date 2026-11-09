@@ -8,20 +8,27 @@ type Db = { query: (sql: string, values?: any[]) => Promise<any> }
 
 export async function assertNoBillReceipts(db: Db, companyId: string, billId: string, includeReversed = false) {
   const result = await db.query('SELECT id FROM payments WHERE company_id=$1 AND bill_id=$2 AND status=ANY($3::text[]) AND deleted=false LIMIT 1', [companyId, billId, includeReversed ? [receiptStatus,reversedReceiptStatus] : [receiptStatus]])
-  if (result.rows.length) throw fail('Reverse the bill receipts before editing, deleting, transferring or reopening this bill')
+  if (result.rows.length) {
+    if (includeReversed) throw fail('Bills with receipt history cannot be transferred or cleaned')
+    throw createError({statusCode:409,statusMessage:'You need to reverse the collected payments first, then retry this action',data:{code:'BILL_RECEIPTS_REQUIRE_REVERSAL'}})
+  }
 }
 
 export async function receiptBill(db: Db, companyId: string, billId: string, lock = false) {
   const bill = (await db.query(`SELECT * FROM bills WHERE id=$1 AND company_id=$2 ${lock ? 'FOR UPDATE' : ''}`, [billId, companyId])).rows[0]
   if (!bill) throw createError({ statusCode: 404, statusMessage: 'Bill not found' })
-  if (bill.deleted || bill.precedence || bill.is_markit || (bill.type && bill.type !== 'BILL')) throw fail('Only active POS bills support customer receipts')
-  if (bill.credit_user_id) throw fail('Settle staff credit through Staff Accounting')
-  if (!['PAID', 'PENDING'].includes(bill.payment_status) || billCreditCents(bill) <= 0) throw fail('This bill has no collectible credit')
   const payments = (await db.query(`SELECT p.*, j.id AS journal_id FROM payments p
     LEFT JOIN accountant_v2_manual_journals j ON j.company_id=p.company_id AND j.source_type='ERP_CREDIT_RECEIPT' AND j.source_id=p.id
     WHERE p.company_id=$1 AND p.bill_id=$2 AND p.status IN ($3,$4) ORDER BY p.payment_date,p.created_at,p.id`, [companyId, billId, receiptStatus, reversedReceiptStatus])).rows
   const paid = payments.filter((p: any) => p.status === receiptStatus && !p.deleted).reduce((n: number, p: any) => n + moneyCents(p.amount), 0)
-  return { bill, payments, outstanding: (billCreditCents(bill) - paid) / 100 }
+  // Retained receipts remain readable after a tender correction or soft deletion.
+  // Mutations still require an active customer-credit bill.
+  if (lock || !payments.length) {
+    if (bill.deleted || bill.precedence || bill.is_markit || (bill.type && bill.type !== 'BILL')) throw fail('Only active POS bills support customer receipts')
+    if (bill.credit_user_id) throw fail('Settle staff credit through Staff Accounting')
+    if (!['PAID', 'PENDING'].includes(bill.payment_status) || billCreditCents(bill) <= 0) throw fail('This bill has no collectible credit')
+  }
+  return { bill, payments, outstanding: bill.deleted ? 0 : Math.max(0, billCreditCents(bill) - paid) / 100 }
 }
 
 async function dateUnlocked(db: Db, companyId: string, date: string) {

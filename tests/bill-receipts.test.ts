@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { recordBillReceipt, reverseBillReceipt, assertNoBillReceipts } from '../server/utils/bill-receipts'
+import { recordBillReceipt, reverseBillReceipt, assertNoBillReceipts, receiptBill } from '../server/utils/bill-receipts'
 import { billOutstanding, billCreditCents, moneyCents, receiptStatus, reversedReceiptStatus, receiptInput, preserveCreditTender } from '../utils/bill-credit'
 
 // Transaction-aware in-memory adapter executes the real service and captures its
@@ -84,7 +84,7 @@ test('dated reversal retains original receipt and journal, reopens the due and r
   assert.equal(f.state.journals.length,2)
   await assert.rejects(reverseBillReceipt(f.db,'company','user',{...body,requestId:'reversal-2'}),/already reversed/)
   await assertNoBillReceipts(f.db,'company','bill')
-  await assert.rejects(assertNoBillReceipts(f.db,'company','bill',true),/Reverse/)
+  await assert.rejects(assertNoBillReceipts(f.db,'company','bill',true),/receipt history/)
 })
 
 test('tenant, date, account, locked-period and excluded-history validation leave sources untouched',async()=>{
@@ -118,6 +118,30 @@ test('amount/date input rejects non-money, invalid calendars and invalid split t
   assert.throws(()=>receiptInput({...input(1),paymentDate:'2026-10-05T10:00:00'}),/timezone/)
   assert.throws(()=>billCreditCents({grandTotal:100,paymentMethod:'Split',splitPayments:[{method:'Credit',amount:99}]}),/equal/)
   assert.equal(billOutstanding({grandTotal:100,paymentMethod:'Credit',payments:[{status:receiptStatus,amount:40},{status:reversedReceiptStatus,amount:20}]}),60)
+})
+
+test('all collections must reverse before correction/deletion, preserving journals and readable history',async()=>{
+  const f=fixture()
+  const first=await recordBillReceipt(f.db,'company','user',input(400))
+  const second=await recordBillReceipt(f.db,'company','user',input(600,'receipt-2'))
+  await assert.rejects(assertNoBillReceipts(f.db,'company','bill'),(e:any)=>e.data.code==='BILL_RECEIPTS_REQUIRE_REVERSAL')
+  const reversal=(receiptId:string,requestId:string)=>({billId:'bill',receiptId,paymentDate:'2026-10-06',requestId})
+  await reverseBillReceipt(f.db,'company','user',reversal(first.receiptId,'reverse-1'))
+  await assert.rejects(assertNoBillReceipts(f.db,'company','bill'),/reverse/)
+  await reverseBillReceipt(f.db,'company','user',reversal(second.receiptId,'reverse-2'))
+  await assertNoBillReceipts(f.db,'company','bill')
+  assert.equal(f.state.payments.length,2)
+  assert.ok(f.state.payments.every((p:any)=>p.status===reversedReceiptStatus))
+  assert.equal(f.state.journals.length,4)
+  for(const account of ['bank','ar']) assert.equal(f.state.lines.filter((l:any)=>l.accountId===account).reduce((sum:number,l:any)=>sum+(l.side==='DEBIT'?l.amount:-l.amount),0),0)
+  const history=structuredClone(f.state.payments)
+  f.state.bill.payment_method='UPI';f.state.bill.payment_status='PAID'
+  assert.deepEqual((await receiptBill(f.db,'company','bill')).payments.map((p:any)=>p.id),history.map((p:any)=>p.id))
+  assert.equal((await receiptBill(f.db,'company','bill')).outstanding,0)
+  await assert.rejects(receiptBill(f.db,'company','bill',true),/no collectible credit/)
+  f.state.bill.deleted=true
+  assert.equal((await receiptBill(f.db,'company','bill')).payments.length,2)
+  assert.deepEqual(f.state.payments,history)
 })
 
 test('invoice corrections cannot disguise a collection by changing paid portions',()=>{

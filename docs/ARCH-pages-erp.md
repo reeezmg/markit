@@ -599,6 +599,22 @@ credit recipients use Staff Accounting and are rejected by this customer API.
 
 Active receipts block invoice edits, deletion and payment-method/status changes.
 Unpaid credit edits preserve original paid portions; use receipts to collect money.
+Sales Delete and Change method first inspect active receipts (including partial
+collections). They show a reverse-first toast and open `CreditReceiptModal` in
+reverse mode instead of the requested action. A structured server conflict
+`BILL_RECEIPTS_REQUIRE_REVERSAL` also opens reversal if a collection raced the UI.
+Users explicitly reverse each active receipt and retry the original action.
+After all receipts are reversed, or if none were collected, Delete follows the
+existing soft-delete/stock/points/coupon lifecycle and Change method allows PAID
+or PENDING customer credit corrections. Changing Credit to a fully paid tender
+marks the bill PAID; retaining Credit derives PENDING. Staff-credit corrections
+still use the bill editor/Staff Accounting. Later collections use dated receipts.
+Reversed payments, original journals, reversal journals and their audit records
+remain intact. The sales payload includes reversed receipt summaries, so Payment
+history remains available after changing away from Credit; receipt history reads
+also work for corrected or soft-deleted bills. Receipt writes retain active-bill
+and customer-credit validation. Method/split/delete errors use `billingErrorMessage`,
+and requests use the selected bill's company scope.
 Transfers and cleanup reject any receipt history, including reversed receipts.
 Generated Payment/Entry mutations and financial Bill mutations are blocked by the
 scoped model adapter so nested or bulk CRUD cannot bypass the source flow.
