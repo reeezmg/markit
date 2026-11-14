@@ -171,9 +171,10 @@ export default defineNuxtConfig({
     sessionSecret: process.env.SESSION_SECRET,
     sourceId: process.env.SOURCE_ID,
     secret: process.env.SECRET,
-    // Private seller shipping service under server/shipping_service.
-    shippingServiceUrl: process.env.SHIPPING_SERVICE_URL || 'http://localhost:8001',
-    shippingServiceToken: process.env.SHIPPING_SERVICE_TOKEN || process.env.CUSTOM_API_SERVICE_TOKEN || '',
+    // Carrier webhooks forward verified events to the customer-facing API.
+    // Seller shipping runs directly in this Nuxt server.
+    customApiUrl: process.env.CUSTOM_API_URL || '',
+    customApiServiceToken: process.env.CUSTOM_API_SERVICE_TOKEN || '',
     geminiApiKey: process.env.GEMINI_API_KEY || '',
     // Encrypts seller-supplied AI credentials at rest. A dedicated secret is
     // preferred; auth.password remains a migration-safe fallback.

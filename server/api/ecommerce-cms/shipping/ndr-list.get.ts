@@ -1,6 +1,6 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
-import { shippingProxy } from '~/server/utils/shipping-proxy'
+import { runShippingOperation } from '~/server/utils/shipping'
 import { isNdrException, ndrVerdict, type NdrState } from '~/utils/ndr'
 
 /**
@@ -70,7 +70,7 @@ export default defineEventHandler(async (event) => {
   const awbs = [...new Set(rows.map((r) => r.awb as string).filter(Boolean))]
   for (let i = 0; i < awbs.length; i += 50) {
     try {
-      const res: any = await shippingProxy(event, {
+      const res: any = await runShippingOperation(event, {
         method: 'GET', path: 'track-bulk', query: { waybills: awbs.slice(i, i + 50).join(',') },
       })
       Object.assign(live, res?.statuses || {})

@@ -30,6 +30,8 @@ Cancellation restores available quantity and reduces sold quantity by the same a
 
 **Detail popover:** Shows shipping address, item snapshot from the `items` JSON (including variant, size, and shade when present), subtotal, discount, delivery fee, and grand total.
 
+**Shipping:** `components/ShipOrderModal.vue` loads `/api/ecommerce-cms/shipping/order-preview`. All seller shipping handlers now execute TypeScript in the same Nuxt deployment through `server/utils/shipping/index.ts` and `service.ts`; no shipping URL or separate Python process is needed. Seller scope comes from `useCompanyRequestSession`. Order previews only read the database; creation, tracking, labels, cancellations, pickups, NDR, reverse/exchange flows and warehouse registration call carrier APIs directly. Item dimensions precede product dimensions; cartonization checks orientation and caps boxes at 200. Shipment creation serializes each company/order, refuses existing shipments and terminal orders, retains e-waybill metadata, and persists carrier AWBs without changing order status. Carrier tracking preserves forward/retry transitions, terminal statuses, status history and COD settlement. AWBs used in seller operations must belong to the authorized company. Label downloads regenerate expired links and return bytes through the existing same-origin endpoint. See `server/utils/shipping/README.md` for deployment and validation.
+
 **Status dates:** Database triggers now retain first observed `paidAt` and a separate `document_status_history` audit for bill/order/checkout status and payment-status changes. The tenant-scoped `/api/bill/status-history?type=order&id=...` reader exposes these records; this does not add a timeline panel to the page. Existing carrier/manual order history is retained. See `ARCH-schema.md` for migration and legacy-date semantics.
 
 ---
@@ -304,7 +306,7 @@ Exchange-request queue. Uses the returns/request data with exchange filtering; s
 
 ### `pages/order/pickup.vue`
 
-Pickup operations and origin-address configuration. Staff create/edit/delete pickup locations, choose a default and sync/register a location with Delhivery. The page also loads parcels awaiting pickup, raises carrier pickups through `/api/ecommerce-cms/shipping/pickup/raise`, and reviews/updates pickup requests and status. A Storetools pickup location and a carrier-registered location can differ until synchronization succeeds. The shipping service's provider list returns an empty list when no configuration exists; actual carrier operations still require configuration. The pickup page shows setup guidance for an empty list and a retry alert for request failures, while location management remains available. `server/shipping_service/tests/test_routes.py` checks this distinction.
+Pickup operations and origin-address configuration. Staff create/edit/delete pickup locations, choose a default and sync/register a location with Delhivery. The page also loads parcels awaiting pickup, raises carrier pickups through `/api/ecommerce-cms/pickup/raise`, and reviews/updates pickup requests and status. A Storetools pickup location and a carrier-registered location can differ until synchronization succeeds. The in-process shipping provider list returns an empty list when no configuration exists; actual carrier operations still require configuration. The pickup page shows setup guidance for an empty list and a retry alert for request failures, while location management remains available. `tests/shipping.test.ts` checks this distinction.
 
 
 ### Pickup location read snapshot

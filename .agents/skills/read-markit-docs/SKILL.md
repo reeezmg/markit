@@ -10,7 +10,7 @@ Identify the task's affected areas, then read the smallest relevant set before a
 - Start with `README.md` for setup, commands, or repository orientation.
 - Read `docs/storefront-memory.md` for storefront editor/agent behavior, generated storefront state, or cross-repository storefront integration.
 - Read `CRM-DEPLOY.md` for CRM deployment or operational changes.
-- Read `server/shipping_service/README.md` for shipping-service or carrier work.
+- Read `server/utils/shipping/README.md` for shipping or carrier work.
 - For schema or persistence work, inspect both `schema.zmodel` and `prisma/schema.prisma`, plus relevant migrations. These are source contracts even where a prose document does not exist.
 
 `schema.zmodel` is the authoritative database schema for all three repositories. Any

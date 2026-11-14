@@ -346,6 +346,23 @@ The 2026-06-15 cleanup moved the former `general-preferences/`, `quotes/`, `sale
 
 Custom storefront CMS APIs. Auth via `requireAuthSession(event)`, company-scoped by `session.data.companyId`, using `pool` raw SQL and table creation helpers in `server/utils/ecommFaqs.ts`.
 
+Seller shipping under `ecommerce-cms/shipping/*` uses `useCompanyRequestSession` and
+the in-process TypeScript implementation in `server/utils/shipping/`. It no longer
+proxies to Python or reads `SHIPPING_SERVICE_URL`/`SHIPPING_SERVICE_TOKEN`.
+Existing order-preview/create, bulk-preview/create, providers, serviceability,
+tracking, cancellation/update, e-waybill, label-size/data/PDF, NDR, reverse/exchange
+and pickup-location registration URLs retain their request/response shapes.
+`create` and `bulk-label` accept POST; `label?trackingId` accepts GET;
+`labels-zip` accepts POST with optional `orderIds` and streams a ZIP, including
+`errors.txt` for skipped labels. Pickup requests continue through `ecommerce-cms/pickup/raise`.
+Delhivery retains its full operation set; existing legacy transports retain their
+limited create/track/cancel behavior, with unavailable capabilities rejected.
+The public `webhooks/shipping/[companyId]/[provider]` handler verifies the enabled
+carrier's company-specific secret locally, then forwards to the existing private
+ecommerce webhook using `CUSTOM_API_URL` and `CUSTOM_API_SERVICE_TOKEN`. It does
+not require a seller session and never accepts a destination URL from the caller.
+See `ARCH-pages-orders.md` and `server/utils/shipping/README.md` for lifecycle and setup.
+
 | Route | Method | Description |
 |---|---|---|
 | `ecommerce-cms/storefront-source` | GET | Returns only the authenticated company's setup/readiness state, stable preview branch alias, and preview/production build statuses. While provisioning, it refreshes both initial deployments and their Vercel aliases, and marks the source ready only when both builds plus stable preview/production aliases are available; immutable deployment URLs, provider identifiers, and errors remain private. |

@@ -38,6 +38,13 @@ Set `DATABASE_URL` in the local `.env` and the project's Vercel environment sett
 It is the only PostgreSQL connection variable used by the app, Prisma/ZenStack and
 maintenance scripts.
 
+Seller shipping runs in the same Nuxt server through `server/api/ecommerce-cms/shipping/`
+and `server/utils/shipping/`. No separate Python shipping deployment or
+`SHIPPING_SERVICE_URL` is required. Carrier credentials remain company-scoped in
+shipping preferences. Verified carrier webhooks use `CUSTOM_API_URL` and
+`CUSTOM_API_SERVICE_TOKEN` to reach the customer ecommerce event intake.
+See [shipping implementation and tests](server/utils/shipping/README.md).
+
 Start the development server on `http://localhost:3000`:
 
 ```bash

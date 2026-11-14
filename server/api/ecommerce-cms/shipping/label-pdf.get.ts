@@ -1,5 +1,5 @@
 import { defineEventHandler, getQuery, createError, setHeader } from 'h3'
-import { shippingProxyBinary } from '~/server/utils/shipping-proxy'
+import { runShippingBinary } from '~/server/utils/shipping'
 
 /**
  * Stream one label PDF to the seller.
@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
   const { trackingId, mode, name } = getQuery(event) as Record<string, string>
   if (!trackingId) throw createError({ statusCode: 400, statusMessage: 'trackingId is required' })
 
-  const { body } = await shippingProxyBinary(event, {
+  const { body } = await runShippingBinary(event, {
     method: 'GET',
     path: `label/${encodeURIComponent(trackingId)}/pdf`,
   })

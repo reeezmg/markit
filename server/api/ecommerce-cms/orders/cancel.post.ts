@@ -1,7 +1,7 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { cancelEcommOrder } from '~/server/utils/ecomm-order-cancel'
-import { shippingProxy } from '~/server/utils/shipping-proxy'
+import { runShippingOperation } from '~/server/utils/shipping'
 
 /**
  * Cancel an ecommerce order from the seller side, stock and all.
@@ -50,7 +50,7 @@ export default defineEventHandler(async (event) => {
   let carrierError: string | null = null
   if (awb) {
     try {
-      await shippingProxy(event, { method: 'POST', path: 'cancel', body: { awb, orderId } })
+      await runShippingOperation(event, { method: 'POST', path: 'cancel', body: { awb, orderId } })
       shipmentCancelled = true
     } catch (e: any) {
       carrierError = e?.statusMessage || e?.message || 'The carrier refused the cancellation'

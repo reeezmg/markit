@@ -1,7 +1,7 @@
 import { defineEventHandler, getQuery } from 'h3'
-import { shippingProxy } from '~/server/utils/shipping-proxy'
+import { runShippingOperation } from '~/server/utils/shipping'
 
 export default defineEventHandler(async (event) => {
   const { pincode } = getQuery(event)
-  return shippingProxy(event, { method: 'GET', path: 'serviceability', query: { pincode } })
+  return runShippingOperation(event, { method: 'GET', path: 'serviceability', query: { pincode } })
 })

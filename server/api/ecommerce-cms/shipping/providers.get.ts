@@ -1,6 +1,6 @@
 import { defineEventHandler } from 'h3'
-import { shippingProxy } from '~/server/utils/shipping-proxy'
+import { runShippingOperation } from '~/server/utils/shipping'
 
 export default defineEventHandler((event) =>
-  shippingProxy(event, { method: 'GET', path: 'providers' }),
+  runShippingOperation(event, { method: 'GET', path: 'providers' }),
 )

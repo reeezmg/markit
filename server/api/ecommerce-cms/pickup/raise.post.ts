@@ -1,7 +1,7 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import crypto from 'crypto'
 import { pool } from '~/server/db'
-import { shippingProxy } from '~/server/utils/shipping-proxy'
+import { runShippingOperation } from '~/server/utils/shipping'
 import { PICKUP_SHIPMENTS_SQL, pickupTagPath } from '~/server/utils/pickup-shipments'
 
 // Raise a pickup request per selected carrier. Auto-attaches all remaining
@@ -72,7 +72,7 @@ export default defineEventHandler(async (event) => {
     // 2) call the carrier's pickup API (outside the DB transaction)
     let carrierPickupId: any = null
     try {
-      const resp: any = await shippingProxy(event, {
+      const resp: any = await runShippingOperation(event, {
         method: 'POST', path: 'pickup',
         body: {
           pickupLocation: location, pickupDate: date, pickupTime: time,

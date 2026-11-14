@@ -1,7 +1,7 @@
 import { defineEventHandler, readBody } from 'h3'
-import { shippingProxy } from '~/server/utils/shipping-proxy'
+import { runShippingOperation } from '~/server/utils/shipping'
 
 export default defineEventHandler(async (event) => {
   const body = await readBody(event)
-  return shippingProxy(event, { method: 'POST', path: 'cancel', body })
+  return runShippingOperation(event, { method: 'POST', path: 'cancel', body })
 })

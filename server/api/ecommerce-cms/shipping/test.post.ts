@@ -1,4 +1,7 @@
+import { useCompanyRequestSession } from '~/server/utils/companyRequestScope'
+
 export default defineEventHandler(async (event) => {
+  await useCompanyRequestSession(event)
   const { provider, credentials } = await readBody<{
     provider: string;
     credentials: Record<string, string>;
