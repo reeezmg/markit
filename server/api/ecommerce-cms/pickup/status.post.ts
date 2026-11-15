@@ -24,10 +24,16 @@ export default defineEventHandler(async (event) => {
   try {
     await client.query('BEGIN')
     const { rows } = await client.query(
-      `SELECT order_ids FROM ecomm_pickup_requests WHERE id = $1 AND company_id = $2 FOR UPDATE`,
+      `SELECT order_ids, carrier_pickup_id FROM ecomm_pickup_requests WHERE id = $1 AND company_id = $2 FOR UPDATE`,
       [id, companyId],
     )
     if (!rows.length) throw createError({ statusCode: 404, statusMessage: 'Pickup request not found' })
+    if (status === 'CANCELLED' && rows[0].carrier_pickup_id) {
+      throw createError({
+        statusCode: 409,
+        statusMessage: 'This pickup exists in Delhivery. Cancel it in Delhivery One so Markit does not show a false carrier status.',
+      })
+    }
 
     await client.query(
       `UPDATE ecomm_pickup_requests SET status = $1, updated_at = now() WHERE id = $2 AND company_id = $3`,

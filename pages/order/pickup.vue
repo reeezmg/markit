@@ -7,6 +7,7 @@ definePageMeta({ auth: true });
 const auth = useNuxtApp().$auth;
 const useAuth = () => auth;
 const toast = useToast();
+const { printLabels, downloadLabels } = useShippingLabels();
 const companyId = computed(() => useAuth().session.value?.companyId || '');
 
 // ─── Pickup locations (warehouses) ──────────────────────────────────────────
@@ -268,14 +269,55 @@ async function raisePickup() {
 // ─── Pickup requests table ──────────────────────────────────────────────────
 const requests = ref<any[]>([]);
 const loadingRequests = ref(false);
-const STATUSES = ['REQUESTED', 'PICKED', 'CANCELLED'];
+const requestDetailsOpen = ref(false);
+const selectedRequest = ref<any | null>(null);
 const statusColor = (s: string) => (s === 'PICKED' ? 'green' : s === 'CANCELLED' ? 'red' : 'amber');
+
+function requestReference(req: any, index: number) {
+  return req.carrierPickupId || `Request ${requests.value.length - index}`;
+}
+
+function pickupSchedule(req: any) {
+  const rawDate = String(req.pickupDate || '').slice(0, 10);
+  if (!rawDate) return '—';
+
+  try {
+    const date = new Date(`${rawDate}T00:00:00`);
+    return `${format(date, 'dd MMM yyyy')} at ${req.pickupTime || '—'}`;
+  } catch {
+    return `${rawDate} at ${req.pickupTime || '—'}`;
+  }
+}
+
+function createdOn(value: string | null | undefined) {
+  if (!value) return '—';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? String(value) : format(date, 'dd MMM yyyy, hh:mm a');
+}
+
+function openRequest(req: any) {
+  selectedRequest.value = req;
+  requestDetailsOpen.value = true;
+}
+
+function productAmount(product: any) {
+  const stored = Number(product.value || 0);
+  return stored || Number(product.rate || 0) * Number(product.quantity || 0);
+}
+
+function money(value: unknown) {
+  return Number(value || 0).toLocaleString('en-IN', { style: 'currency', currency: 'INR' });
+}
 
 async function loadRequests() {
   loadingRequests.value = true;
   try {
     const res: any = await $fetch('/api/ecommerce-cms/pickup/requests');
     requests.value = res.requests || [];
+    if (selectedRequest.value) {
+      selectedRequest.value = requests.value.find((request: any) => request.id === selectedRequest.value.id) || null;
+      if (!selectedRequest.value) requestDetailsOpen.value = false;
+    }
   } catch (e: any) {
     toast.add({ title: 'Could not load pickup requests', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   } finally { loadingRequests.value = false; }
@@ -290,6 +332,50 @@ async function updateStatus(req: any, status: string) {
   } catch (e: any) {
     toast.add({ title: 'Status update failed', description: carrierError(e), color: 'red', ui: { description: 'whitespace-pre-line' } });
   }
+}
+
+function pickupAwbs(req: any) {
+  return [...new Set((req?.shipments || []).map((shipment: any) => String(shipment.awb || '').trim()).filter(Boolean))] as string[];
+}
+
+function printPickupLabels(req: any) {
+  printLabels(pickupAwbs(req));
+}
+
+function downloadPickupLabels(req: any) {
+  const reference = req.carrierPickupId || req.id;
+  downloadLabels(pickupAwbs(req), `pickup-${reference}-labels.pdf`);
+}
+
+async function cancelPickup(req: any) {
+  if (req.carrierPickupId) {
+    window.open('https://one.delhivery.com/v2/pickup-requests/domestic', '_blank', 'noopener,noreferrer');
+    toast.add({
+      title: 'Cancel this pickup in Delhivery One',
+      description: 'Carrier-backed pickups cannot be cancelled safely from Markit. The Delhivery pickup page has been opened.',
+      color: 'orange',
+      timeout: 8000,
+    });
+    return;
+  }
+
+  if (!window.confirm('This request was not created in Delhivery. Cancel it in Markit and release its parcels?')) return;
+  await updateStatus(req, 'CANCELLED');
+}
+
+function requestActions(req: any) {
+  const actions: any[] = [
+    { label: 'Print labels', icon: 'i-heroicons-printer-20-solid', click: () => printPickupLabels(req) },
+    { label: 'Download labels', icon: 'i-heroicons-arrow-down-tray-20-solid', click: () => downloadPickupLabels(req) },
+  ];
+  if (req.status !== 'CANCELLED' && req.status !== 'PICKED') {
+    actions.push({
+      label: req.carrierPickupId ? 'Cancel in Delhivery' : 'Cancel pickup',
+      icon: 'i-heroicons-x-circle-20-solid',
+      click: () => cancelPickup(req),
+    });
+  }
+  return actions;
 }
 
 async function loadProviders() {
@@ -476,46 +562,186 @@ onMounted(() => {
         </div>
       </template>
 
-      <div v-if="!requests.length" class="py-10 text-center text-sm text-gray-500">
+      <div v-if="loadingRequests && !requests.length" class="flex items-center justify-center gap-2 py-10 text-sm text-gray-500">
+        <UIcon name="i-heroicons-arrow-path" class="animate-spin text-lg" />
+        Loading pickup requests…
+      </div>
+
+      <div v-else-if="!requests.length" class="py-10 text-center text-sm text-gray-500">
         No pickup requests yet. Raise one above once you have shipped orders.
       </div>
 
-      <table v-else class="w-full text-sm">
-        <thead class="text-left text-xs uppercase text-gray-400">
-          <tr>
-            <th class="py-2">Date</th>
-            <th>Location</th>
-            <th>Carrier</th>
-            <th>Parcels</th>
-            <th>Packages</th>
-            <th>Pickup ID</th>
-            <th>Status</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="req in requests" :key="req.id" class="border-t border-gray-100 dark:border-gray-800">
-            <td class="py-2">{{ req.pickupDate }} <span class="text-gray-400">{{ req.pickupTime }}</span></td>
-            <td>{{ req.location }}</td>
-            <td class="capitalize">{{ req.carrier }}</td>
-            <td>{{ req.orderCount }}</td>
-            <td>{{ req.packageCount }}</td>
-            <td class="text-gray-400">{{ req.carrierPickupId || '—' }}</td>
-            <td>
-              <div class="flex items-center gap-2">
+      <div v-else class="overflow-x-auto">
+        <table class="w-full min-w-[850px] text-sm">
+          <thead class="border-b border-gray-200 bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-400 dark:border-gray-800 dark:bg-gray-900/60">
+            <tr>
+              <th class="px-4 py-3">Pickup</th>
+              <th class="px-4 py-3">Schedule</th>
+              <th class="px-4 py-3">Location</th>
+              <th class="px-4 py-3">Carrier</th>
+              <th class="px-4 py-3 text-center">Parcels</th>
+              <th class="px-4 py-3">Status</th>
+              <th class="w-16 px-4 py-3 text-right"><span class="sr-only">Actions</span></th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+            <tr
+              v-for="(req, index) in requests"
+              :key="req.id"
+              class="cursor-pointer transition-colors hover:bg-primary-50/60 focus:bg-primary-50/60 focus:outline-none dark:hover:bg-primary-950/20 dark:focus:bg-primary-950/20"
+              tabindex="0"
+              @click="openRequest(req)"
+              @keydown.enter.prevent="openRequest(req)"
+              @keydown.space.prevent="openRequest(req)"
+            >
+              <td class="px-4 py-3">
+                <p class="font-medium text-gray-900 dark:text-white">{{ requestReference(req, index) }}</p>
+                <p v-if="req.carrierPickupId" class="mt-0.5 font-mono text-xs text-gray-400">{{ req.carrierPickupId }}</p>
+                <UBadge v-else color="red" variant="subtle" size="xs" class="mt-1">Not created in Delhivery</UBadge>
+              </td>
+              <td class="whitespace-nowrap px-4 py-3 text-gray-700 dark:text-gray-200">{{ pickupSchedule(req) }}</td>
+              <td class="px-4 py-3 text-gray-700 dark:text-gray-200">{{ req.location || '—' }}</td>
+              <td class="px-4 py-3 capitalize text-gray-700 dark:text-gray-200">{{ req.carrier || '—' }}</td>
+              <td class="px-4 py-3 text-center font-medium text-gray-900 dark:text-white">{{ req.orderCount ?? 0 }}</td>
+              <td class="px-4 py-3">
                 <UBadge :color="statusColor(req.status)" variant="subtle" size="xs">{{ req.status }}</UBadge>
-                <USelect
-                  v-if="req.status !== 'CANCELLED' && req.status !== 'PICKED'"
-                  :model-value="req.status"
-                  :options="STATUSES"
-                  size="xs"
-                  @update:model-value="(v) => updateStatus(req, v)"
-                />
-              </div>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+              </td>
+              <td class="px-4 py-3 text-right" @click.stop @keydown.stop>
+                <UDropdown :items="requestActions(req)" :popper="{ placement: 'bottom-end' }">
+                  <UButton
+                    icon="i-heroicons-ellipsis-vertical-20-solid"
+                    color="gray"
+                    variant="ghost"
+                    size="xs"
+                    title="Pickup actions"
+                  />
+                </UDropdown>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </UCard>
+
+    <!-- Pickup request details and the products physically included in it. -->
+    <USlideover v-model="requestDetailsOpen" :ui="{ width: 'max-w-4xl' }">
+      <div v-if="selectedRequest" class="flex h-full flex-col bg-white dark:bg-gray-950">
+        <div class="flex items-start justify-between gap-4 border-b border-gray-200 px-5 py-4 dark:border-gray-800">
+          <div class="min-w-0">
+            <p class="text-xs font-medium uppercase tracking-wide text-gray-500">Pickup request</p>
+            <div class="mt-1 flex flex-wrap items-center gap-2">
+              <h2 class="truncate text-lg font-semibold text-gray-900 dark:text-white">
+                {{ selectedRequest.carrierPickupId || selectedRequest.id }}
+              </h2>
+              <UBadge :color="statusColor(selectedRequest.status)" variant="subtle" size="xs">
+                {{ selectedRequest.status }}
+              </UBadge>
+            </div>
+            <p class="mt-1 text-sm text-gray-500">{{ pickupSchedule(selectedRequest) }}</p>
+          </div>
+          <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="requestDetailsOpen = false" />
+        </div>
+
+        <div class="flex-1 space-y-6 overflow-y-auto p-5">
+          <dl class="grid gap-4 rounded-xl border border-gray-200 bg-gray-50/70 p-4 sm:grid-cols-2 lg:grid-cols-4 dark:border-gray-800 dark:bg-gray-900/50">
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Location</dt>
+              <dd class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ selectedRequest.location || '—' }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Carrier</dt>
+              <dd class="mt-1 text-sm font-medium capitalize text-gray-900 dark:text-white">{{ selectedRequest.carrier || '—' }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Parcels</dt>
+              <dd class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ selectedRequest.orderCount ?? 0 }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Packages</dt>
+              <dd class="mt-1 text-sm font-medium text-gray-900 dark:text-white">{{ selectedRequest.packageCount ?? 0 }}</dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Requested on</dt>
+              <dd class="mt-1 text-sm text-gray-700 dark:text-gray-200">{{ createdOn(selectedRequest.createdAt) }}</dd>
+            </div>
+            <div class="sm:col-span-2">
+              <dt class="text-xs uppercase tracking-wide text-gray-400">Internal reference</dt>
+              <dd class="mt-1 break-all font-mono text-xs text-gray-500">{{ selectedRequest.id }}</dd>
+            </div>
+          </dl>
+
+          <div>
+            <h3 class="font-semibold text-gray-900 dark:text-white">Products in this pickup</h3>
+            <p class="mt-1 text-sm text-gray-500">Products are grouped by the parcel handed to the carrier.</p>
+          </div>
+
+          <div v-if="!selectedRequest.shipments?.length" class="rounded-xl border border-dashed border-gray-300 py-12 text-center text-sm text-gray-500 dark:border-gray-700">
+            No attached parcel details are available for this pickup.
+          </div>
+
+          <section
+            v-for="shipment in selectedRequest.shipments || []"
+            v-else
+            :key="shipment.id"
+            class="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800"
+          >
+            <div class="flex flex-col gap-2 border-b border-gray-200 bg-gray-50 px-4 py-3 dark:border-gray-800 dark:bg-gray-900 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <div class="flex flex-wrap items-center gap-2">
+                  <p class="font-semibold text-gray-900 dark:text-white">Order #{{ shipment.orderNumber || '—' }}</p>
+                  <UBadge v-if="shipment.kind === 'exchange'" color="violet" variant="subtle" size="xs">Exchange</UBadge>
+                </div>
+                <p class="mt-1 text-xs text-gray-500">{{ shipment.customer || 'Customer unavailable' }}</p>
+              </div>
+              <div class="text-left sm:text-right">
+                <p class="text-xs uppercase tracking-wide text-gray-400">AWB</p>
+                <p class="font-mono text-xs text-gray-600 dark:text-gray-300">{{ shipment.awb || '—' }}</p>
+              </div>
+            </div>
+
+            <div v-if="!shipment.products?.length" class="px-4 py-8 text-center text-sm text-gray-500">
+              No product snapshot is available for this parcel.
+            </div>
+
+            <div v-else class="overflow-x-auto">
+              <table class="w-full min-w-[620px] text-sm">
+                <thead class="border-b border-gray-100 text-left text-xs uppercase tracking-wide text-gray-400 dark:border-gray-800">
+                  <tr>
+                    <th class="px-4 py-3">Product</th>
+                    <th class="px-4 py-3">Size</th>
+                    <th class="px-4 py-3 text-right">Qty</th>
+                    <th class="px-4 py-3 text-right">Rate</th>
+                    <th class="px-4 py-3 text-right">Amount</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
+                  <tr v-for="product in shipment.products" :key="product.id">
+                    <td class="px-4 py-3">
+                      <div class="flex items-center gap-3">
+                        <img v-if="product.image" :src="product.image" :alt="product.name" class="h-10 w-10 rounded-md object-cover" />
+                        <div v-else class="flex h-10 w-10 items-center justify-center rounded-md bg-gray-100 text-gray-400 dark:bg-gray-800">
+                          <UIcon name="i-heroicons-cube" class="h-5 w-5" />
+                        </div>
+                        <div class="min-w-0">
+                          <p class="font-medium text-gray-900 dark:text-white">{{ product.name }}</p>
+                          <p class="truncate text-xs text-gray-500">
+                            {{ [product.variantName, product.barcode].filter(Boolean).join(' · ') || '—' }}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="px-4 py-3 text-gray-600 dark:text-gray-300">{{ product.size || '—' }}</td>
+                    <td class="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">{{ product.quantity }}</td>
+                    <td class="px-4 py-3 text-right text-gray-600 dark:text-gray-300">{{ money(product.rate) }}</td>
+                    <td class="px-4 py-3 text-right font-medium text-gray-900 dark:text-white">{{ money(productAmount(product)) }}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    </USlideover>
 
     <!-- Locations -->
     <UCard>

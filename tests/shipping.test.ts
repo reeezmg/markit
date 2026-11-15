@@ -228,6 +228,12 @@ test('Delhivery edit validation and warehouse/pickup body failures never report 
   await assert.rejects(adapter.location({}, { name: 'Warehouse' }, false), /Carrier refused/)
   await assert.rejects(adapter.pickup({}, { pickupLocation: 'Warehouse' }), /Carrier refused/)
   await assert.rejects(adapter.ewaybill({}, 'X', 'INV-1', '123'), /Carrier refused/)
+
+  const ambiguousPickup = createDelhivery(async () => Response.json({ success: true, message: 'Request received' }))
+  await assert.rejects(
+    ambiguousPickup.pickup({}, { pickupLocation: 'Warehouse', pickupDate: '2026-11-16' }),
+    /did not create the pickup request/,
+  )
 })
 test('legacy carrier transports retain existing create/track operations without calling another app', async () => {
   for (const provider of ['shiprocket', 'ecomexpress', 'xpressbees', 'shadowfax', 'dtdc', 'pickrr', 'dunzo', 'ekart']) {

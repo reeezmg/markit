@@ -79,7 +79,10 @@ export default defineEventHandler(async (event) => {
           expectedPackageCount: shipments.length || 1, provider: carrier,
         },
       })
-      carrierPickupId = resp?.pickupId ?? null
+      carrierPickupId = String(resp?.pickupId || '').trim()
+      // A local request must never be persisted unless the carrier confirms
+      // that the pickup was actually created.
+      if (!carrierPickupId) throw createError({ statusCode: 502, statusMessage: `${carrier} did not return a pickup ID; no pickup was saved in Markit.` })
     } catch (e: any) {
       results.push({ carrier, ok: false, error: e?.statusMessage || 'Carrier pickup failed' })
       continue

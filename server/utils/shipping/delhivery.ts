@@ -149,8 +149,16 @@ export function createDelhivery(fetcher: CarrierFetch = globalThis.fetch) {
     },
     async pickup(gw: ShippingRow, b: ShippingRow) {
       const data = await request(gw, '/fm/request/new/', 'POST', { pickup_location: String(b.pickupLocation || '').trim(), pickup_date: b.pickupDate, pickup_time: b.pickupTime || '12:00:00', expected_package_count: b.expectedPackageCount ?? 1 })
-      if (data.success === false) throw shippingError(carrierError(data, 'Failed to create pickup request'))
-      return { provider: 'delhivery', success: true, pickupId: data.pickup_id, response: data }
+      const pickupId = String(data?.pickup_id || '').trim()
+      // Delhivery can return HTTP 200 for a rejected request. A pickup exists
+      // only when the carrier gives us its pickup_id; never turn a vague 200
+      // response into a successful Markit-only request.
+      if (data?.success === false) throw shippingError(carrierError(data, 'Failed to create pickup request'))
+      if (!pickupId) {
+        const detail = carrierError(data, '')
+        throw shippingError(`Delhivery did not create the pickup request${detail ? `: ${detail}` : ''}`)
+      }
+      return { provider: 'delhivery', success: true, pickupId, response: data }
     },
     async location(gw: ShippingRow, b: ShippingRow, update: boolean) {
       const common = { name: String(b.name || '').trim(), address: b.address || '', pin: b.pincode || '', phone: b.phone || '' }
