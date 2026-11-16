@@ -94,16 +94,10 @@ export default defineNuxtConfig({
         ? { protocol: 'wss', host: process.env.TUNNEL_HOST, clientPort: 443 }
         : undefined,
 
-      // Pre-transform the heaviest pages instead of compiling them on first
-      // visit. Costs nothing at startup — Vite warms these in the background.
-      warmup: {
-        clientFiles: auditBuildDir ? [] : [
-          './pages/erp/billing.vue',
-          './pages/erp/edit/[salesId].vue',
-          './pages/products/add.vue',
-          './layouts/default.vue',
-        ],
-      },
+      // Vite warmup can transform the layout and shared UI components before
+      // Nuxt's auto-import registry is ready, caching unresolved composables.
+      // Compile on demand after Nuxt finishes initialization instead.
+      warmup: { clientFiles: [] },
     },
 
     // Keep the deployment's existing chunk policy. The isolated audit uses

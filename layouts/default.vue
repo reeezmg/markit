@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue';
+import { useDashboard } from '~/composables/useDashboard';
 import { investmentPages } from '~/utils/investments';
 import { accountantSections } from '~/utils/accountant-navigation';
 import AiChatChatBox from '~/components/AiChat/ChatBox.vue';

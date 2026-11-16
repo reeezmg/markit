@@ -169,9 +169,12 @@ Used by: `components/NotificationsSlideover.vue`, `components/NotificationIcon.v
 
 Shared composable (via `createSharedComposable` from `@vueuse/core`) — single instance across all consumers.
 
+The default layout explicitly imports this composable. Development Vite warmup is disabled in `nuxt.config.ts`: precompiling the layout and shared UI components during startup can cache modules before Nuxt's auto-import registry is populated, leaving references such as `useDashboard` or UI's `useUI` unresolved. Affected pages can render their shell but fail client initialization, preventing sidebar interaction. Restart the development server after changing this configuration; existing cached modules must be rebuilt. `tests/composable-tree-shake-config.test.ts` guards the empty warmup list alongside the composable tree-shaking configuration.
+
 Manages:
 - `isHelpSlideoverOpen: Ref<boolean>`
 - `isNotificationsSlideoverOpen: Ref<boolean>`
+- `isChatSlideoverOpen: Ref<boolean>`
 - Keyboard shortcuts via `defineShortcuts`:
 
 | Shortcut | Route |
@@ -191,8 +194,9 @@ Manages:
 | `s-s` | `/settings/store` |
 | `?` | Open HelpSlideover |
 | `n` | Open NotificationsSlideover |
+| `c-b` | Toggle ChatSlideover |
 
-Closes both slidevers on route change.
+Closes help, notifications and chat slideovers on route change.
 
 ---
 

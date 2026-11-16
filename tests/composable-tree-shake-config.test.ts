@@ -10,6 +10,8 @@ test('prefetch preservation leaves dev transforms disabled and preserves product
     if (previous) Object.defineProperty(globalThis, 'defineNuxtConfig', previous);
     else delete (globalThis as any).defineNuxtConfig;
   }
+  assert.deepEqual(config.vite.server.warmup.clientFiles, [],
+    'startup warmup must not compile layouts or shared UI before Nuxt registers auto-imports');
   const configure = config.modules.find((module: any) => typeof module === 'function' && module.name === 'preserveServerPrefetchIds');
   for (const client of [{}, { vue: ['onRenderTracked', 'onRenderTriggered', 'onServerPrefetch'], '#app': ['definePageMeta'] }]) {
     const development = Object.keys(client).length === 0;
