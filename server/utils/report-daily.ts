@@ -57,33 +57,15 @@ const purchasePaymentsSql = `
         WHERE company_id = $1
           AND created_at BETWEEN $2 AND $3
         `;
-export async function dailyReport(db: ReportDatabase, context: DailyReportContext) {
-  const { companyId, startDate, endDate, useOriginalCleanupValues, includeCleanupPrecedence } =
-    context;
+export function dailySourceSections(context: DailyReportContext) {
+  const { useOriginalCleanupValues } = context;
   const billTotalExpr = useOriginalCleanupValues
     ? 'COALESCE(NULLIF(b.original_grand_total, 0), b.grand_total)'
     : 'b.grand_total';
   const entryValueExpr = useOriginalCleanupValues
     ? 'COALESCE(NULLIF(e.original_value, 0), e.value)'
     : 'e.value';
-  const [
-    financial,
-    moneyActivity,
-    [
-      salesRes,
-      brandRes,
-      creditBillsRes,
-      expenseRes,
-      salaryPaymentsRes,
-      purchaseRes,
-      categoryRes,
-    ],
-  ] = await Promise.all([
-    accountingReport(db, [companyId], startDate, endDate),
-    accountingMoneyActivity(db, [companyId], startDate, endDate),
-    reportSections(
-      db,
-      [
+  return [
         billSalesSql(billTotalExpr),
         `
         SELECT 
@@ -155,7 +137,30 @@ export async function dailyReport(db: ReportDatabase, context: DailyReportContex
         GROUP BY c.name
         ORDER BY total DESC
         `,
-      ],
+      ];
+}
+
+export async function dailyReport(db: ReportDatabase, context: DailyReportContext) {
+  const { companyId, startDate, endDate, useOriginalCleanupValues, includeCleanupPrecedence } =
+    context;
+  const [
+    financial,
+    moneyActivity,
+    [
+      salesRes,
+      brandRes,
+      creditBillsRes,
+      expenseRes,
+      salaryPaymentsRes,
+      purchaseRes,
+      categoryRes,
+    ],
+  ] = await Promise.all([
+    accountingReport(db, [companyId], startDate, endDate),
+    accountingMoneyActivity(db, [companyId], startDate, endDate),
+    reportSections(
+      db,
+      dailySourceSections(context),
       [companyId, startDate.toISOString(), endDate.toISOString(), includeCleanupPrecedence]
     ),
   ]);

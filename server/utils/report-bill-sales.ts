@@ -30,14 +30,16 @@ export function billSalesSql(total: string, multipleCompanies = false) {
     JOIN bills b ON b.id=p.bill_id AND b.company_id=p.company_id
     WHERE p.company_id ${companyScope} AND j.status='PUBLISHED' AND j.deleted_at IS NULL
       AND j.journal_date BETWEEN $2 AND $3 AND ($4=true OR b.precedence IS NOT TRUE)
-  ), collections AS (
-    SELECT method,amount FROM receipt_parts
-  ) SELECT
-    COALESCE((SELECT sum(amount) FROM sales_parts),0) AS total_sales,
-    COALESCE((SELECT sum(amount) FROM sales_parts WHERE method='Credit'),0) AS credit,
-    COALESCE((SELECT sum(amount) FROM receipt_parts),0) AS credit_collections,
-    COALESCE((SELECT sum(amount) FROM collections),0) AS total_collections,
-    ${['Cash','UPI','Card','Bank','Cheque'].map(method => `COALESCE((SELECT sum(amount) FROM sales_parts WHERE method='${method}'),0) AS ${method.toLowerCase()},
-    COALESCE((SELECT sum(amount) FROM collections WHERE method='${method}'),0) AS collected_${method.toLowerCase()},
-    COALESCE((SELECT sum(amount) FROM receipt_parts WHERE method='${method}'),0) AS credit_collected_${method.toLowerCase()}`).join(',\n')}`
+  ), sales_totals AS (
+    SELECT COALESCE(sum(amount),0) AS total_sales,
+      COALESCE(sum(amount) FILTER (WHERE method='Credit'),0) AS credit,
+      ${['Cash','UPI','Card','Bank','Cheque'].map(method => `COALESCE(sum(amount) FILTER (WHERE method='${method}'),0) AS ${method.toLowerCase()}`).join(',\n')}
+    FROM sales_parts
+  ), receipt_totals AS (
+    SELECT COALESCE(sum(amount),0) AS credit_collections,
+      COALESCE(sum(amount),0) AS total_collections,
+      ${['Cash','UPI','Card','Bank','Cheque'].map(method => `COALESCE(sum(amount) FILTER (WHERE method='${method}'),0) AS collected_${method.toLowerCase()},
+      COALESCE(sum(amount) FILTER (WHERE method='${method}'),0) AS credit_collected_${method.toLowerCase()}`).join(',\n')}
+    FROM receipt_parts
+  ) SELECT sales_totals.*,receipt_totals.* FROM sales_totals CROSS JOIN receipt_totals`
 }

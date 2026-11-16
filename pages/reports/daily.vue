@@ -1,5 +1,6 @@
 ﻿<script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import type { DailyReportBlock } from '~/server/utils/report-daily-blocks';
 import {
     startOfDay,
     endOfDay,
@@ -33,6 +34,16 @@ const canUseCleanupToggle = computed(
 const showCleanedValues = ref(false);
 const dashboard = ref<any>(null);
 const loading = ref(true);
+const initialBlocks: DailyReportBlock[] = ['sales', 'expenses', 'money', 'balances', 'items'];
+const blockLabels: Record<DailyReportBlock, string> = {
+    sales: 'Sales', expenses: 'Expenses', money: 'Money movements', balances: 'Balances',
+    items: 'Category and brand sales', details: 'Transaction details',
+};
+const blockStatus = ref<Partial<Record<DailyReportBlock, 'loading' | 'ready' | 'error'>>>({});
+const blockErrors = ref<Partial<Record<DailyReportBlock, string>>>({});
+const detailsOpen = ref(false);
+const ready = (...blocks: DailyReportBlock[]) => blocks.every(block => blockStatus.value[block] === 'ready');
+
 const error = ref('');
 const exportLoading = ref('');
 const lastUpdated = ref<Date | null>(null);
@@ -52,7 +63,7 @@ const params = computed(() => ({
     endDate: endOfDay(selectedDate.value.end).toISOString(),
     showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value,
 }));
-const currency = computed(() => dashboard.value?.financial?.currency || 'INR');
+const currency = computed(() => dashboard.value?.financial?.currency || auth.session.value?.currency || 'INR');
 const money = (value: any) =>
     new Intl.NumberFormat('en-IN', {
         style: 'currency',
@@ -71,45 +82,69 @@ const hasActivity = computed(() =>
             (dashboard.value.totalSales ||
                 dashboard.value.totalExpenses ||
                 dashboard.value.totalPurchaseExpense ||
-                financial.value.accounts.some((a: any) => a.debit || a.credit))
+                (financial.value?.accounts || []).some((a: any) => a.debit || a.credit))
     )
 );
 
+async function loadBlock(block: DailyReportBlock, request: number, requestParams: typeof params.value, signal: AbortSignal) {
+    blockStatus.value[block] = 'loading';
+    delete blockErrors.value[block];
+    try {
+        const data = await $fetch('/api/report/report', {
+            params: { ...requestParams, block }, signal, retry: 0,
+        });
+        if (request !== version || signal.aborted) return;
+        dashboard.value = { ...dashboard.value, ...data };
+        blockStatus.value[block] = 'ready';
+    } catch (cause: any) {
+        if (request !== version || signal.aborted) return;
+        blockStatus.value[block] = 'error';
+        blockErrors.value[block] = cause?.data?.statusMessage || cause?.message || 'Could not load this block.';
+    }
+}
+async function loadDetails() {
+    if (!detailsOpen.value || !dashboard.value || !controller || controller.signal.aborted ||
+        blockStatus.value.details === 'loading' || ready('details')) return;
+    await loadBlock('details', version, { ...params.value }, controller.signal);
+}
 async function refresh() {
     clearTimeout(refreshTimer);
     const request = ++version;
     controller?.abort();
-    controller = new AbortController();
+    const activeController = controller = new AbortController();
+    const requestParams = { ...params.value };
     loading.value = true;
     error.value = '';
-    try {
-        if (selectedDate.value.start > selectedDate.value.end)
-            throw new Error('Choose a start date before the end date.');
-        const data = await $fetch('/api/report/report', {
-            params: params.value,
-            signal: controller.signal,
-        });
-        if (request !== version) return;
-        dashboard.value = data;
-        lastUpdated.value = new Date();
-    } catch (cause: any) {
-        if (request === version && !controller.signal.aborted) {
-            dashboard.value = null;
-            error.value =
-                cause?.data?.statusMessage ||
-                cause?.message ||
-                'The report could not be loaded.';
-        }
-    } finally {
-        if (request === version) loading.value = false;
+    dashboard.value = null;
+    blockStatus.value = {};
+    blockErrors.value = {};
+    lastUpdated.value = null;
+    if (selectedDate.value.start > selectedDate.value.end) {
+        error.value = 'Choose a start date before the end date.';
+        loading.value = false;
+        return;
     }
+    dashboard.value = {};
+    // Start all independent requests before awaiting any of them.
+    await Promise.all([
+        ...initialBlocks.map(block => loadBlock(block, request, requestParams, activeController.signal)),
+        ...(detailsOpen.value ? [loadBlock('details', request, requestParams, activeController.signal)] : []),
+    ]);
+    if (request !== version) return;
+    loading.value = false;
+    if (initialBlocks.every(block => ready(block))) lastUpdated.value = new Date();
 }
+watch(detailsOpen, loadDetails);
+
 watch(
     [params, companyId],
     () => {
         ++version;
         controller?.abort();
         loading.value = true;
+        dashboard.value = null;
+        blockStatus.value = {};
+        blockErrors.value = {};
         clearTimeout(refreshTimer);
         refreshTimer = setTimeout(refresh, 150);
     },
@@ -210,11 +245,8 @@ const otherTransactionRows = computed(() => {
         const receipts = receiptMethods.reduce(
             (sum, method) => sum + Number(data?.creditCollectionsByPaymentMethod?.[method] || 0), 0
         );
-        const salary = (data?.salaryPayments || [])
-            .filter((row: any) => isCash
-                ? row.paymentMode === 'CASH'
-                : ['UPI', 'CARD', 'BANK', 'CHEQUE'].includes(row.paymentMode))
-            .reduce((sum: number, row: any) => sum + Number(row.amount || 0), 0);
+        const salaryMethods = isCash ? ['CASH'] : ['UPI', 'CARD', 'BANK', 'CHEQUE'];
+        const salary = salaryMethods.reduce((sum, method) => sum + Number(data?.salaryByPaymentMethod?.[method] || 0), 0);
         const purchases = purchaseMethods.reduce(
             (sum, method) => sum + Number(data?.purchaseExpensesByPaymentMethod?.[method] || 0), 0
         );
@@ -282,28 +314,28 @@ const transactionDetailRows = computed(() => [
 ].map(titles => titles.map(title => transactionDetailGroups.value.find(group => group.title === title)!)));
 const summaryCards = computed(() => [
     {
-        name: 'Sales',
+        name: 'Sales', blocks: ['sales'] as DailyReportBlock[],
         amount: dashboard.value?.totalSales,
         rows: salesRows.value,
         columns: amountColumns,
         note: `Collections: ${money(dashboard.value?.totalCollections)}`,
     },
     {
-        name: 'Expense',
+        name: 'Expense', blocks: ['expenses'] as DailyReportBlock[],
         amount: Number(dashboard.value?.totalExpenses || 0) - Number(dashboard.value?.salaryExpense || 0),
         rows: expensesRows.value,
         columns: amountColumns,
         note: 'Salary is included in Other transactions.',
     },
     {
-        name: 'Other transactions',
+        name: 'Other transactions', blocks: ['sales', 'expenses', 'money'] as DailyReportBlock[],
         amount: otherTransactionRows.value.reduce((sum, row) => sum + row.amount, 0),
         rows: otherTransactionRows.value,
         columns: amountColumns,
         note: '',
     },
     {
-        name: 'Final balance',
+        name: 'Final balance', blocks: ['balances'] as DailyReportBlock[],
         amount: position.value.delta,
         rows: finalBalanceRows.value,
         columns: amountColumns,
@@ -337,12 +369,19 @@ async function download(kind: 'pdf' | 'excel') {
     }
 }
 async function print() {
-    if (!dashboard.value) return;
+    if (!dashboard.value || loading.value || initialBlocks.some(block => !ready(block))) return;
+    const printVersion = version;
     exportLoading.value = 'print';
     try {
+        if (!ready('details') && controller) {
+            await loadBlock('details', version, { ...params.value }, controller.signal);
+        }
+        if (printVersion !== version) return;
+        if (!ready('details')) throw new Error('Transaction details could not be loaded.');
         const expenses = await $fetch('/api/report/expenses', {
             params: params.value,
         });
+        if (printVersion !== version) return;
         await printReport({
             ...dashboard.value,
             companyName: companyName.value,
@@ -440,7 +479,7 @@ const exportActions = [
                         ><UButton
                             label="Export"
                             icon="i-lucide-download"
-                            :disabled="loading || !dashboard"
+                            :disabled="loading || !dashboard || initialBlocks.some(block => !ready(block))"
                             :loading="Boolean(exportLoading)"
                     /></UDropdown>
                 </div>
@@ -479,7 +518,7 @@ const exportActions = [
                 :actions="[{ label: 'Try again', click: refresh }]"
             />
             <div
-                v-else-if="loading"
+                v-else-if="loading && !dashboard"
                 role="status"
                 aria-label="Loading daily report"
                 class="space-y-6"
@@ -492,10 +531,13 @@ const exportActions = [
             /></div>
             <template v-else-if="dashboard">
                 <div
-                    v-if="!hasActivity"
+                    v-if="!loading && initialBlocks.every(block => ready(block)) && !hasActivity"
                     class="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3 text-sm text-gray-600 dark:border-gray-800 dark:bg-gray-900 dark:text-gray-400"
                     >No activity in this period. Selected-period amounts are zero.</div
                 >
+                <UAlert v-for="(message, block) in blockErrors" :key="block" color="red"
+                    :title="`${blockLabels[block]} could not be loaded`" :description="message"
+                    :actions="[{ label: 'Try again', click: refresh }]" />
                 <section
                     class="daily-summary grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4"
                     aria-label="Report highlights"
@@ -507,6 +549,7 @@ const exportActions = [
                         :ui="{ body: { padding: 'p-3 sm:p-3' } }"
                     >
                         <h2 class="text-sm font-medium text-gray-500">{{ card.name }}</h2>
+                        <template v-if="ready(...card.blocks)">
                         <p class="mb-2 text-xl font-semibold tabular-nums">{{
                             money(card.amount)
                         }}</p>
@@ -518,11 +561,14 @@ const exportActions = [
                             :caption="card.name"
                         />
                         <p v-if="card.note" class="mt-2 text-xs text-gray-500">{{ card.note }}</p>
+                        </template>
+                        <div v-else-if="card.blocks.some(block => blockStatus[block] === 'error')" class="py-4 text-sm text-red-500">Could not load this block.</div>
+                        <USkeleton v-else class="mt-3 h-48 rounded-lg" role="status" :aria-label="`Loading ${card.name}`" />
                     </UCard>
                 </section>
-                <details class="rounded-lg border border-gray-200 dark:border-gray-800">
+                <details :open="detailsOpen" @toggle="detailsOpen = ($event.target as HTMLDetailsElement).open" class="rounded-lg border border-gray-200 dark:border-gray-800">
                     <summary class="cursor-pointer px-4 py-3 text-sm font-medium">Transaction details</summary>
-                    <div class="space-y-3 p-3">
+                    <div v-if="ready('details', 'sales', 'expenses', 'money')" class="space-y-3 p-3">
                         <div v-for="(row, index) in transactionDetailRows" :key="index"
                             class="transaction-details-grid grid grid-cols-1 gap-3"
                             :class="row.length === 3 ? 'lg:grid-cols-3' : 'lg:grid-cols-2'">
@@ -537,6 +583,8 @@ const exportActions = [
                         </section>
                         </div>
                     </div>
+                    <p v-else-if="(['details', 'sales', 'expenses', 'money'] as DailyReportBlock[]).some(block => blockStatus[block] === 'error')" class="p-4 text-sm text-red-500">Could not load transaction details.</p>
+                    <USkeleton v-else-if="detailsOpen" class="m-3 h-40 rounded-lg" role="status" aria-label="Loading transaction details" />
                 </details>
                 <section
                     id="money-position"
@@ -554,6 +602,7 @@ const exportActions = [
                         >
                     </div>
                     <ReportsDailyTable
+                        v-if="ready('balances')"
                         :rows="accountRows"
                         :columns="balanceColumns"
                         :total="accountTotal"
@@ -561,6 +610,8 @@ const exportActions = [
                         caption="Actual dated money movement; unpaid sales are excluded"
                         empty="No fund accounts to show for this period."
                     />
+                    <p v-if="blockStatus.balances === 'error'" class="p-4 text-sm text-red-500">Could not load balances.</p>
+                    <USkeleton v-else-if="!ready('balances')" class="m-3 h-40 rounded-lg" role="status" aria-label="Loading balances" />
                 </section>
                 <div class="grid grid-cols-1 gap-4 xl:grid-cols-2">
                     <section
@@ -582,12 +633,16 @@ const exportActions = [
                                 >Item detail including credit sales.</p
                             ></div
                         ><ReportsDailyTable
+                            v-if="ready('items')"
                             :rows="group.rows || []"
                             :columns="itemColumns"
                             :currency="currency"
                             :caption="group.title"
                             empty="No bill items in this period."
-                    /></section>
+                    />
+                        <p v-if="blockStatus.items === 'error'" class="p-4 text-sm text-red-500">Could not load item sales.</p>
+                        <USkeleton v-else-if="!ready('items')" class="m-3 h-40 rounded-lg" role="status" :aria-label="`Loading ${group.title}`" />
+                    </section>
                 </div>
                 <p class="px-1 text-xs leading-5 text-gray-500"
                     >Sales, expenses, supplier payments and item details use

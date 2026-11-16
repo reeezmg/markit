@@ -1,4 +1,5 @@
 import { dailyReport } from '~/server/utils/report-daily';
+import { dailyReportBlock, dailyReportBlocks, type DailyReportBlock } from '~/server/utils/report-daily-blocks';
 import { defineEventHandler, getQuery, createError } from 'h3';
 import { pool } from '~/server/db';
 import { reportWindow } from '~/server/utils/report-accounting';
@@ -23,11 +24,17 @@ export default defineEventHandler(async (event) => {
 
   const { from: startDate, to: endDate } = reportWindow(query);
 
-  return dailyReport(pool, {
+  if (query.block !== undefined && !dailyReportBlocks.includes(query.block as DailyReportBlock)) {
+    throw createError({ statusCode: 400, statusMessage: 'Invalid daily report block' });
+  }
+  const context = {
     companyId,
     startDate,
     endDate,
     useOriginalCleanupValues,
     includeCleanupPrecedence,
-  });
+  };
+  return query.block
+    ? dailyReportBlock(pool, context, query.block as DailyReportBlock)
+    : dailyReport(pool, context);
 });

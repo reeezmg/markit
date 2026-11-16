@@ -22,7 +22,7 @@ export function reportWindow(query: Record<string, any>) {
 }
 
 /** Read only. Posted journals are the sole source of financial totals. */
-export async function accountingReport(db: Queryable, companyIds: string[], from: Date, to: Date) {
+export async function accountingReport(db: Queryable, companyIds: string[], from: Date, to: Date, options: { balancesOnly?: boolean } = {}) {
   if (!companyIds.length)
     throw createError({ statusCode: 403, statusMessage: 'Company access required' });
   if (!Number.isFinite(from.getTime()) || !Number.isFinite(to.getTime()) || from > to)
@@ -38,19 +38,20 @@ export async function accountingReport(db: Queryable, companyIds: string[], from
   COALESCE(sum(CASE WHEN j.journal_date>=$2 AND l.side='CREDIT' THEN round(l.amount*j.exchange_rate,2) ELSE 0 END),0)::text AS credit
  FROM accountant_v2_manual_journal_lines l JOIN accountant_v2_manual_journals j ON j.id=l.journal_id AND j.company_id=l.company_id
  JOIN accountant_v2_accounting_accounts a ON a.id=l.account_id AND a.company_id=l.company_id
- WHERE j.company_id=ANY($1::text[]) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL AND j.journal_date<=$3
+ WHERE l.company_id=ANY($1::text[]) AND j.company_id=ANY($1::text[]) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL AND j.journal_date<=$3
+ ${options.balancesOnly ? "AND a.account_type IN ('CASH','BANK','ACCOUNTS_RECEIVABLE')" : ''}
  GROUP BY a.id,a.company_id,a.name,a.code,a.account_type,a.category ORDER BY a.code NULLS LAST,a.name,a.id`,
-      `SELECT j.id,round(sum(CASE l.side WHEN 'DEBIT' THEN round(l.amount*j.exchange_rate,2) ELSE -round(l.amount*j.exchange_rate,2) END),2)::text AS amount
+      options.balancesOnly ? 'SELECT NULL AS amount WHERE false' : `SELECT j.id,round(sum(CASE l.side WHEN 'DEBIT' THEN round(l.amount*j.exchange_rate,2) ELSE -round(l.amount*j.exchange_rate,2) END),2)::text AS amount
  FROM accountant_v2_manual_journal_lines l JOIN accountant_v2_manual_journals j ON j.id=l.journal_id AND j.company_id=l.company_id
  JOIN accountant_v2_accounting_accounts a ON a.id=l.account_id AND a.company_id=l.company_id
- WHERE j.company_id=ANY($1::text[]) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL AND a.account_type IN ('CASH','BANK') AND j.journal_date BETWEEN $2 AND $3 GROUP BY j.id`,
-      `SELECT j.journal_date::date::text AS date,
+ WHERE l.company_id=ANY($1::text[]) AND j.company_id=ANY($1::text[]) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL AND a.account_type IN ('CASH','BANK') AND j.journal_date BETWEEN $2 AND $3 GROUP BY j.id`,
+      options.balancesOnly ? 'SELECT NULL AS date WHERE false' : `SELECT j.journal_date::date::text AS date,
   COALESCE(sum(CASE WHEN a.account_type IN ('INCOME','OTHER_INCOME') THEN CASE l.side WHEN 'CREDIT' THEN round(l.amount*j.exchange_rate,2) ELSE -round(l.amount*j.exchange_rate,2) END ELSE 0 END),0)::text AS sales,
   COALESCE(sum(CASE WHEN a.account_type IN ('EXPENSE','OTHER_EXPENSE') THEN CASE l.side WHEN 'DEBIT' THEN round(l.amount*j.exchange_rate,2) ELSE -round(l.amount*j.exchange_rate,2) END ELSE 0 END),0)::text AS expenses,
   COALESCE(sum(CASE WHEN a.account_type='COST_OF_GOODS_SOLD' THEN CASE l.side WHEN 'DEBIT' THEN round(l.amount*j.exchange_rate,2) ELSE -round(l.amount*j.exchange_rate,2) END ELSE 0 END),0)::text AS cogs
  FROM accountant_v2_manual_journal_lines l JOIN accountant_v2_manual_journals j ON j.id=l.journal_id AND j.company_id=l.company_id
  JOIN accountant_v2_accounting_accounts a ON a.id=l.account_id AND a.company_id=l.company_id
- WHERE j.company_id=ANY($1::text[]) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL AND j.journal_date BETWEEN $2 AND $3
+ WHERE l.company_id=ANY($1::text[]) AND j.company_id=ANY($1::text[]) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL AND j.journal_date BETWEEN $2 AND $3
  AND a.category IN ('INCOME','EXPENSE') GROUP BY j.journal_date::date ORDER BY j.journal_date::date`,
     ],
     args
@@ -188,17 +189,18 @@ export async function taxAccountingReport(db: Queryable, companyId: string, from
 export async function accountingMoneyActivity(db: Queryable, ids: string[], from: Date, to: Date) {
   const rows = (
     await db.query(
-      `SELECT a.id,a.name,a.account_type::text AS type,
+      `SELECT id,name,type,kind,party,side,SUM(amount)::text AS amount FROM (SELECT a.id,a.name,a.account_type::text AS type,
   CASE WHEN COALESCE(parent.source_type,j.source_type)='ACCOUNT_TRANSFER' THEN 'transfer'
        WHEN COALESCE(parent.source_type,j.source_type) IN ('INVESTOR','LEGACY_INVESTOR','INVESTOR_REVERSAL') THEN 'investment' ELSE 'money' END AS kind,
   CASE WHEN l.distributor_id IS NOT NULL THEN 'SUPPLIER' WHEN l.source_parties ? 'user' THEN 'EMPLOYEE' WHEN l.source_parties ? 'client' THEN 'CUSTOMER' ELSE COALESCE(audit."after"->'sourceRow'->>'party_type','OTHER') END AS party,
-  l.side,round(l.amount*j.exchange_rate,2)::text AS amount
+  l.side,round(l.amount*j.exchange_rate,2) AS amount
  FROM accountant_v2_manual_journal_lines l JOIN accountant_v2_manual_journals j ON j.id=l.journal_id AND j.company_id=l.company_id
  JOIN accountant_v2_accounting_accounts a ON a.id=l.account_id AND a.company_id=l.company_id
  LEFT JOIN accountant_v2_manual_journals parent ON parent.id=j.reversed_from_id AND parent.company_id=j.company_id
  LEFT JOIN accountant_v2_accountant_audit audit ON audit.company_id=j.company_id AND audit.resource='transaction-history-import' AND audit.action='imported' AND audit."after"->>'journalId'=COALESCE(parent.id,j.id)
- WHERE j.company_id=ANY($1::text[]) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL AND j.journal_date BETWEEN $2 AND $3
- AND (a.account_type IN ('CASH','BANK') OR COALESCE(parent.source_type,j.source_type)='ACCOUNT_TRANSFER') AND (COALESCE(parent.source_type,j.source_type) IN ('ACCOUNT_TRANSFER','MONEY_RECEIVE','MONEY_PAY','LEGACY_MONEY_RECEIVE','LEGACY_MONEY_PAY','INVESTOR','LEGACY_INVESTOR','INVESTOR_REVERSAL') OR audit.id IS NOT NULL)`,
+ WHERE l.company_id=ANY($1::text[]) AND j.company_id=ANY($1::text[]) AND j.status='PUBLISHED' AND j.deleted_at IS NULL AND l.deleted_at IS NULL AND j.journal_date BETWEEN $2 AND $3
+ AND (a.account_type IN ('CASH','BANK') OR COALESCE(parent.source_type,j.source_type)='ACCOUNT_TRANSFER') AND (COALESCE(parent.source_type,j.source_type) IN ('ACCOUNT_TRANSFER','MONEY_RECEIVE','MONEY_PAY','LEGACY_MONEY_RECEIVE','LEGACY_MONEY_PAY','INVESTOR','LEGACY_INVESTOR','INVESTOR_REVERSAL') OR audit.id IS NOT NULL)
+ ) activity GROUP BY id,name,type,kind,party,side ORDER BY id,kind,party,side`,
       [ids, from.toISOString(), to.toISOString()]
     )
   ).rows;
