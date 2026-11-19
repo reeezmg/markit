@@ -4,7 +4,7 @@ const $fetch = settingsCompany.fetch;
 const afterSales = useAfterSalesFeature(settingsCompany.scope.companyId, $fetch);
 const { startNewYear, updatePrefixes } = settingsCompany;
 import { useUpdateCompany } from '~/lib/hooks/company';
-import SettingsCustomerProductNumbering from '~/components/Settings/CustomerProductNumbering.vue';
+import SettingsCustomerProductNumbering from '~/components/settings/CustomerProductNumbering.vue';
 
 const UpdateCompany = useUpdateCompany({ optimisticUpdate: true });
 const useAuth = () => settingsCompany.auth;
