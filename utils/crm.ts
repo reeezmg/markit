@@ -1,15 +1,21 @@
 export const crmPages = [
   ['','Overview','i-heroicons-squares-2x2'],
-  ['clients','Clients / leads','i-heroicons-users'],['accounts','Business accounts','i-heroicons-building-office-2'],
+  ['clients','Clients / leads','i-heroicons-users'],
   ['deals','Deals and pipeline','i-heroicons-view-columns'],['activities','Tasks and activities','i-heroicons-check-circle'],
   ['calendar','Calendar','i-heroicons-calendar-days'],['segments','Segments','i-heroicons-funnel'],
-  ['campaigns','Campaigns','i-heroicons-megaphone'],['reports','Reports','i-heroicons-chart-bar'],
+  ['reports','Reports','i-heroicons-chart-bar'],
   ['settings','CRM settings','i-heroicons-cog-6-tooth'],
 ] as const
 export const crmClientLocation = (query:Record<string,any>={}) => ({path:'/client',query:{...query,from:'crm'}})
 export const crmKinds = ['clients','accounts','deals','activities'] as const
 export type CrmKind = typeof crmKinds[number]
 export type CrmStage = { key:string; name:string; probability:number; status:'OPEN'|'WON'|'LOST' }
+export const crmSalesEvents = [
+  ['QUOTE_SENT','Quotation sent'],['QUOTE_ACCEPTED','Quotation accepted'],['QUOTE_DECLINED','Quotation declined'],['QUOTE_EXPIRED','Quotation expired'],
+  ['SALES_ORDER_CONFIRMED','Sales order confirmed'],['SALES_ORDER_CLOSED','Sales order closed'],['SALES_ORDER_CANCELLED','Sales order cancelled'],
+  ['INVOICE_PAID','Invoice fully paid'],['INVOICE_PAYMENT_PENDING','Invoice payment pending'],['INVOICE_CANCELLED','Invoice cancelled / deleted'],
+] as const
+export type CrmSalesRule={key:string;name:string;enabled:boolean;event:typeof crmSalesEvents[number][0];pipelineKey:string;fromStageKey:string;stageKey:string;forwardOnly:boolean;lossReason:string;revision?:string}
 export type CrmSettings = ReturnType<typeof defaultCrmSettings>
 export const crmManager = (role:string) => ['admin','manager'].includes(role)
 export const crmStaff = (role:string) => ['admin','manager','user','biller','accountant'].includes(role)
@@ -24,6 +30,7 @@ export function defaultCrmSettings(){return {
   scoring:{email:10,phone:15,account:15,qualified:40},
   automations:{newLeadFollowUpDays:1,wonFollowUpDays:7,taskReminders:true},
   segments:[] as {key:string;name:string;filters:Record<string,string|number>}[],
+  salesRules:[] as CrmSalesRule[],
 }}
 const fail=(message:string):never=>{throw Error(message)}
 export function crmText(value:any,label:string,max=200,required=false){
@@ -62,12 +69,25 @@ export function normalizeCrmSettings(value:any):CrmSettings{
   const scoring=Object.fromEntries(['email','phone','account','qualified'].map(k=>[k,Math.round(crmNumber(value.scoring?.[k],k+' score',0,100))])) as CrmSettings['scoring']
   if(!Array.isArray(value.segments)||value.segments.length>50)fail('Use up to 50 saved segments.')
   const segments=value.segments.map((s:any)=>({key:key(s.key),name:crmText(s.name,'segment name',100,true),filters:normalizeCrmFilters(s.filters)}));unique(segments,'segment')
+  if(!Array.isArray(value.salesRules??[])||(value.salesRules??[]).length>30)fail('Use up to 30 sales rules.')
+  const salesRules:CrmSalesRule[]=(value.salesRules??[]).map((r:any)=>{
+    const pipeline=pipelines.find((p:any)=>p.key===r.pipelineKey),stage=pipeline?.stages.find((s:any)=>s.key===r.stageKey)
+    if(!pipeline||!stage)fail('Choose an existing pipeline and target stage for each sales rule.')
+    const fromStageKey=crmText(r.fromStageKey,'starting stage',50)
+    if(fromStageKey&&!pipeline.stages.some((s:any)=>s.key===fromStageKey&&s.status==='OPEN'))fail('Choose an open starting stage for the sales rule.')
+    if(typeof r.enabled!=='boolean'||typeof r.forwardOnly!=='boolean')fail('Choose valid sales rule options.')
+    return {key:key(r.key),name:crmText(r.name,'rule name',100,true),enabled:r.enabled,event:choice(r.event,crmSalesEvents.map(e=>e[0]),'sales event') as CrmSalesRule['event'],pipelineKey:pipeline.key,fromStageKey,stageKey:stage.key,forwardOnly:r.forwardOnly,lossReason:crmText(r.lossReason,'automatic loss reason',1000,stage.status==='LOST'),revision:crmText(r.revision,'rule revision',100)}
+  });unique(salesRules,'sales rule')
+  for(let i=0;i<salesRules.length;i++)for(const other of salesRules.slice(i+1)){
+    const rule=salesRules[i]
+    if(rule.enabled&&other.enabled&&rule.event===other.event&&rule.pipelineKey===other.pipelineKey&&(!rule.fromStageKey||!other.fromStageKey||rule.fromStageKey===other.fromStageKey))fail('Enabled rules for the same event and pipeline must use different starting stages.')
+  }
   return {pipelines,sources:[...new Set<string>(value.sources.map((s:any)=>crmText(s,'source',80,true)))],tags:tags(value.tags),customFields,scoring,
-    automations:{newLeadFollowUpDays:Math.round(crmNumber(value.automations?.newLeadFollowUpDays,'lead follow-up days',0,365)),wonFollowUpDays:Math.round(crmNumber(value.automations?.wonFollowUpDays,'won follow-up days',0,365)),taskReminders:value.automations?.taskReminders===true},segments}
+    automations:{newLeadFollowUpDays:Math.round(crmNumber(value.automations?.newLeadFollowUpDays,'lead follow-up days',0,365)),wonFollowUpDays:Math.round(crmNumber(value.automations?.wonFollowUpDays,'won follow-up days',0,365)),taskReminders:value.automations?.taskReminders===true},segments,salesRules}
 }
 export function normalizeCrmFilters(input:any={}){
   const result:Record<string,string|number>={}
-  for(const key of ['q','ownerId','source','lifecycle','leadStatus','tag','accountId','clientId','dealId','pipelineKey','stageKey','status','kind','priority','archived','due'])if(input[key]!=null&&input[key]!=='')result[key]=crmText(input[key],key,200)
+  for(const key of ['q','ownerId','source','lifecycle','leadStatus','tag','accountId','clientId','dealId','segmentKey','pipelineKey','stageKey','status','kind','priority','archived','due'])if(input[key]!=null&&input[key]!=='')result[key]=crmText(input[key],key,200)
   if(input.minScore!=null&&input.minScore!=='')result.minScore=crmNumber(input.minScore,'minimum score',0,100)
   for(const key of ['from','to'])if(input[key])result[key]=crmDate(input[key],key)!
   return result
@@ -92,6 +112,10 @@ export function normalizeCrmRecord(kind:CrmKind,input:any,settings=defaultCrmSet
     Object.assign(body,{clientId:crmText(input.clientId,'contact',100)||null,accountId:crmText(input.accountId,'business account',100)||null,pipelineKey:pipeline!.key,stageKey:stage!.key,status:stage!.status,probability:stage!.probability,value:Math.round(crmNumber(input.value,'deal value',0,999999999999)*100)/100,expectedClose:crmDate(input.expectedClose,'expected close date'),source:crmText(input.source||'Other','source',80),lossReason:crmText(input.lossReason,'loss reason',1000,stage!.status==='LOST')})
   }
   if(kind==='activities'){
+    const segmentKey=crmText(input.segmentKey,'segment',100)
+    const segment=settings.segments.find(s=>s.key===segmentKey)
+    if(segmentKey&&!segment)fail('Choose a current segment in this company.')
+    Object.assign(body,{segmentKey:segmentKey||null,segmentName:segment?.name||''})
     Object.assign(body,{clientId:crmText(input.clientId,'contact',100)||null,accountId:crmText(input.accountId,'business account',100)||null,dealId:crmText(input.dealId,'deal',100)||null,kind:choice(input.kind||'TASK',['TASK','CALL','MEETING','EMAIL','WHATSAPP','NOTE'],'activity type'),subject:crmText(input.subject,'subject',200,true),body:crmText(input.body,'activity details',10000),status:choice(input.status||'OPEN',['OPEN','DONE','CANCELLED'],'activity status'),priority:choice(input.priority||'NORMAL',['LOW','NORMAL','HIGH'],'priority'),dueAt:instant(input.dueAt,'due date and time'),endAt:instant(input.endAt,'end date and time'),recurrenceDays:input.recurrenceDays?Math.round(crmNumber(input.recurrenceDays,'recurrence days',1,3650)):null})
     if(body.endAt&&(!body.dueAt||body.endAt<body.dueAt))fail('The end time must follow the start time.')
     if(body.recurrenceDays&&!body.dueAt)fail('A repeating task needs a due date.')

@@ -1,5 +1,14 @@
 Dedicated sales CRM (revised 2026-11-19): `CrmSettings`, `CrmAccount`, `CrmDeal`,
 `CrmActivity`, `CrmDocumentLink` and `CrmAudit` are scoped, raw-API-owned models.
+CrmSettings.settings.salesRules contains validated sales-state-to-deal-stage rules
+and server-controlled activation revisions. CrmAudit sales-rule entries track each
+rule revision/document link's observed state and decision; ordinary deal audit
+entries record automatic changes/skips. CrmDocumentLink kind also accepts SALES_ORDER
+for existing sales_orders. All reuse current string/JSON storage, with no DDL.
+CrmActivity.attachments retains legacy HTTPS-reference arrays and accepts a v1
+JSON envelope with references, segmentKey and segmentName for company-local saved
+segment links. The raw API flattens this metadata; recurrence preserves it. This
+extends an existing JSON contract without physical schema changes.
 Contacts reuse Client + CompanyClient and the existing /client page; CrmContact is
 removed from the unapplied design. CompanyClient's crmData/crmVersion/crmAccountId
 store only company CRM attributes, concurrency and account association. Those fields

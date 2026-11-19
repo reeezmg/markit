@@ -6,6 +6,7 @@ import { crmDetail, crmClientChoices, crmSummary, crmReports, crmImport, crmRead
 import { crmKinds, crmCsv, type CrmKind } from '../../../utils/crm'
 import { crmCampaigns } from '../../utils/crm-campaigns'
 import { readSalesWorkflow } from '../../utils/sales-workflow'
+import { processCrmSalesRules } from '../../utils/crm-sales-rules'
 
 export default defineEventHandler(async event=>{
   const actor=await crmActor(event),query=getQuery(event)
@@ -28,6 +29,7 @@ export default defineEventHandler(async event=>{
       if(!ready)throw crmError('CRM database installation is pending. Review the prepared CRM update before activation.',503)
       const kind=resource as CrmKind
       if(resource==='settings'&&event.method==='GET')result=await readCrmSettings(db,actor.companyId)
+      else if(resource==='sales-rules'&&id==='run'&&event.method==='POST'){crmRequireManager(actor);result=await processCrmSalesRules(db,actor.companyId)}
       else if(resource==='settings'&&event.method==='PUT')result=await saveCrmSettings(db,actor,body)
       else if(resource==='summary'&&event.method==='GET')result=await crmSummary(db,actor)
       else if(resource==='reports'&&event.method==='GET')result=await crmReports(db,actor,query)
@@ -40,13 +42,13 @@ export default defineEventHandler(async event=>{
       else if(resource==='clients'&&id==='import'&&event.method==='POST')result=await crmImport(db,actor,body)
       else if(resource==='deals'&&id&&action==='documents'&&event.method==='POST')result=await linkCrmDocument(db,actor,id,body)
       else if(resource==='documents'&&event.method==='GET'){
-        const kinds:Record<string,{table:string;label:string;extra:string}>={QUOTE:{table:'quotes',label:'quote_number',extra:'AND deleted=false'},BILL:{table:'bills',label:'coalesce(invoice_code,invoice_number::text)',extra:"AND deleted=false AND is_markit=false AND COALESCE(type::text,'BILL')='BILL'"},ORDER:{table:'ecomm_orders',label:'order_number::text',extra:''}}
+        const kinds:Record<string,{table:string;label:string;extra:string}>={QUOTE:{table:'quotes',label:'quote_number',extra:'AND deleted=false'},BILL:{table:'bills',label:'coalesce(invoice_code,invoice_number::text)',extra:"AND deleted=false AND is_markit=false AND COALESCE(type::text,'BILL')='BILL'"},SALES_ORDER:{table:'sales_orders',label:'order_number',extra:'AND deleted=false'},ORDER:{table:'ecomm_orders',label:'order_number::text',extra:''}}
         const source=Object.hasOwn(kinds,String(query.kind))?kinds[String(query.kind)]:null;if(!source)throw crmError('Choose a document type.')
         result=await crmTableReady(db,source.table)?(await db.query(`SELECT id,${source.label} AS name,client_id FROM ${source.table} WHERE company_id=$1 AND ($2='' OR client_id=$2) AND concat_ws(' ',id,${source.label}) ILIKE $3 ${source.extra} ORDER BY id LIMIT 50`,[actor.companyId,String(query.clientId||''),'%'+String(query.q||'').slice(0,100)+'%'])).rows:[]
       }
       else if(crmKinds.includes(kind)&&id==='export'&&event.method==='GET'){
         const list=await crmList(db,actor,kind,query,true)
-        const columns:[string,string][]=kind==='clients'?[['clientId','Client ID'],['name','Name'],['phone','Phone'],['email','Email'],['lifecycle','Type'],['leadStatus','Lead status'],['source','Source'],['ownerName','Owner'],['score','Score'],['tags','Tags']]:kind==='deals'?[['name','Deal'],['clientName','Contact'],['pipelineKey','Pipeline'],['stageKey','Stage'],['status','Outcome'],['value','Value'],['probability','Probability'],['expectedClose','Expected close'],['ownerName','Owner']]:kind==='accounts'?[['name','Account'],['industry','Industry'],['phone','Phone'],['email','Email'],['website','Website'],['ownerName','Owner']]:[['subject','Subject'],['kind','Type'],['status','Status'],['priority','Priority'],['dueAt','Due'],['ownerName','Owner'],['clientName','Contact']]
+        const columns:[string,string][]=kind==='clients'?[['clientId','Client ID'],['name','Name'],['phone','Phone'],['email','Email'],['lifecycle','Type'],['leadStatus','Lead status'],['source','Source'],['ownerName','Owner'],['score','Score'],['tags','Tags']]:kind==='deals'?[['name','Deal'],['clientName','Contact'],['pipelineKey','Pipeline'],['stageKey','Stage'],['status','Outcome'],['value','Value'],['probability','Probability'],['expectedClose','Expected close'],['ownerName','Owner']]:kind==='accounts'?[['name','Account'],['industry','Industry'],['phone','Phone'],['email','Email'],['website','Website'],['ownerName','Owner']]:[['subject','Subject'],['kind','Type'],['status','Status'],['priority','Priority'],['dueAt','Due'],['ownerName','Owner'],['clientName','Contact'],['segmentName','Segment']]
         if(kind==='clients'){const {settings}=await readCrmSettings(db,actor.companyId);for(const field of settings.customFields){const key='custom:'+field.label;columns.push([key,key]);for(const row of list.rows)row[key]=row.customFields?.[field.key]??''}}
         setHeader(event,'Content-Type','text/csv; charset=utf-8');setHeader(event,'Content-Disposition',`attachment; filename="crm-${kind}.csv"`)
         setHeader(event,'X-CRM-Export-Truncated',String(list.truncated));result=crmCsv(list.rows,columns)

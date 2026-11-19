@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import CRMWorkspace from '../../../components/CRM/Workspace.vue'
-const route=useRoute();
+import { crmClientLocation } from '../../../utils/crm'
+definePageMeta({ redirect: to => crmClientLocation(to.query) })
 </script>
-<template><CRMWorkspace section="accounts" :record-id="String(route.params.accountId)"/></template>
+<template><span /></template>

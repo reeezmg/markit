@@ -140,6 +140,12 @@ model WhatsAppInstallationAppointment {
 // applying the CRM migration requires separate explicit authorization.
 // Settings JSON contains validated pipelines/stages, sources, tags, contact custom
 // fields, scoring weights, saved segments and internal follow-up automations.
+// salesRules JSON stores disabled-by-default, company-local document-state rules:
+// key/name/enabled/event/pipelineKey/fromStageKey/stageKey/forwardOnly/lossReason.
+// Only explicitly linked QUOTE/BILL/SALES_ORDER records can update a deal. Existing
+// records are baselined on activation/linking; state observations and decisions use
+// append-only CrmAudit entityType='sales-rule' with versioned rule/link identities.
+// The authorized CRM worker/check-now route owns updates, never source accounting.
 model CrmSettings {
     companyId String @id @map("company_id")
     company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -242,6 +248,12 @@ model CrmActivity {
     remindedAt DateTime? @db.Timestamptz(3) @map("reminded_at")
     recurrenceDays Int? @map("recurrence_days")
     recurrenceKey String? @map("recurrence_key")
+    // Activity reference metadata accepts legacy HTTPS-reference arrays or the
+    // version-1 envelope {version:1,references:[{name,url}],segmentKey,segmentName}.
+    // segmentKey references this company's CrmSettings.settings.segments key;
+    // segmentName preserves the label if that saved segment is later removed.
+    // Raw CRM APIs expose attachments as an array and segmentKey/segmentName
+    // separately. A segment task is one group task, never a client fan-out.
     attachments Json @default("[]")
     archived Boolean @default(false)
     version Int @default(1)
@@ -261,7 +273,7 @@ model CrmDocumentLink {
     company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
     dealId String @map("deal_id")
     deal CrmDeal @relation(fields: [companyId, dealId], references: [companyId, id], onDelete: Restrict)
-    // QUOTE/BILL/ORDER scalar IDs retain history. APIs validate document company and
+    // QUOTE/BILL/SALES_ORDER/ORDER scalar IDs retain history. APIs validate document company and
     // the deal's linked client; linking never changes a business document or its status.
     kind String
     documentId String @map("document_id")

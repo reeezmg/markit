@@ -51,13 +51,16 @@ export async function crmImport(db:CrmDb,actor:CrmActor,body:any){
 export async function linkCrmDocument(db:CrmDb,actor:CrmActor,id:string,body:any){
   const deal=await crmRead(db,actor,'deals',id)
   if(!crmCanEdit(actor,deal)||deal.archived)throw crmError('You cannot edit this deal.',403)
-  const definitions:Record<string,{table:string;deleted:string}>={QUOTE:{table:'quotes',deleted:'AND deleted=false'},BILL:{table:'bills',deleted:"AND deleted=false AND is_markit=false AND COALESCE(type::text,'BILL')='BILL'"},ORDER:{table:'ecomm_orders',deleted:''}}
+  const definitions:Record<string,{table:string;deleted:string}>={QUOTE:{table:'quotes',deleted:'AND deleted=false'},BILL:{table:'bills',deleted:"AND deleted=false AND is_markit=false AND COALESCE(type::text,'BILL')='BILL'"},SALES_ORDER:{table:'sales_orders',deleted:'AND deleted=false'},ORDER:{table:'ecomm_orders',deleted:''}}
   const definition=Object.hasOwn(definitions,body.kind)?definitions[body.kind]:null;if(!definition)throw crmError('Choose a quotation, invoice or order.')
   const document=(await db.query(`SELECT id,client_id FROM ${definition.table} WHERE company_id=$1 AND id=$2 ${definition.deleted}`,[actor.companyId,String(body.documentId||'')])).rows[0]
   if(!document)throw crmError('The document does not belong to this company.')
   if(deal.client_id){const contact=await crmRead(db,actor,'clients',deal.client_id);if(document.client_id!==contact.id)throw crmError('Choose a document for this deal’s client.')}
   await db.query(`INSERT INTO crm_document_links(id,company_id,deal_id,kind,document_id,created_by) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(company_id,deal_id,kind,document_id) DO NOTHING`,[randomUUID(),actor.companyId,id,body.kind,document.id,actor.userId])
-  await crmAudit(db,actor,'deals',id,'Linked '+body.kind,null,{documentId:document.id});return {linked:true}
+  await crmAudit(db,actor,'deals',id,'Linked '+body.kind,null,{documentId:document.id})
+  const {processCrmSalesRules}=await import('./crm-sales-rules')
+  await processCrmSalesRules(db,actor.companyId,true)
+  return {linked:true}
 }
 export async function crmCommerce(db:CrmDb,company:string,clientId:string|null){
   const commerce:any={bills:[],quotes:[],orders:[],products:[],legacyActivities:[],client:null,permissions:{emailConfirmed:false,whatsappAvailable:false,whatsappService:false,whatsappMarketing:false}}

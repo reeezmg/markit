@@ -10,6 +10,7 @@ import { Switch } from '@headlessui/vue';
 import type { Prisma } from '@prisma/client'
 import { BillingAddClient } from '#components';
 import CRMClientPanel from '~/components/CRM/ClientPanel.vue';
+import CRMTaskComposer from '~/components/CRM/TaskComposer.vue';
 import { crmStaff, crmClientLocation } from '~/utils/crm';
 
 import { useUpdateBill } from '~/lib/hooks/bill';
@@ -28,6 +29,7 @@ const crmClient = computed(() => typeof route.query.crmClient === 'string' ? rou
 const crmCompany = computed(() => typeof route.query.entryCompany === 'string' ? route.query.entryCompany : companyScope.companyId.value);
 const crmAllowed = computed(() => crmStaff(companyScope.auth.session.value?.role || ''));
 const crmMode = computed(() => route.query.from === 'crm' && crmAllowed.value);
+const taskClient = ref<any>(null);
 const crmOpen = computed({ get: () => !!crmClient.value && crmAllowed.value, set: value => { if (!value) { const query = { ...route.query }; delete query.crmClient; void router.replace({ query }); } } });
 const useAuth = () => companyScope.auth;
 const isClientAddModelOpen = ref(false);
@@ -154,6 +156,7 @@ const active = (selectedRows) => [
 
 const action = (row) => [
     [
+        ...(crmAllowed.value ? [{label:'Add task',icon:'i-heroicons-plus',click:()=>{taskClient.value=row;}}] : []),
         ...(crmAllowed.value ? [{
             label: 'CRM details',
             icon: 'i-heroicons-user-group',
@@ -469,6 +472,7 @@ const downloadClientsAsVCF = () => {
                     />
             </div>
                 <div class="flex flex-row gap-3 w-full sm:w-auto justify-end">
+                    <UButton v-if="crmMode" color="gray" icon="i-heroicons-plus" @click="taskClient={companyId:companyScope.selected.value||companyScope.companyId.value}">Add task</UButton>
                   
                     <UButton
                         class="w-full flex-1 sm:w-auto sm:flex-none"
@@ -742,6 +746,7 @@ const downloadClientsAsVCF = () => {
         </UCard>
 
 <UModal v-model="isEditOpen"><ClientMembershipForm :record="editingClient" @close="isEditOpen = false" @saved="isEditOpen = false; refetch()" /></UModal>
+<CRMTaskComposer v-if="taskClient" :key="taskClient.companyId+':'+(taskClient.clientId||'')" :company-id="taskClient.companyId" :client-id="taskClient.clientId" :client-name="taskClient.name" @saved="toast.add({title:'Task created',color:'green'})" @close="taskClient=null"/>
 <USlideover v-model="crmOpen" :ui="{ width: 'sm:max-w-6xl' }">
   <div class="flex justify-end border-b p-3 dark:border-gray-800"><UButton color="gray" variant="ghost" icon="i-heroicons-x-mark" aria-label="Close client CRM" @click="crmOpen = false" /></div>
   <div class="min-h-0 flex-1 overflow-y-auto"><CRMClientPanel v-if="crmClient && crmOpen" :key="crmCompany + ':' + crmClient" :client-id="crmClient" :company-id="crmCompany" /></div>

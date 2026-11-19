@@ -12,6 +12,10 @@ Client identity creation/editing and membership activation remain in the existin
 forms below. Company-specific owner, qualification, source, tags and custom fields
 are controlled CRM attributes on CompanyClient; they do not duplicate client identity.
 Deals/activities reference existing company clients directly. See [ARCH-crm.md](ARCH-crm.md).
+Staff row actions include **Add task**, prefilling that row's client and company;
+the CRM-mode toolbar also offers an unlinked **Add task** action. The shared
+`CRM/TaskComposer.vue` authorizes the selected company and opens the existing
+activity editor. Client CRM details offers Add task alongside Add activity.
 The authorized 2026-11-19 schema push completed the missing CompanyClient columns
 and account foreign key; see ARCH-crm.md for the verified installation state.
 

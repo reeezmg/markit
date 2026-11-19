@@ -23,7 +23,15 @@ export async function crmReady(db:CrmDb){return !!(await db.query(`SELECT to_reg
   AND to_regclass('public.crm_audit') IS NOT NULL AND to_regclass('public.crm_document_links') IS NOT NULL
   AND (SELECT count(*)=3 FROM information_schema.columns WHERE table_schema='public' AND table_name='company_clients' AND column_name IN('crm_data','crm_version','crm_account_id')) AS ready`)).rows[0]?.ready}
 export async function crmTableReady(db:CrmDb,table:string){return !!(await db.query('SELECT to_regclass($1) IS NOT NULL AS ready',['public.'+table])).rows[0]?.ready}
-export function crmRow(row:any):Record<string,any>{return Object.fromEntries(Object.entries(row).map(([key,value])=>[key.replace(/_([a-z])/g,(_,c)=>c.toUpperCase()),value instanceof Date?value.toISOString():value]))}
+export function crmRow(row:any):Record<string,any>{
+  const result=Object.fromEntries(Object.entries(row).map(([key,value])=>[key.replace(/_([a-z])/g,(_,c)=>c.toUpperCase()),value instanceof Date?value.toISOString():value]))
+  if(result.attachments&&!Array.isArray(result.attachments)){
+    const metadata=result.attachments as any
+    result.attachments=metadata.references||[];result.segmentKey=metadata.segmentKey||null;result.segmentName=metadata.segmentName||''
+  }
+  return result
+}
+function activityReferences(body:any){return JSON.stringify(body.segmentKey?{version:1,references:body.attachments||[],segmentKey:body.segmentKey,segmentName:body.segmentName}:body.attachments||[])}
 export async function readCrmSettings(db:CrmDb,company:string){
   const row=(await db.query('SELECT settings,version FROM crm_settings WHERE company_id=$1',[company])).rows[0]
   return {settings:row?normalizeCrmSettings(row.settings):defaultCrmSettings(),version:row?.version||0}
@@ -52,6 +60,7 @@ export function crmWhere(kind:CrmKind,company:string,input:any,settings:CrmSetti
   const f=normalizeCrmFilters(input),args:any[]=[company],where=['r.company_id=$1']
   const bind=(value:any)=>{args.push(value);return '$'+args.length}
   if(f.archived!=='all')where.push('r.archived='+bind(f.archived==='true'))
+  if(kind==='activities'&&f.segmentKey)where.push(`r.attachments->>'segmentKey'=${bind(f.segmentKey)}`)
   const fields:Record<string,string>={ownerId:'owner_id',accountId:'account_id',clientId:'client_id',dealId:'deal_id',lifecycle:'lifecycle',leadStatus:'lead_status',source:'source',pipelineKey:'pipeline_key',stageKey:'stage_key',status:'status',kind:'kind',priority:'priority'}
   const columns=new Set(Object.values(fieldMaps[kind]))
   for(const [key,column]of Object.entries(fields))if(f[key]&&columns.has(column))where.push(`r.${column}=${bind(f[key])}`)
@@ -94,9 +103,14 @@ export async function saveCrmRecord(db:CrmDb,actor:CrmActor,kind:CrmKind,input:a
   if(old&&(!crmCanEdit(actor,old)||old.archived))throw crmError('You cannot edit this CRM record.',403)
   if(old&&old.version!==input.version)throw crmError('This record changed in another session. Reload it before saving.',409)
   const {settings}=await readCrmSettings(db,actor.companyId)
-  const body=crmInput(()=>normalizeCrmRecord(kind,input,settings))
+  // Preserve a removed segment's historical link on ordinary edits; users may
+  // clear it, but cannot attach a new task to a removed/foreign segment.
+  const previous=old?crmRow(old):null
+  const validationSettings=kind==='activities'&&previous?.segmentKey&&input.segmentKey===previous.segmentKey&&!settings.segments.some(s=>s.key===input.segmentKey)
+    ?{...settings,segments:[...settings.segments,{key:previous.segmentKey,name:previous.segmentName||'Removed segment',filters:{}}]}:settings
+  const body=crmInput(()=>normalizeCrmRecord(kind,input,validationSettings))
   await crmOwner(db,actor,body.ownerId,old);await crmRelations(db,actor,kind,body)
-  const recordId=id||randomUUID(),columns=fieldMaps[kind],entries=Object.entries(columns),values=entries.map(([key])=>['customFields','attachments'].includes(key)?JSON.stringify(body[key]):body[key])
+  const recordId=id||randomUUID(),columns=fieldMaps[kind],entries=Object.entries(columns),values=entries.map(([key])=>key==='attachments'?activityReferences(body):key==='customFields'?JSON.stringify(body[key]):body[key])
   if(old){
     const assignments=entries.map(([key,column],i)=>`${column}=$${i+4}${['customFields','attachments'].includes(key)?'::jsonb':''}`)
     if(kind==='deals'){
@@ -119,9 +133,9 @@ export async function saveCrmRecord(db:CrmDb,actor:CrmActor,kind:CrmKind,input:a
   if(kind==='deals'&&body.status==='WON'&&old?.status!=='WON'&&settings.automations.wonFollowUpDays)await createCrmFollowUp(db,actor,body.clientId,recordId,body.ownerId,'Follow up after '+body.name,settings.automations.wonFollowUpDays,'won:'+recordId)
   if(kind==='activities'&&body.status==='DONE'&&old?.status!=='DONE'&&body.recurrenceDays){
     const at=new Date(Math.max(Date.parse(body.dueAt),Date.now())+body.recurrenceDays*86400000)
-    await db.query(`INSERT INTO crm_activities(id,company_id,client_id,account_id,deal_id,kind,subject,body,status,priority,owner_id,due_at,recurrence_days,recurrence_key,created_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,'OPEN',$9,$10,$11,$12,$13,$14) ON CONFLICT(company_id,recurrence_key) DO NOTHING`,
-      [randomUUID(),actor.companyId,body.clientId,body.accountId,body.dealId,body.kind,body.subject,body.body,body.priority,body.ownerId,at,body.recurrenceDays,'repeat:'+recordId,actor.userId])
+    await db.query(`INSERT INTO crm_activities(id,company_id,client_id,account_id,deal_id,kind,subject,body,status,priority,owner_id,due_at,recurrence_days,recurrence_key,created_by,attachments)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,'OPEN',$9,$10,$11,$12,$13,$14,$15::jsonb) ON CONFLICT(company_id,recurrence_key) DO NOTHING`,
+      [randomUUID(),actor.companyId,body.clientId,body.accountId,body.dealId,body.kind,body.subject,body.body,body.priority,body.ownerId,at,body.recurrenceDays,'repeat:'+recordId,actor.userId,activityReferences(body)])
   }
   return crmRow(await crmRead(db,actor.companyId,kind,recordId))
 }
@@ -161,10 +175,19 @@ export async function archiveCrmRecords(db:CrmDb,actor:CrmActor,kind:CrmKind,bod
 export async function saveCrmSettings(db:CrmDb,actor:CrmActor,body:any){
   crmRequireManager(actor);const settings=crmInput(()=>normalizeCrmSettings(body.settings)),current=await readCrmSettings(db,actor.companyId)
   if(current.version!==body.version)throw crmError('CRM settings changed. Reload before saving.',409)
+  for(const rule of settings.salesRules){
+    const previous=current.settings.salesRules.find(r=>r.key===rule.key)
+    const configuration=(r:typeof rule)=>JSON.stringify({...r,revision:''})
+    rule.revision=previous&&configuration(previous)===configuration(rule)?previous.revision||randomUUID():randomUUID()
+  }
   const used=(await db.query('SELECT DISTINCT pipeline_key,stage_key,status FROM crm_deals WHERE company_id=$1',[actor.companyId])).rows
   for(const row of used){const stage=settings.pipelines.find(p=>p.key===row.pipeline_key)?.stages.find(s=>s.key===row.stage_key);if(!stage||stage.status!==row.status)throw crmError('A pipeline/stage in use cannot be removed or change its outcome. Move its deals first.')}
   await db.query(`INSERT INTO crm_settings(company_id,settings,updated_by) VALUES($1,$2::jsonb,$3) ON CONFLICT(company_id)
     DO UPDATE SET settings=excluded.settings,updated_by=excluded.updated_by,version=crm_settings.version+1,updated_at=now()`,[actor.companyId,JSON.stringify(settings),actor.userId])
   await crmAudit(db,actor,'settings',actor.companyId,'Settings saved',current.settings,settings)
+  if(settings.salesRules.some(r=>r.enabled)){
+    const {processCrmSalesRules}=await import('./crm-sales-rules')
+    await processCrmSalesRules(db,actor.companyId,true)
+  }
   return readCrmSettings(db,actor.companyId)
 }

@@ -2,7 +2,7 @@ import { defaultCrmSettings } from '../utils/crm'
 
 /** Isolated DML adapter. No network, database, schemas or provider sends. */
 export function crmFixture(){
-  let state:any={settings:null,version:0,ready:true,counter:1,tables:{crm_accounts:[],crm_deals:[],crm_activities:[],crm_audit:[],crm_document_links:[]},clients:[],memberships:[],notifications:[]},backup:any
+  let state:any={settings:null,version:0,ready:true,counter:1,tables:{crm_accounts:[],crm_deals:[],crm_activities:[],crm_audit:[],crm_document_links:[]},documents:{quotes:[],bills:[],sales_orders:[]},clients:[],memberships:[],notifications:[]},backup:any
   const staff=[{id:'manager',name:'Manager',role:'manager'},{id:'sales',name:'Sales rep',role:'user'},{id:'other',name:'Other rep',role:'user'}]
   const result=(rows:any[]=[])=>({rows,rowCount:rows.length})
   function split(text:string){const parts:string[]=[];let start=0,depth=0,quoted=false;for(let i=0;i<text.length;i++){const c=text[i];if(c==="'"){if(quoted&&text[i+1]==="'"){i++;continue}quoted=!quoted}if(!quoted){if(c==='(')depth++;if(c===')')depth--;if(c===','&&!depth){parts.push(text.slice(start,i).trim());start=i+1}}}parts.push(text.slice(start).trim());return parts}
@@ -17,10 +17,15 @@ export function crmFixture(){
     if(sql.includes('AS ready')&&sql.includes('to_regclass'))return result([{ready:state.ready}])
     if(sql.includes('SELECT currency FROM companies'))return result([{currency:'INR'}])
     if(sql.includes('FROM company_users')){
+      if(sql.startsWith('SELECT user_id FROM'))return result(staff.filter(r=>r.id===args[1]).map(r=>({user_id:r.id})))
       if(sql.startsWith('SELECT role '))return result(staff.filter(r=>r.id===args[1]).map(r=>({role:r.role})))
       return result(staff)
     }
     if(sql.includes('SELECT settings,version'))return result(state.settings?[{settings:state.settings,version:state.version}]:[])
+    if(sql.startsWith('SELECT id,deal_id,kind,document_id FROM crm_document_links'))return result(state.tables.crm_document_links.filter((r:any)=>r.company_id===args[0]&&r.id>args[1]&&r.kind===args[2]).sort((a:any,b:any)=>a.id.localeCompare(b.id)).slice(0,200))
+    if(sql.startsWith('SELECT changes FROM crm_audit'))return result(state.tables.crm_audit.filter((r:any)=>r.company_id===args[0]&&r.entity_type==='sales-rule'&&r.entity_id===args[1]).slice(-1))
+    const documentTable=sql.match(/FROM (quotes|bills|sales_orders) WHERE company_id=\$1 AND id=\$2/)
+    if(documentTable)return result(state.documents[documentTable[1]].filter((r:any)=>r.company_id===args[0]&&r.id===args[1]))
     if(sql.includes('SELECT preference_value FROM general_preferences'))return result([{preference_value:{includeAfterSales:true,includeInvoicing:true}}])
     if(sql.startsWith('INSERT INTO crm_settings')){state.settings=JSON.parse(args[1]);state.version++;return result()}
     if(sql.startsWith('SELECT DISTINCT pipeline_key'))return result(state.tables.crm_deals.filter((r:any)=>r.company_id===args[0]).map((r:any)=>({pipeline_key:r.pipeline_key,stage_key:r.stage_key,status:r.status})))
@@ -68,6 +73,8 @@ export function crmFixture(){
     }
     if(sql.startsWith('SELECT')&&sql.includes('FROM crm_')){
       const table=sql.match(/FROM (crm_\w+)/)![1];let rows=state.tables[table].filter((r:any)=>r.company_id===args[0])
+      const segment=sql.match(/r\.attachments->>'segmentKey'=\$(\d+)/)
+      if(segment)rows=rows.filter((r:any)=>r.attachments?.segmentKey===args[Number(segment[1])-1])
       if(sql.includes('WHERE r.company_id=$1 AND r.id=$2'))rows=rows.filter((r:any)=>r.id===args[1])
       else if(sql.includes('id<>$2'))rows=rows.filter((r:any)=>r.id!==args[1]&&((args[2]&&r.email===args[2])||(args[3]&&r.phone===args[3])||(args[4]&&r.client_id===args[4])))
       else if(sql.includes('AND client_id=$2 AND account_id IS NOT NULL'))rows=rows.filter((r:any)=>r.client_id===args[1]&&r.account_id&&r.account_id!==args[2])

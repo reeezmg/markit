@@ -3,6 +3,7 @@
 import * as Vue from 'vue'
 import Workspace from '../components/CRM/Workspace.vue'
 import ClientPanel from '../components/CRM/ClientPanel.vue'
+import TaskComposer from '../components/CRM/TaskComposer.vue'
 import UButton from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Button.vue'
 import UCard from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Card.vue'
 import UModal from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Modal.vue'
@@ -15,11 +16,12 @@ let ready=true,managerMode=true,servicesEnabled=true,settings=defaultCrmSettings
 const existingClient={id:'existing-client',clientId:'existing-client',name:'Alex CRM',email:'alex@example.com',phone:'+919876543210',ownerId:'',createdBy:'',version:0,lifecycle:'LEAD',leadStatus:'NEW',source:'Other',tags:[],customFields:{},score:25}
 const stores={'company-a':{clients:[existingClient],accounts:[],deals:[],activities:[]},'company-b':{clients:[],accounts:[],deals:[],activities:[]}}
 const clone=value=>JSON.parse(JSON.stringify(value))
-window.testRoute={path:'/client',query:{from:'crm'}};window.useCompanyScope=()=>scope;scope.selectCompany=async id=>{scope.companyId.value=id}
+window.testRoute={path:'/client',query:{from:'crm'}};window.useRoute=()=>window.testRoute;window.useCompanyScope=()=>scope;scope.selectCompany=async id=>{scope.companyId.value=id}
 window.$fetch=async(url,options={})=>{
   const company=options.headers?.['x-company-id'];if(!stores[company])throw Error('Company header missing')
   requests.push({url,...clone(options)});const store=stores[company],parts=url.replace('/api/crm/','').split('/'),[resource,id,action]=parts,method=options.method||'GET',body=options.body,query=options.query||{}
   if(resource==='bootstrap')return {ready,settings:clone(settings),version:settingsVersion,currency:'INR',marketingReady:false,workflow:{includeAfterSales:servicesEnabled,includeInvoicing:true},staff:[{id:'manager',name:'Sales manager',role:'manager'},{id:'viewer',name:'Sales viewer',role:'user'}],actor:{companyId:company,userId:managerMode?'manager':'viewer',role:managerMode?'manager':'user',manager:managerMode}}
+  if(resource==='sales-rules'&&id==='run')return {checked:1,updated:1,skipped:0,baselined:0};
   if(resource==='settings'&&method==='PUT'){settings=clone(body.settings);settingsVersion++;return {settings,version:settingsVersion}}
   if(resource==='client-choices')return [{id:'existing-client',name:'Existing client',phone:'+919876543212',email:'existing@example.com'}]
   if(resource==='reports')return {pipeline:[{pipelineKey:'sales',stageKey:'won',status:'WON',count:1,value:12500,weightedValue:12500,ageDays:1}],owners:[{ownerId:'manager',name:'Sales manager',won:1,lost:0,open:0,wonValue:12500,forecast:0}],forecast:[],sources:[{source:'Other',total:1,converted:1}],losses:[]}
@@ -33,11 +35,11 @@ window.$fetch=async(url,options={})=>{
     if(resource==='deals'){const stage=settings.pipelines.find(p=>p.key===row.pipelineKey).stages.find(s=>s.key===row.stageKey);row.status=stage.status;row.probability=stage.probability}
     if(id)Object.assign(store[resource].find(r=>r.id===id),row);else store[resource].push(row);return clone(row)
   }
-  let rows=store[resource];if(query.archived!=='all')rows=rows.filter(r=>!!r.archived===(query.archived==='true'));for(const key of ['lifecycle','status','ownerId','source','pipelineKey'])if(query[key]&&(key!=='pipelineKey'||resource==='deals'))rows=rows.filter(r=>r[key]===query[key]);return {rows:clone(rows),total:rows.length,page:1,pageSize:query.pageSize||30}
+  let rows=store[resource];if(query.archived!=='all')rows=rows.filter(r=>!!r.archived===(query.archived==='true'));for(const key of ['lifecycle','status','ownerId','source','pipelineKey','segmentKey'])if(query[key]&&(key!=='pipelineKey'||resource==='deals'))rows=rows.filter(r=>r[key]===query[key]);return {rows:clone(rows),total:rows.length,page:1,pageSize:query.pageSize||30}
 }
 scope.fetch=(url,options={})=>window.$fetch(url,{...options,headers:{'x-company-id':scope.companyId.value,...options.headers}})
 scope.fetch.raw=async(url,options={})=>{requests.push({url,...clone(options),headers:{'x-company-id':scope.companyId.value}});return {_data:'Name,Phone\nAlex,+919876543210',headers:{get:()=> 'false'}}}
-const app=createApp({setup:()=>()=>section.value==='clients'&&recordId.value?h(ClientPanel,{key:section.value+recordId.value+scope.companyId.value,clientId:recordId.value,companyId:scope.companyId.value}):h(Workspace,{key:section.value+recordId.value+scope.companyId.value,section:section.value,recordId:recordId.value||undefined})})
+const app=createApp({setup:()=>()=>section.value==='composer'?h(TaskComposer,{companyId:scope.companyId.value,clientId:'existing-client',clientName:'Alex CRM',onClose:()=>{section.value='clients'}}):section.value==='clients'&&recordId.value?h(ClientPanel,{key:section.value+recordId.value+scope.companyId.value,clientId:recordId.value,companyId:scope.companyId.value}):h(Workspace,{key:section.value+recordId.value+scope.companyId.value,section:section.value,recordId:recordId.value||undefined})})
 app.config.globalProperties.$route=window.testRoute
 app.config.errorHandler=error=>{document.querySelector('#result').textContent='FAILED: '+error.stack}
 for(const [name,component]of Object.entries({UButton,UCard,UModal}))app.component(name,component)
@@ -69,7 +71,12 @@ try{
   await go('clients',lead.id);await wait(()=>ui().includes('Linked client:'),'Existing client CRM context appears');assert(!button('Merge contact')&&!button('Convert / link client'),'Client identities do not have a duplicate merge/conversion flow')
   assert(ui().includes('Service history'),'Enabled after-sales links are available');servicesEnabled=false;await go('accounts');await go('clients',lead.id);assert(!ui().includes('Service history'),'Disabled after-sales links stay hidden');servicesEnabled=true
   await go('segments');set(document.querySelector('input[aria-label="Segment name"]'),'Qualified clients');await click('Save current filters');assert(settings.segments.length===1,'Segment is saved')
-  await go('settings');set(input('New lead: create'),'2');await click('Save CRM settings');assert(settings.automations.newLeadFollowUpDays===2,'Automation settings persist')
+  await go('composer');await wait(()=>input('Subject'),'Client task composer opens');set(input('Subject'),'Client page follow-up');assert(input('Client').value===lead.id,'Client page task keeps the row client');await click('Save activity');await saved();assert(stores['company-a'].activities.some(r=>r.subject==='Client page follow-up'&&r.clientId===lead.id),'Client page task saves its client link');
+  await go('clients',lead.id);await click('Add task');set(input('Subject'),'Client detail task');assert(input('Client').value===lead.id,'Client details preselect the client');await click('Save activity');await saved();
+  await go('deals');const dealCard=[...document.querySelectorAll('article')].find(el=>el.textContent.includes('Purifier supply'));dealCard.querySelector('button').click();await nextTick();set(input('Subject'),'Deal follow-up');assert(input('Deal').value===stores['company-a'].deals[0].id,'Pipeline card preselects its deal');await click('Save activity');await saved();
+  await go('segments');set(document.querySelector('select[aria-label="Saved segment"]'),settings.segments[0].key);document.querySelector('select[aria-label="Saved segment"]').dispatchEvent(new Event('change',{bubbles:true}));await sleep(100);await click('Add task for segment');set(input('Subject'),'Segment group follow-up');assert(input('Segment').value===settings.segments[0].key,'Selected segment is prefilled');await click('Save activity');await saved();assert(stores['company-a'].activities.filter(r=>r.segmentKey===settings.segments[0].key).length===1,'Segment produces one group task');
+  window.testRoute.query.segmentKey=settings.segments[0].key;await go('activities');await wait(()=>ui().includes('Segment group follow-up'),'Segment tasks are visible');assert(!ui().includes('Call about installation'),'Segment filter excludes unrelated tasks');delete window.testRoute.query.segmentKey;
+  await go('settings');set(input('New lead: create'),'2');await click('Save CRM settings');assert(settings.automations.newLeadFollowUpDays===2,'Automation settings persist');await click('Add sales rule');assert(!input('Enable rule').checked,'New sales rules start disabled');set(input('Rule name'),'Accepted quote wins');set(input('When record changes to'),'QUOTE_ACCEPTED');set(input('Move deal to'),'won');input('Enable rule').click();await click('Save CRM settings');await sleep(100);assert(settings.salesRules.length===1&&settings.salesRules[0].enabled&&settings.salesRules[0].stageKey==='won','Sales rule is saved in CRM settings');await click('Check rules now');await wait(()=>ui().includes('1 deal(s) updated'),'Check now reports its result')
   await go('segments');await click('Import CSV');set(input('CSV contents'),'clientId,name,source\nexisting-client,Alex CRM,Referral');await click('Preview import');await click('Update 1 clients');await saved();assert(stores['company-a'].clients.length===1&&lead.source==='Referral','CSV updates existing CRM attributes without creating contacts');await click('Export CSV');assert(requests.some(r=>r.url.endsWith('/clients/export')),'Export retains company scope')
   await go('reports');await wait(()=>ui().includes('Team performance'),'Reports load');assert(ui().includes('Sales manager'),'Team reporting has the saved owner')
   await go('campaigns');assert(ui().includes('Email campaign setup is pending'),'Unconfigured marketing stays inactive')

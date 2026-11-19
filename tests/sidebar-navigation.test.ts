@@ -31,6 +31,8 @@ test('Menus retain existing plan, workflow and staff gates regardless of selecte
     assert.equal(paths('connect',undefined,actor).length>0,['admin','manager'].includes(role));
     const crm=paths('crm',undefined,actor);assert.equal(crm.includes('/crm/settings'),['admin','manager'].includes(role));assert.equal(crm.length>0,role!=='investor');
     assert(!crm.includes('/crm/leads'),'CRM must not expose a duplicate lead directory');
+    assert(!crm.includes('/crm/accounts'),'Business accounts must not have a separate navigation page');
+    assert(!crm.includes('/crm/campaigns'),'Campaigns must not have a CRM navigation page');
     if(role!=='investor')assert.equal(crm.filter(path=>path==='/client?from=crm').length,1,'Clients and leads share one directory entry');
     const erp=paths('erp',undefined,actor);assert.equal(erp.includes('/accountant/chart-of-accounts'),['admin','manager','accountant'].includes(role));assert(erp.includes('/settings/sidebar'));
     const reduced=paths('erp',undefined,actor,{includeInvoicing:false,includeAfterSales:false});assert(!reduced.includes('/erp/quotes'));assert(!reduced.includes('/after-sales'));assert(reduced.includes('/erp/billing'));

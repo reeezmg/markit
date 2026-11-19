@@ -4,26 +4,161 @@ import { Prisma } from '@prisma/client'
 import { test } from 'node:test'
 import { Readable } from 'node:stream'
 import { createEvent } from 'h3'
-import { defaultCrmSettings, normalizeCrmRecord, normalizeCrmSettings, crmPhone, crmScore, crmCsv, parseCrmCsv, crmClientLocation } from '../utils/crm'
+import { defaultCrmSettings, normalizeCrmRecord, normalizeCrmSettings, crmPhone, crmScore, crmCsv, parseCrmCsv, crmClientLocation, type CrmSalesRule } from '../utils/crm'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { crmWhere, crmList, saveCrmRecord, saveCrmSettings, archiveCrmRecords } from '../server/utils/crm'
+import { crmWhere, crmList, crmRow, saveCrmRecord, saveCrmSettings, archiveCrmRecords } from '../server/utils/crm'
 import { crmImport, crmRead, linkCrmDocument } from '../server/utils/crm-workflows'
 import { processCrmReminders } from '../server/utils/crm-reminders'
 import handler from '../server/api/crm/[...path]'
 import cron from '../server/api/cron/crm.get'
 import { pool } from '../server/db'
 import { crmFixture } from './crm-fixture'
+import { processCrmSalesRules, crmSalesEventChanged } from '../server/utils/crm-sales-rules'
 const manager={companyId:'a',userId:'manager',role:'manager',manager:true},sales={...manager,userId:'sales',role:'user',manager:false}
 const contact={name:'Alex',email:'alex@example.com',phone:'+919876543210',ownerId:'sales',source:'Other',tags:[],lifecycle:'LEAD',leadStatus:'QUALIFIED'}
+const salesRule=(patch:Partial<CrmSalesRule>={}):CrmSalesRule=>({key:'quote_sent',name:'Sent quote → proposal',enabled:true,event:'QUOTE_SENT',pipelineKey:'sales',fromStageKey:'',stageKey:'proposal',forwardOnly:true,lossReason:'',...patch})
 
-test('Old leads links open the shared client directory and preserve company and client context',async()=>{
+test('Sales rules validate target stages, loss reasons, conflicts and old settings',()=>{
+  const settings=defaultCrmSettings();settings.salesRules=[salesRule()]
+  assert.equal(normalizeCrmSettings(settings).salesRules.length,1)
+  const legacy:any={...settings};delete legacy.salesRules;assert.deepEqual(normalizeCrmSettings(legacy).salesRules,[])
+  for(const bad of [salesRule({stageKey:'missing'}),salesRule({event:'UNKNOWN' as any}),salesRule({stageKey:'lost'}),salesRule({fromStageKey:'won'})])assert.throws(()=>normalizeCrmSettings({...settings,salesRules:[bad]}))
+  assert.throws(()=>normalizeCrmSettings({...settings,salesRules:[salesRule(),salesRule({key:'duplicate'})]}),/different starting stages/)
+})
+
+test('Rules baseline linked records, move only their deal once, audit and preserve source records',async()=>{
+  const db=crmFixture(),clientId=db.seedClient(),settings=defaultCrmSettings()
+  const deal=await saveCrmRecord(db,manager,'deals',{name:'Linked deal',ownerId:'sales',clientId,pipelineKey:'sales',stageKey:'new',value:250})
+  const other=await saveCrmRecord(db,manager,'deals',{name:'Same client, unrelated deal',ownerId:'sales',clientId,pipelineKey:'sales',stageKey:'new',value:100})
+  db.state.documents.quotes.push({id:'quote',company_id:'a',client_id:clientId,status:'DRAFT',payment_status:'',deleted:false})
+  db.state.tables.crm_document_links.push({id:'link',company_id:'a',deal_id:deal.id,kind:'QUOTE',document_id:'quote'})
+  settings.salesRules=[salesRule()];await saveCrmSettings(db,manager,{settings,version:0})
+  assert.equal((await processCrmSalesRules(db,'a')).updated,0)
+  db.state.documents.quotes[0].status='SENT'
+  const source=JSON.stringify(db.state.documents)
+  assert.equal((await processCrmSalesRules(db,'a')).updated,1)
+  assert.equal((await crmRead(db,manager,'deals',deal.id)).stage_key,'proposal')
+  assert.equal((await crmRead(db,manager,'deals',other.id)).stage_key,'new')
+  assert.equal(JSON.stringify(db.state.documents),source)
+  assert.equal((await processCrmSalesRules(db,'a')).updated,0)
+  assert(db.state.tables.crm_audit.some((r:any)=>r.entity_id===deal.id&&r.action==='Sales rule applied'))
+  // Reconfiguration starts a fresh baseline; no historical SENT replay.
+  await saveCrmSettings(db,manager,{settings:{...settings,salesRules:[salesRule({stageKey:'negotiation'})]},version:1})
+  assert.equal((await processCrmSalesRules(db,'a')).updated,0)
+  assert.equal((await crmRead(db,manager,'deals',deal.id)).stage_key,'proposal')
+})
+
+test('Sales order links work; closed, backward, foreign-company and changed-client deals are protected',async()=>{
+  const db=crmFixture(),clientId=db.seedClient(),settings=defaultCrmSettings()
+  const deal=await saveCrmRecord(db,manager,'deals',{name:'Order deal',ownerId:'sales',clientId,pipelineKey:'sales',stageKey:'negotiation',value:100})
+  db.state.documents.sales_orders.push({id:'order',company_id:'a',client_id:clientId,status:'DRAFT',payment_status:'',deleted:false})
+  settings.salesRules=[salesRule({event:'SALES_ORDER_CONFIRMED'})];await saveCrmSettings(db,manager,{settings,version:0})
+  await linkCrmDocument(db,manager,deal.id,{kind:'SALES_ORDER',documentId:'order'})
+  await assert.rejects(linkCrmDocument(db,manager,deal.id,{kind:'SALES_ORDER',documentId:'foreign'}),{statusCode:400})
+  db.state.documents.sales_orders[0].status='CONFIRMED'
+  assert.equal((await processCrmSalesRules(db,'a')).skipped,1)
+  assert.equal((await crmRead(db,manager,'deals',deal.id)).stage_key,'negotiation')
+  settings.salesRules=[salesRule({event:'SALES_ORDER_CLOSED',stageKey:'won'})]
+  await saveCrmSettings(db,manager,{settings,version:1})
+  db.state.documents.sales_orders[0].client_id='different-client';db.state.documents.sales_orders[0].status='CLOSED'
+  assert.equal((await processCrmSalesRules(db,'a')).skipped,1)
+  db.state.documents.sales_orders[0].client_id=clientId
+  assert.equal((await processCrmSalesRules(db,'a')).updated,0,'Changing only the client cannot trigger a stage update')
+  db.state.documents.sales_orders[0].status='CONFIRMED';await processCrmSalesRules(db,'a')
+  db.state.documents.sales_orders[0].status='CLOSED';assert.equal((await processCrmSalesRules(db,'a')).updated,1)
+  db.state.documents.sales_orders[0].status='CONFIRMED';await processCrmSalesRules(db,'a')
+  db.state.documents.sales_orders[0].status='CLOSED';assert.equal((await processCrmSalesRules(db,'a')).updated,0,'Closed deal stays closed')
+  assert.equal((await processCrmSalesRules(db,'b')).updated,0)
+})
+
+test('Invoice payment events require payment changes and automatic losses require the configured reason',async()=>{
+  const state={status:'CONFIRMED',paymentStatus:'PAID',deleted:false,clientId:'alex'}
+  assert(!crmSalesEventChanged('INVOICE_PAID','BILL',{...state,status:'PENDING'},state))
+  assert(crmSalesEventChanged('INVOICE_PAID','BILL',{...state,paymentStatus:'PENDING'},state))
+  const db=crmFixture(),settings=defaultCrmSettings()
+  const deal=await saveCrmRecord(db,manager,'deals',{name:'Invoice deal',ownerId:'sales',pipelineKey:'sales',stageKey:'new',value:50})
+  db.state.documents.bills.push({id:'bill',company_id:'a',client_id:null,status:'CONFIRMED',payment_status:'PENDING',deleted:false})
+  db.state.tables.crm_document_links.push({id:'bill-link',company_id:'a',deal_id:deal.id,kind:'BILL',document_id:'bill'})
+  settings.salesRules=[salesRule({event:'INVOICE_CANCELLED',stageKey:'lost',lossReason:'Invoice cancelled by customer'})]
+  await saveCrmSettings(db,manager,{settings,version:0})
+  db.state.documents.bills[0].deleted=true
+  assert.equal((await processCrmSalesRules(db,'a')).updated,1)
+  const lost=await crmRead(db,manager,'deals',deal.id);assert.equal(lost.status,'LOST');assert.equal(lost.loss_reason,'Invoice cancelled by customer')
+})
+
+test('Sales rule observations roll back with deal changes; re-enabling rules does not replay old states',async()=>{
+  const db=crmFixture(),settings=defaultCrmSettings()
+  const deal=await saveCrmRecord(db,manager,'deals',{name:'Atomic rule update',ownerId:'sales',pipelineKey:'sales',stageKey:'new',value:75})
+  db.state.documents.quotes.push({id:'atomic-quote',company_id:'a',client_id:null,status:'DRAFT',payment_status:'',deleted:false})
+  db.state.tables.crm_document_links.push({id:'atomic-link',company_id:'a',deal_id:deal.id,kind:'QUOTE',document_id:'atomic-quote'})
+  settings.salesRules=[salesRule()];await saveCrmSettings(db,manager,{settings,version:0})
+  db.state.documents.quotes[0].status='SENT'
+  const original=db.query
+  const failed={query:async(sql:string,args:any[]=[])=>{if(sql.startsWith('INSERT INTO crm_audit')&&args[4]==='Sales state observed')throw Error('Observation write failed');return original(sql,args)}}
+  await db.query('BEGIN')
+  await assert.rejects(processCrmSalesRules(failed,'a'),/Observation write failed/)
+  await db.query('ROLLBACK')
+  assert.equal((await crmRead(db,manager,'deals',deal.id)).stage_key,'new')
+  assert.equal((await processCrmSalesRules(db,'a')).updated,1,'Retry after rollback can safely apply the change')
+  await saveCrmSettings(db,manager,{settings:{...settings,salesRules:[salesRule({enabled:false})]},version:1})
+  db.state.documents.quotes[0].status='DRAFT'
+  await saveCrmSettings(db,manager,{settings,version:2})
+  assert.equal((await processCrmSalesRules(db,'a')).updated,0)
+})
+
+test('Displayed rule priority wins when multiple linked documents change before a check',async()=>{
+  const db=crmFixture(),settings=defaultCrmSettings()
+  const deal=await saveCrmRecord(db,manager,'deals',{name:'Priority deal',ownerId:'sales',pipelineKey:'sales',stageKey:'new',value:75})
+  db.state.documents.quotes.push({id:'quote',company_id:'a',client_id:null,status:'DRAFT',payment_status:'',deleted:false})
+  db.state.documents.bills.push({id:'bill',company_id:'a',client_id:null,status:'CONFIRMED',payment_status:'PENDING',deleted:false})
+  db.state.tables.crm_document_links.push({id:'a-quote',company_id:'a',deal_id:deal.id,kind:'QUOTE',document_id:'quote'},{id:'z-bill',company_id:'a',deal_id:deal.id,kind:'BILL',document_id:'bill'})
+  settings.salesRules=[salesRule({key:'paid_wins',event:'INVOICE_PAID',stageKey:'won'}),salesRule()]
+  await saveCrmSettings(db,manager,{settings,version:0})
+  db.state.documents.quotes[0].status='SENT';db.state.documents.bills[0].payment_status='PAID'
+  assert.equal((await processCrmSalesRules(db,'a')).updated,1)
+  assert.equal((await crmRead(db,manager,'deals',deal.id)).status,'WON')
+  assert.equal((await processCrmSalesRules(db,'a')).updated,0)
+})
+
+test('Segment tasks validate company settings, survive edits/recurrence and retain legacy references',async()=>{
+  const db=crmFixture(),settings=defaultCrmSettings()
+  settings.segments=[{key:'priority',name:'Priority leads',filters:{tag:'Priority'}}]
+  await saveCrmSettings(db,manager,{settings,version:0})
+  const input={ownerId:'manager',kind:'TASK',subject:'Call priority group',segmentKey:'priority',dueAt:'2027-01-05T10:00:00Z',recurrenceDays:7,attachments:[{name:'Instructions',url:'https://example.com/brief'}]}
+  const otherCompany=crmFixture()
+  await assert.rejects(saveCrmRecord(otherCompany,{...manager,companyId:'b'},'activities',input),/current segment/)
+  await assert.rejects(saveCrmRecord(db,manager,'activities',{...input,segmentKey:'unknown'}),/current segment/)
+  const task=await saveCrmRecord(db,manager,'activities',input)
+  assert.equal(task.segmentKey,'priority');assert.equal(task.segmentName,'Priority leads');assert.equal(task.attachments.length,1)
+  const filtered=await crmList(db,manager,'activities',{segmentKey:'priority'})
+  assert.equal(filtered.total,1);assert.equal(filtered.rows[0].segmentKey,'priority')
+  assert.equal((await crmList(db,manager,'activities',{segmentKey:'other'})).total,0)
+  await saveCrmRecord(db,manager,'activities',{...task,status:'DONE'},task.id)
+  const next=db.state.tables.crm_activities.find((r:any)=>r.recurrence_key==='repeat:'+task.id)
+  assert.equal(crmRow(next).segmentKey,'priority');assert.equal(crmRow(next).attachments.length,1)
+  await saveCrmSettings(db,manager,{settings:{...settings,segments:[]},version:1})
+  const edited=await saveCrmRecord(db,manager,'activities',{...crmRow(next),subject:'Historical group follow-up'},next.id)
+  assert.equal(edited.segmentName,'Priority leads')
+  const cleared=await saveCrmRecord(db,manager,'activities',{...edited,segmentKey:''},edited.id)
+  assert.equal(cleared.segmentKey,undefined);assert.equal(cleared.attachments.length,1)
+  assert.deepEqual(crmRow({attachments:[{name:'Legacy',url:'https://example.com'}]}).attachments,[{name:'Legacy',url:'https://example.com'}])
+})
+
+test('Retired leads and business account links open the shared client directory with context',async()=>{
   const router=createRouter({history:createMemoryHistory(),routes:[
     {path:'/crm/leads',redirect:to=>crmClientLocation(to.query)},
+    {path:'/crm/accounts',redirect:to=>crmClientLocation(to.query)},
+    {path:'/crm/accounts/:accountId',redirect:to=>crmClientLocation(to.query)},
     {path:'/client',component:{template:'<div />'}},
   ]})
   await router.push('/crm/leads?entryCompany=branch&crmClient=existing-client&from=old')
   assert.equal(router.currentRoute.value.path,'/client')
   assert.deepEqual(router.currentRoute.value.query,{entryCompany:'branch',crmClient:'existing-client',from:'crm'})
+  for(const path of ['/crm/accounts','/crm/accounts/old-account']){
+    await router.push(path+'?entryCompany=branch')
+    assert.equal(router.currentRoute.value.path,'/client')
+    assert.deepEqual(router.currentRoute.value.query,{entryCompany:'branch',from:'crm'})
+  }
 })
 
 test('Contacts reuse the client page and physical CRM columns remain excluded from generated client operations',()=>{
@@ -147,7 +282,8 @@ test('Real CRM handlers enforce tenant, live staff role, CSRF, manager reports a
     const list:any=await handler(event('clients'));assert.equal(list.total,1)
     await assert.rejects(handler(event('clients','GET',undefined,'b')),{statusCode:403})
     await assert.rejects(handler(event('clients','POST',contact,'a','https://evil.test')),{statusCode:403})
-    user='sales';await assert.rejects(handler(event('reports')),{statusCode:403});user='revoked';await assert.rejects(handler(event('bootstrap')),{statusCode:403})
+    assert.equal((await handler(event('sales-rules/run','POST',{})) as any).updated,0)
+    user='sales';await assert.rejects(handler(event('sales-rules/run','POST',{})),{statusCode:403});await assert.rejects(handler(event('reports')),{statusCode:403});user='revoked';await assert.rejects(handler(event('bootstrap')),{statusCode:403})
     user='manager';db.state.ready=false;const bootstrap:any=await handler(event('bootstrap'));assert.equal(bootstrap.ready,false);await assert.rejects(handler(event('clients')),{statusCode:503})
     await assert.rejects(cron(event('anything')),{statusCode:401})
   }finally{(pool as any).query=originalQuery;(pool as any).connect=originalConnect;(globalThis as any).requireAuthSession=auth}

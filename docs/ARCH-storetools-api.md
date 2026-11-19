@@ -6,6 +6,17 @@
 
 ## Dedicated CRM
 
+`POST /api/crm/sales-rules/run` requires the existing same-origin manager/company
+guards and evaluates saved sales-to-deal rules under the CRM transaction/advisory
+lock. `crm-sales-rules.ts` is also invoked by the protected 15-minute CRM cron, which
+includes settings-owning companies with no due tasks. Rule settings and new document
+links establish baselines; scheduled/manual checks observe later quote, sales-order
+and invoice state changes, update only explicitly linked eligible CRM deals, and
+record decisions in existing audit JSON. QUOTE/BILL/SALES_ORDER document links are
+supported; ecommerce ORDER links remain readable without these automation events.
+See ARCH-crm.md for event coverage, no-replay and forward-only behavior. No runtime
+DDL, sales source writes, or accounting changes are involved.
+
 `server/api/crm/[...path].ts` owns `/api/crm/*`. `crm-access.ts` validates current
 staff membership, authorized company and same-origin writes. Managers own reports,
 settings, CRM work archives/restores and bulk assignment; staff edit work they own or
