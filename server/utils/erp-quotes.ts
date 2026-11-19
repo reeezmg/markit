@@ -33,8 +33,10 @@ export async function readQuote(db: any, companyId: string, id: string) {
   if (!row) throw createError({ statusCode: 404, statusMessage: 'Quote not found.' })
   const metadata = row.metadata || {}
   const items = (await db.query(`SELECT i.id, i.variant_id AS "variantId", i.name, i.description,
-      i.quantity, i.rate, i.amount, i.unit FROM quote_items i
-      JOIN quotes q ON q.id=i.quote_id WHERE q.id=$1 AND q.company_id=$2 AND q.deleted=false ORDER BY i.serial_no`, [id, companyId])).rows
+      i.quantity, i.rate, i.amount, i.unit,v.images[1] AS image FROM quote_items i
+      JOIN quotes q ON q.id=i.quote_id
+      LEFT JOIN variants v ON v.id=i.variant_id AND v.company_id=q.company_id
+      WHERE q.id=$1 AND q.company_id=$2 AND q.deleted=false ORDER BY i.serial_no`, [id, companyId])).rows
   return { ...row, metadata: undefined, revision: metadata.revision || '',
     pdfTemplate: row.pdfTemplate || 'classic', hideZeroValueItems: metadata.document?.hideZeroValueItems || false,
     workflow: metadata.workflow || {}, createdByUserId: metadata.createdByUserId || '',

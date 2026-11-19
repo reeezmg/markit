@@ -762,6 +762,28 @@ local draft; Done retains it in the open preference drawer. Save design persists
 current preference changes through the same validated/authorized PUT; failure retains
 the draft and displays the error. Cancel/closing the drawer discards unsaved changes.
 
+Page setup also supports an optional **Professional proposal** layout and live item
+thumbnails within material descriptions. Standard designs retain their existing
+appearance. Text sections can treat their first line as a heading; consecutive left
+and right text columns render side by side, returning to full width when unpaired.
+Live fields can use sign-off/signature or customer-care footer presentation. These
+are optional version-1 JSON properties using the existing section/column kinds.
+The professional totals show Gross total, the actual discount, Other and Net total;
+the style does not set prices, discounts or financial workflow defaults.
+
+The professional header reads the selected company's current logo, name, address,
+phone, email and GSTIN through `server/utils/quote-document.ts`. Preferences GET
+returns this public company profile for the designer, and saved quote detail includes
+`documentCompany` plus the linked customer's most recently updated active address.
+Signed public quotes use the same profile/address reader. Address lookup requires the
+company/client link and excludes addresses belonging to another company. Bank and
+authentication fields are not selected. Missing logo/contact details are omitted;
+adding them in company settings populates later previews without embedding a copy
+in the design. Item thumbnails use the owned variant's first current image and fall
+back to an image placeholder; standalone/custom lines have no catalog image.
+The shared `utils/quote-document.ts` formats addresses and accepts HTTPS images,
+PNG/JPEG data URLs and CDN object keys, rejecting executable/credentialed URLs.
+
 `utils/quote-design.ts` allowlists content and fields, limits 30 sections and 7 columns,
 requires one visible item table/totals and visible item name/amount columns, validates
 PNG/JPEG data URLs (350 KB encoded per image, 1.5 MB design total) and rejects remote/SVG

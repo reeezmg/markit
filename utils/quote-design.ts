@@ -23,11 +23,14 @@ const sectionSchema = z.object({
   gapBefore: z.number().min(0).max(80), gapAfter: z.number().min(0).max(80),
   width: z.number().min(10).max(100), imageHeight: z.number().min(5).max(100),
   placement: z.enum(['flow', 'absolute']).optional(), x: z.number().min(0).max(210).optional(), y: z.number().min(0).max(297).optional(),
+  column: z.enum(['left', 'right']).optional(), heading: z.boolean().optional(),
+  role: z.enum(['signature', 'contact']).optional(),
 })
 export const quoteDesignSchema = z.object({
   version: z.literal(1), accentColor: z.string().regex(/^#[0-9a-fA-F]{6}$/),
   fontFamily: z.enum(['Arial', 'Georgia', 'Verdana']), fontSize: z.number().min(9).max(18),
   padding: z.number().min(6).max(25), tableBorders: z.boolean(), tablePadding: z.number().min(1).max(6),
+  layout: z.enum(['standard', 'professional']).optional(), showItemImages: z.boolean().optional(),
   columns: z.array(columnSchema).min(1).max(7), sections: z.array(sectionSchema).min(2).max(30),
 }).superRefine((design, ctx) => {
   const fail = (message: string) => ctx.addIssue({ code: 'custom', message })

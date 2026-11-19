@@ -11,6 +11,7 @@ const scope = useCompanyScope()
 const toast = useToast()
 const open = computed({ get: () => props.modelValue, set: value => { if (!saving.value && !designOpen.value) emit('update:modelValue', value) } })
 const draft = ref<QuotePreferences>(emptyQuotePreferences())
+const documentCompany = ref<any>(null)
 const designOpen = ref(false), savedDesign = ref('')
 const loading = ref(false), saving = ref(false), error = ref(''), canManage = ref(false)
 let version = 0
@@ -18,7 +19,7 @@ async function load() {
   const request = ++version; loading.value = true; error.value = ''; canManage.value = false
   try {
     const result = await scope.fetch<any>(preferencesPath)
-    if (request === version) { draft.value = normalizeQuotePreferences(result.preferences); canManage.value = result.canManage; savedDesign.value = JSON.stringify(draft.value.documentDesign) }
+    if (request === version) { draft.value = normalizeQuotePreferences(result.preferences); documentCompany.value = result.company || null; canManage.value = result.canManage; savedDesign.value = JSON.stringify(draft.value.documentDesign) }
   } catch (e) { if (request === version) error.value = billingErrorMessage(e) }
   finally { if (request === version) loading.value = false }
 }
@@ -74,7 +75,7 @@ async function save() {
         </fieldset>
       </div>
       <div class="flex justify-end gap-3 border-t border-gray-200 px-6 py-4 dark:border-gray-800"><UButton color="gray" :disabled="saving" @click="open = false">Cancel</UButton><UButton type="submit" :loading="saving" :disabled="loading || !canManage">Save preferences</UButton></div>
-      <QuoteDesignEditor v-if="designOpen" v-model="draft.documentDesign" :company="scope.auth.session.value" :busy="saving" :error="error" :saved-design="savedDesign" :document-kind="documentKind" @close="designOpen = false" @save="save" />
+      <QuoteDesignEditor v-if="designOpen" v-model="draft.documentDesign" :company="documentCompany || scope.auth.session.value" :busy="saving" :error="error" :saved-design="savedDesign" :document-kind="documentKind" @close="designOpen = false" @save="save" />
     </form>
   </USlideover>
 </template>

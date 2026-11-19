@@ -4,6 +4,7 @@ import { Readable } from 'node:stream'
 import { createEvent } from 'h3'
 import { emptyQuotePreferences, normalizeQuotePreferences, visibleQuoteItems } from '../utils/quote-preferences'
 import { defaultQuoteDesign, newQuoteDesignSection, normalizeQuoteDesign } from '../utils/quote-design'
+import { quoteDocumentAddress, quoteDocumentImage } from '../utils/quote-document'
 import { normalizeQuote, newQuoteLine, quoteTotals } from '../utils/erp-quote'
 import { readQuotePreferences, saveQuotePreferences } from '../server/utils/quote-preferences'
 import { convertAcceptedQuote, quoteInvoiceEntries } from '../server/utils/quote-workflow'
@@ -91,6 +92,30 @@ test('one quote design validates images, columns and sections and upgrades legac
   bad(copy => copy.columns.find(c => c.field === 'amount')!.visible = false)
   bad(copy => copy.accentColor = 'url(https://example.com)')
   bad(copy => copy.padding = 200)
+})
+
+test('professional designs retain live media options and paired text without changing legacy designs', () => {
+  const legacy = defaultQuoteDesign()
+  assert.equal(legacy.layout, undefined)
+  assert.equal(legacy.showItemImages, undefined)
+  const professional = structuredClone(legacy)
+  professional.layout = 'professional'; professional.showItemImages = true
+  professional.sections.push({ ...newQuoteDesignSection('text', 'features'), column: 'left', heading: true, text: 'Features\nAutomatic operation' },
+    { ...newQuoteDesignSection('text', 'benefits'), column: 'right', heading: true, text: 'Benefits\nEveryday use' },
+    { ...newQuoteDesignSection('field', 'signature'), field: 'salesperson', role: 'signature' })
+  assert.deepEqual(normalizeQuotePreferences({ documentDesign: professional }).documentDesign, professional)
+  assert.deepEqual(normalizeQuotePreferences({}).documentDesign, legacy)
+  assert.throws(() => normalizeQuoteDesign({ ...professional, layout: 'untrusted' }))
+})
+
+test('document images reject executable URLs and contacts format missing and structured addresses safely', () => {
+  assert.equal(quoteDocumentImage(null), '')
+  for (const image of ['javascript:alert(1)', 'data:image/svg+xml;base64,PHN2Zz4=', 'file:///private/logo.png', 'http://example.test/logo.png', '//example.test/logo.png', '../private.png', 'https://user:password@example.test/logo.png']) assert.equal(quoteDocumentImage(image), '')
+  assert.equal(quoteDocumentImage('company/logo name.png'), 'https://images.markit.co.in/company/logo%20name.png')
+  assert.equal(quoteDocumentImage('https://images.markit.co.in/company/logo.png'), 'https://images.markit.co.in/company/logo.png')
+  assert.equal(quoteDocumentAddress(null), '')
+  assert.equal(quoteDocumentAddress({ formattedAddress: 'Primary address', street: 'Ignored duplicate' }), 'Primary address')
+  assert.equal(quoteDocumentAddress({ houseDetails: 'Building', street: 'Street', city: 'City', state: 'State', pincode: '123456' }), 'Building\nStreet\nCity, State, 123456')
 })
 
 test('company preferences use existing storage and retain a backup, without schema changes', async () => {

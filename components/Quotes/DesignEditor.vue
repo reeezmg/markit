@@ -33,6 +33,12 @@ function setPlacement(value: string) {
   if (!selected.value) return
   Object.assign(selected.value, { placement: value, x: 10, y: 10, width: value === 'absolute' ? Math.min(80, selected.value.width) : selected.value.width })
 }
+function setColumn(value: string) {
+  if (selected.value) selected.value.column = value === 'left' || value === 'right' ? value : undefined
+}
+function setFieldRole(value: string) {
+  if (selected.value) selected.value.role = value === 'signature' || value === 'contact' ? value : undefined
+}
 function move(id: string, offset: number) {
   const list = draft.value.sections, i = list.findIndex(s => s.id === id), target = i + offset
   if (props.busy || i < 0 || target < 0 || target >= list.length) return
@@ -92,6 +98,9 @@ function keydown(event: KeyboardEvent) {
         <fieldset :disabled="busy || uploading">
           <div v-if="tab === 'setup'" class="properties-fields">
             <h3>Page style</h3><label>Accent colour<input v-model="draft.accentColor" type="color" aria-label="Quote accent colour" /></label>
+            <label>Layout<select :value="draft.layout || 'standard'" aria-label="Quote layout style" @change="draft.layout = ($event.target as HTMLSelectElement).value === 'professional' ? 'professional' : 'standard'"><option value="standard">Standard</option><option value="professional">Professional proposal</option></select></label>
+            <label><input v-model="draft.showItemImages" type="checkbox" aria-label="Show quote product images" /> Show product photos in material descriptions</label>
+            <p v-if="draft.layout === 'professional'">Company logo, name, address and contact details use your current company settings. Add or update them there to refresh this design.</p>
             <label>Font<select v-model="draft.fontFamily" aria-label="Quote design font"><option>Arial</option><option>Georgia</option><option>Verdana</option></select></label>
             <label>Text size (px)<input v-model.number="draft.fontSize" type="number" min="9" max="18" aria-label="Quote design text size" /></label>
             <label>Page margin (mm)<input v-model.number="draft.padding" type="number" min="6" max="25" aria-label="Quote page margin" /></label>
@@ -104,7 +113,10 @@ function keydown(event: KeyboardEvent) {
             <template v-if="selected"><h3>{{ quoteSectionLabels[selected.kind] }} properties</h3>
               <label><input v-model="selected.visible" type="checkbox" :disabled="['items', 'totals'].includes(selected.kind)" /> Show section</label>
               <label v-if="selected.kind === 'text'">Text<textarea v-model="selected.text" rows="4" maxlength="5000" aria-label="Quote design text" /></label>
+              <template v-if="selected.kind === 'text'"><label><input v-model="selected.heading" type="checkbox" aria-label="Use first line as quote heading" /> Use the first line as a heading</label><label>Text position<select :value="selected.column || ''" aria-label="Quote text column" @change="setColumn(($event.target as HTMLSelectElement).value)"><option value="">Full width</option><option value="left">Left column</option><option value="right">Right column</option></select></label><p>Place a left-column text section immediately before a right-column text section to show them side by side.</p></template>
               <label v-if="selected.kind === 'field'">Live field<select v-model="selected.field" aria-label="Quote design live field"><option value="">Choose a field</option><option v-for="[key, label] in quoteDesignFields" :key="key" :value="key">{{ isSalesOrder ? label.replace('Quote', 'Order').replace('Valid until', 'Expected shipment date') : label }}</option></select></label>
+              <template v-if="selected.kind === 'field'"><label>Field presentation<select :value="selected.role || ''" aria-label="Quote field presentation" @change="setFieldRole(($event.target as HTMLSelectElement).value)"><option value="">Plain value</option><option value="signature">Signature and sign-off</option><option value="contact">Customer-care footer</option></select></label><label v-if="selected.role">Label<input v-model="selected.text" maxlength="100" aria-label="Quote live field label" /></label></template>
+              <label v-if="['customer', 'notes', 'terms', 'paymentTerms', 'deliveryEstimate'].includes(selected.kind)">Section heading<input v-model="selected.text" maxlength="100" aria-label="Quote section heading" /></label>
               <template v-if="selected.kind === 'image'"><label>PNG, JPEG or WebP (up to 10 MB)<input type="file" accept="image/png,image/jpeg,image/webp" aria-label="Upload quote design image" @change="upload" /></label><label>Image placement<select :value="selected.placement || 'flow'" aria-label="Quote image placement" @change="setPlacement(($event.target as HTMLSelectElement).value)"><option value="flow">In section order</option><option value="absolute">Anywhere on the page (drag to position)</option></select></label><div v-if="selected.placement === 'absolute'" class="two-fields"><label>From left (mm)<input v-model.number="selected.x" type="number" min="0" max="210" step="0.5" aria-label="Quote image left" /></label><label>From top (mm)<input v-model.number="selected.y" type="number" min="0" max="297" step="0.5" aria-label="Quote image top" /></label></div><label>Image description<input v-model="selected.text" maxlength="5000" aria-label="Quote image description" /></label><label>Width (%)<input v-model.number="selected.width" type="number" min="10" max="100" aria-label="Quote image width" /></label><label>Height (mm)<input v-model.number="selected.imageHeight" type="number" min="5" max="100" aria-label="Quote image height" /></label><button v-if="selected.image" type="button" class="design-button" @click="selected.image = ''">Remove image</button></template>
               <label>Alignment<select v-model="selected.align" aria-label="Quote section alignment"><option>left</option><option>center</option><option>right</option></select></label>
               <template v-if="['text', 'field'].includes(selected.kind)"><label>Text size (px)<input v-model.number="selected.fontSize" type="number" min="8" max="40" aria-label="Quote section font size" /></label><label><input v-model="selected.bold" type="checkbox" aria-label="Quote section bold" /> Bold</label></template>

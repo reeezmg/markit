@@ -585,12 +585,19 @@ Selected customers must be linked to that company and linked variants must belon
 |---|---|---|
 | `quotes` | GET | Selected company list. `q`, optional `status`, quote `from`/`to`, `min`/`max` total, `page`, `pageSize` (default 20, max 500), allowlisted `sort`/`order`; `{ rows, total, summary }`. Searches quote number, subject, reference and live/snapshotted customer name/phone. Excludes deleted quotes. |
 | `quotes` | POST | Creates a validated quote and lines. Requires `requestId`; assigns a company-counter number in the source transaction. Returns `{ id, quoteNumber, revision, workflow }`; ACCEPTED can trigger configured invoice conversion. |
-| `quotes/:quoteId` | GET | Company-owned quote, ordered lines, customer snapshot, quote pricing metadata and current company `documentDesign`, read together in a repeatable-read, read-only transaction. |
+| `quotes/:quoteId` | GET | Company-owned quote, ordered lines with owned variant thumbnails, customer snapshot/current active address, pricing metadata, public `documentCompany` branding and current company `documentDesign`, read together in a repeatable-read, read-only transaction. |
 | `quotes/:quoteId` | PUT | Requires the last `revision` and a fresh `requestId`; validates/replaces lines and recomputes totals atomically. Preserves unrelated custom-value JSON and fields outside this editor. Stale revisions return 409. |
 | `quotes/:quoteId` | DELETE | Sets `deleted=true` only for the selected company's quote; retains source rows. |
-| `quotes/preferences` | GET/PUT | Authorized company preferences. GET returns `{preferences,canManage}`; PUT requires admin/manager/accountant, validates A4 documentDesign/booleans/text/conversion/due days (2 MB JSON request limit) and backs up/upserts GeneralPreference JSON (`quotes/defaults`). |
+| `quotes/preferences` | GET/PUT | Authorized company preferences. GET returns `{preferences,company,canManage}` with the selected company's public branding/contact profile; PUT requires admin/manager/accountant, validates A4 documentDesign/booleans/text/conversion/due days (2 MB JSON request limit) and backs up/upserts GeneralPreference JSON (`quotes/defaults`). |
 | `quotes/:quoteId/share` | POST | Authorized repeatable-read snapshot; returns a 30-day signed revision-bound `/quote/:token` path for manual sharing. No message is sent and stored status is unchanged. |
 | `quote-share` | GET/POST | Public bearer-token read/response. GET returns only quote/company/response availability. POST accepts token and ACCEPTED/DECLINED; validates current revision, enabled policy/status and expiry under company/quote locks. Records a final response and invokes acceptance conversion. Same-decision retries are idempotent. |
+
+Quote detail/designer/public reads use `server/utils/quote-document.ts` for selected
+company branding and linked active customer addresses. Only public logo/contact/
+address/tax fields are selected; bank/authentication fields are excluded. Customer
+addresses owned by another company cannot be selected. `readQuote` joins variant
+images on both variant ID and the quote company. These presentation reads do not
+change documents, stock or quote/invoice conversion behavior.
 | `quotes/:quoteId/workflow` | POST | Authorized quote writer; `{action:retry\|issue\|email}` retries conversion, issues a current quote-backed invoice draft or retries invoice email. Returns `{success,workflow}`. Errors remain visible and cannot create a second linked invoice. |
 
 POST/PUT accept `clientId`, `quoteDate`, optional `expiryDate`, `referenceNumber`,

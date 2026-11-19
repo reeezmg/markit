@@ -2,6 +2,7 @@ import { createError, defineEventHandler, getRouterParam } from 'h3'
 import { pool } from '../../db'
 import { quoteCompany, readQuote } from '../../utils/erp-quotes'
 import { readQuotePreferences } from '../../utils/quote-preferences'
+import { readQuoteDocumentCompany, readQuoteDocumentCustomerAddress } from '../../utils/quote-document'
 
 export default defineEventHandler(async event => {
   const { companyId } = await quoteCompany(event)
@@ -13,8 +14,10 @@ export default defineEventHandler(async event => {
     await db.query('BEGIN ISOLATION LEVEL REPEATABLE READ READ ONLY')
     const result = await readQuote(db, companyId, id)
     const preferences = await readQuotePreferences(db, companyId)
+    const documentCompany = await readQuoteDocumentCompany(db, companyId)
+    const clientAddress = await readQuoteDocumentCustomerAddress(db, companyId, result.clientId)
     await db.query('COMMIT')
-    return { ...result, documentDesign: preferences.documentDesign }
+    return { ...result, documentCompany, clientAddress, documentDesign: preferences.documentDesign }
   } catch (error) { await db.query('ROLLBACK'); throw error }
   finally { db.release() }
 })

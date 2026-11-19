@@ -2,6 +2,7 @@ import { createHmac, timingSafeEqual } from 'node:crypto'
 import { createError } from 'h3'
 import { readQuote } from './erp-quotes'
 import { readQuotePreferences } from './quote-preferences'
+import { readQuoteDocumentCompany, readQuoteDocumentCustomerAddress } from './quote-document'
 
 function secret() {
   const value = process.env.QUOTE_SHARE_SECRET || process.env.RECEIPT_SHARE_SECRET || process.env.NUXT_SESSION_SECRET || process.env.SESSION_SECRET || process.env.NUXT_AUTH_PASSWORD
@@ -33,9 +34,10 @@ export async function sharedQuote(db: any, token: string) {
   if (quote.revision !== signed.revision && !(response?.originalRevision === signed.revision && response?.resultRevision === quote.revision))
     throw createError({ statusCode: 404, statusMessage: 'This quote was updated. Ask the sender for a new link.' })
   const preferences = await readQuotePreferences(db, signed.companyId)
-  const company = (await db.query('SELECT name AS "companyName",phone AS "companyPhone",currency,gstin FROM companies WHERE id=$1', [signed.companyId])).rows[0]
+  const company = await readQuoteDocumentCompany(db, signed.companyId)
+  const clientAddress = await readQuoteDocumentCustomerAddress(db, signed.companyId, quote.clientId)
   const { workflow, createdByUserId, clientId, ...document } = quote
-  return { signed, quote, preferences, publicData: { quote: { ...document, documentDesign: preferences.documentDesign }, company,
+  return { signed, quote, preferences, publicData: { quote: { ...document, clientAddress, documentDesign: preferences.documentDesign }, company,
     canRespond: preferences.allowCustomerApproval && ['DRAFT', 'SENT'].includes(quote.status) && !quoteExpired(quote),
     expired: quoteExpired(quote), conversion: workflow?.conversion || '', emailStatus: workflow?.emailStatus || '' } }
 }
