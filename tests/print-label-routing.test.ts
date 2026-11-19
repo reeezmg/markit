@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 import ts from 'typescript';
 
-function fixture(options: { assigned?: boolean; native?: boolean; supported?: boolean; cancelled?: boolean; failed?: boolean } = {}) {
+function fixture(options: { assigned?: boolean; native?: boolean; supported?: boolean; cancelled?: boolean; failed?: boolean; sheet?: boolean } = {}) {
   const calls: string[] = []; let assigned = !!options.assigned;
   const usb = {
     isWebUsbSupported: () => options.supported !== false,
@@ -18,16 +18,16 @@ function fixture(options: { assigned?: boolean; native?: boolean; supported?: bo
     '@capacitor/core': { Capacitor: { isNativePlatform: () => !!options.native } },
     '~/composables/useWebUsbPrinter': { useWebUsbPrinter: () => usb },
     '~/composables/useReceiptPrinter': { useReceiptPrinter: () => ({ printMobileLabel: async () => { calls.push('ble'); return { success: true }; } }) },
-    '~/utils/load-print-template.client': { loadPrintTemplate: async () => ({ id: 'draft' }) },
+    '~/utils/load-print-template.client': { loadPrintTemplate: async () => ({ id: 'draft', ...(options.sheet ? { paperSize: 'A4' } : {}) }) },
     '~/utils/load-label-variables.client': { loadLabelVariables: async (items: any) => { calls.push('enrich'); return items; } },
-    '~/utils/print-template-renderer.client': { browserPrintTemplates: async () => { calls.push('dialog'); } },
+    '~/utils/print-template-renderer.client': { printSheetReceipt: async () => { calls.push('sheet-dialog'); return { success: true }; }, browserPrintTemplates: async () => { calls.push('dialog'); } },
   };
   const source = readFileSync(new URL('../composables/usePrintBill.ts', import.meta.url), 'utf8');
   const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
   const exports: any = {};
   vm.runInNewContext(compiled, { exports, require: (key: string) => { if (!modules[key]) throw new Error(key); return modules[key]; }, console: { error() {}, warn() {} }, $fetch: async () => { calls.push('local-server'); } });
   const print = () => exports.usePrint().printLabel([{ barcode: '123' }], '50x38mm', { id: 'draft' });
-  return { print, calls };
+  return { print, calls, printBill: () => exports.usePrint().printBill({ companyId: 'company-a' }) };
 }
 
 test('printing requires a printer assigned in settings and never opens a chooser', async () => {
@@ -159,4 +159,9 @@ test('100 identical label copies render once, distinct data and later jobs rende
   f.calls.length = 0;
   await f.label(undefined, undefined, [{companyId:'company-a', barcode:'A'}, {companyId:'company-a', barcode:'B'}] as any);
   assert.equal(f.calls.filter(c=>c==='render').length, 2);
+});
+
+ test('sheet receipts route to the system print dialog before checking thermal assignments', async () => {
+  const f = fixture({ sheet: true, supported: false });
+  await f.printBill(); assert.deepEqual(f.calls, ['sheet-dialog']);
 });

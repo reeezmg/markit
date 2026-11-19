@@ -1,0 +1,26 @@
+{
+  "extends": "./tsconfig.reports.json",
+  "include": [
+    "credit-receipt-globals.d.ts",
+    "quote-page-globals.d.ts",
+    "../utils/erp-quote.ts",
+    "../pages/erp/quotes/**/*.vue",
+    "../pages/erp/sales-orders/**/*.vue",
+    "../server/api/sales-orders/**/*.ts",
+    "../server/utils/sales-orders.ts",
+    "../components/Quotes/Editor.vue",
+    "../components/Quotes/Preferences.vue",
+    "../components/Quotes/DesignEditor.vue",
+    "../components/Quotes/Document.vue",
+    "../components/PrinterDesignerWorkspace.vue",
+    "../components/Quotes/PrintPreview.vue",
+    "../components/Erp/DocumentTable.vue",
+    "../server/utils/erp-quotes.ts",
+    "../server/utils/quote-product-search.ts",
+    "../server/api/bill/searchItems.get.ts",
+    "../server/api/quotes/**/*.ts",
+    "../server/api/quote-share.*.ts",
+    "../pages/quote/*.vue",
+    "../pages/erp/invoice-drafts.vue"
+  ]
+}

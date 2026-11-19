@@ -118,19 +118,19 @@ export async function previewInvestmentDistribution(input: unknown) {
             term = history.at(-1);
         if (!term) {
             issues.push(
-                `${p.name}: add a profit-sharing agreement in Ownership first.`
+                `${p.name}: set profile percentages or buy shares first.`
             );
             continue;
         }
         if (history.some((t) => day(t.effective_date) > b.periodFrom)) {
             issues.push(
-                `${p.name}: the agreement changes during this period. Split the period at the agreement date, or correct an incorrect agreement in Ownership.`
+                `${p.name}: ownership changes during this period. Split the period at each ownership change.`
             );
             continue;
         }
         const share = Number(term.terms.profitPercent);
         if (!Number.isFinite(share) || share < 0 || share > 100)
-            throw badRequest('Invalid saved profit-sharing agreement');
+            throw badRequest('Invalid saved investor profit percentage');
         // Round down to the nearest cent. Unassigned shares and rounding remain in the business.
         const amountCents = new Prisma.Decimal(pool)
             .mul(share)
@@ -150,7 +150,7 @@ export async function previewInvestmentDistribution(input: unknown) {
     if (shareTotal > 100.000001 || total > pool)
         throw badRequest('Combined profit shares exceed 100%');
     if (!rows.length && !issues.length)
-        issues.push('Add investors and their ownership agreements first.');
+        issues.push('Add investors with profile percentages or share purchases first.');
     if (!total && !issues.length)
         issues.push('No investor has a payable share of this amount.');
     const snapshot = {

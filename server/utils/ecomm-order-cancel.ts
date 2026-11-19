@@ -1,3 +1,4 @@
+import { cancelBillServices } from './after-sales-lifecycle'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import type { PoolClient } from 'pg'
@@ -120,6 +121,7 @@ export async function cancelEcommOrder(
   }
 
   // ── Order, checkout, bill ────────────────────────────────────────────────
+  await cancelBillServices(db, companyId, order.bill_id, 'order-cancel', 'Ecommerce order cancelled')
   await db.query(
     `UPDATE ecomm_orders SET status = 'CANCELLED', updated_at = now()
      WHERE id = $1 AND company_id = $2`,

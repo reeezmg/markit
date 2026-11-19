@@ -147,6 +147,8 @@ interface Variant {
   images: string[];
   sizeLabel?: string;
   customFields?: Record<string, any>;
+  serviceConfigurationIds?: string[];
+  isServiceProduct?: boolean;
 }
 
 interface Product {
@@ -161,6 +163,8 @@ interface Product {
   categoryId:  string;
   subcategoryId:  string;
   customFields?: Record<string, any>;
+  serviceConfigurationIds?: string[];
+  isServiceProduct?: boolean;
   variants: Variant[];
 }
 
@@ -245,6 +249,8 @@ const description = ref('');
 // Custom product-level inputs (Settings → Products → Create fields) as a
 // { fieldKey: value } map — stored on products.custom_fields.
 const productCustomFields = ref<Record<string, any>>({});
+const productServiceConfigurationIds = ref<string[]>([]);
+const productIsService = ref(false);
 // Linked product-dimension ShippingBox (products.dimension_id).
 const productDimensionId = ref<string | null>(null);
 const live = ref<boolean>();
@@ -279,6 +285,8 @@ const variants = ref<{
     images: ImageData[];
     sizeLabel?: string;
     customFields?: Record<string, any>;
+  serviceConfigurationIds?: string[];
+  isServiceProduct?: boolean;
 }[]>([{
     id: uuidv4(),
     key:String(idCounter.value++),
@@ -316,6 +324,8 @@ const applyDraftToForm = () => {
   subcategory.value = savedForm.subcategoryId || '';
   collection.value = savedForm.collectionId || '';
   productCustomFields.value = savedForm.customFields || {};
+  productServiceConfigurationIds.value = savedForm.serviceConfigurationIds || [];
+  productIsService.value = savedForm.isServiceProduct === true || (!savedForm.name && route.query.serviceProduct === 'true');
   productDimensionId.value = savedForm.dimensionId ?? null;
   live.value = savedForm.live ?? true;
   deliveryType.value = isDistributorPurchaseOrderFlow.value
@@ -339,6 +349,8 @@ const applyDraftToForm = () => {
     // dimension once the preset list loads.
     dimensionId: productDimensionId.value,
     customFields: productCustomFields.value,
+    serviceConfigurationIds: productServiceConfigurationIds.value,
+    isServiceProduct: productIsService.value,
     variants: variants.value,
   };
 
@@ -402,6 +414,8 @@ const persistDraftForm = () => {
     subcategoryId: subcategory.value,
     collectionId: collection.value,
     customFields: productCustomFields.value,
+    serviceConfigurationIds: productServiceConfigurationIds.value,
+    isServiceProduct: productIsService.value,
     // Without this the selected dimension is lost on reload / draft switch and
     // the product silently saves with dimension_id = NULL.
     dimensionId: productDimensionId.value ?? null,
@@ -434,6 +448,8 @@ const createValue = (data: any) => {
     collection.value = data.collection || '';
     productDimensionId.value = data.dimensionId ?? null;
     productCustomFields.value = data.customFields || {};
+    productServiceConfigurationIds.value = data.serviceConfigurationIds || [];
+  productIsService.value = data.isServiceProduct === true;
     persistDraftForm();
 };
 
@@ -488,6 +504,8 @@ const handleProductSelected = (product:any) => {
   category.value = product.category || {};
   subcategory.value = product.subcategoryId || '';
   productCustomFields.value = product.customFields || {};
+  productServiceConfigurationIds.value = product.serviceConfigurationIds || [];
+  productIsService.value = product.isServiceProduct === true;
   productDimensionId.value = product.dimensionId ?? null;
   variants.value = stripDraftImages(product.variants || []);
   selectedProduct.value = {
@@ -544,6 +562,8 @@ const snapshotProductForm = () => ({
     deliveryType: effectiveDeliveryType.value,
   dimensionId: productDimensionId.value ?? null,
   customFields: { ...productCustomFields.value },
+  serviceConfigurationIds: [...productServiceConfigurationIds.value],
+  isServiceProduct: productIsService.value,
   variants: variants.value.map((variant) => ({
     ...variant,
     items: (variant.items || []).map((item) => ({ ...item })),
@@ -586,6 +606,8 @@ const buildStagedProduct = (productId: string, snap: any, catTax: any) => ({
   categoryTax: catTax,
   dimensionId: snap.dimensionId ?? null,
   customFields: snap.customFields || {},
+  serviceConfigurationIds: snap.serviceConfigurationIds || [],
+  isServiceProduct: snap.isServiceProduct === true,
   // display metadata for the left table + barcode labels
   category: snap.category ? { id: snap.category.id, name: snap.category.name, targetAudience: snap.category.targetAudience } : null,
   variants: (snap.variants || []).map((variant: any) => ({
@@ -752,6 +774,8 @@ const handleEdit = async (e: Event) => {
             collectionId: updated.collectionId,
             dimensionId: updated.dimensionId,
             customFields: updated.customFields,
+            serviceConfigurationIds: updated.serviceConfigurationIds,
+            isServiceProduct: updated.isServiceProduct,
           },
           variants: updated.variants.map((variant: any) => ({
             ...variant,
@@ -1477,6 +1501,8 @@ const clearCurrentDraftForNextProducts = () => {
 const handleReset = () => {
 
   clearInputs.value = true
+  productServiceConfigurationIds.value = [];
+  productIsService.value = route.query.serviceProduct === "true";
   productCustomFields.value = {}
   productDimensionId.value = null
   createRef.value?.resetForm()
@@ -1744,6 +1770,8 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
                         :editCollection="selectedProduct?.collectionId"
                         :editDimensionId="selectedProduct?.dimensionId"
                         :editCustomFields="selectedProduct?.customFields"
+          :editServiceConfigurationIds="selectedProduct?.serviceConfigurationIds"
+          :editIsServiceProduct="selectedProduct?.isServiceProduct ?? (route.query.serviceProduct === 'true')"
                         @update="createValue" />
                 </UPageCard>
 

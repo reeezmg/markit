@@ -56,9 +56,7 @@ await run(async()=>{
   assert.equal((await resolveInvestorAccountSelections({capitalAccountId:''})).capital,'equity');
   assert.equal((await resolveInvestorAccountSelections({}, {capital:'override'})).capital,'override');
   for(const id of ['foreign','inactive','deleted','cash'])await assert.rejects(resolveInvestorAccountSelections({capitalAccountId:id}));
-  defaults={};
-  await assert.rejects(resolveInvestorAccountSelections({}),/company investment default/);
-  assert.deepEqual(await resolveInvestorAccountSelections({capitalAccountId:'equity'}),{capital:'equity'});
+  // Missing defaults are covered by investment-account-defaults.test.ts, including provisioning.
   defaults={capitalAccountId:'equity',profitAccountId:'profit',loanAccountId:'loan'};
   for(const p of profiles)await writeInvestorJournal(p,`e-${p.id}`,new Date('2026-10-06'),100,[{accountId:'cash',side:'DEBIT',amount:100},{accountId:'equity',side:'CREDIT',amount:100}],'','');
   for(let i=0;i<2;i++)for(const line of journals[i].lines.create){

@@ -1,0 +1,92 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Sidebar settings verification</title></head><body><div id="app"></div><pre id="result">Running</pre>
+<script type="module">
+import * as Vue from 'vue'
+import heroicons from '@iconify-json/heroicons/icons.json'
+import Layout from '../layouts/default.vue'
+import Editor from '../components/settings/SidebarPreferences.vue'
+import AccountantNavigation from '../components/Accountant/SidebarNavigation.vue'
+import { useSidebarPreferences } from '../composables/useSidebarPreferences'
+import { buildSidebarMenu } from '../utils/sidebar-menu'
+import { defaultSidebarPreferences, sidebarSections } from '../utils/sidebar-navigation'
+const {ref,computed,watch,onMounted,h,createApp,nextTick,Suspense,reactive}=Vue
+for(const [key,value]of Object.entries({ref,computed,watch,onMounted}))window[key]=value
+const route=reactive({path:'/settings/sidebar',query:{},fullPath:'/settings/sidebar'}),session=ref({companyId:'a',id:'manager',name:'Manager',role:'manager',type:'manager',plan:'pro',isUserTrackIncluded:true}),target=ref('a'),states=new Map(),records={a:defaultSidebarPreferences(),branch:defaultSidebarPreferences()},requests=[]
+const workflow={includeInvoicing:true,includeAfterSales:true};let fail=false
+window.useRoute=()=>route;window.useRouter=()=>({push(){}});window.defineShortcuts=()=>{}
+window.useNuxtApp=()=>({$auth:{session}});window.useState=(key,initial)=>{if(!states.has(key))states.set(key,ref(initial()));return states.get(key)}
+async function request(url,options){const company=options.headers['x-company-id'];requests.push({company,method:options.method||'GET'});if(options.method==='PUT'){if(fail)throw Error('Save rejected');records[company]=JSON.parse(JSON.stringify({...options.body,revision:records[company].revision+1}))}return {preferences:JSON.parse(JSON.stringify(records[company])),canManage:true}}
+window.useSidebarPreferences=id=>useSidebarPreferences(id,request);window.useSalesWorkflow=()=>({preferences:ref(workflow)})
+let api,saving=ref(false),error=ref(''),remount=ref(0),readonly=ref(false),panelWidth=ref(250)
+const menus=computed(()=>Object.fromEntries(sidebarSections.map(key=>[key,buildSidebarMenu(key,session.value,workflow)])))
+const Host={setup(){api=useSidebarPreferences(target,request);return()=>h('div',{class:'grid gap-6 lg:grid-cols-[260px_1fr]'},[h(Suspense,null,{default:()=>h(Layout,{key:remount.value}),fallback:()=>h('p','Loading layout')}),h('div',{id:'editor'},[h('p',{role:'alert'},error.value),h(Editor,{preferences:api.preferences.value,menus:menus.value,canManage:!readonly.value,saving:saving.value,onSave:async value=>{saving.value=true;error.value='';try{await api.save(value)}catch(e){error.value=e.message}finally{saving.value=false}}})])])}}
+const app=createApp(Host);app.config.errorHandler=error=>{document.querySelector('#result').textContent='FAILED: '+error.stack}
+app.component('UDashboardLayout',{setup:(_,{slots})=>()=>h('div',{id:'actual-layout'},slots.default?.())})
+app.component('UDashboardPanel',{props:['width'],setup:(p,{slots})=>()=>h('aside',{class:'border-r border-gray-200',style:{width:(p.width===64?64:panelWidth.value)+'px'}},slots.default?.())})
+app.component('UDashboardNavbar',{setup:(_,{slots})=>()=>h('div',[slots.left?.(),slots.right?.()])})
+app.component('UDashboardSidebar',{props:['ui'],setup:(p,{slots})=>()=>h('div',{class:'flex w-full flex-col gap-y-2 py-2'},[h('div',{class:'flex w-full flex-col '+(p.ui?.header||'px-4')},slots.header?.()),h('div',{class:p.ui?.body||'px-4'},slots.default?.()),h('footer',slots.footer?.())])})
+const LinkList={props:['links'],setup:p=>()=>h('div',p.links.map(link=>h('div',[h('a',{href:link.to},link.label),link.children?h(LinkList,{links:link.children}):null])))}
+app.component('UDashboardSidebarLinks',LinkList);app.component('AccountantSidebarNavigation',AccountantNavigation)
+app.component('UButton',{props:['icon','to'],setup:(p,{slots,attrs})=>()=>p.to?h('a',{...attrs,href:p.to},slots.default?.()):h('button',{...attrs,type:'button'},slots.default?.()||p.icon)})
+app.component('UIcon',{props:['name'],setup:p=>()=>{const icon=heroicons.icons[p.name?.replace('i-heroicons-','')];return icon?h('svg',{'aria-hidden':'true',viewBox:`0 0 ${icon.width||heroicons.width} ${icon.height||heroicons.height}`,innerHTML:icon.body}):null}});app.component('UDivider',{setup:()=>()=>h('hr')});app.component('TeamsDropdown',{setup:()=>()=>null})
+app.component('UPopover',{setup:(_,{slots})=>()=>h('div',[slots.default?.(),slots.panel?.()])});app.component('UTooltip',{setup:(_,{slots})=>()=>slots.default?.()})
+app.component('UserDropdown',{setup:()=>()=>h('a',{href:'/settings'},'Settings')});app.component('NuxtLink',{props:['to'],setup:(p,{slots})=>()=>h('a',{href:p.to},slots.default?.())})
+for(const name of ['HelpSlideover','NotificationsSlideover'])app.component(name,{setup:()=>()=>null})
+localStorage.removeItem('storetools_sidebar_collapsed');app.mount('#app')
+const pause=ms=>new Promise(resolve=>setTimeout(resolve,ms)),assert=(value,message)=>{if(!value)throw Error(message)}
+async function wait(test,message){for(let i=0;i<250;i++){await nextTick();if(test())return;await pause(20)}throw Error(message)}
+const layout=()=>document.querySelector('#actual-layout'),tabs=()=>[...layout().querySelectorAll('[role=tab]')].map(el=>el.getAttribute('aria-label')||el.textContent.trim()),urls=()=>[...layout().querySelectorAll('a[href]')].map(a=>a.getAttribute('href'))
+const checkbox=label=>document.querySelector('#editor input[aria-label="'+label+'"]')
+function toggle(label){const el=checkbox(label);assert(el&&!el.disabled,'Checkbox unavailable: '+label);el.click()}
+async function click(text,root=document.querySelector('#editor')){await nextTick();const el=[...root.querySelectorAll('button')].find(b=>b.textContent.trim()===text);assert(el&&!el.disabled,'Button unavailable: '+text);el.click();await pause(30)}
+async function save(){await click('Save sidebar');await wait(()=>!saving.value,'Save did not finish')}
+const previews=[]
+async function checkSectionLayouts(){
+  const original=structuredClone(records.a)
+  for(const width of [200,250,300])for(let mask=1;mask<16;mask++){
+    panelWidth.value=width
+    for(const [index,section]of sidebarSections.entries())records.a.sections[section].enabled=Boolean(mask&(1<<index))
+    records.a.revision++;await api.load();await nextTick()
+    for(const compact of [false,true]){
+      const list=layout().querySelector('[role=tablist]'),count=sidebarSections.filter((_,index)=>mask&(1<<index)).length
+      if(count===1){assert(!list,'A single available section has no switcher in either mode');if(width===250&&mask===1)previews.push({count,compact,html:'<p class="text-sm text-gray-500">Switcher hidden</p>'});layout().querySelector(`button[aria-label="${compact?'Expand':'Collapse'} sidebar"]`).click();await nextTick();continue}
+      const buttons=[...list.querySelectorAll('[role=tab]')],box=list.getBoundingClientRect(),bounds=buttons.map(button=>button.getBoundingClientRect()),near=(a,b)=>Math.abs(a-b)<1
+      assert(buttons.length===sidebarSections.filter((_,index)=>mask&(1<<index)).length,'Every enabled section has one button')
+      for(const [index,button]of buttons.entries()){
+        const rect=bounds[index]
+        assert(rect.width>=40&&rect.height>=40,'Section buttons have a comfortable click area')
+        assert(rect.left>=box.left&&rect.right<=box.right&&rect.top>=box.top&&rect.bottom<=box.bottom,'Buttons fit inside the switcher')
+        if(!compact){const range=document.createRange();range.selectNodeContents(button);const label=range.getBoundingClientRect();assert(label.left>=rect.left&&label.right<=rect.right,'Full section labels fit at the minimum sidebar width')}
+      }
+      if(compact){assert(bounds.every(rect=>near(rect.left,bounds[0].left)&&near(rect.width,bounds[0].width)),'Compact buttons stay centered in one column');const panel=list.closest('aside').getBoundingClientRect();assert(near((box.left+box.right)/2,(panel.left+panel.right-1)/2),'Compact switcher is centered in the sidebar')}
+      else{assert(near(bounds[0].width,bounds[1].width)&&near(bounds[0].top,bounds[1].top),'First row has balanced columns');if(buttons.length===3)assert(near(bounds[2].width,box.width-8)&&bounds[2].top>bounds[0].top,'Third section spans the second row');if(buttons.length===4)assert(bounds.every(rect=>near(rect.width,bounds[0].width))&&near(bounds[2].top,bounds[3].top),'Four sections form a balanced grid')}
+      buttons[0].click();await nextTick();buttons[0].focus();buttons[0].dispatchEvent(new KeyboardEvent('keydown',{key:'End',bubbles:true}));await nextTick();assert(document.activeElement===buttons.at(-1)&&buttons.at(-1).getAttribute('aria-selected')==='true','End selects and focuses the last section')
+      buttons.at(-1).dispatchEvent(new KeyboardEvent('keydown',{key:compact?'ArrowDown':'ArrowRight',bubbles:true}));await nextTick();assert(document.activeElement===buttons[0]&&buttons[0].getAttribute('aria-selected')==='true','Arrow navigation wraps to the first section');assert(buttons.filter(button=>button.tabIndex===0).length===1,'Only the active section is a Tab stop')
+      if(width===250&&[1,3,7,15].includes(mask))previews.push({count:buttons.length,compact,html:list.outerHTML})
+      layout().querySelector(`button[aria-label="${compact?'Expand':'Collapse'} sidebar"]`).click();await nextTick()
+    }
+  }
+  panelWidth.value=250;records.a=original;await api.load();await nextTick()
+}
+try{
+  await wait(()=>layout()&&urls().includes('/erp/billing'),'ERP pages load by default');assert(tabs().length===0,'The single ERP section needs no switcher');assert(['CRM','Storetools','Connect'].every(section=>!checkbox('Show '+section+' section').checked),'CRM, Storetools and Connect default to off')
+  await checkSectionLayouts()
+  toggle('Show ERP section');toggle('Show CRM section');await nextTick();toggle('CRM: Reports');await save()
+  assert(tabs().length===0,'A single CRM section has no switcher');assert(!urls().includes('/crm/reports')&&urls().includes('/crm/leads'),'Only selected CRM pages appear')
+  const collapse=layout().querySelector('button[aria-label="Collapse sidebar"]');collapse.click();await nextTick();assert(tabs().length===0,'Compact single-section switcher is hidden');assert(!urls().includes('/crm/reports'),'Compact pages are filtered')
+  remount.value++;await wait(()=>layout()?.querySelector('button[aria-label="Expand sidebar"]'),'Collapsed selection survives reload');assert(!urls().includes('/crm/reports'),'Selections survive remount')
+  layout().querySelector('button[aria-label="Expand sidebar"]').click();await nextTick()
+  target.value='branch';await wait(()=>api.preferences.value.revision===0&&checkbox('Show ERP section').checked,'Branch settings load');toggle('Show Storetools section');await save();assert(tabs().length===0&&urls().includes('/crm/leads'),'Editing branch settings leaves login company sidebar unchanged');assert(records.branch.sections.storefront.enabled,'Storetools can be explicitly enabled for a company')
+  target.value='a';await wait(()=>!checkbox('Show ERP section').checked,'Original company editor restored')
+  fail=true;toggle('Show ERP section');await save();assert(error.value==='Save rejected'&&tabs().length===0&&urls().includes('/crm/leads'),'Rejected saves preserve sidebar');fail=false
+  await click('Show all');await save();await wait(()=>tabs().length===4,'Show all restores sections')
+  const accountPath='/accountant/manual-journals';for(const section of sidebarSections)records.a.sections[section].enabled=section==='erp';records.a.sections.erp.hiddenPages=menus.value.erp.flatMap(link=>link.children?.map(child=>child.to)||[link.to]).filter(path=>path&&path!==accountPath);records.a.revision++;await api.load()
+  await wait(()=>urls().includes(accountPath),'Selected Account subpage appears');assert(!urls().includes('/accountant/chart-of-accounts'),'Expanded Account excludes hidden subpages')
+  layout().querySelector('button[aria-label="Collapse sidebar"]').click();await nextTick();assert(!urls().includes('/accountant/chart-of-accounts')&&urls().includes(accountPath),'Compact Account excludes hidden subpages')
+  await click('Hide all');await save();assert(tabs().length===0,'All sections can be hidden');assert(urls().includes('/settings'),'Settings recovery remains accessible')
+  readonly.value=true;await nextTick();assert([...document.querySelectorAll('#editor input[type=checkbox]')].every(el=>el.matches(':disabled')),'Staff cannot change settings')
+  assert(records.branch.sections.crm.enabled===false&&records.a.sections.crm.enabled===false,'Company settings persist separately')
+  assert(!layout().querySelector('[role=tablist]'),'No empty switcher is shown when all sections are hidden')
+  if(new URLSearchParams(location.search).has('preview'))document.querySelector('#app').innerHTML='<main class="p-6 bg-gray-50 min-h-screen"><h1 class="text-xl font-semibold mb-2">Sidebar sections</h1><p class="text-sm text-gray-600 mb-6">One, two, three and four enabled sections · expanded and compact</p><div class="flex flex-wrap gap-6">'+[1,2,3,4].map(count=>'<section class="w-[250px] rounded-xl border bg-white p-4"><h2 class="font-medium mb-4">'+count+' section'+(count===1?'':'s')+'</h2>'+previews.find(item=>item.count===count&&!item.compact).html+'<div class="mt-6">'+previews.find(item=>item.count===count&&item.compact).html+'</div></section>').join('')+'</div></main>'
+  document.querySelector('#result').textContent='ALL PASSED: all 15 section combinations at 200/250/300px, expanded/compact alignment, label fit, keyboard navigation, pages, persistence, branch isolation, rejected saves, all hidden, settings recovery and read-only staff'
+}catch(error){document.querySelector('#result').textContent='FAILED: '+error.stack+'\nUI: '+document.querySelector('#app').textContent}
+</script></body></html>

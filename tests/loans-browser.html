@@ -1,0 +1,83 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Loan workflow browser check</title><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="app"></div><pre id="result">RUNNING</pre>
+<script type="module">
+import * as Vue from 'vue'
+import LoansPage from '../components/Investments/LoansPage.vue'
+import LoanAccountPage from '../components/Investments/LoanAccountPage.vue'
+import LoanForm from '../components/Investments/LoanForm.vue'
+import LoanPaymentModal from '../components/Investments/LoanPaymentModal.vue'
+import LoanRepaymentsPage from '../components/Investments/LoanRepaymentsPage.vue'
+import LoanSettingsPage from '../components/Investments/LoanSettingsPage.vue'
+import UButton from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Button.vue'
+import UCard from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Card.vue'
+import UInput from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Input.vue'
+import USelect from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Select.vue'
+import UFormGroup from '../node_modules/@nuxt/ui/dist/runtime/components/forms/FormGroup.vue'
+import UTextarea from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Textarea.vue'
+import UTable from '../node_modules/@nuxt/ui/dist/runtime/components/data/Table.vue'
+import UBadge from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Badge.vue'
+import UAlert from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Alert.vue'
+import UModal from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Modal.vue'
+import heroicons from '../node_modules/@iconify-json/heroicons/icons.json'
+import { computeLoanSchedule, loanPosition } from '../utils/loan-schedule'
+const {createApp,h,ref,reactive,nextTick}=Vue
+let stage='initial rendering';const renderErrors=[]
+Object.assign(window,{ref,reactive,computed:Vue.computed,watch:Vue.watch,onMounted:Vue.onMounted})
+const requests=[],loans=[],today=new Date().toLocaleDateString('en-CA')
+const loanDefaults={bank:'bank',longTerm:'long',shortTerm:'current',interestExpense:'interest',feesExpense:'fees'}
+const accounts=[['bank','ASSET','BANK'],['long','LIABILITY','OTHER_LIABILITY'],['current','LIABILITY','OTHER_CURRENT_LIABILITY'],['interest','EXPENSE','OTHER_EXPENSE'],['fees','EXPENSE','OTHER_EXPENSE']].map(([id,category,accountType])=>({id,name:id,category,accountType,currency:'INR'}))
+window.testRoute=reactive({path:'/loans',query:{},params:{}})
+window.useRoute=()=>window.testRoute
+window.navigateTo=async to=>{const path=typeof to==='string'?to:to.path;window.testRoute.query=typeof to==='string'?{}:to.query||{};window.testRoute.params={loanId:path.split('/').at(-1)};window.testRoute.path=path;await nextTick()}
+window.useAuth=()=>({session:ref({role:'manager'})})
+const clone=value=>JSON.parse(JSON.stringify(value))
+window.useAccountantApi=()=>({companyId:ref('company-2'),
+ async get(path){
+  if(path==='/loans')return {ready:true,currency:'INR',data:clone(loans)}
+  if(path==='/investors/ledger')return {events:[]}
+  if(path==='/loans/options')return {currency:'INR',accounts,investors:[{id:'ravi',name:'Ravi',accounts:{}}]}
+  if(path.startsWith('/loans/')&&loans.some(l=>path==='/loans/'+l.id))return clone(loans.find(l=>path==='/loans/'+l.id))
+  throw Error('Unexpected GET '+path)
+ },
+ async post(path,body){
+  requests.push({path,body:clone(body)})
+  if(path==='/account-settings/investment-defaults')return {defaults:{loans:clone(loanDefaults)}}
+  if(path==='/loans'){
+   const schedule=computeLoanSchedule(body.terms)
+   loans[0]={id:'new-loan',name:body.name,investor_id:body.investorId,investor_name:'Ravi',status:'OPEN',currency:'INR',terms:body.terms,accounts:body.accounts,schedule,events:[],position:loanPosition(schedule,[],today)}
+   loans[1]={...clone(loans[0]),id:'other-loan',name:'Other loan'}
+   return {id:'new-loan'}
+  }
+  if(path.endsWith('/pay'))return {id:'payment'}
+  throw Error('Unexpected POST '+path)
+ },
+ async put(path,body){requests.push({path,body:clone(body)});if(path==='/account-settings/loans')Object.assign(loanDefaults,body.mappings);return {id:'new-loan'}}
+})
+const app=createApp({render:()=>window.testRoute.path==='/loans'?h(LoansPage,{key:'list'}):window.testRoute.path==='/loans/repayments'?h(LoanRepaymentsPage,{key:'repayments'}):window.testRoute.path==='/loans/settings'?h(LoanSettingsPage,{key:'settings'}):h(LoanAccountPage,{key:window.testRoute.path,loanId:window.testRoute.params.loanId})})
+app.config.errorHandler=(error,instance,info)=>{const chain=[];let node=instance?.$;for(let i=0;node&&i<20;i++,node=node.parent)chain.push(node.type.__name||node.type.name||'anonymous');renderErrors.push(info+' ['+chain.join(' > ')+']: '+error.stack)}
+for(const [name,component] of Object.entries({UButton,UCard,UInput,USelect,UFormGroup,UTextarea,UTable,UBadge,UAlert,UModal,InvestmentsLoanForm:LoanForm,InvestmentsLoanPaymentModal:LoanPaymentModal}))app.component(name,component)
+app.component('Icon',{props:['name'],setup:props=>()=>{const name=props.name.replace(/^i-heroicons-/,''),icon=heroicons.icons[name]||heroicons.icons['cube'];return h('svg',{viewBox:'0 0 '+(icon.width||heroicons.width)+' '+(icon.height||heroicons.height),width:'1em',height:'1em',innerHTML:icon.body})}})
+app.component('NuxtLink',{props:{to:[String,Object],custom:Boolean,target:String},setup:(props,{slots})=>()=>{const href=typeof props.to==='string'?props.to:props.to?.path;return props.custom?slots.default?.({route:window.testRoute,href,isActive:false,isExactActive:false,isExternal:false,navigate:e=>{e.preventDefault();window.navigateTo(props.to)}}):h('a',{href,onClick:e=>{e.preventDefault();window.navigateTo(props.to)}},slots.default?.())}})
+app.mount('#app')
+const wait=async()=>{await nextTick();await new Promise(r=>setTimeout(r,40))}
+const assert=(condition,message)=>{if(!condition)throw Error(message)}
+async function until(fn,message){for(let i=0;i<100;i++){if(fn())return;await wait()}throw Error(message)}
+async function click(text){stage='Click '+text;const modal=document.querySelector('[role=dialog]');const button=[...(modal||document).querySelectorAll('button,a')].find(b=>b.textContent.trim()===text);assert(button,'Button or link '+text);button.click();await wait()}
+async function fill(label,value){stage='Fill '+label;const node=[...document.querySelectorAll('label')].find(l=>l.textContent.trim().replace(/\s*\*$/,'')===label);const input=node?.htmlFor?document.getElementById(node.htmlFor):null;assert(input,'Field '+label);input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));await wait()}
+try{
+ await until(()=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='New loan'&&!b.disabled),'Loan list ready')
+ await click('New loan');await until(()=>document.querySelector('[role=dialog] select')&&!document.querySelector('[role=dialog] fieldset').disabled,'Loan editor loaded')
+ await fill('Loan name / reference','Equipment funding');await fill('Investor / lender','ravi');await fill('Amount borrowed (INR)','100000');await fill('Annual interest rate (%)','12')
+ await fill('Borrowing / receipt date','2020-01-01');await fill('First instalment date','2020-02-01');await fill('Number of instalments','12')
+ for(const [label,expected] of [['Long-term loan liability','long'],['Receiving cash / bank','bank'],['Current loan liability','current'],['Interest expense','interest'],['Loan fees expense','fees']]){const node=[...document.querySelectorAll('label')].find(l=>l.textContent.trim().replace(/\s*\*$/,'')===label);assert(document.getElementById(node.htmlFor).value===expected,label+' default preselected')}
+ await click('Preview schedule');assert(document.querySelectorAll('[role=dialog] tbody tr').length===12,'Twelve schedule rows')
+ await click('Save loan');await until(()=>requests.some(r=>r.path==='/loans'),'Loan submitted');await until(()=>!document.querySelector('[role=dialog]'),'Loan editor closed');assert(document.querySelectorAll('table').length===1,'Loan index contains one table');assert(!document.body.textContent.includes('Repayment schedule'),'No detail section on the list');assert(!requests.some(r=>r.path.endsWith('/validate')),'No separate validation request')
+ const saved=requests.find(r=>r.path==='/loans').body;assert(saved.terms.annualRate===12,'Numeric interest rate');assert(saved.terms.frequencyMonths===1,'Numeric payment frequency');assert(saved.accounts.longTerm==='long','Investor liability mapping');assert(saved.schedule[0].interest===1000,'Schedule interest preview')
+ await click('Other loan');await until(()=>document.body.textContent.includes('Repayment schedule'),'Loan detail page loaded');assert(window.testRoute.path==='/loans/other-loan','Row opens a dedicated detail route');assert(window.testRoute.query.entryCompany==='company-2','Detail navigation preserves selected company');await click('Loans');await until(()=>document.querySelectorAll('table').length===1,'Return to table-only list');assert(window.testRoute.query.entryCompany==='company-2','Back navigation preserves selected company');await click('Repay loan');await until(()=>document.querySelector('[role=dialog] tbody tr'),'Repayment allocations visible');assert(window.testRoute.path==='/loans/new-loan','Repay opens the selected loan detail route');assert(document.querySelector('[role=dialog]').textContent.includes('Equipment funding'),'Repayment belongs to the clicked loan');await fill('Fees paid','100');await click('Record repayment');await until(()=>requests.some(r=>r.path.endsWith('/pay')),'Repayment submitted');assert(requests.find(r=>r.path.endsWith('/pay')).path==='/loans/new-loan/pay','Repayment is linked to the clicked loan ID')
+ const payment=requests.find(r=>r.path.endsWith('/pay')).body;assert(payment.allocations.length===12,'Due instalments allocated');assert(payment.allocations[0].interest===1000,'Interest remains separate from principal');assert(payment.fees===100,'Fees remain separate');assert(payment.bankAccountId==='bank','Repayment bank preserved')
+ await until(()=>!document.querySelector('[role=dialog]'),'Payment closes')
+ stage='Repayments page';await window.navigateTo({path:'/loans/repayments',query:{entryCompany:'company-2'}});await until(()=>document.querySelectorAll('tbody tr').length===24,'Unpaid instalments across loans');assert(document.body.textContent.includes('Equipment funding')&&document.body.textContent.includes('Other loan'),'Repayments show both loans')
+ const period=document.querySelector('select[aria-label="Instalment period"]');period.value='UPCOMING';period.dispatchEvent(new Event('input',{bubbles:true}));period.dispatchEvent(new Event('change',{bubbles:true}));await wait();assert(![...document.querySelectorAll('a')].some(a=>a.textContent.trim()==='Record repayment'),'Upcoming filter excludes due instalments');period.value='DUE';period.dispatchEvent(new Event('input',{bubbles:true}));period.dispatchEvent(new Event('change',{bubbles:true}));await wait();await click('Record repayment');await until(()=>document.querySelector('[role=dialog]'),'Repayment page opens loan payment');assert(window.testRoute.query.entryCompany==='company-2','Repayment navigation preserves company');await click('Cancel')
+ stage='Loan settings';await window.navigateTo({path:'/loans/settings',query:{entryCompany:'company-2'}});await until(()=>document.querySelector('fieldset')&&!document.querySelector('fieldset').disabled,'Loan settings ready');await fill('Loan interest expense','fees');await click('Save loan settings');await until(()=>document.body.textContent.includes('Loan defaults saved'),'Loan defaults saved');assert(requests.find(r=>r.path==='/account-settings/loans').body.mappings.interestExpense==='fees','Settings use company loan defaults');assert(loans[0].accounts.interestExpense==='interest','Settings preserve existing loan account snapshots')
+ assert(!renderErrors.length,renderErrors.join('\n'));document.querySelector('#result').textContent='ALL PASSED: default accounts without investor loan mapping; one-step saving; table-only index; loan details and repayments; repayment filters and company context; loan settings preserve existing snapshots.'
+}catch(error){document.querySelector('#result').textContent='FAILED at '+stage+': '+error.stack+'\n'+renderErrors.join('\n')}
+</script></body></html>

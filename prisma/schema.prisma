@@ -378,6 +378,263 @@ enum AccountantJournalEntrySide {
   CREDIT
 }
 
+model WhatsAppConnection {
+  id           String            @id()
+  companyId    String            @unique() @map("company_id")
+  company      Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  wabaId       String            @unique() @map("waba_id")
+  phoneId      String            @unique() @map("phone_id")
+  displayPhone String            @map("display_phone")
+  verifiedName String            @map("verified_name")
+  token        String
+  active       Boolean           @default(true)
+  subscribed   Boolean           @default(false)
+  createdAt    DateTime          @default(now()) @map("created_at")
+  updatedAt    DateTime          @updatedAt() @map("updated_at")
+  messages     WhatsAppMessage[]
+
+  @@map("connect_whatsapp_connections")
+}
+
+model WhatsAppMessage {
+  id           String             @id()
+  connectionId String             @map("connection_id")
+  connection   WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+  metaId       String?            @unique() @map("meta_id")
+  recipient    String
+  direction    String
+  kind         String
+  content      Json
+  status       String
+  statusAt     DateTime?          @map("status_at")
+  consentAt    DateTime?          @map("consent_at")
+  actorId      String?            @map("actor_id")
+  createdAt    DateTime           @default(now()) @map("created_at")
+
+  @@index([connectionId, createdAt])
+  @@map("connect_whatsapp_messages")
+}
+
+model WhatsAppNotificationSettings {
+  companyId   String   @id() @map("company_id")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  enabled     Boolean  @default(false)
+  activatedAt DateTime @default(now()) @map("activated_at") @db.Timestamptz(3)
+  rules       Json     @default("{}")
+  updatedBy   String   @map("updated_by")
+  updatedAt   DateTime @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+
+  @@map("whatsapp_notification_settings")
+}
+
+model WhatsAppNotificationContact {
+  id               String   @id() @default(uuid())
+  companyId        String   @map("company_id")
+  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId         String   @map("client_id")
+  recipient        String
+  clientPhone      String   @map("client_phone")
+  serviceConsent   Boolean  @default(false) @map("service_consent")
+  marketingConsent Boolean  @default(false) @map("marketing_consent")
+  evidence         String
+  updatedBy        String   @map("updated_by")
+  updatedAt        DateTime @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([companyId, clientId])
+  @@index([companyId, recipient])
+  @@map("whatsapp_notification_contacts")
+}
+
+model WhatsAppNotificationSource {
+  companyId  String   @map("company_id")
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  sourceType String   @map("source_type")
+  sourceId   String   @map("source_id")
+  snapshot   Json
+  observedAt DateTime @default(now()) @map("observed_at") @db.Timestamptz(3)
+
+  @@id([companyId, sourceType, sourceId])
+  @@map("whatsapp_notification_sources")
+}
+
+model WhatsAppNotificationOutbox {
+  id          String   @id() @default(uuid())
+  companyId   String   @map("company_id")
+  company     Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  eventKey    String   @map("event_key")
+  eventType   String   @map("event_type")
+  sourceType  String   @map("source_type")
+  sourceId    String   @map("source_id")
+  clientId    String   @map("client_id")
+  payload     Json
+  status      String   @default("QUEUED")
+  availableAt DateTime @map("available_at") @db.Timestamptz(3)
+  expiresAt   DateTime @map("expires_at") @db.Timestamptz(3)
+  messageId   String?  @map("message_id")
+  reason      String   @default("")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([companyId, eventKey])
+  @@index([companyId, status, availableAt])
+  @@map("whatsapp_notification_outbox")
+}
+
+model WhatsAppInstallationAppointment {
+  id                String   @id() @default(uuid())
+  companyId         String   @map("company_id")
+  company           Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customerProductId String   @unique() @map("customer_product_id")
+  appointmentOn     DateTime @map("appointment_on") @db.Timestamptz(3)
+  technician        String   @default("")
+  status            String   @default("SCHEDULED")
+  updatedBy         String   @map("updated_by")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+
+  @@index([companyId, status, appointmentOn])
+  @@map("whatsapp_installation_appointments")
+}
+
+model CrmSettings {
+  companyId String   @id() @map("company_id")
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  settings  Json
+  version   Int      @default(1)
+  updatedBy String   @map("updated_by")
+  updatedAt DateTime @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+
+  @@map("crm_settings")
+}
+
+model CrmAccount {
+  id          String        @id() @default(uuid())
+  companyId   String        @map("company_id")
+  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  name        String
+  industry    String        @default("")
+  website     String        @default("")
+  email       String        @default("")
+  phone       String        @default("")
+  address     String        @default("")
+  ownerId     String        @map("owner_id")
+  tags        String[]
+  description String        @default("")
+  archived    Boolean       @default(false)
+  version     Int           @default(1)
+  createdBy   String        @map("created_by")
+  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime      @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+  deals       CrmDeal[]
+  activities  CrmActivity[]
+
+  @@unique([companyId, id])
+  @@index([companyId, archived, name])
+  @@map("crm_accounts")
+}
+
+model CrmDeal {
+  id             String            @id() @default(uuid())
+  companyId      String            @map("company_id")
+  company        Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId       String?           @map("client_id")
+  client         CompanyClient?    @relation(fields: [companyId, clientId], references: [companyId, clientId], onDelete: Restrict)
+  accountId      String?           @map("account_id")
+  account        CrmAccount?       @relation(fields: [companyId, accountId], references: [companyId, id], onDelete: Restrict)
+  name           String
+  pipelineKey    String            @map("pipeline_key")
+  stageKey       String            @map("stage_key")
+  status         String            @default("OPEN")
+  value          Decimal           @default(0) @db.Decimal(18, 2)
+  probability    Int               @default(0)
+  expectedClose  DateTime?         @map("expected_close") @db.Date()
+  closedAt       DateTime?         @map("closed_at") @db.Timestamptz(3)
+  stageChangedAt DateTime          @default(now()) @map("stage_changed_at") @db.Timestamptz(3)
+  lossReason     String            @default("") @map("loss_reason")
+  ownerId        String            @map("owner_id")
+  source         String            @default("Other")
+  tags           String[]
+  description    String            @default("")
+  archived       Boolean           @default(false)
+  version        Int               @default(1)
+  createdBy      String            @map("created_by")
+  createdAt      DateTime          @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime          @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+  activities     CrmActivity[]
+  documents      CrmDocumentLink[]
+
+  @@unique([companyId, id])
+  @@index([companyId, archived, pipelineKey, stageKey])
+  @@index([companyId, ownerId, expectedClose])
+  @@map("crm_deals")
+}
+
+model CrmActivity {
+  id             String         @id() @default(uuid())
+  companyId      String         @map("company_id")
+  company        Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId       String?        @map("client_id")
+  client         CompanyClient? @relation(fields: [companyId, clientId], references: [companyId, clientId], onDelete: Restrict)
+  accountId      String?        @map("account_id")
+  account        CrmAccount?    @relation(fields: [companyId, accountId], references: [companyId, id], onDelete: Restrict)
+  dealId         String?        @map("deal_id")
+  deal           CrmDeal?       @relation(fields: [companyId, dealId], references: [companyId, id], onDelete: Restrict)
+  kind           String         @default("TASK")
+  subject        String
+  body           String         @default("")
+  status         String         @default("OPEN")
+  priority       String         @default("NORMAL")
+  ownerId        String         @map("owner_id")
+  dueAt          DateTime?      @map("due_at") @db.Timestamptz(3)
+  endAt          DateTime?      @map("end_at") @db.Timestamptz(3)
+  completedAt    DateTime?      @map("completed_at") @db.Timestamptz(3)
+  remindedAt     DateTime?      @map("reminded_at") @db.Timestamptz(3)
+  recurrenceDays Int?           @map("recurrence_days")
+  recurrenceKey  String?        @map("recurrence_key")
+  attachments    Json           @default("[]")
+  archived       Boolean        @default(false)
+  version        Int            @default(1)
+  createdBy      String         @map("created_by")
+  createdAt      DateTime       @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime       @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+
+  @@unique([companyId, recurrenceKey])
+  @@index([companyId, status, dueAt, ownerId])
+  @@index([companyId, clientId, createdAt])
+  @@map("crm_activities")
+}
+
+model CrmDocumentLink {
+  id         String   @id() @default(uuid())
+  companyId  String   @map("company_id")
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  dealId     String   @map("deal_id")
+  deal       CrmDeal  @relation(fields: [companyId, dealId], references: [companyId, id], onDelete: Restrict)
+  kind       String
+  documentId String   @map("document_id")
+  createdBy  String   @map("created_by")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@unique([companyId, dealId, kind, documentId])
+  @@map("crm_document_links")
+}
+
+model CrmAudit {
+  id         String   @id() @default(uuid())
+  companyId  String   @map("company_id")
+  company    Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  entityType String   @map("entity_type")
+  entityId   String   @map("entity_id")
+  action     String
+  actorId    String   @map("actor_id")
+  summary    String
+  changes    Json
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+
+  @@index([companyId, entityType, entityId, createdAt])
+  @@map("crm_audit")
+}
+
 model DistributorCompany {
   expenses            Expense[]
   distributorId       String               @map("distributor_id")
@@ -398,6 +655,22 @@ model DistributorCompany {
 
 model Company {
   id                                    String                              @id() @unique() @default(uuid())
+  crmSettings                           CrmSettings?
+  crmAccounts                           CrmAccount[]
+  crmDeals                              CrmDeal[]
+  crmTasks                              CrmActivity[]
+  crmDocuments                          CrmDocumentLink[]
+  crmAudit                              CrmAudit[]
+  whatsappNotificationSettings          WhatsAppNotificationSettings?
+  whatsappNotificationContacts          WhatsAppNotificationContact[]
+  whatsappNotificationSources           WhatsAppNotificationSource[]
+  whatsappNotificationOutbox            WhatsAppNotificationOutbox[]
+  whatsappInstallationAppointments      WhatsAppInstallationAppointment[]
+  whatsappConnection                    WhatsAppConnection?
+  recurringInvoices                     RecurringInvoice[]
+  recurringInvoiceOccurrences           RecurringInvoiceOccurrence[]
+  retainerInvoices                      RetainerInvoice[]
+  retainerEvents                        RetainerEvent[]
   recurringExpenses                     RecurringExpense[]
   accountantStockControl                AccountantStockControl?
   accountantUserSettings                AccountantUserSettings?
@@ -425,6 +698,7 @@ model Company {
   accountantAccountTransferRows         AccountantAccountTransfer[]
   accountantContactRows                 AccountantContact[]
   accountantInvestorRows                AccountantInvestor[]
+  accountantLoanRows                    AccountantLoan[]
   accountantProjectRows                 AccountantProject[]
   accountantAuditRows                   AccountantAudit[]
   name                                  String
@@ -924,6 +1198,8 @@ model User {
 
 model Client {
   id                        String                       @id() @unique() @default(uuid())
+  recurringInvoices         RecurringInvoice[]
+  retainerInvoices          RetainerInvoice[]
   email                     String?                      @unique()
   name                      String
   gender                    String?
@@ -1458,35 +1734,37 @@ model Collection {
 }
 
 model Product {
-  id              String         @id() @default(uuid())
-  productNo       Int?           @map("product_no")
-  createdAt       DateTime       @default(now()) @map("created_at")
-  updatedAt       DateTime       @updatedAt() @map("updated_at")
-  name            String
-  status          Boolean        @default(true)
-  rating          Float?
-  description     String?
-  weight          Float?
-  length          Float?
-  width           Float?
-  height          Float?
-  dimension       ShippingBox?   @relation("ProductDimension", fields: [dimensionId], references: [id])
-  dimensionId     String?        @map("dimension_id")
-  customFields    Json?          @map("custom_fields")
-  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId       String         @map("company_id")
-  category        Category?      @relation(fields: [categoryId], references: [id])
-  categoryId      String?        @map("category_id")
-  subcategory     Subcategory?   @relation(fields: [subcategoryId], references: [id])
-  subcategoryId   String?        @map("subcategory_id")
-  brand           Brand?         @relation(fields: [brandId], references: [id])
-  brandId         String?        @map("brand_id")
-  collection      Collection?    @relation(fields: [collectionId], references: [id])
-  collectionId    String?        @map("collection_id")
-  variants        Variant[]
-  purchaseorder   PurchaseOrder? @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
-  purchaseorderId String?        @map("purchaseorder_id")
-  writeId         String?        @default(uuid()) @map("write_id")
+  isServiceProduct Boolean              @default(false) @map("is_service_product")
+  serviceLinks     ProductServiceLink[]
+  id               String               @id() @default(uuid())
+  productNo        Int?                 @map("product_no")
+  createdAt        DateTime             @default(now()) @map("created_at")
+  updatedAt        DateTime             @updatedAt() @map("updated_at")
+  name             String
+  status           Boolean              @default(true)
+  rating           Float?
+  description      String?
+  weight           Float?
+  length           Float?
+  width            Float?
+  height           Float?
+  dimension        ShippingBox?         @relation("ProductDimension", fields: [dimensionId], references: [id])
+  dimensionId      String?              @map("dimension_id")
+  customFields     Json?                @map("custom_fields")
+  company          Company              @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId        String               @map("company_id")
+  category         Category?            @relation(fields: [categoryId], references: [id])
+  categoryId       String?              @map("category_id")
+  subcategory      Subcategory?         @relation(fields: [subcategoryId], references: [id])
+  subcategoryId    String?              @map("subcategory_id")
+  brand            Brand?               @relation(fields: [brandId], references: [id])
+  brandId          String?              @map("brand_id")
+  collection       Collection?          @relation(fields: [collectionId], references: [id])
+  collectionId     String?              @map("collection_id")
+  variants         Variant[]
+  purchaseorder    PurchaseOrder?       @relation(fields: [purchaseorderId], references: [id], onDelete: Cascade)
+  purchaseorderId  String?              @map("purchaseorder_id")
+  writeId          String?              @default(uuid()) @map("write_id")
 
   @@unique([companyId, productNo])
   @@index([categoryId])
@@ -1494,6 +1772,208 @@ model Product {
   @@index([collectionId])
   @@index([companyId])
   @@map("products")
+}
+
+model ServiceConfiguration {
+  id        String                         @id() @default(uuid())
+  companyId String                         @map("company_id")
+  kind      String
+  name      String
+  archived  Boolean                        @default(false)
+  revision  Int                            @default(1)
+  rules     Json
+  createdAt DateTime                       @default(now()) @map("created_at")
+  updatedAt DateTime                       @updatedAt() @map("updated_at")
+  versions  ServiceConfigurationRevision[]
+  links     ProductServiceLink[]
+
+  @@index([companyId, kind, archived])
+  @@map("service_configurations")
+}
+
+model ServiceConfigurationRevision {
+  id              String               @id() @default(uuid())
+  companyId       String               @map("company_id")
+  configurationId String               @map("configuration_id")
+  configuration   ServiceConfiguration @relation(fields: [configurationId], references: [id])
+  revision        Int
+  snapshot        Json
+  createdBy       String               @map("created_by")
+  createdAt       DateTime             @default(now()) @map("created_at")
+
+  @@unique([configurationId, revision])
+  @@index([companyId])
+  @@map("service_configuration_revisions")
+}
+
+model ProductServiceLink {
+  id              String               @id() @default(uuid())
+  companyId       String               @map("company_id")
+  productId       String               @map("product_id")
+  product         Product              @relation(fields: [productId], references: [id], onDelete: Cascade)
+  configurationId String               @map("configuration_id")
+  configuration   ServiceConfiguration @relation(fields: [configurationId], references: [id])
+
+  @@unique([productId, configurationId])
+  @@index([companyId, productId])
+  @@map("product_service_links")
+}
+
+model CustomerProduct {
+  id           String                     @id() @default(uuid())
+  companyId    String                     @map("company_id")
+  clientId     String                     @map("client_id")
+  reference    String
+  sourceKey    String                     @map("source_key")
+  productId    String?                    @map("product_id")
+  itemId       String?                    @map("item_id")
+  billId       String?                    @map("bill_id")
+  entryId      String?                    @map("entry_id")
+  orderId      String?                    @map("order_id")
+  serialNumber String?                    @map("serial_number")
+  name         String
+  purchasedOn  DateTime                   @map("purchased_on") @db.Date()
+  deliveredOn  DateTime?                  @map("delivered_on") @db.Date()
+  installedOn  DateTime?                  @map("installed_on") @db.Date()
+  evidence     String?
+  status       String                     @default("ACTIVE")
+  replacedById String?                    @map("replaced_by_id")
+  createdAt    DateTime                   @default(now()) @map("created_at")
+  agreements   CustomerServiceAgreement[]
+  readings     ServiceReading[]
+
+  @@unique([companyId, sourceKey])
+  @@unique([companyId, reference])
+  @@index([companyId, clientId])
+  @@index([companyId, billId])
+  @@index([companyId, orderId])
+  @@map("customer_products")
+}
+
+model CustomerProductNumbering {
+  companyId  String   @id() @map("company_id")
+  prefix     String   @default("PR")
+  lastNumber BigInt   @default(0) @map("last_number")
+  updatedAt  DateTime @updatedAt() @map("updated_at")
+
+  @@map("customer_product_numbering")
+}
+
+model CustomerServiceAgreement {
+  id                String                  @id() @default(uuid())
+  companyId         String                  @map("company_id")
+  customerProductId String                  @map("customer_product_id")
+  customerProduct   CustomerProduct         @relation(fields: [customerProductId], references: [id])
+  configurationId   String                  @map("configuration_id")
+  revision          Int
+  kind              String
+  snapshot          Json
+  status            String                  @default("PENDING")
+  startsOn          DateTime?               @map("starts_on") @db.Date()
+  endsOn            DateTime?               @map("ends_on") @db.Date()
+  nextDue           DateTime?               @map("next_due") @db.Date()
+  completedVisits   Int                     @default(0) @map("completed_visits")
+  lastCompletedOn   DateTime?               @map("last_completed_on") @db.Date()
+  occurrences       MaintenanceOccurrence[]
+  jobs              ServiceJob[]
+
+  @@index([customerProductId, configurationId])
+  @@index([companyId, status, nextDue])
+  @@map("customer_service_agreements")
+}
+
+model MaintenanceOccurrence {
+  id          String                   @id() @default(uuid())
+  companyId   String                   @map("company_id")
+  agreementId String                   @map("agreement_id")
+  agreement   CustomerServiceAgreement @relation(fields: [agreementId], references: [id])
+  dueOn       DateTime                 @map("due_on") @db.Date()
+  status      String                   @default("DUE")
+  snapshot    Json
+
+  @@unique([agreementId, dueOn])
+  @@index([companyId, status, dueOn])
+  @@map("maintenance_occurrences")
+}
+
+model ServiceJob {
+  id            String                   @id() @default(uuid())
+  companyId     String                   @map("company_id")
+  agreementId   String                   @map("agreement_id")
+  agreement     CustomerServiceAgreement @relation(fields: [agreementId], references: [id])
+  occurrenceId  String?                  @unique() @map("occurrence_id")
+  requestKey    String                   @map("request_key")
+  kind          String
+  status        String                   @default("OPEN")
+  assignedTo    String?                  @map("assigned_to")
+  appointmentOn DateTime?                @map("appointment_on") @db.Timestamptz(3)
+  completedOn   DateTime?                @map("completed_on") @db.Date()
+  details       Json
+  snapshot      Json
+  charge        Float                    @default(0)
+  tax           Float                    @default(0)
+  billId        String?                  @unique() @map("bill_id")
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  updatedAt     DateTime                 @updatedAt() @map("updated_at")
+
+  @@unique([companyId, requestKey])
+  @@index([companyId, status])
+  @@map("service_jobs")
+}
+
+model ServiceCharge {
+  id          String   @id() @default(uuid())
+  companyId   String   @map("company_id")
+  name        String
+  description String   @default("")
+  rate        Float    @default(0)
+  tax         Float    @default(0)
+  unit        String   @default("Service")
+  archived    Boolean  @default(false)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt() @map("updated_at")
+
+  @@index([companyId, archived])
+  @@map("service_charges")
+}
+
+model ServiceReading {
+  id                String          @id() @default(uuid())
+  companyId         String          @map("company_id")
+  customerProductId String          @map("customer_product_id")
+  customerProduct   CustomerProduct @relation(fields: [customerProductId], references: [id])
+  recordedOn        DateTime        @map("recorded_on") @db.Date()
+  values            Json
+  createdBy         String          @map("created_by")
+
+  @@index([companyId, customerProductId])
+  @@map("service_readings")
+}
+
+model ServiceAudit {
+  id         String   @id() @default(uuid())
+  companyId  String   @map("company_id")
+  resourceId String   @map("resource_id")
+  action     String
+  actorId    String   @map("actor_id")
+  reason     String
+  before     Json?
+  after      Json?
+  createdAt  DateTime @default(now()) @map("created_at")
+
+  @@index([companyId, resourceId])
+  @@map("service_audit")
+}
+
+model ServiceReminder {
+  id           String   @id() @default(uuid())
+  companyId    String   @map("company_id")
+  occurrenceId String   @map("occurrence_id")
+  leadDays     Int      @map("lead_days")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@unique([occurrenceId, leadDays])
+  @@map("service_reminders")
 }
 
 model Variant {
@@ -1591,6 +2071,8 @@ model ShippingBox {
 
 model Bill {
   id                                String                             @id() @unique() @default(uuid())
+  recurringOccurrences              RecurringInvoiceOccurrence[]
+  retainerEvents                    RetainerEvent[]
   paidAt                            DateTime?                          @map("paid_at") @db.Timestamptz(3)
   createdAt                         DateTime                           @map("created_at")
   updatedAt                         DateTime                           @updatedAt() @map("updated_at")
@@ -1886,19 +2368,23 @@ model EcommOrderStatusHistory {
 }
 
 model EcommPickupRequest {
-  id              String   @id() @unique() @default(uuid())
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt() @map("updated_at")
-  location        String
-  carrier         String
-  pickupDate      String?  @map("pickup_date")
-  pickupTime      String?  @map("pickup_time")
-  packageCount    Int      @default(0) @map("package_count")
-  status          String   @default("REQUESTED")
-  carrierPickupId String?  @map("carrier_pickup_id")
-  orderIds        Json     @default("[]") @map("order_ids")
-  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId       String   @map("company_id")
+  id                  String   @id() @unique() @default(uuid())
+  createdAt           DateTime @default(now()) @map("created_at")
+  updatedAt           DateTime @updatedAt() @map("updated_at")
+  location            String
+  carrier             String
+  pickupDate          String?  @map("pickup_date")
+  pickupTime          String?  @map("pickup_time")
+  requestedPickupDate String?  @map("requested_pickup_date")
+  requestedPickupTime String?  @map("requested_pickup_time")
+  carrierSchedule     Json?    @map("carrier_schedule")
+  carrierResponse     Json?    @map("carrier_response")
+  packageCount        Int      @default(0) @map("package_count")
+  status              String   @default("REQUESTED")
+  carrierPickupId     String?  @map("carrier_pickup_id")
+  orderIds            Json     @default("[]") @map("order_ids")
+  company             Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId           String   @map("company_id")
 
   @@index([companyId, status])
   @@index([companyId, createdAt], map: "ecomm_pickup_requests_company_idx")
@@ -2162,6 +2648,111 @@ model Expense {
   @@map("expenses")
 }
 
+model RecurringInvoice {
+  id             String                       @id() @default(uuid())
+  companyId      String                       @map("company_id")
+  company        Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clientId       String                       @map("client_id")
+  client         Client                       @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  name           String
+  currency       String
+  frequency      String
+  interval       Int                          @default(1)
+  startDate      DateTime                     @map("start_date") @db.Date()
+  endDate        DateTime?                    @map("end_date") @db.Date()
+  nextDate       DateTime                     @map("next_date") @db.Date()
+  status         String                       @default("ACTIVE")
+  generationMode String                       @default("DRAFT") @map("generation_mode")
+  dueDays        Int                          @default(0) @map("due_days")
+  template       Json
+  revision       String
+  createdBy      String                       @map("created_by")
+  lastError      String?                      @map("last_error")
+  createdAt      DateTime                     @default(now()) @map("created_at")
+  updatedAt      DateTime                     @updatedAt() @map("updated_at")
+  occurrences    RecurringInvoiceOccurrence[]
+
+  @@index([companyId])
+  @@index([status, nextDate])
+  @@map("recurring_invoices")
+}
+
+model RecurringInvoiceOccurrence {
+  id          String           @id() @default(uuid())
+  companyId   String           @map("company_id")
+  company     Company          @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  profileId   String           @map("profile_id")
+  profile     RecurringInvoice @relation(fields: [profileId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  invoiceDate DateTime         @map("invoice_date") @db.Date()
+  dueDate     DateTime         @map("due_date") @db.Date()
+  template    Json
+  billId      String?          @unique() @map("bill_id")
+  bill        Bill?            @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  createdAt   DateTime         @default(now()) @map("created_at")
+
+  @@unique([profileId, invoiceDate])
+  @@index([companyId])
+  @@map("recurring_invoice_occurrences")
+}
+
+model RetainerInvoice {
+  id                 String                      @id() @default(uuid())
+  companyId          String                      @map("company_id")
+  company            Company                     @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clientId           String                      @map("client_id")
+  client             Client                      @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  number             Int
+  currency           String
+  retainerDate       DateTime                    @map("retainer_date") @db.Date()
+  status             String                      @default("DRAFT")
+  description        String
+  reference          String                      @default("")
+  notes              String                      @default("")
+  termsAndConditions String                      @default("") @map("terms_and_conditions")
+  amount             Decimal                     @db.Decimal(18, 2)
+  liabilityAccountId String                      @map("liability_account_id")
+  liabilityAccount   AccountantAccountingAccount @relation(fields: [liabilityAccountId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  revision           String
+  createdBy          String                      @map("created_by")
+  createdAt          DateTime                    @default(now()) @map("created_at")
+  updatedAt          DateTime                    @updatedAt() @map("updated_at")
+  events             RetainerEvent[]
+
+  @@unique([companyId, number])
+  @@index([companyId, clientId])
+  @@map("retainer_invoices")
+}
+
+model RetainerEvent {
+  id            String                       @id() @default(uuid())
+  companyId     String                       @map("company_id")
+  company       Company                      @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  retainerId    String                       @map("retainer_id")
+  retainer      RetainerInvoice              @relation(fields: [retainerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  kind          String
+  amount        Decimal                      @db.Decimal(18, 2)
+  eventDate     DateTime                     @map("event_date") @db.Date()
+  reference     String                       @default("")
+  paymentMethod String?                      @map("payment_method")
+  accountId     String?                      @map("account_id")
+  account       AccountantAccountingAccount? @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  billId        String?                      @map("bill_id")
+  bill          Bill?                        @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  paymentId     String?                      @unique() @map("payment_id")
+  payment       Payment?                     @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  journalId     String                       @unique() @map("journal_id")
+  journal       AccountantManualJournal      @relation(fields: [journalId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  reversesId    String?                      @unique() @map("reverses_id")
+  reverses      RetainerEvent?               @relation("RetainerReversal", fields: [reversesId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  reversal      RetainerEvent?               @relation("RetainerReversal")
+  createdBy     String                       @map("created_by")
+  createdAt     DateTime                     @default(now()) @map("created_at")
+
+  @@index([companyId, retainerId])
+  @@index([companyId, billId])
+  @@map("retainer_events")
+}
+
 model RecurringExpense {
   id                   String                       @id() @default(uuid())
   companyId            String                       @map("company_id")
@@ -2200,29 +2791,30 @@ model RecurringExpenseOccurrence {
 }
 
 model Payment {
-  id               String   @id() @unique() @default(uuid())
-  paymentDate      DateTime @default(now()) @map("payment_date")
-  paymentMode      String   @map("payment_mode")
-  paymentReference String?  @map("payment_reference")
+  id               String         @id() @unique() @default(uuid())
+  retainerEvent    RetainerEvent?
+  paymentDate      DateTime       @default(now()) @map("payment_date")
+  paymentMode      String         @map("payment_mode")
+  paymentReference String?        @map("payment_reference")
   amount           Float
-  currency         String   @default("INR")
-  status           String   @default("Completed")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt() @map("updated_at")
-  company          Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  companyId        String   @map("company_id")
-  paymentNumber    Int?     @map("payment_number")
-  referenceNumber  String?  @map("reference_number")
-  bankCharges      Float?   @default(0) @map("bank_charges")
-  depositTo        String?  @map("deposit_to")
-  taxDeducted      String?  @default("none") @map("tax_deducted")
+  currency         String         @default("INR")
+  status           String         @default("Completed")
+  createdAt        DateTime       @default(now()) @map("created_at")
+  updatedAt        DateTime       @updatedAt() @map("updated_at")
+  company          Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  companyId        String         @map("company_id")
+  paymentNumber    Int?           @map("payment_number")
+  referenceNumber  String?        @map("reference_number")
+  bankCharges      Float?         @default(0) @map("bank_charges")
+  depositTo        String?        @map("deposit_to")
+  taxDeducted      String?        @default("none") @map("tax_deducted")
   notes            String?
-  unusedAmount     Float?   @default(0) @map("unused_amount")
-  deleted          Boolean  @default(false)
-  client           Client?  @relation(fields: [clientId], references: [id])
-  clientId         String?  @map("client_id")
-  bill             Bill?    @relation(fields: [billId], references: [id])
-  billId           String?  @map("bill_id")
+  unusedAmount     Float?         @default(0) @map("unused_amount")
+  deleted          Boolean        @default(false)
+  client           Client?        @relation(fields: [clientId], references: [id])
+  clientId         String?        @map("client_id")
+  bill             Bill?          @relation(fields: [billId], references: [id])
+  billId           String?        @map("bill_id")
 
   @@map("payments")
 }
@@ -2331,19 +2923,21 @@ model CompanyUser {
 }
 
 model CompanyClient {
+  crmDeals                  CrmDeal[]
+  crmTasks                  CrmActivity[]
   expenses                  Expense[]
-  companyId                 String    @map("company_id")
-  company                   Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
-  clientId                  String    @map("client_id")
-  client                    Client    @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  companyId                 String        @map("company_id")
+  company                   Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  clientId                  String        @map("client_id")
+  client                    Client        @relation(fields: [clientId], references: [id], onDelete: Cascade)
   password                  String?
-  status                    Boolean   @default(true)
-  pipelineStatus            String    @default("new") @map("pipeline_status")
-  points                    Int       @default(0)
-  clientNumber              Int?      @map("client_number")
-  marketingOptInRequestedAt DateTime? @map("marketing_opt_in_requested_at")
-  marketingOptInAt          DateTime? @map("marketing_opt_in_at")
-  marketingOptInEmail       String?   @map("marketing_opt_in_email")
+  status                    Boolean       @default(true)
+  pipelineStatus            String        @default("new") @map("pipeline_status")
+  points                    Int           @default(0)
+  clientNumber              Int?          @map("client_number")
+  marketingOptInRequestedAt DateTime?     @map("marketing_opt_in_requested_at")
+  marketingOptInAt          DateTime?     @map("marketing_opt_in_at")
+  marketingOptInEmail       String?       @map("marketing_opt_in_email")
 
   @@id([companyId, clientId])
   @@map("company_clients")
@@ -3556,6 +4150,8 @@ model EditSessionMessage {
 }
 
 model AccountantAccountingAccount {
+  retainerInvoices    RetainerInvoice[]
+  retainerEvents      RetainerEvent[]
   distributorMappings AccountantDistributorMapping[]
   id                  String                              @id() @default(cuid())
   companyId           String                              @map("company_id")
@@ -3589,6 +4185,7 @@ model AccountantAccountingAccount {
 }
 
 model AccountantManualJournal {
+  retainerEvent      RetainerEvent?
   distributorSources AccountantDistributorSource[]
   createdById        String?                       @map("created_by_id")
   approvals          Json                          @default("[]")
@@ -3990,6 +4587,7 @@ model AccountantInvestor {
   company      Company                   @relation(fields: [companyId], references: [id], onUpdate: NoAction, onDelete: NoAction)
   terms        AccountantInvestorTerm[]
   events       AccountantInvestorEvent[]
+  loans        AccountantLoan[]
   name         String
   legacyUserId String?                   @map("legacy_user_id")
   profile      Json                      @default("{}")
@@ -4035,6 +4633,47 @@ model AccountantInvestorEvent {
   @@unique([companyId, reversedId])
   @@index([companyId, investorId, eventDate], map: "accountant_v2_investor_events_company_id_investor_id_event_date")
   @@map("accountant_v2_investor_events")
+}
+
+model AccountantLoan {
+  id         String                @id() @default(uuid())
+  companyId  String                @map("company_id")
+  company    Company               @relation(fields: [companyId], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  investorId String                @map("investor_id")
+  investor   AccountantInvestor    @relation(fields: [companyId, investorId], references: [companyId, id], onUpdate: NoAction, onDelete: NoAction)
+  name       String
+  status     String                @default("DRAFT")
+  currency   String
+  terms      Json
+  accounts   Json
+  schedule   Json
+  events     AccountantLoanEvent[]
+  createdAt  DateTime              @default(now()) @map("created_at")
+  updatedAt  DateTime              @updatedAt() @map("updated_at")
+
+  @@unique([companyId, id])
+  @@index([companyId, status])
+  @@map("accountant_v2_loans")
+}
+
+model AccountantLoanEvent {
+  id        String         @id() @default(uuid())
+  companyId String         @map("company_id")
+  loanId    String         @map("loan_id")
+  loan      AccountantLoan @relation(fields: [companyId, loanId], references: [companyId, id], onUpdate: NoAction, onDelete: NoAction)
+  eventDate DateTime       @map("event_date") @db.Date()
+  kind      String
+  principal Decimal        @default(0) @db.Decimal(16, 2)
+  interest  Decimal        @default(0) @db.Decimal(16, 2)
+  fees      Decimal        @default(0) @db.Decimal(16, 2)
+  journalId String         @map("journal_id")
+  requestId String         @map("request_id")
+  details   Json           @default("{}")
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  @@unique([companyId, requestId])
+  @@index([companyId, loanId, eventDate])
+  @@map("accountant_v2_loan_events")
 }
 
 model AccountantContact {

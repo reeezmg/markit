@@ -38,6 +38,7 @@ const links = computed(() => [
             to: '/settings/products',
         },
         { label: 'Account', icon: 'i-heroicons-book-open', to: '/settings/account' },
+        { label: 'Sidebar', icon: 'i-heroicons-bars-3', to: '/settings/sidebar' },
         {
             label: 'Printer',
             icon: 'i-heroicons-printer',

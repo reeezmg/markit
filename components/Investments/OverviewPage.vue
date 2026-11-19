@@ -7,11 +7,11 @@ const api = useAccountantApi(),
     loading = ref(false),
     error = ref('');
 const cards = [
-    ['capital', 'Net invested capital'],
+    ['capital', 'Net contributed capital'],
     ['allocated', 'Profit allocated'],
     ['paid', 'Profit paid'],
     ['payable', 'Profit awaiting payment'],
-    ['loan', 'Investor loans'],
+    ['loan', 'Outstanding loan principal'],
     ['contributed', 'Total contributions'],
 ];
 const totals = computed(() =>
@@ -70,17 +70,23 @@ onMounted(load);
         >
         <UCard
             ><h2 class="font-semibold mb-4">A simple flow</h2
-            ><div class="grid gap-5 md:grid-cols-3"
+            ><div class="grid gap-5 md:grid-cols-2 xl:grid-cols-4"
                 ><div
                     ><p class="font-medium">1. Add investors & shares</p
                     ><p class="text-sm text-gray-500 my-2"
-                        >Keep investor profiles and their dated ownership
-                        agreements up to date.</p
+                        >Add investor profiles, then buy shares or enter ownership and profit percentages.</p
                     ><UButton to="/investments/investors" variant="outline"
                         >Manage investors</UButton
                     ></div
                 ><div
-                    ><p class="font-medium">2. Share company profit</p
+                    ><p class="font-medium">2. Record funding</p>
+                    <p class="text-sm text-gray-500 my-2">Record capital contributions separately from money borrowed from investors.</p>
+                    <div class="flex flex-wrap gap-2">
+                        <UButton to="/investments/capital" variant="outline">Capital</UButton>
+                        <UButton :to="{path: '/loans', query: {entryCompany: api.companyId.value}}" variant="outline">Loans</UButton>
+                    </div>
+                </div><div
+                    ><p class="font-medium">3. Share company profit</p
                     ><p class="text-sm text-gray-500 my-2"
                         >Pick a period, review the calculated profit and approve
                         everyone's share together.</p
@@ -88,7 +94,7 @@ onMounted(load);
                         >Allocate profit</UButton
                     ></div
                 ><div
-                    ><p class="font-medium">3. Record payments</p
+                    ><p class="font-medium">4. Record profit payments</p
                     ><p class="text-sm text-gray-500 my-2"
                         >Pay investors from cash or bank and track the amount
                         still due.</p

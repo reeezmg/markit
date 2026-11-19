@@ -1,0 +1,182 @@
+<!doctype html><html><head><meta charset="utf-8"><title>After-sales browser test</title><meta name="viewport" content="width=device-width,initial-scale=1"><style>*,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important;transition-delay:0s!important}body{font-family:Inter,Arial,sans-serif;margin:0}#result{padding:12px;font-size:12px}#fixture-main{min-width:0}.fixture-sidebar{width:224px;flex:none;border-right:1px solid #e5e7eb;padding:22px 14px}.fixture-sidebar p{padding:9px 12px;font-size:13px;color:#6b7280}.fixture-sidebar .active{background:#fff7ed;color:#ea580c;border-radius:6px;font-weight:600}@media(max-width:767px){.fixture-sidebar{display:none}}</style></head><body><div id="app"></div><pre id="result">Running…</pre><script type="module">
+import * as Vue from 'vue'
+import Configurations from '../components/AfterSales/Configurations.vue'
+import RulesEditor from '../components/AfterSales/RulesEditor.vue'
+import ProductSelector from '../components/AfterSales/ProductSelector.vue'
+import JobEditor from '../components/AfterSales/JobEditor.vue'
+import ValuesEditor from '../components/AfterSales/ValuesEditor.vue'
+import Items from '../components/AfterSales/Items.vue'
+import ProductNumbering from '../components/Settings/CustomerProductNumbering.vue'
+import RecordTable from '../components/AfterSales/RecordTable.vue'
+import CustomerSelect from '../components/AfterSales/CustomerSelect.vue'
+import CustomerHistory from '../components/AfterSales/CustomerHistory.vue'
+import Workspace from '../pages/after-sales/index.vue'
+import ProductDetail from '../pages/after-sales/products/[customerProductId].vue'
+import UButton from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Button.vue'
+import UCard from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Card.vue'
+import UInput from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Input.vue'
+import USelect from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Select.vue'
+import USelectMenu from '../node_modules/@nuxt/ui/dist/runtime/components/forms/SelectMenu.vue'
+import UFormGroup from '../node_modules/@nuxt/ui/dist/runtime/components/forms/FormGroup.vue'
+import UTextarea from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Textarea.vue'
+import UCheckbox from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Checkbox.vue'
+import URadio from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Radio.vue'
+import UTable from '../node_modules/@nuxt/ui/dist/runtime/components/data/Table.vue'
+import UPagination from '../node_modules/@nuxt/ui/dist/runtime/components/navigation/Pagination.vue'
+import UBadge from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Badge.vue'
+import UAlert from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Alert.vue'
+import UDropdown from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Dropdown.vue'
+import UModal from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Modal.vue'
+import USlideover from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Slideover.vue'
+import USkeleton from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Skeleton.vue'
+import heroicons from '../node_modules/@iconify-json/heroicons/icons.json'
+import {defaultServiceRules} from '../utils/after-sales'
+const {createApp,h,ref,Suspense,nextTick}=Vue
+Object.assign(window, {ref:Vue.ref,computed:Vue.computed,watch:Vue.watch,onMounted:Vue.onMounted,onBeforeUnmount:Vue.onBeforeUnmount,toRaw:Vue.toRaw,nextTick:Vue.nextTick,reactive:Vue.reactive});
+const requests=[],config={id:'config',kind:'MAINTENANCE',name:'Quarterly check',revision:1,archived:false,rules:defaultServiceRules()}
+const configs=[config],company=ref('company'),mode=ref('configs'),selected=ref([]),job=ref(null),customerId=ref('')
+const customers=[{id:'customer-a',name:'Ananya Sharma',phone:'98765 43210'},{id:'customer-b',name:'Rahul Mehta',phone:'91234 56789'}]
+const testRoute=Vue.reactive({path:'/after-sales',params:{customerProductId:'unit-0'},query:{}});window.testRoute=testRoute;window.useRoute=()=>testRoute
+const units=Array.from({length:14},(_,i)=>({id:'unit-'+i,reference:'MP-'+String(1001+i),name:i%2?'Aqua Pure Water Purifier':'HomeCool Air Conditioner',customer_name:['Ananya Sharma','Rahul Mehta','Priya Nair','Arjun Patel'][i%4],phone:'98765 43210',serial_number:'SN-2026-'+(101+i),status:'ACTIVE',purchased_on:'2026-10-01',delivered_on:'2026-10-02',agreements:[{id:'agreement-'+i,kind:'MAINTENANCE',name:'Quarterly check',status:'ACTIVE'}]}))
+const dueRows=[{id:'occurrence',agreement_id:'agreement',customer_product_id:'unit-0',customer_name:'Ananya Sharma',phone:'98765 43210',product_name:units[0].name,reference:units[0].reference,configuration_name:'Quarterly check',due_on:'2020-10-01'}]
+const purchases=[...units.map((unit,i)=>({...unit,id:'unit:'+unit.id,customer_product_id:unit.id,barcode:'BC-'+(1001+i),quantity:1,bill_id:'bill',invoice_code:'INV-1'})),{id:'purchase:old',customer_product_id:null,name:'Earlier product',barcode:'OLD-1',quantity:2,status:'UNREGISTERED',purchased_on:'2025-01-01',bill_id:'old-bill',invoice_code:'INV-OLD',agreements:[]}]
+let failNumberingSave=false,numberingAvailable=true;const numbering={company:{prefix:'PR',nextNumber:'3'},branch:{prefix:'BR',nextNumber:'12'}}
+let failRead=false,failJobSave=false,failInvoice=false,holdInvoice=false,finishInvoice
+const catalog={charges:[{id:'labour',name:'Labour',rate:100,tax:18,unit:'Hour',archived:false}],products:[{id:'repair',name:'Repair filter',product_no:1,status:true,variants:[]}]},navigation=[]
+const scope={ready:Promise.resolve(),companyId:company,auth:{session:ref({companyId:'company',currency:'INR'})},async fetch(url,options={}){
+ requests.push({url,options:JSON.parse(JSON.stringify(options))});if(failRead&&!options.body)throw Error('Please try again')
+ if(url==='/api/after-sales/customers/customer-1'){
+  const {q='',page=1,pageSize=20}=options.query,filtered=purchases.filter(row=>JSON.stringify(row).toLowerCase().includes(q.toLowerCase()))
+  return clone({customer:{id:'customer-1',name:'Ananya Sharma',phone:'98765 43210'},rows:filtered.slice((page-1)*pageSize,page*pageSize),total:filtered.length,page,pageSize})
+ }
+ if(url==='/api/bill/findManyClient'){
+  const q=options.query.q.toLowerCase(),rows=options.headers['x-company-id']==='company'?customers:[{id:'branch-customer',name:'Branch customer',phone:null}]
+  return clone(rows.filter(c=>!q||c.name.toLowerCase().includes(q)||c.phone?.replace(/\D/g,'').includes(q.replace(/\D/g,'')||'no digits')))
+ }
+ if(url==='/api/after-sales/products'&&!options.body)return clone(units)
+ if(url==='/api/after-sales/maintenance')return clone(dueRows)
+ if(url==='/api/after-sales/process')return {notified:1}
+ if(url==='/api/after-sales/products/unit-0')return clone({product:units[0],agreements:[{...agreement,status:'ACTIVE',starts_on:'2026-10-01',next_due:'2026-11-01'}],jobs:job.value?[{...job.value,agreement_id:'agreement',agreement_name:'Quarterly check'}]:[],readings:[],history:[]})
+ if(url==='/api/after-sales/configurations/preview')return {token:'preview-token',before:{name:config.name,rules:config.rules},after:options.body,agreements:[{id:'agreement',reference:'MP-1',customer_name:'Client',next_due:'2026-11-01',proposedNextDue:'2026-12-01',booked_visits:1}]}
+ if(url==='/api/after-sales/configurations/archive'){config.archived=options.body.archived;return {id:config.id}}
+ if(url==='/api/after-sales/configurations'&&options.body){const data=options.body;if(data.id)Object.assign(config,JSON.parse(JSON.stringify(data)),{revision:config.revision+1});else configs.push({...JSON.parse(JSON.stringify(data)),id:'new-'+configs.length,revision:1,archived:false});return {id:config.id}}
+ if(url==='/api/after-sales/configurations')return JSON.parse(JSON.stringify(configs))
+ if(url==='/api/after-sales/staff')return [{id:'staff',name:'Technician'}]
+ if(url==='/api/after-sales/catalog')return JSON.parse(JSON.stringify(catalog))
+ if(url==='/api/settings/customer-product-numbering'){if(options.body){if(failNumberingSave)throw Error('Numbering save failed');numbering[company.value].prefix=options.body.prefix}return {...numbering[company.value],available:numberingAvailable,canEdit:true}}
+ if(url==='/api/after-sales/catalog/charges'){const existing=catalog.charges.find(row=>row.id===options.body.id);if(existing)Object.assign(existing,options.body);else catalog.charges.push({...options.body,id:'new-charge-'+catalog.charges.length});return {id:existing?.id||catalog.charges.at(-1).id}}
+ if(url==='/api/bill/searchItems')return ['Regular filter','Service filter'].map((name,i)=>({id:'item'+i,barcode:'code'+i,size:'',variant:{id:'variant'+i,name:'Standard',sprice:50,tax:0,unit:'Nos',product:{name}}}))
+ if(url==='/api/after-sales/jobs'&&!options.body)return job.value?[{...job.value,customer_name:'Ananya Sharma',product_name:units[0].name,customer_product_id:'unit-0',agreement_name:'Quarterly check'}]:[]
+ if(url==='/api/after-sales/jobs'){if(failJobSave)throw Error('Service save failed');job.value={...options.body,id:'job',charge:0};return {id:'job'}}
+ if(url==='/api/after-sales/jobs/invoice'){if(failInvoice)throw Error('Invoice creation failed');if(holdInvoice)await new Promise(resolve=>{finishInvoice=resolve});if(job.value)job.value.bill_id='invoice';return {billId:'invoice'}}
+ throw Error('Unexpected request '+url)
+}}
+window.useCompanyScope=()=>scope
+window.useSettingsCompany=async()=>({scope,auth:scope.auth,fetch:scope.fetch})
+window.navigateTo=async to=>{navigation.push(to)}
+const agreement={id:'agreement',kind:'MAINTENANCE',completed_visits:0,snapshot:{name:'Quarterly check',rules:{...defaultServiceRules(),freeVisits:1,fields:[{key:'reading',label:'Meter reading',type:'NUMBER',unit:'hours',required:true}]}}}
+const clone=value=>JSON.parse(JSON.stringify(value)),uiErrors=[]
+const preview=new URLSearchParams(location.search).get('preview')
+const app=createApp({setup(){return()=>h('div',{class:'flex min-h-screen bg-gray-50 dark:bg-gray-950 text-gray-900 dark:text-white'},[
+ h('aside',{class:'fixture-sidebar bg-white dark:bg-gray-900'},[h('h2',{class:'px-3 mb-6 text-xl font-semibold'},'Markit'),h('p','Dashboard'),h('p','Products'),h('p','Sales'),h('p',{class:'mt-6 text-xs uppercase'},'After-sales'),h('p',{class:'active'},'Service workspace'),h('p','Service items'),h('p','Maintenance plans'),h('p','Warranty'),h('p','Guarantee')]),
+ h('main',{id:'fixture-main',class:'flex-1'},[h('header',{class:'flex h-16 items-center justify-between border-b border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-6'},[h('h2',{class:'font-semibold'},'After-sales'),h('span',{class:'text-sm text-gray-500'},'Sample Store')]),h(Suspense,null,{default:()=>mode.value==='numbering'?h(ProductNumbering,{key:company.value}):mode.value==='configs'?h(Configurations,{key:company.value,kind:'MAINTENANCE'}):mode.value==='workspace'?h(Workspace,{key:company.value}):mode.value==='customerHistory'?h(CustomerHistory,{clientId:'customer-1'}):mode.value==='detail'?h(ProductDetail):mode.value==='items'?h(Items):mode.value==='selector'?h(ProductSelector,{modelValue:selected.value,'onUpdate:modelValue':v=>selected.value=v}):mode.value==='customer'?h(CustomerSelect,{modelValue:customerId.value,companyId:company.value,'onUpdate:modelValue':v=>customerId.value=v}):h('div',{class:'mx-auto h-screen max-w-3xl'},[h(JobEditor,{key:mode.value,agreement,job:mode.value==='savedJob'?job.value:undefined,onSaved:()=>{},onCancel:()=>{}})])})])])}})
+for(const [name,component]of Object.entries({UButton,UCard,UInput,USelect,USelectMenu,UFormGroup,UTextarea,UCheckbox,URadio,UTable,UPagination,UBadge,UAlert,UDropdown,UModal,USlideover,USkeleton}))app.component(name,component)
+app.component('AfterSalesRulesEditor',RulesEditor);app.component('AfterSalesValuesEditor',ValuesEditor);app.component('AfterSalesRecordTable',RecordTable);app.component('AfterSalesCustomerSelect',CustomerSelect);app.component('AfterSalesJobEditor',JobEditor)
+app.component('Icon',{props:['name'],setup:props=>()=>{const name=props.name.replace(/^i-heroicons-/,''),icon=heroicons.icons[name]||heroicons.icons['cube'];return h('svg',{viewBox:'0 0 '+(icon.width||heroicons.width)+' '+(icon.height||heroicons.height),width:'1em',height:'1em',innerHTML:icon.body})}})
+app.component('UIcon',{props:['name'],setup:props=>()=>h(Vue.resolveComponent('Icon'),{name:props.name})})
+app.component('UDashboardPanelContent',{render(){return h('div',{class:'p-4 sm:p-6'},this.$slots.default?.())}})
+app.component('CompanyFormField',{render:()=>null})
+app.component('NuxtLink',{props:{to:[String,Object],custom:Boolean,target:String},setup:(props,{slots})=>()=>{const href=typeof props.to==='string'?props.to:props.to?.path;return props.custom?slots.default?.({route:testRoute,href,isActive:false,isExactActive:false,isExternal:false,navigate:e=>{e.preventDefault();navigation.push(props.to)}}):h('a',{href,onClick:e=>{e.preventDefault();navigation.push(props.to)}},slots.default?.())}})
+app.config.globalProperties.$route=testRoute
+app.config.errorHandler=e=>{uiErrors.push(e);document.querySelector('#result').textContent='FAILED: '+e.stack}
+app.mount('#app')
+const wait=async()=>{await new Promise(r=>setTimeout(r,30));await nextTick()},assert=(value,label)=>{if(!value)throw Error(label)}
+async function until(predicate,label){for(let i=0;i<100;i++){if(predicate())return;await wait()}assert(false,label)}
+async function click(text){let b;for(let i=0;i<30;i++){await wait();b=[...document.querySelectorAll('button,[role=menuitem],[role=option]')].find(b=>b.textContent.trim()===text);if(b)break}assert(b,'Button '+text+'; available: '+[...document.querySelectorAll('[role=menuitem],button')].map(b=>b.textContent.trim()).join('|'));b.click();await wait()}
+async function chooseCustomer(name){const option=[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.includes(name));assert(option,'Customer option '+name);option.dispatchEvent(new MouseEvent('mousedown',{button:0,bubbles:true,cancelable:true}));await wait()}
+async function fill(label,value){const l=[...document.querySelectorAll('label')].find(l=>l.textContent.trim()===label),el=l?.htmlFor?document.getElementById(l.htmlFor):l?.querySelector('input,textarea,select');assert(el,'Input '+label);el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));await wait()}
+async function submit(){const form=document.querySelector('[role=dialog] form')||document.querySelector('form');assert(form,'Form available');form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await wait()}
+async function menu(label,option){const b=document.querySelector('[aria-label="'+label+'"]');assert(b,'Menu '+label);b.click();await wait();await click(option)}
+if(preview){if(preview.includes('dark'))document.documentElement.classList.add('dark');mode.value=preview.startsWith('items')?'items':preview.startsWith('plan')?'configs':preview.startsWith('job')?'job':preview.startsWith('detail')?'detail':'workspace';await wait();if(preview.startsWith('plan-edit'))await click('New maintenance');document.querySelector('#result').textContent='PREVIEW READY'}else
+try{
+ mode.value='customer';await wait();await click('Select a client')
+ for(let i=0;i<60&&!document.querySelector('[role=option]');i++)await wait()
+ assert(document.querySelector('[role=option]')?.textContent.includes('Ananya Sharma'),'Opening customer picker lists existing clients without typing')
+ assert(requests.some(r=>r.url==='/api/bill/findManyClient'&&r.options.query.q===''&&r.options.headers['x-company-id']==='company'),'Initial client lookup uses selected company')
+ await chooseCustomer('Ananya Sharma');assert(customerId.value==='customer-a','Customer selection stores client ID')
+ await click('Ananya Sharma - 98765 43210')
+ const customerSearch=document.querySelector('input[placeholder="Search clients"]')
+ customerSearch.value='9123456789';customerSearch.dispatchEvent(new Event('input',{bubbles:true}))
+ for(let i=0;i<60&&!document.querySelector('[role=option]')?.textContent.includes('Rahul Mehta');i++)await wait()
+ assert(document.querySelectorAll('[role=option]').length===1&&document.querySelector('[role=option]').textContent.includes('Rahul Mehta'),'Phone search renders matching client')
+ await chooseCustomer('Rahul Mehta');assert(customerId.value==='customer-b','Search result can be selected')
+ company.value='branch';await wait();assert(customerId.value==='','Changing company clears prior customer')
+ await click('Select a client');for(let i=0;i<60&&!document.querySelector('[role=option]');i++)await wait()
+ assert(document.querySelector('[role=option]')?.textContent.includes('Branch customer')&&!document.body.textContent.includes('Ananya Sharma'),'Company switch reloads company-linked clients')
+ await chooseCustomer('Branch customer');company.value='company';failRead=true;await wait()
+ for(let i=0;i<60&&!document.body.textContent.includes('Retry loading clients');i++)await wait()
+ assert(document.body.textContent.includes('Please try again'),'Customer lookup failure is visible')
+ failRead=false;await click('Retry loading clients');await click('Select a client')
+ for(let i=0;i<60&&!document.querySelector('[role=option]');i++)await wait()
+ assert(document.querySelector('[role=option]')?.textContent.includes('Ananya Sharma'),'Customer lookup retry recovers')
+ mode.value='configs';await wait();assert(document.body.textContent.includes('Quarterly check'),'Saved configuration is listed')
+ await click('New maintenance');await fill('Name','Custom reading plan');await fill('Schedule','CUSTOM');await click('Add visit date')
+ const date=document.querySelector('input[type=date]');date.value='2027-01-15';date.dispatchEvent(new Event('input',{bubbles:true}));await click('Add custom field')
+ const label=document.querySelector('input[aria-label="Field label"]');label.value='Pressure';label.dispatchEvent(new Event('input',{bubbles:true}));await submit()
+ assert(requests.find(r=>r.options.body?.name==='Custom reading plan')?.options.body.rules.dates[0]==='2027-01-15','Custom dates persisted')
+ await click('Edit');assert(document.querySelector('button[type=submit]')?.disabled||[...document.querySelectorAll('button')].find(b=>b.textContent.includes('Save configuration')).disabled,'Existing edit requires an apply choice')
+ const radio=document.querySelector('input[value=SELECTED]');radio.click();await wait();await fill('Reason','Reschedule future services');await click('Preview affected agreements')
+ assert(document.body.textContent.includes('Client'),'Preview shows affected clients');assert(document.body.textContent.includes('1 Dec 2026'),'Preview shows proposed due date')
+ const check=document.querySelector('input[aria-label="Amend MP-1"]');check.click();await wait();await submit()
+ const amended=requests.find(r=>r.options.body?.applyTo==='SELECTED'&&r.url==='/api/after-sales/configurations');assert(amended.options.body.previewToken==='preview-token'&&amended.options.body.agreementIds[0]==='agreement','Explicit selection and preview sent')
+ document.querySelector('[aria-label="Plan actions"]').click();await wait();await click('Archive');assert(config.archived,'Archive persisted')
+ document.querySelector('[aria-label="Plan actions"]').click();await wait();await click('Restore');assert(!config.archived,'Plan restore persisted')
+ const planCount=configs.length;document.querySelector('[aria-label="Plan actions"]').click();await wait();await click('Duplicate');await submit();assert(configs.length===planCount+1&&configs.at(-1).name.endsWith(' (copy)'),'Duplicating creates a new plan without editing the original')
+ document.querySelector('[aria-label="Plan actions"]').click();await wait();await click('Archive')
+ mode.value='selector';selected.value=['config'];await wait();assert(document.body.textContent.includes('Quarterly check'),'Previously linked archived configuration retained')
+ mode.value='items';await wait();await click('New charge');assert(document.querySelector('[aria-label="Service charge category"]')?.value==='Service Charges','Charge form shows the automatic category');assert(document.querySelector('[aria-label="Service charge category"]')?.disabled,'Automatic charge category is read-only');await fill('Charge name','Inspection');await fill('Default rate before tax','200');await submit()
+ assert(catalog.charges.some(c=>c.name==='Inspection'&&c.rate===200),'Reusable charge created')
+ let inspectionRow=[...document.querySelectorAll('tbody tr')].find(row=>row.textContent.includes('Inspection'));inspectionRow.querySelector('button').click();await wait();await fill('Default rate before tax','250');await submit();assert(catalog.charges.find(row=>row.name==='Inspection').rate===250,'Charge edit preserves identity and updates its rate')
+ inspectionRow=[...document.querySelectorAll('tbody tr')].find(row=>row.textContent.includes('Inspection'));inspectionRow.querySelector('[aria-label="Charge actions"]').click();await click('Archive');assert(catalog.charges.find(row=>row.name==='Inspection').archived,'Charge archive persists')
+ inspectionRow=[...document.querySelectorAll('tbody tr')].find(row=>row.textContent.includes('Inspection'));inspectionRow.querySelector('[aria-label="Charge actions"]').click();await click('Restore');assert(!catalog.charges.find(row=>row.name==='Inspection').archived,'Charge restore persists')
+ await click('Service products');assert(document.body.textContent.includes('Repair filter'),'Service products listed')
+ mode.value='job';await wait();const chargeSelect=document.querySelector('[aria-label="Saved service charge"]');chargeSelect.value='labour';chargeSelect.dispatchEvent(new Event('input',{bubbles:true}));chargeSelect.dispatchEvent(new Event('change',{bubbles:true}));await click('Add saved charge')
+ await click('Find products');await click('Regular filter - Standard');await click('Find products');await click('Service filter - Standard')
+ await fill('Assigned staff','staff');await fill('Status','COMPLETED');await fill('Meter reading (hours)','1200');await submit()
+ assert(job.value?.status==='COMPLETED'&&job.value.details.values.reading===1200,'Service completion records typed manual reading')
+ assert(job.value.assignedTo==='staff','Selected technician is included in the service request')
+ assert(!requests.some(r=>r.url.endsWith('/invoice')),'Completing a job does not automatically invoice or collect payment')
+ assert(job.value.details.charges.some(c=>c.name==='Labour'&&c.rate===118),'Named charge snapshot saved: '+JSON.stringify(job.value.details.charges))
+ assert(job.value.details.parts.length===2,'Regular and service products added together')
+ job.value.details.charges=[];job.value.details.parts=[];job.value.snapshot={name:'Original booked terms',rules:clone(agreement.snapshot.rules)};mode.value='savedJob';await wait();assert(document.body.textContent.includes('Original booked terms'),'Saved jobs display their original booked plan name');await click('Create service invoice')
+ assert(navigation[0].path==='/erp/edit/invoice','Zero service invoice opens billing for printing and sharing')
+ agreement.kind='WARRANTY';mode.value='claim';await wait();await fill('Assigned staff','staff');await fill('Complaint','Seam has opened');await fill('Assessment','Inspected stitching');await fill('Status','RESOLVED');await fill('Resolution','Seam repaired');await fill('Meter reading (hours)','1250');await submit()
+ assert(job.value.status==='RESOLVED'&&job.value.details.complaint==='Seam has opened'&&job.value.details.resolution==='Seam repaired','Claim form saves complaint, assessment and resolution')
+ agreement.kind='MAINTENANCE'
+ mode.value='customerHistory';await wait();assert(document.body.textContent.includes('Ananya Sharma'),'Customer history identifies the selected client')
+ assert(document.querySelectorAll('tbody tr').length===15,'Customer history lists registered units and older purchases')
+ assert(document.body.textContent.includes('Not registered')&&document.body.textContent.includes('Register for service first'),'Older purchases are visible without a fabricated service record')
+ const purchaseSize=document.querySelector('select[aria-label="Client purchases per page"]');purchaseSize.value='10';purchaseSize.dispatchEvent(new Event('input',{bubbles:true}));purchaseSize.dispatchEvent(new Event('change',{bubbles:true}));await wait();assert(document.querySelectorAll('tbody tr').length===10,'Customer history uses server pagination')
+ const purchaseSearch=document.querySelector('input[aria-label="Search client purchases"]');purchaseSearch.value='BC-1001';purchaseSearch.dispatchEvent(new Event('input',{bubbles:true}))
+ for(let i=0;i<60&&document.querySelectorAll('tbody tr').length!==1;i++)await wait()
+ assert(document.querySelectorAll('tbody tr').length===1&&document.body.textContent.includes('BC-1001'),'Customer history searches the purchased barcode')
+ document.querySelector('[aria-label="Service actions for '+units[0].name+'"]').click();await click('View')
+ const destination=navigation.at(-1);assert(destination.path==='/after-sales/products/unit-0'&&destination.query.entryCompany==='company','Product Actions > View opens the unit service detail in the owning company')
+ mode.value='workspace';await wait();assert(document.querySelectorAll('tbody tr').length===10,'Workspace paginates records');const size=document.querySelector('select[aria-label="Rows per page"]');size.value='20';size.dispatchEvent(new Event('input',{bubbles:true}));size.dispatchEvent(new Event('change',{bubbles:true}));await wait();assert(document.querySelectorAll('tbody tr').length===14,'Page size changes visible rows');const search=document.querySelector('input[aria-label="Search client, product or reference"]');search.value='does not exist';search.dispatchEvent(new Event('input',{bubbles:true}));await wait();assert(document.body.textContent.includes('No client products found'),'Search displays useful empty state');await click('Reset');await click('Due maintenance');assert(document.body.textContent.includes('Overdue'),'Due visits show overdue state');mode.value='detail';await wait();await click('Add service visit');assert(document.querySelector('[role=dialog]'),'Service editor opens in a side panel');document.querySelector('[aria-label="Close service job"]').click();for(let i=0;i<60&&document.querySelector('[role=dialog]');i++)await wait();assert(!document.querySelector('[role=dialog]'),'Side panel closes: '+[...document.querySelectorAll('[role=dialog]')].map(d=>d.textContent.slice(0,100)).join('|'));await click('Add service visit');await fill('Status','COMPLETED');await fill('Meter reading (hours)','0')
+ const invoiceRequests=()=>requests.filter(r=>r.url==='/api/after-sales/jobs/invoice').length
+ const beforePrompt=invoiceRequests();failJobSave=true;await submit();assert(document.body.textContent.includes('Service save failed'),'Failed saves display an error');assert(!document.body.textContent.includes('Create service invoice?'),'Failed save does not prompt for an invoice')
+ failJobSave=false;await submit();await until(()=>document.body.textContent.includes('Create service invoice?'),'Completion prompts after successful save')
+ assert(document.body.textContent.includes('\u20b90.00'),'Free service prompt shows its zero invoice total');assert(invoiceRequests()===beforePrompt,'Saving completion alone never requests an invoice')
+ await click('Later');await until(()=>!document.body.textContent.includes('Create service invoice?'),'Later closes the invoice prompt');assert(invoiceRequests()===beforePrompt,'Later leaves the saved service uninvoiced');assert([...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Create service invoice'),'Saved service still supports later invoice creation')
+ document.querySelector('[aria-label="Close service job"]').click();await until(()=>!document.querySelector('[role=dialog]'),'Saved job panel closes')
+ await click('Add service visit');await submit();await until(()=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Save job'),'Open job is saved and reopened');assert(!document.body.textContent.includes('Create service invoice?'),'Open jobs do not show the invoice prompt')
+ document.querySelector('[aria-label="Close service job"]').click();await until(()=>!document.querySelector('[role=dialog]'),'Open job panel closes')
+ await click('Add service visit');await fill('Status','COMPLETED');await fill('Meter reading (hours)','5');await submit();await until(()=>document.body.textContent.includes('Create service invoice?'),'Second completed visit prompts')
+ failInvoice=true;await click('Create invoice');await until(()=>document.body.textContent.includes('Invoice creation failed'),'Invoice errors remain in the prompt');assert(document.body.textContent.includes('Create service invoice?'),'A failed invoice request keeps the prompt available')
+ failInvoice=false;holdInvoice=true;const beforeConfirm=invoiceRequests();await click('Create invoice');const createButton=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Create invoice');assert(createButton.disabled,'Invoice button locks while issuing');createButton.click();await wait();assert(invoiceRequests()===beforeConfirm+1,'Repeated confirmation cannot submit a second invoice request');assert([...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Later').disabled,'Later locks during invoice creation')
+ finishInvoice();holdInvoice=false;await until(()=>!document.body.textContent.includes('Create service invoice?'),'Successful invoice creation closes the prompt');assert(navigation.at(-1).path==='/erp/edit/invoice'&&navigation.at(-1).query.entryCompany==='company','Confirmed invoice opens the company billing screen')
+ mode.value='items';await wait();agreement.kind='WARRANTY';mode.value='detail';await wait();await click('Open claim');await fill('Complaint','Broken stitching');await fill('Status','RESOLVED');await fill('Resolution','Repaired');await fill('Meter reading (hours)','6');await submit();await until(()=>document.body.textContent.includes('Create service invoice?'),'Resolved claim also prompts for an invoice');assert(document.body.textContent.includes('The claim was resolved and saved.'),'Claim completion uses the correct confirmation copy');await click('Later');await until(()=>!document.body.textContent.includes('Create service invoice?'),'Claim prompt can be deferred');document.querySelector('[aria-label="Close service job"]').click();await until(()=>!document.querySelector('[role=dialog]'),'Deferred claim job closes');agreement.kind='MAINTENANCE'
+ mode.value='numbering';await until(()=>document.querySelector('[aria-label="Product reference prefix"]')&&!document.querySelector('[aria-label="Product reference prefix"]').disabled,'Product numbering loads');assert(document.body.textContent.includes('PR-000003'),'Numbering preview uses the next company number');await fill('Product reference prefix','oc-');failNumberingSave=true;await submit();await until(()=>document.body.textContent.includes('Numbering save failed'),'Numbering errors remain visible');assert(document.querySelector('[aria-label="Product reference prefix"]').value==='oc-','Failed save retains prefix');failNumberingSave=false;await submit();await until(()=>document.body.textContent.includes('Product reference prefix saved.'),'Prefix saves');assert(numbering.company.prefix==='OC'&&document.body.textContent.includes('OC-000003'),'Saving normalizes prefix and preserves next number');company.value='branch';await until(()=>document.body.textContent.includes('BR-000012'),'Branch numbering has its own counter');company.value='company';numberingAvailable=false;mode.value='items';await wait();mode.value='numbering';await until(()=>document.body.textContent.includes('Sequential references need database setup'),'Uninstalled numbering shows setup notice');assert(document.querySelector('[aria-label="Product reference prefix"]').disabled,'Numbering changes are disabled before schema installation');numberingAvailable=true
+ mode.value='items';failRead=true;await wait();assert(document.body.textContent.includes('Please try again'),'Request errors are visible');failRead=false;document.querySelector('[aria-label="Refresh records"]').click();await wait();assert(document.body.textContent.includes('Labour'),'Refresh recovers after error');assert(!uiErrors.length,'No UI runtime errors: '+uiErrors.map(e=>e.message).join(';'));document.querySelector('#result').textContent='ALL PASSED · reference numbering settings, invoice completion prompts/retry/defer, customer history/navigation, customer listing, selection, phone search, company switching, retry, configurations, amendments, service catalog, named charges, mixed repair products, completion, zero invoice conversion and navigation'
+}catch(e){document.querySelector('#result').textContent='FAILED: '+e.stack}
+</script></body></html>

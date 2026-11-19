@@ -18,7 +18,7 @@ test('generated payment/entry mutations and advanced bulk operations cannot bypa
 
 test('direct/bulk financial bill changes and nested receipt deletion reject',async()=>{
   const f=fixture()
-  for(const field of ['paymentStatus','splitPayments','originalGrandTotal','precedence','clientId','paidAt','type','isMarkit'])
+  for(const field of ['paymentStatus','splitPayments','originalGrandTotal','precedence','clientId','paidAt','type','isMarkit','invoiceCode','dueDate','invoicePaymentTerms','subject'])
     await assert.rejects(f.api.bill.update({where:{id:'bill'},data:{[field]:'changed'}}),/dated credit receipts/)
   await assert.rejects(f.api.bill.updateMany({data:{paymentStatus:'PAID'}}),/dated credit receipts/)
   await assert.rejects(f.api.account.update({where:{id:'customer'},data:{bill:{deleteMany:{}}}}),/dated credit receipts/)

@@ -1,5 +1,18 @@
 <script setup lang="ts">
 const api = useAccountantApi();
+const afterSales = useAfterSalesFeature(api.companyId);
+const serviceUnits=ref<any[]>([]),selectedServiceUnits=ref<string[]>([]);
+let serviceUnitsVersion = 0;
+async function loadServiceUnits(){
+  const version = ++serviceUnitsVersion, companyId = api.companyId.value, orderId = selected.value?.order?.id;
+  serviceUnits.value = []; selectedServiceUnits.value = [];
+  if (!afterSales.enabled.value || !orderId) return;
+  try {
+    const rows = await $fetch<any[]>('/api/after-sales/products', { headers: { 'x-company-id': companyId }, query: { orderId } });
+    if (version === serviceUnitsVersion && companyId === api.companyId.value && orderId === selected.value?.order?.id && afterSales.enabled.value) serviceUnits.value = rows;
+  } catch { /* Service selection remains empty if the optional read fails. */ }
+}
+watch(afterSales.enabled, loadServiceUnits);
 const selectedAccountSession = useSelectedAccounts();
 const sessionMappings = ref<Record<string,string>>({});
 const toast = useToast();
@@ -21,16 +34,16 @@ function defaultMoneyAccount() { const role = form.action === 'SETTLEMENT' ? 'ba
 watch(() => [form.funding, form.action], () => { form.moneyAccountId = defaultMoneyAccount(); });
 async function loadOrders() { orders.value = await api.get('/ecommerce/orders', { query: { search: search.value, page: page.value } }); }
 async function load() { loading.value = true; error.value = ''; try { const saved = await selectedAccountSession.get(api.companyId.value); sessionMappings.value = {...saved.defaults.erp,...saved.defaults.ecommerce}; config.value = await api.get('/ecommerce/settings'); await loadOrders(); } catch (e: any) { error.value = e.message; } finally { loading.value = false; } }
-async function open(row: any) { loading.value = true; error.value = ''; selected.value = null; try { selected.value = await api.get(`/ecommerce/orders/${row.id}`); Object.keys(returned).forEach(k => delete returned[k]); Object.assign(form, { amount: 0, fee: 0, tax: 0, reference: '', note: '', refundDelivery: false, refundCod: false }); form.funding = selected.value.order.payment_method === 'COD' ? 'codClearing' : 'gatewayClearing'; } catch (e: any) { error.value = e.message; } finally { loading.value = false; } }
+async function open(row: any) { loading.value = true; error.value = ''; selected.value = null; try { selected.value = await api.get(`/ecommerce/orders/${row.id}`); await loadServiceUnits(); Object.keys(returned).forEach(k => delete returned[k]); Object.assign(form, { amount: 0, fee: 0, tax: 0, reference: '', note: '', refundDelivery: false, refundCod: false }); form.funding = selected.value.order.payment_method === 'COD' ? 'codClearing' : 'gatewayClearing'; } catch (e: any) { error.value = e.message; } finally { loading.value = false; } }
 async function save() {
   if (!selected.value || saving.value) return;
-  const body = { ...form, moneyAccountId: showMoneyAccount.value && form.moneyAccountId ? form.moneyAccountId : undefined, items: Object.entries(returned).filter(([, qty]) => Number(qty) > 0).map(([entryId, qty]) => ({ entryId, qty: Number(qty) })) };
+  const body = { ...form, serviceUnitIds:selectedServiceUnits.value, moneyAccountId: showMoneyAccount.value && form.moneyAccountId ? form.moneyAccountId : undefined, items: Object.entries(returned).filter(([, qty]) => Number(qty) > 0).map(([entryId, qty]) => ({ entryId, qty: Number(qty) })) };
   const fingerprint = JSON.stringify({ orderId: selected.value.order.id, ...body });
   if (!requestId || previousPayload !== fingerprint) { requestId = crypto.randomUUID(); previousPayload = fingerprint; }
   saving.value = true; error.value = '';
   try {
     await api.post(`/ecommerce/orders/${selected.value.order.id}/events`, { ...body, requestId });
-    selected.value = await api.get(`/ecommerce/orders/${selected.value.order.id}`);
+    selected.value = await api.get(`/ecommerce/orders/${selected.value.order.id}`); await loadServiceUnits();
     form.amount = 0; form.reference = ''; form.fee = 0; form.tax = 0; Object.keys(returned).forEach(k => delete returned[k]);
     requestId = ''; previousPayload = ''; toast.add({ title: 'Accounting entry recorded', color: 'green' });
   } catch (e: any) { error.value = e.message; } finally { saving.value = false; }
@@ -70,6 +83,7 @@ onMounted(load);
       <div v-if="form.action === 'RETURN'" class="mt-4 space-y-3">
         <p class="text-sm">Enter only quantities physically received back. This restores stock and credits the customer; record the actual refund separately.</p>
         <UFormGroup v-for="item in selected.sale.signature.metadata.items" :key="item.entryId" :label="`${item.name}${item.size ? ` · ${item.size}` : ''} · originally sold ${item.qty}`"><UInput v-model.number="returned[item.entryId]" type="number" min="0" :max="item.qty" /></UFormGroup>
+        <label v-if="afterSales.enabled.value && serviceUnits.some(p=>p.status==='ACTIVE')" class="block text-sm">Customer units physically received<select v-model="selectedServiceUnits" multiple class="block w-full rounded border p-2"><option v-for="p in serviceUnits.filter(p=>p.status==='ACTIVE')" :key="p.id" :value="p.id">{{p.reference}} ? {{p.name}} ? {{p.serial_number}}</option></select></label>
         <UCheckbox v-model="form.refundDelivery" label="Also credit the original delivery charge" /><UCheckbox v-model="form.refundCod" label="Also credit the original COD charge" />
       </div>
       <UFormGroup class="mt-3" label="Note"><UTextarea v-model="form.note" /></UFormGroup>

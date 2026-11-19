@@ -1,3 +1,5 @@
+import { saveProductServiceFlag } from '../../utils/after-sales-catalog'
+import { saveProductServiceLinks } from '../../utils/after-sales'
 import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import crypto from 'crypto'
 import { defineEventHandler, readBody, createError } from 'h3'
@@ -136,7 +138,9 @@ export default defineEventHandler(async (event) => {
         )
       }
 
-      await client.query("COMMIT")
+      await saveProductServiceFlag(client, companyId, productId, payload.isServiceProduct)
+      await saveProductServiceLinks(client, companyId, productId, payload.serviceConfigurationIds)
+      await client.query('COMMIT')
       client.release()
 
       return { success: true, productId }
@@ -162,7 +166,8 @@ export default defineEventHandler(async (event) => {
   try {
     const response = await runTransaction()
     return response
-  } catch {
+  } catch (error: any) {
+    if (error.statusCode) throw error
     throw createError({ statusCode: 500, statusMessage: "Failed to create product after retries" })
   }
 })

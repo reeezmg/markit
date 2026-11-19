@@ -16,13 +16,6 @@ export default defineEventHandler(async (event) => {
   const query = getQuery(event)
   const q = String(query.q || '').trim()
 
-  if (!q) {
-    throw createError({
-      statusCode: 400,
-      statusMessage: 'q is required',
-    })
-  }
-
   const digits = q.replace(/\D/g, '')
   const client = await pool.connect()
 
@@ -41,7 +34,8 @@ export default defineEventHandler(async (event) => {
        AND cc.company_id = $1
       WHERE c.deleted = false
         AND (
-          c.name ILIKE '%' || $2 || '%'
+          $2 = ''
+          OR c.name ILIKE '%' || $2 || '%'
           OR ($3 <> '' AND regexp_replace(COALESCE(c.phone, ''), '[^0-9]', '', 'g') LIKE '%' || $3 || '%')
         )
       ORDER BY
@@ -50,10 +44,11 @@ export default defineEventHandler(async (event) => {
           WHEN $3 <> '' AND RIGHT(regexp_replace(COALESCE(c.phone, ''), '[^0-9]', '', 'g'), 10) = RIGHT($3, 10) THEN 0
           ELSE 1
         END,
-        c.name ASC
-      LIMIT 5;
+        c.name ASC,
+        c.id ASC
+      LIMIT $4;
       `,
-      [companyId, q, digits]
+      [companyId, q, digits, q ? 5 : 20]
     )
 
     return res.rows.map((row) => ({

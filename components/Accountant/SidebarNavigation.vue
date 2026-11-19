@@ -1,7 +1,10 @@
 <script setup lang="ts">
 import { accountantSections } from '~/utils/accountant-navigation';
 
-defineProps<{ compact?: boolean }>();
+const props = defineProps<{ compact?: boolean; allowedPaths?: (string | undefined)[] }>();
+const visibleSections = computed(() => accountantSections.map(section => ({ ...section,
+  links: section.links.filter(([path]) => !props.allowedPaths || props.allowedPaths.includes(`/accountant/${path}`)),
+})).filter(section => section.links.length));
 const route = useRoute();
 const open = ref(route.path.startsWith('/accountant'));
 const active = (path: string) => route.path === `/accountant/${path}` || route.path.startsWith(`/accountant/${path}/`);
@@ -26,7 +29,7 @@ watch(() => route.path, (path) => {
     </summary>
     <h2 v-else class="px-2 pb-3 text-sm font-semibold">Account</h2>
     <nav aria-label="Account navigation" class="space-y-1 py-3" :class="compact ? '' : 'ml-4 border-l border-gray-200 pl-2 dark:border-gray-800'">
-      <section v-for="section in accountantSections" :key="section.label">
+      <section v-for="section in visibleSections" :key="section.label">
         <h3>
           <button type="button" class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-xs font-semibold uppercase text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800"
             :aria-expanded="sectionOpen[section.label]" :aria-controls="sectionId(section.label)" @click="sectionOpen[section.label] = !sectionOpen[section.label]">

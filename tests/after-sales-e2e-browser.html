@@ -1,0 +1,121 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>After-sales PostgreSQL browser workflow</title><style>*,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important}body{margin:0}#result{white-space:pre-wrap;padding:12px}</style></head><body><div id="app"></div><pre id="result">Running...</pre><script type="module">
+import * as Vue from 'vue'
+import Configurations from '../components/AfterSales/Configurations.vue'
+import RulesEditor from '../components/AfterSales/RulesEditor.vue'
+import JobEditor from '../components/AfterSales/JobEditor.vue'
+import ValuesEditor from '../components/AfterSales/ValuesEditor.vue'
+import Items from '../components/AfterSales/Items.vue'
+import RecordTable from '../components/AfterSales/RecordTable.vue'
+import CustomerSelect from '../components/AfterSales/CustomerSelect.vue'
+import CustomerHistory from '../components/AfterSales/CustomerHistory.vue'
+import Workspace from '../pages/after-sales/index.vue'
+import ProductDetail from '../pages/after-sales/products/[customerProductId].vue'
+import UButton from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Button.vue'
+import UCard from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Card.vue'
+import UInput from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Input.vue'
+import USelect from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Select.vue'
+import USelectMenu from '../node_modules/@nuxt/ui/dist/runtime/components/forms/SelectMenu.vue'
+import UFormGroup from '../node_modules/@nuxt/ui/dist/runtime/components/forms/FormGroup.vue'
+import UTextarea from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Textarea.vue'
+import UCheckbox from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Checkbox.vue'
+import URadio from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Radio.vue'
+import UTable from '../node_modules/@nuxt/ui/dist/runtime/components/data/Table.vue'
+import UPagination from '../node_modules/@nuxt/ui/dist/runtime/components/navigation/Pagination.vue'
+import UBadge from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Badge.vue'
+import UAlert from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Alert.vue'
+import UDropdown from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Dropdown.vue'
+import UModal from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Modal.vue'
+import USlideover from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Slideover.vue'
+import USkeleton from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Skeleton.vue'
+const {ref,computed,watch,onMounted,onBeforeUnmount,toRaw,nextTick,reactive,h,Suspense}=Vue
+Object.assign(window,{ref,computed,watch,onMounted,onBeforeUnmount,toRaw,nextTick,reactive})
+const context=await fetch('/api/fixture-context').then(r=>r.json())
+const mode=ref('WARRANTY'), companyId=ref(context.company), navigation=[], errors=[], requests=[]
+const route=reactive({path:'/after-sales/warranty',query:{entryCompany:context.company},params:{}})
+window.testRoute=route; window.useRoute=()=>route
+const scope={companyId,ready:Promise.resolve(),auth:{session:ref({companyId:context.company,currency:'INR'})},async fetch(url,options={}){
+ const query=new URLSearchParams(Object.entries(options.query||{}).filter(([,value])=>value!==undefined&&value!==null).map(([key,value])=>[key,String(value)]))
+ const response=await fetch(url+(query.size?'?'+query:''),{method:options.method||'GET',headers:{'Content-Type':'application/json'},...(options.body?{body:JSON.stringify(options.body)}:{})})
+ const data=await response.json();requests.push({url,method:options.method||'GET',body:options.body,data,status:response.status})
+ if(!response.ok)throw Object.assign(Error(data.statusMessage||'Request failed'),{statusCode:response.status})
+ return data
+}}
+window.useCompanyScope=()=>scope
+window.navigateTo=async(to,options)=>{
+ navigation.push(to);if(to.path.startsWith('/erp/edit/'))return
+ route.path=to.path;route.query=to.query||{};route.params={customerProductId:to.path.split('/').at(-1)}
+ mode.value=to.path.includes('/products/')?'detail':'workspace'
+ await nextTick()
+}
+const app=Vue.createApp({setup:()=>()=>h('main',{class:'bg-white dark:bg-gray-900 text-gray-900 dark:text-white'},[h(Suspense,null,{default:()=>['WARRANTY','GUARANTEE','MAINTENANCE'].includes(mode.value)?h(Configurations,{key:mode.value,kind:mode.value}):mode.value==='items'?h(Items):mode.value==='workspace'?h(Workspace):mode.value==='history'?h(CustomerHistory,{clientId:context.customer}):h(ProductDetail)})])})
+for(const [name,component]of Object.entries({UButton,UCard,UInput,USelect,USelectMenu,UFormGroup,UTextarea,UCheckbox,URadio,UTable,UPagination,UBadge,UAlert,UDropdown,UModal,USlideover,USkeleton}))app.component(name,component)
+for(const [name,component]of Object.entries({AfterSalesRulesEditor:RulesEditor,AfterSalesValuesEditor:ValuesEditor,AfterSalesRecordTable:RecordTable,AfterSalesCustomerSelect:CustomerSelect,AfterSalesJobEditor:JobEditor}))app.component(name,component)
+app.component('Icon',{render:()=>h('span')});app.component('UIcon',{render:()=>h('span')})
+app.component('CompanyFormField',{render:()=>null})
+app.component('UDashboardPanelContent',{render(){return h('div',{class:'p-4 sm:p-6'},this.$slots.default?.())}})
+app.component('NuxtLink',{props:{to:[String,Object],custom:Boolean},setup:(props,{slots})=>()=>{const href=typeof props.to==='string'?props.to:props.to?.path,navigate=e=>{e?.preventDefault();window.navigateTo(typeof props.to==='string'?{path:props.to}:props.to)};return props.custom?slots.default?.({route,href,isActive:false,isExactActive:false,isExternal:false,navigate}):h('a',{href,onClick:navigate},slots.default?.())}})
+app.config.globalProperties.$route=route
+app.config.errorHandler=error=>{errors.push(error);document.querySelector('#result').textContent='FAILED: '+error.stack}
+app.mount('#app')
+const checks=[],pause=()=>new Promise(r=>setTimeout(r,50)),assert=(condition,message)=>{if(!condition)throw Error(message)}
+async function until(predicate,label){document.querySelector('#result').textContent='Running: '+label;const deadline=Date.now()+40000;while(Date.now()<deadline){if(predicate())return;await pause();await nextTick()}throw Error(label+'; alerts: '+[...document.querySelectorAll('[role=alert]')].map(el=>el.textContent).join('|'))}
+const buttons=text=>[...document.querySelectorAll('button,[role=menuitem]')].filter(el=>el.textContent.trim()===text)
+async function click(text){await until(()=>buttons(text).some(el=>!el.disabled),'Button '+text);buttons(text).find(el=>!el.disabled).click();await pause()}
+async function fill(label,value){await until(()=>[...document.querySelectorAll('label')].some(el=>el.textContent.trim()===label),'Label '+label);const l=[...document.querySelectorAll('label')].find(el=>el.textContent.trim()===label),input=document.getElementById(l.htmlFor);assert(input,'Input '+label);input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));input.dispatchEvent(new Event('change',{bubbles:true}));await nextTick()}
+async function closeOptions(){const target=document.activeElement||document.body;target.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await pause()}
+async function choose(text){await until(()=>[...document.querySelectorAll('[role=option]')].some(el=>el.textContent.includes(text)),'Option '+text);const option=[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.includes(text));if(document.querySelector('input[role=combobox]'))option.dispatchEvent(new MouseEvent('mousedown',{button:0,bubbles:true,cancelable:true}));else option.click();await pause()}
+async function submit(){const form=document.querySelector('[role=dialog] form')||document.querySelector('form');assert(form,'Form exists');assert(form.checkValidity(),'Form validation: '+[...form.querySelectorAll(':invalid')].map(el=>el.outerHTML).join('|'));form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await pause()}
+async function show(value){mode.value=value;await pause();await until(()=>!document.querySelector('[role=dialog]'),'Previous dialog closes')}
+const label='Browser '+context.run.slice(0,8), planNames={}
+try{
+ for(const kind of ['WARRANTY','GUARANTEE','MAINTENANCE']){
+  await show(kind);await click('New '+kind.toLowerCase());planNames[kind]=label+' '+kind
+  await fill('Name',planNames[kind]);await fill('Default charge before tax','100');await fill('Tax %','18')
+  if(kind==='MAINTENANCE'){await fill('Schedule','ONCE');await fill('Included free visits','1');await click('Add custom field');await fill('Field label','Meter');const type=document.querySelector('[aria-label="Field type"]');type.value='NUMBER';type.dispatchEvent(new Event('input',{bubbles:true}));type.dispatchEvent(new Event('change',{bubbles:true}));document.querySelector('input[type=checkbox]').click()}
+  await submit();await until(()=>document.body.textContent.includes('Configuration saved.')&&!document.querySelector('form'),kind+' persists')
+  checks.push(kind+' form saves through SQL')
+ }
+ await show('items');await click('New charge');await fill('Charge name',label+' Labour');await fill('Default rate before tax','200');await fill('Tax %','18');await submit();await until(()=>!document.querySelector('[role=dialog]')&&document.body.textContent.includes(label+' Labour'),'Charge persists')
+ checks.push('Service charge creation and catalogue reload')
+ await show('workspace');await click('Register earlier purchase');await click('Select a client')
+ await until(()=>document.querySelector('input[placeholder="Search clients"]'),'Client search opens')
+ const searchClient=document.querySelector('input[placeholder="Search clients"]');searchClient.value=context.customerName;searchClient.dispatchEvent(new Event('input',{bubbles:true}));await choose(context.customerName)
+ await fill('Product name',label+' Appliance');await fill('Purchase date',context.today);await fill('Serial number','SERIAL-'+label);await fill('Purchase evidence / invoice reference','Browser rollback evidence')
+ await click('Select plans and coverage');for(const name of Object.values(planNames))await choose(name);await closeOptions();await submit()
+ await until(()=>mode.value==='detail'&&document.body.textContent.includes(label+' Appliance'),'Registered product opens')
+ const unitId=route.params.customerProductId;checks.push('Client lookup, three-plan registration and detail navigation')
+ await window.navigateTo({path:'/after-sales',query:{entryCompany:context.company,clientId:context.customer}})
+ await click('Refresh due services');await until(()=>document.body.textContent.includes('Due services refreshed.'),'Due refresh commits occurrences')
+ await click('Due maintenance');const dueSearch=document.querySelector('input[aria-label="Search client, product or reference"]');dueSearch.value=label;dueSearch.dispatchEvent(new Event('input',{bubbles:true}))
+ await until(()=>[...document.querySelectorAll('tbody tr')].some(el=>el.textContent.includes(label+' Appliance')),'Generated occurrence is listed')
+ const book=[...document.querySelectorAll('a,button')].find(el=>el.textContent.trim()==='Book visit');assert(book,'Generated occurrence has a booking link');book.click();await until(()=>document.querySelector('[role=dialog] form'),'Occurrence booking opens service editor')
+ checks.push('Manual due refresh, maintenance search and exact-occurrence booking')
+ await fill('Status','COMPLETED');await submit()
+ await until(()=>document.body.textContent.includes('Meter is required.'),'Required completion reading is enforced by server')
+ await fill('Meter','123');await submit();await until(()=>document.body.textContent.includes('Create service invoice?'),'Completion reload and invoice prompt')
+ await click('Later');await until(()=>buttons('Create service invoice').length,'Saved free visit can be invoiced later');await click('Create service invoice')
+ await until(()=>navigation.some(to=>to.path.startsWith('/erp/edit/')),'Zero service invoice navigates to billing')
+ const billId=navigation.find(to=>to.path.startsWith('/erp/edit/')).path.split('/').at(-1)
+ assert(billId,'Actual invoice ID returned');checks.push('Required reading rejection, free completion, deferred zero invoice')
+ await click('Close');await until(()=>!document.querySelector('[role=dialog]'),'Visit closes')
+ for(let index=0;index<2;index++){
+  const open=[...document.querySelectorAll('button')].filter(el=>el.textContent.trim()==='Open claim');assert(open[index],'Claim coverage exists');open[index].click();await pause()
+  await fill('Complaint',label+' defect '+index);await fill('Assessment','Inspected');await fill('Status','RESOLVED');await fill('Resolution','Repaired');await submit()
+  await until(()=>document.body.textContent.includes('Create service invoice?'),'Claim invoice prompt');await click('Create invoice')
+  await until(()=>!document.querySelector('[role=dialog]'),'Claim invoice completes');checks.push((index===0?'GUARANTEE':'WARRANTY')+' resolved and invoiced')
+ }
+ await click('Actions');await click('Edit serial / activation dates');await fill('Serial number','UPDATED-'+label);await fill('Reason','Correct serial');await submit()
+ await until(()=>!document.querySelector('[role=dialog]')&&document.body.textContent.includes('UPDATED-'+label),'Corrected serial persists');checks.push('Audited serial correction')
+ await click('Actions');await click('Record readings');await fill('Agreement',(await scope.fetch('/api/after-sales/products/'+unitId)).agreements.find(a=>a.kind==='MAINTENANCE').id);await fill('Meter','124');await fill('Reason','Follow-up reading');await submit();await until(()=>!document.querySelector('[role=dialog]'),'Reading saves')
+ await click('Recorded readings');await until(()=>document.body.textContent.includes('124'),'Saved reading displays');checks.push('Manual reading save and history')
+ await show('history');await until(()=>document.body.textContent.includes(label+' Appliance'),'Client history lists registered unit');checks.push('Client service history reads saved SQL records')
+ await show('workspace');await until(()=>document.querySelector('input[aria-label="Search client, product or reference"]'),'Workspace loads')
+ const search=document.querySelector('input[aria-label="Search client, product or reference"]');search.value=label;search.dispatchEvent(new Event('input',{bubbles:true}));await until(()=>document.body.textContent.includes('UPDATED-'+label),'Workspace server search finds unit')
+ const view=[...document.querySelectorAll('a,button')].find(el=>el.textContent.trim()==='View product');assert(view,'Product View link');view.click();await until(()=>mode.value==='detail','Product navigation')
+ await click('Actions');await click('Record completed return');await fill('Reason','Physically received');await submit();await until(()=>!document.querySelector('[role=dialog]')&&document.body.textContent.includes('Returned'),'Return persists')
+ assert(!buttons('Add service visit').length&&!buttons('Open claim').length,'Returned units cannot create new jobs');checks.push('Physical return cancels coverage and disables new jobs')
+ assert(!errors.length,'No browser runtime errors')
+ assert(!requests.some(r=>r.status>=500),'No server errors: '+JSON.stringify(requests.filter(r=>r.status>=500)))
+ document.querySelector('#result').textContent='ALL PASSED\n'+checks.map(text=>'✓ '+text).join('\n')+'\nReal components → HTTP → actual handlers → PostgreSQL; outer transaction rolls back.'
+}catch(error){document.querySelector('#result').textContent='FAILED: '+error.stack+'\nCompleted: '+checks.join('; ')+'\nAlerts: '+[...document.querySelectorAll('[role=alert]')].map(el=>el.textContent).join('|')}
+</script></body></html>

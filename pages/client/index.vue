@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const companyScope = useCompanyScope('table');
 const $fetch = companyScope.fetch;
+const afterSales = useAfterSalesFeature(companyScope.readIds, $fetch);
 const toast = useToast();
 const editingClient = ref<any>(null);
 const isEditOpen = ref(false);
@@ -8,6 +9,8 @@ const { forOwner } = useOrganizationActions();
 import { Switch } from '@headlessui/vue';
 import type { Prisma } from '@prisma/client'
 import { BillingAddClient } from '#components';
+import CRMClientPanel from '~/components/CRM/ClientPanel.vue';
+import { crmStaff } from '~/utils/crm';
 
 import { useUpdateBill } from '~/lib/hooks/bill';
 import { useFindManyCompanyClient, useCountCompanyClient } from '~/lib/company-hooks/company-client';
@@ -21,6 +24,10 @@ const UpdateManyCompanyClient = useUpdateManyCompanyClient({ optimisticUpdate: t
 const UpdateBill = useUpdateBill({ optimisticUpdate: true });
 const router = useRouter();
 const route = useRoute();
+const crmClient = computed(() => typeof route.query.crmClient === 'string' ? route.query.crmClient : '');
+const crmCompany = computed(() => typeof route.query.entryCompany === 'string' ? route.query.entryCompany : companyScope.companyId.value);
+const crmAllowed = computed(() => crmStaff(companyScope.auth.session.value?.role || ''));
+const crmOpen = computed({ get: () => !!crmClient.value && crmAllowed.value, set: value => { if (!value) { const query = { ...route.query }; delete query.crmClient; void router.replace({ query }); } } });
 const useAuth = () => companyScope.auth;
 const isClientAddModelOpen = ref(false);
 const phoneNo = ref('');
@@ -146,6 +153,16 @@ const active = (selectedRows) => [
 
 const action = (row) => [
     [
+        ...(crmAllowed.value ? [{
+            label: 'CRM details',
+            icon: 'i-heroicons-user-group',
+            to: { path: '/client', query: { from: 'crm', entryCompany: row.companyId, crmClient: row.clientId } },
+        }] : []),
+        ...(afterSales.isEnabled(row.companyId) ? [{
+            label: 'Service history',
+            icon: 'i-heroicons-wrench-screwdriver',
+            to: { path: `/after-sales/customers/${row.clientId}`, query: { entryCompany: row.companyId } },
+        }] : []),
         {
             label: 'Edit',
             icon: 'i-heroicons-pencil-square-20-solid',
@@ -545,6 +562,7 @@ const downloadClientsAsVCF = () => {
                 <template #actions-data="{ row }">
                     <UDropdown :items="action(row)">
                         <UButton
+                            :aria-label="'Actions for '+row.name"
                             color="gray"
                             variant="ghost"
                             icon="i-heroicons-ellipsis-horizontal-20-solid"
@@ -721,6 +739,10 @@ const downloadClientsAsVCF = () => {
         </UCard>
 
 <UModal v-model="isEditOpen"><ClientMembershipForm :record="editingClient" @close="isEditOpen = false" @saved="isEditOpen = false; refetch()" /></UModal>
+<USlideover v-model="crmOpen" :ui="{ width: 'sm:max-w-6xl' }">
+  <div class="flex justify-end border-b p-3 dark:border-gray-800"><UButton color="gray" variant="ghost" icon="i-heroicons-x-mark" aria-label="Close client CRM" @click="crmOpen = false" /></div>
+  <div class="min-h-0 flex-1 overflow-y-auto"><CRMClientPanel v-if="crmClient && crmOpen" :key="crmCompany + ':' + crmClient" :client-id="crmClient" :company-id="crmCompany" /></div>
+</USlideover>
 <BillingAddClient
   :allow-company-selection="true"
   v-model:model="isClientAddModelOpen"

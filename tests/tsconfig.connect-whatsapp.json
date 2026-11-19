@@ -1,0 +1,8 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler", "strictNullChecks": true,
+    "skipLibCheck": true, "noEmit": true, "allowSyntheticDefaultImports": true,
+    "baseUrl": "..", "paths": { "~/*": ["./*"] }, "types": ["node"]
+  },
+  "include": ["connect-whatsapp-globals.d.ts", "../server/utils/connect-whatsapp*.ts", "../server/utils/whatsapp-notification*.ts", "../utils/whatsapp-notifications.ts", "../server/api/whatsapp-notifications/*.ts", "../server/api/cron/whatsapp-notifications.get.ts", "../server/api/connect/whatsapp/*.ts", "../components/Connect/*.vue", "../pages/connect.vue", "../pages/connect/**/*.vue"]
+}

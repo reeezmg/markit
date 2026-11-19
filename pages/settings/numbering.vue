@@ -1,8 +1,10 @@
 <script setup lang="ts">
 const settingsCompany = await useSettingsCompany();
 const $fetch = settingsCompany.fetch;
+const afterSales = useAfterSalesFeature(settingsCompany.scope.companyId, $fetch);
 const { startNewYear, updatePrefixes } = settingsCompany;
 import { useUpdateCompany } from '~/lib/hooks/company';
+import SettingsCustomerProductNumbering from '~/components/Settings/CustomerProductNumbering.vue';
 
 const UpdateCompany = useUpdateCompany({ optimisticUpdate: true });
 const useAuth = () => settingsCompany.auth;
@@ -158,6 +160,8 @@ const onPrefixSave = async () => {
         </div>
       </div>
     </div>
+
+    <SettingsCustomerProductNumbering v-if="afterSales.enabled.value" />
 
     <!-- ========== FINANCIAL YEAR ========== -->
     <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">

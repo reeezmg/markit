@@ -47,6 +47,8 @@ interface Variant {
   images: string[];
   sizeLabel?: string;
   customFields?: Record<string, any>;
+  serviceConfigurationIds?: string[];
+  isServiceProduct?: boolean;
 }
 
 interface Product {
@@ -61,6 +63,8 @@ interface Product {
   categoryId:  string;
   subcategoryId:  string;
   customFields?: Record<string, any>;
+  serviceConfigurationIds?: string[];
+  isServiceProduct?: boolean;
   variants: Variant[];
 }
 
@@ -97,6 +101,8 @@ const collection = ref('');
 // Custom product-level inputs (Settings → Products → Create fields) as a
 // { fieldKey: value } map — stored on products.custom_fields.
 const productCustomFields = ref<Record<string, any>>({});
+const productServiceConfigurationIds = ref<string[]>([]);
+const productIsService = ref(false);
 // Linked product-dimension ShippingBox (products.dimension_id). Mirrors the
 // select inside AddProductCreate so handleEdit can save what the user picked.
 const productDimensionId = ref<string | null>(null);
@@ -121,6 +127,8 @@ const variants = ref<{
     images: ImageData[];
     sizeLabel?: string;
     customFields?: Record<string, any>;
+  serviceConfigurationIds?: string[];
+  isServiceProduct?: boolean;
 }[]>([{
     id: uuidv4(),
     key:String(idCounter.value++),
@@ -158,6 +166,8 @@ const createValue = (data: any) => {
     collection.value = data.collection || '';
     productDimensionId.value = data.dimensionId ?? null;
     productCustomFields.value = data.customFields || {};
+    productServiceConfigurationIds.value = data.serviceConfigurationIds || [];
+  productIsService.value = data.isServiceProduct === true;
 };
 
 const updateVariant = (index,data: any) => {
@@ -233,6 +243,8 @@ watch(selectedProductRaw, (newVal) => {
     collection.value = newVal.collectionId ?? '';
     productDimensionId.value = newVal.dimensionId ?? null;
     productCustomFields.value = newVal.customFields ?? {};
+    productServiceConfigurationIds.value = newVal.serviceConfigurationIds || [];
+  productIsService.value = newVal.isServiceProduct === true;
     variants.value = JSON.parse(JSON.stringify(newVal.variants ?? [])).map((variant: any) => ({
       ...variant,
       items: (variant.items || []).map((item: any) => ({ ...item, qty: item.initialQty ?? 0 })),
@@ -446,6 +458,8 @@ const updateResult: any = await $fetch('/api/products/update', {
       collectionId: collection.value || null,
       dimensionId: productDimensionId.value ?? null,
       customFields: productCustomFields.value || {},
+      serviceConfigurationIds: productServiceConfigurationIds.value,
+    isServiceProduct: productIsService.value,
     },
     variants: variants.value.map(v => ({
       id: v.id,
@@ -759,6 +773,8 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
           :editCollection="selectedProduct?.collectionId"
           :editDimensionId="selectedProduct?.dimensionId"
           :editCustomFields="selectedProduct?.customFields"
+          :editServiceConfigurationIds="selectedProduct?.serviceConfigurationIds"
+          :editIsServiceProduct="selectedProduct?.isServiceProduct ?? (route.query.serviceProduct === 'true')"
           @update="createValue" />
       </UPageCard>
   
@@ -861,6 +877,8 @@ watch(() => companyScope.auth.session.value?.variantInputs, value => { variantIn
                 :editCollection="selectedProduct?.collectionId"
                 :editDimensionId="selectedProduct?.dimensionId"
                 :editCustomFields="selectedProduct?.customFields"
+          :editServiceConfigurationIds="selectedProduct?.serviceConfigurationIds"
+          :editIsServiceProduct="selectedProduct?.isServiceProduct ?? (route.query.serviceProduct === 'true')"
                 @update="createValue" />
             </UPageCard>
   

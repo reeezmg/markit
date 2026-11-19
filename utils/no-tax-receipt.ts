@@ -1,4 +1,7 @@
-// Shared physical layout for the built-in receipt's HTML, PDF and printer raster.
+import { receiptSummary } from './receipt-summary'
+import { billDocumentLines } from './invoice-flow'
+
+// Legacy standalone HTML receipt export; current built-in designs use the canvas renderer.
 export type ReceiptMark = { kind: 'text' | 'line' | 'box'; x: number; y: number; width: number; height: number; text?: string; font?: number; bold?: boolean; align?: 'left' | 'center' | 'right'; dashed?: boolean };
 const number = (v: unknown) => Number.isFinite(Number(v)) ? Number(v) : 0;
 const money = (v: unknown) => number(v).toFixed(2);
@@ -55,17 +58,17 @@ export function noTaxReceiptLayout(data: any) {
   rule();
   row(['', 'TOTAL', data.tqty ?? entries.reduce((s: number, e: any) => s + number(e.qty), 0), money(data.tvalue), money(data.tdiscount), money(data.ttvalue ?? data.subtotal)], true);
   rule();
-  const raw = String(data.discount ?? '0');
-  const billDiscount = raw.startsWith('+') ? -Math.abs(number(raw)) : number(raw) < 0 ? Math.abs(number(raw)) : number(data.ttvalue ?? data.subtotal) * number(raw) / 100;
-  text(`DISC / ROUND OFF (+/-): ${raw.startsWith('+') ? '+' + money(Math.abs(number(raw))) : number(raw) < 0 ? '-' + money(Math.abs(number(raw))) : money(billDiscount)}`, 'center');
+  const summary = receiptSummary(data);
+  text(`DISC / ROUND OFF (+/-): ${summary.discountText}`, 'center');
   y += 1;
   text(`GRAND TOTAL: ${money(data.grandTotal)}`, 'center', 3.8, true, 2);
   if (number(data.couponValue)) text(`Coupon discount: ${money(data.couponValue)}`, 'center');
   if (number(data.redeemedPoints)) text(`Points redeemed: ${money(data.redeemedPoints)}`, 'center');
   if (number(data.availablePoints)) text(`Points available: ${number(data.availablePoints)}`, 'center');
-  const savings = Math.max(0, number(data.tdiscount) + billDiscount + number(data.couponValue) + number(data.redeemedPoints));
+  const savings = summary.savings;
   marks.push({ kind: 'box', x: left, y, width: inner, height: 6.5 });
   y += 1.2; text(`YOUR SAVING: ${money(savings)}`, 'center', 2.6, true, 3);
+  for (const line of billDocumentLines(data)) text(line);
   for (const note of [data.thankYouNote, data.returnPolicy, data.refundPolicy, data.phone ? `Customer Care: ${data.phone}` : '']) text(note, 'center', 2.6, false, 4);
   const height = y + 2;
   marks.unshift({ kind: 'box', x: 0.8, y: 0.8, width: 88.4, height: height - 1.6, dashed: true });

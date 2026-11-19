@@ -16,7 +16,7 @@ test('edit owner selection cancelled leaves previous bill unchanged', async t =>
   const h = harness(edit, ['fetchBill'], { bill: ref(null), dataLoading: ref(false), route: { params: {} }, useAuth: () => ({ session: ref({}) }), $fetch: async () => ({ companyId: 'branch' }), selectOwnerAndReload: async () => false, getCategories: async () => { throw new Error('Must not load categories') } }); t.after(h.stop)
   await h.context.fetchBill(); assert.equal(h.context.bill.value, null); assert.equal(h.context.dataLoading.value, false)
 })
-for (const file of [billing, edit, 'components/Billing/ProductSearch.vue', 'components/Billing/AddClient.vue', 'components/Billing/AccountModal.vue', 'components/Billing/SplitModal.vue', 'components/Billing/SalesReturn.vue']) test(`${file}: script and template compile`, () => {
+for (const file of [billing, edit, 'components/Billing/ProductSearch.vue', 'components/Billing/AddClient.vue', 'components/Billing/AccountModal.vue', 'components/Billing/SplitModal.vue', 'components/Billing/SalesReturn.vue', 'components/Billing/PaymentTerms.vue', 'components/Billing/DiscountAdjustment.vue']) test(`${file}: script and template compile`, () => {
   const { descriptor, errors } = parse(read(file)); assert.deepEqual(errors, [])
   const result = compileScript(descriptor, { id: 'billing-tests' })
   const template = compileTemplate({ source: descriptor.template!.content, filename: file, id: 'billing-tests', compilerOptions: { bindingMetadata: result.bindings } })

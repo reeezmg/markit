@@ -7,6 +7,10 @@ import * as Vue from 'vue'
 import * as dates from '../../composables/date'
 import { companyStorageKey } from '../../utils/companyStorageKey'
 import { billingErrorMessage } from '../../utils/billing-error'
+import { invoiceDetails } from '../../utils/invoice-flow'
+import * as billAdjustments from '../../utils/bill-adjustments'
+import * as receiptAmounts from '../../utils/receipt-entry-amounts'
+import * as billingPreferences from '../../utils/billing-preferences'
 
 export const root = fileURLToPath(new URL('../../', import.meta.url))
 export const billing = 'pages/erp/billing.vue'
@@ -25,9 +29,17 @@ export function harness(file: string, names?: string[], overrides: Record<string
   const storage = new Map<string, string>()
   const scope = Vue.effectScope()
   const context: any = {
-    ...Vue, ...dates, companyStorageKey, billingErrorMessage,
+    ...Vue, ...dates, ...billAdjustments, ...receiptAmounts, ...billingPreferences, companyStorageKey, billingErrorMessage, invoiceDetails,
     console: { log() {}, warn() {}, error() {} },
     process: { client: true }, navigator: { onLine: true },
+    billingMode: Vue.ref('paynow'),
+    invoicingEnabled: Vue.ref(true),
+    serviceCustomerRequired: Vue.ref(false),serviceUnits: Vue.ref([]),returnedServiceUnitIds: Vue.ref([]),removedServiceUnitIds: Vue.ref([]),
+    invoiceDueDate: Vue.ref(''), invoiceTerms: Vue.ref(''), invoiceReference: Vue.ref(''),
+    testImport: async (name: string) => {
+      if (name === '~/utils/share-receipt.client') return {shareReceiptPDF: async () => ({receiptId:'saved?pdf=1&share=test',path:'/receipt/saved'})}
+      throw new Error('Unmocked module: '+name)
+    },
     localStorage: { getItem: (k: string) => storage.get(k) ?? null, setItem: (k: string, v: string) => storage.set(k, v), removeItem: (k: string) => storage.delete(k) },
     onMounted: (fn: any) => mounts.push(fn), onBeforeUnmount: (fn: any) => unmounts.push(fn), onUnmounted: (fn: any) => unmounts.push(fn),
     useToast: () => ({ add: (value: any) => toasts.push(value) }),
@@ -49,7 +61,7 @@ export function harness(file: string, names?: string[], overrides: Record<string
     return node.getText(source)
   }) : source.statements.filter(s => !ts.isImportDeclaration(s) && !ts.isExportDeclaration(s)).map(s => s.getText(source))
   const code = statements.join('\n').replace(/^export\s+/gm, '')
-  const js = ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText
+  const js = ts.transpileModule(code, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.None } }).outputText.replace(/\bimport\(([^)]+)\)/g,'testImport($1)')
   vm.createContext(context)
   scope.run(() => vm.runInContext(js + (names ? `\nObject.assign(globalThis, {${names.filter(name => !name.startsWith('$')).join(',')}})` : ''), context, { filename: root + file }))
   return { context, calls, toasts, storage, mounts, stop: () => { for (const fn of unmounts) fn(); scope.stop() }, run: (fn: () => any) => scope.run(fn), mount: async () => { for (const fn of mounts) await scope.run(fn); await Vue.nextTick() } }
@@ -64,16 +76,19 @@ export function composable(file: string, name: string, args: any[] = [], overrid
 export function pageState(overrides: Record<string, any> = {}) {
   const session = { companyId: 'company', id: 'staff', pointsValue: 10, isTaxIncluded: true }
   const state: any = {
+    serialRegistration: { waitUntilReady: async () => {} },
     useAuth: () => ({ session: Vue.ref(session) }), toast: { add() {} },
     isSaving: Vue.ref(false), items: Vue.ref([row(), row({ name: '', category: [], rate: 0, value: 0 })]),
     currentRequestIds: Vue.ref({}), subtotal: Vue.ref(100), grandTotal: Vue.ref(100), discount: Vue.ref(0), returnAmt: Vue.ref(0),
-    redeemedAmt: Vue.ref(0), redeemedPoints: Vue.ref(0), points: Vue.ref(0), paymentMethod: Vue.ref('Cash'),
+    adjustment: Vue.ref(0), redeemedAmt: Vue.ref(0), redeemedPoints: Vue.ref(0), points: Vue.ref(0), paymentMethod: Vue.ref('Cash'),
     splitPayments: Vue.ref([]), clientId: Vue.ref(''), clientName: Vue.ref(''), phoneNo: Vue.ref(''), couponValue: Vue.ref(0),
     selected: Vue.ref(null), selectedCouponId: Vue.ref(null), skipPoints: Vue.ref(false), selectedAction: Vue.ref(null),
+    customerNotes: Vue.ref(''), termsAndConditions: Vue.ref(''),
     date: Vue.ref('2026-10-06T08:00:00.000Z'), uuid: Vue.ref(''), uuidv4: () => 'test-request', RECENT_BILL_KEY: 'recent',
     bill: Vue.ref({ invoiceNumber: 92 }), route: { params: { salesId: 'test-bill' } }, showUnitColumn: Vue.ref(false),
     pastBillPoints: Vue.ref(10), oldClientId: Vue.ref(''), originalRedeemedPoints: Vue.ref(0),
     commitDateInput() {}, reset() {}, print() {}, send() {}, download() {}, fireFcmNotification() {}, printData: null,
+    billingMode: Vue.ref('paynow'), dueDate: Vue.ref(''), invoicePaymentTerms: Vue.ref(''), invoiceReference: Vue.ref(''), printModel: Vue.ref(false),
     ...overrides,
   }
   return state

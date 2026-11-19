@@ -8,6 +8,7 @@ import { receiptSummary } from './receipt-summary';
 import { loadReceiptTable } from './load-receipt-table.client';
 import { h as createVNode, nextTick, render } from 'vue';
 import { QrcodeCanvas } from 'qrcode.vue';
+import { billDocumentLines } from './invoice-flow';
 
 export async function renderPrintTemplate(template: PrintTemplate, data: any) {
   template = templateSchema.parse(template);
@@ -17,12 +18,23 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
   const width = Math.round(template.width * scale);
   const canvas = document.createElement('canvas');
   canvas.width = width;
-  canvas.height = template.kind === 'label' ? Math.round(template.height * scale) : 16000;
+  canvas.height = template.kind === 'label' ? Math.round(template.height * scale) : template.paperSize ? Math.ceil(template.height * scale) + 512 : 16000;
   const context = canvas.getContext('2d');
   if (!context) throw new Error('Print preview is unavailable');
   const ctx: CanvasRenderingContext2D = context;
+  function ensureCanvasHeight(required: number) {
+    if (required <= canvas.height) return;
+    if (required > 15500) throw new Error('Receipt is too long to render. Reduce content.');
+    const copy = document.createElement('canvas'); copy.width = canvas.width; copy.height = canvas.height; copy.getContext('2d')!.drawImage(canvas, 0, 0);
+    const state = { font: ctx.font, textAlign: ctx.textAlign, textBaseline: ctx.textBaseline, fillStyle: ctx.fillStyle, lineWidth: ctx.lineWidth, strokeStyle: ctx.strokeStyle };
+    canvas.height = Math.min(16000, Math.ceil(Math.max(required + 256, canvas.height * 1.5)));
+    ctx.fillStyle = 'white'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.drawImage(copy, 0, 0); Object.assign(ctx, state);
+    copy.width = 0; copy.height = 0;
+  }
   ctx.fillStyle = 'white'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = 'black';
   let cursor = 2 * scale;
+  let imageBottom = 0;
+  const pageBreaks: number[] = [];
   const bounds: { id: string; x: number; y: number; width: number; height: number }[] = [];
   const thermal = template.fontFamily === 'thermal';
   const squeeze = thermal ? 0.78 : 1;
@@ -45,6 +57,7 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
     ctx.textBaseline = 'top'; ctx.textAlign = align as CanvasTextAlign;
     const lines = wrap(text, w / squeeze);
     const lineHeight = font * leading;
+    ensureCanvasHeight(y + lines.length * lineHeight + 2 * scale);
     for (let i = 0; i < lines.length; i++) {
       const anchor = x + (align === 'center' ? w / 2 : align === 'right' ? w : 0);
       const top = y + i * lineHeight;
@@ -63,6 +76,7 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
     return lines.length * lineHeight;
   }
   function barcode(value: string, x: number, y: number, w: number, h: number) {
+    ensureCanvasHeight(y + h + 2 * scale);
     if (template.kind === 'label') value = requireLabelBarcode(value);
     if (!value) return;
     const source = document.createElement('canvas');
@@ -73,11 +87,14 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
     ctx.drawImage(source, Math.round(x), Math.round(y), Math.round(w), Math.round(h));
     ctx.restore();
   }
-  for (const element of template.elements) {
+  const elements = [...template.elements.filter(e => e.placement !== 'absolute'), ...template.elements.filter(e => e.placement === 'absolute')];
+  for (const element of elements) {
     if (!elementIsVisible(element, data)) continue;
     const x = element.x * scale;
-    const y = template.kind === 'receipt' ? cursor + (element.gapBefore || 0) * scale : element.y * scale;
+    const floating = template.kind === 'receipt' && element.placement === 'absolute';
+    const y = template.kind === 'receipt' && !floating ? cursor + (element.gapBefore || 0) * scale : element.y * scale;
     const w = element.width * scale, h = element.height * scale;
+    ensureCanvasHeight(y + h + 2 * scale);
     const font = element.fontSize * Number(template.dpi) / 72;
     let used = h;
     if (element.type === 'text' || element.type === 'field') {
@@ -144,6 +161,7 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
         const bold = header ? element.tableHeaderBold !== false : element.bold;
         setFont(font, bold);
         const rowHeight = Math.max(...values.map((value, i) => wrap(value, (widths[i] - padding * 2) / squeeze).length * font * leading)) + padding * 2;
+        ensureCanvasHeight(rowY + rowHeight + 2 * scale);
         if (rowY + rowHeight > 15000) throw new Error('Receipt is too long to render. Reduce the number of items.');
         let columnX = x;
         values.forEach((value, i) => {
@@ -152,6 +170,7 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
           columnX += widths[i];
         });
         rowY += rowHeight;
+        pageBreaks.push(rowY);
       };
       lines.forEach(columns => drawRow(columns, columns.map(column => column.header), true));
       if (element.tableRules) rule();
@@ -181,10 +200,17 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
       used = Math.max(h, rowY - y);
     }
     bounds.push({ id: element.id, x: x / scale, y: y / scale, width: element.width, height: used / scale });
-    if (template.kind === 'receipt') cursor = y + used + (element.gapAfter ?? 1) * scale;
+    if (floating) imageBottom = Math.max(imageBottom, y + used);
+    else if (template.kind === 'receipt') { cursor = y + used + (element.gapAfter ?? 1) * scale; pageBreaks.push(cursor); }
     if (cursor > 15000) throw new Error('Receipt is too long to render. Reduce content or font sizes.');
   }
   if (template.kind === 'receipt') {
+    const invoiceLines = billDocumentLines(data);
+    if (invoiceLines.length) {
+      cursor += 2*scale;
+      cursor += drawText(invoiceLines.join('\n'),2*scale,cursor,(template.width-4)*scale,10*Number(template.dpi)/72,true,'left')+scale;
+      if (cursor>15000) throw new Error('Receipt is too long to render. Shorten the notes or terms.');
+    }
     // Earned vouchers remain part of the receipt regardless of the selected design.
     for (const coupon of data.generatedCoupons || []) {
       const details = [`Coupon: ${coupon.code}`, coupon.type === 'PERCENTAGE' ? `${coupon.discountValue}% off${coupon.maxDiscountAmount ? ` (max ${Number(coupon.maxDiscountAmount).toFixed(2)})` : ''}` : coupon.type === 'FLAT' ? `${Number(coupon.discountValue || 0).toFixed(2)} off` : 'Gift coupon'];
@@ -195,26 +221,30 @@ export async function renderPrintTemplate(template: PrintTemplate, data: any) {
       cursor += 20 * scale;
       if (cursor > 15000) throw new Error('Receipt is too long to render.');
     }
-    const cropped = document.createElement('canvas'); cropped.width = width; cropped.height = Math.ceil(cursor + 2 * scale);
+    const bottom = Math.max(cursor, imageBottom);
+    if (bottom > 15500) throw new Error('Receipt content exceeds the supported canvas length.');
+    const cropped = document.createElement('canvas'); cropped.width = width; cropped.height = Math.max(Math.ceil(bottom + 2 * scale), template.paperSize ? Math.round(template.height * width / template.width) : 0);
     cropped.getContext('2d')!.drawImage(canvas, 0, 0);
-    return finish(cropped, template, bounds);
+    return finish(cropped, template, bounds, pageBreaks);
   }
   return finish(canvas, template, bounds);
 }
 
-function finish(canvas: HTMLCanvasElement, template: PrintTemplate, bounds: any[]) {
+function finish(canvas: HTMLCanvasElement, template: PrintTemplate, bounds: any[], pageBreaks: number[] = []) {
+  if (template.paperSize) return { canvas, bounds, width: template.width, height: canvas.height * 25.4 / Number(template.dpi), paperHeight: template.height, pageBreaks };
   const ctx = canvas.getContext('2d')!;
   const pixels = ctx.getImageData(0, 0, canvas.width, canvas.height);
   // Preview and PDF show the same monochrome pixels sent to the thermal printer.
-  for (let i = 0; i < pixels.data.length; i += 4) {
+  for (let i = 0; !template.paperSize && i < pixels.data.length; i += 4) {
     const value = (pixels.data[i] + pixels.data[i + 1] + pixels.data[i + 2]) / 3 < 128 ? 0 : 255;
     pixels.data[i] = pixels.data[i + 1] = pixels.data[i + 2] = value; pixels.data[i + 3] = 255;
   }
   ctx.putImageData(pixels, 0, 0);
-  return { canvas, bounds, width: template.width, height: template.kind === 'label' ? template.height : canvas.height * 25.4 / Number(template.dpi) };
+  return { canvas, bounds, width: template.width, height: template.kind === 'label' ? template.height : canvas.height * 25.4 / Number(template.dpi), paperHeight: template.paperSize ? template.height : undefined, pageBreaks };
 }
 
 export function templatePrintBytes(rendered: Awaited<ReturnType<typeof renderPrintTemplate>>, template: PrintTemplate, language: 'tspl' | 'cpcl' = 'tspl') {
+  if (template.paperSize) throw new Error('Sheet receipts use the system print dialog or PDF, not a thermal printer.');
   const { canvas } = rendered;
   const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
   const encode = (value: string) => new TextEncoder().encode(value);
@@ -244,16 +274,52 @@ export function templatePrintBytes(rendered: Awaited<ReturnType<typeof renderPri
 }
 
 export async function renderedTemplatePDF(rendered: Awaited<ReturnType<typeof renderPrintTemplate>>) {
-  if (rendered.height > 1400) throw new Error('Receipt exceeds the PDF page limit. Print it directly or reduce content.');
+  if (!rendered.paperHeight && rendered.height > 1400) throw new Error('Receipt exceeds the PDF page limit. Print it directly or reduce content.');
   // The renderer is also imported during SSR; load the PDF library only for a browser download.
   const { jsPDF } = await import('jspdf');
-  const pdf = new jsPDF({ unit: 'mm', format: [rendered.width, rendered.height], orientation: rendered.width > rendered.height ? 'landscape' : 'portrait' });
-  pdf.addImage(rendered.canvas.toDataURL('image/png'), 'PNG', 0, 0, rendered.width, rendered.height);
+  const height = rendered.paperHeight || rendered.height;
+  const pdf = new jsPDF({ unit: 'mm', format: [rendered.width, height], orientation: rendered.width > height ? 'landscape' : 'portrait' });
+  renderedTemplatePages(rendered).forEach((page, index) => {
+    if (index) pdf.addPage([rendered.width, height], rendered.width > height ? 'landscape' : 'portrait');
+    pdf.addImage(page.canvas.toDataURL('image/png'), 'PNG', 0, 0, rendered.width, page.height);
+  });
   return pdf;
 }
 
 export async function createTemplatePDF(template: PrintTemplate, data: any) {
   return renderedTemplatePDF(await renderPrintTemplate(template, data));
+}
+
+/** Slice sheet receipts at row/section boundaries, preserving the canvas pixels. */
+export function renderedTemplatePages(rendered: Awaited<ReturnType<typeof renderPrintTemplate>>) {
+  if (!rendered.paperHeight) return [{ canvas: rendered.canvas, height: rendered.height }];
+  const scale = rendered.canvas.width / rendered.width, limit = Math.round(rendered.paperHeight * scale);
+  const pages: { canvas: HTMLCanvasElement; height: number }[] = [];
+  let start = 0;
+  while (start < rendered.canvas.height) {
+    const edge = Math.min(start + limit, rendered.canvas.height);
+    const safe = rendered.pageBreaks.filter(y => y > start + limit * 0.6 && y <= edge).sort((a, b) => a - b).at(-1);
+    const end = edge < rendered.canvas.height && safe ? Math.floor(safe) : edge;
+    const canvas = document.createElement('canvas'); canvas.width = rendered.canvas.width; canvas.height = end - start;
+    canvas.getContext('2d')!.drawImage(rendered.canvas, 0, start, canvas.width, canvas.height, 0, 0, canvas.width, canvas.height);
+    pages.push({ canvas, height: canvas.height / scale }); start = end;
+  }
+  return pages;
+}
+
+export async function printSheetReceipt(template: PrintTemplate, data: any) {
+  const rendered = await renderPrintTemplate(template, data), pages = renderedTemplatePages(rendered);
+  const frame = document.createElement('iframe'); frame.title = 'Print receipt'; frame.style.cssText = 'position:fixed;width:1px;height:1px;left:-9999px;';
+  const ready = new Promise<void>(resolve => { frame.onload = () => resolve(); });
+  frame.srcdoc = `<!doctype html><html><head><style>@page{size:${template.width}mm ${template.height}mm;margin:0}body{margin:0}.page{width:${template.width}mm;height:${template.height}mm;break-after:page}.page:last-child{break-after:auto}img{display:block;width:100%}</style></head><body>${pages.map(page => `<div class="page"><img src="${page.canvas.toDataURL('image/png')}" alt="Receipt page"></div>`).join('')}</body></html>`;
+  document.body.appendChild(frame);
+  try {
+    await ready; await Promise.all(Array.from(frame.contentDocument!.images).map(image => image.decode()));
+    frame.contentWindow!.focus(); frame.contentWindow!.print();
+  } catch (error) { frame.remove(); throw error; }
+  frame.contentWindow!.addEventListener('afterprint', () => frame.remove(), { once: true });
+  setTimeout(() => frame.remove(), 300000);
+  return { success: true };
 }
 
 export async function downloadTemplatePDF(template: PrintTemplate, data: any, filename = 'receipt.pdf') {

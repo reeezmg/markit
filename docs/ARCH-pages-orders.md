@@ -6,6 +6,19 @@
 
 ## Order Pages
 
+Order details link to company-scoped after-sales history. Seller-created and public
+ecommerce orders register covered units inside their creation transaction. Manual
+delivery and carrier tracking/webhooks activate delivery-based agreements once.
+Cancellation ends remaining obligations; return approval alone does not. Physically
+received covered returns in Accountant require exact registered unit selection.
+See `ARCH-after-sales.md`.
+
+Company-owned WhatsApp automation separately observes committed order status and paid
+state, including public storefront/carrier changes. It can notify confirmation,
+dispatch, delivery, failed delivery, cancellation and received returns. It does not
+call carriers or alter order/stock/accounting state. Configuration, client permissions
+and the separately prepared notification migration are in `WHATSAPP-NOTIFICATIONS.md`.
+
 The `order/` pages handle order operations. The full Storefront sidebar exposes Orders (`/order/ecomorders`), Pickup, Failed deliveries, Requests, Returns and Exchange. `layouts/default.vue` excludes the Orders group from the ERP sidebar. Older Try N Buy and Bookings pages remain in source but are hidden from the sidebar for now.
 
 ### Navigation (`pages/order.vue` layout)
@@ -30,7 +43,7 @@ Cancellation restores available quantity and reduces sold quantity by the same a
 
 **Detail popover:** Shows shipping address, item snapshot from the `items` JSON (including variant, size, and shade when present), subtotal, discount, delivery fee, and grand total.
 
-**Shipping:** `components/ShipOrderModal.vue` loads `/api/ecommerce-cms/shipping/order-preview`. All seller shipping handlers now execute TypeScript in the same Nuxt deployment through `server/utils/shipping/index.ts` and `service.ts`; no shipping URL or separate Python process is needed. Seller scope comes from `useCompanyRequestSession`. Order previews only read the database; creation, tracking, labels, cancellations, pickups, NDR, reverse/exchange flows and warehouse registration call carrier APIs directly. Item dimensions precede product dimensions; cartonization checks orientation and caps boxes at 200. Shipment creation serializes each company/order, refuses existing shipments and terminal orders, retains e-waybill metadata, and persists carrier AWBs without changing order status. Carrier tracking preserves forward/retry transitions, terminal statuses, status history and COD settlement. AWBs used in seller operations must belong to the authorized company. Label downloads regenerate expired links and return bytes through the existing same-origin endpoint. See `server/utils/shipping/README.md` for deployment and validation.
+**Shipping:** `components/ShipOrderModal.vue` loads `/api/ecommerce-cms/shipping/order-preview`. All seller shipping handlers now execute TypeScript in the same Nuxt deployment through `server/utils/shipping/index.ts` and `service.ts`; no shipping URL or separate Python process is needed. Seller scope comes from `useCompanyRequestSession`. Order previews only read the database; creation, tracking, labels, cancellations, pickups, NDR, reverse/exchange flows and warehouse registration call carrier APIs directly. Item dimensions precede product dimensions; cartonization checks orientation and caps boxes at 200. Shipment creation serializes each company/order, refuses existing shipments and terminal orders, retains e-waybill metadata, and persists carrier AWBs without changing order status. Carrier tracking preserves forward/retry transitions, terminal statuses, status history, COD settlement and first delivery activation. AWBs used in seller operations must belong to the authorized company. Label downloads regenerate expired links and return bytes through the existing same-origin endpoint. Markit's custom label keeps Delhivery's routing/address fields but resolves each AWB back to its company-owned forward, reverse or exchange order snapshot; its product table renders one row per item with product, variant/shade, quantity, unit price and line total instead of printing Delhivery's aggregated `prd`/`qty` values as one row. See `server/utils/shipping/README.md` for deployment and validation.
 
 **Status dates:** Database triggers now retain first observed `paidAt` and a separate `document_status_history` audit for bill/order/checkout status and payment-status changes. The tenant-scoped `/api/bill/status-history?type=order&id=...` reader exposes these records; this does not add a timeline panel to the page. Existing carrier/manual order history is retained. See `ARCH-schema.md` for migration and legacy-date semantics.
 
@@ -311,6 +324,34 @@ Pickup operations and origin-address configuration. Staff create/edit/delete pic
 Pickup request history uses one compact table row per request. Selecting a row opens a wide right-side slideover with request metadata and every attached parcel, following the distributor-style summary/detail interaction. Parcel details are grouped by order and shipment kind (forward or exchange) and show the AWB, customer, and product snapshot with image, product/variant, barcode, size, quantity, rate, and amount. `GET /api/ecommerce-cms/pickup/requests` resolves the stored `<orderId>:<kind>` references against company-owned ecommerce orders; exchange parcels use the linked exchange-request item snapshot when available. Each row has a three-dot menu for printing all attached AWB labels, downloading one combined label PDF, and cancellation. Legacy rows without `carrierPickupId` are visibly marked as not created in Delhivery and can be cancelled locally to release their parcels. Carrier-backed rows open Delhivery One for cancellation because the public pickup API has no cancellation operation; the status endpoint rejects a local-only cancellation for those rows.
 
 Pickup creation is successful only when the carrier response contains a non-empty `pickup_id`. Both the Delhivery adapter and `/api/ecommerce-cms/pickup/raise` enforce that contract before any local pickup row or shipment tag is persisted. This fixes the prior false-success path where an HTTP 200 response without `pickup_id` created a Markit-only request even though Delhivery had not scheduled a pickup.
+
+**Requested versus allocated schedule:** `EcommPickupRequest.requestedPickupDate` and
+`requestedPickupTime` preserve the submitted date/time; `pickupDate`/`pickupTime`
+remain the legacy requested values. `carrierResponse` retains the carrier creation
+response. Nullable `carrierSchedule` records `{date,startTime,endTime,source,recordedAt}`.
+The public B2C API documents creation, not allocated-slot readback or attaching AWBs
+to an existing pickup. Never infer the carrier slot from the submitted time. The
+table and detail panel show the requested time separately and show an unknown
+carrier slot until recorded. `PickupCarrierScheduleModal.vue` copies the allocated
+date and start/end times from Delhivery One (IST); this records information locally
+and does not reschedule the carrier booking. No live synchronization is claimed.
+
+**Adding parcels:** Order row actions expose **Add to existing pickup** for unassigned
+forward shipments awaiting pickup; pickup row actions expose **Add orders**.
+`PickupAddOrdersModal.vue` loads open carrier-backed pickups and eligible parcels,
+including independent forward/exchange legs. `POST /api/ecommerce-cms/pickup/add`
+locks the pickup and company-owned orders, checks carrier/location and eligibility
+again, updates per-leg tags and the local parcel/package count, and treats retries
+as no-ops. A stale selection fails before writes. This changes Markit's planned
+handover list only; the creation API does not populate Delhivery One's per-pickup
+order list. Explicitly selecting a held-back parcel includes it for this pickup.
+
+**Local migration pending:** `20261115160000_pickup_requested_schedule` adds the four
+new nullable fields and backfills only requested dates/times. Database application
+requires separate authorization. Pickup history remains readable before migration;
+creation and carrier-slot recording fail with a clear 503 before booking a carrier
+pickup when the new columns are missing. `tests/pickup-management.test.ts` covers
+assignment isolation, retries, validation, schedule separation and that guard.
 
 
 ### Pickup location read snapshot

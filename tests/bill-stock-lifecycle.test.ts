@@ -5,6 +5,7 @@ import { test } from 'node:test'
 import ts from 'typescript'
 import { applyBillStock, billStockDeltas } from '../server/utils/bill-stock'
 import { assertNoBillReceipts } from '../server/utils/bill-receipts'
+import { cancelBillServices } from '../server/utils/after-sales-lifecycle'
 
 const entries = [
   { item_id: 'shirt', qty: 2, return: false },
@@ -41,6 +42,7 @@ function fixture() {
   const client = {
     release() {},
     async query(sql: string, args: any[] = []) {
+      if(sql.includes('to_regclass'))return {rows:[{ready:false}],rowCount:1}
       if (sql === 'BEGIN') snapshot = { deleted, stock: structuredClone(stock) }
       else if (sql === 'ROLLBACK') { deleted = snapshot.deleted; stock = structuredClone(snapshot.stock) }
       else if (sql === 'COMMIT') { if (failCommit) throw new Error('Deferred posting failure') }
@@ -85,6 +87,7 @@ function fixture() {
       if (name === '~/server/utils/bill-stock') return { applyBillStock }
       if (name === '~/server/utils/bill-receipts') return { assertNoBillReceipts }
       if (name === '~/server/utils/user-ledger') return {}
+      if(name==='../../utils/after-sales-lifecycle')return {cancelBillServices}
       throw new Error(`Unexpected import: ${name}`)
     }, module, module.exports)
     return () => module.exports.default({ billId: 'bill', companyId: 'company' })

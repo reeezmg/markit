@@ -14,9 +14,13 @@ const writes = new Set(['create', 'createMany', 'update', 'updateMany', 'delete'
 const legacyArchives = new Set(['AccountLedgerEntry', 'MoneyTransaction', 'AccountTransfer', 'Investment', 'BankAccount', 'CashAccount']);
 const archiveMutations = new Set([...writes, 'createManyAndReturn', 'updateManyAndReturn']);
 const financialSources = new Set(['Bill','Entry','Payment','DistributorCredit','Item']);
+const quoteSources = new Set(['Quote','QuoteItem','QuoteCustomFieldValue','SalesOrder','SalesOrderItem']);
+for (const model of ['RecurringInvoice','RecurringInvoiceOccurrence','RetainerInvoice','RetainerEvent']) quoteSources.add(model);
+const quoteWriteDenied = () => createError({statusCode:409,statusMessage:'Use the quote APIs or sales order APIs and their Preference drawer to change documents or workflow settings'});
 const archiveWriteDenied = () => createError({ statusCode: 410, statusMessage: 'Legacy Accounts is read-only. Use Accountant for new financial entries.' });
 const billFinanceFields = new Set(['paymentMethod','paymentStatus','splitPayments','grandTotal','subtotal','tax','discount','discountType','adjustment','couponValue','originalGrandTotal','originalSubtotal','originalDiscount','createdAt','paidAt','invoiceNumber','currency','accountId','account','clientId','client','creditUserId','creditUser','entries','payments','deleted','precedence','type','isMarkit','companyId','company']);
 const sourceWriteDenied = () => createError({statusCode:409,statusMessage:'Use the bill source API or dated credit receipts for financial changes'});
+for (const field of ['invoiceCode','dueDate','invoicePaymentTerms','subject']) billFinanceFields.add(field);
 const denied = () => createError({ statusCode: 403, statusMessage: 'Record or related data belongs to another company' });
 
 function scopeRelations(modelName: string, args: any, ids: string[]): any {
@@ -40,6 +44,9 @@ async function validateData(modelName: string, data: any, ids: string[], parentC
   if (legacyArchives.has(modelName)) throw archiveWriteDenied();
   if (modelName === 'Payment' || modelName === 'Entry') throw sourceWriteDenied();
   if (Array.isArray(data)) { for (const row of data) await validateData(modelName, row, ids, parentCompany, db, creating); return; }
+  if (modelName === 'GeneralPreference' && (data.pageName?.set ?? data.pageName) === 'sales-workflow') throw createError({ statusCode: 409, statusMessage: 'Use Company & Branches settings to change workflows.' });
+  if (modelName === 'GeneralPreference' && (data.pageName?.set ?? data.pageName) === 'sidebar-navigation') throw createError({ statusCode: 409, statusMessage: 'Use Settings > Sidebar to change sidebar selections.' });
+  if (quoteSources.has(modelName) || (modelName === 'GeneralPreference' && ['quotes','sales-orders','invoices','sales'].includes(data.pageName?.set ?? data.pageName))) throw quoteWriteDenied();
   if (modelName === 'Item') prepareItemStockWrite(data, creating);
   if (modelName === 'DistributorCredit') {
     const poId = typeof data.purchaseOrderId === 'object' ? data.purchaseOrderId?.set : data.purchaseOrderId;
@@ -55,6 +62,10 @@ async function validateData(modelName: string, data: any, ids: string[], parentC
   for (const field of models.get(modelName)?.fields ?? []) {
     if (field.kind !== 'object' || !data[field.name]) continue;
     const relation = data[field.name];
+    if (['RecurringInvoice','RecurringInvoiceOccurrence','RetainerInvoice','RetainerEvent'].includes(field.type) &&
+      ['create','createMany','update','updateMany','upsert','connectOrCreate','connect','disconnect','set','delete','deleteMany'].some(operation => relation[operation])) throw sourceWriteDenied();
+    if (quoteSources.has(field.type) && ['create','createMany','update','updateMany','upsert','connectOrCreate','delete','deleteMany','set','disconnect'].some(operation => relation[operation])) throw quoteWriteDenied();
+    if (field.type === 'GeneralPreference' && ['update','updateMany','upsert','delete','deleteMany'].some(operation => relation[operation])) throw quoteWriteDenied();
     if (modelName === 'PurchaseOrder' && field.type === 'DistributorCredit'
       && ['create','createMany','connect','connectOrCreate','set','upsert'].some(operation => relation[operation])) {
       throw createError({statusCode:409,statusMessage:'Purchase orders cannot create or link credits. Use standalone Add Credit.'});
@@ -131,8 +142,10 @@ export function scopeOrganizationModelReads<T extends object>(client: T, activeI
       return new Proxy(delegate, {
         get(targetDelegate, operation, innerReceiver) {
           const method = Reflect.get(targetDelegate, operation, innerReceiver);
-          if (typeof operation !== 'string' || typeof method !== 'function' || (!reads.has(operation) && !writes.has(operation) && !((legacyArchives.has(model.name) || financialSources.has(model.name)) && archiveMutations.has(operation)))) return method;
+          if (typeof operation !== 'string' || typeof method !== 'function' || (!reads.has(operation) && !writes.has(operation) && !((legacyArchives.has(model.name) || financialSources.has(model.name) || quoteSources.has(model.name) || model.name === 'GeneralPreference') && archiveMutations.has(operation)))) return method;
           return async (args: any = {}) => {
+            if (quoteSources.has(model.name) && archiveMutations.has(operation)) throw quoteWriteDenied();
+            if (model.name === 'GeneralPreference' && ['createManyAndReturn','updateManyAndReturn'].includes(operation)) throw quoteWriteDenied();
             if (legacyArchives.has(model.name) && archiveMutations.has(operation)) throw archiveWriteDenied();
             if (model.name === 'BillHistory' && writes.has(operation)) {
               throw createError({ statusCode: 409, statusMessage: 'Bill history is read-only. Use the bill source API.' });
@@ -152,6 +165,15 @@ export function scopeOrganizationModelReads<T extends object>(client: T, activeI
             const isOwned = owned(model.name);
             const parent = ownershipParent(model.name);
             if (writes.has(operation)) {
+              if (model.name === 'GeneralPreference') {
+                const where = args.where?.companyId_pageName_key ?? args.where ?? {};
+                if (['update','updateMany','delete','deleteMany','upsert'].includes(operation)) {
+                  const rows = await db.generalPreference.findMany({ where: appendCompanyWhere(where, {companyId:{in:ids}}), select: {pageName:true} });
+                  if (rows.some((row:any) => row.pageName === 'sales-workflow')) throw createError({ statusCode: 409, statusMessage: 'Use Company & Branches settings to change workflows.' });
+                  if (rows.some((row:any) => row.pageName === 'sidebar-navigation')) throw createError({ statusCode: 409, statusMessage: 'Use Settings > Sidebar to change sidebar selections.' });
+                  if (rows.some((row:any) => ['quotes','sales-orders','invoices','sales'].includes(row.pageName))) throw quoteWriteDenied();
+                }
+              }
               if (model.name === 'CompanyUser' && ['update', 'delete', 'updateMany', 'deleteMany', 'upsert'].includes(operation)) {
                 const members = await db.companyUser.findMany({ where: { AND: [(args.where?.companyId_userId ?? args.where ?? {}), { companyId: { in: ids } }] } });
                 const change = args.data ?? args.update ?? {};

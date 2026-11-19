@@ -1,3 +1,5 @@
+import { cancelBillServices } from './after-sales-lifecycle';
+import { afterSalesPgAdapter } from './after-sales-returns';
 import { Prisma } from '@prisma/client';
 import { prisma } from '~/server/prisma';
 import { protectReceiptBills } from './bill-receipt-cleanup';
@@ -14,6 +16,7 @@ export async function applyBillDeletionCleanup(opts: BillCleanupOptions) {
 
   return await prisma.$transaction(async (tx) => {
     await protectReceiptBills(tx,companyId,deleteBillIds);
+    for(const billId of deleteBillIds)await cancelBillServices(afterSalesPgAdapter(tx),companyId,billId,'cleanup','Invoice removed by cleanup');
     // Step 1: Hard delete selected bills
     const deleteResult = await tx.bill.deleteMany({
       where: {

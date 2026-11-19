@@ -1,5 +1,6 @@
 import { shouldAutoPlanStorefrontTask, startStorefrontInteraction } from '~/server/utils/storefrontAgent'
 import { uploadToR2 } from '~/server/utils/r2'
+import { isStorefrontModelKey } from '~/server/utils/storefrontModel'
 
 const IMAGE_EXTENSIONS: Record<string, string> = {
   'image/jpeg': '.jpg',
@@ -54,7 +55,7 @@ export default defineEventHandler(async (event) => {
   // Shape-check only. The sandbox validates the key against its own list and
   // rejects an unknown one, so we don't duplicate the model list here.
   const model = body?.model?.trim()
-  if (model && !(/^[a-z0-9.\-]{1,40}$/.test(model) || /^byok:[0-9a-f-]{36}$/i.test(model))) {
+  if (model && !isStorefrontModelKey(model)) {
     throw createError({ statusCode: 400, statusMessage: 'Invalid model' })
   }
   const requestedRunMode = body?.runMode

@@ -13,6 +13,9 @@ export default defineEventHandler(async (event) => {
   const { rows } = await pool.query(
     `SELECT id, location, carrier,
             pickup_date AS "pickupDate", pickup_time AS "pickupTime",
+            to_jsonb(ecomm_pickup_requests)->>'requested_pickup_date' AS "requestedPickupDate",
+            to_jsonb(ecomm_pickup_requests)->>'requested_pickup_time' AS "requestedPickupTime",
+            to_jsonb(ecomm_pickup_requests)->'carrier_schedule' AS "carrierSchedule",
             package_count AS "packageCount", status,
             carrier_pickup_id AS "carrierPickupId",
             order_ids AS "orderIds",

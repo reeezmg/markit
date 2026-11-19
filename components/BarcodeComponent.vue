@@ -16,7 +16,7 @@
   </template>
   
   <script setup lang="ts">
-  import { onMounted, watch, defineProps, ref } from "vue";
+  import { onMounted, watch, ref } from "vue";
   import JsBarcode from "jsbarcode";
   
   // Define the TypeScript interface

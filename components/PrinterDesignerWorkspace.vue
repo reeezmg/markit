@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { nextTick, onBeforeUnmount, ref, watch } from 'vue';
 
-const props = defineProps<{ fullscreen: boolean; open: boolean; title: string; busy: boolean; dirty: boolean; kind?: 'label' | 'receipt' }>();
+const props = defineProps<{ fullscreen: boolean; open: boolean; title: string; busy: boolean; dirty: boolean; kind?: 'label' | 'receipt' | 'quote' | 'sales-order' }>();
 const emit = defineEmits<{ close: [] }>();
 const dialog = ref<HTMLDialogElement | null>(null);
 let previousOverflow = '';
@@ -25,10 +25,10 @@ onBeforeUnmount(() => { dialog.value?.close(); unlock(); });
     <div class="workspace-actions mb-4"><slot name="actions" /></div>
     <slot />
   </div>
-  <dialog v-else ref="dialog" class="printer-workspace" aria-labelledby="printer-workspace-title" @cancel="cancel">
+  <dialog v-else ref="dialog" class="printer-workspace" aria-labelledby="printer-workspace-title" @cancel="cancel" @keydown.esc.stop>
     <header class="workspace-header">
       <div class="workspace-heading">
-        <span class="workspace-eyebrow">Printer settings / {{ kind === 'receipt' ? 'Receipt' : 'Label' }} designer</span>
+        <span class="workspace-eyebrow">{{ kind === 'sales-order' ? 'Sales orders / Sales order' : kind === 'quote' ? 'Quotes / Quote' : `Printer settings / ${kind === 'receipt' ? 'Receipt' : 'Label'}` }} designer</span>
         <h2 id="printer-workspace-title">{{ title }}</h2>
         <span class="workspace-state">{{ dirty ? 'Unsaved draft' : 'All changes saved' }}</span>
       </div>

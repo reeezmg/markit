@@ -3,6 +3,8 @@
 import { useFindManyAccount } from '~/lib/company-hooks/account';
 import { useFindUniqueBillHistory } from '~/lib/hooks/bill-history';
 import { useFindManyCategory } from '~/lib/company-hooks/category';
+import { historySnapshot } from '~/utils/sales-history';
+import { billingErrorMessage } from '~/utils/billing-error';
 
 const companyScope = useCompanyScope('form', true);
 await companyScope.ready;
@@ -10,7 +12,7 @@ const useAuth = () => companyScope.auth;
 const route = useRoute();
 const toast = useToast();
 const router = useRouter();
-const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
+const paymentOptions = ['Cash', 'UPI', 'Card', 'Credit', 'Bank', 'Cheque']
 const date = ref(new Date().toISOString().split('T')[0]);
 const discount = ref(0);
 const subtotal = ref(0);
@@ -124,6 +126,7 @@ onMounted(async () => {
     th.style.width = `${th.offsetWidth}px`;
   });
 });
+onBeforeUnmount(stopResize);
 
 
 
@@ -152,26 +155,28 @@ const billArgs = computed(() => ({
 }));
 
 
-const { data: bill ,refetch:billRefetch} = useFindUniqueBillHistory(billArgs,{enabled:false});
+const { data: bill, refetch:billRefetch, isFetching, error:historyError } = useFindUniqueBillHistory(billArgs,{enabled:false});
 
 
 watch([bill, categories], ([newData]) => {
   if (!newData?.data) return;
-  discount.value = newData.data.discount
+  const snapshot = historySnapshot(newData.data)
+  discount.value = snapshot.discount
     selected.value = newData.data.account?.id || newData.data.account_id || ''
     clientId.value = newData.data.client?.id
     clientName.value = newData.data.client?.name
     phoneNo.value = newData.data.client?.phone
-  paymentMethod.value = newData.data.paymentMethod
-    date.value = new Date(newData.changedAt).toISOString().split('T')[0]
-    grandTotal.value = newData.data.grand_total || 0
-  subtotal.value = newData.data.subtotal || 0
-  returnAmt.value = newData.data.return_Amt ?? newData.data.return_amt ?? 0
+    date.value = new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Kolkata',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date(newData.data.created_at ?? newData.data.createdAt ?? newData.changedAt))
+    grandTotal.value = snapshot.grandTotal
+  subtotal.value = snapshot.subtotal
+  returnAmt.value = snapshot.returnAmt
   voucherNo.value = newData.data.voucher_no || ''
-  paymentMethod.value = newData.data.payment_method || 'Cash'
+  paymentMethod.value = snapshot.paymentMethod
+  splitPayments.value = snapshot.splitPayments
+  tempSplits.value = Object.fromEntries([...new Set([...paymentOptions,...snapshot.splitPayments.map(p=>p.method)])].map(method=>[method,{method,amount:snapshot.splitPayments.find(p=>p.method===method)?.amount ?? null}]))
 
 
-  items.value = (newData.data.entries || []).map((entry, index) => {
+  items.value = snapshot.entries.map((entry, index) => {
     return {
       entryId: entry.id || '',
       id:entry.item?.id || '',
@@ -179,10 +184,10 @@ watch([bill, categories], ([newData]) => {
       sn: index + 1,
       name:entry.name || '',
       barcode: entry.barcode || '', 
-      category:  (categories.value || []).filter(category =>category.id === entry.category_id),
+      category: entry.category?.name ? [entry.category] : (categories.value || []).filter(category =>category.id === (entry.category_id ?? entry.categoryId)),
       size: entry.item?.size || '',
       sizes: entry.sizes || null,
-      qty: entry.qty || 1,
+      qty: entry.qty,
       rate: entry.rate || 0,
       discount: entry.discount || 0,
       tax: entry.tax || 0,
@@ -235,7 +240,10 @@ const handleSplit = () => {
 
 <template>
   <UDashboardPanelContent class="p-1">
-    <UCard 
+    <p v-if="isFetching" role="status" class="p-3">Loading bill history…</p>
+    <UAlert v-else-if="historyError" color="red" title="Could not load this history entry" :description="billingErrorMessage(historyError)" />
+    <p v-else-if="!bill" role="status" class="p-3">History entry not found.</p>
+    <UCard v-if="bill?.data"
        :ui="{
           base: 'h-full flex flex-col',
           rounded: '',
@@ -252,6 +260,7 @@ const handleSplit = () => {
 
         <div class="px-3 py-3 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-4 text-sm">
         <UInput v-model="date" type="date" label="Date" class="lg:col-span-2" disabled/>
+        <p class="text-gray-500 lg:col-span-8">History recorded: {{ new Date(bill.changedAt).toLocaleString('en-IN', {timeZone:'Asia/Kolkata'}) }}</p>
 
       </div>
 
@@ -324,7 +333,7 @@ const handleSplit = () => {
               </td>
               <td class="py-1 whitespace-nowrap">
                 <UInput 
-                  v-model="row.rate" 
+                  v-model="row.qty"
                   type="number" 
                   ref="rateInputs"
                   size="sm"  
@@ -333,7 +342,7 @@ const handleSplit = () => {
               </td>
               <td class="py-1 whitespace-nowrap">
                 <UInput 
-                  v-model="row.qty"  
+                  v-model="row.rate"
                   ref="qtyInputs" 
                   type="number" 
                   size="sm"  
@@ -499,7 +508,7 @@ const handleSplit = () => {
     <h2 class="text-lg font-semibold">Split Payment</h2>
 
     <div
-      v-for="(method, index) in paymentOptions"
+      v-for="(part, method) in tempSplits"
       :key="method"
       class="flex gap-2 items-center"
     >
@@ -532,14 +541,7 @@ const handleSplit = () => {
       </p>
     </div>
 
-    <UButton
-      disabled
-      color="green"
-      block
-      class="mt-4"
-    >
-      Submit Split Payment
-    </UButton>
+    <UButton color="gray" block class="mt-4" @click="showSplitModal = false">Close</UButton>
   </div>
 </UModal>
 

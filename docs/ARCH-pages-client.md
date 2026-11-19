@@ -1,5 +1,18 @@
 ## Client / CRM Pages
 
+### Dedicated CRM (`/crm`)
+
+CRM reuses this existing `/client` page for all contacts. Its sidebar link opens
+`/client?from=crm`; there is no dedicated contact page or table. Row Actions →
+**CRM details** opens `CRM/ClientPanel.vue` in a slideover on the same page, preserving
+the membership's company. Deep links use `crmClient` and `entryCompany`.
+Client identity creation/editing and membership activation remain in the existing
+forms below. Company-specific owner, qualification, source, tags and custom fields
+are controlled CRM attributes on CompanyClient; they do not duplicate client identity.
+Deals/activities reference existing company clients directly. See [ARCH-crm.md](ARCH-crm.md).
+The revised prepared migration creates six CRM tables and extends CompanyClient;
+it remains unapplied pending separate authorization.
+
 ### Client (`/client`)
 
 **Files:**
@@ -14,7 +27,8 @@
 ---
 
 #### Client List (`index.vue`)
-- Lists `Client` records filtered by `companies.some.companyId` — i.e. only clients linked to current company via `CompanyClient`
+- Lists `CompanyClient` memberships through the page's table company scope, including their shared `Client` and company details. Table row IDs are `companyId:clientId`; row actions use the separate `clientId` and `companyId` values.
+- Service history appears in row actions only when that row's owning company enables after-sales; mixed-company tables check each owner independently.
 - Points, active status, and flat CRM `pipelineStatus` are displayed from the current company's `CompanyClient` row (included via `companies` relation, filtered by companyId)
 - Bills are included with entries — expandable rows show bill history per client
 - Search by `name`, `email`, or `phone` (OR condition)
@@ -29,6 +43,7 @@
 - **Pipeline management:** dropdown per client to move through stages (new → prospect → viewing → reject → close)
 
 **Company forms and row actions:**
+- **Service history** is inside each customer's Actions dropdown. It opens `/after-sales/customers/:clientId?entryCompany=:companyId` for that membership. `AfterSales/CustomerHistory.vue` lists purchased stock lines and registered units with server-side search/paging. Registered units expose **Actions → View**, linking to `/after-sales/products/:customerProductId` with the same company. Unregistered earlier purchases are marked and do not receive automatic service records or agreements.
 - `BillingAddClient` receives `allowCompanySelection` on this page, using an independent form scope and defaulting new records to the head office. Billing callers continue to inherit their billing form's company.
 - `ClientMembershipForm.vue` edits shared contact details through `/api/clients/membership` after checking the selected company membership. The form explains that contact details are shared.
 - Company changes use the confirmed transfer preview. The shared Client identity stays in place; the source membership's dependent records and points move, destination membership links are reused, and destination document numbers are allocated transactionally.
@@ -55,7 +70,7 @@
 
 **Pagination:** `useCountCompanyClient` with same filters; standard page/pageCount controls
 
-**Columns:** Name, Phone, Email, Pipeline Status (badge + dropdown to change), Active status, Actions (Edit, Delete)
+**Columns:** Name, Phone, Email, Pipeline Status (badge + dropdown to change), Active status, Actions (Service history, Edit, Delete)
 
 ---
 

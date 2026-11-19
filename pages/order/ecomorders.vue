@@ -8,6 +8,7 @@ const useAuth = () => useNuxtApp().$auth;
 const { labelFor } = useSizeLabel();
 const toast = useToast();
 const companyId = computed(() => useAuth().session.value?.companyId || '');
+const afterSales = useAfterSalesFeature(companyId);
 
 // Labels (print / download / carrier PDF) and shipment cancellation are shared
 // with ShipOrderModal — see composables/useShippingLabels.ts and
@@ -502,6 +503,8 @@ async function saveManualStatus() {
 // choice persists and the pickup screen sees it — not a per-session toggle.
 const pickupExcluded = (row: any) => Boolean(row?.meta?.shipping?.pickupExcluded);
 const pickupBusy = ref<string | null>(null);
+const addPickupOpen = ref(false);
+const addPickupOrder = ref<any | null>(null);
 
 async function togglePickup(row: any) {
   const excluded = !pickupExcluded(row);
@@ -556,6 +559,10 @@ function rowActions(row: any) {
   const upl = ndrUpl(row);
 
   const label = awb ? [
+    ...(['MANIFESTED', 'NOT_PICKED', 'PACKED'].includes(row.status) && !row.meta?.shipping?.pickupRequestId ? [{
+      label: 'Add to existing pickup', icon: 'i-heroicons-plus-20-solid',
+      click: () => { addPickupOrder.value = row; addPickupOpen.value = true; },
+    }] : []),
     { label: 'Print label', icon: 'i-heroicons-printer-20-solid', click: () => printRowLabel(row) },
     { label: 'Download PDF', icon: 'i-heroicons-arrow-down-tray-20-solid', click: () => downloadRowLabel(row) },
     { label: 'Track shipment', icon: 'i-heroicons-magnifying-glass-20-solid', click: () => trackRow(row) },
@@ -1094,6 +1101,7 @@ const rows = computed(() => orders.value || []);
 
         <template #footer>
           <div class="flex justify-end gap-2">
+            <NuxtLink v-if="detailsRow && afterSales.isEnabled(detailsRow.companyId || companyId)" :to="{path:'/after-sales',query:{orderId:detailsRow.id,entryCompany:detailsRow.companyId}}">Coverage and service history</NuxtLink>
             <UButton variant="ghost" color="gray" @click="detailsOpen = false">Close</UButton>
             <!-- Pack disappears once packed; both disappear once shipped. -->
             <UButton
@@ -1269,5 +1277,6 @@ const rows = computed(() => orders.value || []);
         </template>
       </UCard>
     </UModal>
+  <PickupAddOrdersModal v-model="addPickupOpen" :order="addPickupOrder" @saved="reload" />
   </UDashboardPanelContent>
 </template>

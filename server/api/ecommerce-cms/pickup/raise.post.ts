@@ -3,6 +3,7 @@ import crypto from 'crypto'
 import { pool } from '~/server/db'
 import { runShippingOperation } from '~/server/utils/shipping'
 import { PICKUP_SHIPMENTS_SQL, pickupTagPath } from '~/server/utils/pickup-shipments'
+import { requirePickupScheduleSchema } from '~/server/utils/pickup-management'
 
 // Raise a pickup request per selected carrier. Auto-attaches all remaining
 // shipped-but-unpicked orders for that location+carrier, calls the carrier's
@@ -27,6 +28,8 @@ export default defineEventHandler(async (event) => {
   if (!location || !date || !carriers?.length) {
     throw createError({ statusCode: 400, statusMessage: 'location, date and at least one carrier are required' })
   }
+
+  await requirePickupScheduleSchema(pool)
 
   const results: any[] = []
   for (const carrier of carriers) {
@@ -64,13 +67,14 @@ export default defineEventHandler(async (event) => {
     const shipments = rows as { id: string; orderId: string; kind: string; awb: string }[]
 
     // An explicit empty selection means "nothing" — never fall through to all.
-    if (chosen && !shipments.length) {
+    if (!shipments.length) {
       results.push({ carrier, ok: false, error: 'None of the selected parcels are still awaiting pickup.' })
       continue
     }
 
     // 2) call the carrier's pickup API (outside the DB transaction)
     let carrierPickupId: any = null
+    let carrierResponse: any = null
     try {
       const resp: any = await runShippingOperation(event, {
         method: 'POST', path: 'pickup',
@@ -80,6 +84,7 @@ export default defineEventHandler(async (event) => {
         },
       })
       carrierPickupId = String(resp?.pickupId || '').trim()
+      carrierResponse = resp?.response ?? null
       // A local request must never be persisted unless the carrier confirms
       // that the pickup was actually created.
       if (!carrierPickupId) throw createError({ statusCode: 502, statusMessage: `${carrier} did not return a pickup ID; no pickup was saved in Markit.` })
@@ -98,23 +103,29 @@ export default defineEventHandler(async (event) => {
         // @updatedAt, which raw SQL bypasses) — omitting it made every pickup
         // insert fail, *after* the carrier had already booked the pickup.
         `INSERT INTO ecomm_pickup_requests
-           (id, company_id, location, carrier, pickup_date, pickup_time, package_count, status, carrier_pickup_id, order_ids, updated_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,'REQUESTED',$8,$9::jsonb, now())`,
+           (id, company_id, location, carrier, pickup_date, pickup_time, package_count, status, carrier_pickup_id, order_ids,
+            requested_pickup_date, requested_pickup_time, carrier_response, updated_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,'REQUESTED',$8,$9::jsonb,$5,$6,$10::jsonb, now())`,
         [reqId, companyId, location, carrier, date, time, shipments.length, carrierPickupId,
-         JSON.stringify(shipments.map((s) => s.id))],
+         JSON.stringify(shipments.map((s) => s.id)), JSON.stringify(carrierResponse)],
       )
       // The tag goes on the leg that was handed over, so an order's forward
       // parcel and its exchange replacement are tracked separately.
+      // Lock in the same order as adding parcels to an existing pickup.
+      await client.query(`SELECT id FROM ecomm_orders WHERE company_id=$1 AND id=ANY($2::text[]) ORDER BY id FOR UPDATE`,
+        [companyId, [...new Set(shipments.map(shipment => shipment.orderId))].sort()])
       for (const kind of ['forward', 'exchange']) {
         const ids = shipments.filter((s) => s.kind === kind).map((s) => s.orderId)
         if (!ids.length) continue
-        await client.query(
+        const attached = await client.query(
           `UPDATE ecomm_orders
            SET meta = jsonb_set(COALESCE(meta, '{}'::jsonb), '${pickupTagPath(kind)}', to_jsonb($1::text), true),
                updated_at = now()
-           WHERE company_id = $2 AND id = ANY($3::text[])`,
+           WHERE company_id = $2 AND id = ANY($3::text[])
+             AND meta#>>'${pickupTagPath(kind)}' IS NULL RETURNING id`,
           [reqId, companyId, ids],
         )
+        if (attached.rows.length !== ids.length) throw new Error('A selected parcel was assigned to another pickup while this booking was being created')
       }
       await client.query('COMMIT')
       results.push({ carrier, ok: true, requestId: reqId, orders: shipments.length })

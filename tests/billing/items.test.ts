@@ -8,6 +8,18 @@ function setup(overrides = {}, tax: any = { taxType: 'FIXED', fixedTax: 5 }) {
   const h = composable('composables/useBillingItems.ts', 'useBillingItems', [items, categories, { getCategoryById: () => tax }, included, { code: ref('A'), id: ref('staff'), name: ref('Alice') }, () => {}], overrides)
   return { ...h, items, included }
 }
+
+for (const taxIncluded of [true, false]) test(`service invoice charges retain agreed tax and inclusive price while editing (taxIncluded=${taxIncluded})`, async t => {
+  const items = ref([row({ _serviceCharge: true, name: 'Labour', rate: 118, tax: 18, value: 118 })])
+  const h = harness(edit, ['$watch:items'], { items, isTaxIncluded: taxIncluded, categoryStore: { getCategoryById: () => ({ taxType: 'FIXED', fixedTax: 5 }) } }); t.after(h.stop)
+  items.value[0].qty = 2; await nextTick()
+  assert.equal(items.value[0].tax, 18); assert.equal(items.value[0].value, 236)
+  items.value[0].rate = 59; await nextTick()
+  assert.equal(items.value[0].value, 118)
+  items.value[0].variantId = 'replacement'; items.value[0].id = 'stock-item'; items.value[0].rate = 100; await nextTick()
+  assert.equal(items.value[0].tax, 5)
+  assert.equal(items.value[0].value, taxIncluded ? 200 : 210, 'Replacing a charge with stock restores product tax rules')
+})
 for (const [discount, included, expected] of [[0, true, 200], [10, true, 180], [-10, true, 180], [0, false, 210]] as const) test(`row calculations discount=${discount}, taxIncluded=${included}`, async t => {
   const h = setup(); t.after(h.stop); h.included.value = included
   h.items.value = [row({ qty: 2, discount })]; await nextTick()

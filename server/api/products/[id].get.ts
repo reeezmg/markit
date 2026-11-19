@@ -1,3 +1,4 @@
+import { afterSalesAvailable } from '../../utils/after-sales-lifecycle'
 import { defineEventHandler, getRouterParam, createError } from 'h3'
 import { pool } from '~/server/db'
 import { getAuthorizedCompanyIds } from '~/server/utils/organizationReadScope'
@@ -15,7 +16,7 @@ export default defineEventHandler(async (event) => {
   try {
     const productRes = await client.query(
       `SELECT p.id, p.product_no, p.company_id, p.updated_at, p.name, p.description, p.status,
-              p.category_id, p.subcategory_id, p.brand_id, p.collection_id, p.custom_fields,
+              p.category_id, p.subcategory_id, p.brand_id, p.collection_id, p.custom_fields, COALESCE((to_jsonb(p)->>'is_service_product')::boolean,false) AS is_service_product,
               p.dimension_id,
               c.name AS category_name, c.target_audience AS category_target_audience,
               b.name AS brand_name,
@@ -65,7 +66,9 @@ export default defineEventHandler(async (event) => {
       subcategoryId: p.subcategory_id,
       brandId: p.brand_id,
       collectionId: p.collection_id,
+      serviceConfigurationIds: await afterSalesAvailable(client) ? (await client.query('SELECT configuration_id FROM product_service_links WHERE product_id=$1 AND company_id=$2', [p.id,p.company_id])).rows.map((r:any)=>r.configuration_id) : [],
       customFields: p.custom_fields || {},
+      isServiceProduct: p.is_service_product ?? false,
       dimensionId: p.dimension_id,
       category: p.category_id ? { id: p.category_id, name: p.category_name, targetAudience: p.category_target_audience } : null,
       brand: p.brand_id ? { id: p.brand_id, name: p.brand_name } : null,

@@ -24,16 +24,29 @@ try {
   assert.equal(actions.context.creditReceiptBill.value.paymentStatus, 'PAID', 'Opening Reverse does not change the bill status')
 } finally { actions.stop() }
 
+const menu = harness(file, ['action'], { invoiceBalance: () => ({ balanceDue: 100 }) })
+try {
+  for (const row of [
+    { paymentMethod: 'Credit', payments: [{ id: 'receipt' }] },
+    { paymentMethod: 'Cash', payments: [{ id: 'reversed-receipt' }] },
+  ]) {
+    const entries = menu.context.action(row).flat()
+    assert.equal(entries.filter((entry: any) => entry.label === 'Payment history').length, 1, 'Merged actions expose payment history once')
+    assert.equal(entries.filter((entry: any) => entry.label === 'Record payment').length, row.paymentMethod === 'Credit' ? 1 : 0)
+  }
+} finally { menu.stop() }
+
 const pending: ReturnType<typeof deferred>[] = []
 const h = harness(file, ['isLoading', 'lastFetchId', 'salesTotals', 'collectionsTotal', 'collectionsByMethod', 'fetchSales'], {
   $fetch: async () => { const request = deferred(); pending.push(request); return request.promise },
   useAuth: () => ({ session: { value: { companyId: 'store' } } }),
+  loadError: { value: '' }, salesView: { value: 'all' }, dateFilter: { value: 'range' },
   search: { value: 'older invoice' }, selectedStatus: { value: [] }, selectedPaymentMethods: { value: [] },
   minGrandTotal: { value: null }, maxGrandTotal: { value: null },
   getUtcDateRangeForApi: () => ({ startDate: '2026-10-05', endDate: '2026-10-05' }),
   page: { value: 1 }, pageCount: { value: 5 }, sort: { value: { column: 'createdAt', direction: 'desc' } },
   canUseCleanupToggle: { value: false }, showCleanedValues: { value: false },
-  sales: { value: [] }, pageTotal: { value: 0 },
+  sales: { value: [] }, pageTotal: { value: 0 }, detailRevision: { value: 0 },
 })
 try {
   const c = h.context

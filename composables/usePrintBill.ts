@@ -2,8 +2,10 @@ import { Capacitor } from '@capacitor/core';
 import { useReceiptPrinter } from '~/composables/useReceiptPrinter';
 import { useWebUsbPrinter } from '~/composables/useWebUsbPrinter';
 import type { PrintTemplate } from '~/utils/print-templates';
+import { loadPrintTemplate } from '~/utils/load-print-template.client';
+import { printSheetReceipt } from '~/utils/print-template-renderer.client';
 
-/** All app print actions use the devices assigned in Settings > Printer. */
+/** Thermal jobs use assigned devices; sheet receipts use the system print dialog. */
 export const usePrint = () => {
   const usb = useWebUsbPrinter();
   const bluetooth = useReceiptPrinter();
@@ -13,9 +15,11 @@ export const usePrint = () => {
   }
   return {
     async printBill(data: any, design?: PrintTemplate | null) {
-      if (Capacitor.isNativePlatform()) return bluetooth.printMobileBill(data, design === undefined ? data.printTemplate : design);
+      const selected = design === undefined ? data.printTemplate === undefined ? await loadPrintTemplate('receipt', data.companyId) : data.printTemplate : design;
+      if (selected?.paperSize) return printSheetReceipt(selected, data);
+      if (Capacitor.isNativePlatform()) return bluetooth.printMobileBill(data, selected);
       requirePrinter('receipt');
-      return usb.printBillViaUsb(data, design === undefined ? data.printTemplate : design);
+      return usb.printBillViaUsb(data, selected);
     },
     async printLabel(data: any[], size: string, design?: PrintTemplate | null) {
       if (Capacitor.isNativePlatform()) return bluetooth.printMobileLabel(data, size, design);

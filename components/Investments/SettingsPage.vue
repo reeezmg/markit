@@ -2,28 +2,28 @@
 const api = useAccountantApi(),
     toast = useToast(),
     totalShares = ref(0),
+    includeShares = ref(false),
     sharesReady = ref(false),
     sharesBusy = ref(false),
     error = ref('');
 onMounted(async () => {
     try {
-        totalShares.value = (
-            await api.get('/investors/share-settings')
-        ).totalShares;
+        const settings = await api.get('/investors/share-settings');
+        totalShares.value = settings.totalShares; includeShares.value = settings.includeShares;
         sharesReady.value = true;
     } catch (e: any) {
         error.value = e.message;
     }
 });
 async function saveShares() {
-    sharesBusy.value = true;
+    sharesBusy.value = true; error.value = '';
     try {
         const saved = await api.put('/investors/share-settings', {
-            totalShares: totalShares.value,
+            totalShares: totalShares.value, includeShares: includeShares.value,
         });
         totalShares.value = saved.totalShares;
         toast.add({ title: 'Company shares saved', color: 'green' });
-    } catch {
+    } catch (e: any) { error.value = e.message;
     } finally {
         sharesBusy.value = false;
     }
@@ -36,15 +36,15 @@ async function saveShares() {
         <UCard>
             <h2 class="font-semibold">Company shares</h2>
             <p class="text-sm text-gray-500 mt-2 mb-5"
-                >Set the total once for all investors. New agreements use this
-                total to calculate ownership from shares held.</p
+                >Set the total once for all investors. Purchases and redemptions calculate ownership from shares held.</p
             >
             <form class="space-y-4" @submit.prevent="saveShares">
-                <UFormGroup label="Total company shares" required>
+                <UCheckbox v-model="includeShares" label="Include shares" :disabled="sharesBusy || !sharesReady" /><p class="text-sm text-gray-500">When enabled, ownership and profit share follow shares held. When disabled, enter percentages directly. Each share transaction has its own price.</p>
+                <UFormGroup v-if="includeShares" label="Total company shares" required>
                     <UInput
                         v-model="totalShares"
                         type="number"
-                        min="0"
+                        min="0.00000001"
                         max="1000000000000"
                         step="any"
                         required
@@ -52,10 +52,7 @@ async function saveShares() {
                     />
                 </UFormGroup>
                 <p class="text-xs text-gray-500"
-                    >Use zero if you only track ownership percentages. Changes
-                    apply to new agreements; existing agreements keep their
-                    recorded shares and ownership. Add new agreements for
-                    affected investors when the total changes.</p
+                    >The company share total is fixed while investor holdings depend on it. Switching this option changes the available controls and preserves historical holdings and allocations.</p
                 >
                 <UButton
                     type="submit"

@@ -3,7 +3,7 @@ const companyScope = useCompanyScope();
 const $fetch = companyScope.fetch;
 
 import { v4 as uuidv4 } from 'uuid'
-import { ref, watch, computed, defineExpose } from 'vue'
+import { ref, watch, computed } from 'vue'
 import AwsService from '~/composables/aws'
 import { useUpdateProduct } from '~/lib/company-hooks/product';
 

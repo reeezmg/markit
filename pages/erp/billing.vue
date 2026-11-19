@@ -2,18 +2,39 @@
 const companyScope = useCompanyScope('form', true);
 await companyScope.ready;
 const $fetch = companyScope.fetch;
+const salesWorkflow = useSalesWorkflow(companyScope.companyId, $fetch);
+await salesWorkflow.ready;
+const invoicingEnabled = computed(() => salesWorkflow.preferences.value.includeInvoicing);
+const afterSalesEnabled = computed(() => salesWorkflow.preferences.value.includeAfterSales);
 
 import { BillingAddClient } from '#components';
+import BillingPaymentTerms from '~/components/Billing/PaymentTerms.vue';
+import BillingDiscountAdjustment from '~/components/Billing/DiscountAdjustment.vue';
 import { billingErrorMessage } from '~/utils/billing-error';
 import { billSaveActionIcon, billSaveActionIcons } from '~/utils/bill-save-action-icon';
 import '~/assets/css/billing-layout.css';
 import { v4 as uuidv4 } from 'uuid';
 import { Capacitor } from '@capacitor/core';
+import { invoiceDetails } from '~/utils/invoice-flow';
+import { billDiscountValue, billAdjustmentValue } from '~/utils/bill-adjustments';
+import { receiptEntryAmounts, receiptEntryTotals } from '~/utils/receipt-entry-amounts';
+const documentDefaults = {};
+const defaultResults = await Promise.allSettled(['invoice', 'sale'].map(document => $fetch('/api/settings/billing-preferences', { query: { document } })));
+defaultResults.forEach((result, index) => {
+  if (result.status === 'fulfilled') {
+    const value = result.value;
+    documentDefaults[index === 0 ? 'invoice' : 'sale'] = value.preferences;
+    if (index === 0) documentDefaults.terms = value.terms;
+  }
+});
 
 
 const { printBill } = usePrint();
 const useAuth = () => companyScope.auth;
 const toast = useToast();
+onMounted(() => {
+  if (defaultResults.some(result => result.status === 'rejected')) toast.add({ title: 'Could not load document defaults', description: 'Check customer notes, terms and payment terms before saving.', color: 'orange' });
+});
 const isTaxIncluded = ref(useAuth().session.value?.isTaxIncluded);
 const isUserTrackIncluded = ref(useAuth().session.value?.isUserTrackIncluded);
 const paymentOptionsInsplit = ['Cash', 'UPI', 'Card','Credit']
@@ -22,7 +43,7 @@ const paymentOptions = ref(['Cash', 'UPI', 'Card','Credit'])
 // ─── Draft / bill state ────────────────────────────────────────────────────
 const {
   billNo, date, parentUserCode, parentUserId, parentUserName,
-  discount, redeemedAmt, redeemedPoints, paymentMethod,
+  discount, adjustment, redeemedAmt, redeemedPoints, paymentMethod,
   phoneNo, points, clientName, clientId, couponValue,
   splitPayments, isRedeemPoint, selected, tempSplits, items,
   draftBills, selectedDraft, requestId: uuid,
@@ -30,7 +51,38 @@ const {
   dateInput, commitDateInput,
   createNewBill, loadDraftBills, loadBill, deleteBill, resetDraft,
   LOCAL_BILLS_KEY, MAX_BILL_DRAFTS,
-} = useBillingDraft()
+  billingMode, dueDate, invoicePaymentTerms, invoiceReference,
+  customerNotes, termsAndConditions,
+  applyBillingModeDefaults,
+} = useBillingDraft(documentDefaults)
+
+const isInvoiceMode = computed(() => billingMode.value === 'invoice')
+const isNotesOpen = ref(false)
+const billingRoute = useRoute()
+const billingRouter = useRouter()
+onMounted(async () => {
+  await nextTick()
+  const mode = billingRoute.query.billingMode
+  if (mode === 'invoice' || mode === 'paynow') {
+    changeBillingMode(mode)
+    const query = { ...billingRoute.query }
+    delete query.billingMode
+    await billingRouter.replace({ path: billingRoute.path, query })
+  }
+})
+const billingModes = [{ label: 'Pay now', value: 'paynow' }, { label: 'Invoice', value: 'invoice' }]
+function changeBillingMode(mode) {
+  if (!invoicingEnabled.value) mode = 'paynow'
+  applyBillingModeDefaults(mode)
+  billingMode.value = mode
+  selected.value = null
+  splitPayments.value = []
+  paymentMethod.value = mode === 'invoice' ? 'Credit' : 'Cash'
+  if (mode === 'invoice') { dueDate.value ||= dateInput.value; invoicePaymentTerms.value ||= 'Due on receipt' }
+}
+watch([invoicingEnabled, billingMode], ([enabled, mode]) => {
+  if (!enabled && mode !== 'paynow') changeBillingMode('paynow')
+}, { immediate: true, flush: 'sync' })
 
 const isProductSearchOpen = ref(false);
 const RECENT_BILL_KEY = 'markit_recent_bill_id'
@@ -453,6 +505,7 @@ const handleEnterBarcode = (barcode,index) => {
 }}
 
 const handleEnterMainDiscount = () => {
+  if (billingMode.value === 'invoice') { saveref.value?.$el?.focus(); return }
   const component = paymentref.value;
   const select = component.$el.querySelector("select");
   select.focus();
@@ -520,6 +573,7 @@ const actionItems = [
 
 const draftMenuItems = [
   [
+    { label: 'Notes', icon: 'i-heroicons-document-text', click: () => { isNotesOpen.value = true } },
     { label: 'Reset', icon: 'i-heroicons-arrow-path', click: () => reset() },
     { label: 'Add Row', icon: 'i-heroicons-plus', click: () => addNewRow(0, false) },
     { label: 'Recent Bill', icon: 'i-heroicons-document-text', shortcuts: ['F2'], click: () => openRecentBill() },
@@ -704,17 +758,9 @@ function buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, 
   return {
     // invoiceNumber is assigned server-side inside the create transaction
     subtotal: Number(subtotal.value) || 0,
-    discount: (() => {
-      const discStr = String(discount.value ?? '').trim()
-      if (discStr.startsWith('+')) return Math.abs(parseFloat(discStr) || 0)  // surcharge: positive flat
-      return Number(discount.value) || 0  // negative = flat deduction, positive = percentage
-    })(),
-    discountType: (() => {
-      const discStr = String(discount.value ?? '').trim()
-      if (discStr.startsWith('+')) return 'surcharge'
-      if (Number(discount.value) < 0) return 'flat'
-      return 'percentage'
-    })(),
+    discount: billDiscountValue(discount.value),
+    discountType: billDiscountValue(discount.value) < 0 ? 'flat' : 'percentage',
+    adjustment: billAdjustmentValue(refs.adjustment?.value),
     grandTotal: Number(grandTotal.value) || 0,
     returnAmt: Number(returnAmt.value) || 0,
     couponValue: Number(couponValue.value) || 0,
@@ -724,6 +770,7 @@ function buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, 
     createdAt: new Date(date.value).toISOString(),
     paymentStatus: hasCreditPayment ? 'PENDING' : 'PAID',
     type: 'BILL',
+    notes: refs.customerNotes?.value || '', termsAndConditions: refs.termsAndConditions?.value || '',
     entries: { create: entriesData },
     company: { connect: { id: session.companyId } },
     companyUser: { connect: { companyId_userId: { companyId: session.companyId, userId: session.id } } },
@@ -741,6 +788,7 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
   const showUnit = Array.isArray(units) && units.length > 1
   return {
     invoiceNumber: billInv,
+    notes: refs.customerNotes?.value || '', termsAndConditions: refs.termsAndConditions?.value || '',
     companyId: session.companyId,
     phone: session?.companyPhone,
     description: session?.description,
@@ -758,19 +806,18 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
       return {
         description: entry.barcode ? entry.name : entry.category[0].name,
         hsn: entry.category[0].hsn,
-        qty: Number(entry.qty || 1),
+        ...receiptEntryAmounts(entry),
         mrp: Number(entry.rate || 0),
         discount: discountVal,
         tax: Number(entry.tax || 0),
-        value: Number(entry.qty || 1) * Number(entry.rate || 0),
         size: entry.size || '',
         unit: entry.unit || 'Nos',
         barcode: entry.barcode,
-        tvalue: Number(entry.value || 0),
       }
     }),
     subtotal: Number(subtotal.value) || 0,
     discount: String(discount.value ?? ''),
+    adjustment: billAdjustmentValue(refs.adjustment?.value),
     grandTotal: Number(grandTotal.value) || 0,
     paymentMethod: paymentMethod.value,
     isTaxIncluded: session?.isTaxIncluded || false,
@@ -785,15 +832,7 @@ function buildPrintData({ billInv, session, finalitems, refs }) {
     availablePoints: Number(points.value) || 0,
     redeemedPoints: Number(redeemedPoints.value) || 0,
     couponValue: Number(couponValue.value) || 0,
-    tqty: finalitems.reduce((sum, e) => sum + Number(e.qty || 1), 0),
-    tvalue: finalitems.reduce((sum, e) => sum + Number(e.qty || 1) * Number(e.rate || 0), 0),
-    ttvalue: finalitems.reduce((sum, e) => sum + Number(e.value || 0), 0),
-    tdiscount: finalitems.reduce((sum, e) => {
-      const qty = Number(e.qty || 1)
-      const rate = Number(e.rate || 0)
-      const d = Number(e.discount || 0)
-      return sum + (d < 0 ? Math.abs(d) * qty : ((rate * d) / 100) * qty)
-    }, 0),
+    ...receiptEntryTotals(finalitems),
   }
 }
 
@@ -826,6 +865,10 @@ async function ensureClientExists() {
 
 // ─── Save handler (orchestrator) ─────────────────────────────────────────────
 
+const serialRegistration = useBillingSerialNumbers(items, clientId, afterSalesEnabled, companyScope.companyId, $fetch);
+const serviceCustomerRequired = serialRegistration.required;
+const serviceUnits = serialRegistration.serviceUnits;
+const returnedServiceUnitIds = serialRegistration.returnedUnitIds;
 const handleSave = async () => {
   if (isSaving.value) return
 
@@ -840,6 +883,15 @@ const handleSave = async () => {
     await nextTick()
 
     const session = useAuth().session.value
+    billDiscountValue(discount.value)
+    billAdjustmentValue(adjustment.value)
+    let invoice = null
+    if (billingMode.value === 'invoice') {
+      if (!clientId.value) throw new Error('Select a client by name or phone before creating the invoice.')
+      if (Number(grandTotal.value) <= 0) throw new Error('Invoice total must be greater than zero.')
+      invoice = invoiceDetails({ dueDate: dueDate.value, invoicePaymentTerms: invoicePaymentTerms.value, subject: invoiceReference.value }, date.value)
+      paymentMethod.value = 'Credit'; splitPayments.value = []; selected.value = null
+    }
 
     // ── Pre-flight validation (runs before counter is incremented) ────────────
     validateBillState({
@@ -860,6 +912,8 @@ const handleSave = async () => {
 
     const finalitems = validateBillEntries(items.value)
 
+    await serialRegistration.waitUntilReady()
+    if (serviceCustomerRequired.value && !clientId.value) throw new Error('Select a client for warranty, guarantee or maintenance registration.')
     await ensureClientExists()
 
     const billPoints = skipPoints.value ? 0 : computeBillPoints(session, grandTotal.value)
@@ -869,14 +923,16 @@ const handleSave = async () => {
       paymentMethod.value === 'Credit' ||
       (paymentMethod.value === 'Split' && splitPayments.value.some((p) => p?.method === 'Credit'))
 
-    const draftRefs = { subtotal, discount, grandTotal, returnAmt, couponValue, paymentMethod,
-                        redeemedPoints, clientId, selected, splitPayments, date, clientName, phoneNo, points }
+    const draftRefs = { subtotal, discount, adjustment, grandTotal, returnAmt, couponValue, paymentMethod,
+                        redeemedPoints, clientId, selected, splitPayments, date, clientName, phoneNo, points,
+                        customerNotes, termsAndConditions }
 
     const payload = buildBillPayload({ session, entriesData, billPoints, hasCreditPayment, refs: draftRefs })
+    if (invoice) Object.assign(payload, invoice, { billingMode: 'invoice' })
 
     const result = await $fetch('/api/bill/create', {
       method: 'POST',
-      body: { uuid: uuid.value, payload, items: finalitems, returnedItems, billPoints,
+      body: { uuid: uuid.value, payload, items: finalitems, returnedItems, billPoints, serviceUnits: serviceUnits.value, returnedServiceUnitIds: returnedServiceUnitIds.value,
               clientId: clientId.value, companyId, couponId: selectedCouponId.value?.value || null, userId },
     })
     if (result?.billId) {
@@ -887,14 +943,17 @@ const handleSave = async () => {
     const billInv = result?.invoiceNumber
     printData = buildPrintData({ billInv, session, finalitems, refs: draftRefs })
     printData.billId = result?.billId || uuid.value
+    if (invoice) Object.assign(printData, invoice, { billingMode: 'invoice', invoiceCode: `INV-${billInv}`, amountReceived: 0, balanceDue: grandTotal.value, invoicePaymentStatus: 'Unpaid' })
     printData.generatedCoupons = result?.generatedCoupons || []
     fireFcmNotification(companyId, billInv, grandTotal.value, session)
 
-    if (selectedAction.value === 'print') await print()
-    else if (selectedAction.value === 'send') await send()
-    else if (selectedAction.value === 'download') await download()
+    const action = selectedAction.value
+    if (invoice) printModel.value = true
+    if (action === 'print') await print()
+    else if (action === 'send') await send()
+    else if (action === 'download') await download()
 
-    toast.add({ title: 'Bill created successfully!', color: 'green' })
+    toast.add({ title: invoice ? 'Invoice created — unpaid' : 'Bill created successfully!', color: 'green' })
     reset()
   } catch (error) {
     console.error('Error creating bill', error)
@@ -949,8 +1008,7 @@ onMounted(async () => {
 
 
 const moveFocus = (currentRowIndex, currentField, direction) => {
-  const baseFieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', 'tax'];
-  const fieldOrder = isUserTrackIncluded ? [...baseFieldOrder.slice(0, 6), 'user', 'tax'] : baseFieldOrder;
+  const fieldOrder = ['barcode', 'category', 'name', 'rate', 'qty', 'discount', ...(isUserTrackIncluded.value ? ['user'] : []), 'tax'];
 
   const currentFieldIndex = fieldOrder.indexOf(currentField);
 
@@ -1194,8 +1252,13 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 <template>
   <UDashboardPanelContent class="billing-page p-1">
       <CompanyFormField toolbar />
+      <ClientOnly>
+        <Teleport to="#page-navbar-actions">
+          <USelect v-if="invoicingEnabled" :model-value="billingMode" :options="billingModes" aria-label="Billing mode" :disabled="isSaving" class="w-32" @update:model-value="changeBillingMode" />
+        </Teleport>
+      </ClientOnly>
                   
-      <UCard :style="billingTableStyle"
+      <UCard :style="billingTableStyle" :inert="isSaving"
     :ui="{
       base: 'billing-card flex flex-col',
       rounded: '',
@@ -1217,6 +1280,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
   >
 
     <template #header>
+      <UAlert v-if="serialRegistration.error.value" :title="serialRegistration.error.value" color="orange" class="m-2"><template #actions><UButton size="xs" variant="soft" @click="serialRegistration.load">Retry</UButton></template></UAlert>
     <!-- 📷 Camera View -->
     <div class="relative px-2">
       <div
@@ -1238,7 +1302,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
     </div>
      <div class="w-full flex flex-wrap gap-4 lg:hidden  py-2 px-2">
           <UButton color="blue" class="flex-1" block :disabled="!canCreateDraft" @click="handleCreateNewDraft" >New</UButton>
-          <UButton  :loading="isSaving" :icon="billSaveActionIcon(selectedAction)" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <UButton  :loading="isSaving" :icon="billSaveActionIcon(selectedAction)" ref="saveref" color="green" class="flex-1" block @click="handleSave">{{ isInvoiceMode ? 'Create invoice' : 'Save' }}</UButton>
           <UButton class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
     
@@ -1260,12 +1324,12 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
         </div>
         </div>
      
-         <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
+         <div class="lg:hidden col-span-2 flex flex-row flex-wrap items-end gap-2 py-2 px-2">
             <UInput
               v-model="dateInput"
               type="date"
-              label="Date"
-              class="flex-1"
+              :aria-label="isInvoiceMode ? 'Invoice date' : 'Date'"
+              class="flex-1 min-w-32"
               @change="commitDateInput"
               @blur="commitDateInput"
             />
@@ -1282,11 +1346,11 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
             <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan"/>
           </div>
         
-       <div class="billing-topbar hidden lg:flex items-center gap-2 text-sm py-2 px-2">
+       <div class="billing-topbar hidden lg:flex items-end gap-2 text-sm py-2 px-2">
           <UInput
             v-model="dateInput"
             type="date"
-            label="Date"
+            :aria-label="isInvoiceMode ? 'Invoice date' : 'Date'"
             class="w-40"
             @change="commitDateInput"
             @blur="commitDateInput"
@@ -1341,7 +1405,8 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 </div>
 
 
-   </template>  
+   <BillingInvoiceDetails v-if="isInvoiceMode && isMobile" v-model:due-date="dueDate" v-model:terms="invoicePaymentTerms" :invoice-date="dateInput" :disabled="isSaving" :show-reference="false" />
+   </template>
 
     
 <div  v-if="isMobile" class="block lg:hidden space-y-4 py-1 px-2">
@@ -1361,6 +1426,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
       <span  :class="{ 'text-red-600': row.return }">{{ row.name }}</span>
       <span v-if="((useAuth().session.value?.role === 'admin') && useAuth().session.value?.isCostIncluded === true)" :class="{ 'text-red-600': row.return }">₹{{ row.cost }}</span>
       <span  :class="{ 'text-red-600': row.return }">₹{{ row.value }}</span>
+      <div class="flex items-center gap-1"><BillingSerialNumbers v-if="afterSalesEnabled" :item="row" :covered="serialRegistration.isCovered(row)" :owned="serialRegistration.owned.value" v-model:returned-unit-ids="returnedServiceUnitIds" :disabled="isSaving" @details="details => serialRegistration.setDetails(row, details)" /><UButton icon="i-heroicons-trash" color="red" variant="ghost" size="xs" aria-label="Delete row" @click="deleteRowByIndex(index)" /></div>
     </div>
 
     <!-- Row 1: Barcode | Qty | Discount -->
@@ -1404,7 +1470,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
       />
     </div>
 
-    <!-- Row 2: Category | Qty | Unit | Tax -->
+<!-- Row 2: Category | Qty | Unit | Tax -->
     <div :class="showUnitColumn ? 'grid grid-cols-4 gap-2 z-10' : 'grid grid-cols-3 gap-2 z-10'">
       <USelectMenu
         v-model="row.category"
@@ -1536,7 +1602,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
         @keydown.right.prevent="moveFocus(index, 'name', 'right')"
       />
     </td>
-    <td class="py-1 whitespace-nowrap">
+<td class="py-1 whitespace-nowrap">
       <UInput 
         v-model="row.rate" 
         type="number" 
@@ -1619,6 +1685,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
       {{ row.value }}
     </td>
     <td class="py-1 whitespace-nowrap text-right">
+      <BillingSerialNumbers v-if="afterSalesEnabled" :item="row" :covered="serialRegistration.isCovered(row)" :owned="serialRegistration.owned.value" v-model:returned-unit-ids="returnedServiceUnitIds" :disabled="isSaving" @details="details => serialRegistration.setDetails(row, details)" />
       <UButton
         icon="i-heroicons-trash"
         color="red"
@@ -1627,7 +1694,6 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
         square
         title="Delete row"
         aria-label="Delete row"
-        :disabled="bill?.isMarkit"
         @click="deleteRowByIndex(index)"
       />
     </td>
@@ -1646,7 +1712,10 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
         <div>
            Qty: {{ tQty }}
         </div>
-  
+        <div v-if="isInvoiceMode" class="billing-invoice-subject">
+          <label for="invoice-subject" class="text-gray-700 font-medium">Subject</label>
+          <UInput id="invoice-subject" v-model="invoiceReference" placeholder="Let your customer know what this invoice is for" maxlength="500" :disabled="isSaving" aria-label="Invoice subject" />
+        </div>
 
 </div>
         <!-- Other form elements -->
@@ -1658,31 +1727,21 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
     <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
   </div>
 </div>
-<div class="mb-6">
-          <label class="block text-gray-700 font-medium">Discount</label>
-          <UInput
-            ref="discountref"
-            type="text"
-            inputmode="decimal"
-            v-model="discount"
-            @keydown.enter.prevent="handleEnterMainDiscount()"
-            placeholder="e.g. 10, -5, +50"
-          />
-        </div>
+<BillingDiscountAdjustment ref="discountref" v-model:discount="discount" v-model:adjustment="adjustment" :disabled="isSaving" @enter="handleEnterMainDiscount()" />
 <div class="billing-primary-action flex">
 
     <!-- Save -->
     <UButton
       :loading="isSaving"
       :icon="billSaveActionIcon(selectedAction)"
-      ref="saveref" :title="selectedAction ? 'Save & ' + selectedAction : 'Save'"
+      ref="saveref" :title="(isInvoiceMode ? 'Create invoice' : 'Save') + (selectedAction ? ' & ' + selectedAction : '')"
       color="green"
       class="flex-1 rounded-r-none"
       block
       @keydown.enter.prevent="handleSave"
       @click="handleSave"
     >
-      Save
+      {{ isInvoiceMode ? 'Create invoice' : 'Save' }}
     </UButton>
 
     <!-- Dropdown -->
@@ -1703,7 +1762,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
     <div class="text-green-700 dark:textgreen-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
   </div>
 </div>
-<div class="mb-4">
+<div v-if="!isInvoiceMode" class="mb-4">
               <label class="block text-gray-700 font-medium">Payment</label>
               <div class="w-full flex flex-row gap-2">
                 <USelect
@@ -1724,6 +1783,10 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
                 />
               </div>
             </div>
+<div v-else>
+  <label for="invoice-payment-terms" class="block text-gray-700 font-medium">Payment terms</label>
+  <BillingPaymentTerms id="invoice-payment-terms" v-model:terms="invoicePaymentTerms" v-model:due-date="dueDate" :invoice-date="dateInput" :disabled="isSaving" />
+</div>
 <div class="billing-row-action"><UButton icon="i-heroicons-trash" aria-label="Delete" title="Delete" block variant="solid" color="gray" class="w-full" disabled>Delete</UButton></div>
 </div>
 <div>
@@ -1737,7 +1800,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
               <UInput v-model = redeemedAmt  />
             </div>
 </div>
-<div class="billing-summary-account flex gap-2">
+<div v-if="!isInvoiceMode" class="billing-summary-account flex gap-2">
               <UInputMenu v-model="selected" placeholder="Account" aria-label="Account Name" :options="accounts" value-attribute="id" option-attribute="name">
                 <template #option="{ option }">
                   <div
@@ -1751,6 +1814,10 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
                 </template>
               </UInputMenu>
             <UButton icon="i-heroicons-plus" aria-label="Add account" title="Add account" square @click="isOpen=true" />
+</div>
+<div v-else>
+  <label for="invoice-due-date" class="block text-gray-700 font-medium">Due date <span class="text-red-500" aria-hidden="true">*</span></label>
+  <UInput id="invoice-due-date" v-model="dueDate" type="date" :min="dateInput" :disabled="isSaving" required aria-label="Invoice due date" />
 </div>
 <div class="billing-row-action"><UButton icon="i-heroicons-arrow-uturn-left" aria-label="Sales Return" title="Sales Return" block variant="solid" class="w-full" @click="issalesReturnModelOpen = true">Return</UButton></div>
 </div>
@@ -1855,20 +1922,9 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 
         <!-- mobile view -->
         <div  v-if="isMobile" class="lg:hidden flex flex-col gap-3 py-3 text-sm px-2" >
-        <div class="">
-          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-) / Add (+n)</label>
-          <UInput
-          ref="discountref"
-          type="text"
-          v-model="discount"
-          inputmode="text"
-          @keydown.enter.prevent="handleEnterMainDiscount()"
-          placeholder="e.g. 10, -5, +50"
-          pattern="^[+\-]?[0-9]*[.,]?[0-9]*$"
-          />
-        </div>
+        <BillingDiscountAdjustment ref="discountref" v-model:discount="discount" v-model:adjustment="adjustment" :disabled="isSaving" @enter="handleEnterMainDiscount()" />
 
-        <div class="">
+        <div v-if="!isInvoiceMode" class="">
           <label class="block text-gray-700 font-medium">Payment Method</label>
           <div class="w-full flex flex-row gap-2">
             <USelect
@@ -1945,7 +2001,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 
         <div class="">
           <div class="w-full flex flex-row gap-2">
-            <UInputMenu class="flex-1" v-model="selected" placeholder="Account Name" aria-label="Account Name" :options="accounts" value-attribute="id" option-attribute="name">
+            <UInputMenu v-if="!isInvoiceMode" class="flex-1" v-model="selected" placeholder="Account Name" aria-label="Account Name" :options="accounts" value-attribute="id" option-attribute="name">
               <template #option="{ option }">
                 <div
                   :class="option.kind === 'header'
@@ -1964,7 +2020,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
             square
             variant="solid"
             class="w-auto"
-            @click="isOpen=true"
+            v-if="!isInvoiceMode" @click="isOpen=true"
             />
           </div>
         </div>
@@ -1976,7 +2032,12 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 
           <div v-if="isMobile" class="w-full flex flex-wrap gap-4  px-3 py-3 lg:hidden">
           <UButton color="blue" class="flex-1" block :disabled="!canCreateDraft" @click="handleCreateNewDraft" >New</UButton>
-          <UButton  :loading="isSaving" :icon="billSaveActionIcon(selectedAction)" ref="saveref" color="green" class="flex-1" block @click="handleSave">Save</UButton>
+          <div class="flex flex-1">
+            <UButton :loading="isSaving" :icon="billSaveActionIcon(selectedAction)" ref="saveref" color="green" class="flex-1" :class="{ 'rounded-r-none': isInvoiceMode }" block @click="handleSave">{{ isInvoiceMode ? 'Create invoice' : 'Save' }}</UButton>
+            <UDropdown v-if="isInvoiceMode" :items="actionItems">
+              <UButton color="green" class="rounded-l-none px-3" icon="i-heroicons-chevron-up" aria-label="Invoice receipt action" />
+            </UDropdown>
+          </div>
           <UButton  class="flex-1" @click="issalesReturnModelOpen = true" block>Return</UButton>
         </div>
         </template>
@@ -1984,6 +2045,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
   </UDashboardPanelContent>
 
   <BillingAccountModal v-model="isOpen" @account-created="getAccounts" />
+  <BillingNotesModal v-model="isNotesOpen" v-model:notes="customerNotes" v-model:terms-and-conditions="termsAndConditions" :disabled="isSaving" />
 
 
      

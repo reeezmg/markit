@@ -2,6 +2,16 @@
 
 ## Independent Accountant area (`/accountant`)
 
+ERP retainers (local implementation, 2026-10-30) use this chart and published system
+journals: collect Dr cash/bank Cr selected OTHER_CURRENT_LIABILITY; apply Dr liability
+Cr the invoice's frozen receivable; refund Dr liability Cr cash/bank. Removing an
+application adds the exact opposite journal linked to the original and reopens the
+normal invoice receipt. Requests alone post nothing. All cash/bank/liability accounts
+must be active and match the owning company/currency, and financial dates respect
+transaction locks. These journals remain source-managed and cannot be manually edited,
+deleted or reversed through the generic journal UI. See `ARCH-pages-erp.md` for the
+advance subledger and the prepared, unapplied invoice-program migration.
+
 ### Source correction policy (prepared locally, 2026-10-22)
 
 `schema.zmodel` documents the `AccountantManualJournal` source-edit contract.
@@ -57,7 +67,7 @@ connect through Staff Accounting for new activity; bank statement posting remain
 Distributors are connected through Settings → Account → Purchase. Company account
 configuration and transaction-form defaults are centralized on `/settings/account`;
 see `ARCH-pages-settings.md` for the groups and default precedence.
-`server/utils/accountant/company-account-defaults.ts` provisions 38 standard
+`server/utils/accountant/company-account-defaults.ts` provisions 41 standard
 accounts and default selections for each company. It combines the 18 core chart
 accounts with bank, salary, investment, Receive / Pay clearing, fixed-asset and
 ecommerce accounts. Account IDs belong to that company; investor and supplier
@@ -65,7 +75,10 @@ purpose accounts are shared within the company, with optional party overrides.
 Registration and branch creation call this helper in their creation transaction.
 It reuses existing standard accounts and primary banks, preserves valid custom
 selections and integration activation flags, and fills missing selections for
-ERP, staff, ecommerce, purchases, investments, Receive / Pay, transfers and assets.
+ERP, staff, ecommerce, purchases, investments, loans, Receive / Pay, transfers and assets.
+Loan defaults include current liability, interest expense and fees expense, in addition
+to receiving Cash/Bank and long-term liability. New-company setup and on-demand
+investment initialization share standard account codes.
 Profit distribution has a separate shared equity default. New integration settings
 remain disabled until explicitly enabled. Provisioning does not post journals or
 replay source history. New accounts use the company currency; a newly created
@@ -184,6 +197,29 @@ manual journals, amount/percentage journal templates, recurring profiles,
 reversals, credit entries, fiscal year-end adjustments, budgets and actuals,
 transaction locks, currency adjustments, fixed assets/categories/depreciation/
 disposal, contacts/projects, client engagements, and preferences.
+
+Subaccount relationship and review (2026-10-23):
+`AccountantAccountingAccount.parentId` links an account to another account of the
+same model; journal lines still reference the individual account ID. The chart form
+offers active parents of the same exact account type, and `accounts.ts` validates
+company-scoped parent ownership, active status, matching type, self/circular links
+and the new node's ancestor depth. BANK, CREDIT_CARD and ACCOUNTS_RECEIVABLE are
+not supported subaccount types. A child does not inherit or move its parent's
+transactions or opening entries. `account-ledger.ts` reads one account only;
+full-list balances in `accounts.ts` and account-detail balances in `management.ts`
+also group by individual account ID without aggregating descendants. Parent-ledger
+PDF/Excel exports consequently contain direct postings only, not a group statement.
+
+Verified hierarchy gaps: moving an existing account checks its proposed ancestor
+chain but not the height of its descendants, so a valid moved parent can push its
+children beyond five levels. Type edits protect the edited account's own posted
+lines but do not validate existing children's types; when parentId is omitted,
+the retained parent's type is not revalidated either. The chart's `addDepth` sorts
+by parent ID and name rather than traversing a tree, so grandchildren can precede
+their parent and root. Its parent picker excludes the edited account but still
+offers descendants (the API rejects the resulting circular link). These are
+review findings, not implemented fixes. In-memory checks reproduced excessive
+subtree depth and child-before-parent ordering without database writes.
 
 ### Ecommerce connection
 
@@ -431,35 +467,154 @@ The main ERP sidebar has an **Investments** group backed by `utils/investments.t
 child on company/route changes; it does not nest the Accountant sidebar. Separate
 routes/components cover `/investments/overview`, `/investors`,
 `/capital`, `/allocate`, `/payouts` and `/settings` (all under `/investments`).
+Loans is now a separate finance sidebar entry at `/loans`, beside Investments.
+Its own `pages/loans.vue` shell preserves the company selector and authorized roles;
+old `/investments/loans` index, detail and history URLs redirect with query values
+intact. Investor statement/overview links use the new loan routes.
+Capital offers Receive/Return capital and shows contributed, returned and net
+contributed capital (contributions minus returns, excluding profit), with separate
+history and CSV export. The overview and investor statement retain separate
+capital/profit/principal totals. Reversals remain in their original category.
+Capital ledger filters affect its table/export; its cards remain company-wide.
+
+`LoansPage.vue`, `LoanAccountPage.vue`, `LoanForm.vue` and `LoanPaymentModal.vue` implement borrowing
+agreements through `/api/accountant/loans` (`server/utils/accountant/loans.ts`).
+An agreement belongs to an existing active investor and snapshots base currency,
+fixed-rate terms, account mappings and its repayment schedule. Saving loan
+information records the receipt and opens the loan atomically, with no separate
+validation or confirmation screen. This is available to admin/manager/accountant.
+`/loans` contains only the loan table and its New loan/history actions;
+it does not render totals, schedules or a selected loan's details. Opening a row
+navigates to `/loans/:loanId`, where its schedule, yearly analysis,
+accounting history, repayment and settlement actions live. The `loanId` parameter
+avoids CompanyScope's reserved ERP `id` lookup. Repay loan links open that detail
+route with `repay=1` to show its payment form. Older `?loan=` links redirect there.
+Earlier unassigned movements are retained at `/loans/history`.
+The Loans sidebar also exposes `/loans/repayments`, listing unpaid instalments
+across open loans with due/upcoming/all filters and loan/lender search. Due rows
+open the correct loan's repayment form with the selected company preserved.
+`/loans/settings` manages the same five company defaults as Settings > Account >
+Loans. Defaults are suggested for new loans; existing saved snapshots are preserved.
+Older unposted DRAFT records can be completed by saving their information once;
+this posts their original receipt and freezes their snapshot. Retries of either
+new-loan creation or draft completion cannot duplicate the receipt. Posted loans
+cannot be edited. The old manager-only validate/cancel endpoints remain API
+compatibility operations for older drafts, but are absent from the new UI.
+Raw loan creation explicitly supplies both timestamps because Prisma's
+`@updatedAt` does not populate raw SQL inserts; edits/status changes set
+`updated_at` explicitly as well. Saving freezes the agreement and
+records the full receipt: debit selected Cash/Bank, credit the loan's selected
+long-term loan liability (`OTHER_LIABILITY`). This is a new receipt, not adoption
+of earlier loan history. Existing unassigned movements stay in a separate history
+page and are never inferred into agreements.
+
+`utils/loan-schedule.ts` computes equal-payment reducing-balance, equal-principal,
+and interest-only/bullet schedules, with 0% support where instalments remain
+positive. Monthly/quarterly/yearly nominal rates are annual rate times period/12;
+the first due date must be one regular period after receipt. Month-end anchors
+are clamped without drifting. Principal rounding residue goes to the last row.
+Irregular dates, daily-rate contracts and lender rounding use a manual schedule or
+CSV (`date,principal,interest`, ISO dates, plain decimal amounts). The server
+independently validates increasing dates, exact principal total, positive totals,
+nonnegative two-decimal amounts and configured limits. Manual scheduled interest
+is authoritative; no rate-based reconciliation is inferred.
+
+Each due instalment debits long-term principal and interest expense and credits
+current loan liability for their total. A separate reclassification debits the
+next twelve months' future principal to long-term liability and credits current
+liability; its equal opposite posts the next day. This follows the Odoo-style
+scheduled-entry/reclassification mechanism. Saving catches up through the UTC
+current date. The authenticated daily `/api/cron/loans` job (Vercel: 01:30 UTC,
+existing `CRON_SECRET`) and explicit Post due entries process only dates through
+today, in the owning company-locked transaction. GETs do not post or provision
+accounts. Locked dates or inactive accounts fail the whole per-loan transaction
+and are returned by the cron for review; retries do not duplicate entries.
+
+Repayments allocate separate principal/interest amounts to due instalments, allow
+partial payments, and optionally debit fees expense. One bank credit clears their
+total; interest already recognized by the scheduled entry is not expensed twice.
+Each OPEN loan row has a Repay loan link to its dedicated detail page and payment
+form. Incomplete/closed/cancelled rows do not offer repayment.
+Only actual principal receipts/payments project into investor events, tagged with
+`details.loanId`; generic investor repayments cannot use managed-loan balances,
+and generic reversals reject these events. Loan payment reversals require
+manager/admin, a reason and unlocked original/reversal dates, and preserve all
+original journals. Reverse later live payments first. Paid loans close when their
+principal and scheduled interest are fully cleared.
+
+Manager/admin early settlement first posts due entries, unwinds any live principal
+reclassification, then clears due current liability and future long-term principal
+against bank. The lender's extra settlement interest and fees are separate inputs.
+Future unearned schedule interest is permanently waived and future postings stop.
+Settlements are final in this workflow; the regular-payment reversal action does
+not reverse them. Posted receipts/agreements cannot be cancelled or deleted.
+Automatic late interest, floating-rate resets, arbitrary partial prepayments,
+refinancing, foreign-currency loans and historical loan adoption are not inferred.
+The annual analysis/export preserves the original contractual schedule; overdue
+and paid state use actual recorded payments. Existing investor overview principal
+includes both managed agreements and earlier unassigned loan movements.
+
+`AccountantLoan`/`AccountantLoanEvent` and migration
+`20261102120000_loan_management` are prepared locally. Until separately installed,
+Loans shows an installation-pending message and preserves earlier history. The
+installer `scripts/production-accounting/apply-loan-management.mjs` without flags
+prints an offline plan only; `--apply` requires a separate explicit instruction.
+Offline tests use an in-memory database adapter and real Vue compilation, with no
+DDL. `node tests/loan-queries.readonly.test.mjs` additionally checks both actual
+event-reader SQL queries in PostgreSQL using a read-only transaction and random
+company IDs. Their sort keys qualify the source table alias because the text date
+projection and original date column share the output name `event_date`.
 Investor accounts use `/investments/investors/:investorId`; the parameter deliberately
 avoids `id`, which CompanyScope interprets as an ERP record lookup. Profile and
 movement forms mount only when opened. `/accountant/investors` redirects to the
 directory; the former all-in-one `Accountant/InvestorsPage.vue` was removed.
-`DirectoryPage.vue` combines investor profiles, searchable contact details, dated
-ownership/share totals, capital and profit-due balances in one list. Agreements
-opens the selected investor's history and add/edit/delete controls on the same page.
-Profile add/edit remains a modal; Account opens the individual ledger. The former
-`OwnershipPage.vue` was removed. `/investments/ownership` redirects to the combined
-investor page preserving query parameters, including the selected investor. There
-is no separate Ownership sidebar entry.
+`DirectoryPage.vue` is a single searchable investor table with an as-of date,
+ownership/profit shares, capital balance and profit due. It has no aggregate cards,
+agreement panel or per-row edit actions. Clicking a row or the investor name opens
+`/investments/investors/:investorId`; legacy `?investor=` directory links redirect
+to that profile. The existing `InvestorAccountPage.vue` owns contact/status details,
+notes and documents, current ownership/shares, capital contributed/returned/balance,
+profit allocated/paid/due and outstanding investor loan principal. Its transaction
+statement retains date filters, CSV export and existing reversal controls. Capital
+movements and profit payments open the existing investor-prefilled forms from the
+profile and refresh its balances/history after saving. Profit due represents posted
+allocations less payments, not an estimate of unallocated earnings.
+
+Agreement forms, the agreement panel and capital-commitment/dues UI have been
+removed. Add/Edit investor is a full-screen modal with a scrollable body and fixed
+save footer. In percentage mode it contains ownership %, profit-share % and an
+effective date alongside the investor details. In share mode, new profiles start
+with zero shares and Buy shares / Redeem shares on the profile records the units.
+The profile shows dated read-only Ownership history and a statement of cash, units
+and transaction prices. `/investments/ownership` remains a compatibility redirect
+to the directory (or selected profile); there is no agreement workflow/sidebar.
 
 The `investors` and `investor-profits` routers are registered in
-`/api/accountant/[...path].ts`. The company-scoped
-API links each new investor to a company user (`legacy_user_id` is reused for native
-and imported links, unique per company/user). GET `/investors/users` lists active
-company users and their existing investor link. Creation accepts `userId` or
-`newUser {name,email,phone}`; selecting an existing membership never changes its role.
+`/api/accountant/[...path].ts`. POST investor accepts `userId` or
+`newUser {name,email,phone}`, optional creation requestId, effectiveDate and,
+in percentage mode, ownershipPercent/profitPercent. Profile, company membership,
+identity, initial ownership snapshot and creation audit save atomically. Profile
+PUT accepts dated percentage changes in percentage mode. Changes require manager/
+admin, validate aggregate company percentages and cannot rewrite allocation-
+protected periods or supersede a later ownership change. Missing percentage fields
+on contact/account-only API edits preserve participation. Share-mode percentages
+change through trades. Non-managers may create zero-participation profiles.
+Request UUIDs are payload-checked in `AccountantAudit` (`investor-create`). Legacy
+`initialAgreement` creation payloads and POST/PUT/DELETE term routes explicitly
+reject with instructions to use profile percentages or share purchases/redemptions.
+Existing historical term rows remain readable; rollout never deletes allocations,
+agreements, imported holdings or journals. Selecting an existing membership never changes its role.
 An existing email in the same company is reused; an identity outside that company
 must first be added through Users. Fresh identities and memberships are created
 atomically with role `investor`, an unusable random password hash (password-reset
 flow for login), and the investor/accounts; failed profile creation rolls everything
 back. Previously unlinked profiles can be linked when edited, but existing links
 cannot be reassigned. Profile contact edits do not change the linked user's identity.
-Native investor creation resolves existing active company accounts from the
+Native investor creation resolves active company accounts from the
 Investments company defaults; explicit `capitalAccountId`, `profitAccountId` and
-`loanAccountId` override those defaults for that investor. Equity is required;
-profit payable and loan accounts are optional until those movements are used.
-Native creation creates no chart accounts. Accounts can be shared by investors:
+`loanAccountId` override those defaults for that investor. All three purposes receive
+defaults. Missing standard accounts/default selections are provisioned as data in
+the existing request transaction; valid company defaults are reused. Accounts can be shared by investors:
 every journal line retains `sourceParties.investor`, while balances, profit-payment
 limits and loan-repayment limits are calculated from that investor's events.
 Events without the
@@ -467,6 +622,16 @@ required purpose account are rejected; receipts still debit the selected existin
 Cash/Bank account and credit the mapped investor account. Legacy imports retain
 their three-account creation contract, and existing profiles keep their mappings.
 The profile modal offers account selections when adding or editing an investor.
+`GET /investors/options` remains read-only. Investor/profile, movement and new-loan
+forms explicitly POST `/account-settings/investment-defaults` before loading options.
+This company-locked mutation fills missing investment/loan defaults and creates only
+missing standard accounts, with account-creation and before/after settings audits.
+It posts no journals and does not rewrite existing mappings. Inactive, wrong-type,
+wrong-currency or deleted standard-code conflicts require correction in Account
+settings. Loan forms preselect all five accounts from company loan defaults and
+allow per-loan overrides, including long-term liability. No investor loan-account
+mapping is required or changed. Investor profile forms show only equity and
+profit-payable selections; historical loan mappings remain preserved internally.
 Selecting Company default resolves the current default at save time; omitted
 fields on an API edit preserve the existing mapping. Changing an account with a
 nonzero balance for that investor/purpose is rejected until settlement or
@@ -476,32 +641,63 @@ rewrite existing investor mappings or journals.
 Settings → Account → Investments also exposes an investor selector and override
 editor. The same section configures
 capital/loan cash-bank defaults, payout defaults and profit-distribution equity.
-Dated ownership/profit-share terms
-can be corrected by manager/admin through PUT `:id/terms/:termId` until protected
-by posted allocations. The API rejects edits if either the original or proposed
-effective date is on/before any allocation period end for that investor (including
-reversed allocations), and validates duplicate dates and aggregate ownership and profit percentages, which cannot exceed 100% at any recorded effective date.
-Ownership history exposes Edit/Delete agreement and explains protected records.
-DELETE `:id/terms/:termId` requires manager/admin and rejects agreements on/before
-any posted allocation period end. The confirmation explains that the earlier
-agreement resumes (or the period has no agreement). Deletion revalidates company
-ownership/profit totals, rolling back if restoring earlier terms exceeds 100%.
-The deleted snapshot remains in AccountantAudit as `terms-deleted`. Corrections
-retain the original nonzero company-share total; `terms-edited` AccountantAudit
-entries retain the term ID and before/after values. Failed validations roll back
-the correction. Shares, company share count and ownership must agree
-when share counts are supplied. Total company shares are configured once under
-Investment settings, stored in company-scoped append-only AccountantAudit records
-(`investor-share-settings` / `configured`). GET/PUT `/investors/share-settings`
-reads/writes the total; writes require manager/admin. Zero enables percentage-only
-tracking. The agreement form displays the company total read-only and calculates
-ownership when shares held are positive. The API requires a configured total for
-share-count agreements, rejects a supplied stale total, and snapshots the configured
-total in each new agreement. Existing agreements are never rewritten when settings
-change; affected investors need new dated agreements. Percentage-only agreements
-retain zero share counts. Capital contributions do not change ownership.
+Investment settings GET/PUT `/investors/share-settings` returns
+`{includeShares,totalShares}` in append-only company audit settings. Missing legacy
+flags infer inclusion from a positive total. The company denominator is fixed while
+current/future share holdings depend on it. Toggling controls preserves history.
+Outstanding shares must be redeemed before changing that investor to percentage
+holdings. Nonzero percentage holdings must be cleared in percentage mode before
+switching that investor to share purchases; neither mode silently erases ownership.
 
-All six native movement types post published balanced system journals in company
+Share transactions and cash settlement are separate operations. A new share
+purchase/redemption still uses a transaction-specific pricePerShare: purchase units
+are amount / price; redemption value is shareQuantity * price rounded to cents.
+The form requires paymentStatus PAID, DUE or PARTIAL (paidAmount). Shares and
+ownership/profit percentages change when the trade is saved, including unpaid
+trades; only the confirmed payment changes capital/cash. No agreement or capital
+commitment is involved. Legacy paid capital/share events stay readable and do not
+become new dues automatically.
+
+New noncash SHARE_BUY/SHARE_REDEEM events store full trade value, price, units,
+initial payment confirmation and shareChange snapshots with null journal_id. If
+paid in full or partly paid, the same transaction adds a separate linked published
+CAPITAL_IN/OUT payment with details.settleTradeId. An invalid payment rolls back
+the trade/ownership as well. A due-only trade creates no cash/receivable/payable
+journal; its outstanding amount is tracked operationally in the investor module.
+GET `:id/share-dues?asOf=` computes per-trade total, paid, remaining due and
+PAID/PARTIAL/DUE/CANCELLED status from posted linked payments/reversals. Purchase
+receivables and redemption payables stay separate; summary fields shareCapitalDue
+and shareRedemptionDue expose them without automatic netting.
+
+Profile Share payments & dues shows trade status, Receive payment and Pay redemption
+due. Capital forms offer New share movement versus Settle share due; percentage
+mode additionally offers ordinary capital-only entries. Settling selects the
+original trade, prefills its balance and locks its original units/price. Capital
+statements and balances include actual linked cash payments and their reversals,
+not the noncash share-recording events. Profile statements retain both with clear
+labels. Partial/full settlements refresh the same profile dues and cash data.
+
+GET `:id/capital-preview` accepts dated kind/amount, transaction price/units and
+paymentStatus/paidAmount for new trades, or settleTradeId and amount for a due
+settlement. It returns total value, payment now, remaining due, before/after cash
+and units, and previewHash. New trades require manager/admin and the matching hash;
+existing authorized accountants can settle dues. Settlements reject wrong investor,
+wrong direction, pre-trade dates, cancelled trades, share-change fields and amounts
+above the date-specific balance. Chronological validation also rejects changes
+that would overpay a later settlement. Hash/request checks and company locking
+prevent stale previews and duplicate trade/payment saves.
+
+Same-day ownership snapshots audit each revision. Decimal calculations retain up
+to eight fractional unit digits and reconcile within one cent. Bank/account locks,
+company share pool, allocation-protected periods and dependency guards remain.
+Share events sort before cash payments with identical transaction timestamps.
+Reversing a linked payment reopens the original due without changing holdings.
+A share trade can be cancelled by reversing its ownership only after its payments
+have been reversed, and only without dependent later ownership/allocation changes.
+CSV/profile history distinguishes recorded shares from posted cash. Cash and stock
+therefore remain consistent while purchases/redemptions may be paid at later dates.
+
+The six cash/allocation movement types post published balanced system journals in company
 base currency: CAPITAL_IN/OUT, PROFIT_ALLOCATE/PAY and LOAN_IN/OUT. The API uses the
 existing transaction/company lock, role gate, active-account checks and date locks.
 Request UUIDs are payload-checked for retries. The allocation page calculates
@@ -511,9 +707,9 @@ rate and rounding to cents. Drafts/deleted lines are excluded. This is posted bo
 profit, so missing source accounting and closing/adjustment entries affect the
 result; it is not a sales-only estimate. The user enters only the company amount
 to share, which cannot exceed positive period profit. The preview lists every
-active investor's saved share, allocation, unassigned/rounding amount and retained
-profit. Missing agreements or changes inside the period block approval rather than
-guessing entitlement; split the period at agreement changes.
+active investor's saved percentage, allocation, unassigned/rounding amount and retained
+profit. Missing ownership snapshots or changes inside the period block approval rather than
+guessing entitlement; split the period at ownership changes.
 
 Manager/admin approval posts all positive allocations in one company transaction.
 The preview hash covers profits, participants, terms, funding account and amounts;
@@ -525,7 +721,7 @@ are stored in AccountantAudit (`investor-profit-batch`, `approved`), while each
 event retains `details.batchId`. Retries return the saved result. Batch history
 shows original snapshots and counts later individual reversals. The legacy
 per-investor event API remains compatible, but the UI uses company-wide allocation.
-The snapshot retains the applicable agreement; later terms cannot rewrite a period
+The allocation snapshot retains the applicable ownership; later changes cannot rewrite a period
 already used for allocation. Profit/loan repayments and reversals must preserve
 nonnegative payable/loan balances throughout the event history. Capital may become
 negative; it is shown explicitly rather than silently clamped.
@@ -537,7 +733,8 @@ created/reused automatically. Settings can select another active company equity
 account, excluding dedicated investor accounts; latest append-only AccountantAudit
 `investor-profit-settings` / `configured` records own this configuration. The
 allocation form never asks for an equity account. Payouts select cash/bank separately.
-No additional schema migration is needed beyond the original investor installation.
+The profile/ownership/profit workflows need only the original investor installation;
+the new agreement-based Loans workflow additionally needs its prepared loan migration.
 Documents are HTTP/HTTPS references, not file uploads. Access is the same
 admin/manager/accountant gate as Accountant; this is not an investor login portal.
 

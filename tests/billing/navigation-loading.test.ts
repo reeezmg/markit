@@ -26,8 +26,22 @@ test('edit restores persisted categories, item IDs, credit party, surcharge and 
   h.context.bill.value = { companyId: 'company', createdAt: '2026-10-06', grandTotal: 100, paymentMethod: 'Split', splitPayments: [{ method: 'Cash', amount: 50 }, { method: 'Credit', amount: 50 }], creditUserId: 'staff', discount: 10, discountType: 'surcharge', redeemedPoints: 20, couponValue: 5, client: { id: 'client', name: 'Alice', phone: '+919876543210', companies: [{ points: 100 }] }, entries: [{ id: 'entry', name: 'Tee', qty: 1, rate: 100, value: 100, categoryId: 'cat', item: { id: 'item', size: 'M' }, variant: { id: 'variant', pprice: 40 } }] }
   await new Promise(resolve => setImmediate(resolve)); await nextTick()
   assert.equal(h.context.items.value[0].category[0].id, 'cat'); assert.equal(h.context.items.value[0].entryId, 'entry'); assert.equal(h.context.items.value[0].id, 'item'); assert.equal(h.context.items.value.length, 2)
-  assert.equal(h.context.discount.value, '+10'); assert.equal(h.context.selected.value, 'user:staff'); assert.equal(h.context.phoneNo.value, '9876543210'); assert.equal(h.context.redeemedAmt.value, 25)
+  assert.equal(h.context.discount.value, 0); assert.equal(h.context.adjustment.value, 10); assert.equal(h.context.selected.value, 'user:staff'); assert.equal(h.context.phoneNo.value, '9876543210'); assert.equal(h.context.redeemedAmt.value, 25)
   assert.equal(h.context.points.value, 90); assert.equal(h.context.splitPayments.value.length, 2); assert.equal(h.context.dataLoading.value, false)
+})
+
+test('service invoice edit identifies charge rows and supplies a missing legacy category without changing parts', async t => {
+  const state = pageState({ categories: ref([{ id: 'service-cat', name: 'Service Charges' }, { id: 'cat', name: 'Parts' }]), paymentOptions: ['Credit'], tempSplits: ref({}), bill: ref(null), dataLoading: ref(false), clientFound: ref(false), couponFound: ref(false), isRedeemPoint: ref(false), baseDisplayPoints: ref(0), barcodeInputs: ref([]), resizableTable: ref(null) })
+  const h = harness(edit, ['computeBillPoints', 'setDisplayedPointsFromServer', '$watch:bill'], { ...state, pointsValue: 10 }); t.after(h.stop)
+  h.context.bill.value = { isServiceInvoice: true, serviceChargeCategory: { id: 'service-cat' }, createdAt: '2026-10-30', paymentMethod: 'Credit', entries: [
+    { id: 'labour', name: 'Labour', qty: 1, rate: 118, tax: 18 },
+    { id: 'part', name: 'Filter', qty: 1, rate: 50, categoryId: 'cat', item: { id: 'item' }, variant: { id: 'variant' } },
+  ] }
+  await new Promise(resolve => setImmediate(resolve)); await nextTick()
+  assert.equal(h.context.items.value[0]._serviceCharge, true)
+  assert.equal(h.context.items.value[0].category[0].id, 'service-cat')
+  assert.equal(h.context.items.value[1]._serviceCharge, false)
+  assert.equal(h.context.items.value[1].category[0].id, 'cat')
 })
 for (const scan of ['1A123456', 'invalid', '']) test(`native scanner result ${JSON.stringify(scan)}`, async t => {
   const received: string[] = []

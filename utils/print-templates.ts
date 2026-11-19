@@ -31,8 +31,9 @@ export const elementSchema = z.object({
   type: z.enum(['text', 'field', 'items', 'line', 'barcode', 'qrcode', 'logo', 'taxsummary', 'spacer']),
   text: z.string().max(2000).default(''),
   field: z.string().max(100).default(''),
-  x: z.number().min(0).max(100), y: z.number().min(0).max(300),
-  width: z.number().min(2).max(100), height: z.number().min(2).max(100),
+  x: z.number().min(0).max(297), y: z.number().min(0).max(1400),
+  width: z.number().min(2).max(297), height: z.number().min(2).max(297),
+  placement: z.enum(['flow', 'absolute']).optional(),
   fontSize: z.number().min(6).max(32), bold: z.boolean(),
   align: z.enum(['left', 'center', 'right']),
   image: z.string().max(350000).regex(/^(data:image\/(png|jpeg);base64,[A-Za-z0-9+/=]+)?$/).default(''),
@@ -55,13 +56,20 @@ export const elementSchema = z.object({
 export const templateSchema = z.object({
   id: z.string().min(1).max(80), name: z.string().trim().min(1).max(80),
   kind: z.enum(['receipt', 'label']),
-  width: z.number().min(25).max(100), height: z.number().min(15).max(150),
+  width: z.number().min(25).max(216), height: z.number().min(15).max(297),
+  paperSize: z.enum(['A4', 'A5', 'Letter']).optional(),
   dpi: z.enum(['203', '300']),
   fontFamily: z.enum(['sans', 'thermal']).optional(),
   elements: z.array(elementSchema).min(1).max(40),
 }).superRefine((t, ctx) => {
+  if (t.kind === 'label' && (t.width > 100 || t.height > 150 || t.paperSize)) ctx.addIssue({ code: 'custom', message: 'Labels must be at most 100 x 150 mm' });
+  const paper = t.paperSize && ({ A4: [210, 297], A5: [148, 210], Letter: [216, 279] } as const)[t.paperSize];
+  if (t.kind === 'receipt' && (paper ? t.width !== paper[0] || t.height !== paper[1] : t.width > 100)) ctx.addIssue({ code: 'custom', message: 'Choose a standard sheet size or a thermal width up to 100 mm' });
   if (new Set(t.elements.map(e => e.id)).size !== t.elements.length) ctx.addIssue({ code: 'custom', message: 'Element IDs must be unique' });
   for (const e of t.elements) {
+    if (e.placement === 'absolute' && e.type !== 'logo') ctx.addIssue({ code: 'custom', message: 'Free placement is available for images' });
+    if (e.placement === 'absolute' && t.paperSize && e.y + e.height > t.height) ctx.addIssue({ code: 'custom', message: 'Place the image inside the first sheet' });
+    if (t.kind === 'label' && (e.width > 100 || e.height > 100)) ctx.addIssue({ code: 'custom', message: 'Label boxes must be at most 100 mm' });
     if (e.columns && new Set(e.columns.map(c => c.id)).size !== e.columns.length) ctx.addIssue({ code: 'custom', message: 'Table column IDs must be unique' });
     if (e.x + e.width > t.width || (t.kind === 'label' && e.y + e.height > t.height))
       ctx.addIssue({ code: 'custom', message: 'Elements must fit inside the paper dimensions' });
@@ -206,10 +214,14 @@ export function fieldValue(data: any, field: string): string {
     return `${get('day')}-${get('month')}-${get('year')} ${get('hour')}:${get('minute')}`;
   }
   if (field === 'receiptUpiPayment') {
+    if (data.billingMode === 'invoice') return Number(data.balanceDue ?? data.grandTotal)>0 ? fieldValue(data,'upiPayment') : '';
     const amount = String(data.paymentMethod).toLowerCase() === 'upi' ? data.grandTotal : String(data.paymentMethod).toLowerCase() === 'split' ? data.splitPayments?.find((p: any) => String(p.method).toLowerCase() === 'upi')?.amount : null;
     return amount != null ? fieldValue({ ...data, grandTotal: amount }, 'upiPayment') : '';
   }
-  if (field === 'upiPayment') return data?.upiId ? `upi://pay?pa=${encodeURIComponent(data.upiId)}&pn=${encodeURIComponent(data.companyName || '')}&am=${Number(data.grandTotal || 0).toFixed(2)}&cu=INR` : '';
+  if (field === 'upiPayment') {
+    const amount=data.billingMode==='invoice'?Number(data.balanceDue??data.grandTotal):Number(data.grandTotal||0);
+    return data?.upiId && (data.billingMode!=='invoice'||amount>0) ? `upi://pay?pa=${encodeURIComponent(data.upiId)}&pn=${encodeURIComponent(data.companyName || '')}&am=${amount.toFixed(2)}&cu=INR` : '';
+  }
   const value = nestedLabelValue(data, field);
   if (value == null) return '';
   if (field === 'companyAddress') return typeof value === 'string' ? value : ['name', 'street', 'locality', 'city', 'state', 'pincode'].map(k => value[k]).filter(Boolean).join(', ');

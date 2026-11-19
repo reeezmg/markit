@@ -1,12 +1,174 @@
 # Storetools — Nuxt Server API Routes + Server Utilities
 
+## Sidebar settings
+
+`GET/PUT /api/settings/sidebar-navigation` reads/saves company sidebar choices through `server/utils/sidebar-navigation.ts`. Reads require active membership and authorized company scope. Same-origin writes require a live admin/manager role, strict preferences, a company row lock, matching JSON revision and transactional backup under GeneralPreference `sidebar-navigation/defaults-backup`. Generic generated mutations of this namespace are rejected. No runtime DDL or schema migration is involved. See `ARCH-sidebar-navigation.md`.
+
+## Dedicated CRM
+
+`server/api/crm/[...path].ts` owns `/api/crm/*`. `crm-access.ts` validates current
+staff membership, authorized company and same-origin writes. Managers own reports,
+settings, CRM work archives/restores and bulk assignment; staff edit work they own or
+created; unassigned memberships may be claimed. Client identity is managed only on /client. Source records and linked identities are checked against the same company.
+`crm.ts`, `crm-workflows.ts`, `crm-reminders.ts` and `crm-campaigns.ts` own persistence
+and business operations. All new CRM model access is denied through generated APIs.
+
+| Endpoint | Operations |
+|---|---|
+| `bootstrap` | GET readiness, authorized actor, active staff, defaults/settings and currency |
+| `clients` | GET existing company clients; PUT `:id` updates CRM attributes only; POST creation rejected |
+| `accounts`, `deals`, `activities` | GET filtered/paged records; POST create |
+| `:resource/:id` | GET detail/activity/audit context; PUT versioned edit |
+| `:resource/bulk` | POST manager assignment or archive/restore of explicit versioned rows |
+| `:resource/export` | GET filtered CSV, capped at 5,000 matches with truncation header |
+| `clients/import` | POST preview/atomic update of CRM attributes for up to 200 existing client IDs |
+| `client-choices`, `documents` | GET scoped client and quotation/invoice/order selectors |
+| `deals/:id/documents` | POST explicit company/client-checked source-document reference |
+| `order-summary/:id` | GET company-owned order status, amount and linked invoice |
+| `summary`, `reports`, `settings` | GET CRM aggregates/configuration; PUT manager settings |
+| `campaigns/*` | Existing email handlers under a request-local, authorized CRM actor |
+| `/api/cron/crm` | Protected 15-minute internal reminder processor; no customer messages |
+
+Readiness checks the six CRM tables and three CompanyClient CRM columns. Client create/edit/activation remain on the existing client page; CRM bulk archive rejects clients. Missing dedicated CRM tables return a setup
+state/503 and are never installed by runtime code. Writes use a company advisory lock,
+transactions, optimistic versions and append-only audit evidence. See `ARCH-crm.md`.
+
+## Pickup handover list and carrier schedule
+
+`POST /api/ecommerce-cms/pickup/add` accepts `{requestId,shipmentIds}` where parcel
+IDs are `<orderId>:forward|exchange`. The authorized company comes from
+`useCompanyRequestSession`. A transaction locks an open carrier-backed pickup and
+the selected company-owned orders, rechecks the shared pending-parcel query for
+carrier/location/availability, sets the per-leg pickup tag and updates local counts.
+Retries return `added: 0`; stale selections return 409 without writes. The response
+includes `carrierUpdated: false`: no carrier AWB-assignment call exists here.
+
+`POST /api/ecommerce-cms/pickup/schedule` accepts `{requestId,date,startTime,endTime}`
+and validates a real calendar date and a same-day 24-hour `HH:mm` range. It stores
+`carrierSchedule` with source `manual` and an audit timestamp on the authorized
+company's open carrier pickup. It records an allocated slot from the portal;
+it does not reschedule it. Creation preserves requested date/time and the raw
+carrier response. Creation and slot recording check the separately authorized
+schedule migration before writing; creation checks before contacting the carrier.
+The history reader tolerates absent new columns and reports unknown carrier slots.
+See `ARCH-pages-orders.md` and `ARCH-schema.md` for field/migration details.
+
+## After-sales
+
+`GET /api/settings/customer-product-numbering` returns company-scoped `prefix`,
+`nextNumber` (string), `nextReference`, `available` and `canEdit`. PUT accepts `{prefix}`
+for admin/manager/accountant and audits the preceding/new prefix without resetting
+the counter. Writes require the separately authorized numbering migration; a missing
+installation returns 503. Public checkout has no prefix-setting endpoint. POS, manual
+and ecommerce registration allocate from the same locked company counter after
+installation and otherwise retain legacy references for compatibility.
+
+`/api/after-sales/*` owns staff-only, company-scoped configuration CRUD/preview/archive,
+product linking reads, customer-unit registration, agreements, claims, visits, readings
+and explicit service invoicing. The daily authenticated `/api/cron/after-sales` processor
+generates due occurrences and internal alerts. Runtime source integrations are no-ops
+before migration installation; feature APIs report 503. See `ARCH-after-sales.md` for
+the complete route table, lifecycle behavior and prepared migration boundary.
+
+`GET /api/after-sales/staff` uses active, non-deleted `company_users` memberships and
+excludes cleanup users. It returns User IDs with the company membership's name, using
+account email as a fallback. Service assignment enforces the same eligibility.
+
+`GET /api/after-sales/customers/:id` validates the customer's company membership and
+returns `customer`, purchase `rows`, `total`, `page` and `pageSize`. `q` searches product,
+barcode, serial, reference and invoice; page sizes are 10/20/50 (default 20). Registered
+units retain their service IDs; unregistered stock quantities from non-deleted sale
+bills have `customer_product_id=null`. The read excludes charge/return lines and never
+creates historical registrations. See `after-sales-customer-history.ts`.
+
+`GET /api/after-sales/catalog` searches charges and service products by `q` and accepts
+`includeArchived=true` for charge management. `POST /api/after-sales/catalog/charges`
+creates or updates company-owned defaults (`id?`, `name`, `description`, `rate` before
+tax, `tax`, `unit`, `archived`) and returns `{id,category}`. The write atomically
+ensures/reuses the company's Service Charges category; catalogue reads include
+`chargeCategory` (or null) without creating it. A company-scoped preference retains
+the category ID through renames; an inactive category is restored on charge save or
+service invoice issuance. New custom/free service invoices also receive this category.
+Category creation/restoration is audited and serialized by the after-sales lock.
+`billEdit/findUniqueBill` additionally returns `isServiceInvoice` and
+`serviceChargeCategory`; the editor uses these to preserve charge tax/rates and supply
+available defaults for previously uncategorized charges on explicit save.
+Job saves accept `details.charges` non-stock lines and
+`details.parts` catalog stock lines. Charge lines cannot carry stock identities; product
+lines validate company ownership. First service invoice issuance requires completion
+and supports zero total; repeated calls reuse the linked invoice. Product create,
+update and batch-save payloads accept optional `isServiceProduct`; read/PO payloads
+return it. These additions require prepared migration `20261030170000_service_items`.
+
 ---
 
 ## Server Utilities (`storetools/server/`)
 
+### Recurring invoices and retainers
+
+`GET/POST /api/recurring-invoices`, `GET/PUT /api/recurring-invoices/:id`, and
+`POST /api/recurring-invoices/:id/actions` own profile listing, create/edit/read and
+`pause`, `resume`, `generate`, `issue` actions (`occurrenceId` selects a saved draft).
+`GET/POST /api/retainer-invoices`, `GET/PUT /api/retainer-invoices/:id`,
+`GET /api/retainer-invoices/options`, and `POST /api/retainer-invoices/:id/actions`
+own advance requests, account choices and `sent`, `void`, `collect`, `apply`, `refund`,
+`unapply` actions. Financial payloads include date/amount/reference; collections/refunds
+also need paymentMethod/accountId, applications billId, removals eventId.
+
+`invoice-program-route.ts` authorizes through `quoteCompany`, opens repeatable-read
+read-only transactions for GET, or bounded write transactions for mutations. Mutations
+require requestId and saves require the last revision for edits. Database tenant comes
+from the authorized request context. Domain services use parameterized SQL, company and
+document locks, and durable `saveSourceRequest` receipts. Missing module tables report a
+setup-needed 503; no route executes DDL. Generic and nested generated mutations are
+blocked. `GET /api/billSale/invoices?clientId=...` adds a bound customer filter used by
+the application picker, preserving existing company/date/state/pagination filters.
+
+`GET /api/cron/recurring-invoices` requires the configured CRON_SECRET Bearer token;
+unauthenticated/development bypasses are absent. It invokes the bounded per-occurrence
+processor and reports failed work with HTTP 500. See `ARCH-pages-erp.md` for the dates,
+accounting lifecycle, atomicity, limits and local-only migration deployment boundary.
+
+### Invoice payment terms
+
+`GET /api/settings/payment-terms` reads saved named terms for one authorized company
+and returns `canCreate`. `POST` accepts `{name,days}` for admin, manager, accountant,
+biller and user roles. It validates a 1–100-character name and integer days 0–3650,
+locks the company, rejects duplicate preset/custom names and a 100-term limit, then
+backs up the previous JSON and saves the new list in the same transaction.
+`server/utils/invoice-payment-terms.ts` uses existing GeneralPreference keys
+`billing/payment-terms` and `payment-terms-backup`; no DDL or schema setup runs.
+Request company selection is authorized by `getReadCompanyId`, independent of any
+company ID in the body. Built-in date rules and Custom are supplied by the UI;
+issued invoice text and due dates continue to use the existing Bill fields.
+
+`GET/PUT /api/settings/sales-workflow` manages company-specific workflow navigation
+setting in `general_preferences` (`sales-workflow/defaults`). GET returns
+`{preferences:{version:1,includeInvoicing,includeAfterSales},canManage}` without writing;
+absent flags default to disabled. Company & Branches owns the editor; after-sales
+controls its group in both ERP and Storefront sidebars. PUT requires
+admin/manager/accountant and at least one boolean `includeInvoicing` or
+`includeAfterSales`; unknown fields and invalid booleans are rejected. It checks the
+authorized company, locks its row, merges omitted flags from the saved value, backs up
+prior JSON at `defaults-backup` and saves atomically. Generic model writes cannot
+modify this preference page. Invoicing controls its workflow UI; after-sales controls
+related navigation/inputs and new automatic POS/seller-order registrations. Existing
+service integrity protections, document authorization, source postings and history
+remain intact. See `ARCH-after-sales.md` for the component and lifecycle gates.
+
+`GET/PUT /api/settings/billing-preferences?document=invoice|sale` manages separate
+company defaults in existing GeneralPreference `invoices/defaults` or
+`sales/defaults`, with prior JSON retained under `defaults-backup`. GET returns
+`preferences`, `configured`, `canManage`, and invoice payment-term choices. PUT
+requires admin/manager/accountant, validates version-1 text limits (5,000/10,000),
+page size (3/5/10/20/30/40), summary visibility and company-owned invoice payment
+term IDs, then locks the authorized company and saves/backs up atomically. Company
+selection uses the authorized request header, never a body company ID. Generic
+preference writes cannot bypass this API. No schema changes or posting functions run.
+
 ### Company print designs
 
-`GET /api/settings/print-templates` returns version-1 templates and receipt/label default IDs for the authorized request company. `PUT` requires admin/manager and validates IDs, dimensions, element bounds, logo data and matching default kinds through `utils/print-templates.ts`. It updates only that company's existing preference namespace (`printer/templates`) and backs up the prior JSON under `printer/templates-backup` in one Prisma transaction. Limits: 12 templates, 40 elements each, 2 MB request JSON; logos are inline PNG/JPEG data URLs. No DDL or database schema changes. `GET /api/billSale/receipt` also returns `companyId` and `printTemplate` from the bill's owning company for consistent cross-store receipt rendering.
+`GET /api/settings/print-templates` returns version-1 templates and receipt/label default IDs for the authorized request company. `PUT` requires admin/manager and validates IDs, dimensions, element bounds, logo data and matching default kinds through `utils/print-templates.ts`. It updates only that company's existing preference namespace (`printer/templates`) and backs up the prior JSON under `printer/templates-backup` in one Prisma transaction. Limits: 12 templates, 40 elements each, 2 MB request JSON; images are inline PNG/JPEG data URLs after client normalization of PNG/JPEG/WebP uploads. Receipt JSON supports optional paperSize A4/A5/Letter and image placement flow/absolute; labels retain 100 x 150 mm limits. Sheet images are bounded to the first sheet. No DDL or database schema changes. `GET /api/billSale/receipt` also returns `companyId` and `printTemplate` from the bill's owning company for consistent cross-store receipt rendering.
 
 `GET /api/settings/label-variables` returns active product/variant custom-field picker definitions for the authorized request company. `POST` accepts up to 500 combined item IDs/barcodes and returns only the catalogue-selected label values. `server/utils/labelVariables.ts` scopes item, variant and product to the request company, discards foreign category/brand/collection/purchase relations, and derives the distributor through the company-linked purchase order. The routes are read-only; no schema changes.
 
@@ -95,8 +257,10 @@ it does not mount an Express app. No legacy accounting endpoint is redirected.
 | `manual-journals` | List, next number, source lookup, detail, create/edit/delete draft, approve/publish/reverse; `journals.ts` |
 | `account-transfers` | List, next number, create/edit/delete with source journals; `transfers.ts` |
 | `money` | Receive/pay options, list, immediate journal posting and reversal; `money.ts` |
-| `investors` | GET list with `asOf`, GET options, GET `users` (active company memberships with existing investor links), GET company `ledger`, GET/PUT `share-settings` (totalShares; manager/admin writes), POST profile (`userId` or `newUser` identity; existing roles preserved, fresh users get investor role), GET/PUT `:id`, POST `:id/terms`, PUT/DELETE `:id/terms/:termId` (audited corrections/deletions before posted allocations; manager/admin only; company totals revalidated), POST `:id/events`, POST `:id/reverse/:eventId`; `investors.ts`. Dated agreements and approved profit allocations require manager/admin; other operations retain the Accountant role gate. |
+| `investors` | GET list with asOf, options, users, ledger and :id (read-only ownership/event history); GET/PUT share-settings (includeShares, fixed totalShares; manager/admin writes). POST profile (userId/newUser, effectiveDate, optional requestId; ownershipPercent/profitPercent in percentage mode), PUT :id updates details/accounts and optional dated percentages. Share-mode profiles start at zero shares. GET :id/capital-preview accepts date, kind, amount for purchases or shareQuantity for redemptions, and pricePerShare + paymentStatus (PAID/DUE/PARTIAL with paidAmount) for a new share trade, or settleTradeId + amount for a due payment. GET :id/share-dues?asOf= returns trade value, paid, due and status. POST :id/events saves normalized previewHash, ownership and optional confirmed linked cash atomically; share trades require manager/admin. POST :id/reverse/:eventId reopens a due for payment reversals; trade cancellation restores units only after payments are reversed and dependency/allocation checks pass. Legacy initialAgreement and term mutation routes reject with replacement-flow instructions; historic terms remain readable. Share dues are distinct from old capital commitments. Share-only events have no journal; only confirmed settlements affect Capital. Summaries include shareCapitalDue/shareRedemptionDue. Creation/percentage edits validate tenant/company totals; existing roles and account mapping protections remain. |
 | `investor-profits` | GET `profit?periodFrom=&periodTo=`, POST `preview` (period + distributable), POST `approve` (period, distributable, date, previewHash, requestId, optional note), GET `history`, GET/PUT `settings` (accountId). Computes posted book profit and atomically allocates all active investor shares; `investor-profits.ts`. Approval/settings writes require manager/admin. Preview changes, missing/changing terms, overlapping periods and excessive amounts are rejected. This router has a 120-second transaction timeout for multi-investor batches. |
+| `account-settings/investment-defaults` | POST initializes missing investment and loan account defaults from standard company codes, creating missing accounts in company currency. Preserves valid custom defaults and existing investor mappings, audits account creation and configuration before/after, and posts no journals. Uses the accounting write gate, request transaction and company lock; GET options remain read-only. Investor creation also fills missing purpose defaults server-side. |
+| `loans` | GET list (readiness, currency and positions), GET `options`, POST `preview`, POST loan (immediately records receipt and opens the loan), GET `:id`, PUT `:id` (completes an older unposted draft and records its receipt on save), POST `post-due`, `pay`, `settle`, `reverse-payment`; `loans.ts`. Save/post/payment use the Accountant gate with no separate approval. Settlement and payment reversal require manager/admin. Legacy `:id/validate` and `:id/cancel` remain manager-only compatibility routes for old drafts. Cash requests and repeated saves are retry-safe. Company-locked writes have a 120-second timeout; GETs never post. Dedicated tables require `20261102120000_loan_management`; list returns `ready:false` until installed. |
 | `parties`, `projects` | Independent directory list/create; `directories.ts` |
 | `accountant-management` | Bootstrap, details/sub-accounts/activity/credits, templates, recurring profiles/generate/toggle, budgets/actuals, locks/unlock, openings, assets/categories/depreciation/disposal, currency drafts/publish, year-end journals, preferences, engagements and bulk account updates; `management.ts` |
 
@@ -112,6 +276,13 @@ models in `schema.zmodel`; generated CRUD denies all access to these models.
 See `ARCH-pages-accounts.md` for rollout boundaries, UI behavior, operational setup
 and verification. Existing sales, expenses, purchases, payroll and statements do
 not call this API during the independent adoption phase.
+
+`GET /api/cron/loans` requires the existing `CRON_SECRET` as a Bearer token
+(constant-time comparison, minimum 16 characters). The Vercel schedule is daily
+at 01:30 UTC. It discovers open loans in the configured schema and runs each loan's
+due charges/reclassifications/reversals in its company-locked transaction. It
+returns per-loan failures for review, never posts future entries, returns
+`ready:false` before installation, and performs no DDL.
 
 ### Prisma clients
 
@@ -221,6 +392,14 @@ Cash and bank ledger calculations. Auth via `useAuthSession`. Uses `pool` (raw S
 
 ## bill/
 
+Invoice issuance is an optional `payload.billingMode='invoice'` on `bill/create`.
+It requires a linked customer, positive total, full Credit tender, due date,
+optional `invoicePaymentTerms` and `subject` (customer reference), plus enabled ERP
+Accounting with an active receivable mapping. `invoice-flow.ts` validates these in
+the existing transaction, forces `BILL/PENDING` and writes the existing invoice
+fields. The update route preserves/validates invoice details for marked invoices.
+No schema/posting-function changes or payment creation occur during issuance.
+
 Billing (POS) operations. Core transaction routes.
 
 | Route | Method | Auth | Description |
@@ -233,13 +412,13 @@ Billing (POS) operations. Core transaction routes.
 | `bill/findBillCounter` | POST | session | Atomically increments `companies.bill_counter`, stores in session, returns value. **DEPRECATED / no longer called** by `billing.vue` — invoice numbers now come from the `bills` BEFORE INSERT trigger (`trigger_generate_invoice_number`). Endpoint left in place but unused. |
 | `bill/by-barcode` | GET | session | Barcode lookup for billing page: `?barcode=`. Returns `{ id, size, qty, variant: { id, name, sprice, product: { name, categoryId } } }` or null. Uses raw SQL |
 | `bill/findFirstItem` | GET | session | Full barcode scan for POS: `?barcode=`. Returns item with variant + category tax config (taxType, fixedTax, thresholds). More detailed than `by-barcode` |
-| `bill/searchItems` | GET | session | Quote item typeahead: `?q=&limit=3`. Raw SQL search over in-stock item barcode, product name, variant name, and subcategory name for the current session company. Returns Prisma-like item rows with variant, product, category, barcode, size, qty, and prices |
+| `bill/searchItems` | GET | session + selected company access | Quote item typeahead: `?q=&limit=3&field=all`. Field accepts all/barcode/product/variant/brand/category/subcategory/collection. Specific fields match only their name/barcode; Brand matches product and variant brands. All combines them with barcode-first ranking. Positive stock and active product/variant required; catalog joins are company-scoped. Returns Prisma-like item rows plus variant/product brand and product collection names. Limit is a positive integer capped at 10; unknown fields return 400. Uses `server/utils/quote-product-search.ts`. |
 | `bill/redeemClientPoints` | POST | — | Redeem or revert client loyalty points. Body: `{ companyId, clientId, points, mode: 'redeem'\|'revert' }`. `redeem` uses `AND points >= $3` guard. Returns updated `points` |
 | `bill/findManyAccount` | GET | — | Lists accounts for company: `?companyId=` returns `[{ id, name, phone }]`. With `includeUsers=true`, returns grouped selector rows with account ids prefixed as `account:<id>` and staff ids as `user:<userId>`; user labels include `Name (code)` so code search works in POS/edit account selector. |
 | `bill/findManyCategory` | GET | — | Lists active categories: `?companyId=`. Returns `[{ id, name, hsn }]` |
 | `bill/findManyCoupon` | GET | — | Active coupons for company (within valid dates, `isActive=true`): `?companyId=`. Returns full coupon including `giftBarcode`, with `clients[]` from `coupon_clients` (each row includes `usageLimit` for generated-voucher remaining balance) and `used_clients[]` from `coupon_usages` |
 | `bill/findUniqueClient` | GET | session | Client lookup by phone: `?phone=`. Returns `{ id, name, email, phone, companies: [{ points }] }` or null |
-| `bill/findManyClient` | GET | session | Client lookup suggestions for billing/edit: `?q=`. Raw SQL over `clients` + `company_clients`, matches company-linked clients by `name ILIKE` or normalized phone digits, returns up to 5 rows ordered with exact name/phone matches first. Response shape: `[{ id, name, phone, email, points }]` |
+| `bill/findManyClient` | GET | session | Client lookup for billing/edit and after-sales. An omitted/blank `q` lists the first 20 company-linked, non-deleted clients by name; `?q=` searches name or normalized phone digits, returning up to 5 rows with exact matches first. Raw SQL joins `clients` + `company_clients`, scoped through the authenticated company request context. Response shape: `[{ id, name, phone, email, points }]` |
 
 ---
 
@@ -256,6 +435,52 @@ Bill edit page data helpers.
 ---
 
 ## billSale/
+
+`POST /api/billSale/findManyBills` powers the unified Sales table. Optional
+`salesView=all|paynow|invoices|unpaid` (default all) uses `server/utils/sales-view.ts`
+to filter both paginated rows and matching totals. `dateFilter=all|range` defaults
+to range, preserving older/online callers. All skips issue-date filtering and uses
+all dates for the independent collection total. Rows include due/terms/subject,
+amountReceived, balanceDue, overdue and sendStatus. Totals additionally include
+received/balance/overdue. Collections remain independent of tab and sales filters.
+Invoice-code/subject/customer nonnumeric searches are parameterized; sorts are
+allowlisted, including due date and receipt-derived received/balance. No source,
+stock, journal or schema writes occur. `billSale/invoices` remains available for
+the payment and retainer pickers; its separate page redirects to unified Sales.
+
+| Route | Method | Description |
+|---|---|---|
+| `billSale/invoices` | GET | Authorized table-company scope; `q`, `state` (unpaid/partial/paid/overdue), issued `from`/`to`, `min`/`max` total, `page`, `pageSize`, allowlisted `sort` and `order`. Returns `{rows,total,summary}` with invoice/customer/due data, receipt-derived balances and sending status. `collectible=1` additionally includes outstanding legacy customer Credit/Split bills for the payment picker. Staff/marketplace/deleted/cleanup-hidden sources are excluded. |
+| `billSale/payments` | GET | Authorized company receipt history with `q`, optional payment `from`/`to`, `min`/`max` amount, receipt `status`, `page`, `pageSize`, allowlisted `sort` and `order`. Returns `{rows,total,summary}`; active/reversed receipts retain receiving account/method/date and references. Summary received/count exclude reversed receipts; reversed amounts have their own total. |
+
+`server/utils/invoice-lists.ts` builds these SELECTs. `receiptData.ts` enriches
+marked invoice documents with terms/reference, due date and current balances.
+Bill source create/update also persist the existing numeric `adjustment` field;
+invalid signed amounts reject. Update preserves it when omitted. Bill edit and
+receipt reads return it independently of `discount` / `discountType`, and receipt
+reads preserve historical surcharge semantics.
+Saved receipt data includes coupon value, redeemed points, current available client
+points, unit visibility from the owning company's variant inputs, entry sizes and
+return flags, and generated vouchers scoped to the bill's company/client. Signed
+receipt row/totals mapping is shared with billing and bill edit. The Subject caption
+is used consistently in invoice document footers.
+Bill create/update also save existing `notes` / `terms_and_conditions` fields after
+shared text validation (5,000 / 10,000 characters). Update preserves either field
+when omitted. Bill edit reads, sales rows and receipt data return both fields; this applies to
+ordinary bills and invoice mode. Quote preferences persist independent text-retention
+booleans in their existing defaults JSON, and conversion copies only selected text
+to draft/issued invoice snapshots and Bill fields. Email uses the issued Bill text.
+`server/utils/document-list.ts` validates paging (pageSize defaults to 20, maximum
+500 for exports), dates, amount bounds and sort options. Filters precede sorting
+and pagination; summary amounts cover the complete filtered result. India-day
+boundaries apply to invoice/payment timestamps. Quote list uses `quote-list.ts`
+with the same controls and `{rows,total,summary}` response, plus quote status and
+date-only quote dates; it retains its single owning-company scope.
+`whatsapp/send-payment-template` records accepted/failed invoice sends in the
+existing audit table (`resource='invoice-send'`, owning bill `resourceId`). Its
+delivery status is separate from payment state. If provider acceptance succeeds
+but audit recording fails, the response stays successful with `trackingWarning`;
+it never reports an accepted send as failed or creates a payment.
 
 Sales list page operations.
 
@@ -278,6 +503,7 @@ behavior is preserved. In-memory regression coverage:
 | `billSale/deleteBill` | POST | Soft-delete bill and reverse stock/loyalty/coupon/staff-credit effects in one transaction: `{ billId, companyId }`. Returns `invoiceNumber`; already deleted returns 404. |
 | `billSale/restoreBill` | POST | Restore a deleted bill from `/saleshistory`: `{ billId, companyId }`. Re-applies stock/loyalty/coupon/staff-credit effects in one transaction and returns `invoiceNumber`; an active or missing bill returns 404. |
 | `billSale/receipt` | GET | Print data for a bill receipt: `?id=`. Returns formatted print payload with entries, company info, totals, UPI ID, GSTIN, tqty/tvalue/ttvalue/tdiscount. **Bug:** `console.log('SALE ENTRIES:', sale.entries)` |
+| `billSale/history` | GET | `?id=&page=1` returns `{rows,total,page,pageSize:20}` for the Sales detail panel. Authorizes the bill against `getReadCompanyIds` before reading snapshots; ordinary sessions exclude precedence-marked bills/history. Rows expose snapshot ID/data/operation/changedAt and sort by changedAt DESC, ID DESC. Bill validation, count and page share a repeatable-read read-only transaction. Invalid pages return 400; absent/out-of-scope bills return 404. No schema changes or writes. |
 | `billSale/updateBillNotes` | POST | Update bill notes: `{ billId, companyId, notes }` |
 | `billSale/updatePaymentStatus` | POST | Scoped non-credit status correction; preserves `created_at`. Credit settlement returns 409 and directs to dated receipts. Active receipts block changing/reopening the bill; unchanged status is a no-op. |
 | `billSale/share-receipt` | POST | Authenticated, authorized bill/company lookup; issues a 30-day HMAC receipt link without database writes. |
@@ -328,9 +554,63 @@ Store frontend cart persistence (customer-facing e-commerce).
 
 ---
 
+## sales-orders/
+
+Authenticated, selected-company ERP source routes; writes use the same staff roles
+as quote source APIs. GET list accepts q/status/from/to/min/max/page/pageSize and
+allowlisted orderNumber/orderDate/clientName/expectedShipmentDate/status/total sorting.
+GET `sales-orders/:orderId` reads one consistent document/design snapshot. POST creates,
+PUT `:orderId` updates with requestId/revision, and DELETE soft-deletes orders without
+linked invoices. Creation reserves existing company numbering; all writes validate
+owned customer/variants and compute totals. No bills, stock, receipts or journals are
+created. Canonical fields include orderDate/expectedShipmentDate/deliveryMethod plus
+customer, subject, staff, notes/terms, discount/adjustment and quote-compatible lines.
+
+GET/PUT `sales-orders/preferences` manage independent sales-orders/defaults company
+JSON with the prior value backed up. Management roles alone save settings. The shared
+A4 design schema, notes/terms/visibility and terminal-order editing policy apply;
+quote approval/conversion fields have no sales-order workflow. Per-order metadata
+uses existing GeneralPreference sales-orders/document:<id> keys. Generic SalesOrder/
+SalesOrderItem and this preference namespace cannot bypass the source APIs. Delete
+rejects live Bill links or invoiced=true. No schema or function installation occurs.
+
+## quotes/
+
+The ERP quote page uses the existing quote models through company-authorized raw-pg
+routes and `server/utils/erp-quotes.ts`. GETs require an authenticated session and
+company access; writes additionally allow admin/manager/accountant/biller/user roles.
+Selected customers must be linked to that company and linked variants must belong to it.
+
+| Route | Method | Description |
+|---|---|---|
+| `quotes` | GET | Selected company list. `q`, optional `status`, quote `from`/`to`, `min`/`max` total, `page`, `pageSize` (default 20, max 500), allowlisted `sort`/`order`; `{ rows, total, summary }`. Searches quote number, subject, reference and live/snapshotted customer name/phone. Excludes deleted quotes. |
+| `quotes` | POST | Creates a validated quote and lines. Requires `requestId`; assigns a company-counter number in the source transaction. Returns `{ id, quoteNumber, revision, workflow }`; ACCEPTED can trigger configured invoice conversion. |
+| `quotes/:quoteId` | GET | Company-owned quote, ordered lines, customer snapshot, quote pricing metadata and current company `documentDesign`, read together in a repeatable-read, read-only transaction. |
+| `quotes/:quoteId` | PUT | Requires the last `revision` and a fresh `requestId`; validates/replaces lines and recomputes totals atomically. Preserves unrelated custom-value JSON and fields outside this editor. Stale revisions return 409. |
+| `quotes/:quoteId` | DELETE | Sets `deleted=true` only for the selected company's quote; retains source rows. |
+| `quotes/preferences` | GET/PUT | Authorized company preferences. GET returns `{preferences,canManage}`; PUT requires admin/manager/accountant, validates A4 documentDesign/booleans/text/conversion/due days (2 MB JSON request limit) and backs up/upserts GeneralPreference JSON (`quotes/defaults`). |
+| `quotes/:quoteId/share` | POST | Authorized repeatable-read snapshot; returns a 30-day signed revision-bound `/quote/:token` path for manual sharing. No message is sent and stored status is unchanged. |
+| `quote-share` | GET/POST | Public bearer-token read/response. GET returns only quote/company/response availability. POST accepts token and ACCEPTED/DECLINED; validates current revision, enabled policy/status and expiry under company/quote locks. Records a final response and invokes acceptance conversion. Same-decision retries are idempotent. |
+| `quotes/:quoteId/workflow` | POST | Authorized quote writer; `{action:retry\|issue\|email}` retries conversion, issues a current quote-backed invoice draft or retries invoice email. Returns `{success,workflow}`. Errors remain visible and cannot create a second linked invoice. |
+
+POST/PUT accept `clientId`, `quoteDate`, optional `expiryDate`, `referenceNumber`,
+`subject`, `salesperson`, `status`, `notes`, `termsAndConditions`, `paymentTerms`,
+`deliveryEstimate`, `discount`, `discountType` (`amount`/`percent`), `adjustment`,
+optional legacy `pdfTemplate` (classic/modern/compact, retained for compatibility), boolean `hideZeroValueItems`, and
+1–200 items. Each item has a unique client line `id`, optional `variantId`,
+`name`, `description`, `barcode`, `size`, `unit`, `quantity`, `rate`, `discount` and
+`tax`. Rates include tax; discounts are percentages per line. The server calculates
+line amounts and document totals and stores extra pricing details under `_erpQuote`
+in existing `quote_custom_field_values.field_values`. These routes never create
+database objects. Acceptance conversion can invoke the existing bill source, stock
+and native posting; it never records payment. Drafts stay in quote workflow metadata
+and are listed with `GET quotes?drafts=1` until issue. The shared source-request
+audit receipt makes unchanged retries idempotent. Generated model writes cannot
+bypass quote source or preference APIs.
+
 ## Removed document APIs
 
-The 2026-06-15 cleanup moved the former `general-preferences/`, `quotes/`, `sales-orders/next-number`, `invoices/next-number`, and `payments/next-number` route files out of active `storetools/server/api/`. Storetools no longer exposes active Nuxt API routes for the removed settings preferences, quotes, sales orders, service invoices, or received-payment document pages.
+The 2026-06-15 cleanup moved the former `general-preferences/`, `quotes/`, `sales-orders/next-number`, `invoices/next-number`, and `payments/next-number` route files out of active `storetools/server/api/`. The dedicated ERP quote routes now implement persistence, preferences and workflows. The old generic preferences, service-invoice and received-payment document APIs remain removed; dedicated sales-order source APIs now implement the ERP order module; current customer receipts use the separate billSale receipt APIs.
 
 ---
 
@@ -515,7 +795,7 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `dashboard.get` | GET | session | **Legacy dashboard** — fetches all data via Prisma (products, items, variants, bills+entries+expenses) and computes everything in JS. Returns 20+ computed fields. Deprecated in favor of `lib/api/useDashboardData.ts` ZenStack hooks. **Bugs:** `console.log("here")`, date filter uses `new Date(undefined)` if no query params |
 | `gemini.js` | POST | — | **Cloudflare Worker** source file (not a Nuxt route). HMAC-signed upload secret auth, calls Gemini 2.5 Flash, stores AI image to R2 |
 | `gettax.get` | GET | session | Returns company categories with tax config: `{ id, shortCut, fixedTax, taxBelowThreshold, taxAboveThreshold, thresholdAmount, taxType }` |
-| `getuser.get` | GET | — | Returns company users: `?companyId=`. Maps `CompanyUser` + `user.email/image`. **Bug: no auth check** — any caller can enumerate company users |
+| `getuser.get` | GET | session/company access | Requires `assertCompanyAccess(event, companyId)`; returns active, nondeleted company users whose User is not cleanup: `?companyId=`. Maps `{id,code,name,email,image}` from CompanyUser + User. Used by userStore and quote Prepared by; no users returns 404. |
 | `item.post` | POST | session | Create initial items for company-owned variants without existing items. `{ variants }` seeds `initialQty = qty`, `soldQty = 0`. Locks variants and writes in one serializable transaction. Existing items return 409 directing callers to product edit, preserving barcodes and sales history. |
 | `items/findFirst` | GET | session | Find item by `?sPrice=&categoryId=`. Used for manual price entry in billing. Returns item + variant + category tax |
 | `mails.ts` | GET | — | Returns hardcoded mock mail data (Nuxt UI template stub, not in use) |
@@ -524,7 +804,7 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `savefcmtoken.post` | POST | session | Register/update web FCM push token: `{ fcmToken, deviceId, deviceInfo? }`. Derives userId from the authenticated session, ignores body userId, validates nonempty token/device strings, and atomically upserts `PushToken` by `userId_deviceId`. Returns `{ success: true }`; missing auth is 401 and invalid fields are 400. |
 | `savecaptoken.post` | POST | — | Register/update Capacitor native push token: `{ token, userId, companyId, deviceId, deviceInfo? }`. Upserts `CapPushToken` |
 | `secret.ts` | GET | session (requireAuth) | Auth test endpoint. Returns email from session. Not used in production |
-| `send-otp.ts` | POST | — | Send OTP to email: `{ email }`. Generates 6-digit OTP, stores in `EmailOtp` with 10min expiry, sends via Gmail SMTP (`utils/mailer`) |
+| `send-otp.ts` | POST | — | Send OTP to email: `{ email }`. Generates 6-digit OTP, stores in `EmailOtp` with 10min expiry, sends via SMTP configured by `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, and `SMTP_PASS` (`utils/mailer`). Port 465 uses implicit TLS. |
 | `verify-otp.ts` | POST | — | Verify email OTP: `{ email, otp }`. Checks expiry, validates match, deletes record on success |
 | `shopifyRegister.post` | POST | — | Shopify login: `{ email, password }`. Looks up user by email, compares hashed password. Returns `{ companies }`. **Bug:** references undefined `shopifyLogin` function (should be `import { shopifyLogin }`) |
 | `shopify/shopifyProduct` | POST | session | Create product on Shopify: `{ productData }`. Uses `session.shopifyAccessToken`. Hardcoded to `bazaartests.myshopify.com` |
@@ -536,8 +816,12 @@ Per-distributor and per-PO PDF/Excel export endpoints. All auth via `useAuthSess
 | `upload.ts` | POST | — | **Main image upload handler** (fire-and-forget). Accepts `{ base64, key, isAiImage?, view?, categoryName?, targetAudience? }`. Responds immediately with `{ received: true }`, then processes in background via `setTimeout`. Background: if `isAiImage=true`, sends to Gemini (3 retries), resizes to 1024×1024 WebP, uploads to R2. If `isAiImage=false`, uploads original directly |
 | `whatsapp/send-payment-template` | POST | — | Send WhatsApp invoice notification with a stored PDF link. Body: `{ phone, name, billName, amount, paymentDate, receiptId, companyId }`; receiptId is the signed PDF path suffix returned by share-receipt. Requires company access and a matching signed bill/document token. Uses `invoice_1` template via Facebook Graph API v25.0. Env: `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN` |
 | `whatsapp/send-coupon-message` | POST | — | Sends a free-form WhatsApp text message for earned generated coupons after receipt send. Body: `{ phone, name, companyName, coupons[] }`. Includes coupon numbers/details; barcode image sending requires a hosted media/template flow and is not implemented here. |
-| `whatsapp/send-pending-template` | POST | — | Send WhatsApp pending invoice reminder. Body: `{ phone, name, billName, amount, dueDate, receiptUrl, paymentUrl }`. Uses `pending_invoice_1` template via Facebook Graph API v25.0. Two URL buttons: receipt link + UPI payment link. Phone auto-prefixed with `91`. Env: `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN` |
-| `whatsapp/webhook` | GET/POST | — | WhatsApp webhook. GET: verification (hardcoded `VERIFY_TOKEN = 'markit123'`). POST: handles incoming text, voice note, image, and PDF messages, resolves sender phone to `CompanyUser`, routes the session through Gemini + MCP, and sends the AI reply back to WhatsApp. **Bug:** verify token hardcoded |
+| `whatsapp/send-pending-template` | POST | — | Legacy pending reminder. Body: `{ phone, name, billName, amount, receiptId }`. Uses `pending_invoice_1` via Facebook Graph API v25.0, with one dynamic URL button supplied by receiptId. The current route does not send a separate UPI button. Phone auto-prefixed with `91`. Env: `WHATSAPP_PHONE_ID`, `WHATSAPP_TOKEN`. Separate from company-owned notification automation. |
+| `whatsapp/webhook` | GET/POST | — | Legacy shared-sender WhatsApp AI webhook. GET: verification (hardcoded `VERIFY_TOKEN = 'markit123'`). POST: handles incoming text, voice note, image, and PDF messages, resolves sender phone to `CompanyUser`, routes the session through Gemini + MCP, and sends the AI reply back to WhatsApp. **Bug:** verify token hardcoded. Separate from the new tenant Connect webhook. |
+| `connect/whatsapp/:action` | GET/POST/PUT/DELETE | Company admin/manager | Company-scoped Embedded Signup/code exchange, connection lifecycle, template management, messaging, history, number registration and profile management. Methods depend on action. No runtime DDL. See `ARCH-connect-whatsapp.md` for contracts, required secrets and the prepared-only migration. |
+| `connect/whatsapp/webhook` | GET/POST | Meta challenge / HMAC | Separate tenant webhook; validates raw-body signature, resolves active WABA + phone to one company, deduplicates inbound messages and ingests delivery receipts. No shared-number AI invocation. |
+| `whatsapp-notifications/:action` | GET/PUT/POST | Company admin/manager | `settings` GET/PUT; `contacts` GET/POST; `installations` GET/POST; `queue` GET; `process` POST. Authorizes selected company and same-origin writes, requires prepared notification tables, validates template ownership and client permissions. Processing may send real approved templates. See `WHATSAPP-NOTIFICATIONS.md`. |
+| `cron/whatsapp-notifications` | GET | CRON_SECRET bearer | Five-minute committed-state scan and bounded delivery of enabled active companies. Missing setup returns readiness false. No source business writes or runtime DDL. |
 | `statement/_helpers.ts` | — | — | Shared module: `fetchCompanyContext`, `classifyRow` (Gemini AI with DB context), `executeOperation` (INSERT using meta UUIDs), `deleteExecutedRecord`, `upsertMapping`, `parseMeta` |
 | `statement/banks.get` | GET | session | Lists active native BANK accounts owned by the authenticated company. Statement selection never writes a native ID to the legacy batch bank foreign key. |
 | `statement/upload.post` | POST | session | Upload bank statement (base64 PDF/image). Extracts rows via Gemini `gemini-3-flash-preview`, saves batch + rows, auto-matches mappings (30% keyword overlap). Body: `{file, mimeType, fileName?, bankAccountId?}`. Returns `{batchId, rowCount, matched, unmatched}` |

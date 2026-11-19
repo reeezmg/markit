@@ -1,5 +1,33 @@
 ### ERP (`/erp`)
 
+The user-facing sidebar group and navbar are labeled **Sales**. Existing `/erp/*`
+routes remain, including `/erp/settings` for sales accounts, printer settings,
+numbering and the shared sales/invoice/quote/sales-order preference editors. See
+`ARCH-pages-settings.md` for settings behavior and company scoping.
+
+After-sales registration is part of the bill source transaction for products with
+linked configurations. With after-sales enabled, billing requires a customer and
+shows a unit-details icon beside each row's Delete action, including mobile cards.
+The modal captures optional serial, delivery and installation dates for each covered
+unit; returns select exact registered units there. There is no serial-number column
+or standalone registration panel. Confirm stages the modal values on draft rows;
+Cancel leaves the draft unchanged. Saving the bill maps them to the existing
+per-unit payload. Ecommerce delivery remains order/carrier-owned. Invoice edits
+require removed unit IDs for quantity reductions, product changes or customer
+corrections, and link to service history. Returned/replaced units retain their original
+quantity slots so later source edits cannot silently recreate coverage. Explicit
+service-job invoicing uses the existing unpaid invoice flow; completion alone never
+collects money. See `ARCH-after-sales.md`.
+
+Completed service visits/resolved claims support named labour/other charge lines plus
+regular and service product parts. Explicit conversion opens the existing invoice
+editor for payment/print/share. Service invoices can total zero (including free stock
+parts); ordinary invoice issuance retains its positive-total rule. Only the internal
+service source option or a verified existing service-invoice link permits zero.
+After saving a completed visit/resolved claim, the service product page asks whether
+to create its invoice. Create invoice opens billing; Later leaves the saved job
+available for invoicing afterward. Saving alone does not issue an invoice or payment.
+
 Head-office administration uses local table filters or form company fields across
 billing/sales/expenses, products/purchases, suppliers, staff, clients, coupons,
 reports, Accountant and Investments. Settings now retains its own `entryCompany`
@@ -125,6 +153,7 @@ Head-office admins default to the active head office plus active direct branches
 **Files:**
  - `pages/erp.vue` — Parent ERP shell with `UDashboardPage`/`UDashboardPanel`; exact `/erp` path redirects to `/erp/billing`
 - `pages/erp/billing.vue` — Main POS billing page (~1,700 lines; coordination layer only)
+- `pages/erp/quotes/index.vue` — Saved quotes table; `add.vue` and `edit/[quoteId].vue` use the shared quote editor
 - `pages/erp/sales.vue` — Sales list with print/edit/delete
 - `pages/erp/expenses.vue` — Expense management
 - `pages/erp/accounts.vue` — Credit accounts (B2B) with bills
@@ -159,7 +188,7 @@ Head-office admins default to the active head office plus active direct branches
 | `/api/bill/findManyAccount` | GET | Raw SQL | List credit accounts; with `includeUsers=true`, returns account/user selector options for POS credit billing |
 | `/api/bill/createAccount` | POST | Prisma | Create a new credit account |
 | `/api/bill/findFirstItem` | GET | Raw SQL (pg pool) | Fetch item by barcode for billing, including zero/negative stock items |
-| `/api/bill/searchItems` | GET | Raw SQL (pg pool) | Suggest in-stock items by barcode, product name, variant name, or subcategory name; returns up to `limit` Prisma-like item rows for quote item typeahead |
+| `/api/bill/searchItems` | GET | Raw SQL (pg pool) | Quote product suggestions from the selected company: `q`, `field` (all/barcode/product/variant/brand/category/subcategory/collection), and `limit`. All includes each supported field; specific fields restrict matching. Returns in-stock active product/variant rows with tax, brand and collection metadata. |
 | `/api/bill/redeemClientPoints` | POST | Raw SQL (pg pool) | Redeem or revert loyalty points |
 | `/api/bill/by-barcode` | GET | — | Lookup by barcode (not read) |
 | `/api/billSale/findManyBills` | POST | Raw SQL (pg pool) | Paginated bill list for sales page. Supports: `selectedPaymentMethods[]`, `minGrandTotal`, `maxGrandTotal` filters. Reads `cleanup` from session and the cleanup-only `showCleanedValues` body flag: normal users always exclude soft-deleted bills (`precedence IS NOT TRUE`); cleanup users with the toggle off see original cleanup values plus `precedence=true` rows; cleanup users with the toggle on see current cleaned values and exclude `precedence=true` rows. Returns `b.precedence` in SELECT. |
@@ -168,7 +197,7 @@ Head-office admins default to the active head office plus active direct branches
 | `/api/billEdit/findUniqueBill` | GET | Raw SQL (pg pool) | Fetch full bill for edit page |
 | `/api/billEdit/deleteBill` | POST | Raw SQL (pg pool) | Soft delete bill |
 | `/api/billEdit/findEntriesToDelete` | POST | — | Find entry IDs to remove during edit |
-| `/api/billEdit/updateBillNotes` | POST | — | Update bill notes |
+| `/api/billSale/updateBillNotes` | POST | — | Legacy single-field bill notes update |
 | `/api/billEdit/updatePaymentStatus` | POST | — | Update payment status |
 | `/api/discount/apply` | POST | Raw SQL (pg pool) | Bulk apply discount% to variants |
 | `/api/accounts/expenses` | GET | Raw SQL (pg pool) | List expenses with search (note/category/user name via JOINs), status/paymentMode/category/user/amount/date filters, whitelisted sort columns (incl. nested `expensecategory.name`/`user.name`), pagination. Returns `{ rows, total }`. Rows shaped with nested `expensecategory {id,name}` + `user {userId,name,phone}` and `createdAt`. |
@@ -191,6 +220,158 @@ Head-office admins default to the active head office plus active direct branches
 
 #### `pages/erp/billing.vue` — POS Billing
 
+**Pay now / Invoice:** A single billing mode selector appears at the far right of
+the ERP navbar on desktop and mobile, after the company selector. The billing page
+owns it and teleports it into `ErpPageNavbar.vue`'s `page-navbar-actions` target
+after hydration.
+When **Enable invoicing workflow** is off for the billing company, this selector
+is hidden and Billing stays in Pay now mode. The page waits for the company workflow
+setting before initializing billing. Restored Invoice preferences and invoice-mode
+links cannot switch it to Invoice; draft items and custom notes are retained.
+Invoice hides tender and B2B/staff account controls, requires a linked customer and
+positive total, and captures due date, payment terms and an optional Subject.
+Invoice details persist per company-local draft. The selected mode is a company-local
+preference in `markit_billing_mode:<companyId>` and survives Save, reset, new drafts,
+draft switching, navigation and refresh until explicitly changed. On first use,
+the first saved draft supplies the mode when no preference exists. Invoice drafts
+load with Credit and default due date/terms when Invoice is selected; selecting Pay
+now restores tender controls. `/erp/invoices` links to
+`/erp/billing?billingMode=invoice`, preserving a single selected company through
+`entryCompany`. The billing-mode query is consumed with a router replacement after
+applying it, so refreshing cannot override a later manual selection. The billing
+card and navbar mode selector are disabled during save.
+
+Invoice and Sales table Preference buttons open `Billing/Preferences.vue`, a right
+drawer matching the quote preferences layout. Separate company defaults include
+customer notes, terms and conditions, rows per page and summary-card visibility;
+invoice preferences also select a preset/company-saved payment term. Receipt design
+opens the owning company's Printer settings in a new tab. In a branch-filtered
+table, preferences target that single branch; the all-stores view targets the active
+company, identified in the drawer. Admin/manager/accountant roles can save; other
+authorized users can view. Cancel discards unsaved edits and failed saves retain them.
+
+Billing loads both document defaults before creating its draft state. New/reset
+drafts adopt the selected mode's notes/terms; new invoice terms calculate the due
+date from the invoice day. Mode changes replace untouched default text while
+preserving entered text and existing invoice terms. Existing drafts and issued bills
+are unchanged. Company row defaults apply when opening/reloading table preferences;
+unconfigured Sales defaults preserve existing locally saved page size/pagination.
+Column choices, filters and sort controls retain their existing persistence.
+`npm run test:billing-preferences` checks permission/storage/draft contracts,
+Sales hydration, and drawer save/cancel/failure/read-only behavior in Chrome.
+
+On desktop, Payment terms and Due date occupy the second footer row
+below Total and the return/redeemed amounts. Delete and Return sit directly below
+them, aligned with Create invoice. Both billing toolbars show the invoice date
+without a visible label, retaining its accessible name. Due date retains its minimum
+invoice date and save lock. Subject sits at the far right of the Qty footer row on
+desktop and mobile, with placeholder "Let your customer know what this invoice is
+for"; it uses the existing draft reference binding and saved `subject` field. Mobile
+keeps payment terms and due date in the header detail section and hides that section's
+reference field. Desktop omits this header detail row entirely; the customer-selection
+and unpaid-invoice helper message is removed. Bill edit uses the same placement:
+desktop payment terms/due date in the footer, mobile details in the header, and
+Subject at the right of the Qty row. `Billing/InvoiceDetails.vue` still defaults to
+showing all fields for other callers.
+
+`Billing/PaymentTerms.vue` replaces the invoice payment-term text box on desktop,
+mobile and bill edit with a searchable dropdown: Due on Receipt, Due end of the
+month, Due end of next month, Net 15/30/45/60, company-saved terms and Custom. The
+footer action New Payment Term opens a Term Name / Due After (Days) modal with
+Save and Cancel. Saving a named term selects it and calculates the due date from
+the invoice day. Day and month-end rules use calendar dates, including leap years
+and year boundaries. Invoice-date changes update a rule-calculated due date;
+manual date overrides and legacy free-text terms remain editable through Custom.
+Incomplete native date edits do not discard the last valid invoice day.
+Billing and `InvoiceDetails.vue` explicitly import this control so rendering does
+not depend on Nuxt component discovery. The footer browser check mounts the real
+control and verifies its visible trigger, term selection and new-term modal with
+mocked settings requests.
+
+`GET/POST /api/settings/payment-terms` stores named terms in the owning company's
+existing GeneralPreference `billing/payment-terms` JSON, with the preceding value
+in `payment-terms-backup`. Company locks serialize additions and case-insensitive
+duplicates (including preset names) reject. Billing roles can create terms. Names
+are 1–100 characters and Due After is a whole number from 0 to 3650. Failures retain
+the modal's entered values. Invoices retain their existing text/date snapshot;
+adding a term does not change issued invoices or create database schema objects.
+
+Invoice uses the same numbered `BILL` source and stock/posting transaction, forcing
+`Credit` / `PENDING`. Existing `invoice_code` stores `INV-<invoice_number>`;
+`due_date`, `invoice_payment_terms` and `subject` hold the entered details (subject
+is the customer reference). `server/utils/invoice-flow.ts` validates membership
+and enabled ERP Accounting with an active receivable mapping before issuance.
+No schema/setup/history import runs. Generic model writes cannot bypass invoice
+validation. Edit loads/preserves these fields; active receipts still block edits.
+
+The desktop and mobile footer Create invoice button uses the same green split-button
+layout and persisted Print / Send / Download / None receipt selection as Pay now's
+Save button. Invoice creation executes the selected receipt action. The separate
+header row of create actions and invoice/payment links is removed. Send/upload/
+download failure leaves the saved invoice available in the action dialog and invoice
+list. Retrying Send shares the saved bill rather than creating another. Sending
+never changes the payment status or creates a receipt.
+
+Billing's ellipsis menu opens `Billing/NotesModal.vue` with only Customer notes and
+Terms and conditions. These values persist per company-local draft, survive draft
+switching and are cleared for new/reset bills. Save stores them in existing Bill
+`notes` / `termsAndConditions` fields; edit loads and updates them through the same
+two-field modal. Server writes validate text limits (5,000 / 10,000 characters), and
+omitted edit fields preserve saved values. Receipt reads, preview, custom designs,
+original PDF and printer output include both through `billDocumentLines`.
+
+`/erp/sales` is the unified Sales table for Pay now bills and invoices, with All sales,
+Pay now, Invoices and Unpaid / overdue tabs. `/erp/invoices` redirects there with
+`view=invoices`, retaining other query values such as `entryCompany` and `q`; its
+separate sidebar link is removed. Invoice views add due date, payment terms, subject,
+received, balance, overdue and sending status, and reuse the sales payment/receipt
+actions. Invoice Send/Resend/PDF loads the saved owning-company receipt; it never
+creates another bill. `/erp/payments` retains `Billing/InvoiceWorkspace.vue` with a
+table company scope and only Record payment in the header. Recurring and retainer
+pages remain separate workflows.
+
+Payments received lists date, invoice, customer, amount, method, receiving account,
+reference and Received/Reversed status. Its picker searches outstanding customer
+credit invoices, including legacy Credit/Split bills; staff debt stays in Staff
+Accounting. Payment history reuses dated reversals. Collections/reversals do not
+repeat sale/stock effects. Outstanding derives from active `POS_CREDIT_RECEIPT`
+rows and original tender, never the legacy `balance_due` cache.
+
+Quotes and Payments received use `components/Erp/DocumentTable.vue` for
+the Sales-style summary cards, card header/date picker, debounced search, rows per
+page (3/5/10/20/30/40), column picker, Download, Filters/Reset, selectable rows and
+Showing/pagination footer. Row actions use three-dot menus. Column choices restore
+after mount from per-page/company browser storage. Status and amount filters use
+draft/apply controls; filters and sorting reset to page 1. All dates is the initial
+range. Invoice dates and payment dates use India-day boundaries; quote dates are
+date-only. Summaries cover all matching rows, not just the current page. Payment
+Received totals exclude reversed receipts, which have their own total.
+
+`server/utils/document-list.ts` validates dates, amount bounds, allowlisted sort
+keys/directions, page and pageSize (1–500). `quote-list.ts` and `invoice-lists.ts`
+filter before pagination and return rows/total/summary in one SQL statement.
+`utils/erp-document-table.ts` snapshots filters for full filtered exports in
+500-row requests; selected rows export instead when selection is present.
+`utils/erp-document-export.client.ts` exports the visible data columns to PDF or
+Excel, excluding action controls. Requests capture the selected company scope.
+`npm run test:erp-tables` (`tests/erp-document-tables.test.ts`) covers parameter validation and export paging;
+its opt-in `INVOICE_READONLY_DATABASE=1` check executes SELECTs in a read-only
+transaction. The quote browser regression exercises shared table controls and
+existing edit/print/delete behavior. No table schema changes are involved.
+
+Invoice documents include due date, terms, reference, received and balance through
+`utils/invoice-flow.ts`. Every custom design appends that summary; original HTML/PDF
+fallbacks include it too. UPI requests use the outstanding amount and disappear
+after full settlement. Uploaded PDFs remain snapshots; regenerate to share an
+updated balance. Sending status is provider acceptance, not delivery/read confirmation.
+
+`npm run test:invoices` covers isolated type checks and mocked invoice creation,
+drafts, resend, rendered balances/UPI, partial/full/reversed payments and source
+guards. Set `INVOICE_READONLY_DATABASE=1` when running `tests/invoice-flow.test.ts`
+for SELECT-only list checks and EXPLAIN without ANALYZE inside READ ONLY. Existing
+`npm run test:billing` also covers invoice footer controls in isolated Chromium.
+Verification does not create schemas or write live data.
+
 Billing and bill edit use `utils/billing-error.ts` for save, receipt and client/account form error toasts. Offline failures show "No internet connection"; connection failures and timeouts get actionable messages. Clean validation messages are retained, while request URLs and database/runtime details use a plain action-specific fallback. Camera errors give permission/device guidance.
 
 `npm run test:billing` runs the database-free regression suite in `tests/billing/`
@@ -210,7 +391,7 @@ and duplicate submissions before issuing requests.
 Desktop billing/edit share `assets/css/billing-layout.css`: the card gives remaining panel space to a scrolling table, while the header and payment/action footer keep their natural height. `useBillingTableLayout` measures the table header plus one row and padding as its minimum height. The panel scrolls only when those minimum contents cannot fit; the table header stays visible during table scrolling. Mobile retains the stacked form.
 
 The desktop summary uses five columns sharing three rows. The first is Subtotal / Discount / Save (including receipt-action dropdown); the second is Grand Total / Payment Method / Delete, with both total labels above their values. The third contains return-redeemed amounts / account / Sales Return, the fourth coupon selection / count-value / New and Search, and the last column client phone / name-points / loyalty actions. Sales Return and Delete use solid variants. New and Search are text-only buttons at the bottom of the fourth column; Add Client is a solid person-plus icon button beside the Cell No. input, and Add Account is a plus beside its selector. Qty/Invoice stays in a separate compact information strip. The measured footer height automatically gives the saved space to the table.
-Field labels, input values and select triggers on billing/edit use a consistent 12px font with 20px line height, matching the compact summary labels. Visible summary labels and button captions use one word; Account/Coupon placeholders follow the same convention. Save retains its selected receipt action in the tooltip and dropdown. The action dropdown and Save buttons share Print, Send, Download and None icons; the selected action icon appears beside Save on desktop and mobile, with a check icon for None.
+Field labels, input values and select triggers on billing/edit use a consistent 12px font with 20px line height, matching the compact summary labels. Pay now summary labels and button captions use one word; Account/Coupon placeholders follow the same convention. Invoice mode uses Payment terms, Customer reference and Create invoice captions. Save retains its selected receipt action in the tooltip and dropdown. The action dropdown and Save buttons share Print, Send, Download and None icons; the selected action icon appears beside Save on desktop and mobile, with a check icon for None.
 The desktop Cell No. controls use an explicit non-wrapping horizontal row: input and Add Client icon in billing; input, clear-client X and Add Client icon in bill edit. The input shrinks while the icon buttons remain 32px square with centered icons.
  The account selector uses "Account" as its placeholder and "Account Name" as its accessible label instead of a separate visible label; adjacent desktop actions reserve only button height.
 The account selector aligns with the second row of inputs; Save, Delete, Sales Return and loyalty actions occupy the third row.
@@ -223,7 +404,7 @@ helpers, orchestration, DOM refs, keyboard navigation, table resizing and templa
 
 | Composable | Owns | Key exports |
 |---|---|---|
-| `useBillingDraft` | All bill state refs, localStorage sync, draft CRUD | `billNo, date, items, discount, redeemedAmt, grandTotal, subtotal, tQty, splitPayments, tempSplits, ...`, `createNewBill, deleteBill, resetDraft` |
+| `useBillingDraft` | All bill state refs, localStorage sync, draft CRUD | `billNo, date, items, discount, adjustment, redeemedAmt, grandTotal, subtotal, tQty, splitPayments, tempSplits, ...`, `createNewBill, deleteBill, resetDraft` |
 | `useBillingItems` | Row add/remove, barcode fetch, per-row tax/value watchers, category-dedup watcher | `loadingStates, currentRequestIds, addNewRow, removeRow, fetchItemData, handleProductSelected, handleReturnData` |
 | `useBillingClient` | Phone lookup, client-add flow, points redeem/revert | `isClientLoading, redeeming, handleEnterPhone, handleClientAdded, handleRedeemPoints` |
 | `useBillingCoupons` | Coupon fetch, eligibility filter, discount calc, watchers | `allCoupons, selectedCouponId, eligibleCoupons, couponRefetch` |
@@ -260,7 +441,7 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 - Barcode field → Enter (with valid barcode) → auto-fetch item + add new row, focus next barcode
 - Barcode field → Enter (empty) → jump to main discount field
 - Barcode field → Enter (non-barcode text) → treat as category shortcut (lookup via `categoryStore.getCategoryByShortCut()`)
-- Main discount → Enter → payment method
+- Main discount → Enter → adjustment → Enter → payment method
 - Payment method → Enter → Save button
 - Shift+Enter → focus phone number field
 
@@ -286,21 +467,22 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 
 **Discount logic:**
 - Per-entry: negative = flat deduction from rate; positive = percentage off rate
-- Grand total discount: three modes based on input value:
-  - Positive number (e.g. `10`) → percentage off total
-  - Negative number (e.g. `-5`) → fixed amount subtracted (round off)
-  - `+` prefixed number (e.g. `+50`) → fixed amount **added** to total
-- Input is `type="text"` to allow the `+` prefix; stored as string in drafts, converted for DB (`+` case stores `discount: 0` since no discount was applied)
+- `Billing/DiscountAdjustment.vue` splits the original discount space into equal-width Discount and Adjustment fields on desktop and mobile, for billing and bill edit.
+- Discount accepts a positive percentage (`2` means 2% off) or a negative fixed deduction (`-2` means ₹2 off). The `+` key is blocked; pasted `+2` and invalid input prevent save with a validation message.
+- Adjustment is a separate signed amount: `2` adds ₹2 and `-2` subtracts ₹2 after the discount. `utils/bill-adjustments.ts` shares validation, total calculation and legacy loading.
+- Drafts persist both inputs independently and reset both for a new bill. Existing `+` discount drafts and saved `surcharge` bills load with Discount zero and the old charge added to Adjustment, preserving totals.
+- Source create/update and edit/receipt reads use existing `bills.adjustment`; discounts retain `flat` / `percentage` types. Older edit requests omitting adjustment preserve the saved amount. No schema changes are needed.
 - Receipt total savings is computed from print data, not stored on the bill:
   - `lineSavings = tdiscount` from `buildPrintData()` (sum of per-entry discounts; negative entry discount is flat amount × qty, positive entry discount is percentage of rate × qty)
   - `billDiscountBase = ttvalue` (sum of final entry values after per-line discounts; fallback `subtotal`)
   - Main discount contribution:
     - Positive input (e.g. `10`) → `(billDiscountBase * 10) / 100`
     - Negative input (e.g. `-5`) → `+5` savings
-    - `+` prefixed input (e.g. `+7`) → `-7` savings because it is an added round-off/charge
+    - Historical `+` prefixed receipt data remains supported as an added charge
   - Coupon discount (`couponValue`) and redeemed points (`redeemedPoints`) are also added to receipt savings
-  - `totalSavings = max(0, round2(lineSavings + mainDiscountContribution + couponValue + redeemedPoints))`
-  - Receipt `DISC/ROUND OFF(+/-)` displays the raw meaning separately: `+7` for added amount, `-7` for subtracted round-off, or calculated amount for percentage discount
+  - `totalSavings = max(0, round2(lineSavings + mainDiscountContribution - adjustment + couponValue + redeemedPoints))`
+  - Receipt `DISC/ROUND OFF(+/-)` includes the net discount/adjustment change when adjustment is nonzero. Preview, original PDF, custom receipt summaries and printer bytes include the same signed adjustment and savings.
+  - `utils/receipt-entry-amounts.ts` keeps print rows and totals consistent across billing, bill edit and saved reprints: returned quantities, gross/final amounts and line savings carry negative signs, matching the billing total.
 
 **Columns visibility (computed `columns` array drives `<thead>`):**
 - `user` column: only shown if `session.isUserTrackIncluded = true`
@@ -373,6 +555,77 @@ Each row in the bill table: `{ id, variantId, sn, barcode, category[], size, uni
 
 ---
 
+#### Recurring invoices and retainer invoices
+
+`/erp/recurring-invoices` and `/erp/retainer-invoices` are separate ERP pages backed by
+`Billing/RecurringWorkspace.vue` and `Billing/RetainerWorkspace.vue`. Both use a single
+authorized company form scope; the toolbar selector locks while editing or viewing a
+selected document. Sidebar links live in `layouts/default.vue`. Lists search within
+that company and return at most 500 profiles/retainers; recurring history shows the
+latest 200 occurrences. These are database-backed documents, not localStorage records.
+
+Recurring profiles store a validated quote-shaped invoice template, customer, currency,
+original start date, optional inclusive end date, interval/frequency (day/week/month/year),
+due days and generation mode DRAFT or ISSUE. The original calendar anchor survives short
+months/leap years. New profiles with a past start skip earlier occurrences. Active
+profiles catch up dates missed during scheduler downtime; pausing stops generation and
+resuming skips paused dates. Start/frequency changes require a new profile. Profile
+edits use optimistic revisions and never rewrite existing occurrence templates.
+
+`server/utils/recurring-invoices.ts` creates one unique profile/date occurrence at a
+time. A draft freezes the invoice template/dates with no Bill, stock or posting. Issue
+uses `issueProgramInvoice` -> `createBillSource`, retaining native invoice numbering,
+stock and accounting behavior. Manual generation consumes only a due occurrence;
+issuing a saved draft is idempotent even with a new request ID. Deleting the resulting
+bill does not clear its occurrence or regenerate it. Issued invoices use the existing
+Invoices page for payments, printing and sending. Automatic emailing/card charging is
+not configured by this module.
+
+The authenticated `/api/cron/recurring-invoices` job runs at 06:00 IST via `vercel.json`,
+using the existing `CRON_SECRET` (minimum 16 characters, timing-safe Bearer comparison).
+Company -> profile locks serialize scheduler and interactive actions. Each dated child
+and schedule advance commit together; failures, including deferred posting errors, roll
+back the entire occurrence and leave its date due. Failures store safe visible errors;
+a run skips its failed profiles, caps work at 200 occurrences/40 seconds, and returns
+HTTP 500 when any occurrence failed so scheduling can retry.
+
+Retainers request a positive advance against an explicitly selected active same-currency
+OTHER_CURRENT_LIABILITY account. Creating, editing, marking sent or voiding an unpaid
+request posts no receivable, revenue, tax or stock. Mark as sent records a manual status;
+Print / PDF produces an A4 advance request with requested/collected/applied/refunded/unused
+amounts, customer notes, terms and transaction history. Collection posts Dr Cash/Bank,
+Cr the frozen liability account. Partial collections cannot exceed the requested amount.
+Applying unused collected credit posts Dr liability, Cr the invoice's frozen posted
+receivable and creates a normal `POS_CREDIT_RECEIPT` Payment with mode `Retainer`.
+Multiple retainers can pay the same invoice; a retainer can fund multiple invoices.
+Applications share the normal outstanding calculation and edit/delete receipt guards.
+
+`server/utils/retainer-invoices.ts` owns append-only collection/application/refund/removal
+events and balanced system journals. Refunds debit liability/credit Cash or Bank and
+cannot consume applied funds. Removing an application reverses its original journal,
+marks its Payment `POS_CREDIT_REVERSED`, reopens the invoice and restores unused credit;
+it can happen only once. The regular receipt reversal route directs Retainer payments
+back to this module. All actions check company/customer/currency, active accounts,
+accounting locks, dates, remaining credit and the exact posted invoice receivable.
+Transactions cannot be dated before the request, invoice (for applications), or any
+previous retainer event, or after today. Retainers with financial history cannot be
+edited or voided. Draft/Sent/Void is stored; Paid/Partially paid/Applied/Refunded labels
+are derived from events.
+
+The source contract starts in `schema.zmodel`; local migration
+`20261030120000_invoice_programs` prepares the four tables and checks/FKs. It has **not
+been applied** as part of implementation. Separate explicit database authorization is
+required. Missing-table API reads/writes return a setup-needed 503. Generated CRUD and
+nested relation mutations cannot bypass the source APIs. Durable source request receipts
+and browser retry IDs protect interactive saves/actions after timeouts.
+
+Validation: `npm run test:invoice-programs` type-checks the new screens/APIs, runs real
+services against a transaction-aware in-memory adapter, and exercises browser generation,
+issue, pause/resume, collections, retries, application/removal/refund and print contents.
+No database schema or data is changed by that suite. The workflows were checked against
+Zoho Books [recurring invoices](https://www.zoho.com/in/books/help/recurring-invoice/ri-createsend.html)
+and [retainer invoices](https://www.zoho.com/in/books/help/retainer-invoice/).
+
 #### `POST /api/bill/create` — Bill Creation (source transaction)
 Bill creation uses the shared `pg` pool and `server/utils/create-bill-source.ts` (2026-10-21). Parameterized application DML replaces the missing `create_bill_source_plpgsql(jsonb)` dependency. The handler retains ownership locks, the atomic request receipt and transient transaction retries. Shared `applyBillStock`, staff-credit and generated-coupon helpers run on that same transaction; native database triggers retain invoice numbering and financial posting. Neither the handler nor helper executes schema DDL. Combined coupon eligibility filters the bill total by the owning company, so a shared customer's branch purchases cannot earn a head-office voucher.
 
@@ -393,27 +646,287 @@ Bill creation uses the shared `pg` pool and `server/utils/create-bill-source.ts`
 
 ---
 
+#### `pages/erp/quotes/` — Quotes
+
+`/erp/quotes` (`index.vue`) opens the saved quotes table. Its Add quote button opens
+`/erp/quotes/add` (`add.vue`). Clicking a quote number or Edit quote opens
+`/erp/quotes/edit/:quoteId` (`edit/[quoteId].vue`). Add/edit routes share
+`components/Quotes/Editor.vue`; Back to quotes navigates to the table. Each link
+retains the selected company through `entryCompany`. The `quoteId` route parameter
+avoids the shared company context's automatic Bill lookup for an `id` parameter.
+
+These pages use the existing `Quote`, `QuoteItem` and `QuoteCustomFieldValue`
+models. ERP → Quotes is available in both sidebar menus. Table and editor use a
+single-company `useCompanyScope('form', true)`; the company selector remounts new
+forms through `entryCompany` and is locked for saved quotes. Search, detail, save
+and deletion use that selected company. Initial edit data loads through
+`useAsyncData`; failed loads show Retry and hide the creation form.
+
+- Customer name/phone search and add/link reuse the billing customer flow. Product
+  search reuses `/api/bill/searchItems`; custom item names/descriptions are also allowed.
+- Quote product search has All fields, Barcode, Product name, Variant name, Brand
+  name, Category name, Subcategory name and Collection name modes. A specific mode
+  searches only that field; Brand matches product and variant brand names. All
+  fields includes every mode, ranking exact/prefix barcodes first. Searches remain
+  case-insensitive substring matches over positive-stock active products/variants
+  in the selected company, with five suggestions in the quote editor. Changing
+  mode refreshes an existing query and discards stale results. Suggestions display
+  their brand/category/collection names alongside barcode, size and price.
+- The mode is separate from quote document data and is saved browser-locally in
+  `erp:quote-product-search-field:v1`, shared across quote add/edit pages. It restores
+  only after mount; unknown values or unavailable storage fall back to All fields.
+  `utils/quote-product-search.ts` shares allowed values with the SQL builder in
+  `server/utils/quote-product-search.ts`. No catalog schema changes are needed.
+- Header fields: quote date, optional expiry, reference, subject, prepared-by name and
+  DRAFT/SENT/ACCEPTED/DECLINED/EXPIRED status. Staff set statuses explicitly; SENT does
+  not send a message and expiry dates do not automatically change stored status.
+  Enabled customer approval can record ACCEPTED/DECLINED through a signed link.
+- Customer reference is an optional customer enquiry/PO/project identifier; Subject
+  is an optional short description of what the quote covers. Prepared by searches
+  active users in the selected company by name, staff code or email through the
+  existing authorized `/api/getuser?companyId=...` endpoint. Results are filtered
+  locally (up to eight), with a debounced search, request reuse, stale-result guards,
+  empty/error states and Retry. Selecting a result stores its display name in the
+  existing `salesperson` text field, which is restored on edit and printed. Existing
+  free-text names remain displayable. New selections use search results; an unfinished
+  nonempty search must be selected or cleared before saving. No staff foreign key or
+  schema field is added.
+- Lines capture quantity (up to three decimal places), unit, tax-inclusive rate,
+  percentage discount and included tax rate. Catalogue picks initialize category
+  FIXED/VARIABLE tax or variant tax; tax-exclusive catalogue prices are converted to
+  inclusive rates. Rates and tax remain editable snapshots rather than live tax rules.
+- `utils/erp-quote.ts` owns shared validation and calculations. Totals sum rounded line
+  amounts, apply a fixed/percentage document discount, then a signed adjustment.
+  Included tax is reduced proportionately by the document discount. Adjustments do not
+  carry tax. The server computes stored amounts and totals independently of browser totals.
+- Payment terms, delivery estimate, notes and conditions print with the quote.
+  `components/Quotes/PrintPreview.vue` provides A4 browser printing / Save as PDF for
+  saved data. Printing never collects payment; accepting a quote can invoke the
+  company's configured invoice conversion workflow.
+- Saved quotes use the shared Sales-style document table described above, including
+  search, status/date/amount filtering, sorting, configurable pagination and exports,
+  editing and confirmed soft deletion. Failed saves preserve inputs; unchanged retries
+  reuse their request ID. Revision checks reject stale edits. New quote forms auto-save
+  incomplete inputs, selected customer, pending customer/staff/product searches and
+  request ID to browser localStorage. `utils/quote-draft.ts` validates the versioned
+  snapshot without requiring a complete/savable quote. Keys `erp:quote-draft:v1:<company>:<user>`
+  and `erp:quote-status:v1:<company>:<user>` are captured for the form owner so branch
+  changes cannot write the previous form into the new branch. Status changes are
+  remembered for the next new quote; edit pages keep the saved server status. Restore
+  runs after mount to preserve SSR hydration. Back/navigation/refresh retain new drafts
+  without a discard prompt when local storage succeeds. Save clears the new-document
+  draft while retaining status; Clear draft explicitly discards it. Storage failures
+  display an alert and retain navigation warnings. Saved-document edit pages retain
+  their existing unsaved-change confirmation and optimistic server revision checks.
+
+`server/utils/erp-quotes.ts` owns transactional quote persistence. It validates
+company-linked customers and company-owned variants under locks, reserves the existing
+`quote_counter` with a company row lock, and skips existing number collisions. Numbering
+uses the existing prefix (fallback `QT`) plus a hyphen and five-digit counter. It merges
+only `_erpQuote` in the existing custom-value JSON, preserving other custom fields.
+That namespace records a version, revision, customer name/phone snapshot, payment and
+delivery terms, and per-line discount/tax/barcode/size keyed by saved line ID.
+`saveSourceRequest` records an idempotency receipt in the existing audit table.
+Ordinary quote saves do not change stock or post sales. An ACCEPTED save or customer
+acceptance invokes the configured conversion described below; only issuing an invoice
+calls the existing bill source and native stock/accounting path. No payment is recorded.
+No schema installation or migration runs through the quote routes.
+
+**Preference drawer and customer workflow:** `Quotes/Preferences.vue` opens a right
+slideover from the table's Preference button. GET/PUT `/api/quotes/preferences` stores
+versioned company settings in existing `general_preferences` (`quotes` / `defaults`),
+backing up the prior JSON under `defaults-backup`. Reads require company access;
+admin/manager/accountant roles can save. Default customer notes/terms and zero-value
+item visibility initialize new quotes. Item visibility remains snapshotted under
+`_erpQuote.document`; all items print when the entire quote total is zero.
+
+The quote editor's Notes card contains only Customer notes and Terms and conditions;
+sales orders retain their separate payment/delivery controls. Quote preferences
+add independent `retainCustomerNotes` and `retainTermsAndConditions` checkboxes,
+both unchecked by default. Invoice conversion filters the draft preview snapshot,
+issued Bill fields and issued quote snapshot using these choices, leaving the quote
+unchanged. Invoice email reads notes/terms from the issued Bill rather than copying
+unselected text from the original quote. Preferences use existing JSON storage and
+conversion uses existing Bill text columns; no schema migration runs.
+
+There is one company A4 quote design, stored as `documentDesign` in the same JSON.
+The Classic/Modern/Compact cards and editor template selector are removed; existing
+`pdf_template` values remain readable for API compatibility but do not select a layout.
+Preference > Design quote opens `Quotes/DesignEditor.vue` using the receipt designer's
+`PrinterDesignerWorkspace` and `useDesignerHistory`. The workspace includes a live
+A4 preview, zoom, page margins/font/accent, ordered draggable sections and arrow
+reordering, custom text/live fields/dividers, header/footer/logo image uploads,
+image width/height/alignment, section spacing/visibility and table headings, relative
+widths, ordering, borders and padding. Undo/redo and keyboard shortcuts operate on the
+local draft; Done retains it in the open preference drawer. Save design persists all
+current preference changes through the same validated/authorized PUT; failure retains
+the draft and displays the error. Cancel/closing the drawer discards unsaved changes.
+
+`utils/quote-design.ts` allowlists content and fields, limits 30 sections and 7 columns,
+requires one visible item table/totals and visible item name/amount columns, validates
+PNG/JPEG data URLs (350 KB encoded per image, 1.5 MB design total) and rejects remote/SVG
+images. The upload UI accepts PNG/JPEG/WebP files up to 10 MB, checks image signatures, and resizes/compresses them through the shared designer image helper before storage. Images can remain in section order or use absolute A4 x/y coordinates with direct canvas dragging. Independent images do not move quote content; print compensates page margins to retain physical placement. No raw HTML or
+executable expressions are stored. `Quotes/Document.vue` renders the same live design
+in the designer, `PrintPreview.vue` browser print/Save PDF, draft review and public
+customer page. Detail/public reads return the current authorized company design;
+changing it updates presentation of saved quotes without changing document amounts.
+The source writer and invoice conversion snapshots do not embed large design images.
+Browser PDF output uses A4 with the saved margins and repeating table headings.
+Issued-invoice emails keep their existing invoice PDF renderer.
+Accepted-edit and customer-response policies apply to existing quotes too.
+
+Accepted quotes are locked by default in the editor and source writer; preferences
+can allow editing. Generated Quote/QuoteItem/QuoteCustomFieldValue writes and generic
+mutations of quote GeneralPreference records cannot bypass the source APIs. A linked
+issued invoice is never silently changed when its quote is edited.
+
+Share quote generates a 30-day signed, revision-bound `/quote/:token` link for print,
+copy or manual WhatsApp sharing. For companies with automatic quote notifications
+enabled, the share transaction also queues one client notification for that revision;
+it performs no external send before commit. The notification schema is separately
+prepared, and absent/disabled notification setup leaves sharing unchanged. See
+`WHATSAPP-NOTIFICATIONS.md`. `quote-share.ts` uses QUOTE_SHARE_SECRET, receipt/session
+signing secrets or NUXT_AUTH_PASSWORD (minimum 32 characters); domain-separated HMAC
+signatures prevent reuse of receipt tokens. Public GET/POST `/api/quote-share` expose
+only that quote/company and record one final ACCEPTED/DECLINED response. Approval
+must be enabled, the quote current/unexpired, and status DRAFT/SENT. Responses bump
+the revision; their original link remains readable until another staff edit. Stale
+links, altered tokens and changed repeat decisions reject. Same-decision retries do
+not issue again. The public page requires no seller login and is excluded from the
+auth plugin's remembered ERP route.
+
+Conversion modes are none, draft or issue-and-email. `quote-workflow.ts` serializes
+company/quote writes and persists `_erpQuote.workflow`. Draft invoices store a quote
+snapshot and source revision there; they create no Bill, stock or journal until Issue.
+`/erp/invoice-drafts` lists/reviews them and is linked from Invoices and the quote
+table. Explicit issue requires a current draft revision. Issued invoices use the
+existing Credit/PENDING bill source, client membership and ERP receivable setup.
+Catalogue lines resolve owned stock by variant/barcode/size; ambiguous/missing stock
+requires review. Document discounts allocate in cents before creating invoice lines;
+signed zero-tax amount-only adjustments have zero quantity and do not record returns.
+The existing source handles stock, native posting and generated coupons at issue.
+The source receipt `quote-invoice` plus saved Bill ID prevents duplicate invoices.
+
+Conversion failures roll back to a savepoint while retaining quote acceptance and a
+visible retry error. `quotes/:id/workflow` supports retry, explicit draft issue and
+email retry. Company currency and issued quote contents are captured with the link;
+they do not require a Bill currency column. After issue commits and its connection
+is released, `quote-invoice-email.ts` sends the PDF using the existing SMTP_HOST/PORT/
+USER/PASS configuration. It reads the issued Bill's client email, current invoice
+entries and receipt-derived balance under a Bill read lock; the issued quote snapshot
+retains reference/notes/terms. It serializes delivery by quote and records Pending/Sent/Failed.
+Email failure never undoes acceptance or creates another Bill. Retry is a staff action;
+there is no background email worker. SMTP acceptance is recorded as Sent, not delivery
+confirmation; a transport/commit failure after provider acceptance can leave an
+uncertain send requiring staff review. Invoice payment stays pending until receipts.
+
+Validation: `npm run test:quotes` runs isolated type checks, mocked source/API tests and
+an isolated Chrome/Edge fixture mounting the real list/add/edit routes and shared editor
+with Vue Router and UI stand-ins. The fixture covers table-first entry, Add/Back/Edit
+navigation, company query preservation, unsaved navigation guards, failed saves/retries,
+item pricing, preview, filters, exports, preferences/defaults, accepted locks, draft
+issue, public acceptance, sharing, design image/text editing, undo/redo, save/reload and deletion;
+it does not exercise authenticated Nuxt login or real database writes.
+For schema validation, set `QUOTE_READONLY_DATABASE=1` and run
+`node --import tsx --test tests/erp-quotes.test.ts tests/quote-preferences.test.ts`;
+the extra tests use READ ONLY and EXPLAIN without ANALYZE, never executing DML or
+schema changes. Workflow tests exercise the actual source writer with in-memory
+transactions; SMTP is replaced by a capture so no real messages are sent.
+
+#### `pages/erp/sales-orders/` - Sales orders
+
+ERP Sales orders opens `/erp/sales-orders`, with Add at `/erp/sales-orders/add` and
+edit at `/erp/sales-orders/edit/:orderId`. Both sidebar variants include the link
+without a subpage icon. Links carry `entryCompany`; saved orders lock their company.
+The list uses `Erp/DocumentTable.vue`: summary amounts, customer/order/reference/subject
+search, order-date/status/amount filters, sorts, paging, persisted columns and PDF/Excel.
+Its statuses are the existing SalesOrderStatus values DRAFT, CONFIRMED, CLOSED, CANCELLED.
+
+Add/edit reuse `Quotes/Editor.vue` in sales-order mode: customer and prepared-by search,
+catalogue field priorities, custom lines, tax-inclusive prices/discounts/adjustments,
+order date, expected shipment date, reference, subject, payment terms, delivery method,
+notes and terms. `utils/sales-order.ts` adapts the shared UI DTO to canonical order
+fields. New drafts/status preferences use separate `erp:sales-order-{draft,status}:v1`
+keys scoped to the form's company/user. Successful save clears only that document's
+draft; existing order edits never replace the new-order remembered status.
+
+Preference reuses the right drawer/A4 designer, with independent company defaults at
+GeneralPreference `sales-orders/defaults` and backup at `defaults-backup`. It controls
+notes/terms, zero-value lines and editing of closed/cancelled orders. Quote customer
+approval/automatic conversion controls are hidden. Design/printing uses the shared
+`Quotes/Document.vue` with SALES ORDER and expected-shipment/delivery-method labels;
+quote designs remain separate. Closed/cancelled orders are locked unless their own
+preference permits editing. Invoiced/payment flags are read-only. Orders with stored
+invoiced=true or live linked Bills cannot be deleted.
+
+`server/utils/sales-orders.ts` writes existing SalesOrder/SalesOrderItem rows in one
+transaction, with company-first locks, customer/variant ownership checks, collision-aware
+sales_order_prefix/counter numbering, source-request idempotency, calculated line/totals
+and revision checks. GeneralPreference `sales-orders/document:<id>` stores the revision,
+subject, customer snapshot, per-line discount/tax/barcode/size and item visibility;
+attachments and existing invoice/payment links are preserved. Generic model mutations
+of SalesOrder/Item or their preference namespace cannot bypass these source APIs.
+Saving or changing an order status does not create Bills, receipts, stock movements,
+loyalty or journals. No schema changes or posting functions are installed. Read-only
+schema planning validates the source SQL; source/API tests mock transactions and the
+browser fixture exercises list/add/edit, local restoration, failed-save retry, design,
+print, terminal locks and delete. Set SALES_ORDER_READONLY_DATABASE=1 for the additional
+READ ONLY / EXPLAIN test in `tests/sales-orders.test.ts` (no source writes are executed).
+
 #### `pages/erp/sales.vue` — Sales List
+
+Clicking a sale row, its invoice number or Details opens a distributor-style split
+view: a compact searchable/paginated list on the left and `Sales/DetailPanel.vue`
+on the right (stacked on small screens). Close returns to the full sales table.
+The panel has exactly Bill and History tabs. Bill reads the selected owner's
+`billSale/receipt` payload and renders `ThermalReceipt` with the existing Print
+action. History reads paginated saved snapshots through `billSale/history`, newest
+first, with expandable historical items, totals, notes and split methods. Table
+payment/notes/action controls retain their own clicks. Selection updates/clears
+with refreshed rows and company changes; data saves refresh the panel. Receipt
+and history requests explicitly pin both company headers to the selected sale.
+Independent loading/errors/retry states and request versions prevent stale bill
+responses after switching records or closing the panel. `tests/sales-detail.test.ts`
+checks row selection, stale responses, scope, history pagination and compilation.
+
+This page also owns the invoice table. `utils/sales-view.ts` defines its four URL
+tabs (`view=all|paynow|invoices|unpaid`) and the old invoice-link redirect. All sales
+retains the complete existing sales dataset. Pay now filters `invoice_code IS NULL`;
+Invoices requires an invoice code on a non-marketplace BILL without staff credit.
+Unpaid / overdue shows positive receipt-derived balances excluding staff credit.
+All sales and Pay now default to the date range; Invoices and Unpaid default to All
+dates, so old outstanding invoices remain visible. The date selector can be changed
+in every view. Switching tabs resets status/method filters and pagination. Explicit
+invoice links override stale saved search/amount filters. Existing company scopes,
+cleanup visibility, entry expansion and source edit/payment protections remain.
+
+`server/utils/sales-view.ts` supplies the SQL tab predicate, original credit obligation,
+active receipt sum, received amount, outstanding and IST overdue expression to the
+same `findManyBills` rows/totals query. Filters run before LIMIT/OFFSET. Retainer-mode
+receipts use the same active receipt status; reversed receipts are excluded. The API
+adds received/balance/overdue totals without adding collections to revenue. Invoice
+view summary cards show total/received/balance/overdue; other views keep tender cards.
+One Preference action opens the existing reusable drawer for the current invoice or
+sale defaults. No database schema or stored sale records change for this unification.
 
 Sales and online-sales selected columns compare stable column keys, so recreated responsive column objects preserve the same table columns during SSR and hydration.
 
 - Fetches bills via `POST /api/billSale/findManyBills` — **raw SQL** with `pg` pool
 - Search logic:
-  - Non-numeric → search by `client.name ILIKE`
-  - Numeric < 3 chars → search by `client.phone ILIKE`
-  - Numeric ≥ 3 chars and fits integer range (≤ 2,147,483,647) → match `invoice_number` exactly OR `phone ILIKE`
+  - Non-numeric → bound search by client name/phone, invoice code or subject
+  - Numeric that fits integer range (≤ 2,147,483,647) → match `invoice_number` exactly OR `phone ILIKE`
   - Numeric ≥ 3 chars and exceeds integer range (e.g. full phone numbers) → search by `phone ILIKE` only (skips invoice match to avoid PostgreSQL integer overflow)
   - **Date range filter is SKIPPED when search is active** (intentional design — the WHERE clause excludes date filter if `normalizedSearch` is truthy)
 - Filters: payment status (PAID/PENDING), payment method (`Cash`, `UPI`, `Card`, `Credit`, `Split`), min/max `grandTotal`, date range
-- Filter UX: date picker is always visible in header; remaining filters open in modal and apply on explicit `Apply Filter` click
-- Sort by: invoiceNumber, createdAt, grandTotal, paymentStatus
-- Export: `Download` button generates `.xlsx` (exceljs + file-saver) for the currently filtered dataset (fetches all pages with active filters in batches of 500)
+- Filter UX: All dates / Date range selector in the header; Date range exposes the existing date picker. Other filters open in the explicit Apply Filter modal.
+- Sort allowlist includes invoiceNumber, createdAt, grandTotal, paymentStatus, customer, paymentMethod, notes, dueDate, amountReceived and balanceDue.
+- Export: Download generates XLSX or PDF for the current dataset in batches of 500. Tab, company and filter values are frozen before paging. Invoice views export issued invoice codes, customer, due date, total, received, balance and payment state; other views retain the original sales columns. Export filenames identify the tab and date mode.
 - **Table state persistence:** all filter/sort/pagination/column-visibility state saved to `localStorage` key `erp_sales_table_state_v1` and restored on mount
 - Table columns omit `subtotal`; the sales grid now shows a `Method` column with plain text, and clicking `Split` opens the shared split modal instead of a hover popover
 - Cleanup sessions (`session.cleanup === true`) render a cleanup-only `Cleaned values` toggle. Off is the original cleanup view: bill `subtotal`, `discount`, and `grandTotal` use saved original columns where available; entry `rate`, `discount`, and `value` use saved original entry columns; `precedence=true` rows are included. On switches the same sales list/export API to current cleaned values and filters out `precedence=true` rows. The API returns explicit original fields only for the original cleanup view. Non-cleanup sessions continue to read current visible values and never render the toggle.
 - Summary cards use the totals response from `/api/billSale/findManyBills`; `Split` bills are broken down by `split_payments` and their amounts are folded into the existing Cash/Card/UPI/Credit totals so the top cards reflect mixed payments.
 - Credit and credit-containing Split rows show Collect / Reverse actions with a read-only payment status. Collect opens the receipt form and is disabled for fully paid bills; Reverse opens receipt history to choose an active collection and confirm its dated reversal. Other rows retain the PAID/PENDING dropdown. The receipt modal's optional `mode` defaults to `collect`.
-- The date/search toolbar shows Collections on its right: credit repayments only, net of dated reversals, from the API's `collections.creditRepayments`. Direct sale payments are excluded from this toolbar total. This uses the selected dates and authorized store scope independently of invoice search, status/method filters and pagination; older bills repaid in the selected dates are included. Collections do not increase the sales cards. Loading and request failures hide the previous total. Hovering or activating the Collections button opens a payment-method breakdown (Cash, UPI, Card, Bank, Cheque) from `collections.byMethod`, with negative dated reversals retained. The breakdown shares the total's loading/error handling and SSR hydration snapshot.
+- The date/search toolbar shows Collections: credit repayments only, net of dated reversals, from `collections.creditRepayments`. It follows the selected date mode and authorized company scope independently of tab/search/status/method/pagination. All dates is labeled explicitly. Collections do not increase sales totals; loading/errors hide the previous amount. Hovering or activating the Collections button opens a payment-method breakdown (Cash, UPI, Card, Bank, Cheque) from `collections.byMethod`, with negative dated reversals retained. The breakdown shares the total's loading/error handling and SSR hydration snapshot.
 - Bills with `isMarkit = true` → show only "Open" action (no edit/print — marketplace orders)
 - Bill actions: Print (via `usePrint`), Change method (opens payment-method modal; choosing `Split` opens the shared split modal before save, then prompts for Print/Send/Download), Details (expand entries inline), Edit (→ `edit/[salesId].vue`), Delete (soft delete via `POST /api/billEdit/deleteBill`)
 - **Soft-deleted bill highlighting:** `styledSales` computed maps rows to add `class: 'bg-red-50 text-red-600'` when `row.precedence === true`. `:rows` is bound to `styledSales`.
@@ -424,7 +937,10 @@ Sales and online-sales selected columns compare stable column keys, so recreated
 
 - Fetches bill via `GET /api/billEdit/findUniqueBill` — **raw SQL** (returns bill + entries + client + coupon usages)
 - Resolves the bill's owning company, then loads its category options before assigning the bill to the form watcher; saved entry categories are matched by ID during row initialization.
-- Same UI as billing.vue (barcode rows, camera scanning, keyboard nav, tax calc, split payments, skip points toggle, `+n` discount add); the table shows `unit` next to `qty` only when multiple billing units are enabled in settings
+- Same UI as billing.vue (barcode rows, camera scanning, keyboard nav, tax calc, split payments, skip points toggle, separate Discount/Adjustment inputs); the table shows `unit` next to `qty` only when multiple billing units are enabled in settings
+- After-sales registration uses the shared `BillingSerialNumbers` icon beside Delete on desktop and mobile, with staged serial/delivery/installation fields and exact return selection. The old registration panels are absent from the header. A shield icon in the toolbar opens registered-unit history/removal controls; changes to existing unit details still use service history. All service controls require the owning company's after-sales setting. Save waits for the shared registration lookup before validation.
+- The responsive toolbar groups date, optional staff code, the saved bill/invoice identifier, Add item and Notes menu; it has no separate menu row. Invoice edit places Payment terms and Due date below the totals on desktop, above Delete/Return, and uses the shared invoice-details section on mobile without duplicating Subject. Subject remains bound to the saved invoice reference in the Qty footer row. The card is inert while saving, and marketplace bills retain their disabled controls.
+- Linked service invoices identify their non-stock charge rows on load. These retain the service's tax and tax-inclusive rate rather than adopting category tax or adding tax again in tax-exclusive companies. A missing legacy charge category uses the company's automatic Service Charges category when available, persisted only on explicit save; product rows retain their own category/tax behavior.
 - The Account Name selector mirrors billing.vue: existing `accountId` values load as `account:<id>`, staff-credit `creditUserId` values load as `user:<id>`, and save back into separate bill columns.
 - User tracking parity with billing: supports top-level user code input (near date); applying it updates all existing rows and pre-fills newly added rows
 - Tracks `oldClientId` vs `newClientId` for points reversal on client change
@@ -474,6 +990,9 @@ The existing marketing schedule requires a plan supporting more-than-daily runs.
 Tests: `npm run test:recurring-expenses` validates dates/money and tests concurrent runs,
 catch-up, deleted occurrences, deferred-commit rollback, company boundaries, CRUD handlers
 and cron authentication in a temporary database schema. No production records are changed.
+This integration suite creates a schema. Under the current repository no-DDL policy,
+do not run it as part of ordinary feature validation; use the pure date/money checks
+and in-memory service/browser tests until separately authorized database work is scoped.
 
 #### `pages/erp/expenses.vue` — Daily Expense
 
@@ -524,7 +1043,7 @@ Lists `Account` records (B2B customers with deferred payment) with their bills.
 - **Credit payments:** Sales and Credit Accounts open `Billing/CreditReceiptModal.vue` to record an amount, payment date, method, receiving native CASH/BANK account and optional reference. Full settlement changes status to PAID; partial settlement remains PENDING. The original payment method/splits and invoice date are retained. Payment history offers manager/accountant/admin dated reversals.
 - **Excel export:** `Download` button generates `.xlsx` (exceljs + file-saver) with account name, phone, pending amount, bills count
 - **Table state persistence:** filter/sort/pagination/column state saved to `localStorage` key `erp_accounts_table_state_v1` and restored on mount
-- **WhatsApp reminder:** `Send Reminder` action calls `POST /api/whatsapp/send-pending-template` with account phone, pending amount, receipt URL, and UPI payment deep link
+- **WhatsApp reminder:** The legacy `Send Reminder` action calls `POST /api/whatsapp/send-pending-template` with phone, customer/company names, amount and row ID as `receiptId`. The current template route has one URL button, not a separate UPI payment button. Company-owned automatic invoice reminders are configured separately in `WHATSAPP-NOTIFICATIONS.md`.
 
 ---
 
@@ -577,6 +1096,11 @@ Customer credit settlement uses company-scoped `billSale/receipts` GET/POST and
 `payments` table and native journals; no new table, trigger or schema installation
 is required. Receipt status is `POS_CREDIT_RECEIPT`; reversed records remain as
 `POS_CREDIT_REVERSED`. `deposit_to` stores the receiving native account ID.
+
+The Sales row shows Collect only for a bill that is not PAID and has a positive
+balance due. Reverse appears only when the row has an active, non-deleted
+`POS_CREDIT_RECEIPT`. The button container is hidden when neither action applies;
+payment history remains available from the row menu.
 
 Each receipt debits the selected cash/bank account and credits the original ERP
 source's receivable account, carrying its original customer party snapshots.

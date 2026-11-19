@@ -1,0 +1,24 @@
+{
+  "extends": "./tsconfig.invoice-flow.json",
+  "include": [
+    "credit-receipt-globals.d.ts",
+    "quote-page-globals.d.ts",
+    "../utils/after-sales.ts",
+    "../composables/useBillingSerialNumbers.ts",
+    "../components/Billing/SerialNumbers.vue",
+    "../utils/customer-product-numbering.ts",
+    "../server/utils/customer-product-numbering.ts",
+    "../server/api/settings/customer-product-numbering.*.ts",
+    "../components/Settings/CustomerProductNumbering.vue",
+    "../server/utils/after-sales*.ts",
+    "../server/api/after-sales/**/*.ts",
+    "../server/api/cron/after-sales.get.ts",
+    "after-sales-globals.d.ts",
+    "after-sales.integration.test.ts",
+    "after-sales-api.integration.test.ts",
+    "sales-after-sales.integration.test.ts",
+    "../components/AfterSales/**/*.vue",
+    "../pages/after-sales/**/*.vue",
+    "../pages/after-sales.vue"
+  ]
+}

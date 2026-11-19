@@ -1,3 +1,4 @@
+import { afterSalesAvailable } from '../../utils/after-sales-lifecycle'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
   const client = await pool.connect()
   try {
     const prodRes = await client.query(
-      `SELECT p.id, p.product_no, p.name, p.description, p.status, p.brand_id, p.category_id, p.subcategory_id,
+      `SELECT p.id, COALESCE((to_jsonb(p)->>'is_service_product')::boolean,false) AS is_service_product, p.product_no, p.name, p.description, p.status, p.brand_id, p.category_id, p.subcategory_id,
               p.purchaseorder_id, p.company_id,
               c.name AS category_name, c.target_audience AS category_target_audience,
               b.name AS brand_name, s.name AS subcategory_name
@@ -56,9 +57,12 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    const serviceLinks = await afterSalesAvailable(client) ? (await client.query('SELECT product_id,configuration_id FROM product_service_links WHERE product_id=ANY($1::text[]) AND company_id=ANY($2::text[])', [productIds,companyIds])).rows : []
     return prodRes.rows.map((p) => ({
       id: p.id,
       productNo: p.product_no,
+      isServiceProduct: p.is_service_product ?? false,
+      serviceConfigurationIds:serviceLinks.filter((l:any)=>l.product_id===p.id).map((l:any)=>l.configuration_id),
       name: p.name,
       description: p.description,
       status: p.status,

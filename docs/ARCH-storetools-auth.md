@@ -2,6 +2,10 @@
 
 Covers: `storetools/auth/` (Nuxt layer for session management) and `storetools/nuxt.config.ts`.
 
+Public `/quote/:token` routes set `auth:false, layout:false`; revision-bound signed
+quote APIs authorize their one document without a seller session. Like public receipt
+links, these routes are excluded from the auth plugin's remembered last ERP route.
+
 ---
 
 ## Auth Module Overview
@@ -374,6 +378,18 @@ Inherits `@nuxt/ui-pro` (Nuxt UI Pro component library) and `./auth` (session au
 ### Rendering
 
 - `ssr: true` — server-side rendering enabled
+
+`scripts/patch-nuxt-app-resolution.mjs` backports the upstream app-resolution fix
+to the installed Nuxt `3.17.4` ([Nuxt PR #32993](https://github.com/nuxt/nuxt/pull/32993)).
+It resolves layouts, middleware, plugins and configs into local collections before
+publishing them together, avoiding false `manifest-route-rule` duplicate warnings.
+`postinstall` applies this idempotent, version-specific patch before `nuxt prepare`.
+Other Nuxt versions are left unchanged; remove/review the backport when upgrading.
+Manifest route rules remain enabled without a local path-normalization hook or
+warning suppression. Dependency versions and the lockfile are unchanged.
+`tests/manifest-middleware-registration.test.ts` loads Nuxt and concurrently
+regenerates an isolated app, checking that one global manifest middleware remains
+without duplicate warnings. Its temporary fixture does not access a database.
 
 The isolated local audit build disables server sourcemaps and `/nonetwork` prerendering to reduce memory use. It disables Nitro dependency tracing because its output runs alongside the existing installed dependencies, and resolves Prisma's generated `.prisma/client` import to its installed directory. This output is a local test artifact, not a standalone deployment package; the regular deployment configuration keeps its existing settings.
 

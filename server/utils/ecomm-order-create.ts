@@ -1,3 +1,4 @@
+import { registerBillServices } from './after-sales-lifecycle'
 import { randomUUID } from 'node:crypto'
 import { createError } from 'h3'
 import type { PoolClient } from 'pg'
@@ -223,7 +224,7 @@ export async function createEcommOrder(
   // one the browser quoted against. A coupon with a minimum order value must
   // not be redeemable by quoting it on a big basket and then creating a small
   // one.
-  let coupon = null
+  let coupon: Awaited<ReturnType<typeof findEligibleCoupon>> = null
   if (input?.couponId) {
     coupon = await findEligibleCoupon(db, companyId, clientId, subtotal, input.couponId)
     if (!coupon) {
@@ -326,6 +327,7 @@ export async function createEcommOrder(
     )
   }
 
+  await registerBillServices(db, companyId, billId)
   return {
     orderId,
     billId,

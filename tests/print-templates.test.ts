@@ -372,6 +372,13 @@ test('print defaults use persistent company caches and saved settings replace th
   }
 });
 
+test('built-in printer receipts include customer notes and terms', () => {
+  const bytes = buildBillReceiptBytes({ companyName: 'Test', entries: [], notes: 'Call before delivery', termsAndConditions: 'Keep receipt' });
+  const text = Buffer.from(bytes).toString('latin1');
+  assert.ok(text.includes('Customer notes: Call before delivery'));
+  assert.ok(text.includes('Terms and conditions: Keep receipt'));
+});
+
 test('fixed receipts, coupon slips and reports feed paper before every cut', () => {
   const bill = { companyName: 'Test', entries: [], generatedCoupons: [{ code: 'TEST123', type: 'FLAT', discountValue: 10 }] };
   for (const bytes of [buildBillReceiptBytes(bill), buildReportReceiptBytes({})]) {
@@ -469,6 +476,17 @@ test('standard paper presets resize existing elements within bounds without losi
   }
   for (const preset of receiptPaperSizes) assert.equal(templateSchema.safeParse(resizePrintPaper(noTaxReceiptTemplate(), preset.width)).success, true);
   assert.throws(() => resizePrintPaper(originalLabelTemplate(), 0));
+});
+
+test('sheet receipt sizes and floating images validate without widening label limits', () => {
+  const sheet = resizePrintPaper(classicReceiptTemplate(), 210, 297);
+  assert.equal(sheet.paperSize, 'A4');
+  assert.equal(templateSchema.safeParse(sheet).success, true);
+  assert.equal(templateSchema.safeParse({ ...sheet, paperSize: undefined }).success, false);
+  assert.equal(templateSchema.safeParse({ ...sheet, kind: 'label' }).success, false);
+  const image = { ...sheet.elements[0], id: 'image', type: 'logo', placement: 'absolute', x: 20, y: 40, width: 50, height: 20 };
+  assert.equal(templateSchema.safeParse({ ...sheet, elements: [image] }).success, true);
+  assert.equal(templateSchema.safeParse({ ...sheet, elements: [{ ...image, y: 290 }] }).success, false);
 });
 
 test('product barcode aliases resolve flat and enriched payloads, and empty legacy jobs cannot print', () => {

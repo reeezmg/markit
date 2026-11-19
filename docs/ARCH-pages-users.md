@@ -60,7 +60,7 @@ management access. The Users role selector also includes Investor.
 
 **Add user flow:**
 1. Enter email → `checkEmailExist(email)` → if exists, link to company via `CreateCompanyUser` with existing userId
-2. If new: `CreateUser({ email, name, password: hash(email) })` then `CreateCompanyUser`
+2. If new: `CreateUser` writes email/password and nests `companies.create` for the membership's name, role, phone and company. `users` has no name column; names belong to `company_users`.
 3. Password defaults to hashed email for new users
 
 4. Modal also accepts optional phone number and stores it on `CompanyUser.phone`
@@ -78,6 +78,9 @@ management access. The Users role selector also includes Investor.
 - Returns: `[{ id, code, name, email, image }]`
 - Used by `userStore` to maintain a persisted global user list for quick lookups (e.g. who made a bill)
 - Requires `assertCompanyAccess(event, companyId)` before reading staff; the query company must be accessible to the authenticated user.
+- Quote Prepared by uses this endpoint with the editor's exact selected company;
+  it filters the returned active users locally by name, code or email and saves
+  the selected display name in the quote's existing `salesperson` text field.
 
 ---
 

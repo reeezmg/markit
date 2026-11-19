@@ -3,6 +3,7 @@
 const companyScope = useCompanyScope('form', true);
 await companyScope.ready;
 const $fetch = companyScope.fetch;
+const afterSales = useAfterSalesFeature(companyScope.companyId, $fetch);
 
 import { v4 as uuidv4 } from 'uuid';
 import { billingErrorMessage } from '~/utils/billing-error';
@@ -15,11 +16,20 @@ import {
   CapacitorBarcodeScannerTypeHint
 } from '@capacitor/barcode-scanner'
 import { Capacitor } from '@capacitor/core';
+import { invoiceDetails } from '~/utils/invoice-flow';
+import { billTotal, billDiscountValue, billAdjustmentValue, splitBillDiscount } from '~/utils/bill-adjustments';
+import BillingDiscountAdjustment from '~/components/Billing/DiscountAdjustment.vue';
+import BillingPaymentTerms from '~/components/Billing/PaymentTerms.vue';
+import { receiptEntryAmounts, receiptEntryTotals } from '~/utils/receipt-entry-amounts';
 const queryClient = useQueryClient();
 const currentRequestIds = ref({});
 const useAuth = () => companyScope.auth;
 const { selectOwnerAndReload } = useOrganizationActions();
 const route = useRoute();
+const removedServiceUnitIds = ref([]), isServiceUnitsOpen = ref(false);
+watch(afterSales.enabled, enabled => {
+  if (!enabled) { removedServiceUnitIds.value = []; isServiceUnitsOpen.value = false; }
+});
 const toast = useToast();
 const { printBill } = usePrint();
 const router = useRouter();
@@ -36,10 +46,14 @@ const isSavingAcc = ref(false);
 const issalesReturnModelOpen = ref(false);
 const paymentOptions = ['Cash', 'UPI', 'Card','Credit']
 const date = ref(new Date().toISOString());
+const invoiceDueDate=ref(''), invoiceTerms=ref(''), invoiceReference=ref('');
+const customerNotes = ref(''), termsAndConditions = ref(''), isNotesOpen = ref(false);
+const billMenuItems = [[{ label: 'Notes', icon: 'i-heroicons-document-text', click: () => { isNotesOpen.value = true } }]];
 const parentUserCode = ref(null);
 const parentUserId = ref(null);
 const parentUserName = ref(null);
 const discount = ref(0);
+const adjustment = ref(0);
 const accountLoaded = ref(false);
 const couponValue = ref(0);
 const clientFound = ref(false);
@@ -75,20 +89,7 @@ const grandTotal = computed(() => {
     return item.return ? sum - itemValue : sum + itemValue;
   }, 0);
 
-  let afterDiscount = 0;
-  const discStr = String(discount.value ?? '');
-
-  if (discStr.startsWith('+')) {
-    const discNum = parseFloat(discStr);
-    afterDiscount = isNaN(discNum) ? baseTotal : parseFloat((baseTotal + Math.abs(discNum)).toFixed(2));
-  } else if (Number(discount.value) < 0) {
-    afterDiscount = parseFloat((baseTotal - Math.abs(Number(discount.value))).toFixed(2));
-  } else {
-    const pct = Number(discount.value);
-    afterDiscount = isNaN(pct) ? baseTotal : parseFloat((baseTotal - (baseTotal * pct) / 100).toFixed(2));
-  }
-
-  return afterDiscount - redeemedAmt.value;
+  return billTotal(baseTotal, discount.value, adjustment.value, redeemedAmt.value);
 });
 
 
@@ -221,6 +222,10 @@ const revertRedeemedPointsForCurrentClient = async () => {
 const items = ref([
   { id:'', variantId:'',sn: 1, barcode: '',category:[], size:'', unit:'', item: '', qty: 1,rate: 0, discount: 0, tax: 0, value: 0, cost: 0,sizes:{}, totalQty:0,return:false, userCode:null, userId:null, user:null },
 ]);
+const serialRegistration = useBillingSerialNumbers(items, clientId, afterSales.enabled, companyScope.companyId, $fetch);
+const serviceCustomerRequired = serialRegistration.required;
+const serviceUnits = serialRegistration.serviceUnits;
+const returnedServiceUnitIds = serialRegistration.returnedUnitIds;
 
 
 const result = ref('')
@@ -474,6 +479,7 @@ watch(selected, (newSelected) => {
 watch(items, async () => {
   for (let index = 0; index < items.value.length; index++) {
     const item = items.value[index];
+    const isServiceCharge = item._serviceCharge && !item.variantId && !item.id;
     
     // ---------- Step 1: Calculate discounted rate ----------
     let discountedRate = item.rate;
@@ -490,7 +496,7 @@ watch(items, async () => {
 
    
 
-    if (item.category[0]?.id) {
+    if (item.category[0]?.id && !isServiceCharge) {
       const category = categoryStore.getCategoryById(item.category[0].id)
       // Subcategory tax takes priority over category tax when configured
       const sub = item._subcategory || null
@@ -516,7 +522,7 @@ watch(items, async () => {
     // ---------- Step 3: Calculate base value ----------
     let baseValue = discountedRate * item.qty;
     
-    if (!isTaxIncluded) {
+    if (!isTaxIncluded && !isServiceCharge) {
       baseValue += (baseValue * item.tax) / 100;
     }
 
@@ -798,14 +804,9 @@ watch(bill, async (newBill) => {
   }
 
   /* ---------------- BASIC FIELDS ---------------- */
-  // Restore discount input based on discountType
-  if (newBill.discountType === 'surcharge') {
-    discount.value = `+${Math.abs(newBill.discount || 0)}`
-  } else if (newBill.discountType === 'flat') {
-    discount.value = -Math.abs(newBill.discount || 0)
-  } else {
-    discount.value = newBill.discount || 0
-  }
+  const amounts = splitBillDiscount(newBill.discount, newBill.adjustment, newBill.discountType)
+  discount.value = amounts.discount
+  adjustment.value = amounts.adjustment
   selected.value = newBill.creditUserId
     ? `user:${newBill.creditUserId}`
     : (newBill.accountId ? `account:${newBill.accountId}` : null)
@@ -814,6 +815,11 @@ watch(bill, async (newBill) => {
   clientName.value = newBill.client?.name
   phoneNo.value = newBill.client?.phone?.replace(/^\+91/, '') || ''
   paymentMethod.value = newBill.paymentMethod
+  invoiceDueDate.value = newBill.dueDate || ''
+  invoiceTerms.value = newBill.invoicePaymentTerms || ''
+  invoiceReference.value = newBill.subject || ''
+  customerNotes.value = newBill.notes || ''
+  termsAndConditions.value = newBill.termsAndConditions || ''
   date.value = new Date(newBill.createdAt).toISOString()
 
   /* ---------------- POINTS ---------------- */
@@ -835,10 +841,11 @@ watch(bill, async (newBill) => {
     entryId: entry.id || '',
     id: entry.item?.id || '',
     variantId: entry.variant?.id || '',
+    _serviceCharge: newBill.isServiceInvoice === true && !entry.item?.id && !entry.variant?.id,
     sn: index + 1,
     name: entry.name || '',
     barcode: entry.barcode || '',
-    category: categories.value.filter(c => c.id === entry.categoryId),
+    category: categories.value.filter(c => c.id === (entry.categoryId || (newBill.isServiceInvoice && !entry.item?.id && !entry.variant?.id ? newBill.serviceChargeCategory?.id : null))),
     categoryName: entry.categoryName || '',
     categoryHsn: entry.categoryHsn || '',
     size: entry.item?.size || '',
@@ -1090,6 +1097,8 @@ const handleEdit = async () => {
     if (typeof navigator !== 'undefined' && navigator.onLine === false) {
       throw new Error('No internet connection')
     }
+    billDiscountValue(discount.value)
+    billAdjustmentValue(adjustment.value)
     
     // 1. Validate and filter items
     const finalitems = items.value.filter(item =>
@@ -1130,6 +1139,7 @@ const handleEdit = async () => {
 
     // 5. Prepare print data
     const preparedPrintData = {
+      notes: customerNotes.value, termsAndConditions: termsAndConditions.value,
       companyId: bill.value.companyId || useAuth().session.value?.companyId,
       invoiceNumber: bill.value.invoiceNumber || '',
       date: new Date(date.value).toISOString(),
@@ -1151,21 +1161,20 @@ const handleEdit = async () => {
         }
 
         return {
-          description: entry.barcode ? entry.name : (entry.category[0]?.name || entry.categoryName || ''),
+          description: entry.barcode || entry._serviceCharge ? entry.name : (entry.category[0]?.name || entry.categoryName || ''),
           hsn: entry.category[0]?.hsn || entry.categoryHsn || '',
-          qty: entry.qty,
+          ...receiptEntryAmounts(entry),
           mrp: entry.rate,
           discount: calculatedDiscount,
           tax: entry.tax,
-          value: entry.qty * entry.rate,
           size: entry.size,
           unit: entry.unit || 'Nos',
           barcode: entry.barcode,
-          tvalue: entry.value,
         };
       }),
       subtotal: subtotal.value,
       discount: String(discount.value ?? ''),
+      adjustment: billAdjustmentValue(adjustment.value),
       grandTotal: grandTotal.value,
       paymentMethod: paymentMethod.value,
       isTaxIncluded: useAuth().session.value?.isTaxIncluded || false,
@@ -1182,16 +1191,7 @@ const handleEdit = async () => {
       availablePoints: Number(points.value) || 0,
       redeemedPoints: Number(redeemedPoints.value) || 0,
       couponValue: Number(couponValue.value) || 0,
-      tqty: finalitems.reduce((sum, entry) => sum + entry.qty, 0),
-      tvalue: finalitems.reduce((sum, entry) => sum + (entry.qty * entry.rate), 0),
-      ttvalue: finalitems.reduce((sum, entry) => sum + (entry.value), 0),
-      tdiscount: finalitems.reduce((sum, entry) => {
-        if (entry.discount < 0) {
-          return sum + (Math.abs(entry.discount) * entry.qty);
-        } else {
-          return sum + (((entry.rate * entry.discount) / 100) * entry.qty);
-        }
-      }, 0)
+      ...receiptEntryTotals(finalitems),
     };
 
     const hasCreditPayment =
@@ -1200,25 +1200,22 @@ const handleEdit = async () => {
       splitPayments.value?.some(p => p.method === 'Credit'));
     console.log(selected.value, 'selected account');
     // 6. Prepare request data for server
+    await serialRegistration.waitUntilReady();
+    if(serviceCustomerRequired.value&&!clientId.value)throw new Error('Select a client for warranty, guarantee or maintenance registration.')
     const requestData = {
       items: finalitems,
       entriesToDelete: entriesDelete || [],
+      removedServiceUnitIds: removedServiceUnitIds.value,
+      serviceUnits:serviceUnits.value,returnedServiceUnitIds:returnedServiceUnitIds.value,
       couponId: selectedCouponId.value?.value || null,
       billPoints,
       billData: {
+        notes: customerNotes.value, termsAndConditions: termsAndConditions.value,
         id: route.params.salesId,
         subtotal: subtotal.value || 0,
-        discount: (() => {
-          const discStr = String(discount.value ?? '').trim()
-          if (discStr.startsWith('+')) return Math.abs(parseFloat(discStr) || 0)
-          return Number(discount.value) || 0
-        })(),
-        discountType: (() => {
-          const discStr = String(discount.value ?? '').trim()
-          if (discStr.startsWith('+')) return 'surcharge'
-          if (Number(discount.value) < 0) return 'flat'
-          return 'percentage'
-        })(),
+        discount: billDiscountValue(discount.value),
+        discountType: billDiscountValue(discount.value) < 0 ? 'flat' : 'percentage',
+        adjustment: billAdjustmentValue(adjustment.value),
         grandTotal: grandTotal.value || 0,
         redeemedPoints: redeemedPoints.value || 0,
         couponValue:Number(couponValue.value) || 0,
@@ -1233,6 +1230,7 @@ const handleEdit = async () => {
       },
     }
 
+    if (bill.value?.invoiceCode) Object.assign(requestData.billData,invoiceDetails({dueDate:invoiceDueDate.value,invoicePaymentTerms:invoiceTerms.value,subject:invoiceReference.value},date.value))
     // 7. Prepare for printing after the server transaction succeeds
     printData = preparedPrintData;
 
@@ -1242,6 +1240,11 @@ const handleEdit = async () => {
       body: requestData
     })
     printData.generatedCoupons = result?.generatedCoupons || []
+    if (bill.value?.invoiceCode) {
+      Object.assign(printData,{billingMode:'invoice',invoiceCode:bill.value.invoiceCode,
+        ...invoiceDetails({dueDate:invoiceDueDate.value,invoicePaymentTerms:invoiceTerms.value,subject:invoiceReference.value},date.value),
+        amountReceived:0,balanceDue:grandTotal.value,invoicePaymentStatus:'Unpaid'})
+    }
 
     if (selectedAction.value === 'print') await print()
     else if (selectedAction.value === 'send') await send()
@@ -2133,6 +2136,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 
   <UDashboardPanelContent class="billing-page p-1">
       <CompanyFormField toolbar />
+      <BillingNotesModal v-model="isNotesOpen" v-model:notes="customerNotes" v-model:terms-and-conditions="termsAndConditions" :disabled="isSaving || bill?.isMarkit" />
     <div v-if="dataLoading" class="w-full flex justify-center items-center py-20">
           <UIcon
             name="i-heroicons-arrow-path-20-solid"
@@ -2140,7 +2144,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
           />
           <span>Loading data...</span>
         </div>
-      <UCard v-else :style="billingTableStyle"
+      <UCard v-else :style="billingTableStyle" :inert="isSaving"
     :ui="{
       base: 'billing-card flex flex-col',
       rounded: '',
@@ -2161,6 +2165,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
     }"
   >
       <template #header>
+      <UAlert v-if="serialRegistration.error.value" :title="serialRegistration.error.value" color="orange" class="m-2"><template #actions><UButton size="xs" variant="soft" @click="serialRegistration.load">Retry</UButton></template></UAlert>
         <div class="relative px-2">
       <div
         v-if="showCamera"
@@ -2204,12 +2209,12 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
         </div>
         </div>
      
-         <div class="lg:hidden col-span-2 flex flex-row gap-2 py-2 px-2">
+         <div class="billing-topbar flex flex-wrap items-end gap-2 text-sm py-2 px-2">
             <UInput
               v-model="dateInput"
               type="date"
-              label="Date"
-              class="flex-1"
+              :aria-label="bill?.invoiceCode ? 'Invoice date' : 'Date'"
+              class="flex-1 min-w-32 lg:flex-none lg:w-40"
               :disabled="bill?.isMarkit"
               @change="commitDateInput"
               @blur="commitDateInput"
@@ -2220,47 +2225,30 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
               type="number"
               label="User Code"
               placeholder="Enter user code"
-              class="flex-1"
+              class="flex-1 min-w-32 lg:flex-none lg:w-40"
               @keydown.enter.prevent="updateParentUserDetails(parentUserCode)"
               @blur="updateParentUserDetails(parentUserCode)"
               :disabled="bill?.isMarkit"
             />
-            <UButton color="primary" icon="i-heroicons-camera" label="Scan" block class="flex-1" @click="handleScan" :disabled="bill?.isMarkit"/>
-          </div>
-        
-        <div class="lg:flex lg:flex-row lg:justify-between text-sm py-2 px-2 hidden">
-          <div class="lg:flex lg:flex-row gap-2">
-            <UInput
-              v-model="dateInput"
-              type="date"
-              label="Date"
-              :disabled="bill?.isMarkit"
-              @change="commitDateInput"
-              @blur="commitDateInput"
-            />
-            <UInput
-              v-if="isUserTrackIncluded"
-              v-model="parentUserCode"
-              type="number"
-              label="User Code"
-              placeholder="Enter user code"
-              @keydown.enter.prevent="updateParentUserDetails(parentUserCode)"
-              @blur="updateParentUserDetails(parentUserCode)"
-              :disabled="bill?.isMarkit"
-            />
-          </div>
-          <div class="lg:flex lg:flex-row gap-2">
+          <div class="ml-auto flex items-center gap-2">
+            <UButton v-if="afterSales.enabled.value" icon="i-heroicons-shield-check" color="gray" variant="ghost" square title="Registered units" aria-label="Registered units" :disabled="isSaving || bill?.isMarkit" @click="isServiceUnitsOpen = true" />
+            <span class="whitespace-nowrap text-xs text-gray-500 dark:text-gray-400">{{ bill?.invoiceCode || `Bill #${bill?.invoiceNumber ?? ''}` }}</span>
+            <UButton v-if="isMobile || Capacitor.isNativePlatform()" color="primary" icon="i-heroicons-camera" aria-label="Scan barcode" title="Scan barcode" square @click="handleScan" :disabled="bill?.isMarkit" />
            <UButton
                 color="primary"
                 icon="i-heroicons-plus"
-                class="flex-shrink-0 me-2"
+                aria-label="Add item"
+                title="Add item"
+                square
                 @click="addNewRow(0,false)"
                 :disabled="bill?.isMarkit"
               />
+            <UDropdown :items="billMenuItems"><UButton icon="i-heroicons-ellipsis-horizontal" aria-label="Bill options" title="Bill options" :disabled="isSaving || bill?.isMarkit" /></UDropdown>
           </div>
         </div>
 
-   </template>  
+   <BillingInvoiceDetails v-if="bill?.invoiceCode && isMobile" v-model:due-date="invoiceDueDate" v-model:terms="invoiceTerms" :invoice-date="dateInput" :disabled="isSaving || bill?.isMarkit" :show-reference="false" />
+   </template>
 
         <!-- Responsive table wrapper -->  
          
@@ -2282,6 +2270,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
               <span  :class="{ 'text-red-600': row.return }">{{ row.name }}</span>
               <span v-if="showCostColumn" :class="{ 'text-red-600': row.return }">₹{{ row.cost }}</span>
               <span  :class="{ 'text-red-600': row.return }">₹{{ row.value }}</span>
+              <div class="flex items-center gap-1"><BillingSerialNumbers v-if="afterSales.enabled.value" :item="row" :covered="serialRegistration.isCovered(row)" :owned="serialRegistration.owned.value" v-model:returned-unit-ids="returnedServiceUnitIds" :disabled="isSaving || bill?.isMarkit" @details="details => serialRegistration.setDetails(row, details)" /><UButton icon="i-heroicons-trash" color="red" variant="ghost" size="xs" aria-label="Delete row" :disabled="isSaving || bill?.isMarkit" @click="() => { isDeleteModalOpen = true; deletingRowIdentity = { index, sn: row.sn }; }" /></div>
             </div>
 
             <!-- Row 1: Barcode | Qty | Discount -->
@@ -2544,6 +2533,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
                   {{ row.value }}
                 </td>
                 <td class="py-1 ps-2 whitespace-nowrap text-right">
+                  <BillingSerialNumbers v-if="afterSales.enabled.value" :item="row" :covered="serialRegistration.isCovered(row)" :owned="serialRegistration.owned.value" v-model:returned-unit-ids="returnedServiceUnitIds" :disabled="isSaving || bill?.isMarkit" @details="details => serialRegistration.setDetails(row, details)" />
                   <UButton
                     icon="i-heroicons-trash"
                     color="red"
@@ -2570,8 +2560,9 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
       <div>
           Qty: {{ tQty }}
       </div>
-      <div>
-          Inv #: {{ bill?.invoiceNumber }}
+      <div v-if="bill?.invoiceCode" class="billing-invoice-subject">
+        <label for="invoice-subject" class="text-gray-700 font-medium">Subject</label>
+        <UInput id="invoice-subject" v-model="invoiceReference" placeholder="Let your customer know what this invoice is for" maxlength="500" :disabled="isSaving || bill?.isMarkit" aria-label="Invoice subject" />
       </div>
 
 </div>
@@ -2584,18 +2575,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
     <div class="text-primary-700 dark:text-primary-300 font-bold text-3xl leading-none">₹{{ subtotal.toFixed(2) }}</div>
   </div>
 </div>
-<div class="mb-6">
-          <label class="block text-gray-700 font-medium">Discount</label>
-          <UInput
-            ref="discountref"
-            type="text"
-            inputmode="decimal"
-            v-model="discount"
-            @keydown.enter.prevent="handleEnterMainDiscount()"
-            placeholder="e.g. 10, -5, +50"
-            :disabled="bill?.isMarkit"
-          />
-        </div>
+<BillingDiscountAdjustment ref="discountref" v-model:discount="discount" v-model:adjustment="adjustment" :disabled="isSaving || bill?.isMarkit" @enter="handleEnterMainDiscount()" />
 <div class="billing-primary-action flex">
             <UButton
               :loading="isSaving"
@@ -2627,7 +2607,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
     <div class="text-green-700 dark:text-green-300 font-bold text-3xl leading-none ">₹{{ grandTotal.toFixed(2) }}</div>
   </div>
 </div>
-<div class="mb-4">
+<div v-if="!bill?.invoiceCode" class="mb-4">
               <label class="block text-gray-700 font-medium">Payment</label>
               <div class="w-full flex flex-row gap-2">
                 <USelect
@@ -2650,6 +2630,10 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
                 />
               </div>
             </div>
+<div v-else>
+  <label for="invoice-payment-terms" class="block text-gray-700 font-medium">Payment terms</label>
+  <BillingPaymentTerms id="invoice-payment-terms" v-model:terms="invoiceTerms" v-model:due-date="invoiceDueDate" :invoice-date="dateInput" :disabled="isSaving || bill?.isMarkit" />
+</div>
 <div class="billing-row-action"><UButton icon="i-heroicons-trash" aria-label="Delete" title="Delete" block variant="solid" color="red" class="w-full" @click="isBillDeleteModalOpen = true" :disabled="bill?.isMarkit">Delete</UButton></div>
 </div>
 <div>
@@ -2666,7 +2650,7 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
               />
             </div>
 </div>
-<div class="billing-summary-account flex gap-2">
+<div v-if="!bill?.invoiceCode" class="billing-summary-account flex gap-2">
               <UInputMenu v-model="selected" placeholder="Account" aria-label="Account Name" :options="accounts" value-attribute="id" option-attribute="name" :disabled="bill?.isMarkit">
                 <template #option="{ option }">
                   <div
@@ -2680,6 +2664,10 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
                 </template>
               </UInputMenu>
             <UButton icon="i-heroicons-plus" aria-label="Add account" title="Add account" square @click="isOpen=true" :loading="isSavingAcc" :disabled="bill?.isMarkit" />
+</div>
+<div v-else>
+  <label for="invoice-due-date" class="block text-gray-700 font-medium">Due date <span class="text-red-500" aria-hidden="true">*</span></label>
+  <UInput id="invoice-due-date" v-model="invoiceDueDate" type="date" :min="dateInput" :disabled="isSaving || bill?.isMarkit" required aria-label="Invoice due date" />
 </div>
 <div class="billing-row-action"><UButton icon="i-heroicons-arrow-uturn-left" aria-label="Sales Return" title="Sales Return" block variant="solid" class="w-full" @click="issalesReturnModelOpen = true" :disabled="bill?.isMarkit">Return</UButton></div>
 </div>
@@ -2780,13 +2768,11 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
               :disabled="clientFound || bill?.isMarkit" />
             </div>
 </div>
-<div class="billing-summary-actions mt-9">
-            <div class="flex gap-2">
+<div class="billing-summary-actions flex gap-2 mt-9">
                <UButton v-if="!isRedeemPoint" color="green" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Redeem</UButton>
               <UButton v-else-if="isRedeemPoint" color="red" class="flex-1" block @click="handleRedeemPoints" :loading="redeeming" :disabled="bill?.isMarkit">Undo</UButton>
               <UButton v-if="!skipPoints" color="red" class="flex-1" block @click="skipPoints = true" :disabled="bill?.isMarkit">Skip</UButton>
               <UButton v-else color="green" class="flex-1" block @click="skipPoints = false" :disabled="bill?.isMarkit">Include</UButton>
-            </div>
             </div>
 </div>
 </div>
@@ -2794,21 +2780,9 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
 
         <!-- mobile view -->
         <div  v-if="isMobile" class="lg:hidden flex flex-col gap-3 py-3 text-sm px-2" >
-        <div class="">
-          <label class="block text-gray-700 font-medium">Dis % (+) / Round Off (-) / Add (+n)</label>
-          <UInput
-          ref="discountref"
-          type="text"
-          inputmode="text"
-          pattern="^[+\-]?[0-9]*[.,]?[0-9]*$"
-          v-model="discount"
-          @keydown.enter.prevent="handleEnterMainDiscount()"
-          placeholder="e.g. 10, -5, +50"
-          :disabled="bill?.isMarkit"
-          />
-        </div>
+        <BillingDiscountAdjustment ref="discountref" v-model:discount="discount" v-model:adjustment="adjustment" :disabled="isSaving || bill?.isMarkit" @enter="handleEnterMainDiscount()" />
 
-        <div class="">
+        <div v-if="!bill?.invoiceCode" class="">
           <label class="block text-gray-700 font-medium">Payment Method</label>
           <div class="w-full flex flex-row gap-2">
             <USelect
@@ -3141,6 +3115,14 @@ watch(() => companyScope.auth.session.value?.isUserTrackIncluded, value => { isU
         </UCard>
     </UModal>
 
+    <UModal v-if="afterSales.enabled.value" v-model="isServiceUnitsOpen" :ui="{ width: 'sm:max-w-2xl' }">
+      <UCard>
+        <template #header><div class="flex items-center justify-between"><h2 class="font-semibold">Registered units</h2><UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" aria-label="Close registered units" @click="isServiceUnitsOpen = false" /></div></template>
+        <p class="mb-4 text-sm text-gray-500">Use service history to change an already registered unit's serial number or activation dates. Select units below when removing them from this bill.</p>
+        <AfterSalesInvoiceUnits v-if="afterSales.enabled.value && isServiceUnitsOpen" v-model="removedServiceUnitIds" :bill-id="String(route.params.salesId)" />
+        <template #footer><div class="flex justify-end"><UButton @click="isServiceUnitsOpen = false">Done</UButton></div></template>
+      </UCard>
+    </UModal>
 </template>
 
 <style scoped>

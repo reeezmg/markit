@@ -1,0 +1,58 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Unified Sales</title><style>body{font:14px Arial;color:#334155;margin:24px}button,a,input,select{margin:4px;padding:8px;border:1px solid #cbd5e1;border-radius:6px}a{display:inline-block;color:#ea580c;text-decoration:none}a[aria-current=page]{background:#fff7ed;border-color:#fb923c}table{width:100%;border-collapse:collapse;margin:16px 0}th,td{text-align:left;padding:10px;border-bottom:1px solid #ddd}th{background:#f8fafc}h1{font-size:24px}#result{padding:12px;background:#f0fdf4}</style></head><body><div id="app"></div><pre id="result">Running…</pre>
+<script type="module">
+import * as Vue from 'vue'
+import { QueryClient, VueQueryPlugin } from '@tanstack/vue-query'
+import Sales from '../pages/erp/sales.vue'
+import {emptyBillingPreferences} from '../utils/billing-preferences'
+const {h,ref,reactive,nextTick,Suspense}=Vue
+const route=reactive({query:{},path:'/erp/sales'}),calls=[]
+const cash={id:'cash',companyId:'company',invoiceNumber:41,billPrefix:'SALE',createdAt:'2026-10-30T05:00:00Z',grandTotal:200,subtotal:200,paymentMethod:'Cash',paymentStatus:'PAID',client:{name:'Walk-in'},entries:[],payments:[],amountReceived:200,balanceDue:0}
+const invoice={id:'invoice',companyId:'company',invoiceNumber:42,invoiceCode:'INV-42',createdAt:'2026-10-01T05:00:00Z',grandTotal:1000,subtotal:1000,paymentMethod:'Credit',paymentStatus:'PENDING',dueDate:'2026-10-15',invoicePaymentTerms:'Net 14',subject:'Maintenance',client:{name:'Sample Customer',phone:'1234567890'},payments:[{amount:400,status:'POS_CREDIT_RECEIPT'}],entries:[],amountReceived:400,balanceDue:600,overdue:true,sendStatus:'Not sent'}
+const paid={...invoice,id:'paid',invoiceCode:'INV-43',invoiceNumber:43,paymentStatus:'PAID',payments:[{amount:1000,status:'POS_CREDIT_RECEIPT'}],amountReceived:1000,balanceDue:0,overdue:false,sendStatus:'Sent'}
+const scope={ready:Promise.resolve(),companyId:ref('company'),readIds:ref(['company']),enabled:ref(false),companyName:()=> 'Sample Store',auth:{session:ref({companyId:'company',currency:'INR',companyName:'Sample Store'})},async fetch(url,options={}){
+  calls.push({url,...JSON.parse(JSON.stringify(options))})
+  if(url.includes('billing-preferences'))return{preferences:emptyBillingPreferences(options.query.document),configured:false}
+  if(url.includes('findManyBills')){
+    const view=options.body.salesView,rows=view==='paynow'?[cash]:view==='invoices'?[invoice,paid]:view==='unpaid'?[invoice]:[cash,invoice,paid]
+    return {rows:JSON.parse(JSON.stringify(rows)),total:rows.length,totals:{total:rows.reduce((n,r)=>n+r.grandTotal,0),cash:view==='paynow'||view==='all'?200:0,card:0,upi:0,credit:view==='paynow'?0:1000,received:400,balance:600,overdue:600},collections:{creditRepayments:400}}
+  }
+  throw Error('Unmocked '+url)
+}}
+const store=reactive({search:'',selectedStatus:[],selectedPaymentMethods:[],page:1,pageCount:'5',selectedColumnKeys:[],$patch(value){Object.assign(this,value)}})
+Object.assign(window,Vue,{useCompanyScope:()=>scope,useSalesTableStore:()=>store,useBillStore:()=>({lastUpdate:0}),useToast:()=>({add(){}}),
+  useRoute:()=>route,useRouter:()=>({push(){},replace(value){route.query=value.query}}),useOrganizationActions:()=>({forOwner:items=>items}),
+  usePrint:()=>({printBill(){}}),useAsyncData:async(_key,load)=>({data:ref(await load())})})
+const app=Vue.createApp({render:()=>h(Suspense,null,{default:()=>h(Sales)})})
+app.use(VueQueryPlugin,{queryClient:new QueryClient()})
+const wrap={setup:(_p,{slots})=>()=>h('div',[slots.header?.(),slots.default?.(),slots.footer?.()])}
+for(const name of ['UDashboardPanelContent','UCard','UFormGroup'])app.component(name,wrap)
+app.component('NuxtLink',{props:['to'],setup:(p,{slots,attrs})=>()=>h('a',{...attrs,href:p.to.path+'?view='+p.to.query?.view,onClick:event=>{event.preventDefault();route.query={...p.to.query}}},slots.default?.())})
+app.component('UButton',{props:['label','to','disabled','loading'],setup:(p,{slots,attrs})=>()=>h('button',{...attrs,disabled:p.disabled||p.loading},p.label||slots.default?.())})
+app.component('UInput',{props:['modelValue'],emits:['update:modelValue'],setup:(p,{emit,attrs})=>()=>h('input',{...attrs,value:p.modelValue,onInput:e=>emit('update:modelValue',e.target.value)})})
+app.component('USelect',{props:['modelValue','options'],emits:['update:modelValue'],setup:(p,{emit,attrs})=>()=>h('select',{...attrs,value:p.modelValue,onChange:e=>emit('update:modelValue',e.target.value)},p.options.map(o=>h('option',{value:typeof o==='object'?o.value:o},typeof o==='object'?o.label:o)))})
+app.component('UTable',{props:['rows','columns'],setup:(p,{slots})=>()=>h('table',[h('thead',h('tr',p.columns.map(c=>h('th',c.label)))),h('tbody',p.rows.map(row=>h('tr',p.columns.map(c=>h('td',slots[c.key+'-data']?.({row})||String(row[c.key]??''))))))])})
+for(const name of ['UModal','USlideover'])app.component(name,{props:['modelValue'],setup:(p,{slots})=>()=>p.modelValue?h('aside',slots.default?.()):null})
+for(const name of ['UPopover','UDropdown','USelectMenu'])app.component(name,{setup:(_p,{slots})=>()=>h('span',slots.default?.())})
+app.component('UBadge',{setup:(_p,{slots})=>()=>h('span',slots.default?.())})
+app.component('UAlert',{props:['title','description'],setup:p=>()=>h('p',p.title+': '+p.description)})
+for(const name of ['CompanyTableFilter','UIcon','UPagination','BillingCreditReceiptModal','ThermalReceipt'])app.component(name,{render:()=>null})
+async function settle(){for(let i=0;i<30;i++){await Promise.resolve();await nextTick()}}
+function assert(ok,label){if(!ok)throw Error(label)}
+async function tab(label){const link=[...document.querySelectorAll('nav a')].find(a=>a.textContent===label);assert(link,'Tab '+label);link.click();await settle()}
+const result=document.querySelector('#result')
+try{
+ app.mount('#app');await settle()
+ assert(document.querySelector('h1').textContent==='Sales','Unified title')
+ assert(document.querySelectorAll('nav a').length===4,'Four sales tabs')
+ assert(document.querySelector('table').textContent.includes('SALE-41')&&document.querySelector('table').textContent.includes('INV-42'),'All sales contains cash and invoice')
+ await tab('Pay now');assert(document.querySelector('table').textContent.includes('SALE-41')&&!document.querySelector('table').textContent.includes('INV-42'),'Pay now is filtered')
+ await tab('Invoices');const table=document.querySelector('table')
+ for(const label of ['Due date','Received','Balance','Payment terms','Subject','Sending','INV-42','INV-43','Net 14','Maintenance','Overdue'])assert(table.textContent.includes(label),'Invoice table '+label)
+ assert(calls.filter(c=>c.url.includes('findManyBills')).at(-1).body.dateFilter==='all','Invoices default to all dates')
+ assert(!table.textContent.includes('SALE-41'),'Invoice view excludes pay now')
+ await tab('Unpaid / overdue');assert(document.querySelector('table').textContent.includes('INV-42')&&!document.querySelector('table').textContent.includes('INV-43'),'Unpaid excludes paid invoice')
+ await tab('All sales');assert(calls.filter(c=>c.url.includes('findManyBills')).at(-1).body.dateFilter==='range','All sales restores date range')
+ await tab('Invoices')
+ result.textContent=new URLSearchParams(location.search).has('preview')?'PREVIEW READY · Unified Sales with invoice tab':'ALL PASSED · one Sales table, tab filtering, invoice columns, overdue badge, date defaults and existing paid sales'
+}catch(error){result.textContent='FAILED: '+error.stack}
+</script></body></html>

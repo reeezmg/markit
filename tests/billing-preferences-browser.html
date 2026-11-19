@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Billing preference drawer checks</title><style>body{font:14px Arial;margin:20px}label{display:block;margin:10px 0}textarea,select{display:block;width:90%;padding:6px}button,a{margin:5px;padding:8px}form{max-width:640px;border:1px solid #ddd;padding:15px}fieldset{border:0}</style></head><body><pre id="result">RUNNING</pre><div id="app"></div><script type="module">
+import * as Vue from 'vue';
+import Preferences from '../components/Billing/Preferences.vue';
+import { emptyBillingPreferences, normalizeBillingPreferences } from '../utils/billing-preferences.ts';
+import { invoicePaymentTerms } from '../utils/invoice-payment-terms.ts';
+const state=Vue.reactive({open:false,document:'invoice',company:'company'}),saved=new Map(),calls=[];
+let canManage=true,failSave=false;
+const fetch=async(url,options)=>{
+ const key=options.headers['x-company-id']+':'+options.query.document;calls.push({key,method:options.method||'GET'});
+ if(options.method==='PUT'){if(failSave)throw Error('Could not save. Please retry.');saved.set(key,normalizeBillingPreferences(options.body,options.query.document));return {}}
+ return {preferences:structuredClone(saved.get(key)||emptyBillingPreferences(options.query.document)),terms:invoicePaymentTerms,canManage};
+};
+Object.assign(window,Vue,{useCompanyScope:()=>({fetch}),useToast:()=>({add(){}})});
+const app=Vue.createApp({setup:()=>()=>Vue.h(Preferences,{modelValue:state.open,'onUpdate:modelValue':value=>state.open=value,document:state.document,companyId:state.company})});
+app.component('USlideover',{props:['modelValue'],setup:(p,{slots})=>()=>p.modelValue?Vue.h('aside',{role:'dialog'},slots.default?.()):null});
+app.component('UButton',{inheritAttrs:false,props:['to','disabled','loading','type'],setup:(p,{attrs,slots})=>()=>Vue.h(p.to?'a':'button',{...attrs,...(p.to?{href:p.to.path+'?entryCompany='+p.to.query.entryCompany}:{type:p.type||'button',disabled:p.disabled||p.loading})},slots.default?.())});
+app.component('UFormGroup',{props:['label'],setup:(p,{slots})=>()=>Vue.h('label',[p.label,slots.default?.()])});
+app.component('UTextarea',{inheritAttrs:false,props:['modelValue'],emits:['update:modelValue'],setup:(p,{attrs,emit})=>()=>Vue.h('textarea',{...attrs,value:p.modelValue,onInput:e=>emit('update:modelValue',e.target.value)})});
+app.component('USelect',{inheritAttrs:false,props:['modelValue','options','optionAttribute','valueAttribute'],emits:['update:modelValue'],setup:(p,{attrs,emit})=>()=>Vue.h('select',{...attrs,value:p.modelValue,onChange:e=>emit('update:modelValue',e.target.value)},p.options.map(option=>Vue.h('option',{value:typeof option==='object'?option[p.valueAttribute]:option},typeof option==='object'?option[p.optionAttribute]:option)))});
+app.component('UCheckbox',{inheritAttrs:false,props:['modelValue','label'],emits:['update:modelValue'],setup:(p,{attrs,emit})=>()=>Vue.h('label',[Vue.h('input',{...attrs,type:'checkbox',checked:p.modelValue,onChange:e=>emit('update:modelValue',e.target.checked)}),p.label])});
+app.component('UAlert',{props:['description'],setup:p=>()=>Vue.h('p',{role:'alert'},p.description)});
+app.mount('#app');
+const check=(value,message)=>{if(!value)throw Error(message)},tick=()=>new Promise(resolve=>setTimeout(resolve,30));
+const field=label=>document.querySelector('[aria-label="'+label+'"]');
+const set=(label,value)=>{const input=field(label);input.value=value;input.dispatchEvent(new Event(input.tagName==='SELECT'?'change':'input',{bubbles:true}))};
+const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);
+async function open(kind='invoice',company='company'){state.document=kind;state.company=company;state.open=true;await tick()}
+const logs=[];
+try{
+ await open();check(document.querySelector('form[aria-label="Invoice preferences"]'),'Invoice drawer missing');
+ set('Default invoice payment terms','net-30');set('Default invoice customer notes','Default invoice note');set('Default table rows per page','10');await tick();
+ field('Show table summary cards').click();await tick();document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await tick();
+ check(!state.open,'Save did not close drawer');check(saved.get('company:invoice').paymentTermId==='net-30','Payment term not saved');check(saved.get('company:invoice').pageSize===10&&!saved.get('company:invoice').showSummary,'Table preferences not saved');
+ await open();check(field('Default invoice customer notes').value==='Default invoice note','Saved notes not restored');set('Default invoice customer notes','Unsaved');button('Cancel').click();await tick();
+ await open();check(field('Default invoice customer notes').value==='Default invoice note','Cancel changed saved notes');state.open=false;await tick();
+ logs.push('PASS invoice drawer save/reopen, due terms, table preferences and Cancel');
+ await open('sale');check(!field('Default invoice payment terms'),'Invoice payment terms leaked into sales');check(field('Default sale customer notes').value==='','Invoice defaults leaked into sales');
+ set('Default sale customer notes','Sale note');await tick();failSave=true;document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await tick();
+ check(state.open&&document.querySelector('[role="alert"]'),'Failed save did not retain drawer/error');check(field('Default sale customer notes').value==='Sale note','Failed save lost notes');
+ failSave=false;document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await tick();check(saved.get('company:sale').customerNotes==='Sale note','Retry did not save');
+ logs.push('PASS independent sales settings and save failure/retry retain entered values');
+ canManage=false;await open('invoice','branch');check(button('Save preferences').disabled,'Read-only role can save');check(field('Default invoice customer notes').matches(':disabled'),'Read-only role can edit');check(field('Default invoice customer notes').value==='','Company defaults leaked');
+ check(document.querySelector('a').href.endsWith('/settings/printer?entryCompany=branch'),'Receipt design link uses wrong company');
+ logs.push('PASS company isolation, read-only controls and company receipt-design link');
+ document.querySelector('#result').textContent=logs.join('\n')+'\nALL PASSED';
+}catch(error){document.querySelector('#result').textContent=logs.join('\n')+'\nFAILED: '+error.stack}
+</script></body></html>

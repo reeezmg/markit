@@ -1,3 +1,15 @@
+Dedicated sales CRM (revised 2026-11-19): `CrmSettings`, `CrmAccount`, `CrmDeal`,
+`CrmActivity`, `CrmDocumentLink` and `CrmAudit` are scoped, raw-API-owned models.
+Contacts reuse Client + CompanyClient and the existing /client page; CrmContact is
+removed from the unapplied design. CompanyClient's crmData/crmVersion/crmAccountId
+store only company CRM attributes, concurrency and account association. Those fields
+are @ignore for generated operations, preserving pre-installation client reads and
+keeping writes in authenticated CRM APIs. Identity and consent are never copied into
+CRM JSON. Deal/activity composite foreign keys reference CompanyClient directly.
+Versions/audits protect changes. Deal outcomes never post sales/stock/accounting.
+The revised prepared CRM migration adds six tables and three CompanyClient columns;
+it is not applied. See ARCH-crm.md and the separate approval rule in AGENTS.md.
+
 Legacy accounting archive policy (2026-10-06): generated create/update/delete is
 denied on AccountLedgerEntry, MoneyTransaction, AccountTransfer, Investment, BankAccount
 and CashAccount. Dedicated legacy financial mutation routes are retired. Raw scoped
@@ -6,6 +18,96 @@ by native posting triggers. This is an application-policy change, with no table/
 migration or deletion of historical financial data.
 
 # Markit v1 - Project Architecture Guide
+
+## Ecommerce pickup schedule separation (local preparation)
+
+`EcommPickupRequest` in `schema.zmodel` owns warehouse-level pickup bookings.
+`requestedPickupDate`/`requestedPickupTime` (nullable text, mapped to
+`requested_pickup_date`/`requested_pickup_time`) preserve submitted values separately
+from `carrierSchedule` (nullable JSONB, `carrier_schedule`). A recorded slot contains
+`date`, `startTime`, `endTime`, `source: "manual"` and `recordedAt`; it is copied from
+the carrier portal, never inferred from the requested time. `carrierResponse`
+(nullable JSONB, `carrier_response`) retains the original creation response.
+Legacy `pickupDate`/`pickupTime` still mean requested values. `orderIds` and order
+metadata tags represent Markit's handover list, not a confirmed carrier AWB link.
+The local migration `20261115160000_pickup_requested_schedule` adds these four
+columns and backfills requested values only. It must not be applied without
+separate explicit authorization. No table/column changes were applied during
+implementation. See `ARCH-pages-orders.md` for the UI and API semantics.
+
+## WhatsApp Connect (local preparation)
+
+`WhatsAppNotificationSettings`, `WhatsAppNotificationContact`,
+`WhatsAppNotificationSource`, `WhatsAppNotificationOutbox` and
+`WhatsAppInstallationAppointment` own automatic customer updates. All are company
+scoped with generated access denied. Settings hold template rules and an activation
+baseline. Contacts bind recorded permissions to an explicit recipient/client phone.
+Source observations suppress historical/repeated events. Outbox keys are stable
+per-company SHA-256 event keys; intent commits before external sending, and uncertain
+delivery is never automatically retried. Installation bookings reference existing
+customer units; their actual completion remains an after-sales date action.
+Prepared migration `20261118160000_whatsapp_notifications` creates these five tables
+and requires separate authorization. No database schema changes were applied by this
+implementation. See `WHATSAPP-NOTIFICATIONS.md` and `ARCH-connect-whatsapp.md`.
+
+`WhatsAppConnection` owns one company/WABA/phone association and encrypted business
+credential. Company, WABA and phone ownership are unique. `WhatsAppMessage` stores
+outbound intent, consent attestation/admin, Meta ID and receipt state, plus signed
+inbound text/media metadata. Generated access is denied; company-admin raw server
+APIs own this feature. Disconnect erases the credential and retains history; company
+deletion cascades to connections/messages. The prepared-only migration is
+`20261103120000_connect_whatsapp`; this work does not apply it. See
+`ARCH-connect-whatsapp.md` for setup, limitations and API semantics.
+
+## After-sales records
+
+Customer-product reference numbering (local preparation): `CustomerProductNumbering`
+stores a company-owned `prefix` (default PR), `lastNumber` bigint and update time.
+Counter allocation is in the unit-registration transaction and locks the same row as
+settings changes; numbers continue across prefix changes and financial years. The
+CustomerProduct reference constraint is now `[companyId,reference]`, while its UUID
+remains the global internal identity. Migration `20261030213000_customer_product_numbering`
+creates this table/replaces the unique index only after separate database approval.
+It does not rewrite existing references. Existing deployed schemas keep legacy
+registration until the migration is installed. See `ARCH-after-sales.md`.
+
+`ServiceConfiguration` and immutable `ServiceConfigurationRevision` define reusable
+WARRANTY/GUARANTEE/MAINTENANCE rules. `ProductServiceLink` is the company-scoped
+many-to-many catalog assignment. `CustomerProduct` records physical sold units;
+`CustomerServiceAgreement` stores terms/revision snapshots and activation/schedule
+dates. `MaintenanceOccurrence`, `ServiceJob`, `ServiceReading`, `ServiceAudit` and
+`ServiceReminder` retain due work, claims/visits, manual evidence, changes and deduped
+alerts. Raw authenticated APIs own these models; generated access is denied.
+`ServiceCharge` stores company-owned reusable non-stock charge defaults and archive
+state. `Product.isServiceProduct` classifies stocked repair parts in the existing
+product table. ServiceJob `details.charges`/`details.parts` keep billing line snapshots;
+all non-stock service charges use a company category referenced by existing
+GeneralPreference `after-sales/service-charge-category` JSON (`version`, `categoryId`).
+Charge save/invoice issuance ensure the category transactionally; no ServiceCharge
+column or migration is needed for this association. Rates/taxes remain line snapshots.
+Legacy single `charge`/`tax` remains readable. Follow-up local migration
+`20261030170000_service_items` adds the catalog and product flag. Installation status
+must be checked for each database rather than inferred from the local migration files.
+Customer-product source IDs are scalar history references, so catalog deletion does
+not erase service history. Replacement units can retain multiple historical agreements.
+Migration `20261030150000_after_sales` is prepared locally and requires separate
+authorization before database installation. See `ARCH-after-sales.md` for invariants.
+
+Recurring invoice and retainer source contract (2026-10-30, local preparation):
+`RecurringInvoice` stores company/customer/currency, an anchored schedule, revision and
+validated invoice template. `RecurringInvoiceOccurrence` uniquely records profile/date,
+frozen template/due date and optional unique normal Bill link. Draft occurrences have no
+posting; issue and schedule advancement share the Bill source transaction.
+`RetainerInvoice` stores a numbered advance request and frozen liability account;
+`RetainerEvent` records immutable COLLECTION/APPLY/REFUND/UNAPPLY amounts, dated journal,
+optional invoice/Payment and unique reversal links. Applications use existing Payment
+receipt/reversal statuses so invoice outstanding and source guards remain consistent.
+Company/customer/currency, active account types, locked periods and amount bounds are
+validated by the owning source services. Generic CRUD is denied for all four models.
+Migration `20261030120000_invoice_programs` is prepared only; database installation
+requires a separate explicit instruction. It creates no historical postings and rewrites
+no source records. `prisma/schema.prisma` is generated from the authoritative zmodel.
+See `ARCH-pages-erp.md` and `ARCH-storetools-api.md` for implementation ownership.
 
 Datasource configuration (2026-10-29): `DATABASE_URL` is the single PostgreSQL
 connection variable for the application, ZenStack/Prisma and maintenance scripts.
@@ -35,25 +137,55 @@ canonical expression. These declaration changes do not alter production tables o
 `AccountantInvestor`, `AccountantInvestorTerm` and `AccountantInvestorEvent` own
 the new Accountant investor area. Profiles store contact/document metadata, a
 linked company user ID (the existing `legacyUserId` column now links both native and
-imported profiles, unique per company/user) and the three dedicated chart account IDs.
+imported profiles, unique per company/user) and saved chart account mappings, which
+may be shared by investors; purpose balances are isolated by investor events.
 `UserRole.investor` is added by migration `20260930180000_investor_user_role`;
-existing roles are not rewritten. Terms keep dated ownership/share/profit-sharing agreements. Manager/admin corrections
-are allowed before posted allocations protect the original or proposed effective
-date; the API audits before/after values under `terms-edited` in AccountantAudit.
-Unprotected terms may be deleted by manager/admin after validating remaining
-company totals; `terms-deleted` audits preserve the removed snapshot. Events retain dated amounts,
-journal/request/reversal/legacy IDs and allocation or import snapshots. Composite
-company/investor foreign keys keep terms/events within their profile's tenant;
-request, legacy and reversal IDs are unique per company. Generated CRUD is denied.
-The API owns posts and reversals; the legacy-import trigger makes adopted old
-investment rows immutable. See `ARCH-pages-accounts.md` and
-`scripts/production-accounting/INVESTORS.md` for calculation and import rules.
+existing roles are not rewritten. `AccountantInvestorTerm` now stores internal
+versioned ownership/profit snapshots rather than a user agreement workflow.
+Percentage-mode snapshots come from Add/Edit investor; share-mode snapshots come
+from purchases/redemptions priced individually. Historical agreement rows/JSON are
+retained; old term mutation endpoints reject new agreement operations. New profile,
+identity, membership, zero-share/percentage snapshot and creation-request audit
+commit atomically. Composite tenant keys and unique request/reversal IDs remain.
+
+Investor events retain dated cash, journal/request/reversal/legacy IDs, transaction
+pricePerShare and preview/shareChange snapshots in existing details JSON. There
+are no current capital commitments or agreement price requirements. Share units
+and percentages reflect recorded trades; confirmed cash posts separately.
+Same-day trades reuse the unique dated ownership row with per-event audit history.
+SHARE_BUY/SHARE_REDEEM events have null journalId and store full trade value with
+paymentStatus in JSON. Confirmed partial/full payments are separate CAPITAL_IN/OUT
+events linked by details.settleTradeId and a published journal. Unpaid trade dues
+are operational balances, not automatic cash or receivable/payable journals.
+Payment reversals reopen dues without changing units; reversing an unpaid trade
+restores units after dependency/allocation checks. Existing JSON and nullable
+journal fields support this without schema additions.
+The legacy-import trigger still makes adopted old investments immutable. Generated
+CRUD remains denied. No columns, tables or migrations are added for this change.
+See `ARCH-pages-accounts.md` and `scripts/production-accounting/INVESTORS.md`.
 
 Company-wide profit distributions reuse these investor models. `AccountantAudit`
 stores append-only funding-account configuration (`investor-profit-settings`),
-company share totals (`investor-share-settings`, `after.totalShares`), and
+company share mode/totals (`investor-share-settings`, `after.includeShares` and `after.totalShares`), and
 approved request/result snapshots (`investor-profit-batch`). Investor event details
 link the batch ID; there is no separate distribution table or new schema migration.
+
+`AccountantLoan` and `AccountantLoanEvent` define agreement-based investor borrowing.
+The loan snapshots terms, accounts and an exact-cent schedule as JSON. Loan accounts
+default from company loan settings and can be overridden per loan; they do not
+require or modify the investor's historical loan-account mapping. Saving
+records the receipt and moves the loan to OPEN in one transaction; DRAFT is a
+transient creation state and supports completion of earlier unposted records.
+OPEN agreements freeze their snapshots, and settlement or full repayment closes
+them. Immutable source events store scheduled charges,
+12-month reclassification/reversal journals, actual payments and reasoned payment
+reversals. Company/investor and company/loan composite foreign keys enforce tenant
+ownership, and request IDs are unique per company. Only cash principal movements
+project into investor events using `details.loanId`; interest/fees never inflate
+investor principal. Generated CRUD denies all operations. Migration
+`20261102120000_loan_management` adds only the two loan tables/indexes/constraints
+and is prepared, not applied. Runtime APIs and tests perform no DDL. See the Loans
+contract in `ARCH-pages-accounts.md` for posting dates, accrual and settlement.
 
 `AccountantUserSettings` stores company salary/credit account mappings and activation.
 `AccountantUserSource` freezes source account choices, posting signatures and current
@@ -335,7 +467,14 @@ Liability the company owes to a distributor.
 ### Billing / Sales
 
 #### `bills` (Bill)
+Existing `adjustment` stores the signed fixed amount applied after the bill discount.
+POS billing and edit keep it separate from `discount` / `discountType`: `2` adds ₹2
+and `-2` subtracts ₹2. Drafts, source writes, edit reads and receipt reads preserve it;
+legacy surcharge discounts are moved into the adjustment input when opened for edit.
 A sales invoice/order.
+- ERP Invoice mode reuses `type=BILL`, `paymentMethod=Credit`, initial `paymentStatus=PENDING`. Existing `invoiceCode` (`INV-<invoiceNumber>`) marks issuance; `dueDate`, `invoicePaymentTerms` and `subject` (customer reference) store its details. The UI derives received/balance from original tender and active Payment receipts rather than the legacy `balanceDue` field. No model field or posting-function addition is needed.
+- Invoice sending history uses the existing company-scoped Accountant audit table with resource `invoice-send` and bill ID as resource ID. It does not alter payment status.
+- Existing `notes` and `termsAndConditions` (`terms_and_conditions`) store customer-facing bill/invoice text, with source validation limits of 5,000 and 10,000 characters. Quote conversion copies only the text selected by its company retention preferences. These are existing columns; no schema change is required.
 - `paidAt` (`paid_at`, timestamptz): first observed PAID insertion/transition after migration `20261001120000_document_status_history`. A database trigger sets it using the transaction timestamp and preserves it on retries, edits, refunds or reopening. Existing paid rows remain null; neither `createdAt` nor `updatedAt` is treated as historical payment evidence. New historical imports also record observation time, not a backdated collection date.
 - Fields: `companyId`, `clientId`, `userId`, `accountId`, `creditUserId`, `invoiceNumber`, `subtotal`, `originalSubtotal`, `discount`, `originalDiscount`, `tax`, `grandTotal`, `originalGrandTotal`, `paymentMethod`, `paymentStatus`, `splitPayments` (JSON), `type` (STANDARD/BOOKING/TRY_AT_HOME/BILL), `status` (order lifecycle), `deleted`, `isMarkit`, `precedence` (Boolean? default false), `commission`, `storeWaitingFee`
 - `originalSubtotal` / `originalGrandTotal` / `originalDiscount`: cleanup reduction snapshots. First cleanup amount reduction preserves the real bill values here before lowering visible `subtotal` / `grandTotal` and zeroing visible `discount`; cleanup users can see these real values.
@@ -642,9 +781,32 @@ Controls which variant form fields are visible, per company.
 
 #### `general_preferences` (GeneralPreference)
 Flexible per-company, per-page preference storage for reusable page rules/settings.
+- `sidebar-navigation/defaults` holds version-1 JSON with a revision and per-section
+  enabled/hidden-page selections for ERP, CRM, Storetools and Connect. Without saved
+  choices, only ERP is enabled; CRM, Storetools and Connect default to false. Explicit
+  company choices override these defaults. Live admin/manager
+  settings APIs own writes and back up the previous JSON at `defaults-backup` within a
+  company-locked transaction. Generic mutations of this namespace are rejected.
+  Choices narrow existing menu gates without changing route/API authorization. No new
+  fields or schema objects are required; see `ARCH-sidebar-navigation.md`.
+- `sales-workflow/defaults` holds `{version:1,includeInvoicing:boolean,includeAfterSales:boolean}` for Sales
+  and after-sales visibility. Missing settings enable invoicing and disable after-sales. The dedicated GET/PUT settings
+  API authorizes company reads and admin/manager/accountant writes, preserves the
+  preceding JSON at `defaults-backup` under a company row lock, and performs no
+  schema, journal or historical-document changes. Generated preference mutations
+  are blocked for this page by `organizationModelScope.ts`.
+- `invoices/defaults` and `sales/defaults` hold version-1 billing/table defaults:
+  customer notes, terms and conditions, invoice payment-term ID, page size and summary
+  visibility. The preceding JSON is saved under `defaults-backup`; dedicated billing
+  preference APIs authorize management writes and generic CRUD is blocked. New/reset
+  drafts adopt defaults; existing drafts/issued documents retain their text and dates.
+  Receipt designs keep their existing `printer/templates` ownership. These settings
+  use existing JSON storage without adding fields or database schema objects.
 - Fields: `companyId`, `pageName` (`page_name`), `key` (`preference_key`), `value` (`preference_value` JSON), `active`
 - Unique constraint: `[companyId, pageName, key]`
-  - Current active Storetools usage: company print designs at `pageName = printer`, `key = templates`; `templates-backup` retains the preceding saved JSON. `GET/PUT /api/settings/print-templates` provides authorized company reads and admin/manager writes. The older preferences page and `/api/general-preferences` route remain removed.
+  - Named invoice payment terms use `pageName = billing`, `key = payment-terms`, with the previous JSON at `payment-terms-backup`. Version-1 JSON contains `{terms: [{id,name,kind:'days',days}]}`. Invoice snapshots remain in existing Bill `invoicePaymentTerms` and `dueDate`; no model fields or schema objects are added.
+  - Current active Storetools usage: company print designs (including optional A4/A5/Letter receipt paperSize and flow/absolute embedded images) at `pageName = printer`, `key = templates`; `templates-backup` retains the preceding saved JSON. `GET/PUT /api/settings/print-templates` provides authorized company reads and admin/manager writes. The older preferences page and `/api/general-preferences` route remain removed.
+  - Quote defaults use `pageName = quotes`, `key = defaults` (previous JSON in `defaults-backup`): one validated A4 documentDesign (sections, embedded PNG/JPEG images, columns and typography), terms/notes, visibility, accepted-edit and customer approval policies, conversion mode, invoice due days and independent `retainCustomerNotes` / `retainTermsAndConditions` booleans (default false). Dedicated quote preference APIs require company access and management writes; generic model writes cannot change this family.
 - Historical intent: approval settings, custom fields, validation rules, custom actions, and record-locking rules could be stored as additional page/key JSON preferences without adding one-off tables for every preference family.
   - **Used in:** `server/utils/printTemplateSettings.ts`, `server/api/settings/print-templates.{get,put}.ts`, `components/PrinterTemplateDesigner.vue`.
 
@@ -682,11 +844,25 @@ Provider-aware editing slot registry: generic GCP pool slots and company-bound A
 - An idle slot remains reserved to `owner_user_id` for 15 minutes from `last_activity_at`, so that user can switch, create, or fork conversations in the same warm slot; the orchestrator rehydrates the requested conversation when it differs from `owner_conversation_id`. Processing rows cannot be claimed, and a user with a processing slot is not assigned a second slot. An idle row with expired affinity is globally eligible, ordered oldest first. A failed teardown is quarantined.
 - **Used in:** `orchestrator/server.js`, `orchestrator/schema.sql`, and pool seed/provision tooling.
 
+#### `sales_orders` / `sales_order_items`
+The ERP Sales orders module uses the existing SalesOrder/SalesOrderItem models and
+SalesOrderStatus DRAFT/CONFIRMED/CLOSED/CANCELLED. Its company counter/prefix supplies
+order numbers. Existing GeneralPreference JSON at sales-orders/document:<id> holds
+revision, subject, customer and line-pricing snapshots; sales-orders/defaults holds
+independent design/defaults (with defaults-backup). The order's paymentTerms,
+deliveryMethod, expectedShipmentDate and pricing totals use their existing columns.
+Order saves preserve attachments, invoiced/payment flags and Bill.salesOrderId links;
+confirmed orders have no bill/stock/receipt/journal effects until a separate workflow
+creates those sources. Only schema.zmodel contract comments were added; no fields,
+generated Prisma schema or database schema were changed.
+
 #### `quote_custom_field_values` (QuoteCustomFieldValue)
-Per-quote values for custom fields configured through quote field-customization preferences.
+Per-quote JSON values. The ERP quote editor reserves `_erpQuote` for its version,
+revision, customer name/phone snapshot, payment terms, delivery estimate and per-line
+discount/tax/barcode/size metadata. Other JSON keys survive quote edits.
 - Fields: `quoteId` (unique, FK to `quotes`), `companyId`, `values` (`field_values` JSON)
-- Runtime API creates/upserts the physical table from raw SQL because generated ZenStack hooks do not yet include this new model until regeneration.
-- **Used in:** no active storetools source confirmed in the 2026-06-15 cleanup; former quote modal/custom-field API files were moved out of active source.
+- The table is declared in `schema.zmodel` and generated Prisma. Quote APIs only read/upsert records in the existing table; they do not create/alter the table at runtime.
+- **Used in:** `server/utils/erp-quotes.ts` through `/api/quotes`; `pages/erp/quotes/index.vue` and `components/Quotes/Editor.vue` (add/edit routes). Existing `pdf_template` is retained for compatibility; the current company quote preference documentDesign controls presentation. `_erpQuote.document` records print visibility and `_erpQuote.workflow` records response revisions, invoice drafts, one issued Bill link, currency/document snapshots and email outcomes. Draft invoices in this metadata have no source/stock effects until issue. No new schema fields or posting functions are needed.
 
 ---
 

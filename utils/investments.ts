@@ -1,17 +1,25 @@
 export const investmentPages = [
     ['overview', 'Overview'],
     ['investors', 'Investors'],
-    ['capital', 'Capital & loans'],
+    ['capital', 'Capital'],
     ['allocate', 'Allocate profit'],
     ['payouts', 'Profit payouts'],
     ['settings', 'Settings'],
 ] as const;
+export type InvestmentMovementMode = 'capital' | 'loans' | 'payouts';
+export const investmentMovementKinds: Record<InvestmentMovementMode, string[]> = {
+    capital: ['CAPITAL_IN', 'CAPITAL_OUT'],
+    loans: ['LOAN_IN', 'LOAN_OUT'],
+    payouts: ['PROFIT_ALLOCATE', 'PROFIT_PAY'],
+};
 export const investmentToday = () => new Date().toLocaleDateString('en-CA');
 export const investmentMoney = (amount: unknown, currency = 'INR') =>
     new Intl.NumberFormat('en-IN', { style: 'currency', currency }).format(
         Number(amount || 0)
     );
 export const investmentKinds: Record<string, string> = {
+    SHARE_BUY: 'Share purchase recorded',
+    SHARE_REDEEM: 'Share redemption recorded',
     CAPITAL_IN: 'Capital received',
     CAPITAL_OUT: 'Capital returned',
     PROFIT_ALLOCATE: 'Profit allocated',
@@ -47,9 +55,10 @@ export function investmentLedger(events: any[]) {
             ...e,
             date: String(e.event_date).slice(0, 10),
             posted,
+            recorded: ['SHARE_BUY','SHARE_REDEEM'].includes(kind),
             movementKind: kind,
             label: `${e.kind === 'REVERSAL' ? 'Reversal: ' : ''}${
-                investmentKinds[kind] || kind
+                (e.details?.settleTradeId ? (kind === 'CAPITAL_IN' ? 'Share purchase payment' : 'Share redemption payment') : e.details?.pricePerShare ? (kind === 'CAPITAL_IN' ? 'Share purchase' : kind === 'CAPITAL_OUT' ? 'Share redemption' : investmentKinds[kind]) : investmentKinds[kind]) || kind
             }`,
             capital: balance.capital / 100,
             profit: balance.profit / 100,

@@ -13,6 +13,17 @@ Delhivery HTTP contracts; `legacy-carriers.ts` preserves the previous limited
 transports for other carriers without advertising unsupported capabilities.
 Carrier requests use native fetch with timeouts and no automatic mutation retries.
 
+Pickup creation is warehouse-level, with an expected parcel count; its public
+contract does not provide an allocated-slot lookup or attach individual AWBs to
+an existing pickup. `pickup/raise` retains the original response and the requested
+date/time separately. Markit's pickup history exposes a manually recorded carrier
+slot and explicitly labels the local handover list. `pickup/add` updates only
+that local list; `pickup/schedule` records a slot copied from Delhivery One.
+Neither operation claims to update Delhivery One's order list or reschedule the
+carrier. The prepared `20261115160000_pickup_requested_schedule` migration must
+be applied with separate authorization before creation/slot recording can use
+the new columns; creation checks this before contacting the carrier.
+
 ## Configuration
 
 - Use Storetools' existing `DATABASE_URL` and seller-session configuration.
@@ -40,7 +51,8 @@ reports movement. Carrier errors, including HTTP-200 body rejections, surface
 as failures rather than successful shipment actions.
 
 Tracking preserves terminal orders and allowed retry transitions, appends status
-history and settles pending delivered COD records.
+history and settles pending delivered COD records. Delivery activation uses
+the first delivery-history day in Asia/Kolkata and retains an existing activation.
 Cancellation archives the previous AWB and releases the order to PACKED only
 after carrier acceptance. Return/exchange shipments require approved requests
 and a registered warehouse. Seller tracking/edit/label/NDR calls verify company

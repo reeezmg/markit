@@ -3,6 +3,7 @@ import { Router, badRequest, notFound } from './router';
 import { context, accountantPrisma } from './context';
 import { erpAccountingSettings, erpRoles } from './erp';
 import { planEcommerceReturn } from '../../../utils/ecommerce-accounting';
+import { afterSalesPgAdapter, returnOrderServiceUnits } from '../after-sales-returns';
 
 export const ecommerceAccountingRouter = Router();
 const extraRoles: Record<string, { type: string; code: string; name: string; category: string }> = {
@@ -88,6 +89,7 @@ const eventSchema = z.object({
   category: z.enum(['shippingExpense', 'gatewayExpense', 'sales', 'deliveryIncome', 'codIncome']).default('shippingExpense'),
   moneyAccountId: z.string().min(1).optional(), reference: z.string().trim().min(1).max(150), note: z.string().trim().max(1000).default(''),
   items: z.array(z.object({ entryId: z.string().min(1), qty: z.number().int().positive() })).default([]),
+  serviceUnitIds: z.array(z.string().min(1)).max(10000).default([]),
   refundDelivery: z.boolean().default(false), refundCod: z.boolean().default(false),
 });
 const round = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -122,6 +124,7 @@ ecommerceAccountingRouter.post('/orders/:id/events', async (req, res) => {
     try { plan = planEcommerceReturn(s.sale.signature.metadata, s.events.map((e: any) => e.signature.metadata), b); }
     catch (error: any) { throw badRequest(error.message); }
     lines.push(...plan.lines); extra = plan.metadata;
+    await returnOrderServiceUnits(afterSalesPgAdapter(db),companyId,s.order.id,b.items,b.serviceUnitIds,userId);
     for (const item of plan.items) {
       const moved = await db.$queryRawUnsafe(`UPDATE items SET qty=COALESCE(qty,0)+$1,sold_qty=COALESCE(sold_qty,0)-$1,updated_at=now()
         WHERE id=$2 AND company_id=$3 RETURNING id`, item.qty, item.itemId, companyId);

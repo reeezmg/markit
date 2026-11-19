@@ -1,0 +1,54 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Billing receipt audit</title>
+<style>body{margin:20px;background:#edf0f4;font:14px Arial;color:#1e293b}#samples{display:flex;align-items:flex-start;gap:20px;flex-wrap:wrap}.sample{background:white;padding:12px;box-shadow:0 2px 8px #ccd1d9}canvas{display:block;width:272px}h3{margin:0 0 12px;font-size:14px}pre{white-space:pre-wrap}</style></head><body>
+<pre id="result">RUNNING</pre><div id="samples"></div>
+<script type="module">
+import { classicReceiptTemplate, taxlessReceiptTemplate } from '../utils/print-templates.ts';
+import { renderPrintTemplate, templatePrintBytes, renderedTemplatePDF } from '../utils/print-template-renderer.client.ts';
+import { createThermalReceiptPDF } from '../utils/thermal-receipt.client.ts';
+import { receiptEntryAmounts, receiptEntryTotals } from '../utils/receipt-entry-amounts.ts';
+import { receiptSummary } from '../utils/receipt-summary.ts';
+import { billTotal } from '../utils/bill-adjustments.ts';
+const check=(value,message)=>{if(!value)throw Error(message)};
+const logs=[];
+const entries=[{name:'Cotton shirt with a long description',barcode:'SAMPLE01',qty:2,rate:100,discount:10,value:180,tax:5,size:'M',unit:'Nos'},{name:'Returned item',barcode:'SAMPLE02',qty:1,rate:50,discount:0,value:50,tax:5,size:'L',unit:'Nos',return:true}];
+const totals=receiptEntryTotals(entries);
+const base={companyId:'sample',companyName:'MARKIT SAMPLE STORE',companyAddress:{street:'Sample Market Road',city:'Kochi',state:'Kerala'},gstin:'SAMPLE GSTIN',invoiceNumber:'SAMPLE-100',date:'2026-10-29T05:00:00Z',clientName:'Sample Customer',clientPhone:'9999999999',phone:'9999999999',showUnit:true,isTaxIncluded:true,entries:entries.map(e=>({...receiptEntryAmounts(e),description:e.name,mrp:e.rate,discount:e.discount?e.discount+'%':0,tax:e.tax,size:e.size,unit:e.unit,barcode:e.barcode})),...totals,subtotal:totals.tvalue,discount:2,adjustment:2,couponValue:10,redeemedPoints:5,availablePoints:80,grandTotal:billTotal(totals.ttvalue,2,2,15),notes:'Please call before delivery.\nHandle the returned item separately.',termsAndConditions:'Keep this receipt for any exchange. Items must retain their original tags.',thankYouNote:'Thank you for your business.'};
+const cases=[
+ ['Pay now / tax',{...base,paymentMethod:'Cash'},classicReceiptTemplate()],
+ ['Invoice / tax',{...base,discount:-2,adjustment:-2,grandTotal:111,paymentMethod:'Credit',billingMode:'invoice',invoiceCode:'INV-SAMPLE-100',dueDate:'2026-11-28',invoicePaymentTerms:'Net 30',subject:'Clothing order for the October event',amountReceived:0,balanceDue:111,invoicePaymentStatus:'Unpaid'},classicReceiptTemplate()],
+ ['Invoice / no tax',{...base,paymentMethod:'Credit',billingMode:'invoice',invoiceCode:'INV-SAMPLE-101',dueDate:'2026-11-28',invoicePaymentTerms:'Net 30',subject:'Clothing order with a return and signed adjustment',amountReceived:40,balanceDue:base.grandTotal-40,invoicePaymentStatus:'Partially paid'},taxlessReceiptTemplate()],
+];
+try{
+ const original=CanvasRenderingContext2D.prototype.fillText;let text=[];
+ CanvasRenderingContext2D.prototype.fillText=function(value,x,y,...rest){const point=this.getTransform().transformPoint({x,y});text.push({value:String(value),x:point.x,y:point.y,canvas:this.canvas});return original.call(this,value,x,y,...rest)};
+ try{
+  for(const [title,data,template] of cases){
+   text=[];const result=await renderPrintTemplate(template,data);const calls=text.filter(t=>t.canvas===result.canvas||t.canvas.width===result.canvas.width);
+   check(calls.some(t=>t.value.includes(data.grandTotal.toFixed(2))),title+': total missing');
+   check(calls.some(t=>t.value.includes(receiptSummary(data).discountText)),title+': discount/adjustment summary missing');
+   if(data.billingMode==='invoice'){
+    for(const expected of ['Subject:', 'Payment terms:', 'Due date:', 'Balance due:'])check(calls.some(t=>t.value.includes(expected)),title+': '+expected+' missing');
+    const footer=calls.find(t=>t.value.startsWith('INVOICE '));
+    const designBottom=Math.max(...result.bounds.map(b=>(b.y+b.height)*template.dpi/25.4));
+    check(footer.y>=designBottom-1,title+': invoice details overlap the design '+JSON.stringify({footerY:footer.y,designBottom,bounds:result.bounds.slice(-3)}));
+   }
+   check(calls.some(t=>t.value.includes('Customer notes:')),title+': notes missing');
+   check(calls.some(t=>t.value.includes('Terms and conditions:')),title+': terms missing');
+   check(calls.every(t=>t.y>=0&&t.y<result.canvas.height),title+': text clipped vertically');
+   const bytes=templatePrintBytes(result,template);check(bytes.length>1000,title+': empty printer data');
+   const pdf=await renderedTemplatePDF(result);check(Math.abs(pdf.internal.pageSize.getWidth()-result.width)<0.01,title+': PDF width differs');
+   const host=document.createElement('div');host.className='sample';const heading=document.createElement('h3');heading.textContent=title;host.append(heading,result.canvas);document.querySelector('#samples').append(host);
+   logs.push('PASS '+title+': totals, adjustment, notes, invoice details, printer data and PDF size');
+  }
+  const long={...cases[1][1],notes:'Long customer note with delivery instructions. '.repeat(30),termsAndConditions:'These terms must wrap without covering the total or being cut off. '.repeat(30)};
+  text=[];const result=await renderPrintTemplate(classicReceiptTemplate(),long);check(result.height>350,'Long notes did not extend the receipt');
+  const pdf=await createThermalReceiptPDF({...long,printTemplate:null});
+  check(pdf.internal.getNumberOfPages()===1,'Original thermal PDF unexpectedly split');
+  const commands=pdf.internal.pages[1].join('\n');
+  const positions=[...commands.matchAll(/[-\d.]+ ([-\d.]+) Td/g)].map(match=>Number(match[1]));
+  check(positions.every(y=>y>=0&&y<=pdf.internal.pageSize.getHeight()*pdf.internal.scaleFactor),'Original PDF text extends beyond the paper');
+  logs.push('PASS long customer notes and terms wrap and extend canvas/original PDF without clipping');
+ }finally{CanvasRenderingContext2D.prototype.fillText=original}
+ document.querySelector('#result').textContent=logs.join('\n')+'\n'+(new URLSearchParams(location.search).has('preview')?'PREVIEW READY':'ALL PASSED');
+}catch(error){document.querySelector('#result').textContent=logs.join('\n')+'\nFAILED: '+error.stack}
+</script></body></html>

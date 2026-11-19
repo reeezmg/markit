@@ -99,20 +99,26 @@
 
       <!-- ROUND OFF -->
       <div class="text-center">
-        DISC / ROUND OFF (+/-): {{ money(data.discount) }}
+        DISC / ROUND OFF (+/-): {{ summary.discountText }}
       </div>
 
       <!-- GRAND TOTAL -->
       <div class="text-center text-[16px] font-bold my-2">
         GRAND TOTAL: {{ money(data.grandTotal) }}
       </div>
+      <div v-if="Number(data.couponValue)" class="text-center">Coupon discount: {{ money(data.couponValue) }}</div>
+      <div v-if="Number(data.redeemedPoints)" class="text-center">Points redeemed: {{ money(data.redeemedPoints) }}</div>
+      <div v-if="Number(data.availablePoints)" class="text-center">Points available: {{ data.availablePoints }}</div>
 
       <!-- SAVINGS -->
       <div class="border border-black text-center font-bold py-1 my-2">
-        YOUR SAVING: {{ money(data.tdiscount) }}
+        YOUR SAVING: {{ money(summary.savings) }}
       </div>
 
       <!-- FOOTER -->
+      <div v-if="billDocumentLines(data).length" class="mb-3 border-t border-black pt-2 whitespace-pre-wrap break-words">
+        <p v-for="(line,index) in billDocumentLines(data)" :key="index">{{ line }}</p>
+      </div>
       <div v-if="data.thankYouNote" class="text-center mb-3">
         {{ data.thankYouNote }}
       </div>
@@ -130,7 +136,10 @@
 </template>
 
 <script setup lang="ts">
+import { billDocumentLines } from '~/utils/invoice-flow'
+import { receiptSummary } from '~/utils/receipt-summary'
 const props = defineProps<{ data: any }>()
+const summary = computed(() => receiptSummary(props.data))
 const originalReceipt = ref(false)
 watch(() => props.data, () => { originalReceipt.value = false }, { deep: true })
 

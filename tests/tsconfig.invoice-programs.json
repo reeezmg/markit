@@ -1,0 +1,14 @@
+{
+  "extends": "./tsconfig.invoice-flow.json",
+  "include": [
+    "credit-receipt-globals.d.ts", "quote-page-globals.d.ts",
+    "../utils/invoice-programs.ts", "../utils/invoice-program-request.client.ts",
+    "../server/utils/invoice-programs.ts", "../server/utils/invoice-program-route.ts",
+    "../server/utils/recurring-invoices.ts", "../server/utils/retainer-invoices.ts",
+    "../server/api/recurring-invoices/**/*.ts", "../server/api/retainer-invoices/**/*.ts",
+    "../server/api/cron/recurring-invoices.get.ts",
+    "../components/Billing/ProgramCustomer.vue", "../components/Billing/ProgramTemplate.vue",
+    "../components/Billing/RecurringWorkspace.vue", "../components/Billing/RetainerWorkspace.vue", "../components/Billing/RetainerPrint.vue",
+    "../pages/erp/recurring-invoices/index.vue", "../pages/erp/retainer-invoices/index.vue"
+  ]
+}

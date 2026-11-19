@@ -1,0 +1,5 @@
+{
+  "extends":"./tsconfig.invoice-flow.json",
+  "compilerOptions":{"strictNullChecks":false},
+  "include":["credit-receipt-globals.d.ts","quote-page-globals.d.ts","unified-sales-globals.d.ts","../utils/sales-view.ts","../pages/erp/sales.vue","../pages/erp/invoices.vue"]
+}

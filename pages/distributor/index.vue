@@ -2,6 +2,7 @@
 import { purchaseOrderPayments, purchaseOrderDue } from '~/utils/purchase-order-payments';
 import { distributorPurchaseTransactions } from '~/utils/distributor-purchase-transactions';
 import { distributorCreditKind, creditAccountRoles, type DistributorCreditKind } from '~/utils/distributor-credit-kind';
+import type { DistributorTableReport } from '~/utils/distributor-table-export.client';
 const companyScope = useCompanyScope('table');
 await companyScope.ready;
 const $fetch = companyScope.fetch;
@@ -774,6 +775,40 @@ const paginatedReturns = computed(() =>
   filteredReturns.value.slice((returnPage.value - 1) * returnPageCount.value, returnPage.value * returnPageCount.value)
 )
 
+const exportDate = (value: string | Date) => format(new Date(value), 'dd MMM yyyy')
+const exportPeriod = (range: { start: Date; end: Date }) => `${exportDate(range.start)} to ${exportDate(range.end)}`
+const exportSupplier = computed(() => selectedDistributor.value?.distributor?.name || 'Distributor')
+const total = (rows: any[], key: string) => rows.reduce((sum, row) => sum + Math.round(Number(row[key] || 0) * 100), 0) / 100
+const poExportReport = computed<DistributorTableReport>(() => ({
+  title: 'Purchase Orders', supplier: exportSupplier.value, company: selectedDistributor.value?.company?.name, period: exportPeriod(poSelectedDate.value),
+  columns: [{ label: 'PO number' }, { label: 'Date' }, { label: 'Payment type' },
+    { label: 'Total (INR)', numeric: true }, { label: 'Qty', numeric: true }, { label: 'Due (INR)', numeric: true }],
+  rows: filteredPOs.value.map((row: any) => [row.purchaseOrderNo ?? '-', exportDate(row.createdAt), row.paymentType || '-', Number(row.totalAmount || 0), Number(row.qty || 0), row.due == null ? null : Number(row.due)]),
+  summary: [{ label: 'Purchase total', value: total(filteredPOs.value, 'totalAmount') }, { label: 'Due shown', value: total(filteredPOs.value, 'due') }],
+}))
+function paymentExportReport(rows: any[], period: string, title = 'Payments'): DistributorTableReport {
+  return {
+    title, supplier: exportSupplier.value, company: selectedDistributor.value?.company?.name, period,
+    columns: [{ label: 'Payment number' }, { label: 'Date' }, { label: 'PO number' }, { label: 'Type' },
+      { label: 'Amount (INR)', numeric: true }, { label: 'Bill number' }, { label: 'Remarks', width: 50 }],
+    rows: rows.map(row => [row.paymentNo ?? '-', exportDate(row.createdAt), row.pono ?? '-', row.paymentType || '-', Number(row.amount || 0), row.billNo || '-', row.remarks || '']),
+    summary: [{ label: 'Payments shown', value: total(rows, 'amount') }],
+  }
+}
+const paymentsExportReport = computed(() => paymentExportReport(filteredPayments.value, exportPeriod(paymentSelectedDate.value)))
+const poPaymentsExportReport = (po: any) => paymentExportReport(
+  (po.distributorPayment || []).map((payment: any) => ({ ...payment, pono: po.purchaseOrderNo })),
+  'All dates', `PO-${po.purchaseOrderNo} Payments`,
+)
+const returnsExportReport = computed<DistributorTableReport>(() => ({
+  title: 'Purchase Returns', supplier: exportSupplier.value, company: selectedDistributor.value?.company?.name, period: exportPeriod(returnSelectedDate.value),
+  columns: [{ label: 'Return number' }, { label: 'Date' }, { label: 'PO number' },
+    { label: 'Subtotal (INR)', numeric: true }, { label: 'Tax (INR)', numeric: true }, { label: 'Total (INR)', numeric: true }, { label: 'Remarks', width: 50 }],
+  rows: filteredReturns.value.map((row: any) => [row.returnNo ?? '-', exportDate(row.createdAt), row.poNo ?? '-', Number(row.subTotalAmount || 0), Number(row.taxAmount || 0), Number(row.totalAmount || 0), row.remarks || '']),
+  summary: [{ label: 'Subtotal shown', value: total(filteredReturns.value, 'subTotalAmount') },
+    { label: 'Tax shown', value: total(filteredReturns.value, 'taxAmount') }, { label: 'Returns shown', value: total(filteredReturns.value, 'totalAmount') }],
+}))
+
 const resetPoFilters = () => {
   poPaymentTypeFilter.value = ''
   poDueOnly.value = false
@@ -936,10 +971,6 @@ const handleAddCredit = async () => {
 }
 
 // Downloads
-const isDownloadingPo      = ref(false)
-const isDownloadingCredits = ref(false)
-const isDownloadingPayments = ref(false)
-
 async function triggerDownload(url: string, filename: string, blob: Blob) {
   const objectUrl = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -947,84 +978,6 @@ async function triggerDownload(url: string, filename: string, blob: Blob) {
   a.download = filename
   a.click()
   URL.revokeObjectURL(objectUrl)
-}
-
-const downloadPo = async (format: 'excel' | 'pdf') => {
-  isDownloadingPo.value = true
-  try {
-    const res = await $fetch.raw(`/api/downloads/distributor-po.${format}`, {
-      method: 'GET',
-      params: {
-        distributorId: selectedDistributor.value.distributorId,
-        companyId: selectedDistributor.value.companyId,
-        startDate:     startOfDay(poSelectedDate.value.start).toISOString(),
-        endDate:       endOfDay(poSelectedDate.value.end).toISOString(),
-        search:        poSearch.value || undefined,
-        paymentType:   poPaymentTypeFilter.value || undefined,
-        dueOnly:       poDueOnly.value ? 'true' : undefined,
-      },
-    })
-    const mime = format === 'pdf'
-      ? 'application/pdf'
-      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    const ext  = format === 'pdf' ? 'pdf' : 'xlsx'
-    await triggerDownload('', `po-${selectedDistributor.value.distributor?.name ?? 'distributor'}.${ext}`, new Blob([res._data as ArrayBuffer], { type: mime }))
-  } catch (err: any) {
-    toast.add({ title: 'Download failed', color: 'red', description: err.message })
-  } finally {
-    isDownloadingPo.value = false
-  }
-}
-
-const downloadCredits = async (format: 'excel' | 'pdf') => {
-  isDownloadingCredits.value = true
-  try {
-    const res = await $fetch.raw(`/api/downloads/distributor-credits.${format}`, {
-      method: 'GET',
-      params: {
-        distributorId: selectedDistributor.value.distributorId,
-        companyId: selectedDistributor.value.companyId,
-        startDate:     startOfDay(creditSelectedDate.value.start).toISOString(),
-        endDate:       endOfDay(creditSelectedDate.value.end).toISOString(),
-        type:          creditTypeFilter.value !== 'ALL' ? creditTypeFilter.value : undefined,
-      },
-    })
-    const mime = format === 'pdf'
-      ? 'application/pdf'
-      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    const ext  = format === 'pdf' ? 'pdf' : 'xlsx'
-    await triggerDownload('', `credits-${selectedDistributor.value.distributor?.name ?? 'distributor'}.${ext}`, new Blob([res._data as ArrayBuffer], { type: mime }))
-  } catch (err: any) {
-    toast.add({ title: 'Download failed', color: 'red', description: err.message })
-  } finally {
-    isDownloadingCredits.value = false
-  }
-}
-
-const downloadPayments = async (format: 'excel' | 'pdf') => {
-  isDownloadingPayments.value = true
-  try {
-    const res = await $fetch.raw(`/api/downloads/distributor-payments.${format}`, {
-      method: 'GET',
-      params: {
-        distributorId: selectedDistributor.value.distributorId,
-        companyId: selectedDistributor.value.companyId,
-        startDate: startOfDay(paymentSelectedDate.value.start).toISOString(),
-        endDate: endOfDay(paymentSelectedDate.value.end).toISOString(),
-        paymentType: paymentTypeFilter.value || undefined,
-        excludeReturns: true,
-      },
-    })
-    const mime = format === 'pdf'
-      ? 'application/pdf'
-      : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
-    const ext = format === 'pdf' ? 'pdf' : 'xlsx'
-    await triggerDownload('', `payments-${selectedDistributor.value.distributor?.name ?? 'distributor'}.${ext}`, new Blob([res._data as ArrayBuffer], { type: mime }))
-  } catch (err: any) {
-    toast.add({ title: 'Download failed', color: 'red', description: err.message })
-  } finally {
-    isDownloadingPayments.value = false
-  }
 }
 
 const downloadAllTransactions = async (row: any) => {
@@ -1055,28 +1008,6 @@ const downloadPurchaseReturn = async (returnId: string) => {
   }
 }
 
-const poDownloadItems = [
-  [
-    { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells', click: () => downloadPo('excel') },
-    { label: 'PDF',           icon: 'i-heroicons-document-text', click: () => downloadPo('pdf') },
-  ],
-]
-
-const creditsDownloadItems = [
-  [
-    { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells', click: () => downloadCredits('excel') },
-    { label: 'PDF',           icon: 'i-heroicons-document-text', click: () => downloadCredits('pdf') },
-  ],
-]
-
-const paymentsDownloadItems = [
-  [
-    { label: 'Excel (.xlsx)', icon: 'i-heroicons-table-cells', click: () => downloadPayments('excel') },
-    { label: 'PDF', icon: 'i-heroicons-document-text', click: () => downloadPayments('pdf') },
-  ],
-]
-
-// ─── Dropdown menus ───
 const mainAction = (row: any) => [
   [
     { label: 'Edit', icon: 'i-heroicons-pencil-square-20-solid', click: () => openForm(row.distributor, row) },
@@ -1539,15 +1470,7 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
                           variant="outline"
                           @click="poFilterOpen = true"
                         />
-                        <UDropdown :items="poDownloadItems">
-                          <UButton
-                            icon="i-heroicons-arrow-down-tray"
-                            size="xs"
-                            color="gray"
-                            variant="outline"
-                            :loading="isDownloadingPo"
-                          />
-                        </UDropdown>
+                        <DistributorTableDownload :report="poExportReport" :disabled="isLoading || Boolean(distributorLoadError)" />
                       </div>
                     </div>
 
@@ -1582,7 +1505,10 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
                       <!-- Expand: Payments sub-table -->
                       <template #expand="{ row }">
                         <div class="p-4 bg-gray-50 dark:bg-gray-900 rounded-md">
-                          <h3 class="text-sm font-semibold mb-3">Distributor Payments</h3>
+                          <div class="flex flex-wrap items-center justify-between gap-2 mb-3">
+                            <h3 class="text-sm font-semibold">Distributor Payments</h3>
+                            <DistributorTableDownload :report="poPaymentsExportReport(row)" :disabled="isLoading || Boolean(distributorLoadError)" />
+                          </div>
                           <div v-if="row.distributorPayment?.length">
                             <table class="w-full text-sm border border-gray-200 dark:border-gray-700">
                               <thead class="bg-gray-100 dark:bg-gray-800">
@@ -1643,6 +1569,7 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
                 <template v-if="index === 0">
                   <DistributorAccountingTransactions
                     :company-id="selectedDistributor.companyId"
+                    :company-name="selectedDistributor.company?.name"
                     :distributor-id="selectedDistributor.distributorId"
                     :revision="selectedDistributor"
                   >
@@ -1709,6 +1636,7 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
                     <div class="flex items-center gap-1.5 px-4 py-2 border-b border-gray-200 dark:border-gray-700">
                       <span class="text-xs text-gray-500">Rows:</span>
                       <USelect v-model="returnPageCount" :options="[5, 10, 20]" size="xs" class="w-16" />
+                      <DistributorTableDownload class="ml-auto" :report="returnsExportReport" :disabled="isLoading || Boolean(distributorLoadError)" />
                     </div>
 
                     <UTable
@@ -1835,15 +1763,7 @@ watch(companyScope.readIds, () => { page.value = 1; poPage.value = 1; creditPage
                           variant="outline"
                           @click="openPaymentFilter"
                         />
-                        <UDropdown :items="paymentsDownloadItems">
-                          <UButton
-                            icon="i-heroicons-arrow-down-tray"
-                            size="xs"
-                            color="gray"
-                            variant="outline"
-                            :loading="isDownloadingPayments"
-                          />
-                        </UDropdown>
+                        <DistributorTableDownload :report="paymentsExportReport" :disabled="isLoading || Boolean(distributorLoadError)" />
                       </div>
                     </div>
 

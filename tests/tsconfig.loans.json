@@ -1,0 +1,20 @@
+{
+    "extends": "./tsconfig.reports.json",
+    "include": [
+        "loan-globals.d.ts",
+        "../utils/loan-schedule.ts",
+        "../utils/investments.ts",
+        "../server/utils/accountant/loans.ts",
+        "../server/api/cron/loans.get.ts",
+        "../components/Investments/LoanForm.vue",
+        "../components/Investments/LoanPaymentModal.vue",
+        "../components/Investments/LoansPage.vue",
+        "../components/Investments/LoanAccountPage.vue",
+        "../components/Investments/LoanHistoryPage.vue",
+        "../components/Investments/LoanRepaymentsPage.vue",
+        "../components/Investments/LoanSettingsPage.vue",
+        "../pages/investments/loans/**/*.vue",
+        "../pages/loans/**/*.vue",
+        "loans.test.ts"
+    ]
+}

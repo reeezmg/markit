@@ -107,3 +107,16 @@ Install [Renovate GitHub app](https://github.com/apps/renovate/installations/sel
   Cashfree connection testing, webhook setup, runtime flow, and troubleshooting.
 - [Storefront memory](docs/storefront-memory.md) — storefront editor and generated
   storefront behavior.
+
+
+## After-sales service
+
+Reusable warranty, guarantee and maintenance configurations and the staff service
+workspace are documented in [ARCH-after-sales.md](docs/ARCH-after-sales.md). Run
+`npm run test:after-sales` for focused type, service and browser checks. The prepared
+`20261030150000_after_sales` and `20261030170000_service_items` migrations are not automatically applied; installing them
+requires separate explicit authorization. Existing sales remain operational before
+installation, while after-sales screens report that installation is required.
+Service items manages reusable labour/other charges and repair products through the
+shared product forms. Completed services support explicit invoices, including zero
+totals, with mixed charge and product lines and normal invoice printing/sharing.

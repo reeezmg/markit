@@ -1,8 +1,36 @@
 # Storetools Composables
 
+## Company sidebar preferences
+
+`useSidebarPreferences` owns shared company-keyed navigation choices for layout and Settings → Sidebar. Request generations and save revisions protect against stale GET responses; branch saves never replace login-company values. It uses the request fetcher during SSR and calls the authenticated sidebar-navigation settings API. See `ARCH-sidebar-navigation.md`.
+
+
 All custom composables and lib utilities in `storetools/composables/` and `storetools/lib/api/`.
 
 **Note:** `storetools/lib/hooks/` contains ZenStack auto-generated hooks (e.g., `useFindManyProduct`, `useCreateBill`) — see `ARCH-patterns.md` for the hooks pattern.
+
+`useAfterSalesSearch(query, load)` debounces configuration, customer-product and service-item
+server searches by 300 ms while tables filter their current rows immediately. It cancels
+the pending timer on unmount; owning pages reject stale responses and retain company scope.
+See `ARCH-after-sales.md` for the table and side-panel workflow.
+
+`useBillingSerialNumbers(items, clientId, enabled, companyId, fetcher)` owns billing and bill edit's
+row unit-details modal. Serials, delivery/installation dates and stable line keys live on existing draft
+rows, while `serviceUnits` maps covered lines/units to the existing save payload.
+Coverage/return reads reject stale company/client responses; saves wait for the
+current read. Quantity reductions and product replacement prune obsolete serials.
+Disabled after-sales performs no service reads and excludes serial metadata from
+registration payloads, retaining draft values. `Billing/SerialNumbers.vue` renders
+the icon next to Delete and stages modal edits separately until Confirm. It captures
+details per covered unit or the row's exact-return-unit selector.
+
+`useAfterSalesFeature(companyIds, fetcher?)` reads company-scoped workflow preferences
+and shares the company-keyed state/revisions with `useSalesWorkflow`. `enabled` applies
+to one owning company; `isEnabled(id)` handles rows in mixed-company tables. Missing
+settings or failed reads hide optional inputs. SSR awaits its initial read. Scope
+changes, saves and component disposal reject stale responses. It controls product,
+invoice, client/order, numbering, ecommerce-return and dedicated workspace UI; hiding
+an editor preserves its stored service fields.
 
 ---
 
@@ -84,7 +112,7 @@ Used on native platform at login — see `ARCH-pages-auth-settings.md`.
 
 ### `composables/usePrintBill.ts` — `usePrint()`
 
-Platform dispatcher: the native mobile app uses the selected Bluetooth printer; web uses assigned WebUSB devices from Settings > Printer. There is no localhost service, automatic device chooser or browser print-dialog path. `printBill` preserves explicit design overrides; otherwise `useWebUsbPrinter` loads the company default. Product label calls use the same shared default loader.
+Platform dispatcher: the native mobile app uses the selected Bluetooth printer; web uses assigned WebUSB devices from Settings > Printer. Sheet receipt templates (A4/A5/Letter) are resolved before printer assignment checks and use the system print dialog via `printSheetReceipt`; thermal jobs keep the device transports. There is no localhost service or automatic device chooser. `printBill` preserves explicit design overrides; otherwise `useWebUsbPrinter` loads the company default. Product label calls use the same shared default loader.
 
 ### `composables/useWebUsbPrinter.ts` â€” `useWebUsbPrinter()`
 
@@ -124,9 +152,16 @@ The fixed builders remain internal failsafes when no default exists or rendering
 
 Custom receipt table columns use `utils/receipt-table.ts` for variable resolution and `utils/load-receipt-table.client.ts` for related catalogue lookup. The renderer loads required product/variant/item relations through the existing company-scoped label-variable API; billed row values remain separate from current catalogue values. Shared receipt data is pre-resolved server-side into only the configured `receiptTableValues`, so public viewers need no private catalogue request. Manual entries without linked products leave related fields blank. New tables wrap headings and cells with shared column geometry; legacy items without column configuration keep the old layout.
 
-The Classic Tax Receipt preset uses `utils/receipt-summary.ts` for discount/savings and rate-grouped tax amounts, following existing thermal tax-inclusive/exclusive behavior. `tableColumnLines` partitions table columns by layout line and `tableColumnTotal` sums configured billed values; both header and item cells use the same per-line geometry. `fontFamily: thermal` uses condensed Consolas/Liberation Mono fallback. Built-in and editable copies use the normal raster/PDF renderer, including earned coupons. `renderedTemplatePDF` embeds an already rendered canvas in a PDF, `createTemplatePDF` renders then returns a reusable PDF document, and `downloadTemplatePDF` saves that document. `createThermalReceiptPDF` uses this same path for selected designs; the legacy Original format retains its fixed generator. `utils/share-receipt.client.ts` uploads the PDF data URI through the company-authorized share endpoint before returning a PDF link. No Tax Receipt is the built-in `taxlessReceiptTemplate` variant of Tax Receipt: thermal font, matching non-table sections, a six-column table and no tax summary. It renders through the ordinary template element loop; the former separate Courier drawing branch has been removed. Its in-app preview uses the same canvas image as PDF and thermal output. Receipt download actions offer PDF; the internal standalone HTML export utility remains available.
+The Classic Tax Receipt preset uses `utils/receipt-summary.ts` for discount/savings and rate-grouped tax amounts, following existing thermal tax-inclusive/exclusive behavior. `tableColumnLines` partitions table columns by layout line and `tableColumnTotal` sums configured billed values; both header and item cells use the same per-line geometry. `fontFamily: thermal` uses condensed Consolas/Liberation Mono fallback. Built-in and editable copies use the normal raster/PDF renderer, including earned coupons. `renderedTemplatePDF` embeds an already rendered canvas in a PDF (sheet receipts are sliced at row/section boundaries into physical A4/A5/Letter pages without dropping pixels), `createTemplatePDF` renders then returns a reusable PDF document, and `downloadTemplatePDF` saves that document. `createThermalReceiptPDF` uses this same path for selected designs; the legacy Original format retains its fixed generator. `utils/share-receipt.client.ts` uploads the PDF data URI through the company-authorized share endpoint before returning a PDF link. No Tax Receipt is the built-in `taxlessReceiptTemplate` variant of Tax Receipt: thermal font, matching non-table sections, a six-column table and no tax summary. It renders through the ordinary template element loop; the former separate Courier drawing branch has been removed. Its in-app preview uses the same canvas image as PDF and thermal output. Receipt download actions offer PDF; the internal standalone HTML export utility remains available.
 
 The internal `printCommands.ts` builders retain fixed ESC/POS bills/reports and TSPL labels. Direct receipts, coupons and reports read `utils/receipt-finishing.ts`: device-local `markit-receipt-finishing` stores bottomLines (0-30, default 7) and autoCut (default true). Labels and PDF downloads do not include receipt finishing. The localhost print transport remains removed. Native Bluetooth uses the same prepared receipt/label bytes and finishing settings as WebUSB.
+
+`test:print-templates` includes mocked saved-receipt data parity checks for returns,
+discounts/adjustments, sizes, units, redemption and invoice footers.
+`test:print-template-browser` also renders Pay now and Invoice fixtures with tax/no-tax
+designs, checks footer placement and long-note growth, prepares printer bytes and
+checks PDF dimensions. Transport tests mock USB/Bluetooth; these checks do not send
+a physical printer job or modify database records.
 
 ---
 

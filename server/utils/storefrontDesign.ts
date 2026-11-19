@@ -1,5 +1,8 @@
 import { createTableReadinessCheck } from '~/server/utils/schemaReadiness'
 import { pool } from '~/server/db'
+import { storefrontDesignOutcome } from './storefrontDesignOutcome'
+import { storefrontUsesAws } from './storefrontTransport'
+import { awsStorefrontRequest } from './awsStorefront'
 
 export const ensureStorefrontDesignTable = createTableReadinessCheck(['storefront_design_profiles'], 'Storefront design')
 
@@ -14,18 +17,33 @@ export async function getStorefrontDesignProfile(companyId: string) {
   )
   const profile = result.rows[0]
   if (!profile) return { status: 'NOT_CONFIGURED' as const }
-  if (profile.status === 'GENERATING' && profile.conversationId) {
+  const originalStatus = profile.status
+  if (['GENERATING', 'READY'].includes(profile.status) && profile.conversationId) {
     const run = await pool.query(
-      `SELECT status, reply FROM storefront_agent_sessions WHERE company_id=$1 AND conversation_id=$2`,
+      `SELECT status, reply, stage, runtime_result AS "runtimeResult" FROM storefront_agent_sessions WHERE company_id=$1 AND conversation_id=$2`,
       [companyId, profile.conversationId],
     )
-    const status = run.rows[0]?.status
-    if (status === 'completed') {
+    const outcome = storefrontDesignOutcome(run.rows[0])
+    profile.stage = run.rows[0]?.stage || 'preparing_design'
+    if (outcome === 'VERIFIED') {
+      if (await storefrontUsesAws(companyId)) {
+        const deployment = await awsStorefrontRequest<{ previewStatus: string }>('status', companyId)
+        if (deployment.previewStatus !== 'READY') {
+          profile.status = deployment.previewStatus === 'ERROR' ? 'FAILED' : 'GENERATING'
+          profile.stage = 'deploying_design_preview'
+          if (profile.status === 'GENERATING') return profile
+          profile.errorMessage = 'The design build failed to deploy. Retry to repair it.'
+          await pool.query(`UPDATE storefront_design_profiles SET status='FAILED',error_message=$2,updated_at=NOW() WHERE company_id=$1`, [companyId, profile.errorMessage])
+          return profile
+        }
+      }
       profile.status = 'READY'
-      await pool.query(`UPDATE storefront_design_profiles SET status='READY', error_message=NULL, updated_at=NOW() WHERE company_id=$1`, [companyId])
-    } else if (status === 'failed') {
+      if (originalStatus !== 'READY') await pool.query(`UPDATE storefront_design_profiles SET status='READY', error_message=NULL, updated_at=NOW() WHERE company_id=$1`, [companyId])
+    } else if (outcome === 'FAILED') {
       profile.status = 'FAILED'
-      profile.errorMessage = run.rows[0]?.reply || 'The initial design run failed. You can retry it.'
+      profile.errorMessage = run.rows[0]?.runtimeResult?.error || (run.rows[0]?.status === 'completed'
+        ? 'The AI finished without a verified design skill, applied source changes and browser checks. Please retry design setup.'
+        : run.rows[0]?.reply || 'The initial design run failed. You can retry it.')
       await pool.query(`UPDATE storefront_design_profiles SET status='FAILED', error_message=$2, updated_at=NOW() WHERE company_id=$1`, [companyId, profile.errorMessage])
     }
   }

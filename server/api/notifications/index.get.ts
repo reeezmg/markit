@@ -17,9 +17,7 @@ export default defineEventHandler(async (event) => {
   return await prisma.notification.findMany({
       where: {
         companyId,
-        NOT: {
-          userId: userId
-        }
+        OR: [{ userId: null }, { userId: { not: userId } }]
       },
       orderBy: { createdAt: 'desc' },
       take: 50

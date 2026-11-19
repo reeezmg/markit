@@ -48,7 +48,7 @@ for (const file of [billing, edit]) {
   })
   test(`${file}: receipt send requires phone and sends generated coupons`, async t => {
     const requests: any[] = [], toasts: any[] = []
-    const h = harness(file, ['send'], { ...pageState(), printModel: ref(false), printData: { clientPhone: '', clientName: 'Alice', companyName: 'Shop', generatedCoupons: ['gift'] }, toast: { add: (value: any) => toasts.push(value) }, $fetch: async (url: string, options: any) => requests.push({url,...options}) }); t.after(h.stop)
+    const h = harness(file, ['send'], { ...pageState(), printModel: ref(false), printData: { clientPhone: '', clientName: 'Alice', companyName: 'Shop', generatedCoupons: ['gift'] }, toast: { add: (value: any) => toasts.push(value) }, $fetch: async (url: string, options: any) => {requests.push({url,...options});return {success:true}} }); t.after(h.stop)
     await h.context.send(); assert.equal(requests.length, 0); assert.match(toasts.at(-1).description, /phone number is missing/)
     h.context.printData.clientPhone = '9876543210'; await h.context.send(); assert.equal(requests.length, 2); assert.equal(requests[1].url, '/api/whatsapp/send-coupon-message'); assert.equal(toasts.at(-1).color, 'green')
   })

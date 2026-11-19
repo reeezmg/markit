@@ -1,6 +1,8 @@
 import { defineEventHandler, readBody, createError } from 'h3'
 import { getReadCompanyId } from '~/server/utils/organizationReadScope'
 import { verifyReceiptShare } from '~/server/utils/receiptShare'
+import { pool } from '~/server/db'
+import { randomUUID } from 'node:crypto'
 
 // ✅ Safe date formatter (DD/MM/YYYY)
 const formatDate = (date: string) => {
@@ -34,9 +36,22 @@ export default defineEventHandler(async (event) => {
     paymentDate,
     receiptId
   } = body
+  const source = (await pool.query(`SELECT invoice_code FROM bills WHERE id=$1 AND company_id=$2
+    AND COALESCE(type::text,'BILL')='BILL' AND is_markit=false AND deleted=false`,[share.billId,companyId])).rows[0]
+  let trackingWarning = false
+  async function track(status: string, messageId?: string) {
+    if (!source?.invoice_code) return
+    try {
+      const session = await requireAuthSession(event)
+      await pool.query(`INSERT INTO accountant_v2_accountant_audit(id,company_id,"userId",action,resource,"resourceId","after",updated_at)
+        VALUES($1,$2,$3,'delivery','invoice-send',$4,$5::jsonb,now())`,
+      [randomUUID(),companyId,session.data.id,share.billId,JSON.stringify({status,messageId:messageId||null})])
+    } catch { trackingWarning = true }
+  }
 
   // ❌ Validate phone
   if (!phone) {
+    await track('Failed')
     return { success: false, message: 'Phone is required' }
   }
 
@@ -90,12 +105,15 @@ export default defineEventHandler(async (event) => {
       }
     )
 
+    await track('Sent',res.messages?.[0]?.id)
     return {
       success: true,
+      trackingWarning,
       to: formattedPhone,
       data: res
     }
   } catch (error: any) {
+    await track('Failed')
     console.error('WhatsApp Error:', JSON.stringify(error?.data, null, 2))
 
     return {

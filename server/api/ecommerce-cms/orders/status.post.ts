@@ -1,3 +1,4 @@
+import { deliveredBillServices } from '../../../utils/after-sales-lifecycle'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { setDocumentStatusContext } from '~/server/utils/document-status-context'
@@ -106,6 +107,7 @@ export default defineEventHandler(async (event) => {
       }
     }
 
+    if (status === 'DELIVERED') await deliveredBillServices(client, companyId, orderId)
     await client.query('COMMIT')
     return { ok: true, status, previous, cancelled: false }
   } catch (e: any) {

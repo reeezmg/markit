@@ -1,5 +1,246 @@
 {
   "models": {
+    "WhatsAppConnection": {
+      "purpose": "Company-owned WhatsApp Cloud API connection managed by admin-only Connect endpoints; prepared local schema, not runtime DDL.",
+      "fields": {
+        "id": "Server-generated connection UUID.",
+        "companyId": "Unique owning company; one WhatsApp connection per Markit company.",
+        "company": "Owning company; deletion cascades to the connection and its messages.",
+        "wabaId": "Meta WhatsApp business account ID, globally unique among Markit connections.",
+        "phoneId": "Meta business phone number ID, globally unique among Markit connections.",
+        "displayPhone": "Display number fetched from the authorized Meta account.",
+        "verifiedName": "Verified business name fetched from Meta.",
+        "token": "AES-256-GCM encrypted business access token; erased on disconnect.",
+        "active": "Whether the company may send messages and ingest new webhook events.",
+        "subscribed": "Local confirmation that the app subscribed to this WABA; dashboard messages-field setup is separate.",
+        "createdAt": "Initial connection creation time.",
+        "updatedAt": "Last connection metadata, authorization or subscription update time.",
+        "messages": "Historical outbound intents, receipt states and signed inbound text/media metadata."
+      }
+    },
+    "WhatsAppMessage": {
+      "purpose": "Connection-owned message intent, Meta identifier and delivery state or signed inbound event; duplicates are suppressed by request/Meta IDs.",
+      "fields": {
+        "id": "Outbound client request UUID for deduplication, or server-generated inbound UUID.",
+        "connectionId": "Connection owning this message and its tenant boundary.",
+        "connection": "Parent WhatsApp connection; deletion cascades to message history.",
+        "metaId": "Unique Meta message ID when accepted/received; absent for unresolved outbound attempts.",
+        "recipient": "Full international customer number; denotes the sender for inbound messages.",
+        "direction": "Inbound or outbound relative to the company number.",
+        "kind": "Text/template send type or inbound Meta message type.",
+        "content": "Outbound noncredential payload or inbound text/media metadata; may include delivery error code.",
+        "status": "PENDING, ACCEPTED, UNKNOWN, FAILED, SENT, DELIVERED, READ, or inbound RECEIVED.",
+        "statusAt": "Last recorded send-result or delivery-receipt timestamp.",
+        "consentAt": "Time the sending administrator attested recipient consent; not independently verified opt-in.",
+        "actorId": "Authenticated administrator who initiated an outbound send.",
+        "createdAt": "Outbound intent insertion time or Meta inbound timestamp used for the 24-hour reply window."
+      }
+    },
+    "WhatsAppNotificationSettings": {
+      "purpose": "Company notification master switch, template bindings and activation baseline; dedicated admin APIs only.",
+      "fields": {
+        "companyId": "Owning company; dedicated APIs enforce tenant authorization.",
+        "company": "Owning company; deletion cascades to these records.",
+        "enabled": "Master opt-in; disabled companies do not enqueue or send notifications.",
+        "activatedAt": "Activation/re-activation boundary after baselining existing business records.",
+        "rules": "Per-event enable switches and owned approved template IDs.",
+        "updatedBy": "Staff actor or signed-webhook marker responsible for the last change.",
+        "updatedAt": "Last mutation time."
+      }
+    },
+    "WhatsAppNotificationContact": {
+      "purpose": "Company/client permission record bound to an explicit WhatsApp recipient and saved client phone; signed STOP revokes permissions.",
+      "fields": {
+        "id": "Server-generated record UUID.",
+        "companyId": "Owning company; dedicated APIs enforce tenant authorization.",
+        "company": "Owning company; deletion cascades to these records.",
+        "clientId": "Company-linked customer identifier.",
+        "recipient": "Explicit full international WhatsApp number; country codes are never inferred.",
+        "clientPhone": "Client phone value when permission was recorded; a subsequent change invalidates sending.",
+        "serviceConsent": "Permission for purchase, delivery, service and payment updates.",
+        "marketingConsent": "Separate permission for feedback and Marketing templates.",
+        "evidence": "Recorded permission source; signed STOP replaces it with the opt-out reason.",
+        "updatedBy": "Staff actor or signed-webhook marker responsible for the last change.",
+        "updatedAt": "Last mutation time."
+      }
+    },
+    "WhatsAppNotificationSource": {
+      "purpose": "Last committed business snapshot observed by the company notification scanner; prevents historical and repeated event sends.",
+      "fields": {
+        "companyId": "Owning company; dedicated APIs enforce tenant authorization.",
+        "company": "Owning company; deletion cascades to these records.",
+        "sourceType": "Business source family used to resolve fresh committed state.",
+        "sourceId": "Business source identifier, scoped with its family and company.",
+        "snapshot": "Last observed business state and safe message fields.",
+        "observedAt": "Last successful scan observation time."
+      }
+    },
+    "WhatsAppNotificationOutbox": {
+      "purpose": "Durable deduplicated customer notification with due/expiry times and an intent-before-send delivery lifecycle.",
+      "fields": {
+        "id": "Server-generated record UUID.",
+        "companyId": "Owning company; dedicated APIs enforce tenant authorization.",
+        "company": "Owning company; deletion cascades to these records.",
+        "eventKey": "Stable per-company logical event key preventing repeated sends.",
+        "eventType": "Supported customer notification event.",
+        "sourceType": "Business source family used to resolve fresh committed state.",
+        "sourceId": "Business source identifier, scoped with its family and company.",
+        "clientId": "Company-linked customer identifier.",
+        "payload": "Planned event, relevance guard and timing snapshot.",
+        "status": "Queue/delivery lifecycle; UNKNOWN and interrupted SENDING are never automatically retried.",
+        "availableAt": "Earliest eligible send time.",
+        "expiresAt": "Deadline after which this update is obsolete.",
+        "messageId": "Durable intent ID in the company connection message history.",
+        "reason": "Explanation for skipped, cancelled, failed or unconfirmed delivery.",
+        "createdAt": "Initial record creation time.",
+        "updatedAt": "Last mutation time."
+      }
+    },
+    "WhatsAppInstallationAppointment": {
+      "purpose": "Company-owned installation booking for an existing customer product; completion remains in after-sales product history.",
+      "fields": {
+        "id": "Server-generated record UUID.",
+        "companyId": "Owning company; dedicated APIs enforce tenant authorization.",
+        "company": "Owning company; deletion cascades to these records.",
+        "customerProductId": "Existing company customer unit awaiting installation; one appointment record per unit.",
+        "appointmentOn": "Installation time, persisted with timezone.",
+        "technician": "Client-facing technician name.",
+        "status": "Queue/delivery lifecycle; UNKNOWN and interrupted SENDING are never automatically retried.",
+        "updatedBy": "Staff actor or signed-webhook marker responsible for the last change.",
+        "createdAt": "Initial record creation time.",
+        "updatedAt": "Last mutation time."
+      }
+    },
+    "CrmSettings": {
+      "purpose": "Versioned company sales CRM configuration: pipelines, sources, tags, scoring, saved contact segments and internal follow-up rules. Dedicated CRM migration is prepared only.",
+      "fields": {
+        "companyId": "Owning company; every dedicated CRM query and relationship is scoped to this company.",
+        "company": "Owning company relation; company deletion cascades to its CRM records.",
+        "settings": "Validated JSON for stable pipeline/stage keys, sources, tags, custom field definitions, scoring weights, segments and internal follow-ups.",
+        "version": "Optimistic revision starting at 1; stale saves are rejected, and accepted mutations increment it.",
+        "updatedBy": "Authenticated staff ID responsible for the latest settings change.",
+        "updatedAt": "Timestamp of the latest accepted CRM change."
+      }
+    },
+    "CrmAccount": {
+      "purpose": "Company-owned business account grouping existing clients, opportunities and activities; archiving preserves history.",
+      "fields": {
+        "id": "Server-generated UUID identifying this CRM record.",
+        "companyId": "Owning company; every dedicated CRM query and relationship is scoped to this company.",
+        "company": "Owning company relation; company deletion cascades to its CRM records.",
+        "name": "User-visible name of this company CRM record.",
+        "industry": "Business industry classification.",
+        "website": "Validated HTTPS business website without embedded credentials.",
+        "email": "CRM email address; storing it does not grant email subscription consent.",
+        "phone": "CRM international phone number; imported existing client snapshots may retain historical formatting.",
+        "address": "Business contact/postal address as company-local text.",
+        "ownerId": "Assigned active staff user; only managers may assign another owner.",
+        "tags": "Company-local searchable tags; not a source of marketing permission.",
+        "description": "Company-local notes/description, independent of shared Client identity.",
+        "archived": "Soft archive flag; history and connected commercial records are preserved.",
+        "version": "Optimistic revision starting at 1; stale saves are rejected, and accepted mutations increment it.",
+        "createdBy": "Authenticated staff ID that created the record.",
+        "createdAt": "Timestamp when the record was created.",
+        "updatedAt": "Timestamp of the latest accepted CRM change.",
+        "clients": "Existing company client memberships grouped by this account; raw CRM relation ignored by generated operations.",
+        "deals": "Company-scoped opportunities linked to this account or contact.",
+        "activities": "Company-scoped tasks and conversation notes linked to this record."
+      }
+    },
+    "CrmDeal": {
+      "purpose": "Company opportunity with configured pipeline/stage, saved outcome/probability and value in company currency. Won outcomes do not post invoices, payments or stock.",
+      "fields": {
+        "id": "Server-generated UUID identifying this CRM record.",
+        "companyId": "Owning company; every dedicated CRM query and relationship is scoped to this company.",
+        "company": "Owning company relation; company deletion cascades to its CRM records.",
+        "clientId": "Optional existing Client ID in the owning company membership; no separate contact identity.",
+        "client": "CompanyClient relation protected by a compound company/client foreign key.",
+        "accountId": "Optional business account in the same company.",
+        "account": "Business account relation, protected by a composite company/account foreign key.",
+        "name": "User-visible name of this company CRM record.",
+        "pipelineKey": "Stable pipeline identifier in the owning company’s versioned settings.",
+        "stageKey": "Stable stage identifier within the chosen pipeline.",
+        "status": "API-validated deal outcome or activity work state; lifecycle rules determine permitted transitions.",
+        "value": "Nonnegative opportunity amount in the company currency, with two decimal places.",
+        "probability": "Saved stage probability from 0 to 100; won is 100 and lost is 0.",
+        "expectedClose": "Expected opportunity closing date; independent of invoice and collection dates.",
+        "closedAt": "First terminal outcome time; cleared when the deal reopens.",
+        "stageChangedAt": "Most recent pipeline/stage change time used for stage aging.",
+        "lossReason": "Required explanation when a deal moves to a lost stage.",
+        "ownerId": "Assigned active staff user; only managers may assign another owner.",
+        "source": "Configured acquisition/source label retained with the CRM record.",
+        "tags": "Company-local searchable tags; not a source of marketing permission.",
+        "description": "Company-local notes/description, independent of shared Client identity.",
+        "archived": "Soft archive flag; history and connected commercial records are preserved.",
+        "version": "Optimistic revision starting at 1; stale saves are rejected, and accepted mutations increment it.",
+        "createdBy": "Authenticated staff ID that created the record.",
+        "createdAt": "Timestamp when the record was created.",
+        "updatedAt": "Timestamp of the latest accepted CRM change.",
+        "activities": "Company-scoped tasks and conversation notes linked to this record.",
+        "documents": "Explicit source-document links belonging to this deal."
+      }
+    },
+    "CrmActivity": {
+      "purpose": "Company tasks and logged calls, meetings, emails, WhatsApp conversations and notes. Internal reminders and completion-driven recurrence are idempotent; entries do not send messages.",
+      "fields": {
+        "id": "Server-generated UUID identifying this CRM record.",
+        "companyId": "Owning company; every dedicated CRM query and relationship is scoped to this company.",
+        "company": "Owning company relation; company deletion cascades to its CRM records.",
+        "clientId": "Optional existing Client ID in the owning company membership; no separate contact identity.",
+        "client": "CompanyClient relation protected by a compound company/client foreign key.",
+        "accountId": "Optional business account in the same company.",
+        "account": "Business account relation, protected by a composite company/account foreign key.",
+        "dealId": "Related deal in the same company.",
+        "deal": "Deal relation, protected by a composite company/deal foreign key.",
+        "kind": "Validated activity type or linked document category; determines workflow behavior.",
+        "subject": "Activity/task subject displayed in lists and calendar.",
+        "body": "Plain-text conversation details or task notes, never executable HTML.",
+        "status": "API-validated deal outcome or activity work state; lifecycle rules determine permitted transitions.",
+        "priority": "Activity priority LOW/NORMAL/HIGH.",
+        "ownerId": "Assigned active staff user; only managers may assign another owner.",
+        "dueAt": "Optional activity deadline or appointment start instant.",
+        "endAt": "Optional appointment end instant, at or after its start.",
+        "completedAt": "Completion time for a DONE activity; cleared on reopen.",
+        "remindedAt": "Internal reminder claim timestamp, committed with its system alert and reset on rescheduling.",
+        "recurrenceDays": "Optional completion-driven interval in days for creating the next activity.",
+        "recurrenceKey": "Company-unique recurrence/automation identity suppressing duplicate follow-up creation.",
+        "attachments": "Up to ten named, validated HTTPS reference links; no server-side URL fetching or automatic uploads.",
+        "archived": "Soft archive flag; history and connected commercial records are preserved.",
+        "version": "Optimistic revision starting at 1; stale saves are rejected, and accepted mutations increment it.",
+        "createdBy": "Authenticated staff ID that created the record.",
+        "createdAt": "Timestamp when the record was created.",
+        "updatedAt": "Timestamp of the latest accepted CRM change."
+      }
+    },
+    "CrmDocumentLink": {
+      "purpose": "Explicit company-checked quotation, invoice or ecommerce-order reference on a deal; linking preserves the source document.",
+      "fields": {
+        "id": "Server-generated UUID identifying this CRM record.",
+        "companyId": "Owning company; every dedicated CRM query and relationship is scoped to this company.",
+        "company": "Owning company relation; company deletion cascades to its CRM records.",
+        "dealId": "Related deal in the same company.",
+        "deal": "Deal relation, protected by a composite company/deal foreign key.",
+        "kind": "Validated activity type or linked document category; determines workflow behavior.",
+        "documentId": "Source document scalar ID, verified for company and linked client ownership.",
+        "createdBy": "Authenticated staff ID that created the record.",
+        "createdAt": "Timestamp when the record was created."
+      }
+    },
+    "CrmAudit": {
+      "purpose": "Append-only company CRM actor, action and before/after evidence retained after record archiving.",
+      "fields": {
+        "id": "Server-generated UUID identifying this CRM record.",
+        "companyId": "Owning company; every dedicated CRM query and relationship is scoped to this company.",
+        "company": "Owning company relation; company deletion cascades to its CRM records.",
+        "entityType": "CRM resource category whose changes this audit describes.",
+        "entityId": "Stable CRM resource identifier retained without a destructive record foreign key.",
+        "action": "Human-readable mutation/action category.",
+        "actorId": "Authenticated staff user responsible for this audited mutation.",
+        "summary": "Human-readable action and record label.",
+        "changes": "Immutable before/after record evidence as JSON.",
+        "createdAt": "Timestamp when the record was created."
+      }
+    },
     "Base": {
       "purpose": "Shared record fields and access policy inherited by concrete ZenStack models.",
       "fields": {
@@ -27,6 +268,22 @@
       "purpose": "Defines a tenant store, its settings, numbering counters, and operational configuration.",
       "fields": {
         "id": "Primary key identifying this Company record.",
+        "crmSettings": "Company’s versioned dedicated sales CRM settings.",
+        "crmAccounts": "Company-local business accounts.",
+        "crmDeals": "Company opportunities and their sales outcomes.",
+        "crmTasks": "Company CRM activities: tasks, meetings and logged conversations.",
+        "crmDocuments": "Company-checked deal/document references.",
+        "crmAudit": "Append-only company CRM change evidence.",
+        "whatsappNotificationSettings": "Company notification switch, template bindings and activation baseline.",
+        "whatsappNotificationContacts": "Company/client recipient permission records.",
+        "whatsappNotificationSources": "Committed business snapshots observed by the notification scanner.",
+        "whatsappNotificationOutbox": "Durable deduplicated client notification queue and delivery status.",
+        "whatsappInstallationAppointments": "Installation bookings for company customer products.",
+        "whatsappConnection": "",
+        "recurringInvoices": "Recurring invoice profiles owned by this company.",
+        "recurringInvoiceOccurrences": "Dated invoice drafts/issued child receipts owned by this company.",
+        "retainerInvoices": "Retainer advance requests owned by this company.",
+        "retainerEvents": "Immutable retainer financial activity owned by this company.",
         "recurringExpenses": "Fixed monthly expense schedules owned by this company.",
         "accountantStockControl": "Optional company stock reconciliation configuration and current valuation snapshot.",
         "accountantUserSettings": "Optional staff accounting configuration.",
@@ -54,6 +311,7 @@
         "accountantAccountTransferRows": "",
         "accountantContactRows": "",
         "accountantInvestorRows": "Investor profiles owned by this company.",
+        "accountantLoanRows": "Borrowing agreements owned by this company.",
         "accountantProjectRows": "",
         "accountantAuditRows": "",
         "name": "Human-readable name of this Company record.",
@@ -365,7 +623,7 @@
         "id": "Primary key identifying this GeneralPreference record.",
         "pageName": "Settings page or feature that owns this preference.",
         "key": "Stable key identifying this preference or field.",
-        "value": "Stored value of this named preference.",
+        "value": "Stored value of this named preference. sidebar-navigation/defaults stores versioned company section/page visibility with optimistic revision; missing preferences enable only ERP, with CRM, Storetools and Connect disabled. Explicit company choices override defaults; defaults-backup preserves the previous JSON. Dedicated admin/manager APIs own these writes; no schema change.",
         "active": "Whether this GeneralPreference record is active.",
         "company": "Links this GeneralPreference record to Company through companyId.",
         "companyId": "Company that owns this GeneralPreference record; use it when scoping tenant data."
@@ -533,6 +791,8 @@
       "purpose": "Stores buyer identity across company stores.",
       "fields": {
         "id": "Primary key identifying this Client record.",
+        "recurringInvoices": "Recurring invoice profiles using this customer.",
+        "retainerInvoices": "Retainer advance requests for this customer.",
         "email": "Email address associated with this Client record.",
         "name": "Human-readable name of this Client record.",
         "gender": "Gender recorded for this person.",
@@ -1041,6 +1301,8 @@
     "Product": {
       "purpose": "Stores a product identity and its catalog classification.",
       "fields": {
+        "isServiceProduct": "Classifies stocked repair parts for the Service items page; shares normal product, variant, item and purchase flows and does not change publication status.",
+        "serviceLinks": "Reusable company-owned warranty, guarantee and maintenance configurations linked across this product?s variants.",
         "id": "Primary key identifying this Product record.",
         "productNo": "Company-local sequential product reference, separate from its UUID; preserved on same-company edits and PO links. The catalog-number migration backfills existing records and allocates destination numbers on company transfers.",
         "createdAt": "Time this Product record was created.",
@@ -1072,11 +1334,193 @@
         "writeId": "Client-side write identifier used for offline synchronization."
       }
     },
+    "ServiceConfiguration": {
+      "purpose": "Company-owned reusable warranty, guarantee or maintenance configuration; dedicated staff APIs own edits and availability.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "kind": "Configuration kind WARRANTY/GUARANTEE/MAINTENANCE, or job kind CLAIM/VISIT as applicable.",
+        "name": "Human-readable configuration or purchased-product name.",
+        "archived": "Blocks new product selection while retaining saved links and customer agreements.",
+        "revision": "Saved configuration version; agreement snapshots retain their agreed revision until explicitly amended.",
+        "rules": "Validated date rules, coverage/instructions, manual custom fields, prices and reminder settings.",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time the application last changed this record.",
+        "versions": "Immutable revisions saved when this configuration is created or edited.",
+        "links": "Catalog product assignments for this configuration."
+      }
+    },
+    "ServiceConfigurationRevision": {
+      "purpose": "Immutable name, kind and rules snapshot for each saved configuration revision.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "configurationId": "Identity of the reusable configuration associated with this revision, link or agreement.",
+        "configuration": "Related reusable service configuration.",
+        "revision": "Saved configuration version; agreement snapshots retain their agreed revision until explicitly amended.",
+        "snapshot": "Agreed name, kind and rules JSON retained independently of later configuration edits.",
+        "createdBy": "Authenticated staff identity recording the revision or reading.",
+        "createdAt": "Time this record was created."
+      }
+    },
+    "ProductServiceLink": {
+      "purpose": "Company-scoped many-to-many assignment of reusable configurations to a product across all variants.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "productId": "Catalog product identity; customer-product provenance remains a scalar reference after catalog deletion.",
+        "product": "Product receiving this configuration across its variants.",
+        "configurationId": "Identity of the reusable configuration associated with this revision, link or agreement.",
+        "configuration": "Related reusable service configuration."
+      }
+    },
+    "CustomerProduct": {
+      "purpose": "One physical unit owned by a customer, with sale provenance and optional manufacturer serial number; retained after catalog deletion.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "clientId": "Customer identity associated with this physical product.",
+        "reference": "Company-unique display reference for this physical unit. New registrations use configured prefix plus a six-digit padded counter after numbering installation; legacy references are retained.",
+        "sourceKey": "Company-unique bill-entry/unit or manual-registration key protecting registration retries.",
+        "productId": "Catalog product identity; customer-product provenance remains a scalar reference after catalog deletion.",
+        "itemId": "Historical stock-option identity used to associate the sold unit and exact returns.",
+        "billId": "Original sale bill for a customer product, or the explicitly issued invoice linked to a service job.",
+        "entryId": "Historical sale-line identity for unit-level quantity reconciliation and returns.",
+        "orderId": "Actual ecommerce-order identity; absent for POS and independent manual registrations.",
+        "serialNumber": "Optional manufacturer serial number; the automatic Markit reference is sufficient when absent.",
+        "name": "Human-readable configuration or purchased-product name.",
+        "purchasedOn": "Explicit purchase calendar date.",
+        "deliveredOn": "First recorded delivery date, changed only by an audited staff correction.",
+        "installedOn": "Staff-recorded installation date used by installation-based activation.",
+        "evidence": "Purchase evidence or invoice reference supplied during manual registration.",
+        "status": "Current workflow state maintained by dedicated lifecycle APIs.",
+        "replacedById": "Replacement customer-unit identity; original history is retained.",
+        "createdAt": "Time this record was created.",
+        "agreements": "Historical coverage and maintenance agreements currently attached to this customer unit.",
+        "readings": "Dated manually entered readings associated with this customer unit."
+      }
+    },
+    "CustomerProductNumbering": {
+      "purpose": "Company-scoped prefix and transactional sequential counter for customer-owned physical-unit references; all sales channels share it.",
+      "fields": {
+        "companyId": "Owning company and counter identity.",
+        "prefix": "Prefix for future references; defaults to PR. Changing it never rewrites issued references or resets the counter.",
+        "lastNumber": "Last allocated number as a bigint; allocation locks this row and commits or rolls back with unit registration.",
+        "updatedAt": "Time this prefix or counter was last changed."
+      }
+    },
+    "CustomerServiceAgreement": {
+      "purpose": "Agreed configuration revision and rules snapshot for one customer unit, including coverage or maintenance dates and visit count.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "customerProductId": "Customer physical unit associated with this agreement or reading.",
+        "customerProduct": "Related customer-owned physical unit.",
+        "configurationId": "Identity of the reusable configuration associated with this revision, link or agreement.",
+        "revision": "Saved configuration version; agreement snapshots retain their agreed revision until explicitly amended.",
+        "kind": "Configuration kind WARRANTY/GUARANTEE/MAINTENANCE, or job kind CLAIM/VISIT as applicable.",
+        "snapshot": "Agreed name, kind and rules JSON retained independently of later configuration edits.",
+        "status": "Current workflow state maintained by dedicated lifecycle APIs.",
+        "startsOn": "Agreed activation date; null while the required delivery/installation evidence is missing.",
+        "endsOn": "Coverage expiry or optional maintenance end date.",
+        "nextDue": "Maintenance generation cursor; existing missed occurrences remain independently overdue.",
+        "completedVisits": "Number of completed service visits; cancellation does not consume a visit.",
+        "lastCompletedOn": "Actual last completion date for completion-based maintenance recurrence.",
+        "occurrences": "Dated obligations generated for this maintenance agreement.",
+        "jobs": "Claims and service visits retaining snapshots of this agreement."
+      }
+    },
+    "MaintenanceOccurrence": {
+      "purpose": "A dated maintenance obligation; unique agreement/date pairs prevent duplicate due work.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "agreementId": "Agreement whose coverage or maintenance obligation this record concerns.",
+        "agreement": "Related customer coverage or maintenance agreement.",
+        "dueOn": "Scheduled service calendar date; missed visits remain overdue.",
+        "status": "Current workflow state maintained by dedicated lifecycle APIs.",
+        "snapshot": "Agreed name, kind and rules JSON retained independently of later configuration edits."
+      }
+    },
+    "ServiceJob": {
+      "purpose": "Staff-managed guarantee/warranty claim or maintenance visit, retaining its own agreed terms, answers, charges and optional issued invoice.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "agreementId": "Agreement whose coverage or maintenance obligation this record concerns.",
+        "agreement": "Related customer coverage or maintenance agreement.",
+        "occurrenceId": "Maintenance occurrence associated with a booking or reminder; cancelled jobs release their booking slot.",
+        "requestKey": "Company-unique service-job request key preventing duplicate creation on retries.",
+        "kind": "Configuration kind WARRANTY/GUARANTEE/MAINTENANCE, or job kind CLAIM/VISIT as applicable.",
+        "status": "Current workflow state maintained by dedicated lifecycle APIs.",
+        "assignedTo": "Active staff identity assigned to this claim or service visit.",
+        "appointmentOn": "Scheduled appointment timestamp.",
+        "completedOn": "Actual staff-recorded completion date.",
+        "details": "Complaint, assessment, resolution, notes, checklist answers, typed readings, named non-stock charges and catalog product line snapshots.",
+        "snapshot": "Agreed name, kind and rules JSON retained independently of later configuration edits.",
+        "charge": "Legacy single service amount before tax, used only when details.charges is absent; new jobs snapshot named charges.",
+        "tax": "Legacy single charge tax percentage, used only when details.charges is absent.",
+        "billId": "Original sale bill for a customer product, or the explicitly issued invoice linked to a service job.",
+        "createdAt": "Time this record was created.",
+        "updatedAt": "Time the application last changed this record."
+      }
+    },
+    "ServiceCharge": {
+      "purpose": "Company-owned reusable non-stock service charge defaults; jobs copy billing lines so later edits or archiving preserve existing work.",
+      "fields": {
+        "id": "Primary key identifying this reusable charge.",
+        "companyId": "Owning company; dedicated staff APIs scope reads and writes to this company.",
+        "name": "Charge name copied onto service jobs and invoices, for example Labour.",
+        "description": "Default descriptive text copied into the service line snapshot.",
+        "rate": "Default unit rate before tax; jobs store the converted tax-inclusive rate.",
+        "tax": "Default tax percentage between zero and one hundred.",
+        "unit": "Default unit label, such as Hour or Service.",
+        "archived": "Prevents new catalog selection while preserving previously saved job lines.",
+        "createdAt": "Time the charge definition was created.",
+        "updatedAt": "Time the charge definition was last updated."
+      }
+    },
+    "ServiceReading": {
+      "purpose": "Dated staff-entered custom readings for a customer product and selected agreement; evidence is manually assessed.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "customerProductId": "Customer physical unit associated with this agreement or reading.",
+        "customerProduct": "Related customer-owned physical unit.",
+        "recordedOn": "Date on which staff recorded these readings.",
+        "values": "JSON envelope containing the selected agreement ID and its validated manual field values.",
+        "createdBy": "Authenticated staff identity recording the revision or reading."
+      }
+    },
+    "ServiceAudit": {
+      "purpose": "Append-only before/after evidence and reason for after-sales registration, configuration, agreement and service changes.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "resourceId": "Customer product, configuration, agreement or service-job identity described by this audit event.",
+        "action": "Audited lifecycle action.",
+        "actorId": "Staff or source identity responsible for this action.",
+        "reason": "Recorded reason for changing terms, dates, availability or service state.",
+        "before": "Previous snapshot retained for review.",
+        "after": "Saved snapshot or action result retained for review.",
+        "createdAt": "Time this record was created."
+      }
+    },
+    "ServiceReminder": {
+      "purpose": "Receipt deduplicating an internal maintenance reminder for one occurrence and lead-day offset.",
+      "fields": {
+        "id": "Primary key identifying this after-sales record.",
+        "companyId": "Owning company; every dedicated API scopes reads and writes to this authorized company.",
+        "occurrenceId": "Maintenance occurrence associated with a booking or reminder; cancelled jobs release their booking slot.",
+        "leadDays": "Reminder lead in days before the occurrence; zero is the due-day reminder.",
+        "createdAt": "Time this record was created."
+      }
+    },
     "Variant": {
       "purpose": "Stores a sellable product variation with prices and display data.",
       "fields": {
         "id": "Primary key identifying this Variant record.",
-        "variantNo": "Company-local sequential variant reference, independent of product numbers and the seller-entered code; preserved on same-company edits and installed by the catalog-number migration.",
+        "variantNo": "Company-local sequential variant reference, independent of product numbers and the seller-entered code; preserved on same-company edits. Defined by the catalog-number migration.",
         "createdAt": "Time this Variant record was created.",
         "updatedAt": "Time this Variant record was last updated.",
         "name": "Display name of this sellable variation.",
@@ -1164,6 +1608,8 @@
       "purpose": "Records a sale and its financial totals.",
       "fields": {
         "id": "Primary key identifying this Bill record.",
+        "recurringOccurrences": "Unique recurring child that issued this normal invoice.",
+        "retainerEvents": "Advance applications and removals affecting this invoice.",
         "paidAt": "First observed PAID insertion or transition, set by a database trigger; immutable thereafter. Existing paid records remain null without historical evidence.",
         "createdAt": "Time this Bill record was created.",
         "updatedAt": "Time this Bill record was last updated.",
@@ -1444,6 +1890,10 @@
         "carrier": "Shipping carrier selected for this request.",
         "pickupDate": "Requested pickup calendar date.",
         "pickupTime": "Requested pickup time.",
+        "requestedPickupDate": "",
+        "requestedPickupTime": "",
+        "carrierSchedule": "",
+        "carrierResponse": "",
         "packageCount": "Number of parcels in the pickup request.",
         "status": "Current workflow state of this EcommPickupRequest record.",
         "carrierPickupId": "Pickup identifier returned by the carrier.",
@@ -1692,6 +2142,103 @@
         "distributorPayment": "Links this Expense record to DistributorPayment."
       }
     },
+    "RecurringInvoice": {
+      "purpose": "Company/customer recurring invoice profile. Draft occurrences have no posting; issued occurrences use the normal Bill source transaction.",
+      "fields": {
+        "id": "Unique source identifier.",
+        "companyId": "Owning company; every operation authorizes this tenant.",
+        "company": "Company owning this source.",
+        "clientId": "Company-linked customer; checked again before financial activity.",
+        "client": "Customer associated with this document.",
+        "name": "User-visible profile name.",
+        "currency": "Frozen company currency; currency changes require review.",
+        "frequency": "DAY, WEEK, MONTH or YEAR schedule unit.",
+        "interval": "Positive repeat interval from 1 to 365.",
+        "startDate": "Original immutable calendar anchor; month ends and leap years retain this day.",
+        "endDate": "Optional inclusive last occurrence date.",
+        "nextDate": "Next due occurrence; advanced atomically after successful generation.",
+        "status": "ACTIVE, PAUSED or COMPLETED.",
+        "generationMode": "DRAFT for review or ISSUE for automatic unpaid invoice creation.",
+        "dueDays": "Number of calendar days added to the occurrence date for payment due.",
+        "template": "Validated quote-shaped invoice template, including customer, line amounts, notes and terms.",
+        "revision": "Optimistic concurrency token changed by source updates.",
+        "createdBy": "Authenticated actor who created this source.",
+        "lastError": "Safe generation failure message; the failed date stays due.",
+        "createdAt": "Time this source was created.",
+        "updatedAt": "Time this source was last updated.",
+        "occurrences": "Unique dated drafts or issued invoices created by this profile."
+      }
+    },
+    "RecurringInvoiceOccurrence": {
+      "purpose": "Durable profile/date generation receipt with a frozen invoice template and optional unique normal Bill reference.",
+      "fields": {
+        "id": "Unique source identifier.",
+        "companyId": "Owning company; every operation authorizes this tenant.",
+        "company": "Company owning this source.",
+        "profileId": "Recurring profile identifier; unique together with invoiceDate.",
+        "profile": "Recurring profile owning this dated child.",
+        "invoiceDate": "Original scheduled invoice date.",
+        "dueDate": "Frozen payment due date.",
+        "template": "Validated quote-shaped invoice template, including customer, line amounts, notes and terms.",
+        "billId": "Normal Bill created when issued; null identifies a saved draft.",
+        "bill": "Issued invoice; deletion does not recreate this occurrence.",
+        "createdAt": "Time this source was created."
+      }
+    },
+    "RetainerInvoice": {
+      "purpose": "Numbered advance request. Creation posts no revenue, tax, stock or receivable; collected credit is held in a frozen liability account.",
+      "fields": {
+        "id": "Unique source identifier.",
+        "companyId": "Owning company; every operation authorizes this tenant.",
+        "company": "Company owning this source.",
+        "clientId": "Company-linked customer; checked again before financial activity.",
+        "client": "Customer associated with this document.",
+        "number": "Company-local sequential number displayed with RET- prefix.",
+        "currency": "Frozen company currency; currency changes require review.",
+        "retainerDate": "Calendar date of the advance request.",
+        "status": "Stored DRAFT, SENT or VOID workflow state; financial labels are derived from events.",
+        "description": "Goods/services for which an advance is requested.",
+        "reference": "Optional customer/project reference.",
+        "notes": "Customer notes included in the advance request printout.",
+        "termsAndConditions": "Customer terms included in the advance request printout.",
+        "amount": "Requested advance; collections cannot exceed this positive two-decimal amount.",
+        "liabilityAccountId": "Frozen active same-currency OTHER_CURRENT_LIABILITY account.",
+        "liabilityAccount": "Unearned revenue account used by all financial events.",
+        "revision": "Optimistic concurrency token changed by source updates.",
+        "createdBy": "Authenticated actor who created this source.",
+        "createdAt": "Time this source was created.",
+        "updatedAt": "Time this source was last updated.",
+        "events": "Immutable collections, invoice applications, refunds and application removals."
+      }
+    },
+    "RetainerEvent": {
+      "purpose": "Append-only dated retainer movement linked to a balanced system journal; financial application receipts also participate in normal invoice balances.",
+      "fields": {
+        "id": "Unique source identifier.",
+        "companyId": "Owning company; every operation authorizes this tenant.",
+        "company": "Company owning this source.",
+        "retainerId": "Retainer advance request owning this movement.",
+        "retainer": "Owning retainer source.",
+        "kind": "COLLECTION, APPLY, REFUND or UNAPPLY.",
+        "amount": "Positive two-decimal movement amount.",
+        "eventDate": "Financial date, checked against accounting locks, source dates and prior retainer activity.",
+        "reference": "User reference or retainer number fallback.",
+        "paymentMethod": "Cash, UPI, Card or Bank for collection/refund; null for invoice applications.",
+        "accountId": "Cash/bank account for collection/refund; null for applications.",
+        "account": "Cash/bank account receiving or refunding the advance.",
+        "billId": "Invoice receiving or removing a retainer application.",
+        "bill": "Same-company, same-customer invoice settled by this advance.",
+        "paymentId": "Unique normal Retainer-mode Payment created by APPLY.",
+        "payment": "Invoice receipt participating in outstanding balances and source edit guards.",
+        "journalId": "Unique published balanced system journal for this event.",
+        "journal": "Immutable accounting movement owned by this retainer event.",
+        "reversesId": "Unique original APPLY event reversed by UNAPPLY.",
+        "reverses": "Original application removed by this event.",
+        "reversal": "Optional unique removal event that restored the applied credit.",
+        "createdBy": "Authenticated actor who created this source.",
+        "createdAt": "Time this source was created."
+      }
+    },
     "RecurringExpense": {
       "purpose": "Company-owned fixed monthly expense schedule processed by scoped APIs and the authenticated Vercel cron.",
       "fields": {
@@ -1730,6 +2277,7 @@
       "purpose": "Records a payment associated with a sale or account.",
       "fields": {
         "id": "Primary key identifying this Payment record.",
+        "retainerEvent": "Optional APPLY event that created this Retainer-mode invoice receipt.",
         "paymentDate": "Date on which payment was made or scheduled.",
         "paymentMode": "Mode used to make or receive this payment.",
         "paymentReference": "Reference supplied for the payment.",
@@ -1859,6 +2407,12 @@
     "CompanyClient": {
       "purpose": "Links a customer to a company with company-specific identity and CRM state.",
       "fields": {
+        "crmData": "Raw CRM API JSON for company-only owner, qualification, lifecycle, source, tags, custom values, job title, notes and CRM timestamps; never duplicates shared identity or consent. Ignored by generated operations.",
+        "crmVersion": "Raw CRM API optimistic version; defaults to zero for existing memberships and prevents stale updates. Ignored by generated operations.",
+        "crmAccountId": "Optional same-company CRM business account ID maintained by raw CRM APIs; ignored by generated operations.",
+        "crmAccount": "Raw-only company/account relation; restricts account removal while existing memberships refer to it.",
+        "crmDeals": "Opportunities that directly reference this existing company/client membership.",
+        "crmTasks": "CRM activities that directly reference this existing company/client membership.",
         "expenses": "Expenses assigned to this client within this company.",
         "companyId": "Company that owns this CompanyClient record; use it when scoping tenant data.",
         "company": "Links this CompanyClient record to Company through companyId.",
@@ -2998,6 +3552,8 @@
     "AccountantAccountingAccount": {
       "purpose": "Independent Accountant books: categorized chart, parent hierarchy, bank metadata, status and dashboard flag. Stored separately from the existing finance system.",
       "fields": {
+        "retainerInvoices": "Advance requests using this frozen liability account.",
+        "retainerEvents": "Advance collections/refunds using this cash or bank account.",
         "distributorMappings": "",
         "id": "Primary key of this new Accountant record.",
         "companyId": "Company that owns this independent accounting record; every API operation scopes by it.",
@@ -3027,6 +3583,7 @@
     "AccountantManualJournal": {
       "purpose": "Independent Accountant books: draft/published journal header, source identity, reversal, creator and approval records. Stored separately from the existing finance system.",
       "fields": {
+        "retainerEvent": "Retainer financial event owning this system-generated journal.",
         "distributorSources": "",
         "createdById": "Session user who created this journal; used to enforce self-approval rules.",
         "approvals": "Distinct approver user IDs and approval dates; cleared when a draft is edited.",
@@ -3386,48 +3943,86 @@
       }
     },
     "AccountantInvestor": {
-      "purpose": "Company investor profile with dedicated capital, profit-payable and loan chart accounts.",
+      "purpose": "Company investor profile linked to a company user and existing capital, profit-payable and loan chart account mappings; creation can atomically include its initial agreement.",
       "fields": {
         "id": "Investor identifier.",
         "companyId": "Owning company.",
         "company": "Owning company relation.",
-        "terms": "Dated immutable agreements.",
+        "terms": "Dated ownership/profit-share agreements; editable until protected by posted allocations.",
         "events": "Capital, profit and loan movements.",
+        "loans": "Borrowing agreements where this investor is the lender.",
         "name": "Display name.",
-        "legacyUserId": "Original company-user ID for idempotent legacy grouping; no ownership inferred.",
+        "legacyUserId": "Linked company-user ID for both native and imported profiles; unique per company/user and never infers ownership.",
         "profile": "Contact, status, notes and HTTP/HTTPS document links.",
-        "accounts": "IDs of capital equity, profit payable and loan liability chart accounts.",
+        "accounts": "Existing capital equity mapping and optional profit payable/loan liability mappings; accounts can be shared while balances stay isolated by investor events.",
         "createdAt": "Profile creation timestamp."
       }
     },
     "AccountantInvestorTerm": {
-      "purpose": "Immutable effective-dated ownership and profit-sharing agreement.",
+      "purpose": "Internal effective-dated ownership/profit snapshot generated from profile percentages or individually priced share transactions. Historical agreement rows are preserved.",
       "fields": {
         "id": "Agreement identifier.",
         "companyId": "Owning company; part of the investor foreign key.",
         "investorId": "Investor within this company.",
         "investor": "Company-scoped investor relation.",
         "effectiveDate": "First date this agreement applies.",
-        "terms": "Ownership and profit percentages, share counts/class and agreement note.",
+        "terms": "Ownership/profit percentages, share counts/class, note and trackingMode. Legacy agreement commitment/price fields remain historical only.",
         "createdAt": "Agreement recording timestamp."
       }
     },
     "AccountantInvestorEvent": {
-      "purpose": "Immutable investor subledger movement tied to a system journal, or an unposted pending legacy snapshot.",
+      "purpose": "Immutable investor cash/allocation movement, noncash share trade or retained pending legacy snapshot. Confirmed share payments link to their original trade.",
       "fields": {
         "id": "Movement identifier.",
         "companyId": "Owning company.",
         "investorId": "Investor within this company.",
         "investor": "Company-scoped investor relation.",
         "eventDate": "Accounting date.",
-        "kind": "CAPITAL_IN/OUT, PROFIT_ALLOCATE/PAY, LOAN_IN/OUT or REVERSAL.",
+        "kind": "CAPITAL_IN/OUT payments, noncash SHARE_BUY/SHARE_REDEEM, PROFIT_ALLOCATE/PAY, LOAN_IN/OUT or REVERSAL.",
         "amount": "Positive two-decimal amount; reversal direction is determined by its original kind.",
-        "journalId": "Published system journal ID; null for pending imported history.",
+        "journalId": "Published system journal ID; null for noncash share trades/voids and pending imported history.",
         "legacyId": "Original investment ID, unique within company.",
         "requestId": "Retry key, unique within company.",
         "reversedId": "Original investor event ID for a reversal; unique within company.",
-        "details": "Canonical request, allocation agreement snapshot, or immutable source fingerprint and import mapping.",
+        "details": "Canonical request, transaction price/payment confirmation, settleTradeId on linked payments, capital preview/shareChange snapshots, allocation ownership snapshot or source import mapping.",
         "createdAt": "Recording timestamp."
+      }
+    },
+    "AccountantLoan": {
+      "purpose": "Company-owned investor borrowing agreement recorded and opened on save, with frozen terms, account mappings and repayment schedule.",
+      "fields": {
+        "id": "Loan UUID; also the payload-checked creation request ID.",
+        "companyId": "Tenant that owns this loan.",
+        "company": "Owning company relation.",
+        "investorId": "Same-company investor acting as lender.",
+        "investor": "Lender relation protected by the company/investor foreign key.",
+        "name": "Loan name or lender reference.",
+        "status": "Saving records the receipt and opens the loan. DRAFT supports older unposted records; repayment/settlement closes the loan.",
+        "currency": "Company base currency captured on creation.",
+        "terms": "Borrowed amount, nominal annual rate, periods, frequency, dates, method, notes and original creation request.",
+        "accounts": "Frozen bank, long-term principal liability, current liability, interest expense and fee expense mappings.",
+        "schedule": "Validated dated principal/interest rows whose principal totals the borrowing amount.",
+        "events": "Immutable source accounting and cash-payment history.",
+        "createdAt": "Time the loan agreement was created.",
+        "updatedAt": "Time the draft or lifecycle state last changed."
+      }
+    },
+    "AccountantLoanEvent": {
+      "purpose": "Immutable loan source event linked to a balanced system journal; scheduled principal is distinct from actual repayment.",
+      "fields": {
+        "id": "Unique source event UUID.",
+        "companyId": "Tenant owning the event and loan.",
+        "loanId": "Agreement receiving this event.",
+        "loan": "Loan relation protected by the company/loan foreign key.",
+        "eventDate": "Accounting date; future scheduled entries are not posted early.",
+        "kind": "RECEIPT, INSTALMENT, RECLASS, RECLASS_REVERSAL, PAYMENT, SETTLEMENT or PAYMENT_REVERSAL.",
+        "principal": "Principal component; its meaning follows kind and only cash events change investor principal.",
+        "interest": "Scheduled interest recognized or cash interest paid, according to event kind.",
+        "fees": "Fees recognized in a payment or settlement.",
+        "journalId": "Immutable balanced system journal owned by this source event.",
+        "requestId": "Company-unique payload-checked action UUID or deterministic scheduled-entry key.",
+        "details": "Instalment number, allocations, reverse date/original ID, request snapshot, reason or waived interest.",
+        "createdAt": "Time the event was appended."
       }
     },
     "AccountantContact": {

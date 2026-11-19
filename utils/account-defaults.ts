@@ -12,6 +12,12 @@ export const accountDefaultGroups: Record<string, { title: string; fields: Recor
     loanAccountId: field('Investor loan', 'OTHER_LIABILITY'), counterAccountId: money('Capital & loan receipts / payments'),
     payoutAccountId: money('Profit payouts'),
   } },
+  loans: { title: 'Loans', fields: {
+    bank: money('Loan receipts'), longTerm: field('Long-term loan liability', 'OTHER_LIABILITY'),
+    shortTerm: field('Current loan liability', 'OTHER_CURRENT_LIABILITY'),
+    interestExpense: field('Loan interest expense', 'EXPENSE', 'OTHER_EXPENSE'),
+    feesExpense: field('Loan fees expense', 'EXPENSE', 'OTHER_EXPENSE'),
+  } },
   receive: { title: 'Receive / Pay money', fields: { moneyAccountId: money('Receive into') } },
   pay: { title: 'Pay money', fields: { moneyAccountId: money('Pay from') } },
   transfers: { title: 'Account transfers', fields: {

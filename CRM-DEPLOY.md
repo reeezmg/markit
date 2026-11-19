@@ -1,5 +1,33 @@
 # Storefront CRM rollout
 
+## Dedicated sales CRM
+
+The new `/crm` workspace is separate from the storefront email tools below. See
+`docs/ARCH-crm.md` for its contracts. Its new database prerequisite is the prepared
+`20261118220000_dedicated_crm` migration creating six CRM tables and adding three CompanyClient columns. Applying it requires
+a separate explicit instruction under AGENTS.md after preparation in `schema.zmodel`.
+Implementation, generation and tests never install it. Do not apply every pending migration.
+
+After separately authorized installation, deploy the matching generated Prisma,
+enhancer, Zod and query-hook output and restart the application. Deploy the protected
+15-minute `/api/cron/crm` schedule with the existing private `CRON_SECRET`; it creates
+internal company alerts and sends no customer email or WhatsApp messages. Managers
+configure pipelines, sources, custom fields, scoring and follow-ups. Staff use the existing /client page for new leads and contacts. Existing memberships
+appear directly in CRM; there is no separate contact import or consent enrollment.
+The raw CRM membership fields use @ignore so generated client queries remain
+compatible before installation.
+
+Verify with `npm run test:crm`, `npm run test:crm:mobile` and the read-only
+`node --import tsx scripts/check-crm-readiness.ts`. New CRM write SQL uses isolated
+test adapters until installation is authorized. Real provider delivery remains a
+separate email/WhatsApp onboarding check.
+
+## Existing storefront email marketing
+
+The older email prerequisites below need their own separate database authorization.
+Installing the sales CRM does not authorize those or any earlier WhatsApp migrations,
+nor does it opt clients into campaigns.
+
 The CRM is deliberately fail-closed: no campaign is sent until a manager queues a draft or enables an automation, a customer has confirmed the exact email address, and the scheduled processor is configured.
 
 1. Apply the two CRM migrations under `prisma/migrations/20260913120000_add_company_client_marketing_consent/` and `20260913130000_add_storefront_crm/` to the shared PostgreSQL database through the normal migration pipeline **before** deploying either API. Do not run an unrestricted schema push against production.

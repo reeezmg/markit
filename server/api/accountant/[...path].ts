@@ -12,6 +12,7 @@ import { distributorAccountingRouter } from '../../utils/accountant/distributors
 import { moneyRouter } from '../../utils/accountant/money';
 import { investorRouter } from '../../utils/accountant/investors';
 import { investorProfitRouter } from '../../utils/accountant/investor-profits';
+import { loanRouter } from '../../utils/accountant/loans';
 import { userAccountingRouter } from '../../utils/accountant/users';
 import { erpAccountingRouter } from '../../utils/accountant/erp';
 import { ecommerceAccountingRouter } from '../../utils/accountant/ecommerce';
@@ -28,7 +29,7 @@ export default defineEventHandler(async event => {
   const [resource, ...parts] = path.split('/');
   const routes = { 'account-settings': accountSettingsRouter, 'accounting-accounts': accountingAccountRouter, 'manual-journals': manualJournalRouter,
     'account-transfers': accountTransferRouter, 'accountant-management': accountantManagementRouter, 'investor-profits': investorProfitRouter,
-    parties: directoryRouter, projects: directoryRouter, distributors: distributorAccountingRouter, erp: erpAccountingRouter, ecommerce: ecommerceAccountingRouter, users: userAccountingRouter, money: moneyRouter, investors: investorRouter };
+    parties: directoryRouter, projects: directoryRouter, loans: loanRouter, distributors: distributorAccountingRouter, erp: erpAccountingRouter, ecommerce: ecommerceAccountingRouter, users: userAccountingRouter, money: moneyRouter, investors: investorRouter };
   const router = routes[resource as keyof typeof routes];
   if (!router) throw createError({ statusCode: 404 });
   try {
@@ -36,7 +37,7 @@ export default defineEventHandler(async event => {
       await router.dispatch(event.method, resource === 'parties' || resource === 'projects' ? `/${resource}` : `/${parts.join('/')}`, req, res);
       if (!['GET', 'HEAD'].includes(event.method)) await logActivity({ ...user,
         action: event.method, resource, resourceId: parts.join('/') || (result as any)?.id || '', meta: {} });
-    }, { readOnly: ['GET', 'HEAD'].includes(event.method), lockCompany: resource === 'users' && !['GET', 'HEAD'].includes(event.method), ...(resource === 'investor-profits' ? { transactionTimeoutMs: 120000 } : {}) });
+    }, { readOnly: ['GET', 'HEAD'].includes(event.method), lockCompany: resource === 'users' && !['GET', 'HEAD'].includes(event.method), ...(['investor-profits', 'loans'].includes(resource) ? { transactionTimeoutMs: 120000 } : {}) });
     return result;
   } catch (error: any) {
     if (error instanceof ZodError) throw createError({ statusCode: 400, statusMessage: error.issues.map(i => `${i.path.join('.')}: ${i.message}`).join('; ') });

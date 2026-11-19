@@ -49,6 +49,13 @@ export interface LabelPackage {
   sort_code?: string          // carrier routing code, e.g. "MAN/KKA"
   barcode?: string            // carrier PNG, fallback only
   ewbn?: string[]             // e-way bill numbers
+  items?: Array<{
+    id?: string
+    name: string
+    quantity: number
+    price: number
+    total: number
+  }>
 }
 
 const ENTITIES: Record<string, string> = {
@@ -59,6 +66,26 @@ const esc = (v: unknown) => String(v ?? '').replace(/[&<>"']/g, (c) => ENTITIES[
 
 const amount = (v: unknown) =>
   v == null || v === '' ? '' : Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 });
+
+export function shippingLabelItemRows(pkg: LabelPackage): string {
+  return pkg.items?.length
+    ? pkg.items.map((item) => [
+        '      <tr>',
+        '        <td class="ink">' + esc(item.name || 'Product') + '</td>',
+        '        <td class="num ink">' + esc(item.quantity ?? 1) + '</td>',
+        '        <td class="num ink">' + esc(amount(item.price)) + '</td>',
+        '        <td class="num ink">' + esc(amount(item.total)) + '</td>',
+        '      </tr>',
+      ].join('\n')).join('\n')
+    : [
+        '      <tr>',
+        '        <td class="ink">' + esc(pkg.prd || 'Merchandise') + '</td>',
+        '        <td class="num ink">' + esc(pkg.qty ?? 1) + '</td>',
+        '        <td class="num ink">' + esc(amount(pkg.rs)) + '</td>',
+        '        <td class="num ink">' + esc(amount(pkg.rs)) + '</td>',
+        '      </tr>',
+      ].join('\n');
+}
 
 function labelDate(raw?: string) {
   if (!raw) return '';
@@ -117,6 +144,7 @@ function labelBody(pkg: LabelPackage, page = 1, pages = 1): string {
   const due = payment === 'COD' ? pkg.cod : pkg.rs;
   const returnAddr = [pkg.radd, pkg.rcty, pkg.rst, pkg.rpin].filter(Boolean).join(', ');
   const ewb = Array.isArray(pkg.ewbn) ? pkg.ewbn.filter(Boolean).join(', ') : '';
+  const itemRows = shippingLabelItemRows(pkg);
 
   return [
     '<div class="label">',
@@ -177,12 +205,9 @@ function labelBody(pkg: LabelPackage, page = 1, pages = 1): string {
     '    <table class="items">',
     '      <colgroup><col class="c-product"><col class="c-qty"><col class="c-price"><col class="c-total"></colgroup>',
     '      <thead><tr><th>Product Name</th><th class="num">Qty.</th><th class="num">Price</th><th class="num">Total</th></tr></thead>',
-    '      <tbody><tr>',
-    '        <td class="ink">' + esc(pkg.prd || 'Merchandise') + '</td>',
-    '        <td class="num ink">' + esc(pkg.qty ?? 1) + '</td>',
-    '        <td class="num ink">' + esc(amount(pkg.rs)) + '</td>',
-    '        <td class="num ink">' + esc(amount(pkg.rs)) + '</td>',
-    '      </tr></tbody>',
+    '      <tbody>',
+    itemRows,
+    '      </tbody>',
     '    </table>',
     '  </div>',
 
@@ -254,6 +279,7 @@ const STYLES = [
   '.items th, .items td { padding: calc(var(--pad-top) - 2px) var(--pad-x); text-align: left; vertical-align: top; line-height: 1.2; }',
   '.items thead th { padding-bottom: calc(var(--pad-bottom) - 3px); }',
   '.items tbody td { padding-bottom: var(--pad-bottom); }',
+  '.items tbody tr + tr td { border-top: 1px solid #d1d5db; }',
   '.items thead th { border-bottom: 1px solid #000; font-size: 1.05em; font-weight: 700; }',
   '.items col.c-product { width: 55%; }',
   '.items col.c-qty { width: 12%; }',

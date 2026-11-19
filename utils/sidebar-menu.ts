@@ -1,0 +1,1142 @@
+import { investmentPages } from './investments';
+import { accountantSections } from './accountant-navigation';
+import { salesMenu } from './sales-workflow';
+import { crmPages, crmManager, crmStaff } from './crm';
+import type { SidebarLink, SidebarSection } from './sidebar-navigation';
+
+/** One menu source for the sidebar and its Settings page. Existing gates stay here. */
+export function buildSidebarMenu(section: SidebarSection, session: Record<string, any>, workflow: {includeInvoicing:boolean;includeAfterSales:boolean}): SidebarLink[] {
+  if (section === 'connect' && !crmManager(session.role || '')) return [];
+  const plan=session.plan, isUserTrackIncluded=session.isUserTrackIncluded;
+
+    const simplifiedLinks = [
+    // {
+    //   id: 'dashboard',
+    //   label: 'Dashboard',
+    //   icon: 'i-heroicons-home',
+    //   to: `/dashboard`,
+    //   tooltip: {
+    //     text: 'Dashboard',
+    //     shortcuts: ['D', 'D'],
+    //   },
+    // },
+    {
+    id: 'offline',
+    label: 'Offline',
+    to: '/offline',
+    icon: 'i-heroicons-no-symbol',
+    tooltip: {
+        text: 'Adjust stock for offline/manual sales',
+        shortcuts: ['P', 'O'],
+    },
+    },
+   {
+      id: 'online',
+      label: 'Online',
+      to: `/erp/online`,
+      icon: 'i-heroicons-shopping-bag',
+      tooltip: {
+        text: 'Online Sales',
+        shortcuts: ['E', 'O'],
+      },
+    },
+    {
+      id: 'reports',
+      label: 'Reports',
+      to: `/reports/online`,
+      icon: 'i-heroicons-book-open',
+      tooltip: {
+        text: 'Reports',
+        shortcuts: ['R', 'S'],
+      },
+    },
+    {
+      id: 'products',
+      label: 'Products',
+      to: `/products`,
+      icon: 'i-heroicons-squares-2x2',
+      tooltip: {
+        text: 'Products',
+        shortcuts: ['P', 'P'],
+      },
+    },
+    {
+      id: 'categories',
+      label: 'Categories',
+      to: `/products/categories`,
+      icon: 'i-heroicons-rectangle-group',
+      tooltip: {
+        text: 'Categories',
+        shortcuts: ['P', 'C'],
+      },
+    },
+    {
+      id: 'brands',
+      label: 'Brands',
+      to: `/products/brands`,
+      icon: 'i-heroicons-tag',
+      tooltip: {
+        text: 'Brands',
+        shortcuts: ['P', 'B'],
+      },
+    },
+    {
+      id: 'collections',
+      label: 'Collections',
+      to: `/products/collections`,
+      icon: 'i-heroicons-squares-2x2',
+      tooltip: {
+        text: 'Collections',
+        shortcuts: ['P', 'O'],
+      },
+    },
+    {
+      id: 'boxes',
+      label: 'Boxes',
+      to: `/products/dimensions`,
+      icon: 'i-heroicons-cube',
+      tooltip: {
+        text: 'Packaging Boxes',
+        shortcuts: ['P', 'X'],
+      },
+    },
+    {
+      id: 'ecom',
+      label: 'Ecom',
+      icon: 'i-heroicons-globe-alt',
+      children: [
+        {
+          id: 'ecom-storefront',
+          label: 'Storefront Editor',
+          to: '/storefront/editor',
+          icon: 'i-heroicons-paint-brush',
+          tooltip: {
+            text: 'Storefront Editor',
+            shortcuts: ['C', 'E'],
+          },
+        },
+        {
+          id: 'ecom-messages',
+          label: 'Messages',
+          to: '/ecommerce-cms/messages',
+          icon: 'i-heroicons-inbox',
+          tooltip: {
+            text: 'Messages',
+            shortcuts: ['C', 'M'],
+          },
+        },
+        {
+          id: 'ecom-customers',
+          label: 'Customers',
+          to: '/ecommerce-cms/customers',
+          icon: 'i-heroicons-user-group',
+        },
+        ...(['admin', 'manager'].includes(String(session.role || '')) ? [{
+          id: 'ecom-marketing',
+          label: 'Marketing',
+          to: '/ecommerce-cms/marketing',
+          icon: 'i-heroicons-megaphone',
+        }] : []),
+        {
+          id: 'ecom-faq',
+          label: 'FAQ',
+          to: '/ecommerce-cms/faq',
+          icon: 'i-heroicons-question-mark-circle',
+          tooltip: {
+            text: 'FAQ',
+            shortcuts: ['C', 'F'],
+          },
+        },
+        {
+          id: 'ecom-feedback',
+          label: 'Feedback',
+          to: '/ecommerce-cms/feedback',
+          icon: 'i-heroicons-chat-bubble-left-right',
+          tooltip: {
+            text: 'Feedback',
+            shortcuts: ['C', 'R'],
+          },
+        },
+        {
+          id: 'ecom-reviews', label: 'Product Reviews', to: '/ecommerce-cms/reviews',
+          icon: 'i-heroicons-star', tooltip: { text: 'Product Reviews', shortcuts: ['C', 'V'] },
+        },
+        {
+          id: 'ecom-blogs',
+          label: 'Blogs',
+          to: '/ecommerce-cms/blogs',
+          icon: 'i-heroicons-newspaper',
+          tooltip: {
+            text: 'Blogs',
+            shortcuts: ['C', 'B'],
+          },
+        },
+        {
+          id: 'ecom-gallery',
+          label: 'Gallery',
+          to: '/ecommerce-cms/gallery',
+          icon: 'i-heroicons-photo',
+          tooltip: {
+            text: 'Gallery',
+            shortcuts: ['C', 'Y'],
+          },
+        },
+        {
+          id: 'ecom-policies',
+          label: 'Policies',
+          to: '/ecommerce-cms/policies',
+          icon: 'i-heroicons-document-text',
+          tooltip: {
+            text: 'Policies',
+            shortcuts: ['C', 'P'],
+          },
+        },
+        {
+          id: 'ecom-payment',
+          label: 'Payment',
+          to: '/ecommerce-cms/payment',
+          icon: 'i-heroicons-credit-card',
+          tooltip: {
+            text: 'Payment Gateway',
+            shortcuts: ['C', 'G'],
+          },
+        },
+        {
+          id: 'ecom-shipping',
+          label: 'Shipping',
+          to: '/ecommerce-cms/shipping',
+          icon: 'i-heroicons-truck',
+          tooltip: {
+            text: 'Shipping Integrations',
+            shortcuts: ['C', 'H'],
+          },
+        },
+      ],
+    },
+    {
+      id: 'stocks',
+      label: 'Stocks',
+      to: `/products/stocks`,
+      icon: 'i-heroicons-archive-box',
+      tooltip: {
+        text: 'Stocks',
+        shortcuts: ['P', 'S'],
+      },
+    },
+    {
+      id: 'bookings',
+      label: 'Orders',
+      to: `/order/ecomorders`,
+      icon: 'i-heroicons-bookmark',
+      tooltip: {
+        text: 'Orders',
+        shortcuts: ['O', 'B'],
+      },
+    },
+    {
+      id: 'pickup',
+      label: 'Pickup',
+      to: `/order/pickup`,
+      icon: 'i-heroicons-truck',
+      tooltip: {
+        text: 'Pickup requests & locations',
+      },
+    },
+    {
+      id: 'ndr',
+      label: 'Failed deliveries',
+      to: `/order/ndr`,
+      icon: 'i-heroicons-exclamation-triangle',
+      tooltip: {
+        text: 'Failed deliveries (NDR)',
+      },
+    },
+    {
+      id: 'returns',
+      label: 'Returns',
+      to: `/order/returns`,
+      icon: 'i-heroicons-arrow-uturn-left',
+      tooltip: {
+        text: 'Return requests & reverse pickups',
+      },
+    },
+    {
+      id: 'exchange',
+      label: 'Exchange',
+      to: `/order/exchange`,
+      icon: 'i-heroicons-arrows-right-left',
+      tooltip: {
+        text: 'Exchange requests & REPL shipments',
+      },
+    },
+    {
+      id: 'requests',
+      label: 'Requests',
+      to: `/order/requests`,
+      icon: 'i-heroicons-arrow-path-rounded-square',
+      tooltip: {
+        text: 'Requests',
+        shortcuts: ['O', 'R'],
+      },
+    },
+    {
+      id: 'users',
+      label: 'Users',
+      icon: 'i-heroicons-user-group',
+      to: `/users`,
+      tooltip: {
+        text: 'Users',
+        shortcuts: ['U', 'U'],
+      },
+    },
+    {
+      id: 'client',
+      label: 'Client',
+      icon: 'i-heroicons-user-plus',
+      to: `/client`,
+      tooltip: {
+        text: 'Client',
+        shortcuts: ['C', 'C'],
+      },
+    },
+    {
+      id: 'ai',
+      label: 'AI',
+      icon: 'i-heroicons-sparkles',
+      children: [
+        {
+          id: 'ai-usage',
+          label: 'Usage',
+          to: '/ai/usage',
+          icon: 'i-heroicons-chart-bar',
+          tooltip: {
+            text: 'AI Usage & Cost',
+            shortcuts: ['A', 'U'],
+          },
+        },
+        {
+          id: 'ai-models',
+          label: 'Models',
+          to: '/ai/models',
+          icon: 'i-heroicons-cpu-chip',
+          tooltip: { text: 'AI Models & API Keys', shortcuts: ['A', 'M'] },
+        },
+      ],
+    },
+    {
+      id: 'settings',
+      label: 'Settings',
+      to: `/settings`,
+      icon: 'i-heroicons-cog-8-tooth',
+      children: [
+        {
+          label: 'General',
+          to: '/settings',
+          exact: true,
+          tooltip: {
+            text: 'Settings',
+            shortcuts: ['S', 'G'],
+          },
+        },
+        {
+          label: 'Store',
+          to: '/settings/store',
+          tooltip: {
+            text: 'Store Settings',
+            shortcuts: ['S', 'S'],
+          },
+        },
+        {
+          label: 'Products',
+          to: '/settings/products',
+          tooltip: {
+            text: 'Product Inputs',
+            shortcuts: ['S', 'I'],
+          },
+        },
+        {
+          label: 'Printer',
+          to: '/settings/printer',
+          tooltip: {
+            text: 'Printer Settings',
+            shortcuts: ['S', 'P'],
+          },
+        },
+        {
+          label: 'Numbering',
+          to: '/settings/numbering',
+          tooltip: {
+            text: 'Numbering & Prefixes',
+            shortcuts: ['S', 'N'],
+          },
+        },
+        {
+          label: 'Requests',
+          to: '/settings/requests',
+          tooltip: {
+            text: 'Request Settings',
+            shortcuts: ['S', 'R'],
+          },
+        },
+      ],
+      tooltip: {
+        text: 'Settings',
+        shortcuts: ['S', 'G'],
+      },
+    },
+  ];
+
+    const baseLinks = [
+        // {  
+        //     id: 'dashboard',
+        //     label: 'Dashboard',    
+        //     icon: 'i-heroicons-home',
+        //     to: `/dashboard`,
+        //     tooltip: {
+        //         text: 'Dashboard',
+        //         shortcuts: ['D', 'D'],
+        //     },
+        // },
+        {   
+            id: 'erp',     
+            label: 'Sales',
+            to: '/erp',
+            icon: 'i-heroicons-credit-card',
+            children: [
+                {
+                    label: 'Billing',
+                    to: `/erp/billing`,
+                    tooltip: { text: 'Sales', shortcuts: ['E', 'B'] },
+                    exact: true,
+                },
+                {
+                    label: 'Sales',
+                    to: `/erp/sales`,
+                    tooltip: { text: 'Sales', shortcuts: ['E', 'S'] },
+                },
+                {
+                    label: 'Online',
+                    to: `/erp/online`,
+                    tooltip: { text: 'Online Sales', shortcuts: ['E', 'O'] },
+                },
+                {
+                    label: 'Credit',
+                    to: `/erp/accounts`,
+                    tooltip: {
+                        text: 'Credit',
+                        shortcuts: ['E', 'A'],
+                    },
+                },
+            ],
+        },
+        {
+        id: 'reports',
+        label: 'Reports',
+        to: '/reports',
+        icon: 'i-heroicons-book-open',
+        children: [
+        ...(session.type === 'admin' || session.type === 'manager'
+            ? [
+            {
+            label: 'Daily',
+            to: `/reports/daily`,
+            tooltip: {
+                text: 'Reports',
+                shortcuts: ['R', 'S'],
+            },
+            },
+            ]
+            : []),
+            ...(session.type === 'admin'
+            ? [
+            {
+            label: 'Summary',
+            to: `/reports/summary`,
+            tooltip: {
+                text: 'Business Summary',
+                shortcuts: ['R', 'M'],
+            },
+            },
+            ]
+            : []),
+            ...(session.type === 'admin'
+            ? [
+            {
+            label: 'Profit',
+            to: `/reports/profit`,
+            tooltip: {
+                text: 'Profit Report',
+                shortcuts: ['P', 'R'],
+            },
+            },
+            ]
+            : []),
+            ...(session.type === 'admin'
+            ? [
+            {
+            label: 'Accounts',
+            to: `/reports/accounts`,
+            tooltip: {
+                text: 'Accounts Report',
+                shortcuts: ['A', 'R'],
+            },
+            },
+            ]
+            : []),
+            ...(session.type === 'admin'
+            ? [
+            {
+            label: 'GST',
+            to: `/reports/gst`,
+            tooltip: {
+                text: 'GST Returns',
+                shortcuts: ['G', 'T'],
+            },
+            },
+            ]
+            : []),
+            {
+            label: 'Online',
+            to: `/reports/online`,
+            tooltip: {
+                text: 'Reports',
+                shortcuts: ['O', 'S'],
+            },
+            },
+            ...(isUserTrackIncluded
+            ? [
+                {
+                    label: 'Users',
+                    to: `/reports/users`,
+                    tooltip: {
+                    text: 'Reports',
+                    shortcuts: ['R', 'U'],
+                    },
+                },
+                ]
+            : []),
+        ],
+        },
+        {
+            id: 'products',
+            label: 'Products',
+            to: `/products`,
+            icon: 'i-heroicons-squares-2x2',
+            children: [
+                {
+                    label: 'All Products',
+                    to: `/products`,
+                    exact: true,
+                    tooltip: {
+                        text: 'products',
+                        shortcuts: ['P', 'P'],
+                    },
+                },
+
+                   {
+                    label: 'Categories',
+                    to: `/products/categories`,
+                    tooltip: {
+                    text: 'products',
+                    shortcuts: ['P', 'C'],
+                    },
+                },
+                   {
+                    label: 'Brands',
+                    to: `/products/brands`,
+                    tooltip: {
+                    text: 'products',
+                    shortcuts: ['P', 'B'],
+                    },
+                },
+                   {
+                    label: 'Collections',
+                    to: `/products/collections`,
+                    tooltip: {
+                    text: 'products',
+                    shortcuts: ['P', 'O'],
+                    },
+                },
+                   {
+                    label: 'Boxes',
+                    to: `/products/dimensions`,
+                    tooltip: {
+                    text: 'Packaging Boxes',
+                    shortcuts: ['P', 'X'],
+                    },
+                },
+                     {
+                    label: 'Stocks',
+                    to: `/products/stocks`,
+                    tooltip: {
+                        text: 'stocks',
+                        shortcuts: ['P', 'S'],
+                    },
+                },
+            ],
+           
+        },
+        {
+            id: 'distributor',
+            label: 'Distributor',
+            to: `/distributor`,
+            icon: 'i-heroicons-truck',
+            children: [
+                {
+                    label: 'All Distributor',
+                    to: `/distributor`,
+                    exact: true,
+                    tooltip: {
+                        text: 'distributors',
+                        shortcuts: ['D', 'D'],
+                    },
+                },
+                {
+                    label: 'Purchase Order',
+                    to: `/distributor/purchaseOrder`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Purchase Order',
+                        shortcuts: ['D', 'O'],
+                    },
+                },
+                {
+                    label: 'Purchase Return',
+                    to: `/distributor/purchase-return`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Purchase Return',
+                        shortcuts: ['D', 'R'],
+                    },
+                },
+                {
+                    label: 'Payments',
+                    to: `/distributor/payments`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Payments',
+                        shortcuts: ['D', 'P'],
+                    },
+                },
+                // {
+                //     label: 'Credit',
+                //     to: `/distributor/credit`,
+                //     exact: true,
+                //     tooltip: {
+                //         text: 'Credit',
+                //         shortcuts: ['D', 'C'],
+                //     },
+                // },
+               
+            ],
+           
+        },
+        {
+            id: 'orders',
+            label: 'Orders',
+            to: `/order`,
+            icon: 'i-heroicons-shopping-bag',
+            children: [
+                        {
+                        label: 'Orders',
+                        to: `/order/ecomorders`,
+                        tooltip: {
+                            text: 'Orders',
+                            shortcuts: ['O', 'B'],
+                        },
+                        },
+                        {
+                        label: 'Pickup',
+                        to: `/order/pickup`,
+                        tooltip: {
+                            text: 'Pickup requests & locations',
+                        },
+                        },
+                        {
+                        label: 'Failed deliveries',
+                        to: `/order/ndr`,
+                        tooltip: {
+                            text: 'Failed deliveries (NDR)',
+                        },
+                        },
+                        {
+                        label: 'Requests',
+                        to: `/order/requests`,
+                        tooltip: {
+                            text: 'Requests',
+                            shortcuts: ['O', 'R'],
+                        },
+                        },
+                        {
+                        label: 'Returns',
+                        to: `/order/returns`,
+                        tooltip: {
+                            text: 'Return requests & reverse pickups',
+                        },
+                        },
+                        {
+                        label: 'Exchange',
+                        to: `/order/exchange`,
+                        tooltip: {
+                            text: 'Exchange requests & REPL shipments',
+                        },
+                        },
+            ],
+
+        },
+
+        {
+            id: 'coupons',
+            label: 'Coupons',
+            to: `/coupon`,
+            icon: 'i-heroicons-ticket',
+            tooltip: {
+                text: 'Coupons',
+                shortcuts: ['C', 'P'],
+            },
+        },
+
+        {
+            id: 'accountant',
+            label: 'Accountant (New)',
+            to: '/accountant/chart-of-accounts',
+            icon: 'i-heroicons-book-open',
+        },
+        {
+            id: 'accounts',
+            label: 'Legacy Accounts',
+            to: `/accounts`,
+            icon: 'i-heroicons-squares-2x2',
+            children: [
+                {
+                    label: 'Banks',
+                    to: `/accounts/bank`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Banks',
+                        shortcuts: ['A', 'B'],
+                    },
+                },
+                {
+                    label: 'Cash',
+                    to: `/accounts/cash`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Cash',
+                        shortcuts: ['A', 'C'],
+                    },
+                },
+                {
+                    label: 'Tax',
+                    to: `/accounts/tax`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Tax Account',
+                        shortcuts: ['A', 'X'],
+                    },
+                },
+                {
+                    label: 'Credit',
+                    to: `/accounts/credit`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Credit Account',
+                        shortcuts: ['A', 'R'],
+                    },
+                },
+                                {
+                    label: 'Legacy investments',
+                    to: `/accounts/investment`,
+                    tooltip: {
+                    text: 'investments',
+                    shortcuts: ['A', 'I'],
+                    },
+                },
+                {
+                    label: 'Transfers',
+                    to: `/accounts/transfer`,
+                    tooltip: {
+                    text: 'transfers',
+                    shortcuts: ['A', 'T'],
+                    },
+                },
+                {
+                    label: 'Transactions',
+                    to: `/accounts/transaction`,
+                    exact: true,
+                    tooltip: {
+                        text: 'transactions',
+                        shortcuts: ['A', 'T'],
+                    },
+                }
+            ],
+           
+        },
+        
+                  {
+                      id: 'users',
+                      label: 'Users',
+                      icon: 'i-heroicons-user-group',
+                      to: `/users`,
+                      children: [
+                          {
+                              label: 'Users',
+                              to: `/users`,
+                              exact: true,
+                              tooltip: {
+                                  text: 'Users',
+                                  shortcuts: ['U', 'U'],
+                              },
+                          },
+                          {
+                              label: 'Salary',
+                              to: `/users/salary`,
+                              tooltip: {
+                                  text: 'Salary',
+                                  shortcuts: ['U', 'S'],
+                              },
+                          },
+                          {
+                              label: 'Credit Bills',
+                              to: `/users/credit-bills`,
+                              tooltip: {
+                                  text: 'Credit Bills',
+                                  shortcuts: ['U', 'C'],
+                              },
+                          },
+                          {
+                              label: 'User Ledger',
+                              to: `/users/ledger`,
+                              tooltip: {
+                                  text: 'User Ledger',
+                                  shortcuts: ['U', 'L'],
+                              },
+                          },
+                          {
+                              label: 'Attendance',
+                              to: `/users/attendance`,
+                              tooltip: {
+                                  text: 'Attendance',
+                                  shortcuts: ['U', 'A'],
+                              },
+                          },
+                          {
+                              label: 'Holiday',
+                              to: `/users/holidays`,
+                              tooltip: {
+                                  text: 'Holiday',
+                                  shortcuts: ['U', 'O'],
+                              },
+                          },
+                          {
+                              label: 'Shift',
+                              to: `/users/shift`,
+                              tooltip: {
+                                  text: 'Shift',
+                                  shortcuts: ['U', 'H'],
+                              },
+                          },
+                      ],
+                  },
+              
+      
+        {
+            id: 'client',
+            label: 'Client',
+            icon: 'i-heroicons-user-plus',
+            to: `/client`,
+            tooltip: {
+                text: 'Client',
+                shortcuts: ['C', 'C'],
+            },
+        },
+        {
+            id: 'ecom',
+            label: 'Ecom',
+            to: '/storefront/editor',
+            icon: 'i-heroicons-globe-alt',
+            children: [
+                {
+                    label: 'Storefront Editor',
+                    to: '/storefront/editor',
+                    exact: true,
+                    tooltip: {
+                        text: 'Storefront Editor',
+                        shortcuts: ['C', 'E'],
+                    },
+                },
+                {
+                    label: 'Messages',
+                    to: '/ecommerce-cms/messages',
+                    exact: true,
+                    tooltip: {
+                        text: 'Messages',
+                        shortcuts: ['C', 'M'],
+                    },
+                },
+                {
+                    label: 'Customers',
+                    to: '/ecommerce-cms/customers',
+                    exact: true,
+                    icon: 'i-heroicons-user-group',
+                },
+                ...(['admin', 'manager'].includes(String(session.role || '')) ? [{
+                    label: 'Marketing',
+                    to: '/ecommerce-cms/marketing',
+                    exact: true,
+                    icon: 'i-heroicons-megaphone',
+                }] : []),
+                {
+                    label: 'FAQ',
+                    to: '/ecommerce-cms/faq',
+                    exact: true,
+                    tooltip: {
+                        text: 'FAQ',
+                        shortcuts: ['C', 'F'],
+                    },
+                },
+                {
+                    label: 'Feedback',
+                    to: '/ecommerce-cms/feedback',
+                    exact: true,
+                    tooltip: {
+                        text: 'Feedback',
+                        shortcuts: ['C', 'R'],
+                    },
+                },
+                {
+                    label: 'Product Reviews', to: '/ecommerce-cms/reviews', exact: true,
+                    tooltip: { text: 'Product Reviews', shortcuts: ['C', 'V'] },
+                },
+                {
+                    label: 'Blogs',
+                    to: '/ecommerce-cms/blogs',
+                    exact: true,
+                    tooltip: {
+                        text: 'Blogs',
+                        shortcuts: ['C', 'B'],
+                    },
+                },
+                {
+                    label: 'Gallery',
+                    to: '/ecommerce-cms/gallery',
+                    exact: true,
+                    tooltip: {
+                        text: 'Gallery',
+                        shortcuts: ['C', 'Y'],
+                    },
+                },
+                {
+                    label: 'Policies',
+                    to: '/ecommerce-cms/policies',
+                    exact: true,
+                    tooltip: {
+                        text: 'Policies',
+                        shortcuts: ['C', 'P'],
+                    },
+                },
+                {
+                    label: 'Payment',
+                    to: '/ecommerce-cms/payment',
+                    exact: true,
+                    tooltip: {
+                        text: 'Payment Gateway',
+                        shortcuts: ['C', 'G'],
+                    },
+                },
+                {
+                    label: 'Shipping',
+                    to: '/ecommerce-cms/shipping',
+                    exact: true,
+                    tooltip: {
+                        text: 'Shipping Integrations',
+                        shortcuts: ['C', 'H'],
+                    },
+                },
+            ],
+        },
+
+        {
+            id: 'ai',
+            label: 'AI',
+            icon: 'i-heroicons-sparkles',
+            children: [
+                {
+                    id: 'ai-usage',
+                    label: 'Usage',
+                    to: `/ai/usage`,
+                    exact: true,
+                    tooltip: {
+                        text: 'AI Usage & Cost',
+                        shortcuts: ['A', 'U'],
+                    },
+                },
+                {
+                    id: 'ai-models',
+                    label: 'Models',
+                    to: `/ai/models`,
+                    exact: true,
+                    tooltip: { text: 'AI Models & API Keys', shortcuts: ['A', 'M'] },
+                },
+            ],
+        },
+
+        {
+            id: 'settings',
+            label: 'Settings',
+            to: `/settings`,
+            icon: 'i-heroicons-cog-8-tooth',
+            children: [
+                {
+                    label: 'General',
+                    to: `/settings`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Settings',
+                        shortcuts: ['S', 'G'],
+                    },
+                },
+                {
+                    label: 'Store',
+                    to: `/settings/store`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Settings',
+                        shortcuts: ['S', 'S'],
+                    },
+                },
+                {
+                    label: 'Products',
+                    to: `/settings/products`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Product Inputs',
+                        shortcuts: ['S', 'I'],
+                    },
+                },
+                {
+                    label: 'Printer',
+                    to: `/settings/printer`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Settings',
+                        shortcuts: ['S', 'P'],
+                    },
+                },
+                {
+                    label: 'Numbering',
+                    to: `/settings/numbering`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Numbering & Prefixes',
+                        shortcuts: ['S', 'N'],
+                    },
+                },
+                {
+                    label: 'Requests',
+                    to: `/settings/requests`,
+                    exact: true,
+                    tooltip: {
+                        text: 'Request Settings',
+                        shortcuts: ['S', 'R'],
+                    },
+                },
+            ],
+
+        },
+    ];
+
+    // Parent items with children render as accordion groups; start them collapsed by default.
+    const collapseGroups = (arr: any[]) =>
+      arr.map((link) => (link.children?.length ? { ...link, defaultOpen: false } : link));
+
+  const expenseLinks = {
+    id: 'expense', label: 'Expense', icon: 'i-heroicons-receipt-percent',
+    children: [
+      { label: 'Daily Expense', to: '/erp/expenses', tooltip: { text: 'Daily Expense', shortcuts: ['E', 'E'] } },
+      { label: 'Recurring Expense', to: '/erp/recurring-expenses' },
+    ],
+  };
+  const selectedLinks: any[] = plan === 'free' || plan === 'lite'
+    ? simplifiedLinks
+    : baseLinks
+  const erpMenu = selectedLinks.find(link => link.id === 'erp');
+  const salesChildren = salesMenu(workflow.includeInvoicing);
+  if (erpMenu) erpMenu.children = salesChildren;
+  else selectedLinks.unshift({ id: 'erp', label: 'Sales', to: '/erp', icon: 'i-heroicons-credit-card', children: salesChildren });
+  const expenseIndex = selectedLinks.findIndex(link => link.id === 'erp') + 1;
+  const investmentLinks = {
+    id: 'investments', label: 'Investments', to: '/investments/overview', icon: 'i-heroicons-chart-pie',
+    children: investmentPages.map(([path, label]) => ({ label, to: `/investments/${path}`, exact: path !== 'investors' })),
+  };
+  const allLinks: any[] = [...selectedLinks.slice(0, expenseIndex), expenseLinks, ...selectedLinks.slice(expenseIndex)]
+    .filter(link => link.id !== 'accounts' && link.id !== 'accountant');
+  const settings = allLinks.find(link => link.id === 'settings');
+  if (settings?.children) settings.children.push({label:'Sidebar',to:'/settings/sidebar',exact:true});
+  if (['admin', 'manager', 'accountant'].includes(session.role || '')) {
+    const accountIndex = allLinks.findIndex(link => link.id === 'users' || link.id === 'client' || link.id === 'settings');
+    allLinks.splice(accountIndex < 0 ? allLinks.length : accountIndex, 0, {
+      id: 'accountant', label: 'Account', to: '/accountant/chart-of-accounts', icon: 'i-heroicons-book-open',
+      children: accountantSections.flatMap(section => section.links.map(([path, label]) => ({ label, to: `/accountant/${path}` }))),
+    });
+  }
+
+  const afterSalesLinks = { id: 'after-sales', label: 'After-sales', icon: 'i-heroicons-wrench-screwdriver', children: [
+    {label:'Service workspace',to:'/after-sales'}, {label:'Service items',to:'/after-sales/items'}, {label:'Maintenance plans',to:'/after-sales/maintenance'},
+    {label:'Warranty plans',to:'/after-sales/warranty'}, {label:'Guarantee plans',to:'/after-sales/guarantee'}] };
+  if (workflow.includeAfterSales) allLinks.push(afterSalesLinks);
+  const accountantIndex = allLinks.findIndex(link => link.id === 'accountant');
+  allLinks.splice(accountantIndex >= 0 ? accountantIndex + 1 : expenseIndex + 1, 0, investmentLinks, {
+    id: 'loans', label: 'Loans', to: '/loans', icon: 'i-heroicons-banknotes', children: [
+      { label: 'Loan accounts', to: '/loans', exact: true },
+      { label: 'Repayments', to: '/loans/repayments', exact: true },
+      { label: 'Settings', to: '/loans/settings', exact: true },
+      { label: 'Earlier history', to: '/loans/history', exact: true },
+    ],
+  });
+
+  if (section === 'crm') {
+    if (!crmStaff(session.role || '')) return []
+    return crmPages.filter(([page]) => !['reports','settings','campaigns'].includes(page) || crmManager(session.role || '')).map(([path,label,icon]) => ({id:'crm-'+(path||'overview'),label,icon,to:path==='clients'?'/client?from=crm':'/crm'+(path?'/'+path:''),exact:!path}))
+  }
+  if (section === 'connect') {
+    return [{ id: 'connect-whatsapp', label: 'WhatsApp Business', to: '/connect/whatsapp', icon: 'i-heroicons-chat-bubble-left-right' }]
+  }
+  if (section === 'storefront') {
+    const ecomChildren = (allLinks.find((link) => link.id === 'ecom') as { children?: any[] } | undefined)?.children ?? []
+    const editor = ecomChildren.find((link) => link.to === '/storefront/editor')
+    const orderLinks = allLinks
+      .filter((link) => link.id === 'orders' || link.id === 'bookings')
+      .map((link) => ({ ...link, id: 'storefront-orders' }))
+    const group = (id: string, label: string, icon: string, paths: string[]) => ({
+      id,
+      label,
+      icon,
+      children: ecomChildren.filter((link) => paths.includes(link.to)),
+    })
+
+    return collapseGroups([
+      ...(workflow.includeAfterSales ? [afterSalesLinks] : []),
+      ...(editor ? [{ ...editor, id: 'storefront-editor', icon: 'i-heroicons-paint-brush' }] : []),
+      group('storefront-content', 'Content', 'i-heroicons-document-text', [
+        '/ecommerce-cms/faq', '/ecommerce-cms/blogs', '/ecommerce-cms/gallery', '/ecommerce-cms/policies',
+      ]),
+      group('storefront-customer', 'Customer', 'i-heroicons-chat-bubble-left-right', [
+        '/ecommerce-cms/customers', '/ecommerce-cms/marketing', '/ecommerce-cms/messages', '/ecommerce-cms/feedback', '/ecommerce-cms/reviews',
+      ]),
+      group('storefront-commerce', 'Commerce', 'i-heroicons-shopping-bag', [
+        '/ecommerce-cms/payment', '/ecommerce-cms/shipping',
+      ]),
+      ...orderLinks,
+      ...allLinks.filter((link) => link.id === 'ai' || link.id === 'settings'),
+    ])
+  }
+
+  const sectionLinks = allLinks.filter((link) =>
+    link.id !== 'ecom' && link.id !== 'ai' && link.id !== 'orders' && link.id !== 'bookings'
+  )
+
+  return collapseGroups(sectionLinks)
+
+
+}

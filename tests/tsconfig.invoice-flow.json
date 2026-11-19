@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.reports.json",
+  "include": [
+    "credit-receipt-globals.d.ts", "quote-page-globals.d.ts",
+    "../utils/invoice-flow.ts", "../server/utils/invoice-flow.ts", "../server/utils/invoice-lists.ts",
+    "../utils/sales-view.ts", "../server/utils/sales-view.ts", "../server/api/billSale/findManyBills.post.ts",
+    "../server/utils/create-bill-source.ts", "../server/api/billSale/invoices.get.ts", "../server/api/billSale/payments.get.ts",
+    "../components/Billing/InvoiceDetails.vue", "../components/Billing/InvoiceWorkspace.vue",
+    "../components/Billing/PaymentTerms.vue", "../utils/invoice-payment-terms.ts", "../server/utils/invoice-payment-terms.ts",
+    "../components/Billing/DiscountAdjustment.vue", "../utils/bill-adjustments.ts",
+    "../components/Billing/Preferences.vue", "../utils/billing-preferences.ts", "../server/utils/billing-preferences.ts",
+    "../server/api/settings/billing-preferences.get.ts", "../server/api/settings/billing-preferences.put.ts",
+    "../server/api/settings/payment-terms.get.ts", "../server/api/settings/payment-terms.post.ts",
+    "../components/Erp/DocumentTable.vue",
+    "../pages/erp/invoice-drafts.vue",
+    "../components/Billing/CreditReceiptModal.vue", "../pages/erp/invoices.vue", "../pages/erp/payments.vue"
+  ]
+}

@@ -2,6 +2,8 @@
 import { Switch } from '@headlessui/vue'
 import type { Period, Range } from '~/types'
 import { useFindManyBill, useCountBill } from '~/lib/company-hooks/bill';
+import { historyEventWhere, historyInvoiceWhere } from '~/utils/sales-history';
+import { billingErrorMessage } from '~/utils/billing-error';
 const companyScope = useCompanyScope('table');
 await companyScope.ready;
 const historyCompany = useRoute().query.entryCompany;
@@ -25,6 +27,7 @@ const ranges = [
 ]
 const historyAsOf = useState<string>('sales-history:initial-date', () => new Date().toISOString())
 const selectedDate = ref({ start: sub(new Date(historyAsOf.value), { days: 14 }), end: new Date(historyAsOf.value) })
+const dateMode = ref('range')
 
 // 🔹 Columns
 const columns = [
@@ -59,11 +62,13 @@ const selectedColumns = ref(columns)
 const columnsTable = computed(() => companyScope.columns(columns.filter((c) => selectedColumns.value.includes(c))));
 
 // 🔹 Filters
-const search = ref<number | null>(null)
+const search = ref('')
 const selectedStatus = ref<any>([])
 const resetFilters = () => {
   search.value = ''
   selectedStatus.value = []
+  dateMode.value = 'range'
+  selectedDate.value = {start:sub(new Date(),{days:14}),end:new Date()}
 }
 
 // 🔹 Pagination
@@ -74,7 +79,7 @@ const pageCount = ref('20')
 const selectedRows = ref([])
 
 
-const pageFrom = computed(() => (page.value - 1) * parseInt(pageCount.value) + 1)
+const pageFrom = computed(() => pageTotal.value ? (page.value - 1) * parseInt(pageCount.value) + 1 : 0)
 const pageTo = computed(() => Math.min(page.value * parseInt(pageCount.value), pageTotal.value || 0))
 
 // 🔹 Helpers for date filter
@@ -93,28 +98,21 @@ function selectRange(duration: Duration) {
 // 🔹 Query
 const queryArgs = computed<Prisma.BillFindManyArgs>(() => {
   const cleanup = useAuth().session.value?.cleanup ?? false
+  const eventWhere = historyEventWhere(cleanup, dateMode.value === 'range' ? selectedDate.value : null)
   return {
     where: {
       AND: [
         { companyId: useAuth().session.value?.companyId },
         ...(!cleanup ? [{ precedence: { not: true } }] : []),
-        ...(search.value ? [{ invoiceNumber: search.value }] : []),
+        historyInvoiceWhere(search.value),
         ...(selectedStatus.value.length
           ? [{ OR: selectedStatus.value.map((s: any) => ({ paymentStatus: s.value })) }]
           : []),
-        ...(selectedDate.value
-          ? [
-              { updatedAt: { gte: selectedDate.value.start.toISOString() } },
-              { updatedAt: { lte: selectedDate.value.end.toISOString() } }
-            ]
-          : [])
       ],
-      billHistories: { some: {} }
+      billHistories: { some: eventWhere }
     },
     include: {
-      billHistories: cleanup
-        ? true
-        : { where: { precedence: { not: true } } }
+      billHistories: { where: eventWhere, orderBy: [{changedAt:'desc'},{id:'desc'}] }
     },
     orderBy: { [sort.value.column]: sort.value.direction },
     skip: (page.value - 1) * parseInt(pageCount.value),
@@ -126,9 +124,9 @@ const countArgs = computed(() => ({
   where: queryArgs.value.where,
 }));
 
-const { data: pageTotal } = useCountBill(countArgs)
+const { data: pageTotal, refetch: refetchCount, error: countError } = useCountBill(countArgs)
 
-const { data: bills, isLoading, refetch } = useFindManyBill(queryArgs)
+const { data: bills, isLoading, refetch, error: listError } = useFindManyBill(queryArgs)
 
 const styledBills = computed(() =>
   (bills.value || []).map(row => ({
@@ -139,31 +137,41 @@ const styledBills = computed(() =>
 
 // 🔹 Restore Action
 watch(companyScope.readIds, () => { page.value = 1; expand.value = { openedRows: [], row: null }; });
+watch([search, selectedStatus, selectedDate, dateMode, pageCount, sort], () => {
+  page.value=1; expand.value={openedRows:[],row:null};
+}, {deep:true})
+watch(pageTotal, total => {
+  if (total != null) page.value=Math.min(page.value,Math.max(1,Math.ceil(total/Number(pageCount.value))))
+})
+const restoringBillId = ref('')
 const restoreBill = async (row: any) => {
+  if (restoringBillId.value) return
+  restoringBillId.value=row.id
   try {
-    await companyScope.selectOwner(row.companyId);
     await companyScope.fetch('/api/billSale/restoreBill', {
       method: 'POST',
+      headers: {'x-company-id':row.companyId},
       body: {
         billId: row.id,
         companyId: row.companyId,
       },
     })
     toast.add({ title: 'Bill Restored!', color: 'green' })
-    refetch()
+    await Promise.all([refetch(),refetchCount()])
   } catch (err: any) {
     toast.add({
       title: 'Failed to restore bill',
-      description: err?.data?.statusMessage || err?.message,
+      description: billingErrorMessage(err),
       color: 'red',
     })
-  }
+  } finally { restoringBillId.value='' }
 }
 </script>
 
 <template>
   <UDashboardPanelContent class="pb-24">
     <CompanyTableFilter />
+    <UAlert v-if="listError || countError" title="Could not load bill history" :description="billingErrorMessage(listError || countError)" color="red" class="mb-4" />
     <UCard
             class="w-full"
             :ui="{
@@ -198,7 +206,8 @@ const restoreBill = async (row: any) => {
                 class="w-full sm:w-40"
               />
             </div>
-            <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+            <USelect v-model="dateMode" :options="[{label:'Date range',value:'range'},{label:'All dates',value:'all'}]" aria-label="History date filter" />
+            <UPopover v-if="dateMode === 'range'" :popper="{ placement: 'bottom-start' }" class="z-10">
               <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
                 {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
               </UButton>
@@ -244,7 +253,6 @@ const restoreBill = async (row: any) => {
             icon="i-heroicons-funnel"
             color="gray"
             size="xs"
-            :disabled="search === '' && selectedStatus.length === 0"
             @click="resetFilters"
           >
             Reset
@@ -267,10 +275,12 @@ const restoreBill = async (row: any) => {
         <template #createdAt-data="{ row }">
           {{ new Date(row.createdAt).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) }}
         </template>
-        <template #grandTotal-data="{ row }"> ₹{{ row.grandTotal?.toFixed(2) }} </template>
+        <template #grandTotal-data="{ row }"> ₹{{ Number(row.grandTotal ?? 0).toFixed(2) }} </template>
         <template #action-data="{ row }">
           <UButton
             v-if="row.deleted"
+            :loading="restoringBillId === row.id"
+            :disabled="!!restoringBillId"
             color="primary"
             variant="ghost"
             icon="i-heroicons-arrow-path"
@@ -288,7 +298,7 @@ const restoreBill = async (row: any) => {
             <template #changedAt-data="{ row }">
               {{ new Date(row.changedAt).toLocaleString('en-GB') }}
             </template>
-            <template #grand_total-data="{ row }"> ₹{{ row.grand_total?.toFixed(2) }} </template>
+            <template #grand_total-data="{ row }"> ₹{{ Number(row.grand_total ?? row.grandTotal ?? 0).toFixed(2) }} </template>
             <template #action-data="{ row }">
               <UButton
                 color="primary"

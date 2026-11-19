@@ -1,0 +1,88 @@
+<!doctype html><html><head><meta charset="utf-8"><title>WhatsApp Connect browser check</title></head><body><div id="app"></div><pre id="result">Running…</pre>
+<script type="module">
+import * as Vue from 'vue'
+import Workspace from '../components/Connect/WhatsAppWorkspace.vue'
+import UButton from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Button.vue'
+import UBadge from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Badge.vue'
+import heroicons from '../node_modules/@iconify-json/heroicons/icons.json'
+const {createApp,h,ref,nextTick}=Vue
+Object.assign(window,Vue)
+const requests=[],scope={companyId:ref('branch-company'),busy:ref(false)}
+window.testRoute={query:{},path:'/connect/whatsapp'}
+window.useRoute=()=>window.testRoute
+window.useCompanyScope=(mode)=>{if(mode)throw Error('Workspace must inherit the parent company scope');return scope}
+window.confirm=()=>true
+window.FB={init(){},login(callback){callback({authResponse:{code:'test-code'}})}}
+let connected=false,failSend=false
+let templates=[{id:'300',name:'order_ready',language:'en_US',status:'APPROVED',category:'UTILITY',components:[{type:'BODY',text:'Hello {{1}}, your order is ready.'}]}]
+let activity=[]
+window.$fetch=async(url,options={})=>{
+  requests.push({url,...structuredClone(options)})
+  if(options.headers['x-company-id']!=='branch-company')throw Error('Company context lost')
+  const action=url.split('/').pop(),method=options.method||'GET'
+  if(action==='status')return {configured:true,schemaReady:true,appId:'123',configId:'456',version:'v25.0',setup:{},webhookPath:'/api/connect/whatsapp/webhook',connection:connected?{active:true,verifiedName:'Sample business',displayPhone:'+91 98765 43210',wabaId:'100',phoneId:'200',subscribed:true}:null}
+  if(action==='start')return {state:'state'}
+  if(action==='exchange')return {assets:[{wabaId:'100',phoneId:'200',displayPhone:'+91 98765 43210',verifiedName:'Sample business'}]}
+  if(action==='finish'){connected=true;return {}}
+  if(action==='templates'){
+    if(method==='POST'){templates.push({...options.body,id:'301',status:'PENDING'});return {id:'301',status:'PENDING'}}
+    if(method==='DELETE'){templates=templates.filter(t=>t.id!==options.body.id);return {success:true}}
+    return {data:structuredClone(templates),after:null}
+  }
+  if(action==='messages'){
+    if(method==='POST'){
+      const b=options.body
+      activity.unshift({id:b.requestId,metaId:'wamid.browser',recipient:b.to,direction:'outbound',kind:'template',content:{template:{name:'order_ready'}},status:failSend?'UNKNOWN':'ACCEPTED',createdAt:new Date().toISOString()})
+      if(failSend)throw {data:{statusMessage:'Meta did not confirm the request. Check activity before retrying.'}}
+      return {status:'ACCEPTED',metaId:'wamid.browser'}
+    }
+    return {data:structuredClone(activity),before:null}
+  }
+  if(action==='health')return {phone:{verified_name:'Sample business',quality_rating:'GREEN',code_verification_status:'VERIFIED',platform_type:'CLOUD_API'}}
+  if(action==='profile')return {data:[{about:'Retail company',description:'Orders and support'}]}
+  if(action==='disconnect'){connected=false;return {success:true}}
+  throw Error('Unexpected action '+action)
+}
+const app=createApp(Workspace)
+app.config.globalProperties.$route=window.testRoute
+app.config.errorHandler=error=>{document.querySelector('#result').textContent='FAILED: '+error.stack}
+app.component('UButton',UButton);app.component('UBadge',UBadge)
+app.component('Icon',{props:['name'],setup:p=>()=>{const icon=heroicons.icons[p.name.replace(/^i-heroicons-/,'')]||heroicons.icons['link'];return h('svg',{viewBox:'0 0 24 24',width:'1em',height:'1em',innerHTML:icon.body})}})
+app.component('UIcon',{props:['name'],setup:p=>()=>h(Vue.resolveComponent('Icon'),{name:p.name})})
+app.component('NuxtLink',{props:{to:{},custom:Boolean,target:{}},setup:(p,{slots})=>()=>p.custom?slots.default?.({href:p.to,route:window.testRoute,isActive:false,isExactActive:false,isExternal:true,navigate(){}}):h('a',{href:p.to,target:p.target},slots.default?.())})
+app.mount('#app')
+const sleep=ms=>new Promise(r=>setTimeout(r,ms))
+const assert=(condition,message)=>{if(!condition)throw Error(message)}
+async function wait(condition,message){for(let i=0;i<100;i++){await nextTick();if(condition())return;await sleep(20)}throw Error(message)}
+const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text)
+async function click(text){await wait(()=>button(text)&&!button(text).disabled,'Button unavailable: '+text);button(text).click();await sleep(25);await nextTick()}
+function set(element,value){assert(element,'Input missing');element.value=value;element.dispatchEvent(new Event(element.tagName==='SELECT'?'change':'input',{bubbles:true}))}
+function inputIn(label){const el=[...document.querySelectorAll('label')].find(l=>l.textContent.trim().startsWith(label));return el?.querySelector('input,select,textarea')}
+try{
+  await click('Connect with Meta');await click('Finish connection')
+  assert(requests.some(r=>r.url.endsWith('/finish')&&r.body.wabaId==='100'),'Signup must finish with selected assets')
+  await click('Manage templates');await click('Create template')
+  set(inputIn('Name'),'order_followup');set(inputIn('Message body'),'Hello {{1}}, order {{2}} is ready.')
+  await nextTick();set(inputIn('Sample values'),'Alex\nORD-1');await nextTick()
+  await click('Submit to Meta')
+  const created=requests.find(r=>r.url.endsWith('/templates')&&r.method==='POST')
+  assert(created.body.components[0].example.body_text[0][1]==='ORD-1','Template examples are sent to Meta')
+  assert(document.body.textContent.includes('PENDING'),'Pending approval must be shown')
+  await click('Messages')
+  set(inputIn('Recipient number'),'+919876543210');set(inputIn('Approved template'),'300');await nextTick()
+  set(inputIn('body variable 1'),'Alex');await nextTick()
+  assert(button('Send message').disabled,'Sending requires explicit consent')
+  const checkbox=inputIn('I confirm');checkbox.click();await nextTick();await click('Send message')
+  const sent=requests.find(r=>r.url.endsWith('/messages')&&r.method==='POST')
+  assert(sent.body.consent&&sent.body.components[0].parameters[0].text==='Alex','Send uses consent and filled variables')
+  assert(button('Send message').disabled,'Repeat sending must be blocked')
+  assert(document.body.textContent.includes('wamid.browser'),'Actual response ID appears in activity')
+  await click('Start a new message');failSend=true;inputIn('I confirm').click();await nextTick();await click('Send message')
+  assert(document.body.textContent.includes('Meta did not confirm'),'Uncertain result is visible')
+  assert(button('Send message').disabled,'Uncertain sends must not repeat automatically')
+  assert(requests.filter(r=>r.url.endsWith('/messages')&&r.method==='POST').length===2,'Exactly two intentional sends')
+  await click('Settings');await click('Disconnect this company')
+  assert(document.body.textContent.includes('Not connected'),'Disconnect state refreshes')
+  document.querySelector('#result').textContent='ALL PASSED · company scope, signup, template creation, consent, sending, ambiguous result and disconnect'
+}catch(error){document.querySelector('#result').textContent='FAILED: '+error.stack+'\nUI: '+document.querySelector('#app').textContent+'\nRequests: '+JSON.stringify(requests.map(r=>({url:r.url,method:r.method})))}
+</script></body></html>

@@ -7,8 +7,13 @@ import type { Prisma } from '@prisma/client'
 import { sub, format, isSameDay, type Duration } from 'date-fns'
 import { startOfDay, endOfDay } from 'date-fns'
 import { useQueryClient } from '@tanstack/vue-query'
+import { invoiceBalance } from '~/utils/invoice-flow'
+import { salesViews, salesView as readSalesView, salesInvoiceView, salesExportColumns } from '~/utils/sales-view'
 import { billingErrorMessage } from '~/utils/billing-error'
 import { receiptStatus } from '~/utils/bill-credit'
+import BillingPreferences from '~/components/Billing/Preferences.vue'
+import SalesDetailPanel from '~/components/Sales/DetailPanel.vue'
+import { emptyBillingPreferences } from '~/utils/billing-preferences'
 import { getQueryKey } from '@zenstackhq/tanstack-query/runtime-v5'
 const paymentOptions = ['Cash', 'UPI', 'Card']
 const allPaymentOptions = ['Cash', 'UPI', 'Card', 'Credit', 'Split']
@@ -18,6 +23,30 @@ const billStore = useBillStore()
 const timeZone = 'Asia/Kolkata'
 const salesTableStore = useSalesTableStore()
 const toast = useToast();
+const route = useRoute()
+const salesView = computed(() => readSalesView(route.query.view))
+const invoiceView = computed(() => salesInvoiceView(salesView.value))
+const dateFilter = ref<'all'|'range'>(invoiceView.value ? 'all' : 'range')
+const preferenceDocument = computed(() => invoiceView.value ? 'invoice' as const : 'sale' as const)
+const documentBusy = ref(''), loadError = ref('')
+const preferencesOpen = ref(false), preferences = ref(emptyBillingPreferences('sale'))
+const preferenceCompanyId = computed(() => companyScope.readIds.value.length === 1 ? companyScope.readIds.value[0] : companyScope.companyId.value)
+let preferenceVersion = 0
+async function loadPreferences() {
+  const version = ++preferenceVersion
+  try {
+    const result = await $fetch<any>('/api/settings/billing-preferences', { query: { document: preferenceDocument.value }, headers: { 'x-company-id': preferenceCompanyId.value } })
+    if (version === preferenceVersion) {
+      preferences.value = result.preferences
+      if (result.configured) {
+        if (pageCount.value !== String(result.preferences.pageSize)) page.value = 1
+        pageCount.value = String(result.preferences.pageSize)
+      }
+    }
+  } catch { if (version === preferenceVersion) preferences.value = emptyBillingPreferences('sale') }
+}
+watch([preferenceCompanyId, preferenceDocument], loadPreferences)
+onBeforeUnmount(() => { preferenceVersion++ })
 const router = useRouter();
 const useAuth = () => companyScope.auth;
 const { forOwner } = useOrganizationActions();
@@ -29,7 +58,9 @@ const isOpen = ref(false);
 const creditReceiptOpen = ref(false);
 const creditReceiptBill = ref<any>(null);
 const creditReceiptMode = ref<'collect' | 'reverse'>('collect');
-const openCreditCollection = (bill: any, mode: 'collect' | 'reverse') => {
+const canCollectPayment = (bill: any) => bill.paymentStatus !== 'PAID' && Number(bill.balanceDue ?? invoiceBalance(bill).balanceDue) > 0;
+const hasReversiblePayments = (bill: any) => bill.payments?.some((payment: any) => payment.status === receiptStatus && !payment.deleted) === true;
+const openCreditCollection = (bill: any, mode: 'collect' | 'reverse' = 'collect') => {
   creditReceiptBill.value = { ...bill };
   creditReceiptMode.value = mode;
   creditReceiptOpen.value = true;
@@ -55,7 +86,7 @@ const openDeleteBill = (row: any) => {
 const isDeleteModalOpen = ref(false)
 const deletingRowIdentity = ref<any>({})
 const paymentMethod = ref('Cash');
-const activeBillInfo = ref({});
+const activeBillInfo = ref<any>({});
 const isChangePaymentMethodOpen = ref(false)
 const changePaymentMethodDraft = ref('Cash')
 const changePaymentMethodBill = ref<any | null>(null)
@@ -68,6 +99,15 @@ const isPostChangeActionOpen = ref(false)
 const { printBill } = usePrint();
 const printData = ref(null);
 const isPrintOpen = ref(false)
+const selectedSale = ref<any>(null)
+const detailRevision = ref(0)
+let ignoreSaleClick = false
+const rememberSaleClick = (event: MouseEvent) => {
+  const target = event.target as HTMLElement | null
+  ignoreSaleClick = Boolean(target?.closest('button,a,input,select,textarea,[role="checkbox"],[role="combobox"]'))
+}
+const selectSale = (row: any) => { selectedSale.value = row }
+const selectSaleRow = (row: any) => { if (!ignoreSaleClick) selectSale(row) }
 const ranges = [
   { label: 'Last 7 days', duration: { days: 7 } },
   { label: 'Last 14 days', duration: { days: 14 } },
@@ -85,7 +125,7 @@ const selectedDate = ref({
 const getColumns = (isMobile: boolean) => {
   if (!isMobile) {
     const desktopColumns = [
-      { key: 'invoiceNumber', label: 'Inv#', sortable: true },
+      { key: 'invoiceNumber', label: 'Sale / invoice', sortable: true },
       ...(useAuth().session.value?.allStores ? [{ key: 'companyName', label: 'Store', sortable: false }] : []),
       { key: 'createdAt', label: 'Date', sortable: true },
       { key: 'customer', label: 'Customer', sortable: true },
@@ -102,7 +142,7 @@ const getColumns = (isMobile: boolean) => {
   }
 
   const mobileColumns = [
-    { key: 'invoiceNumber', label: 'Inv#', sortable: true },
+    { key: 'invoiceNumber', label: 'Sale / invoice', sortable: true },
     ...(useAuth().session.value?.allStores ? [{ key: 'companyName', label: 'Store', sortable: false }] : []),
     { key: 'grandTotal', label: 'Grand Total', sortable: true },
     { key: 'paymentMethod', label: 'Method', sortable: true },
@@ -119,7 +159,21 @@ const getColumns = (isMobile: boolean) => {
 };
 
 // Call it with the current isMobile value
-const columns = computed(() => getColumns(isMobile.value));
+const columns = computed(() => {
+  const result = getColumns(isMobile.value)
+  if (invoiceView.value) {
+    const index = result.findIndex(column => column.key === 'grandTotal') + 1
+    result.splice(index, 0,
+      {key:'dueDate',label:'Due date',sortable:true},
+      {key:'amountReceived',label:'Received',sortable:true},
+      {key:'balanceDue',label:'Balance',sortable:true},
+      {key:'invoicePaymentTerms',label:'Payment terms',sortable:false},
+      {key:'subject',label:'Subject',sortable:false},
+      {key:'sendStatus',label:'Sending',sortable:false},
+    )
+  }
+  return result
+});
 
 
 const entrycolumns = computed(() => [
@@ -200,7 +254,7 @@ const active = (selectedRows) => [
     ],
 ];
 const action = (row: any) => {
-  const items = [
+  const items: Array<Array<{label:string;icon:string;click:()=>void|Promise<unknown>;disabled?:boolean}>> = [
     [
       {
         label: 'Print',
@@ -214,8 +268,15 @@ const action = (row: any) => {
       },
     ],
   ]
-
-  if (row.payments?.length) items.push([
+  if (row.invoiceCode) items[0].push(
+    { label: row.sendStatus === 'Not sent' ? 'Send invoice' : 'Resend invoice', icon:'i-heroicons-paper-airplane', click:()=>sendSale(row) },
+    { label:'Download PDF',icon:'i-heroicons-arrow-down-tray',click:()=>downloadSale(row) },
+  )
+  if (row.paymentMethod === 'Credit' || row.splitPayments?.some((part: any) => part.method === 'Credit')) items.push([
+    {label:'Record payment',icon:'i-heroicons-banknotes',disabled:Number(row.balanceDue ?? invoiceBalance(row).balanceDue)<=0,click:()=>openCreditCollection(row)},
+    {label:'Payment history',icon:'i-heroicons-clock',click:()=>openCreditCollection(row,'reverse')},
+  ])
+  else if (row.payments?.length) items.push([
     {label:'Payment history',icon:'i-heroicons-clock',click:()=>openCreditCollection(row,'reverse')},
   ])
 
@@ -241,7 +302,7 @@ const action = (row: any) => {
       {
         label: 'Edit',
         icon: 'i-heroicons-pencil-square-20-solid',
-        click: () => router.push(`./edit/${row.id}`),
+        click: () => router.push({path:`/erp/edit/${row.id}`,query:{entryCompany:row.companyId}}),
       },
     ],
     [
@@ -284,7 +345,7 @@ const columnsTable = computed(() =>
 const selectedRows = ref([]);
 const notes = ref<any>({})
 
-const search = ref('');
+const search = ref(typeof route.query.q === 'string' ? route.query.q : '');
 const selectedStatus = ref<any>([]);
 const searchStatus = ref(undefined);
 const selectedPaymentMethods = ref<any>([]);
@@ -303,9 +364,22 @@ const resetFilters = () => {
     minGrandTotal.value = null;
     maxGrandTotal.value = null;
     selectedDate.value = { start: new Date(), end: new Date() };
+    dateFilter.value = invoiceView.value ? 'all' : 'range'
 };
 
-const summaryCards = computed(() => [
+watch(salesView, () => {
+  selectedStatus.value = []; selectedPaymentMethods.value = []; page.value = 1
+  selectedRows.value = []; expand.value = { openedRows: [], row: null }
+  dateFilter.value = invoiceView.value ? 'all' : 'range'
+})
+watch(() => route.query.q, value => { search.value = typeof value === 'string' ? value : '' })
+
+const summaryCards = computed(() => invoiceView.value ? [
+  {label:'Sales total',value:salesTotals.value.total,method:null,icon:'i-heroicons-document-text',color:'primary'},
+  {label:'Received',value:salesTotals.value.received || 0,method:null,icon:'i-heroicons-banknotes',color:'green'},
+  {label:'Balance due',value:salesTotals.value.balance || 0,method:null,icon:'i-heroicons-clock',color:'orange'},
+  {label:'Overdue',value:salesTotals.value.overdue || 0,method:null,icon:'i-heroicons-exclamation-circle',color:'red'},
+] : [
   { label: 'Total Sales',  value: salesTotals.value.total,  method: null,     icon: 'i-heroicons-banknotes',     color: 'primary' },
   { label: 'Cash',         value: salesTotals.value.cash,   method: 'Cash',   icon: 'i-heroicons-currency-rupee', color: 'green'   },
   { label: 'Card',         value: salesTotals.value.card,   method: 'Card',   icon: 'i-heroicons-credit-card',    color: 'blue'    },
@@ -348,7 +422,7 @@ const pageTotal = ref(0)
 const isLoading = ref(false)
 const isDownloadLoading = ref(false)
 const lastFetchId = ref(0)
-const salesTotals = ref({ total: 0, cash: 0, card: 0, upi: 0, credit: 0 })
+const salesTotals = ref({ total: 0, cash: 0, card: 0, upi: 0, credit: 0, received:0, balance:0, overdue:0 })
 const collectionsTotal = ref<number | null>(null)
 const collectionMethods = ['Cash', 'UPI', 'Card', 'Bank', 'Cheque'] as const
 const collectionsByMethod = ref<Partial<Record<typeof collectionMethods[number], number>> | null>(null)
@@ -369,7 +443,7 @@ const formatDateTimeForExport = (value: string | Date) =>
   format(new Date(value), 'd MMM yyyy, hh:mm a')
 
 const getSalesExportFilename = (extension: 'xlsx' | 'pdf') =>
-  `Sales (${format(selectedDate.value.start, 'dd-MM-yyyy')} to ${format(selectedDate.value.end, 'dd-MM-yyyy')}).${extension}`
+  `Sales - ${salesViews.find(view=>view.value===salesView.value)?.label} (${dateFilter.value==='all'?'All dates':format(selectedDate.value.start, 'dd-MM-yyyy')+' to '+format(selectedDate.value.end, 'dd-MM-yyyy')}).${extension}`
 
 const getUtcDateRangeForApi = () => ({
   startDate: startOfDay(selectedDate.value?.start),
@@ -388,6 +462,7 @@ const formatPdfCurrency = (val: number) =>
 
 const fetchSales = async () => {
   isLoading.value = true
+  loadError.value = ''
   const fetchId = ++lastFetchId.value
   try {
     const res = await $fetch('/api/billSale/findManyBills', {
@@ -395,6 +470,8 @@ const fetchSales = async () => {
       body: {
         companyId: useAuth().session.value?.companyId,
         search: search.value?.trim(),
+        salesView: salesView.value,
+        dateFilter: dateFilter.value,
         selectedStatus: selectedStatus.value,
         selectedPaymentMethods: selectedPaymentMethods.value,
         minGrandTotal: minGrandTotal.value,
@@ -412,6 +489,7 @@ const fetchSales = async () => {
 
     if (fetchId !== lastFetchId.value) return
     sales.value = res.rows
+    detailRevision.value++
     pageTotal.value = res.total   // ✅ REAL TOTAL
     if (res.totals) salesTotals.value = res.totals
     collectionsTotal.value = res.collections?.creditRepayments ?? null
@@ -422,6 +500,8 @@ const fetchSales = async () => {
     pageTotal.value = 0
     collectionsTotal.value = null
     collectionsByMethod.value = null
+    salesTotals.value = {total:0,cash:0,card:0,upi:0,credit:0,received:0,balance:0,overdue:0}
+    loadError.value = billingErrorMessage(err)
   } finally{
     if (fetchId === lastFetchId.value) {
       isLoading.value = false
@@ -430,7 +510,7 @@ const fetchSales = async () => {
 }
 
 await companyScope.ready;
-const initialSales = await useAsyncData('erp-sales:' + companyScope.readIds.value.join(','), async () => {
+const initialSales = await useAsyncData('erp-sales:' + companyScope.readIds.value.join(',') + ':' + salesView.value + ':' + search.value, async () => {
   await fetchSales();
   return { rows: sales.value, total: pageTotal.value, totals: salesTotals.value, collections: collectionsTotal.value, collectionsByMethod: collectionsByMethod.value };
 });
@@ -460,6 +540,8 @@ watch(sales, (newSales) => {
 watch(
   [
     page,
+    salesView,
+    dateFilter,
     pageCount,
     search,
     selectedStatus,
@@ -478,6 +560,7 @@ watch(
 watch(
   [
     search,
+    dateFilter,
     selectedStatus,
     selectedPaymentMethods,
     minGrandTotal,
@@ -545,26 +628,26 @@ const applyFilters = async () => {
   await fetchSales()
 }
 
-onMounted(() => {
+onMounted(async () => {
   {
     const saved = salesTableStore
-    search.value = saved.search ?? ''
-    selectedStatus.value = saved.selectedStatus ?? []
-    selectedPaymentMethods.value = saved.selectedPaymentMethods ?? []
-    minGrandTotal.value = saved.minGrandTotal ?? null
-    maxGrandTotal.value = saved.maxGrandTotal ?? null
+    search.value = typeof route.query.q === 'string' ? route.query.q : saved.search ?? ''
+    selectedStatus.value = route.query.view ? [] : saved.selectedStatus ?? []
+    selectedPaymentMethods.value = route.query.view ? [] : saved.selectedPaymentMethods ?? []
+    minGrandTotal.value = route.query.view ? null : saved.minGrandTotal ?? null
+    maxGrandTotal.value = route.query.view ? null : saved.maxGrandTotal ?? null
     if (saved.selectedDate?.start && saved.selectedDate?.end) {
       selectedDate.value = {
         start: new Date(saved.selectedDate.start),
         end: new Date(saved.selectedDate.end),
       }
     }
-    page.value = Number(saved.page || 1)
+    page.value = route.query.view || route.query.q ? 1 : Number(saved.page || 1)
     pageCount.value = String(saved.pageCount || '5')
     if (saved.sort?.column && saved.sort?.direction) {
       sort.value = saved.sort
     }
-    if (Array.isArray(saved.selectedColumnKeys) && saved.selectedColumnKeys.length > 0) {
+    if (!invoiceView.value && Array.isArray(saved.selectedColumnKeys) && saved.selectedColumnKeys.length > 0) {
       selectedColumns.value = columns.value.filter((c: any) =>
         saved.selectedColumnKeys.includes(c.key)
       )
@@ -572,11 +655,12 @@ onMounted(() => {
   }
 
   isMobile.value = window.innerWidth < 640
-  window.addEventListener('resize', () => {
-    isMobile.value = window.innerWidth < 640
-  })
+  window.addEventListener('resize', onResize)
+  await loadPreferences()
   fetchSales()
 })
+function onResize() { isMobile.value = window.innerWidth < 640 }
+onBeforeUnmount(() => { window.removeEventListener('resize', onResize); lastFetchId.value++ })
 
 
 
@@ -588,25 +672,23 @@ const fetchFilteredSalesForExport = async () => {
   const exportPageCount = 500
   let hasMore = true
   let totalRows = 0
+  const filters = JSON.parse(JSON.stringify({
+    companyId:useAuth().session.value?.companyId,search:search.value?.trim(),salesView:salesView.value,dateFilter:dateFilter.value,
+    selectedStatus:selectedStatus.value,selectedPaymentMethods:selectedPaymentMethods.value,
+    minGrandTotal:minGrandTotal.value,maxGrandTotal:maxGrandTotal.value,...getUtcDateRangeForApi(),
+    sortColumn:sort.value.column,sortDirection:sort.value.direction,excludeMarkit:true,
+    closingDate:useAuth().session.value?.closingDate ?? null,showCleanedValues:canUseCleanupToggle.value && showCleanedValues.value,
+  }))
+  const headers = {'x-company-id':companyScope.companyId.value,'x-company-filter':companyScope.readIds.value.length===1?companyScope.readIds.value[0]:'*'}
 
   while (hasMore) {
     const res = await $fetch('/api/billSale/findManyBills', {
       method: 'POST',
+      headers,
       body: {
-        companyId: useAuth().session.value?.companyId,
-        search: search.value?.trim(),
-        selectedStatus: selectedStatus.value,
-        selectedPaymentMethods: selectedPaymentMethods.value,
-        minGrandTotal: minGrandTotal.value,
-        maxGrandTotal: maxGrandTotal.value,
-        ...getUtcDateRangeForApi(),
+        ...filters,
         page: exportPage,
         pageCount: exportPageCount,
-        sortColumn: sort.value.column,
-        sortDirection: sort.value.direction,
-        excludeMarkit: true,
-        closingDate: useAuth().session.value?.closingDate ?? null,
-        showCleanedValues: canUseCleanupToggle.value && showCleanedValues.value,
       },
     })
 
@@ -631,7 +713,7 @@ const buildSalesExportData = (rows: any[]) => {
   ]
 
   const billRows = rows.map((row: any) => ({
-    invoiceNumber: formatInvoiceForExport(row.invoiceNumber, row.billPrefix),
+    invoiceNumber: row.invoiceCode || formatInvoiceForExport(row.invoiceNumber, row.billPrefix),
     companyName: row.companyName || '',
     date: row.createdAt ? formatDateTimeForExport(row.createdAt) : '',
     subtotal: Number(row.subtotal || 0),
@@ -639,6 +721,11 @@ const buildSalesExportData = (rows: any[]) => {
     grandTotal: Number(row.grandTotal || 0),
     taxCollected: Number(row.tax || 0),
     payment: row.paymentMethod || '',
+    customer: row.client?.name || row.client?.phone || '',
+    dueDate: row.dueDate || '',
+    amountReceived: Number(row.amountReceived ?? invoiceBalance(row).amountReceived),
+    balanceDue: Number(row.balanceDue ?? invoiceBalance(row).balanceDue),
+    paymentStatus: invoiceBalance(row).invoicePaymentStatus,
   }))
 
   return { summaryRows, billRows }
@@ -646,6 +733,8 @@ const buildSalesExportData = (rows: any[]) => {
 
 const handleDownloadExcel = async () => {
   isDownloadLoading.value = true
+  const exportColumns = salesExportColumns(invoiceView.value)
+  const filename = getSalesExportFilename('xlsx')
   try {
     const rows = await fetchFilteredSalesForExport()
     if (!rows.length) {
@@ -674,6 +763,7 @@ const handleDownloadExcel = async () => {
       { header: 'F', key: 'col6', width: 18 },
       { header: 'G', key: 'col7', width: 18 },
       { header: 'H', key: 'col8', width: 22 },
+      ...(exportColumns.length>8?[{header:'I',key:'col9',width:22}]:[]),
     ]
 
     worksheet.mergeCells('A1:B1')
@@ -697,20 +787,11 @@ const handleDownloadExcel = async () => {
 
     worksheet.addRow([])
     const billsTitleRowIndex = worksheet.lastRow!.number + 1
-    worksheet.mergeCells(`A${billsTitleRowIndex}:H${billsTitleRowIndex}`)
+    worksheet.mergeCells(`A${billsTitleRowIndex}:${exportColumns.length>8?'I':'H'}${billsTitleRowIndex}`)
     worksheet.getCell(`A${billsTitleRowIndex}`).value = 'Bills'
     worksheet.getCell(`A${billsTitleRowIndex}`).font = { bold: true, size: 14 }
 
-    const billsHeaderRow = worksheet.addRow([
-      'Invoice Number',
-      'Date',
-      'Subtotal',
-      'Discount',
-      'Grand Total',
-      'Total Tax Collected',
-      'Payment',
-      'Store',
-    ])
+    const billsHeaderRow = worksheet.addRow(exportColumns.map(column=>column.label))
     billsHeaderRow.font = { bold: true }
     billsHeaderRow.eachCell((cell) => {
       cell.fill = {
@@ -721,16 +802,7 @@ const handleDownloadExcel = async () => {
     })
 
     billRows.forEach((row) => {
-      worksheet.addRow([
-        row.invoiceNumber,
-        row.date,
-        row.subtotal,
-        row.discount,
-        row.grandTotal,
-        row.taxCollected,
-        row.payment,
-        row.companyName,
-      ])
+      worksheet.addRow(exportColumns.map(column=>row[column.key]))
     })
 
     for (let rowIndex = 3; rowIndex <= 2 + summaryRows.length; rowIndex++) {
@@ -739,14 +811,10 @@ const handleDownloadExcel = async () => {
 
     const billsDataStart = billsHeaderRow.number + 1
     for (let rowIndex = billsDataStart; rowIndex < billsDataStart + billRows.length; rowIndex++) {
-      worksheet.getCell(`C${rowIndex}`).numFmt = '#,##0.00'
-      worksheet.getCell(`D${rowIndex}`).numFmt = '#,##0.00'
-      worksheet.getCell(`E${rowIndex}`).numFmt = '#,##0.00'
-      worksheet.getCell(`F${rowIndex}`).numFmt = '#,##0.00'
+      exportColumns.forEach((column,index)=>{if(column.numeric) worksheet.getRow(rowIndex).getCell(index+1).numFmt='#,##0.00'})
     }
 
     const buffer = await workbook.xlsx.writeBuffer()
-    const filename = getSalesExportFilename('xlsx')
     saveAs(
       new Blob([buffer], {
         type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
@@ -766,6 +834,9 @@ const handleDownloadExcel = async () => {
 
 const handleDownloadPdf = async () => {
   isDownloadLoading.value = true
+  const exportColumns = salesExportColumns(invoiceView.value)
+  const filename = getSalesExportFilename('pdf')
+  const period = dateFilter.value==='all'?'All dates':`${format(selectedDate.value.start, 'd MMM yyyy')} - ${format(selectedDate.value.end, 'd MMM yyyy')}`
   try {
     const rows = await fetchFilteredSalesForExport()
     if (!rows.length) {
@@ -813,7 +884,7 @@ const handleDownloadPdf = async () => {
 
     doc.setFont('helvetica', 'normal')
     doc.text(
-      `Period: ${format(selectedDate.value.start, 'd MMM yyyy')} - ${format(selectedDate.value.end, 'd MMM yyyy')}`,
+      `Period: ${period}`,
       pageWidth - margin,
       23,
       { align: 'right' }
@@ -835,43 +906,16 @@ const handleDownloadPdf = async () => {
 
     autoTable(doc, {
       startY: (doc as any).lastAutoTable.finalY + 10,
-      head: [[
-        'Invoice Number',
-        'Date',
-        'Subtotal',
-        'Discount',
-        'Grand Total',
-        'Total Tax Collected',
-        'Payment',
-        'Store',
-      ]],
-      body: billRows.map((row) => [
-        row.invoiceNumber,
-        row.date,
-        formatPdfCurrency(row.subtotal),
-        formatPdfCurrency(row.discount),
-        formatPdfCurrency(row.grandTotal),
-        formatPdfCurrency(row.taxCollected),
-        row.payment,
-        row.companyName,
-      ]),
+      head: [exportColumns.map(column=>column.label)],
+      body: billRows.map(row=>exportColumns.map(column=>column.numeric?formatPdfCurrency(row[column.key]):row[column.key])),
       tableWidth: pageWidth - margin * 2,
       theme: 'grid',
       styles: { fontSize: 9, cellPadding: 3 },
       headStyles: { fillColor: [100, 116, 139], textColor: 255, fontStyle: 'bold' },
-      columnStyles: {
-        0: { cellWidth: 32 },
-        1: { cellWidth: 36 },
-        2: { halign: 'right', cellWidth: 28 },
-        3: { halign: 'right', cellWidth: 28 },
-        4: { halign: 'right', cellWidth: 28 },
-        5: { halign: 'right', cellWidth: 34 },
-        6: { cellWidth: 32 },
-        7: { cellWidth: 32 },
-      },
+      columnStyles: Object.fromEntries(exportColumns.map((column,index)=>[index,{halign:column.numeric?'right':'left'}])),
     })
 
-    doc.save(getSalesExportFilename('pdf'))
+    doc.save(filename)
   } catch (error: any) {
     toast.add({
       title: 'Failed to export sales PDF',
@@ -905,6 +949,7 @@ function isRangeSelected(duration: Duration) {
 }
 
 function selectRange(duration: Duration) {
+  dateFilter.value = 'range'
   selectedDate.value = { start: sub(new Date(), duration), end: new Date() }
 }
 
@@ -981,6 +1026,7 @@ const buildSplitTempSplits = (splitPayments: any[] = []) => {
 }
 
 const buildPrintDataFromSale = (sale: any, session: any) => ({
+  notes: sale.notes || '', termsAndConditions: sale.termsAndConditions || '',
   invoiceNumber: sale.invoiceNumber,
   phone: session?.companyPhone,
   description: session?.description,
@@ -1227,15 +1273,46 @@ const print = async (id) => {
 
   const session = useAuth().session.value
 
-  printData.value = session?.allStores
+  printData.value = session?.allStores || sale.invoiceCode
     ? await $fetch('/api/billSale/receipt', { query: { id: sale.id } })
     : buildPrintDataFromSale(sale, session)
 
   await printBill(printData.value)
 }
 
+async function saleDocument(row: any) {
+  return $fetch<any>('/api/billSale/receipt', {query:{id:row.id},headers:{'x-company-id':row.companyId,'x-company-filter':row.companyId}})
+}
+async function downloadSale(row: any) {
+  if (documentBusy.value) return
+  documentBusy.value = row.id
+  try {
+    const details = await saleDocument(row)
+    const { generateThermalReceiptPDF } = await import('~/utils/thermal-receipt.client')
+    await generateThermalReceiptPDF(details, (row.invoiceCode || 'Receipt-'+row.invoiceNumber) + '.pdf')
+  } catch(e) { toast.add({title:'Could not download invoice',description:billingErrorMessage(e),color:'red'}) }
+  finally { documentBusy.value = '' }
+}
+async function sendSale(row: any) {
+  if (documentBusy.value) return
+  documentBusy.value = row.id
+  try {
+    const details = await saleDocument(row)
+    if (!details.clientPhone) throw Error('Add a customer phone number before sending.')
+    const { shareReceiptPDF } = await import('~/utils/share-receipt.client')
+    const share = await shareReceiptPDF(details,row.id)
+    const result = await $fetch<any>('/api/whatsapp/send-payment-template',{method:'POST',headers:{'x-company-id':row.companyId},body:{
+      companyId:row.companyId,phone:details.clientPhone,name:details.clientName,billName:details.companyName,
+      amount:details.grandTotal,paymentDate:details.date,receiptId:share.receiptId,
+    }})
+    if (!result.success) throw Error('Invoice could not be sent. Retry sending this saved invoice.')
+    toast.add({title:result.trackingWarning?'Invoice sent; sending history could not be updated.':'Invoice sent',color:result.trackingWarning?'orange':'green'})
+  } catch(e) { toast.add({title:'Invoice not sent',description:billingErrorMessage(e),color:'red'}) }
+  finally { documentBusy.value = ''; await fetchSales() }
+}
 
-const openBill = async (id) => {
+
+const openBill = (id) => {
   const sale = sales.value.find(s => s.id === id)
 
 
@@ -1244,12 +1321,7 @@ const openBill = async (id) => {
     return
   }
 
-  const session = useAuth().session.value
-  
-  printData.value = session?.allStores
-    ? await $fetch('/api/billSale/receipt', { query: { id: sale.id } })
-    : buildPrintDataFromSale(sale, session)
-  isPrintOpen.value = true
+  selectSale(sale)
 
 }
 
@@ -1328,24 +1400,37 @@ const download = async () => {
 
 
 
-watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
+watch(companyScope.readIds, () => { selectedSale.value=null;page.value = 1; void fetchSales(); });
+watch(sales, rows => {
+  if (selectedSale.value) selectedSale.value=rows.find(row=>row.id===selectedSale.value.id && row.companyId===selectedSale.value.companyId) || null
+})
 </script>
 
 <template>
     <UDashboardPanelContent class="pb-24">
+        <BillingPreferences v-model="preferencesOpen" :document="preferenceDocument" :company-id="preferenceCompanyId" :company-name="companyScope.companyName(preferenceCompanyId)" @saved="loadPreferences" />
+        <div class="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h1 class="text-xl font-semibold">Sales</h1>
+          <UButton icon="i-heroicons-plus" :to="{path:'/erp/billing',query:{billingMode:invoiceView?'invoice':'paynow',entryCompany:preferenceCompanyId}}">{{ invoiceView ? 'New invoice' : 'New sale' }}</UButton>
+        </div>
+        <nav aria-label="Sales views" class="mb-5 flex flex-wrap gap-1 border-b border-gray-200 dark:border-gray-700">
+          <NuxtLink v-for="view in salesViews" :key="view.value" :to="{path:'/erp/sales',query:{...route.query,view:view.value}}" :aria-current="salesView===view.value?'page':undefined" class="border-b-2 px-4 py-3 text-sm font-medium transition-colors" :class="salesView===view.value?'border-primary-500 text-primary-600':'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'">{{ view.label }}</NuxtLink>
+        </nav>
+        <UAlert v-if="loadError" class="mb-4" color="red" title="Could not load sales" :description="loadError" />
         <!-- Summary Cards -->
-        <div class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
+        <div v-if="preferences.showSummary" class="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-4">
           <button
             v-for="card in summaryCards"
             :key="card.label"
             class="text-left rounded-lg border px-4 py-3 transition-all focus:outline-none"
+            :disabled="invoiceView"
             :class="[
-              (card.method === null && activeCardMethod === null) ||
-              (card.method !== null && activeCardMethod === card.method)
+              !invoiceView && ((card.method === null && activeCardMethod === null) ||
+              (card.method !== null && activeCardMethod === card.method))
                 ? 'border-primary-500 bg-primary-50 dark:bg-primary-950 dark:border-primary-400 ring-2 ring-primary-400'
                 : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 hover:border-gray-400 dark:hover:border-gray-500',
             ]"
-            @click="handleCardClick(card.method)"
+            @click="!invoiceView && handleCardClick(card.method)"
           >
             <div class="flex items-center gap-2 mb-1">
               <UIcon :name="card.icon" class="w-4 h-4 text-gray-500 dark:text-gray-400" />
@@ -1357,7 +1442,8 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
           </button>
         </div>
 
-        <UCard
+        <div class="flex min-w-0 flex-col items-start gap-4 lg:flex-row">
+        <UCard v-if="!selectedSale"
             class="w-full"
             :ui="{
                 base: '',
@@ -1376,8 +1462,9 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
             <div class="flex flex-wrap justify-between items-center gap-3 w-full">
                     <div class="flex flex-wrap items-center gap-3">
                   <CompanyTableFilter />
+                  <USelect v-model="dateFilter" :options="[{label:'All dates',value:'all'},{label:'Date range',value:'range'}]" aria-label="Sales date filter" class="w-32" />
                   
-                      <UPopover :popper="{ placement: 'bottom-start' }" class="z-10">
+                      <UPopover v-if="dateFilter==='range'" :popper="{ placement: 'bottom-start' }" class="z-10">
                           <UButton icon="i-heroicons-calendar-days-20-solid" class="w-full sm:w-60">
                           {{ format(selectedDate.start, 'd MMM, yyy') }} - {{ format(selectedDate.end, 'd MMM, yyy') }}
                           </UButton>
@@ -1406,7 +1493,7 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
                         v-model="search"
                         icon="i-heroicons-magnifying-glass-20-solid"
                         type="text"
-                        placeholder="Search Invoice"
+                        placeholder="Invoice, customer or subject"
                         class="w-full sm:w-52"
                       />
                     </div>
@@ -1416,7 +1503,7 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
                       class="ml-auto"
                     >
                       <button type="button" class="flex items-center gap-2 rounded-md py-1 text-sm focus-visible:outline focus-visible:outline-2 focus-visible:outline-primary-500" aria-label="Collections by payment method" aria-live="polite">
-                      <span class="text-gray-500 dark:text-gray-400">Collections</span>
+                      <span class="text-gray-500 dark:text-gray-400">Collections{{ dateFilter==='all'?' (all dates)':'' }}</span>
                       <span class="font-semibold tabular-nums text-gray-900 dark:text-white">
                         {{ isLoading ? '…' : collectionsTotal === null ? '—' : formatCurrency(collectionsTotal) }}
                       </span>
@@ -1452,6 +1539,7 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
                 </div>
 
                 <div class="flex gap-1.5 items-center z-10">
+                    <UButton icon="i-heroicons-cog-6-tooth" color="gray" size="xs" @click="preferencesOpen = true">Preference</UButton>
                     <div
                         v-if="canUseCleanupToggle"
                         class="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1 dark:border-gray-700"
@@ -1535,10 +1623,13 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
                 :multiple-expand="false"
                 sort-mode="manual"
                 class="w-full"
+                @click.capture="rememberSaleClick"
+                @select="selectSaleRow"
             >
 
                 <template #invoiceNumber-data="{ row }">
-                    {{ row.billPrefix ? `${row.billPrefix}-${row.invoiceNumber}` : row.invoiceNumber }}
+                    <button type="button" class="text-primary-600 hover:underline" @click.stop="selectSale(row)">{{ row.invoiceCode || (row.billPrefix ? `${row.billPrefix}-${row.invoiceNumber}` : row.invoiceNumber) }}</button>
+                    <p v-if="salesView==='all'" class="text-xs text-gray-500">{{ row.invoiceCode?'Invoice':'Pay now' }}</p>
                 </template>
 
                 <template #actions-data="{ row }">
@@ -1547,9 +1638,17 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
                             color="gray"
                             variant="ghost"
                             icon="i-heroicons-ellipsis-horizontal-20-solid"
+                            :disabled="!!documentBusy"
                         />
                     </UDropdown>
                 </template>
+
+                <template #dueDate-data="{ row }"><span :class="row.overdue?'font-medium text-red-500':''">{{ row.dueDate || '—' }}</span><UBadge v-if="row.overdue" color="red" variant="subtle" size="xs" class="ml-1">Overdue</UBadge></template>
+                <template #amountReceived-data="{ row }">{{ formatCurrency(Number(row.amountReceived ?? invoiceBalance(row).amountReceived)) }}</template>
+                <template #balanceDue-data="{ row }">{{ formatCurrency(Number(row.balanceDue ?? invoiceBalance(row).balanceDue)) }}</template>
+                <template #invoicePaymentTerms-data="{ row }"><span class="whitespace-normal">{{ row.invoicePaymentTerms || '—' }}</span></template>
+                <template #subject-data="{ row }"><span class="whitespace-normal">{{ row.subject || '—' }}</span></template>
+                <template #sendStatus-data="{ row }">{{ row.invoiceCode ? row.sendStatus : '—' }}</template>
 
                 <template #customer-data="{ row }">
                    <div class="flex flex-col">
@@ -1590,11 +1689,12 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
 
                <template #paymentStatus-data="{ row }">
                     <div v-if="row.paymentMethod === 'Credit' || row.splitPayments?.some(p => p.method === 'Credit')" class="space-y-1">
-                      <div class="inline-flex items-center gap-1 rounded-md border border-gray-200 p-0.5 dark:border-gray-700">
-                        <UButton label="Collect" size="xs" variant="ghost" :disabled="row.paymentStatus === 'PAID'" @click="openCreditCollection(row, 'collect')" />
-                        <UButton label="Reverse" size="xs" color="red" variant="ghost" @click="openCreditCollection(row, 'reverse')" />
+                      <div v-if="canCollectPayment(row) || hasReversiblePayments(row)" class="inline-flex items-center gap-1 rounded-md border border-gray-200 p-0.5 dark:border-gray-700">
+                        <UButton v-if="canCollectPayment(row)" label="Collect" size="xs" variant="ghost" @click="openCreditCollection(row, 'collect')" />
+                        <UButton v-if="hasReversiblePayments(row)" label="Reverse" size="xs" color="red" variant="ghost" @click="openCreditCollection(row, 'reverse')" />
                       </div>
-                      <div class="text-xs text-gray-500">{{ row.paymentStatus }}</div>
+                      <div class="text-xs text-gray-500">{{ row.invoiceCode ? invoiceBalance(row).invoicePaymentStatus : row.paymentStatus }}</div>
+                      <div v-if="row.invoiceCode" class="text-xs text-gray-500">Received {{ formatCurrency(invoiceBalance(row).amountReceived) }} · Due {{ formatCurrency(invoiceBalance(row).balanceDue) }}</div>
                     </div>
                     <USelect
                         v-else
@@ -1691,6 +1791,24 @@ watch(companyScope.readIds, () => { page.value = 1; void fetchSales(); });
                 </div>
             </template>
         </UCard>
+        <template v-else>
+          <aside class="w-full shrink-0 overflow-hidden rounded-lg border border-gray-200 dark:border-gray-800 lg:w-72" aria-label="Sales list">
+            <div class="border-b border-gray-200 p-3 dark:border-gray-800"><UInput v-model="search" icon="i-heroicons-magnifying-glass" placeholder="Search sales" aria-label="Search sales" /></div>
+            <div class="max-h-48 divide-y divide-gray-200 overflow-auto dark:divide-gray-800 lg:max-h-[65vh]">
+              <div v-for="sale in styledSales" :key="`${sale.companyId}:${sale.id}`" class="flex items-center gap-1 p-2" :class="selectedSale.id===sale.id && selectedSale.companyId===sale.companyId?'bg-primary-50 dark:bg-primary-950':''">
+                <button type="button" class="min-w-0 flex-1 rounded p-2 text-left hover:bg-gray-50 dark:hover:bg-gray-800" :aria-current="selectedSale.id===sale.id?'true':undefined" @click="selectSale(sale)">
+                  <span class="block truncate text-sm font-medium">{{ sale.invoiceCode || `Bill #${sale.invoiceNumber}` }}</span>
+                  <span class="block truncate text-xs text-gray-500">{{ sale.client?.name || sale.client?.phone || 'Walk-in customer' }}</span>
+                  <span class="block text-xs">{{ formatCurrency(Number(sale.grandTotal)) }} · {{ sale.paymentStatus }}</span>
+                </button>
+                <UDropdown :items="forOwner(action(sale),sale.companyId)"><UButton icon="i-heroicons-ellipsis-horizontal" color="gray" variant="ghost" aria-label="Sale actions" /></UDropdown>
+              </div>
+            </div>
+            <div class="border-t border-gray-200 p-3 dark:border-gray-800"><UPagination v-model="page" :page-count="Number(pageCount)" :total="Number(pageTotal)" size="xs" /></div>
+          </aside>
+          <SalesDetailPanel :bill="selectedSale" :revision="detailRevision" :fetcher="$fetch" @close="selectedSale=null" @print="print(selectedSale.id)" />
+        </template>
+        </div>
         <UDashboardModal
         v-model="isDeleteModalOpen"
         title="Delete Bill"

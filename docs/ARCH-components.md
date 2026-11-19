@@ -1,6 +1,39 @@
 # storetools — Shared Components Reference
 
+## Sidebar configuration
+
+`settings/SidebarPreferences.vue` is the section/group/page editor for Settings → Sidebar. It edits a local draft and emits explicit saves; read-only staff and pending saves disable changes. `Accountant/SidebarNavigation.vue` accepts optional `allowedPaths`; both sidebar modes pass filtered Account paths so its custom groups cannot reveal deselected pages. See `ARCH-sidebar-navigation.md`.
+
+
 All components are in `storetools/components/`. This file covers components not documented inline in the pages topic files.
+
+After-sales components use the app's Nuxt UI theme. `AfterSales/RecordTable.vue` supplies
+the Sales-style list card, search/filter/action slots, column selector, sorting and
+client-side pagination. `Configurations`/`RulesEditor` own structured plan editing;
+`Items` uses the shared product forms and modal charge editing; the charge modal
+shows its automatic company service category as a read-only field. `JobEditor` fills the
+product-detail side panel with scrolling fields and a persistent invoice total/action
+footer. The customer-product page owns the post-save invoice confirmation modal for
+completed visits/resolved claims; deferring returns to the saved JobEditor, which keeps
+its explicit invoice action. `CustomerSelect` initially lists up to 20 company-linked clients for manual
+registration and searches by name/phone, with loading/error/retry states and selection
+reset when the company changes.
+`ProductSelector` owns product coverage selection. Bill edit keeps `InvoiceUnits`
+in a toolbar dialog for existing unit history/removal. Billing and bill edit
+use `Billing/SerialNumbers.vue` next to Delete in the table/mobile
+cards. It opens a modal for serial/delivery/installation details per covered unit
+or exact returned units. Confirm updates the draft; Cancel discards modal edits.
+`useBillingSerialNumbers` owns draft metadata and the existing save payload; the
+standalone registration panel is absent from billing and bill edit. See `ARCH-after-sales.md`
+for data/API contracts.
+
+Billing invoice programs are documented in `ARCH-pages-erp.md`: `RecurringWorkspace`
+and `RetainerWorkspace` own the two pages; `ProgramCustomer` searches authorized
+company-linked customers and `ProgramTemplate` edits tax-inclusive recurring lines.
+`RetainerPrint` teleports an A4 print/PDF document with advance balances/history to
+body, isolates it for printing and removes its Escape listener on unmount.
+Recurring draft previews reuse `Quotes/PrintPreview` with INVOICE DRAFT title, Due
+date label and a draft-specific footer. Quote/sales-order labels remain unchanged.
 
 ---
 
@@ -72,7 +105,18 @@ Not read — assumed to be a Nuxt UI starter template stub (triggered by `isHelp
 ## Print / Barcode Components
 
 ### `ThermalReceipt.vue`
+Invoice-mode data includes its due date, terms, Subject and receipt-derived
+received/balance values. `invoiceDocumentLines` adds these to original HTML/PDF
+fallbacks and every custom design through `print-template-renderer.client.ts`.
+Invoice UPI requests use the current balance and are hidden once paid. Shared PDF
+links keep the uploaded snapshot; regenerate a PDF after subsequent collections.
 Custom receipt designs are rendered through `PrintTemplateReceipt.vue`; the original layout below is used when no receipt default is selected. Bill receipt API data includes the owning company's template and `companyId`, so cross-store previews do not use the viewer's default company. Locally built print payloads load their company default through the settings API. Rendering failures are displayed rather than silently changing the design.
+Saved receipt reads also include sizes, return signs, unit visibility, coupon/redemption
+amounts, current available points and vouchers earned from that company-owned bill.
+`receipt-entry-amounts.ts` shares signed row values and totals between new billing,
+bill edit and reprints; returns reduce quantities, amounts and line savings. Original
+HTML and standalone no-tax exports use the shared discount/adjustment savings, and
+invoice/notes footers use the same Subject, payment terms and customer text.
 Renders a thermal receipt for printing. Used by `pages/receipt/[id].vue` and the `usePrint` composable.
 - **Props:** `data: any` — receipt payload from `GET /api/billSale/receipt`
 - **Layout:** 90mm wide, monospace font, dashed borders — matches typical 80mm thermal paper

@@ -1,0 +1,83 @@
+<!doctype html><html><head><meta charset="utf-8"><title>CRM workflow browser verification</title></head><body><div id="app"></div><pre id="result">Running…</pre>
+<script type="module">
+import * as Vue from 'vue'
+import Workspace from '../components/CRM/Workspace.vue'
+import ClientPanel from '../components/CRM/ClientPanel.vue'
+import UButton from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Button.vue'
+import UCard from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Card.vue'
+import UModal from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Modal.vue'
+import heroicons from '../node_modules/@iconify-json/heroicons/icons.json'
+import { defaultCrmSettings } from '../utils/crm'
+const {ref,h,createApp,nextTick}=Vue
+// Preserve the browser's native Text/Comment constructors used by Headless UI.
+const section=ref('leads'),recordId=ref(''),requests=[],scope={companyId:ref('company-a'),busy:ref(false),auth:{session:ref({role:'manager'})}}
+let ready=true,managerMode=true,servicesEnabled=true,settings=defaultCrmSettings(),settingsVersion=0,sequence=0
+const existingClient={id:'existing-client',clientId:'existing-client',name:'Alex CRM',email:'alex@example.com',phone:'+919876543210',ownerId:'',createdBy:'',version:0,lifecycle:'LEAD',leadStatus:'NEW',source:'Other',tags:[],customFields:{},score:25}
+const stores={'company-a':{clients:[existingClient],accounts:[],deals:[],activities:[]},'company-b':{clients:[],accounts:[],deals:[],activities:[]}}
+const clone=value=>JSON.parse(JSON.stringify(value))
+window.testRoute={query:{},path:'/crm/leads'};window.useCompanyScope=()=>scope;scope.selectCompany=async id=>{scope.companyId.value=id}
+window.$fetch=async(url,options={})=>{
+  const company=options.headers?.['x-company-id'];if(!stores[company])throw Error('Company header missing')
+  requests.push({url,...clone(options)});const store=stores[company],parts=url.replace('/api/crm/','').split('/'),[resource,id,action]=parts,method=options.method||'GET',body=options.body,query=options.query||{}
+  if(resource==='bootstrap')return {ready,settings:clone(settings),version:settingsVersion,currency:'INR',marketingReady:false,workflow:{includeAfterSales:servicesEnabled,includeInvoicing:true},staff:[{id:'manager',name:'Sales manager',role:'manager'},{id:'viewer',name:'Sales viewer',role:'user'}],actor:{companyId:company,userId:managerMode?'manager':'viewer',role:managerMode?'manager':'user',manager:managerMode}}
+  if(resource==='settings'&&method==='PUT'){settings=clone(body.settings);settingsVersion++;return {settings,version:settingsVersion}}
+  if(resource==='client-choices')return [{id:'existing-client',name:'Existing client',phone:'+919876543212',email:'existing@example.com'}]
+  if(resource==='reports')return {pipeline:[{pipelineKey:'sales',stageKey:'won',status:'WON',count:1,value:12500,weightedValue:12500,ageDays:1}],owners:[{ownerId:'manager',name:'Sales manager',won:1,lost:0,open:0,wonValue:12500,forecast:0}],forecast:[],sources:[{source:'Other',total:1,converted:1}],losses:[]}
+  if(resource==='summary')return {clients:{leads:store.clients.filter(r=>r.lifecycle==='LEAD').length,total:store.clients.length,customers:1},deals:{pipelineValue:12500,forecast:6250,wonValue:12500},tasks:{overdue:0,today:1},upcoming:store.activities.filter(r=>r.status==='OPEN'),recent:[]}
+  if(resource==='documents')return []
+  if(!store[resource])throw Error('Unexpected request '+url)
+  if(id==='import'){if(body.preview)return {valid:body.records.length,total:body.records.length,errors:[]};for(const row of body.records)Object.assign(store.clients.find(c=>c.id===row.clientId),row);return {count:body.records.length}}
+  if(id&&method==='GET'){const row=store[resource].find(r=>r.id===id);return {record:clone(row),activities:store.activities.filter(r=>r.clientId===id),audit:[],deals:store.deals.filter(r=>r.clientId===id),clients:[],documents:[],commerce:{client:row?.clientId?{id:row.clientId,name:row.name,phone:row.phone,points:0,status:true}:null,bills:[],quotes:[],orders:[],products:[],legacyActivities:[]}}}
+  if(method==='POST'||method==='PUT'){
+    const row={...clone(body),id:id||'record-'+(++sequence),version:(body.version||0)+1,createdBy:'manager',ownerName:'Sales manager',createdAt:new Date().toISOString(),archived:false,score:65}
+    if(resource==='deals'){const stage=settings.pipelines.find(p=>p.key===row.pipelineKey).stages.find(s=>s.key===row.stageKey);row.status=stage.status;row.probability=stage.probability}
+    if(id)Object.assign(store[resource].find(r=>r.id===id),row);else store[resource].push(row);return clone(row)
+  }
+  let rows=store[resource];if(query.archived!=='all')rows=rows.filter(r=>!!r.archived===(query.archived==='true'));for(const key of ['lifecycle','status','ownerId','source','pipelineKey'])if(query[key]&&(key!=='pipelineKey'||resource==='deals'))rows=rows.filter(r=>r[key]===query[key]);return {rows:clone(rows),total:rows.length,page:1,pageSize:query.pageSize||30}
+}
+scope.fetch=(url,options={})=>window.$fetch(url,{...options,headers:{'x-company-id':scope.companyId.value,...options.headers}})
+scope.fetch.raw=async(url,options={})=>{requests.push({url,...clone(options),headers:{'x-company-id':scope.companyId.value}});return {_data:'Name,Phone\nAlex,+919876543210',headers:{get:()=> 'false'}}}
+const app=createApp({setup:()=>()=>section.value==='clients'&&recordId.value?h(ClientPanel,{key:section.value+recordId.value+scope.companyId.value,clientId:recordId.value,companyId:scope.companyId.value}):h(Workspace,{key:section.value+recordId.value+scope.companyId.value,section:section.value,recordId:recordId.value||undefined})})
+app.config.globalProperties.$route=window.testRoute
+app.config.errorHandler=error=>{document.querySelector('#result').textContent='FAILED: '+error.stack}
+for(const [name,component]of Object.entries({UButton,UCard,UModal}))app.component(name,component)
+app.component('UDashboardPanelContent',{setup:(_,{slots})=>()=>h('main',{class:'p-4 sm:p-6'},slots.default?.())})
+app.component('CompanyFormField',{setup:()=>()=>null})
+app.component('Icon',{props:['name'],setup:p=>()=>{const icon=heroicons.icons[p.name.replace(/^i-heroicons-/,'')]||heroicons.icons['link'];return h('svg',{viewBox:'0 0 24 24',width:'1em',height:'1em',innerHTML:icon.body})}})
+app.component('UIcon',{props:['name'],setup:p=>()=>h(Vue.resolveComponent('Icon'),{name:p.name})})
+app.component('NuxtLink',{props:{to:{},custom:Boolean,target:{}},setup:(p,{slots})=>()=>p.custom?slots.default?.({href:typeof p.to==='string'?p.to:p.to?.path+(p.to?.query?'?'+new URLSearchParams(p.to.query):''),route:window.testRoute,isActive:false,isExactActive:false,isExternal:true,navigate(){}}):h('a',{href:typeof p.to==='string'?p.to:p.to?.path+(p.to?.query?'?'+new URLSearchParams(p.to.query):'')},slots.default?.())})
+app.mount('#app')
+const sleep=ms=>new Promise(r=>setTimeout(r,ms)),assert=(value,message)=>{if(!value)throw Error(message)}
+async function wait(condition,message){for(let i=0;i<300;i++){await nextTick();if(condition())return;await sleep(20)}throw Error(message)}
+const ui=()=>document.querySelector('#app').textContent
+const activeRoot=()=>document.querySelector('[role="dialog"]')||document
+const button=text=>[...activeRoot().querySelectorAll('button')].find(b=>b.textContent.trim()===text)
+async function click(text){await wait(()=>button(text)&&!button(text).disabled,'Button unavailable: '+text);button(text).click();await sleep(80);await nextTick()}
+function input(label){return [...activeRoot().querySelectorAll('label')].find(el=>el.textContent.trim().startsWith(label))?.querySelector('input,select,textarea')}
+function set(el,value){assert(el,'Input missing');el.value=value;el.dispatchEvent(new Event(el.tagName==='SELECT'?'change':'input',{bubbles:true}))}
+async function go(next,id=''){section.value=next;recordId.value=id;await nextTick();await wait(()=>!ui().includes('Loading your CRM'),'CRM section did not load');await sleep(100)}
+async function saved(){await wait(()=>!document.querySelector('[role="dialog"]'),'Editor did not close after save')}
+try{
+  await wait(()=>ui().includes('Alex CRM'),'Existing clients appear without CRM import');const lead=stores['company-a'].clients[0]
+  assert(!button('New lead'),'No separate contact creation form');assert([...document.querySelectorAll('a')].some(a=>a.textContent.includes('Add / manage clients')&&a.getAttribute('href').startsWith('/client?')),'Lead creation uses the existing client page')
+  await click('Edit');assert(input('Full name').readOnly,'CRM form cannot edit client identity');set(input('Lead status'),'QUALIFIED');await click('Save record');await saved();assert(lead.name==='Alex CRM'&&lead.clientId==='existing-client','Canonical client remains the same')
+  await go('accounts');await click('New account');set(input('Business account name'),'Example Business');set(input('Website'),'https://example.com');await click('Save record');await saved();const account=stores['company-a'].accounts[0];assert(account,'Business account saved')
+  await go('deals');await click('New deal');set(input('Deal name'),'Purifier supply');set(input('Deal value'),'12500');await sleep(100);set(input('Client'),lead.id);set(input('Business account'),account.id);set(input('Stage'),'proposal');await click('Save record');await saved();assert(ui().includes('Purifier supply'),'Deal appears in pipeline')
+  await click('Edit deal');set(input('Stage'),'won');await click('Save record');await saved();assert(stores['company-a'].deals[0].status==='WON','Won outcome must persist')
+  await go('activities');await click('New activity');set(input('Subject'),'Call about installation');set(input('Due / start'),'2027-01-05T10:30');await click('Save activity');await saved();await click('Complete');assert(stores['company-a'].activities[0].status==='DONE','Completing work must persist')
+  await go('calendar');set(input('Month'),'2027-01');input('Month').dispatchEvent(new Event('change',{bubbles:true}));await wait(()=>ui().includes('Call about installation'),'Saved activity appears on calendar')
+  await go('clients',lead.id);await wait(()=>ui().includes('Linked client:'),'Existing client CRM context appears');assert(!button('Merge contact')&&!button('Convert / link client'),'Client identities do not have a duplicate merge/conversion flow')
+  assert(ui().includes('Service history'),'Enabled after-sales links are available');servicesEnabled=false;await go('accounts');await go('clients',lead.id);assert(!ui().includes('Service history'),'Disabled after-sales links stay hidden');servicesEnabled=true
+  await go('segments');set(document.querySelector('input[aria-label="Segment name"]'),'Qualified clients');await click('Save current filters');assert(settings.segments.length===1,'Segment is saved')
+  await go('settings');set(input('New lead: create'),'2');await click('Save CRM settings');assert(settings.automations.newLeadFollowUpDays===2,'Automation settings persist')
+  await go('segments');await click('Import CSV');set(input('CSV contents'),'clientId,name,source\nexisting-client,Alex CRM,Referral');await click('Preview import');await click('Update 1 clients');await saved();assert(stores['company-a'].clients.length===1&&lead.source==='Referral','CSV updates existing CRM attributes without creating contacts');await click('Export CSV');assert(requests.some(r=>r.url.endsWith('/clients/export')),'Export retains company scope')
+  await go('reports');await wait(()=>ui().includes('Team performance'),'Reports load');assert(ui().includes('Sales manager'),'Team reporting has the saved owner')
+  await go('campaigns');assert(ui().includes('Email campaign setup is pending'),'Unconfigured marketing stays inactive')
+  managerMode=false;await go('activities');await click('Call about installation');assert(input('Subject').matches(':disabled'),'Another owner’s activity opens read-only');assert(!button('Save activity'),'Read-only activity cannot be submitted');await click('Cancel');await saved();managerMode=true
+  scope.companyId.value='company-b';await go('clients');assert(!ui().includes('Alex CRM'),'Company switch must not retain another company’s clients')
+  ready=false;await go('leads');assert(ui().includes('CRM setup is pending'),'Missing CRM schema has a clear setup state');assert(!button('New lead'),'Pending schema disables record creation')
+  ready=true;scope.companyId.value='company-a';await go('leads');
+  assert(requests.every(r=>r.headers?.['x-company-id']),'Every CRM request must carry company ownership')
+  document.querySelector('#result').textContent='ALL PASSED: existing client reuse, CRM attributes, accounts, deals, activities, calendar, client context, segments, settings, CSV, reports, company isolation and pending setup'
+}catch(error){document.querySelector('#result').textContent='FAILED: '+error.stack+'\nUI: '+document.querySelector('#app').textContent+'\nRequests: '+JSON.stringify(requests.map(r=>({url:r.url,method:r.method,body:r.body})))}
+</script></body></html>

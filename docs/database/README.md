@@ -19,6 +19,13 @@ node storetools/scripts/check-db-meta.mjs
 
 Database change workflow: change `schema.zmodel`, generate the normal migration, regenerate this catalog, fill new entries in `dbExplanations.json`, update `ARCH-schema.md` and the owning topic, then run affected tests.
 
+Preparing/generating local files does not authorize applying DDL to any database.
+Database application requires a separate explicit instruction after updating the
+authoritative zmodel. Do not run schema-creating integration tests during ordinary
+feature validation. Invoice programs use an in-memory adapter and isolated browser
+fixtures (`npm run test:invoice-programs`); their prepared migration is not applied
+by build, generation or runtime APIs.
+
 For the new ecommerce Accountant connection, preview with
 `node scripts/apply-ecommerce-accounting.mjs` from Storetools, then use `--apply`
 to install only its status-history and ecommerce-accounting migrations. Existing

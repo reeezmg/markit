@@ -1,6 +1,26 @@
 <script setup lang="ts">
-import { investmentMoney } from '~/utils/investments';
-const props = defineProps<{ mode: 'capital' | 'payouts' }>();
+import { investmentMoney, investmentToday, type InvestmentMovementMode } from '~/utils/investments';
+const props = defineProps<{ mode: InvestmentMovementMode }>();
+const page = computed(() => ({
+    capital: {
+        title: 'Capital',
+        description: 'Record investor contributions and capital returns. Choose a new share movement with payment confirmation, or settle an existing share due without moving shares again. Only actual payments appear in this capital statement.',
+        action: 'Record capital movement',
+        cards: [['contributed', 'Capital contributed'], ['returned', 'Capital returned'], ['capital', 'Net contributed capital']],
+    },
+    loans: {
+        title: 'Investor loans',
+        description: 'Record money borrowed from investors and repayments of loan principal. Record interest separately as an expense.',
+        action: 'Record loan movement',
+        cards: [['loan', 'Outstanding loan principal']],
+    },
+    payouts: {
+        title: 'Profit payouts',
+        description: 'Record payments against approved profit allocations.',
+        action: 'Record payment',
+        cards: [['payable', 'Profit awaiting payment'], ['paid', 'Profit paid']],
+    },
+}[props.mode]));
 const api = useAccountantApi(),
     route = useRoute(),
     events = ref<any[]>([]),
@@ -15,11 +35,13 @@ const totals = computed(() =>
     profiles.value.reduce(
         (s, p) => ({
             capital: s.capital + Number(p.capital),
+            contributed: s.contributed + Number(p.contributed),
+            returned: s.returned + Number(p.returned),
             loan: s.loan + Number(p.loan),
             paid: s.paid + Number(p.paid),
             payable: s.payable + Number(p.payable),
         }),
-        { capital: 0, loan: 0, paid: 0, payable: 0 }
+        { capital: 0, contributed: 0, returned: 0, loan: 0, paid: 0, payable: 0 }
     )
 );
 async function load() {
@@ -28,7 +50,7 @@ async function load() {
     try {
         const [ledger, list] = await Promise.all([
             api.get('/investors/ledger'),
-            api.get('/investors'),
+            api.get('/investors',{query:{asOf:investmentToday()}}),
         ]);
         events.value = ledger.events;
         currency.value = ledger.currency;
@@ -50,28 +72,18 @@ async function saved() {
         ><div class="flex justify-between items-center gap-3"
             ><div
                 ><h1 class="text-xl font-semibold">{{
-                    mode === 'capital' ? 'Capital & loans' : 'Profit payouts'
+                    page.title
                 }}</h1
                 ><p class="text-sm text-gray-500">{{
-                    mode === 'capital'
-                        ? 'Record investor contributions, capital returns and loans.'
-                        : 'Record payments against approved profit allocations.'
+                    page.description
                 }}</p></div
             ><UButton :disabled="loading" @click="showForm = true">{{
-                mode === 'capital' ? 'Record movement' : 'Record payment'
+                page.action
             }}</UButton></div
         ><UAlert v-if="error" color="red" :title="error" /><div
             class="grid sm:grid-cols-2 gap-4"
             ><UCard
-                v-for="[key, title] in mode === 'capital'
-                    ? [
-                          ['capital', 'Net capital'],
-                          ['loan', 'Investor loans'],
-                      ]
-                    : [
-                          ['payable', 'Profit awaiting payment'],
-                          ['paid', 'Profit paid'],
-                      ]"
+                v-for="[key, title] in page.cards"
                 :key="key"
                 ><p class="text-sm text-gray-500">{{ title }}</p
                 ><p class="text-2xl font-semibold">{{

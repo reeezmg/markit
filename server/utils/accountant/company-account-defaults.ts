@@ -4,6 +4,7 @@ import { accountDefaultGroups, acceptsDefaultAccount } from '../../../utils/acco
 import { erpRoles } from './erp';
 import { userAccountRoles } from './users';
 import { prismaSqlClient } from '../prisma-sql-client';
+import { investmentDefaultAccounts, investmentDefaultCodes } from '../../../utils/investment-default-accounts';
 
 const extra = [
   ['Primary Bank','PRIMARY-BANK','BANK'],['Accrued Expenses','2250','OTHER_CURRENT_LIABILITY'],
@@ -17,6 +18,7 @@ const extra = [
   ['Delivery charges collected','EC-DELIVERY','INCOME'],['COD charges collected','EC-COD-INCOME','INCOME'],
   ['Customer refunds due','EC-REFUNDS','OTHER_CURRENT_LIABILITY'],['Courier and return shipping costs','EC-SHIPPING','EXPENSE'],
   ['Payment gateway fees','EC-GATEWAY-FEE','EXPENSE'],['Redeemed loyalty rewards','EC-LOYALTY','EXPENSE'],
+  ...investmentDefaultAccounts.filter(spec => spec[1].startsWith('LOAN-')).map(([name, code, type]) => [name, code, type] as const),
 ] as const;
 const category=(type:string)=>['INCOME','OTHER_INCOME'].includes(type)?'INCOME':['EXPENSE','OTHER_EXPENSE','COST_OF_GOODS_SOLD'].includes(type)?'EXPENSE':type==='EQUITY'?'EQUITY':['OTHER_CURRENT_LIABILITY','OTHER_LIABILITY','ACCOUNTS_PAYABLE'].includes(type)?'LIABILITY':'ASSET';
 export const standardCompanyAccounts=[...coreAccountDefaults,...extra].map(([name,code,accountType])=>({name,code,accountType,category:category(accountType)}));
@@ -67,6 +69,7 @@ export async function provisionCompanyAccountDefaults(sql:{query:(sql:string,arg
   const defaults={
     purchase:{payable:byCode('2100'),stock:byCode('1200'),tax:byCode('1210'),cash:byCode('1001'),bank:bankId,opening:byCode('2220')},
     investments:{capitalAccountId:byCode('3000'),profitAccountId:byCode('INV-PROFIT-PAYABLE'),loanAccountId:byCode('INV-LOANS-PAYABLE'),counterAccountId:byCode('1001'),payoutAccountId:byCode('1001')},
+    loans:Object.fromEntries(Object.entries(investmentDefaultCodes.loans).map(([key,code])=>[key,byCode(code)])),
     receive:{moneyAccountId:byCode('1001')},pay:{moneyAccountId:byCode('1001')},transfers:{fromAccountId:byCode('1001'),toAccountId:bankId},
     assets:{assetAccountId:byCode('FA-ASSETS'),accumulatedDepAccountId:byCode('FA-ACCUM-DEP'),depreciationExpenseAccountId:byCode('FA-DEP-EXPENSE'),proceedsAccountId:bankId,gainLossAccountId:byCode('FA-DISPOSAL')},
   };

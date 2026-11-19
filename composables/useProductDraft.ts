@@ -24,6 +24,8 @@ function makeEmptyVariant() {
 function makeEmptyForm() {
   return {
     editingProductId: '',
+    serviceConfigurationIds: [] as string[],
+    isServiceProduct: false,
     name: '',
     brandId: '',
     description: '',

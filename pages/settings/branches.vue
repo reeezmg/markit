@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import WorkflowSettings from '~/components/Sales/WorkflowSettings.vue';
 definePageMeta({ auth: true });
 
 type Branch = { id: string; name: string; status: boolean; phone: string | null; address: { city: string | null; state: string | null } | null };
@@ -11,6 +12,11 @@ if (data.value?.parentCompanyId) await navigateTo('/settings/store', { replace: 
 const saving = ref(false);
 const form = reactive({ name: '', phone: '', city: '', state: '' });
 const isAdmin = computed(() => auth.session.value?.role === 'admin');
+const workflowCompanyId = ref(data.value?.id || auth.session.value?.companyId || '');
+const workflowCompanies = computed(() => data.value ? [
+  { label: data.value.name, value: data.value.id },
+  ...(isAdmin.value ? data.value.branches.filter(branch => branch.status).map(branch => ({ label: branch.name, value: branch.id })) : []),
+] : []);
 
 async function makeHeadOffice() {
   saving.value = true;
@@ -47,6 +53,16 @@ async function addBranch() {
     </div>
     <div v-if="pending" class="text-sm text-gray-500">Loading company...</div>
     <template v-else-if="data">
+      <section class="space-y-4">
+        <div>
+          <h3 class="font-semibold">Company workflows</h3>
+          <p class="text-sm text-gray-500 mt-1">Choose which workflows this company needs. Each branch has its own settings.</p>
+        </div>
+        <UFormGroup v-if="workflowCompanies.length > 1" label="Company / branch">
+          <USelect v-model="workflowCompanyId" :options="workflowCompanies" :disabled="saving" class="max-w-sm" />
+        </UFormGroup>
+        <WorkflowSettings :key="workflowCompanyId" :company-id="workflowCompanyId" />
+      </section>
       <UCard v-if="!data.isHeadOffice">
         <h3 class="font-semibold mb-2">Make {{ data.name }} a head office</h3>
         <p class="text-sm text-gray-500 mb-4">This lets you create linked branches. Existing company data stays here.</p>

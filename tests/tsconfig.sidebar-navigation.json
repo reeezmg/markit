@@ -1,0 +1,4 @@
+{
+  "extends": "./tsconfig.crm.json",
+  "include": ["crm-globals.d.ts", "sidebar-navigation-globals.d.ts", "../utils/sidebar-navigation.ts", "../utils/sidebar-menu.ts", "../composables/useSidebarPreferences.ts", "../server/utils/sidebar-navigation.ts", "../server/api/settings/sidebar-navigation.*.ts", "../components/settings/SidebarPreferences.vue", "../pages/settings/sidebar.vue"]
+}

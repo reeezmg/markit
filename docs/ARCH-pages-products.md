@@ -1,5 +1,22 @@
 ### Products (`/products`)
 
+Service repair parts use `Product.isServiceProduct` (`products.is_service_product`,
+default false). `/after-sales/items` links into the same add/edit forms with the
+service-product option preselected for new records. The shared Create component,
+company-local drafts, staging, batch saves, direct saves and product/PO readers retain
+the flag. Variants, stock and purchases use the same existing tables and behavior.
+Service billing can select regular and service products together. Classification does
+not automatically change publishing/status. Migration `20261030170000_service_items`
+is prepared locally; installation requires separate authorization.
+
+After-sales configurations: product add/edit includes a multi-selector for reusable
+maintenance, warranty and guarantee configurations when the owning company enables
+after-sales. The service-product checkbox is hidden along with this selector when
+disabled; existing saved classifications/links are preserved. Product drafts and raw-SQL
+create/update/batch-save paths persist company-owned links. Archived links can be
+retained but not newly selected. Existing customer agreements keep sale snapshots;
+see `ARCH-after-sales.md` for configuration amendments and service workflows.
+
 Head-office admins default to the active head office plus active direct branches. Each table uses `useCompanyScope('table')` and `CompanyTableFilter.vue`; filters remain local to the component and participate in query keys. `CompanyFormField.vue` is inside add/edit forms: new forms default to the active head office, while edits load the stored owner through `/api/organization/context`. Related quick-add fields inherit their enclosing form company. Product, brand, category, collection, dimension, and stock tables use the local scope. Product and purchase-order forms resolve the saved owner before initializing settings. Product drafts use company-specific storage keys. Requests use explicit company IDs without updating the authentication session or sidebar company. `useOrganizationActions.ts` resolves row ownership locally. Changing an existing record's company opens the transfer preview, requires explicit destination mappings and linked-record confirmation, then moves the saved record in a transaction. Save other form changes before confirming a transfer. See `ARCH-storetools-api.md` for transfer and authorization details.
 
 Company query composition uses `utils/companyWhere.ts` in both the generated-hook adapter and server authorization proxy. Existing `AND` clauses are appended as a flat array (never an array inside `AND`). The category list uses both statuses when its status filter is empty, avoiding `OR: []`. Product form category, collection, brand, and subcategory options react to the form company and remain scoped to that company.
@@ -19,6 +36,7 @@ Selected saved products are read-only in the purchase draft. Removing them only 
 - `pages/products/brands/add.vue` — Add brand; editing an existing brand uses `pages/products/brands/edit/[id].vue`
 - `pages/products/categories/index.vue` — Category management table with PDF export
 - `pages/products/categories/edit/[id].vue` — Category + subcategory full edit
+- Service charge saves and service invoice issuance reuse/create a company-owned Service Charges category in this same catalogue. An existing inactive match is restored without changing its tax settings; a GeneralPreference reference preserves the association through renames. These writes are transactional and audited by the after-sales service; see `ARCH-after-sales.md`.
 - Category create/edit reject whitespace-only names before mutation. Create preserves the emitted inactive state and explicit zero tax/margin values. The catalog browser harness includes category create, row-action edit, reload and confirmed delete in each company; its fixture guard permits only run-owned categories with no nested child writes.
 - `pages/products/stocks/index.vue` — Stock aggregate view (groupBy + filters)
 - `components/AddProduct/Create.vue` — Product fields form (name, brand, category, subcategory, description)

@@ -17,6 +17,7 @@ export const segmentPredicate: Record<Segment, string> = {
 }
 
 export async function requireStorefrontStaff(event: any) {
+  if (event.context?.crmActor) return event.context.crmActor as {companyId:string;userId:string;role:string}
   const session = await useAuthSession(event)
   const companyId = session.data?.companyId as string | undefined
   const userId = session.data?.id as string | undefined

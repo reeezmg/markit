@@ -1,3 +1,4 @@
+import { cancelBillServices } from '../../utils/after-sales-lifecycle'
 import { applyBillStock } from '~/server/utils/bill-stock'
 import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
@@ -113,6 +114,7 @@ export default defineEventHandler(async (event) => {
 
 
 
+    await cancelBillServices(client,companyId,billId,'invoice-delete','Invoice deleted')
     await client.query('COMMIT')
 
     return {

@@ -3,6 +3,8 @@ import { defineEventHandler, readBody, createError } from 'h3'
 import { pool } from '~/server/db'
 import { getReadCompanyIds } from '~/server/utils/organizationReadScope'
 import { billSalesSql } from '~/server/utils/report-bill-sales'
+import { salesViewSql } from '~/server/utils/sales-view'
+import { invoiceSendStatusSql } from '~/server/utils/invoice-flow'
 
 const SORT_COLUMN_MAP: Record<string, string> = {
   orderNumber: 'COALESCE(t.order_number, 0)',
@@ -36,7 +38,10 @@ export default defineEventHandler(async (event) => {
     excludeMarkit = false,
     closingDate = null,
     showCleanedValues = false,
+    salesView = 'all',
+    dateFilter = 'range',
   } = body
+  if (!['all','range'].includes(dateFilter)) throw createError({statusCode:400,statusMessage:'Select a valid date filter.'})
 
   const useOriginalCleanupValues = cleanup && showCleanedValues !== true
   const includeCleanupPrecedence = cleanup && showCleanedValues !== true
@@ -100,6 +105,7 @@ export default defineEventHandler(async (event) => {
     const billDiscountExpr = useOriginalCleanupValues
       ? 'COALESCE(b.original_discount, b.discount)'
       : 'b.discount'
+    const view = salesViewSql(salesView, billTotalExpr)
 
     const entryRateExpr = useOriginalCleanupValues
       ? 'COALESCE(NULLIF(e.original_rate, 0), e.rate)'
@@ -130,6 +136,7 @@ export default defineEventHandler(async (event) => {
     `
     values.push(includeCleanupPrecedence)
     idx++
+    whereSQL += view.filter
 
     /* 🔎 SEARCH RULES */
     let invoiceMatchSelect = '0 AS invoice_match'
@@ -138,7 +145,7 @@ export default defineEventHandler(async (event) => {
       const isNumeric = /^\d+$/.test(normalizedSearch)
 
       if (!isNumeric) {
-        whereSQL += ` AND c.name ILIKE $${idx}`
+        whereSQL += ` AND (c.name ILIKE $${idx} OR c.phone ILIKE $${idx} OR b.invoice_code ILIKE $${idx} OR b.subject ILIKE $${idx})`
         values.push(`%${normalizedSearch}%`)
         idx++
       } else {
@@ -214,7 +221,7 @@ export default defineEventHandler(async (event) => {
     }
 
     /* 📅 DATE FILTER (FIXED) */
-    if (!normalizedSearch && startDate && endDate) {
+    if (dateFilter === 'range' && !normalizedSearch && startDate && endDate) {
       whereSQL += `
         AND b.created_at BETWEEN $${idx} AND $${idx + 1}
       `
@@ -222,10 +229,13 @@ export default defineEventHandler(async (event) => {
       idx += 2
     }
 
+    const additionalSorts: Record<string,string> = { dueDate:'b.due_date',amountReceived:view.received,balanceDue:view.balance,
+      customer:'c.name',paymentMethod:'b.payment_method',notes:'b.notes' }
+    const allowedSorts = { ...SORT_COLUMN_MAP, ...additionalSorts }
     const orderByColumn =
       sortColumn === 'grandTotal'
         ? billTotalExpr
-        : (SORT_COLUMN_MAP[sortColumn] || 'b.invoice_number')
+        : (Object.prototype.hasOwnProperty.call(allowedSorts,sortColumn) ? allowedSorts[sortColumn] : 'b.invoice_number')
 
     const orderByDirection =
       sortDirection === 'asc' ? 'ASC' : 'DESC'
@@ -250,6 +260,11 @@ export default defineEventHandler(async (event) => {
         b.payment_status   AS "paymentStatus",
         b.payment_method   AS "paymentMethod",
         b.notes,
+        b.terms_and_conditions AS "termsAndConditions",
+        b.invoice_code AS "invoiceCode",to_char(b.due_date,'YYYY-MM-DD') AS "dueDate",
+        b.invoice_payment_terms AS "invoicePaymentTerms",b.subject,
+        (${view.received}) AS "amountReceived",(${view.balance}) AS "balanceDue",(${view.overdue}) AS overdue,
+        COALESCE(${invoiceSendStatusSql},'Not sent') AS "sendStatus",
         b.split_payments   AS "splitPayments",
         (SELECT COALESCE(json_agg(json_build_object('amount',p.amount,'status',p.status,'deleted',p.deleted)),'[]'::json)
          FROM payments p WHERE p.company_id=b.company_id AND p.bill_id=b.id AND p.status IN ('POS_CREDIT_RECEIPT','POS_CREDIT_REVERSED') AND p.deleted=false) AS payments,
@@ -299,7 +314,10 @@ export default defineEventHandler(async (event) => {
     const totalsValues = [...values]
     const totalsQuery = `
       SELECT
-        COALESCE(SUM(${billTotalExpr}), 0)                                                AS total,
+        COALESCE(SUM(${billTotalExpr}), 0) AS total,
+        COALESCE(SUM(${view.received}),0) AS received,
+        COALESCE(SUM(${view.balance}),0) AS balance,
+        COALESCE(SUM(${view.balance}) FILTER(WHERE ${view.overdue}),0) AS overdue,
         COALESCE(
           SUM(${billTotalExpr}) FILTER (WHERE b.payment_method = 'Cash'),
           0
@@ -420,7 +438,7 @@ export default defineEventHandler(async (event) => {
     const [res, totalsRes, collectionsRes] = await Promise.all([
       client.query(query, values),
       client.query(totalsQuery, totalsValues),
-      client.query(billSalesSql(billTotalExpr, true), [companyIds, queryStartDate, queryEndDate, includeCleanupPrecedence]),
+      client.query(billSalesSql(billTotalExpr, true), [companyIds, dateFilter === 'all' ? new Date(0) : queryStartDate, dateFilter === 'all' ? new Date() : queryEndDate, includeCleanupPrecedence]),
     ])
 
     const t = totalsRes.rows[0] ?? {}
@@ -450,6 +468,9 @@ export default defineEventHandler(async (event) => {
         card:   Number(t.card   ?? 0),
         upi:    Number(t.upi    ?? 0),
         credit: Number(t.credit ?? 0),
+        received: Number(t.received ?? 0),
+        balance: Number(t.balance ?? 0),
+        overdue: Number(t.overdue ?? 0),
       },
     }
   } finally {

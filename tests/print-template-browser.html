@@ -24,6 +24,7 @@ import ReceiptPreview from '../components/PrintTemplateReceipt.vue';
 const check = (value, message) => { if (!value) throw Error(message); };
 const data = { companyName: 'Markit Sample Store', shopname: 'Markit', companyAddress: { street: 'Main Road', city: 'Kochi' }, gstin: 'SAMPLE', invoiceNumber: 'TEST-001', date: '2026-10-07T12:00:00Z', clientName: 'Sample Customer', productName: 'Cotton shirt', size: 'M', name: 'Sample', code: 'TEST-Printer', dprice: 1299, sprice: 1440, barcode: '313063057461', grandTotal: 99, paymentMethod: 'Cash', thankYouNote: 'Thank you for shopping!', entries: [{ description: 'Cotton shirt', qty: 1, mrp: 99, tvalue: 99, unit: 'Nos', tax: 5, hsn: '6109' }] };
 const logs = [];
+const appendLog = logs.push.bind(logs); logs.push = (...items) => { const count = appendLog(...items); document.getElementById('result').textContent = logs.join('\n'); return count; };
 window.useToast = () => ({ add: () => {} });
 async function run() {
 try {
@@ -370,6 +371,15 @@ try {
   logs.push('PASS grouped label defaults select, save and render the base label');
   labelSelect.value=previousLabelDefault;labelSelect.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
   await wait(()=>!button('Save designs').disabled);const savesBeforeRestore=saves;button('Save designs').click();await wait(()=>saves>savesBeforeRestore);
+  const imageReceiptCard=Array.from(host.querySelectorAll('.template-card')).find(card=>card.textContent.includes('Custom company receipt'));
+  imageReceiptCard.click();await wait(()=>host.querySelector('dialog[open]'));host.querySelector('[data-editor-tab="setup"]').click();await nextTick();
+  const sheetSelect=host.querySelector('[aria-label="Standard paper size"]');check(Array.from(sheetSelect.options).some(o=>o.value==='210x297'),'A4 receipt size missing');sheetSelect.value='210x297';sheetSelect.dispatchEvent(new Event('change',{bubbles:true}));await nextTick();
+  host.querySelector('[data-editor-tab="content"]').click();await nextTick();button('+ Image').click();await nextTick();
+  const upload=host.querySelector('[aria-label="Upload design image"]');const imageBlob=await new Promise(resolve=>blackLogo.toBlob(resolve,'image/png'));const files=new DataTransfer();files.items.add(new File([imageBlob,new Uint8Array(400000)],'banner.png',{type:'image/png'}));upload.files=files.files;upload.dispatchEvent(new Event('change',{bubbles:true}));
+  await wait(()=>!button('Save designs').disabled);check(host.querySelector('[aria-label="Image placement"]').value==='absolute','Receipt image did not offer free placement');
+  const imageProperties=host.querySelector('.element-properties');for(const [name,value] of [['From left','35'],['From top','45']]){const input=Array.from(imageProperties.querySelectorAll('label')).find(label=>label.textContent.startsWith(name)).querySelector('input');input.value=value;input.dispatchEvent(new Event('input',{bubbles:true}));}await nextTick();
+  const beforeImageSave=saves;button('Save designs').click();await wait(()=>saves>beforeImageSave);const savedSheet=stored.templates.find(t=>t.kind==='receipt'&&t.paperSize==='A4');const savedImage=savedSheet?.elements.find(e=>e.type==='logo'&&e.placement==='absolute');check(savedImage?.image&&savedImage.x===35&&savedImage.y===45,'Receipt image or A4 size did not persist');
+  logs.push('PASS receipt image upload, independent positioning and A4 selection save through the designer');
   app.unmount();host.remove();
   const presetsHost=document.createElement('div');document.body.append(presetsHost);
   const presetsApp=createApp(Designer,{receiptData:data,labelData:data,hideOriginalReceipt:true});

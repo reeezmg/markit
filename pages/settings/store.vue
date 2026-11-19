@@ -21,9 +21,6 @@ const awsService = new AwsService();
 const fileRef = ref<HTMLInputElement>();
 const isNameChanged = ref(false);
 const isDescriptionChanged = ref(false);
-const isThankYouNoteChanged = ref(false);
-const isRefundPolicyChanged = ref(false);
-const isReturnPolicyChanged = ref(false);
 const isImageChanged = ref(false);
 const isCategoryChanged = ref(false);
 const isPrinterLabelSizeChanged = ref(false);
@@ -41,7 +38,6 @@ const isUpdatingAddress = ref(false);
 const isUpdatingAccount = ref(false);
 const isUpdatingPointsValue = ref(false);
 const isUpdatingtiming = ref(false);
-const isUpdatingDescription = ref(false);
 const isUpdatingLogo = ref(false);
 const isUpdatingCategory = ref(false);
 const isUpdatingPrinterLabelSize = ref(false);
@@ -173,9 +169,6 @@ const storeUniqueName = ref(useAuth().session.value?.storeUniqueName);
 const storeName = ref(useAuth().session.value?.companyName);
 const storeLogo = ref(useAuth().session.value?.logo);
 const storeDescription = ref(useAuth().session.value?.description || '');
-const storeThankYouNote = ref(useAuth().session.value?.thankYouNote || '');
-const storeRefundPolicy = ref(useAuth().session.value?.refundPolicy || '');
-const storeReturnPolicy = ref(useAuth().session.value?.returnPolicy || '');
 const isTaxInclude = ref(useAuth().session.value?.isTaxIncluded);
 const isAiImage = ref(useAuth().session.value?.isAiImage);
 const isUserTrackInclude = ref(useAuth().session.value?.isUserTrackIncluded);
@@ -221,16 +214,6 @@ watch(() => storeUniqueName.value, (newName) => {
 watch(() => storeDescription.value, (newDescription) => {
   isDescriptionChanged.value = newDescription !== useAuth().session.value?.description;
 }, { immediate: true });
-watch(() => storeThankYouNote.value, (newThankYouNote) => {
-  isThankYouNoteChanged.value = newThankYouNote !== useAuth().session.value?.thankYouNote;
-}, { immediate: true });
-watch(() => storeRefundPolicy.value, (newRefundPolicy) => {
-  isRefundPolicyChanged.value = newRefundPolicy !== useAuth().session.value?.refundPolicy;
-}, { immediate: true });
-watch(() => storeReturnPolicy.value, (newReturnPolicy) => {
-  isReturnPolicyChanged.value = newReturnPolicy !== useAuth().session.value?.returnPolicy;
-}, { immediate: true });
-
 watch(() => selectedCategory.value, (newCategory) => {
   isCategoryChanged.value = newCategory !== useAuth().session.value?.category;
 }, { immediate: true });
@@ -448,41 +431,7 @@ async function onContactDetailsSave() {
   }
 }
 
-async function onNotesUpdate() {
-  isUpdatingDescription.value = true;
-  try {
-  if (!navigator.onLine) {
-    throw createError({
-      statusCode: 0,
-      statusMessage: 'No internet connection',
-    })
-  }
-    await UpdateCompany.mutateAsync({
-      where: {
-        id: useAuth().session.value?.companyId,
-      },
-      data: {
-        description: storeDescription.value,  
-        thankYouNote: storeThankYouNote.value,  
-        refundPolicy: storeRefundPolicy.value,  
-        returnPolicy: storeReturnPolicy.value,  
-      },
-    });
-    toast.add({ title: 'Store description updated', icon: 'i-heroicons-check-circle' });
-    isUpdatingDescription.value = false;
-    await updateStoreNote(
-      storeDescription.value,
-      storeThankYouNote.value,
-      storeRefundPolicy.value,
-      storeReturnPolicy.value
-    )
-  } catch (error) {
-    console.error(error);
-    toast.add({ title: 'Error updating store description', color: 'red',description: error.statusMessage, icon: 'i-heroicons-x-circle' });
-  } finally {
-    isUpdatingDescription.value = false;
-  }
-}
+
 
 async function onaccSubmit(event: FormSubmitEvent<AccountState>) {
     isUpdatingAccount.value = true;
@@ -899,7 +848,7 @@ const onDeliveryTypeChange = async () => {
   }
 };
 
-const isStoreIdentityChanged = computed(() => isNameChanged.value || isImageChanged.value || isCategoryChanged.value);
+const isStoreIdentityChanged = computed(() => isNameChanged.value || isImageChanged.value || isCategoryChanged.value || isDescriptionChanged.value);
 const isUpdatingStoreIdentity = ref(false);
 
 const onStoreIdentitySave = async () => {
@@ -909,6 +858,8 @@ const onStoreIdentitySave = async () => {
     const data: Record<string, any> = {};
     if (isNameChanged.value) data.storeUniqueName = storeUniqueName.value;
     if (isCategoryChanged.value) data.category = selectedCategory.value;
+    if (isDescriptionChanged.value) data.description = storeDescription.value;
+    const { thankYouNote, refundPolicy, returnPolicy } = useAuth().session.value || {};
     const selected = selectedFile.value;
     const hasLogo = isImageChanged.value && selected?.file;
     const replacedLogo = hasLogo ? useAuth().session.value?.logo : null;
@@ -920,6 +871,10 @@ const onStoreIdentitySave = async () => {
     if (Object.keys(data).length) await UpdateCompany.mutateAsync({ where: { id: useAuth().session.value?.companyId }, data });
     if ('storeUniqueName' in data) { await updateStoreUniqueName(data.storeUniqueName); isNameChanged.value = false; }
     if ('category' in data) { await updateCategoryValue(data.category); isCategoryChanged.value = false; }
+    if ('description' in data) {
+      await updateStoreNote(data.description, thankYouNote || '', refundPolicy || '', returnPolicy || '');
+      isDescriptionChanged.value = false;
+    }
     if ('logo' in data) {
       await updateLogo(data.logo); isImageChanged.value = false;
       if (replacedLogo && replacedLogo !== data.logo) await awsService.deleteObjects([replacedLogo]);
@@ -1022,6 +977,21 @@ const onAllDeliverySave = async () => {
           </div>
           <USelectMenu v-model="selectedCategory" :options="category" multiple placeholder="Select Category" />
         </div>
+        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
+          <div class="mb-3">
+            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Store Description</h3>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Description of your store.</p>
+          </div>
+          <UInput
+            v-model="storeDescription"
+            :maxlength="40"
+          >
+            <template #trailing>
+              <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeDescription?.length }}/{{ 40 }}</span>
+            </template>
+          </UInput>
+        </div>
+
       </div>
 
       <div class="my-4 flex w-full justify-end">
@@ -1151,84 +1121,6 @@ const onAllDeliverySave = async () => {
             :loading="isUpdatingContact"
             :disabled="!isContactDetailsChanged"
             @click="onContactDetailsSave"
-          />
-      </div>
-    </div>
-
-    <!-- ========== STORE DESCRIPTION & POLICIES ========== -->
-    <div class="mb-8 pb-8 border-b-2 border-gray-300 dark:border-gray-600">
-      <h2 class="text-lg font-semibold text-gray-900 dark:text-white">Description & Policies</h2>
-      <p class="text-sm text-gray-500 dark:text-gray-400 mb-4">Store description, thank you note, and return/refund policies</p>
-
-      <div class="grid gap-4 md:grid-cols-2">
-        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
-          <div class="mb-3">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Store Description</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Description of your store.</p>
-          </div>
-          <UInput
-            v-model="storeDescription"
-            :maxlength="40"
-          >
-            <template #trailing>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeDescription?.length }}/{{ 40 }}</span>
-            </template>
-          </UInput>
-        </div>
-
-        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
-          <div class="mb-3">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Thank You Note</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Displayed after order completion.</p>
-          </div>
-          <UInput
-            v-model="storeThankYouNote"
-            :maxlength="40"
-          >
-            <template #trailing>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeThankYouNote?.length }}/{{ 40 }}</span>
-            </template>
-          </UInput>
-        </div>
-
-        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
-          <div class="mb-3">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Refund Policy</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Refund policy of your store.</p>
-          </div>
-          <UInput
-            v-model="storeRefundPolicy"
-            :maxlength="40"
-          >
-            <template #trailing>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeRefundPolicy?.length }}/{{ 40 }}</span>
-            </template>
-          </UInput>
-        </div>
-
-        <div class="rounded-xl border border-gray-200 p-5 dark:border-gray-700">
-          <div class="mb-3">
-            <h3 class="text-base font-semibold text-gray-900 dark:text-white">Return Policy</h3>
-            <p class="text-sm text-gray-500 dark:text-gray-400">Return policy of your store.</p>
-          </div>
-          <UInput
-            v-model="storeReturnPolicy"
-            :maxlength="40"
-          >
-            <template #trailing>
-              <span class="text-xs text-gray-500 dark:text-gray-400">{{ storeReturnPolicy?.length }}/{{ 40 }}</span>
-            </template>
-          </UInput>
-        </div>
-      </div>
-
-      <div class="my-4 flex w-full justify-end">
-        <UButton
-            label="Update Description"
-            size="md"
-            :loading="isUpdatingDescription"
-            :disabled="!(isDescriptionChanged || isThankYouNoteChanged || isRefundPolicyChanged || isReturnPolicyChanged)"
-            @click="onNotesUpdate"
           />
       </div>
     </div>

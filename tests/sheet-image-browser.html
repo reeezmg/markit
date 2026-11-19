@@ -1,0 +1,43 @@
+<!doctype html><html><body><pre id="result">RUNNING</pre><script type="module">
+import {prepareDesignerImage} from '../utils/designer-image.client.ts';
+import {classicReceiptTemplate,defaultTemplate} from '../utils/print-templates.ts';
+import {resizePrintPaper} from '../utils/print-paper.ts';
+import {renderPrintTemplate,renderedTemplatePDF,renderedTemplatePages,templatePrintBytes} from '../utils/print-template-renderer.client.ts';
+import {receiptPhotoFixture} from './receipt-photo-fixture.ts';
+const check=(v,m)=>{if(!v)throw Error(m)};
+const logs={push:(s)=>document.getElementById('result').textContent+='\n'+s};
+try{
+const data={...receiptPhotoFixture,barcode:'123456789012',sprice:100,productName:'Product'},classic=classicReceiptTemplate(),label=defaultTemplate('label');
+const classicRender=await renderPrintTemplate(classic,data);
+  const blackLogo = document.createElement('canvas'); blackLogo.width=20; blackLogo.height=20; blackLogo.getContext('2d').fillRect(0,0,20,20);
+  const logo = structuredClone(label); logo.elements[0].type='logo'; logo.elements[0].image=blackLogo.toDataURL(); await renderPrintTemplate(logo,data);
+  logs.push('PASS uploaded logo renders');
+  const logoBlob = await new Promise(resolve => blackLogo.toBlob(resolve, 'image/png'));
+  const prepared = await prepareDesignerImage(new File([logoBlob, new Uint8Array(400000)], 'large-image.png', {type:'image/png'}));
+  check(prepared.data.length < 350000 && prepared.width === 20, 'Ordinary image upload was not normalized');
+  let invalidImage = false;try { await prepareDesignerImage(new File(['<svg/>'], 'bad.svg', {type:'image/svg+xml'})); } catch { invalidImage = true; }
+  check(invalidImage, 'SVG upload was accepted');
+  const floating = structuredClone(classic);
+  floating.elements.push({...logo.elements[0],id:'floating',image:prepared.data,placement:'absolute',x:8,y:20,width:15,height:15});
+  const floatingRender = await renderPrintTemplate(floating, receiptPhotoFixture);
+  check(floatingRender.bounds.find(b=>b.id==='floating').y===20, 'Receipt image ignored absolute coordinates');
+  check(Math.abs(floatingRender.bounds.find(b=>b.id===classic.elements[1].id).y-classicRender.bounds.find(b=>b.id===classic.elements[1].id).y)<0.01, 'Floating image changed flowing sections');
+  for (const [width,height] of [[210,297],[148,210],[216,279]]) {
+    const sheet = resizePrintPaper(classic, width, height);
+    sheet.elements = [{...sheet.elements[0],type:'text',field:'',text:'Short receipt',height:8}];
+    const sheetRender = await renderPrintTemplate(sheet, receiptPhotoFixture);
+    const pdf = await renderedTemplatePDF(sheetRender);
+    check(Math.abs(pdf.internal.pageSize.getWidth()-width)<0.1 && Math.abs(pdf.internal.pageSize.getHeight()-height)<0.1, 'Sheet PDF has the wrong physical size');
+    check(pdf.getNumberOfPages()===1, 'Short sheet receipt has a blank extra page '+JSON.stringify({width,height,renderHeight:sheetRender.height,pages:pdf.getNumberOfPages(),pixelHeight:sheetRender.canvas.height,pagePixels:Math.round(sheetRender.paperHeight*sheetRender.canvas.width/sheetRender.width)}));
+    let blocked=false;try{templatePrintBytes(sheetRender,sheet)}catch{blocked=true}check(blocked,'Sheet receipt generated thermal bytes');
+  }
+  const longSheet = resizePrintPaper(classic,210,297);
+  const longRender = await renderPrintTemplate(longSheet,{...receiptPhotoFixture,entries:Array.from({length:70},()=>({...receiptPhotoFixture.entries[0]}))});
+  const pages = renderedTemplatePages(longRender), longPDF=await renderedTemplatePDF(longRender);
+  check(pages.length>1 && longPDF.getNumberOfPages()===pages.length, 'Long A4 receipt did not paginate');
+  check(pages.reduce((sum,p)=>sum+p.canvas.height,0)===longRender.canvas.height, 'Pagination lost receipt pixels');
+  logs.push('PASS resized image uploads, freely positioned receipt images and paginated A4/A5/Letter PDFs');
+
+document.getElementById('result').textContent+='\nALL PASSED';
+}catch(e){document.getElementById('result').textContent+='\nFAILED: '+e.stack}
+</script></body></html>

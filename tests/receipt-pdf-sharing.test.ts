@@ -11,7 +11,7 @@ import { receiptPdfBuffer } from '../server/utils/receiptPdf';
 const require = createRequire(import.meta.url);
 const pdf = 'data:application/pdf;base64,' + Buffer.from('%PDF-1.3\nfixture\n%%EOF\n').toString('base64');
 
-function fixture() {
+function fixture(invoice = false) {
   const calls: any[] = [];
   let allowAccess = true, billExists = true, uploadFails = false, whatsappFails = false;
   const modules: Record<string, any> = {
@@ -32,6 +32,9 @@ function fixture() {
       return { companyId: 'company-a' };
     } },
     '~/server/utils/receiptShare': shares,
+    '~/server/db': {pool:{query:async(sql:string,values:any[])=>{
+      calls.push(['sql',sql,values]);return {rows:sql.includes('SELECT invoice_code')&&invoice?[{invoice_code:'INV-1'}]:[]}
+    }}},
     '~/server/utils/receiptPdf': { receiptPdfBuffer },
     '~/server/utils/r2': {
       uploadBufferToR2: async (...args: any[]) => { calls.push(['upload', ...args]); if (uploadFails) throw Error('Upload failed'); },
@@ -46,6 +49,7 @@ function fixture() {
       exports, require: (id: string) => modules[id] ?? require(id), Date, URLSearchParams, String, encodeURIComponent,
       process: { env: { WHATSAPP_PHONE_ID: 'test-phone-id', WHATSAPP_TOKEN: 'test-token' } },
       console: { error: () => {} },
+      requireAuthSession:async()=>({data:{id:'staff',companyId:'company-a'}}),
       $fetch: async (_: string, options: any) => { calls.push(['whatsapp', options.body]); if (whatsappFails) throw Error('Provider unavailable'); return { id: 'mock-message' }; },
     });
     return exports.default;
@@ -90,6 +94,22 @@ test('PDF sharing authorizes the bill, stores a unique PDF, and signs that exact
     else process.env.RECEIPT_SHARE_SECRET = previous;
   }
 });
+
+test('invoice sending records its own status without changing the invoice or recording payment',async()=>{
+  const previous=process.env.RECEIPT_SHARE_SECRET
+  process.env.RECEIPT_SHARE_SECRET='test-only-receipt-pdf-signing-key-32-characters'
+  try{
+    const f=fixture(true)
+    const share=await f.post({body:{billId:'bill-a',companyId:'company-a',pdf}})
+    await f.send({body:{receiptId:share.receiptId,companyId:'company-a',phone:'9999999999'}})
+    let audit=f.calls.filter(c=>c[0]==='sql'&&c[1].includes('INSERT INTO accountant_v2_accountant_audit'))
+    assert.equal(JSON.parse(audit[0][2][4]).status,'Sent')
+    f.failWhatsApp();await f.send({body:{receiptId:share.receiptId,companyId:'company-a',phone:'9999999999'}})
+    audit=f.calls.filter(c=>c[0]==='sql'&&c[1].includes('INSERT INTO accountant_v2_accountant_audit'))
+    assert.equal(JSON.parse(audit[1][2][4]).status,'Failed')
+    for(const call of f.calls.filter(c=>c[0]==='sql'))assert.doesNotMatch(call[1],/(?:UPDATE bills|INSERT INTO payments|UPDATE items)/)
+  }finally{if(previous===undefined)delete process.env.RECEIPT_SHARE_SECRET;else process.env.RECEIPT_SHARE_SECRET=previous}
+})
 
 test('unauthorized, invalid and failed uploads never produce PDF share links', async () => {
   const previous = process.env.RECEIPT_SHARE_SECRET;

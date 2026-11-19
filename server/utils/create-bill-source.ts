@@ -1,17 +1,31 @@
+import { registerBillServices, returnBillServices } from './after-sales-lifecycle'
+import { randomUUID } from 'node:crypto'
+import { serviceToday } from '../../utils/after-sales'
 import { createError } from 'h3'
 import { applyBillStock } from './bill-stock'
 import { generateCouponsForBill } from './generatedCoupons'
 import { creditAmountFromBill, upsertUserLedgerEntry } from './user-ledger'
+import { validateInvoiceSource, writeInvoiceDetails } from './invoice-flow'
+import { documentNotes } from '../../utils/document-notes'
+import { billAdjustmentValue } from '../../utils/bill-adjustments'
 
 /** Source writes only. Caller owns the transaction, ownership locks and retry receipt.
  * Invoice numbering and native accounting remain owned by the installed triggers.
  */
-export async function createBillSource(db: any, body: any) {
+export async function createBillSource(db: any, body: any, options: { allowZeroTotal?: boolean } = {}) {
   const payload = body.payload || {}
   const companyId = body.companyId
   const billId = body.uuid
+  try {
+    Object.assign(payload, documentNotes(payload))
+    payload.adjustment = billAdjustmentValue(payload.adjustment)
+  }
+  catch (error: any) { throw createError({ statusCode: 400, statusMessage: error.message }) }
+  if (payload.billingMode && !['paynow','invoice'].includes(payload.billingMode)) throw createError({statusCode:400,statusMessage:'Select a valid billing mode.'})
   if (!billId || !companyId || (payload.company?.connect?.id && payload.company.connect.id !== companyId))
     throw createError({ statusCode: 400, statusMessage: 'A bill ID and matching company are required' })
+  const invoice = payload.billingMode === 'invoice' ? await validateInvoiceSource(db, companyId, payload, options) : null
+  if (invoice) { payload.type = 'BILL'; payload.paymentStatus = 'PENDING' }
 
   let clientId = payload.client?.connect?.id || null
   if (clientId && !(await db.query('SELECT 1 FROM clients WHERE id=$1', [clientId])).rowCount) clientId = null
@@ -24,7 +38,7 @@ export async function createBillSource(db: any, body: any) {
       id, invoice_number, subtotal, discount, discount_type, grand_total, return_amt,
       payment_method, redeemed_points, bill_points, created_at, payment_status,
       type, split_payments, company_id, account_id, credit_user_id, client_id,
-      user_id, updated_at, coupon_value
+      user_id, updated_at, coupon_value, notes, terms_and_conditions, adjustment
     ) SELECT $2, NULL,
       COALESCE(NULLIF(data->>'subtotal','')::numeric,0),
       COALESCE(NULLIF(data->>'discount','')::numeric,0),
@@ -38,15 +52,18 @@ export async function createBillSource(db: any, body: any) {
       CASE WHEN jsonb_typeof(data->'splitPayments')='array' THEN data->'splitPayments' END,
       $3, NULLIF(data #>> '{account,connect,id}',''), NULLIF(data->>'creditUserId',''), $4,
       NULLIF(data #>> '{companyUser,connect,companyId_userId,userId}',''), now(),
-      NULLIF(data->>'couponValue','')::integer
+      NULLIF(data->>'couponValue','')::integer, data->>'notes', data->>'termsAndConditions',
+      COALESCE(NULLIF(data->>'adjustment','')::numeric,0)
     FROM p RETURNING invoice_number, created_at`,
     [JSON.stringify(payload), billId, companyId, clientId, redeemedPoints, billPoints])
   const bill = inserted.rows[0]
+  if (invoice) await writeInvoiceDetails(db, companyId, billId, invoice)
 
+  const sourceEntries=(payload.entries?.create||[]).map((entry:any,index:number)=>({...entry,id:randomUUID(),serviceLineKey:body.items?.[index]?.serviceLineKey}))
   await db.query(`INSERT INTO entries (
       id, name, qty, rate, discount, tax, value, size, barcode, return,
       variant_id, item_id, category_id, company_id, user_id, bill_id, user_name
-    ) SELECT gen_random_uuid()::text, COALESCE(entry->>'name',''),
+    ) SELECT entry->>'id', COALESCE(entry->>'name',''),
       COALESCE(NULLIF(entry->>'qty','')::numeric,1),
       COALESCE(NULLIF(entry->>'rate','')::numeric,0),
       COALESCE(NULLIF(entry->>'discount','')::numeric,0),
@@ -59,7 +76,7 @@ export async function createBillSource(db: any, body: any) {
       NULLIF(entry #>> '{companyUser,connect,companyId_userId,userId}',''), $3,
       NULLIF(entry->>'userName','')
     FROM jsonb_array_elements($1::jsonb) AS e(entry)`,
-    [JSON.stringify(payload.entries?.create || []), companyId, billId])
+    [JSON.stringify(sourceEntries), companyId, billId])
 
   if (payload.creditUserId) await upsertUserLedgerEntry(db, {
     companyId, userId: payload.creditUserId, type: 'USER_CREDIT_BILL', direction: 'DEBIT',
@@ -96,5 +113,8 @@ export async function createBillSource(db: any, body: any) {
   const generatedCoupons = await generateCouponsForBill(db, {
     companyId, clientId, billId, grandTotal: Number(payload.grandTotal || 0), billDate: bill.created_at,
   })
+  const serviceUnits=(body.serviceUnits||[]).map((d:any)=>({...d,...(d.lineKey?{entryId:sourceEntries.find((e:any)=>e.serviceLineKey===d.lineKey)?.id}: {})}))
+  await registerBillServices(db, companyId, billId, serviceUnits, body.userId || 'sale', payload.createdAt ? serviceToday(new Date(payload.createdAt)) : serviceToday())
+  await returnBillServices(db, companyId, billId, body.returnedServiceUnitIds || [], body.userId || 'sale')
   return { success: true, billId, invoiceNumber: bill.invoice_number, generatedCoupons }
 }

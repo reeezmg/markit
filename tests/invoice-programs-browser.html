@@ -1,0 +1,94 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Invoice programs browser test</title><style>body{margin:0;font-family:Arial;color:#334155}button{cursor:pointer}*{box-sizing:border-box}button,input,select,textarea{font:inherit}button{border:0}h1,h2,p{margin:0}fieldset{border:0;margin:0;padding:0}#result{padding:12px;background:#f0fdf4;font-size:12px}</style></head><body><div id="app"></div><pre id="result">Running…</pre>
+<script type="module">
+import * as Vue from 'vue'
+import RecurringWorkspace from '../components/Billing/RecurringWorkspace.vue'
+import RetainerWorkspace from '../components/Billing/RetainerWorkspace.vue'
+import { invoiceToday, retainerBalances } from '../utils/invoice-programs'
+import { newQuoteLine } from '../utils/erp-quote'
+const {createApp,h,Suspense,nextTick,ref}=Vue
+Object.assign(window,Vue,{useHead:()=>{}})
+const today=invoiceToday(),session={companyName:'Sample Store',companyPhone:'1234567890',currency:'INR',companyId:'company',isTaxIncluded:true}
+const template={clientId:'customer',quoteDate:today,expiryDate:'',referenceNumber:'',subject:'Monthly maintenance',salesperson:'',status:'DRAFT',notes:'Thank you for your business.',termsAndConditions:'Payment due within 15 days.',paymentTerms:'Net 15',deliveryEstimate:'',discount:0,discountType:'amount',adjustment:0,items:[{...newQuoteLine('line'),name:'Maintenance service',rate:1000}]}
+const recurring={id:'profile',company_id:'company',name:'Monthly maintenance',currency:'INR',frequency:'MONTH',interval:1,startDate:today,endDate:'',nextDate:today,status:'ACTIVE',generationMode:'DRAFT',dueDays:15,revision:'r1',clientName:'Sample Customer',clientPhone:'1234567890',template,occurrences:[]}
+const retainer={id:'retainer',number:1,clientId:'customer',clientName:'Sample Customer',clientPhone:'1234567890',currency:'INR',retainerDate:today,status:'DRAFT',description:'Advance for website project',reference:'PO-10',amount:1000,liabilityAccountId:'advance',liabilityAccountName:'Unearned Revenue',revision:'r1',notes:'Thank you for your business.',termsAndConditions:'Unused advances can be refunded.',events:[]}
+const accounts=[{id:'advance',name:'Unearned Revenue',type:'OTHER_CURRENT_LIABILITY'},{id:'cash',name:'Cash',type:'CASH'},{id:'bank',name:'Primary Bank',type:'BANK'}]
+const requests=[],payments=[]
+const clone=value=>JSON.parse(JSON.stringify(value))
+function currentRetainer(){return {...clone(retainer),...retainerBalances(retainer.events)}}
+let rejectNext=false
+const scope={ready:Promise.resolve(),companyId:ref('company'),readIds:ref(['company']),auth:{session:ref(session)},async fetch(url,options={}){
+  requests.push({url,...clone(options)})
+  const body=options.body
+  if(rejectNext && body){rejectNext=false;throw Error('Temporary network error')}
+  if(url==='/api/bill/findManyClient')return [{id:'customer',name:'Sample Customer',phone:'1234567890'}]
+  if(url==='/api/bill/searchItems')return []
+  if(url==='/api/billSale/invoices')return {rows:[{id:'invoice',invoiceCode:'INV-10',clientId:'customer',balanceDue:600}]}
+  if(url==='/api/recurring-invoices' && !body)return {rows:[clone(recurring)]}
+  if(url==='/api/recurring-invoices/profile' && !body)return clone(recurring)
+  if(url==='/api/recurring-invoices' && body){Object.assign(recurring,body,{id:'profile',clientName:'Sample Customer'});return {id:'profile',revision:'r2'}}
+  if(url==='/api/recurring-invoices/profile/actions'){
+    if(body.action==='generate'){recurring.occurrences=[{id:'occurrence',invoiceDate:today,dueDate:today,template:clone(template),clientName:'Sample Customer'}];recurring.nextDate='2099-01-01'}
+    if(body.action==='issue')Object.assign(recurring.occurrences[0],{billId:'invoice',invoiceCode:'INV-10'})
+    if(body.action==='pause')recurring.status='PAUSED'
+    if(body.action==='resume')recurring.status='ACTIVE'
+    return {success:true}
+  }
+  if(url==='/api/retainer-invoices' && !body)return {rows:[currentRetainer()]}
+  if(url==='/api/retainer-invoices/options')return {accounts}
+  if(url==='/api/retainer-invoices/retainer' && !body)return currentRetainer()
+  if(url==='/api/retainer-invoices' && body){Object.assign(retainer,body);return {id:'retainer',revision:'r2'}}
+  if(url==='/api/retainer-invoices/retainer/actions'){
+    const kinds={collect:'COLLECTION',apply:'APPLY',refund:'REFUND',unapply:'UNAPPLY'}
+    if(body.action==='sent')retainer.status='SENT'
+    else if(body.action==='void')retainer.status='VOID'
+    else {
+      const amount=body.action==='unapply'?retainer.events.find(e=>e.id===body.eventId).amount:body.amount
+      const event={id:'e'+retainer.events.length,kind:kinds[body.action],amount,eventDate:body.date,invoiceCode:body.billId?'INV-10':'',reference:body.reference,accountName:body.accountId==='bank'?'Primary Bank':'Cash',payment_method:body.paymentMethod}
+      if(body.action==='unapply')retainer.events.find(e=>e.id===body.eventId).reversalId=event.id
+      retainer.events.push(event);retainer.status='SENT'
+    }
+    return {success:true}
+  }
+  throw Error('Unmocked '+url)
+}}
+Object.assign(window,{useCompanyScope:()=>scope})
+let app
+async function mount(Component){app?.unmount();document.querySelector('#app').replaceChildren();app=createApp({render:()=>h(Suspense,null,{default:()=>h(Component)})});app.component('UButton',{props:['label'],setup:(props,{slots})=>()=>h('button',{},props.label||slots.default?.())});app.component('NuxtLink',{props:['to'],setup:(props,{slots})=>()=>h('a',{href:typeof props.to==='string'?props.to:props.to?.path},slots.default?.())});app.mount('#app');await settle()}
+async function settle(){for(let i=0;i<12;i++){await Promise.resolve();await nextTick()}}
+function assert(ok,label){if(!ok)throw Error(label)}
+function text(){return document.body.textContent}
+function button(label){const result=[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===label);assert(result,'Missing button '+label);return result}
+async function click(label){button(label).click();await settle()}
+async function fill(label,value){const field=[...document.querySelectorAll('label')].find(l=>l.childNodes[0]?.textContent.trim()===label)?.querySelector('input,textarea,select');assert(field,'Missing input '+label);field.value=value;field.dispatchEvent(new Event(field.tagName==='SELECT'?'change':'input',{bubbles:true}));await settle()}
+async function submit(){document.querySelector('.program-dialog').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await settle()}
+const result=document.querySelector('#result')
+try{
+  await mount(RecurringWorkspace)
+  assert(text().includes('Monthly maintenance'),'Recurring list loaded')
+  await click('Monthly maintenance');await click('Generate due invoice')
+  assert(text().includes('Issue invoice'),'Generated draft appears')
+  await click('Preview');const draftPaper=document.querySelector('.erp-quote-print-host');assert(draftPaper.textContent.includes('INVOICE DRAFT'),'Draft print has correct title');assert(draftPaper.textContent.includes('Due date:') && !draftPaper.textContent.includes('quotation is an offer'),'Draft dates and notice are invoice-specific');await click('Close')
+  await click('Issue invoice');assert(text().includes('INV-10'),'Issued invoice number visible')
+  await click('Pause');assert(text().includes('PAUSED'),'Paused profile visible');await click('Resume')
+  await click('+ New recurring invoice');assert(document.querySelector('form').textContent.includes('Repeat every'),'Recurring editor fields')
+  assert(document.querySelector('form').textContent.includes('Customer notes'),'Recurring invoice notes field')
+  await click('Cancel')
+  await mount(RetainerWorkspace);await click('RET-1')
+  await click('Record payment');await fill('Amount','1000');await fill('Payment method','Bank');await fill('Deposit to','bank')
+  rejectNext=true;await submit();assert(text().includes('Unable to connect'),'Network error surfaced')
+  const failed=requests.at(-1).body;await submit();const retried=requests.filter(r=>r.body?.action==='collect').at(-1).body
+  assert(failed.requestId===retried.requestId,'Same retry ID retained after timeout')
+  assert(!document.querySelector('.program-dialog'),'Payment modal closed')
+  await click('Apply to invoice');await fill('Invoice','invoice');await fill('Amount','400');await submit()
+  assert(text().includes('INV-10'),'Invoice application in history')
+  await click('Refund');await fill('Amount','600');await submit()
+  await click('Remove application');await submit()
+  assert(text().includes('Application removed'),'Removal in history')
+  assert(currentRetainer().available===400,'Advance restored after removal')
+  await click('Print / PDF');const paper=document.querySelector('.retainer-paper')
+  assert(paper.textContent.includes('RETAINER INVOICE') && paper.textContent.includes('RET-1'),'Retainer title and number on print')
+  for(const value of ['Unused advance','Applied to invoices','Refunded','Customer notes','Terms and conditions','INV-10','Sample Customer','Sample Store'])assert(paper.textContent.includes(value),'Printed '+value)
+  if(new URLSearchParams(location.search).has('preview')){result.textContent='PREVIEW READY · Retainer invoice, payment/application history and balances';}
+  else{await click('Close');await click('+ New retainer invoice');assert(document.querySelector('form').textContent.includes('Unearned revenue account'),'Liability selector available');assert(!document.querySelector('form').textContent.includes('Delivery estimate'),'Retainer has only relevant notes fields');result.textContent='ALL PASSED · recurring generation/issue/pause/resume, draft preview, retainer collection retry/application/refund/removal, print data and forms'}
+}catch(error){result.textContent='FAILED: '+error.stack}
+</script></body></html>

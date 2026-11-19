@@ -31,7 +31,7 @@ export async function receiptBill(db: Db, companyId: string, billId: string, loc
   return { bill, payments, outstanding: bill.deleted ? 0 : Math.max(0, billCreditCents(bill) - paid) / 100 }
 }
 
-async function dateUnlocked(db: Db, companyId: string, date: string) {
+export async function dateUnlocked(db: Db, companyId: string, date: string) {
   const rows = await db.query(`SELECT reason FROM accountant_v2_transaction_locks WHERE company_id=$1 AND is_locked=true
     AND deleted_at IS NULL AND module IN ('ALL','ACCOUNTS','BANKING') AND lock_date >= $2::timestamp LIMIT 1`, [companyId, date])
   if (rows.rows.length) throw fail('The receipt date is in a locked accounting period')
@@ -100,6 +100,7 @@ export async function reverseBillReceipt(db: Db, companyId: string, userId: stri
     const state = await receiptBill(db,companyId,input.billId,true)
     await db.query('SELECT pg_advisory_xact_lock(hashtext($1))', ['accountant-v2:'+companyId])
     const receipt = state.payments.find((p: any) => p.id === body.receiptId && p.status === receiptStatus && !p.deleted)
+    if (receipt?.payment_mode === 'Retainer') throw fail('Remove this application from Retainer invoices to restore the available advance.')
     if (!receipt?.journal_id) throw fail('Receipt is missing or already reversed')
     if (new Date(input.paymentDate) < new Date(receipt.payment_date)) throw fail('Reversal cannot precede the receipt')
     await dateUnlocked(db,companyId,input.paymentDate)

@@ -13,6 +13,29 @@ export function canAdvance(from: string, to: string) {
 const json = (value: any) => typeof value === 'string' ? JSON.parse(value) : value || {}
 const money = (value: any) => Math.round(Number(value || 0) * 100) / 100
 const csv = (value: any) => String(value || '').split(',').map(s => s.trim()).filter(Boolean).slice(0, 50)
+function labelItems(items: any) {
+  return (Array.isArray(items) ? items : []).map((item: any, index: number) => {
+    const quantity = Number(item.quantity ?? item.qty ?? 1) || 1
+    const price = money(item.dprice ?? item.sprice ?? item.price ?? item.rate ?? 0)
+    const name = String(item.name || item.productName || 'Product').trim()
+    const variant = String(item.variantName || item.variant || '').trim()
+    const size = String(item.size || '').trim()
+    const shade = String(item.shade || '').trim()
+    const details = [
+      variant,
+      size ? `${String(item.sizeLabel || 'Size').trim()}: ${size}` : '',
+      shade && shade !== size ? `Shade: ${shade}` : '',
+    ].filter(Boolean)
+
+    return {
+      id: String(item.itemId || item.id || index),
+      name: details.length ? `${name} — ${details.join(' · ')}` : name,
+      quantity,
+      price,
+      total: money(item.value ?? item.amount ?? price * quantity),
+    }
+  })
+}
 function required(value: any, name: string): string {
   if (typeof value !== 'string' || !value.trim()) throw shippingError(`${name} is required`)
   return value.trim()
@@ -370,7 +393,46 @@ export function createShippingService(db: ShippingDB, companyId: string, fetcher
       const { gw } = await active('label'), awbs = csv(q.waybills); await ownedAwbs(awbs)
       const size = await labelSize(), info = await seller(), raw = await carrier.labels(gw, awbs, size, false)
       if (!raw.packages?.length) throw shippingError('No label data for that waybill', 404)
-      return { size, seller: info, packages: raw.packages.map((p: any) => ({ ...p, snm: String(p.snm || '').trim() ? p.snm : info.name, sadd: String(p.sadd || '').trim() ? p.sadd : info.address })) }
+      const labelOrders = await rows(
+        `SELECT eo.items, eo.meta,
+                exchange_request.items AS "exchangeItems",
+                reverse_request.items AS "reverseItems"
+         FROM ecomm_orders eo
+         LEFT JOIN ecomm_order_requests exchange_request
+           ON exchange_request.company_id=eo.company_id
+          AND exchange_request.id=eo.meta#>>'{shipping,exchange,requestId}'
+         LEFT JOIN ecomm_order_requests reverse_request
+           ON reverse_request.company_id=eo.company_id
+          AND reverse_request.id=eo.meta#>>'{shipping,reverse,requestId}'
+         WHERE eo.company_id=$1 AND (
+           eo.meta->>'awb'=ANY($2::text[]) OR eo.meta#>>'{shipping,awb}'=ANY($2::text[])
+           OR eo.meta#>>'{shipping,reverse,awb}'=ANY($2::text[])
+           OR eo.meta#>>'{shipping,exchange,awb}'=ANY($2::text[])
+           OR (eo.meta#>'{shipping,childAwbs}') ?| $2::text[]
+         )`,
+        [companyId, awbs],
+      )
+      const itemsByAwb = new Map<string, any[]>()
+      for (const order of labelOrders) {
+        const meta = order.meta || {}, shipping = meta.shipping || {}
+        const forward = labelItems(order.items)
+        for (const awb of [meta.awb, shipping.awb, ...(shipping.childAwbs || [])].filter(Boolean)) itemsByAwb.set(String(awb), forward)
+        if (shipping.exchange?.awb) itemsByAwb.set(String(shipping.exchange.awb), labelItems(order.exchangeItems || order.items))
+        if (shipping.reverse?.awb) itemsByAwb.set(String(shipping.reverse.awb), labelItems(order.reverseItems || order.items))
+      }
+      return {
+        size,
+        seller: info,
+        packages: raw.packages.map((p: any) => {
+          const awb = String(p.wbn || p.waybill || '')
+          return {
+            ...p,
+            snm: String(p.snm || '').trim() ? p.snm : info.name,
+            sadd: String(p.sadd || '').trim() ? p.sadd : info.address,
+            items: itemsByAwb.get(awb) || [],
+          }
+        }),
+      }
     }
     if (opts.method === 'GET' && parts[0] === 'label' && parts[2] === 'pdf') return pdf(required(parts[1], 'trackingId'))
     if (opts.method === 'GET' && parts[0] === 'label') {

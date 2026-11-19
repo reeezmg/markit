@@ -2,8 +2,12 @@ const numeric = (value: unknown) => Number.isFinite(Number(value)) ? Number(valu
 export function receiptSummary(data: any) {
   const raw = String(data.discount ?? '0');
   const discount = raw.startsWith('+') ? -Math.abs(numeric(raw)) : numeric(raw) < 0 ? Math.abs(numeric(raw)) : numeric(data.ttvalue ?? data.subtotal) * numeric(raw) / 100;
-  const discountText = raw.startsWith('+') ? `+${Math.abs(numeric(raw)).toFixed(2)}` : numeric(raw) < 0 ? `-${Math.abs(numeric(raw)).toFixed(2)}` : discount.toFixed(2);
-  const savings = Math.max(0, numeric(data.tdiscount) + discount + numeric(data.couponValue) + numeric(data.redeemedPoints));
+  const adjustment = numeric(data.adjustment);
+  const netChange = adjustment - discount;
+  const discountText = adjustment !== 0
+    ? `${netChange > 0 ? '+' : ''}${netChange.toFixed(2)}`
+    : raw.startsWith('+') ? `+${Math.abs(numeric(raw)).toFixed(2)}` : numeric(raw) < 0 ? `-${Math.abs(numeric(raw)).toFixed(2)}` : discount.toFixed(2);
+  const savings = Math.max(0, numeric(data.tdiscount) + discount - adjustment + numeric(data.couponValue) + numeric(data.redeemedPoints));
   const groups = new Map<number, number>();
   for (const entry of data.entries || []) {
     const rate = numeric(entry.tax);

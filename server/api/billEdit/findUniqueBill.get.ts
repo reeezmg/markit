@@ -1,6 +1,7 @@
 import { defineEventHandler, getQuery, createError } from 'h3'
 import { pool } from '~/server/db'
 import { getAuthorizedCompanyIds } from '~/server/utils/organizationReadScope'
+import { readServiceChargeCategory } from '../../utils/after-sales-charge-category'
 
 export default defineEventHandler(async (event) => {
   const query = getQuery(event)
@@ -30,6 +31,7 @@ export default defineEventHandler(async (event) => {
         b.subtotal,
         b.discount,
         b.discount_type          AS "discountType",
+        b.adjustment,
         b.tax,
         b.grand_total          AS "grandTotal",
         b.redeemed_points      AS "redeemedPoints",
@@ -41,6 +43,9 @@ export default defineEventHandler(async (event) => {
         b.payment_status       AS "paymentStatus",
         b.split_payments       AS "splitPayments",
         b.notes,
+        b.terms_and_conditions AS "termsAndConditions",
+        b.invoice_code AS "invoiceCode",to_char(b.due_date,'YYYY-MM-DD') AS "dueDate",
+        b.invoice_payment_terms AS "invoicePaymentTerms",b.subject,
         b.return_deadline      AS "returnDeadline",
         b.account_id           AS "accountId",
         b.credit_user_id       AS "creditUserId",
@@ -98,6 +103,10 @@ export default defineEventHandler(async (event) => {
     }
 
     const bill = billRes.rows[0]
+    // Keep ordinary billing compatible before after-sales is installed.
+    const serviceReady = (await client.query("SELECT to_regclass('public.service_jobs') IS NOT NULL AS ready")).rows[0]?.ready
+    bill.isServiceInvoice = serviceReady && !!(await client.query('SELECT 1 FROM service_jobs WHERE bill_id=$1 AND company_id=$2 LIMIT 1', [billId, bill.companyId])).rowCount
+    bill.serviceChargeCategory = bill.isServiceInvoice ? await readServiceChargeCategory(client, bill.companyId) : null
 
     if (bill.trynbuyId && bill.companyId) {
       const earningsRes = await client.query(

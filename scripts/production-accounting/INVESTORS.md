@@ -1,30 +1,122 @@
 # Investor accounts and legacy investment import
 
 Open **Investments** in the main sidebar. Its separate pages are Overview, Investors,
-Capital & loans, Allocate profit, Profit payouts and Settings. Ownership and
-agreement history are managed within Investors. The old
+Capital, Allocate profit, Profit payouts and Settings. Loans is a separate finance
+sidebar item beside Investments, at `/loans`. Old `/investments/loans` links
+redirect and preserve the selected company/investor/repayment query. Capital tracks
+contributions and returns. Loans manages individual borrowing agreements, fixed-rate
+or imported schedules, due interest accounting, partial principal/interest payments,
+fees, reasoned payment reversals and early settlement. Its schedule CSV preserves
+the contractual principal/interest breakdown. Only actual principal projects into
+the combined investor statement; interest is recognized by scheduled journals.
+The Loans index contains only the loan table; opening a row navigates to its
+dedicated detail page with its schedule and payments. Save loan immediately records
+the receipt and opens the loan, without validation or confirmation. Earlier
+unposted drafts can be completed by saving their information once. Earlier
+unassigned movements remain on the separate Earlier loan history page and are not
+adopted automatically. Saving records a new receipt; do not re-enter historical funding.
+Loans has sidebar pages for Loan accounts, Repayments, Settings and Earlier history.
+Repayments lists due/upcoming unpaid instalments and opens their loan for payment.
+Loan settings manages the five shared default accounts. Each loan saves its own
+account selections; investor profiles expose only equity and profit-payable
+accounts and require no loan-account setup. Historical mappings stay preserved.
+Add investor opens a full-screen form. The Investors directory contains one table;
+clicking a row opens details, holdings, ownership history and the account statement.
+No ownership agreement is required or editable. Historical records stay readable.
+
+With Include shares enabled, save the profile then use Buy shares or Redeem shares:
+- Buy: enter cash amount and the transaction's price per share; units = amount / price.
+- Redeem: enter units and the redemption price; cash = units x price rounded to cents.
+- Each transaction can have a different price. Remaining units determine ownership
+  and profit share against the fixed company total. Transactions never use an old
+  agreement price or pay a capital commitment before awarding shares.
+
+With Include shares disabled, enter ownership % and profit-share % directly in
+Add/Edit investor. The effective date preserves history. Capital received/returned
+in this mode does not change those percentages. Existing shares must be redeemed
+before replacing that investor's participation with percentages; mode changes do
+not erase holdings. Managers/admins manage participation and record share trades.
+
+The form asks Payment status: Paid in full, Not paid - keep as due, or Partially
+paid with the amount actually paid. Shares move immediately; only confirmed cash
+is posted to Capital and the chosen bank/cash account. Unpaid purchases show
+Capital due from investor; unpaid redemptions show Redemption due to investor.
+These are separate operational dues, not automatically posted GL receivables.
+
+Use Receive payment / Pay redemption due on the profile, or Capital > Record
+capital movement > Settle share due. Select the original trade and record the
+actual payment (partial or full). This reduces its due without changing shares or
+re-entering its price. Capital > New share movement instead records a new purchase
+or redemption at a chosen price with payment confirmation. The profile and Capital
+share the same underlying records; no second manual cash entry is needed.
+
+Trade, ownership and any immediate payment save atomically. Failed/stale previews,
+overpayments, wrong-party/direction settlements and protected history are rejected.
+Payment reversals reopen the due while keeping units. Cancel a share trade only
+after its payments are reversed and dependent later changes are resolved. Existing
+paid history is preserved and never reclassified as unpaid. Old agreement capital
+commitments remain removed; new trade-specific dues replace no historical records.
+
+The old
 `/accountant/investors` route redirects to `/investments/investors`. New investor
-profiles link their user to a selected existing equity account; profile creation
-does not create chart accounts. Optional existing profit payable and loan liability
-accounts support those movements. Legacy imported profiles retain their dedicated
+profiles use the company's default equity, profit-payable and loan-liability
+accounts, with optional investor overrides. Forms reuse the accounts created with
+the company; missing standard accounts and selections are initialized automatically
+and audited without posting money. Loan entry also preselects receiving Cash/Bank,
+current liability, interest expense and fees expense. Configure shared defaults in
+Settings > Account > Investments / Loans. Legacy imported profiles retain their dedicated
 capital, profit payable and loan accounts.
 Settings → Account → Investments holds account and payment defaults, including
-profit-distribution equity. New receipts/payments post directly to the selected cash/bank account. Ownership
-and profit-sharing agreements are separate, dated records. Allocate profit computes
+profit-distribution equity. New receipts/payments post directly to the selected cash/bank account. Ownership/profit percentages are retained as internal dated snapshots. Allocate profit computes
 company profit from posted income minus expenses in the new books for the chosen
 period, including exchange rates and excluding drafts/deleted lines. Complete the
 books first; missing source entries and period closing entries affect that result.
 Enter the total company amount to share, preview all active investors, then approve
 once as manager/admin. The whole batch posts or rolls back together, and changed
 previews/overlapping allocations are rejected. The period's saved profit-share
-percentage determines each allocation. Split a period if an agreement changes;
-missing agreements must be added first. Unassigned shares and rounding stay in
+percentage determines each allocation. Split a period if ownership changes; profiles need percentages or share purchases before allocating profit. Unassigned shares and rounding stay in
 the business. Allocations debit the automatically created Investor profit
 distributions equity account (change once in Settings if needed) and credit profit payable;
 payouts clear that liability. CSV statements include opening/closing balances.
 Documents are HTTP/HTTPS links, not uploaded copies.
 
+## Verify the investor flow without live writes
+
+`npm run test:investor-flow` checks the UI types and runs the real investor and
+allocation handlers against an in-memory transaction adapter. It covers combined
+creation/rollback/retries, tenant and role checks, capital receipts/returns,
+posted-profit allocation, partial/full payout, variable-price share trades,
+paid/unpaid/partial confirmations, linked settlements, payment/trade reversals,
+rounding, settings modes and protected ownership history. It does
+not execute the older schema-creating `test:investors` integration script.
+
+`npm run test:investor-flow:browser` uses the real Nuxt UI components and the same
+handler fixture over a local HTTP server. It checks the full-screen form and fixed
+save footer, single-table directory, row navigation, profile error/retry, details,
+holdings and statement, purchases/redemptions at different prices, direct profile
+percentages, confirmations and due settlements from both profile and Capital. Set `PRINT_TEST_WINDOW_SIZE=390,844` to repeat at mobile size.
+Neither test command creates live users, database schemas or financial records.
+
 ## Install
+
+The agreement-based Loans feature additionally needs the locally prepared
+`20261102120000_loan_management` migration. Preview it offline from Storetools:
+
+```powershell
+node scripts/production-accounting/apply-loan-management.mjs
+```
+
+This command does not load credentials, connect to a database or execute DDL.
+After a **separate explicit database instruction**, the same command with `--apply`
+installs only its two tables, records the migration checksum and imports no history.
+Do not apply older pending migrations as part of this installation. The Loans page
+shows installation pending until the tables exist. Existing Accountants/investors
+are prerequisites. `GET /api/cron/loans` uses the existing `CRON_SECRET` and is
+scheduled at 01:30 UTC in Vercel; other hosting must configure an equivalent job.
+Scheduled entries also catch up on save, payment or explicit Post due entries.
+
+The older investor installation below is historical setup guidance, not current
+authorization to run database schema commands:
 
 Run from Storetools with the deployed dependencies and `DATABASE_URL` configured:
 
@@ -99,7 +191,7 @@ creates profiles by legacy company/user, and imports every row through the cutof
 Completed rows post at the original date and respect accounting/banking locks.
 Pending rows remain visible and unposted; the importer does not mark them paid.
 Their eventual real movement should be recorded as a new investor entry with the
-old ID in its reference. Profiles and agreements can then be completed in the UI.
+old ID in its reference. Profile details and percentage participation can then be completed in the UI; share holdings are managed through purchases/redemptions.
 
 Original rows remain in place. A database trigger rejects edits/deletes of imported
 rows, including generated CRUD; use a reasoned reversal in the investor page for

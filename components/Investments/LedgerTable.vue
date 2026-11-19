@@ -3,11 +3,13 @@ import {
     investmentLedger,
     investmentMoney,
     investmentToday,
+    investmentMovementKinds,
+    type InvestmentMovementMode,
 } from '~/utils/investments';
 const props = defineProps<{
         events: any[];
         currency: string;
-        mode?: 'capital' | 'payouts';
+        mode?: InvestmentMovementMode;
         investorId?: string;
     }>(),
     emit = defineEmits(['changed']);
@@ -18,7 +20,7 @@ const api = useAccountantApi(),
     reversing = ref<any>(null),
     busy = ref(false),
     reverseDate = ref(investmentToday()),
-    reason = ref('');
+    reason = ref(''), reverseError = ref('');
 const people = computed(() => [
     { value: '', label: 'All investors' },
     ...Array.from(
@@ -41,9 +43,7 @@ const filtered = computed(() =>
             (!from.value || e.date >= from.value) &&
             (!to.value || e.date <= to.value) &&
             (!props.mode ||
-                (props.mode === 'payouts'
-                    ? e.movementKind.startsWith('PROFIT')
-                    : !e.movementKind.startsWith('PROFIT')))
+                investmentMovementKinds[props.mode].includes(e.movementKind))
     )
 );
 const opening = computed(
@@ -67,29 +67,27 @@ const closing = computed(
             )
             .at(-1) || { capital: 0, profit: 0, loan: 0 }
 );
+const balanceColumns = computed(() => {
+    const all = [
+        { key: 'capital', label: 'Net contributed capital' },
+        { key: 'profit', label: 'Profit due' },
+        { key: 'loan', label: 'Outstanding loan principal' },
+    ];
+    const key = props.mode === 'payouts' ? 'profit' : props.mode === 'loans' ? 'loan' : props.mode;
+    return key ? all.filter(column => column.key === key) : all;
+});
 const columns = computed(() => [
     { key: 'date', label: 'Date' },
     ...(!props.investorId ? [{ key: 'investorName', label: 'Investor' }] : []),
     { key: 'label', label: 'Movement' },
     { key: 'amount', label: 'Amount' },
-    ...(props.mode === 'payouts'
-        ? [{ key: 'profit', label: 'Profit due' }]
-        : props.mode === 'capital'
-        ? [
-              { key: 'capital', label: 'Capital balance' },
-              { key: 'loan', label: 'Loan balance' },
-          ]
-        : [
-              { key: 'capital', label: 'Capital balance' },
-              { key: 'profit', label: 'Profit due' },
-              { key: 'loan', label: 'Loan balance' },
-          ]),
+    ...balanceColumns.value,
     { key: 'reference', label: 'Reference' },
     { key: 'actions', label: '' },
 ]);
 async function reverse() {
     if (!reversing.value) return;
-    busy.value = true;
+    busy.value = true; reverseError.value = '';
     try {
         await api.post(
             `/investors/${reversing.value.investor_id}/reverse/${reversing.value.id}`,
@@ -97,7 +95,7 @@ async function reverse() {
         );
         reversing.value = null;
         emit('changed');
-    } catch {
+    } catch (e: any) { reverseError.value = e.message;
     } finally {
         busy.value = false;
     }
@@ -113,13 +111,9 @@ function exportCsv() {
         ['To', to.value || 'Latest'],
     ];
     if (person.value)
-        records.push(
-            ['Opening capital', opening.value.capital],
-            ['Closing capital', closing.value.capital],
-            ['Opening profit due', opening.value.profit],
-            ['Closing profit due', closing.value.profit],
-            ['Opening loan', opening.value.loan],
-            ['Closing loan', closing.value.loan]
+        for (const column of balanceColumns.value) records.push(
+            [`Opening ${column.label}`, opening.value[column.key]],
+            [`Closing ${column.label}`, closing.value[column.key]]
         );
     records.push(
         [],
@@ -128,9 +122,9 @@ function exportCsv() {
             'Investor',
             'Movement',
             'Amount',
-            'Capital balance',
-            'Profit due',
-            'Loan balance',
+            ...balanceColumns.value.map(column => column.label),
+            'Shares',
+            'Price per share',
             'Reference',
             'Note',
             'Status',
@@ -140,12 +134,12 @@ function exportCsv() {
             e.investorName,
             e.label,
             e.amount,
-            e.capital,
-            e.profit,
-            e.loan,
+            ...balanceColumns.value.map(column => e[column.key]),
+            e.details.capitalPreview?.shareQuantity ?? '',
+            e.details.pricePerShare ?? '',
             e.details.reference || e.legacy_id,
             e.details.note,
-            e.posted ? 'Posted' : 'Pending',
+            e.recorded ? 'Shares recorded' : e.posted ? 'Posted' : 'Pending',
         ])
     );
     const url = URL.createObjectURL(
@@ -156,7 +150,7 @@ function exportCsv() {
     );
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'investment-statement.csv';
+    a.download = `${props.mode || 'investment'}-statement.csv`;
     a.click();
     URL.revokeObjectURL(url);
 }
@@ -176,11 +170,10 @@ function exportCsv() {
             ><UButton variant="outline" @click="exportCsv"
                 >Export statement</UButton
             ></div
-        ><p v-if="person" class="text-sm text-gray-500 mb-4"
-            >Opening capital {{ investmentMoney(opening.capital, currency) }} ·
-            Closing capital {{ investmentMoney(closing.capital, currency) }} ·
-            Profit due {{ investmentMoney(closing.profit, currency) }} · Loan
-            {{ investmentMoney(closing.loan, currency) }}</p
+        ><div v-if="person" class="text-sm text-gray-500 mb-4 space-y-1"
+            ><p v-for="column in balanceColumns" :key="column.key"
+                >{{ column.label }}: Opening {{ investmentMoney(opening[column.key], currency) }} ·
+                Closing {{ investmentMoney(closing[column.key], currency) }}</p></div
         ><p v-else class="text-xs text-gray-500 mb-3"
             >Running balances are shown separately for each investor.</p
         ><UTable :rows="filtered" :columns="columns"
@@ -192,12 +185,12 @@ function exportCsv() {
                 ></template
             ><template #label-data="{ row }"
                 ><p>{{ row.label }}</p
-                ><UBadge v-if="!row.posted" color="orange" variant="subtle"
+                ><UBadge v-if="!row.posted && !row.recorded" color="orange" variant="subtle"
                     >Pending</UBadge
                 ><p v-if="row.details.periodFrom" class="text-xs text-gray-500"
                     >{{ row.details.periodFrom }} – {{ row.details.periodTo }} ·
                     {{ row.details.terms?.profitPercent }}%</p
-                ><p class="text-xs text-gray-500">{{
+                ><p v-if="row.details.pricePerShare" class="text-xs text-gray-500">{{ row.details.capitalPreview?.shareQuantity }} shares at {{ row.details.pricePerShare }} each</p><p class="text-xs text-gray-500">{{
                     row.details.note
                 }}</p></template
             ><template
@@ -218,15 +211,16 @@ function exportCsv() {
                 ><span v-if="row.reversed" class="text-xs text-gray-500"
                     >Reversed</span
                 ><UButton
-                    v-else-if="row.posted && row.kind !== 'REVERSAL'"
+                    v-else-if="(row.posted || row.recorded) && row.kind !== 'REVERSAL' && !row.details.loanId"
                     variant="ghost"
                     size="xs"
                     @click="
-                        reversing = row;
+                        reverseError = ''; reversing = row;
                         reverseDate = investmentToday();
                         reason = '';
                     "
                     >Reverse</UButton
+                ><NuxtLink v-else-if="row.details.loanId" :to="{path: `/loans/${row.details.loanId}`, query: {entryCompany: api.companyId.value}}" class="text-primary-500 text-xs">Open loan</NuxtLink
                 ></template
             ></UTable
         >
@@ -237,7 +231,7 @@ function exportCsv() {
             ><UCard
                 ><template #header>Reverse movement</template
                 ><form class="space-y-4" @submit.prevent="reverse"
-                    ><p class="text-sm"
+                    ><UAlert v-if="reverseError" color="red" :title="reverseError" /><p class="text-sm"
                         >This posts an opposite entry and preserves the original
                         history.</p
                     ><UFormGroup label="Date"

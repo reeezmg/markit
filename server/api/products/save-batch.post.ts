@@ -1,3 +1,5 @@
+import { saveProductServiceFlag } from '../../utils/after-sales-catalog'
+import { saveProductServiceLinks } from '../../utils/after-sales'
 import { selectDistributorAccounts } from '../../utils/distributor-account-selection';
 import { updatePurchaseAccounting } from '../../utils/purchase-accounting-update';
 import { createPurchaseOrderPayment } from '../../utils/purchase-order-source';
@@ -217,6 +219,10 @@ export default defineEventHandler(async (event) => {
         for(const row of linked.rows) await selectDistributorAccounts(client,companyId,po.distributorId,`payment:${row.id}`,po.accountingAccounts);
       }
       if (poId) await updatePurchaseAccounting(client, companyId, poId)
+      for (let index = 0; index < products.length; index++) {
+        await saveProductServiceFlag(client, companyId, productIds[index], products[index].isServiceProduct)
+        await saveProductServiceLinks(client, companyId, productIds[index], products[index].serviceConfigurationIds)
+      }
       await client.query('COMMIT')
       client.release()
 

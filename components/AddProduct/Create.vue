@@ -1,6 +1,7 @@
 <script setup lang="ts">
 const companyScope = useCompanyScope();
 const $fetch = companyScope.fetch;
+const afterSales = useAfterSalesFeature(companyScope.companyId, $fetch);
 
 import * as z from 'zod'
 import { useForm } from 'vee-validate'
@@ -24,6 +25,8 @@ const props = defineProps<{
   editSubcategory?: any
   editCollection?: any
   editDimensionId?: string | null
+  editIsServiceProduct?: boolean
+  editServiceConfigurationIds?: string[]
   editCustomFields?: Record<string, any> | null
   // products/purchase.vue still writes products through ZenStack and has no
   // custom-field plumbing, so it opts out of rendering them.
@@ -31,6 +34,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits(['update'])
+const isServiceProduct = ref(false)
+watch(() => props.editIsServiceProduct, value => { isServiceProduct.value = value === true }, { immediate: true })
+const serviceConfigurationIds = ref<string[]>([])
+watch(() => props.editServiceConfigurationIds, value => { serviceConfigurationIds.value = [...(value || [])] }, { immediate: true })
 
 /* -----------------------------
 VALIDATION
@@ -171,6 +178,8 @@ const resetForm = () => {
   collectionSelectedRow.value = {}
   selectedProductDimension.value = null
   customValues.value = seedValues(customFieldDefs.value, null)
+  isServiceProduct.value = props.editIsServiceProduct === true
+  serviceConfigurationIds.value = []
   resetValidation()
 }
 
@@ -427,6 +436,8 @@ const emitUpdate = () => {
     collection: collectionSelectedRow.value?.id,
     dimensionId: (selectedProductDimension.value as any)?.id ?? null,
     customFields: { ...customValues.value },
+    serviceConfigurationIds: [...serviceConfigurationIds.value],
+    isServiceProduct: isServiceProduct.value,
   })
 }
 
@@ -447,11 +458,15 @@ watch(
 // Separate watcher: customValues is a ref to a plain object, so it needs a deep
 // watch to catch per-key edits.
 watch(customValues, emitUpdate, { deep: true })
+watch(serviceConfigurationIds, emitUpdate, { deep: true })
+watch(isServiceProduct, emitUpdate)
 </script>
 
 <!-- ================= TEMPLATE ================= -->
 
 <template id="create">
+  <UCheckbox v-if="afterSales.enabled.value && !hideCustomFields" v-model="isServiceProduct" label="Service product / repair part" help="Uses the same variants, pricing and stock as other products." class="mb-4" />
+  <AfterSalesProductSelector v-if="afterSales.enabled.value && !hideCustomFields" v-model="serviceConfigurationIds" />
   <div class="text-xl mb-4">Create</div>
   <hr class="h-px my-4 bg-gray-200 border-0 dark:bg-gray-700" />
 

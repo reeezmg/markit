@@ -1,3 +1,5 @@
+import { saveProductServiceFlag } from '../../utils/after-sales-catalog'
+import { saveProductServiceLinks } from '../../utils/after-sales'
 import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
@@ -227,7 +229,7 @@ export default defineEventHandler(async (event) => {
       const productRes = await client.query(
         `SELECT p.id, p.updated_at, p.name, p.description, p.status,
                 p.category_id, p.subcategory_id, p.brand_id, p.collection_id, p.custom_fields,
-                p.dimension_id,
+                p.dimension_id, COALESCE((to_jsonb(p)->>'is_service_product')::boolean,false) AS is_service_product,
                 c.name AS category_name, c.target_audience AS category_target_audience,
                 b.name AS brand_name,
                 s.name AS subcategory_name,
@@ -245,6 +247,8 @@ export default defineEventHandler(async (event) => {
         await recalculatePurchaseOrderTotals(client, { companyId, poId: purchaseOrderId })
       }
 
+      await saveProductServiceFlag(client, companyId, productId, product.isServiceProduct)
+      await saveProductServiceLinks(client, companyId, productId, product.serviceConfigurationIds)
       await client.query('COMMIT')
       client.release()
 
@@ -296,7 +300,9 @@ export default defineEventHandler(async (event) => {
           brandId: p.brand_id,
           collectionId: p.collection_id,
           customFields: p.custom_fields || {},
+          ...(product.serviceConfigurationIds!==undefined?{serviceConfigurationIds:product.serviceConfigurationIds}:{}),
           dimensionId: p.dimension_id,
+          isServiceProduct: product.isServiceProduct ?? p.is_service_product,
           category: p.category_id ? { id: p.category_id, name: p.category_name, targetAudience: p.category_target_audience } : null,
           brand: p.brand_id ? { id: p.brand_id, name: p.brand_name } : null,
           subcategory: p.subcategory_id ? { id: p.subcategory_id, name: p.subcategory_name } : null,
@@ -319,7 +325,8 @@ export default defineEventHandler(async (event) => {
 
   try {
     return await runTransaction()
-  } catch {
+  } catch (error: any) {
+    if (error.statusCode) throw error
     throw createError({ statusCode: 500, statusMessage: 'Failed to update product after retries' })
   }
 })

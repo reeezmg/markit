@@ -1,0 +1,12 @@
+{
+    "extends": "./tsconfig.reports.json",
+    "include": [
+        "loan-globals.d.ts", "investor-globals.d.ts",
+        "../components/Investments/SettingsPage.vue", "../components/Investments/DirectoryPage.vue", "../components/Investments/ProfileModal.vue",
+        "../components/Investments/AllocationPage.vue",
+        "../components/Investments/MovementsPage.vue", "../components/Investments/MovementModal.vue",
+        "../components/Investments/LedgerTable.vue", "../components/Investments/InvestorAccountPage.vue",
+        "../server/utils/accountant/investors.ts", "../server/utils/accountant/investor-profits.ts",
+        "investor-flow-fixture.ts", "investor-flow.test.ts", "investor-capital.test.ts", "investor-share-payments.test.ts"
+    ]
+}

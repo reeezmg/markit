@@ -5,6 +5,15 @@ const toast = useToast()
 
 const publicAgentText = (value: unknown) => String(value ?? '').replace(/\bpi\b/gi, 'AI agent')
 const status = ref(props.initialStatus)
+const stage = ref('preparing_design')
+const stageLabels: Record<string, string> = {
+  generating_design_files: 'Creating your design skill, tokens and page plan',
+  applying_and_verifying_design: 'Applying the generated design across your storefront',
+  building_design: 'Building and checking the updated storefront',
+  checking_design_in_browser: 'Testing the design on mobile and desktop',
+  deploying_design_preview: 'Deploying your verified design preview',
+}
+const stageLabel = computed(() => stageLabels[stage.value] || 'Preparing your company storefront and design workspace')
 const submitting = ref(false)
 const skipping = ref(false)
 const references = ref<{ name: string; mimeType: string; data: string; url: string }[]>([])
@@ -27,6 +36,7 @@ async function poll() {
   try {
     const profile = await $fetch<any>('/api/ecommerce-cms/storefront-design')
     status.value = profile.status
+    stage.value = profile.stage || 'preparing_design'
     if (profile.status === 'READY') emit('ready')
     else if (profile.status === 'GENERATING') pollTimer = setTimeout(poll, 3000)
   } catch { pollTimer = setTimeout(poll, 5000) }
@@ -128,7 +138,7 @@ async function skip() {
       <div v-if="status === 'GENERATING'" class="py-14 text-center">
         <UIcon name="i-heroicons-arrow-path" class="mx-auto h-9 w-9 animate-spin text-primary-500" />
         <h3 class="mt-4 font-semibold">Designing your storefront</h3>
-        <p class="mx-auto mt-2 max-w-md text-sm text-gray-500">The AI agent is creating the design system and applying it across every customer-facing page. This is the initial full-site run and can take a while.</p>
+        <p class="mx-auto mt-2 max-w-md text-sm text-gray-500">{{ stageLabel }}. This initial full-site run can take a while.</p>
       </div>
 
       <form v-else class="space-y-5" @submit.prevent="submit">

@@ -64,7 +64,7 @@ export default defineNuxtPlugin(async (nuxtApp) => {
       'persist-last-route',
       (to) => {
         // Don’t persist auth-related pages
-        if (!['/login', '/register'].includes(to.path) && !to.path.startsWith('/receipt/')) {
+        if (!['/login', '/register'].includes(to.path) && !to.path.startsWith('/receipt/') && !to.path.startsWith('/quote/')) {
           localStorage.setItem(LAST_ROUTE_KEY, to.fullPath)
         }
       },

@@ -206,7 +206,7 @@ async function approve() {
                     color="orange"
                     :title="issue"
                 /><UButton to="/investments/investors" variant="outline"
-                    >Review investor agreements</UButton
+                    >Review investors</UButton
                 ></div
             >
             <UTable :rows="preview.rows" :columns="columns"

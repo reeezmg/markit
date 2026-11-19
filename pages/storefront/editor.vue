@@ -133,6 +133,9 @@ async function loadSourceStatus() {
 async function handleDesignReady() {
   designStatus.value = 'READY'
   showDesignSetup.value = false
+  const source = await $fetch<{ previewUrl: string | null; previewDeploymentId: string | null }>('/api/ecommerce-cms/storefront-source')
+  deployedPreviewUrl.value = source.previewUrl
+  previewDeploymentId.value = source.previewDeploymentId
   await seedDefaults()
   await loadPage()
   toast.add({ title: 'Your storefront design system is ready', color: 'green' })

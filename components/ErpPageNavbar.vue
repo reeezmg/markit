@@ -8,6 +8,7 @@ defineProps<{ title?: string }>();
     <template #right>
       <slot name="right" />
       <div id="company-page-topbar" class="empty:hidden flex min-w-0 gap-3 [&>div]:w-40 sm:[&>div]:w-44 [&_*]:!mb-0" aria-label="Page company scope" />
+      <div id="page-navbar-actions" class="empty:hidden flex shrink-0 items-center gap-2" />
     </template>
     <template v-for="name in Object.keys($slots).filter(name => name !== 'right')" #[name]="slotProps">
       <slot :name="name" v-bind="slotProps || {}" />

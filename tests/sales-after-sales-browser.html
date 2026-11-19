@@ -1,0 +1,93 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Sales to after-sales integration</title><style>*,*::before,*::after{transition-duration:0s!important;animation-duration:0s!important}body{margin:0}#result{white-space:pre-wrap;padding:12px}</style></head><body><div id="app"></div><pre id="result">Running...</pre><script type="module">
+import * as Vue from 'vue'
+import SerialNumbers from '../components/Billing/SerialNumbers.vue'
+import InvoiceUnits from '../components/AfterSales/InvoiceUnits.vue'
+import {useBillingSerialNumbers} from '../composables/useBillingSerialNumbers'
+import Workspace from '../pages/after-sales/index.vue'
+import ProductDetail from '../pages/after-sales/products/[customerProductId].vue'
+import JobEditor from '../components/AfterSales/JobEditor.vue'
+import ValuesEditor from '../components/AfterSales/ValuesEditor.vue'
+import RecordTable from '../components/AfterSales/RecordTable.vue'
+import CustomerSelect from '../components/AfterSales/CustomerSelect.vue'
+import UButton from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Button.vue'
+import UCard from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Card.vue'
+import UInput from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Input.vue'
+import USelect from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Select.vue'
+import USelectMenu from '../node_modules/@nuxt/ui/dist/runtime/components/forms/SelectMenu.vue'
+import UFormGroup from '../node_modules/@nuxt/ui/dist/runtime/components/forms/FormGroup.vue'
+import UTextarea from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Textarea.vue'
+import UCheckbox from '../node_modules/@nuxt/ui/dist/runtime/components/forms/Checkbox.vue'
+import UTable from '../node_modules/@nuxt/ui/dist/runtime/components/data/Table.vue'
+import UPagination from '../node_modules/@nuxt/ui/dist/runtime/components/navigation/Pagination.vue'
+import UBadge from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Badge.vue'
+import UAlert from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Alert.vue'
+import UDropdown from '../node_modules/@nuxt/ui/dist/runtime/components/elements/Dropdown.vue'
+import UModal from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Modal.vue'
+import USlideover from '../node_modules/@nuxt/ui/dist/runtime/components/overlays/Slideover.vue'
+import USkeleton from '../node_modules/@nuxt/ui/dist/runtime/components/layout/Skeleton.vue'
+const {ref,computed,watch,onMounted,onBeforeUnmount,toRaw,nextTick,reactive,h,Suspense}=Vue
+Object.assign(window,{ref,computed,watch,onMounted,onBeforeUnmount,toRaw,nextTick,reactive})
+const context=await fetch('/api/fixture-context').then(r=>r.json()),mode=ref('sale'),companyId=ref(context.company),clientId=ref(context.customer),enabled=ref(true),removed=ref([])
+const draft=ref([{id:context.itemId,qty:2,name:'Covered browser appliance',serviceLineKey:'browser-sale'}]),errors=[],navigation=[],checks=[]
+const route=reactive({path:'/erp/billing',query:{entryCompany:context.company},params:{}})
+window.testRoute=route;window.useRoute=()=>route
+const scope={companyId,ready:Promise.resolve(),auth:{session:ref({companyId:context.company,currency:'INR'})},async fetch(path,options={}){
+ const params=new URLSearchParams(Object.entries(options.query||{}).filter(([,v])=>v!==undefined&&v!==null).map(([k,v])=>[k,String(v)]))
+ const response=await fetch(path+(params.size?'?'+params:''),{method:options.method||'GET',headers:{'Content-Type':'application/json'},...(options.body?{body:JSON.stringify(options.body)}:{})})
+ const result=await response.json();if(!response.ok)throw Object.assign(Error(result.statusMessage||'Request failed'),{statusCode:response.status});return result
+}}
+window.useCompanyScope=()=>scope
+window.navigateTo=async to=>{navigation.push(to);if(to.path.startsWith('/erp/edit/'))return;route.path=to.path;route.query=to.query||{};route.params={customerProductId:to.path.split('/').at(-1)};mode.value=to.path.includes('/products/')?'detail':'workspace';await nextTick()}
+let serials
+async function saveSale(){await serials.waitUntilReady();const body=structuredClone(context.saleBody);body.items=Vue.toRaw(draft.value).map(row=>({...row}));body.serviceUnits=serials.serviceUnits.value;await scope.fetch('/api/bill/create',{method:'POST',body});await window.navigateTo({path:'/after-sales',query:{entryCompany:context.company,billId:body.uuid}})}
+async function saveReturn(){await serials.waitUntilReady();const body=structuredClone(context.returnBody);body.returnedServiceUnitIds=[...serials.returnedUnitIds.value];await scope.fetch('/api/bill/create',{method:'POST',body});await window.navigateTo({path:'/after-sales',query:{entryCompany:context.company,billId:context.saleBody.uuid}})}
+const app=Vue.createApp({setup(){serials=useBillingSerialNumbers(draft,clientId,enabled,companyId,scope.fetch);return()=>h('main',{class:'bg-white text-gray-900'},[
+ ['sale','return'].includes(mode.value)?h('div',{class:'p-6 space-y-4'},[h('h1',{class:'font-semibold'},mode.value==='sale'?'Sales API driver with actual billing unit controls':'Return API driver with actual billing unit controls'),
+ h(SerialNumbers,{item:draft.value[0],covered:serials.isCovered(draft.value[0]),owned:serials.owned.value,returnedUnitIds:serials.returnedUnitIds.value,onDetails:values=>serials.setDetails(draft.value[0],values),'onUpdate:returnedUnitIds':value=>serials.returnedUnitIds.value=value}),
+ h(UButton,{onClick:mode.value==='sale'?saveSale:saveReturn},()=>mode.value==='sale'?'Save sale':'Save return')]):mode.value==='invoice-edit'?h(InvoiceUnits,{billId:context.saleBody.uuid,modelValue:removed.value,'onUpdate:modelValue':value=>removed.value=value}):h(Suspense,null,{default:()=>mode.value==='detail'?h(ProductDetail):h(Workspace)})])}})
+for(const[name,component]of Object.entries({UButton,UCard,UInput,USelect,USelectMenu,UFormGroup,UTextarea,UCheckbox,UTable,UPagination,UBadge,UAlert,UDropdown,UModal,USlideover,USkeleton,AfterSalesJobEditor:JobEditor,AfterSalesValuesEditor:ValuesEditor,AfterSalesRecordTable:RecordTable,AfterSalesCustomerSelect:CustomerSelect}))app.component(name,component)
+app.component('Icon',{render:()=>h('span')});app.component('UIcon',{render:()=>h('span')});app.component('CompanyFormField',{render:()=>null})
+app.component('UDashboardPanelContent',{render(){return h('div',{class:'p-4'},this.$slots.default?.())}})
+app.component('NuxtLink',{props:{to:[String,Object],custom:Boolean},setup:(props,{slots})=>()=>{const href=typeof props.to==='string'?props.to:props.to?.path,navigate=e=>{e?.preventDefault();window.navigateTo(typeof props.to==='string'?{path:props.to}:props.to)};return props.custom?slots.default?.({route,href,isActive:false,isExactActive:false,isExternal:false,navigate}):h('a',{href,onClick:navigate},slots.default?.())}})
+app.config.globalProperties.$route=route;app.config.errorHandler=error=>{errors.push(error);document.querySelector('#result').textContent='FAILED: '+error.stack};app.mount('#app')
+const pause=()=>new Promise(r=>setTimeout(r,50)),assert=(condition,message)=>{if(!condition)throw Error(message)}
+async function until(predicate,label){document.querySelector('#result').textContent='Running: '+label;const deadline=Date.now()+40000;while(Date.now()<deadline){if(predicate())return;await pause();await nextTick()}throw Error(label+'; alerts: '+[...document.querySelectorAll('[role=alert]')].map(el=>el.textContent).join('|'))}
+async function click(text){await until(()=>[...document.querySelectorAll('button,[role=menuitem]')].some(el=>el.textContent.trim()===text&&!el.disabled),'Button '+text);[...document.querySelectorAll('button,[role=menuitem]')].find(el=>el.textContent.trim()===text&&!el.disabled).click();await pause()}
+async function fill(label,value){await until(()=>[...document.querySelectorAll('label')].some(el=>el.textContent.trim()===label),'Label '+label);const l=[...document.querySelectorAll('label')].find(el=>el.textContent.trim()===label),el=document.getElementById(l.htmlFor);el.value=value;el.dispatchEvent(new Event('input',{bubbles:true}));el.dispatchEvent(new Event('change',{bubbles:true}));await nextTick()}
+async function submit(){const form=document.querySelector('[role=dialog] form');assert(form&&form.checkValidity(),'Valid job form');form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await pause()}
+try{
+ await serials.ready;assert(serials.required.value,'Coverage is read from the actual sale-context API')
+ document.querySelector('[aria-label="Serial number and activation dates"]').click();await until(()=>document.querySelector('input[aria-label="Unit 1 serial number"]'),'Unit modal opens')
+ for(let i=1;i<=2;i++){const input=document.querySelector('[aria-label="Unit '+i+' serial number"]');input.value='BROWSER-'+i;input.dispatchEvent(new Event('input',{bubbles:true}))}
+ await click('Confirm');await click('Save sale');await until(()=>mode.value==='workspace'&&document.querySelectorAll('tbody tr').length===2,'Real sale creates two covered units')
+ checks.push('Actual billing modal and serial composable → sale HTTP handler → stock/accounting and two units')
+ const row=[...document.querySelectorAll('tbody tr')].find(el=>el.textContent.includes('BROWSER-1'));assert(row,'First serial listed');[...row.querySelectorAll('a,button')].find(el=>el.textContent.trim()==='View product').click()
+ await until(()=>mode.value==='detail'&&document.body.textContent.includes('BROWSER-1'),'Sold physical unit opens after-sales')
+ await click('Add service visit');await fill('Status','COMPLETED');await fill('Meter (hours)','100');await submit();await until(()=>document.body.textContent.includes('Create service invoice?'),'Saved maintenance prompts')
+ await click('Create invoice');await until(()=>navigation.some(to=>to.path.startsWith('/erp/edit/'))&&!document.querySelector('[role=dialog]'),'Zero service invoice issues explicitly')
+ checks.push('Sold unit → completed free visit → explicit zero invoice')
+ await click('Open claim');await fill('Complaint','Browser claim');await fill('Status','RESOLVED');await fill('Resolution','Repaired');await submit();await until(()=>document.body.textContent.includes('Create service invoice?'),'Resolved claim prompts')
+ await click('Create invoice');await until(()=>navigation.filter(to=>to.path.startsWith('/erp/edit/')).length===2&&!document.querySelector('[role=dialog]'),'Paid claim invoice issues')
+ checks.push('Sold unit → resolved claim → separate unpaid service invoice')
+ mode.value='return';draft.value=[{id:context.itemId,qty:1,name:'Returned appliance',return:true}];await serials.waitUntilReady()
+ document.querySelector('[aria-label="Serial number and activation dates"]').click();await click('Select returned units');await until(()=>document.querySelector('[role=option]'),'Return unit options load')
+ const option=[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.includes('BROWSER-1'));assert(option,'Exact sold serial is selectable');option.click();await pause();document.activeElement.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true}));await click('Confirm');await click('Save return')
+ await until(()=>mode.value==='workspace'&&document.body.textContent.includes('Returned'),'Real sales return ends the selected unit')
+ await scope.fetch('/api/fixture/edit-original',{method:'POST',body:{}})
+ document.querySelector('[aria-label="Refresh records"]').click();await until(()=>document.querySelectorAll('tbody tr').length===2&&!document.body.textContent.includes('Loading...'),'Original invoice edit retains two historical units')
+ const verification=await scope.fetch('/api/fixture/verify');assert(verification.active===1&&verification.returned===1&&verification.total===2&&verification.qty===199&&verification.sold===1,JSON.stringify(verification))
+ checks.push('Exact-unit return → original invoice edit → no resurrected coverage or repeated stock')
+ const remaining=verification.units.find(unit=>unit.status==='ACTIVE')
+ await scope.fetch('/api/after-sales/products/update',{method:'POST',body:{id:remaining.id,action:'REPLACE',replacementId:context.replacementId,reason:'Carry coverage to replacement'}})
+ mode.value='invoice-edit';await nextTick();await click('Select client units')
+ await until(()=>[...document.querySelectorAll('[role=option]')].some(el=>el.textContent.includes('BROWSER-2')),'Invoice removal selector includes replaced original')
+ assert(![...document.querySelectorAll('[role=option]')].some(el=>el.textContent.includes('BROWSER-1')),'Returned units keep their original sale slots')
+ ;[...document.querySelectorAll('[role=option]')].find(el=>el.textContent.includes('BROWSER-2')).click();await pause()
+ assert(removed.value.includes(remaining.id),'Original replaced identity selected explicitly')
+ await scope.fetch('/api/fixture/remove-replaced',{method:'POST',body:{ids:[...removed.value]}})
+ const ended=await scope.fetch('/api/after-sales/products/'+context.replacementId)
+ assert(ended.agreements.every(agreement=>agreement.status==='CANCELLED'),'Original invoice removal ends carried obligations')
+ checks.push('Carried replacement → actual invoice unit selector → quantity reduction cancels remaining obligations')
+ assert(!errors.length,'No browser runtime errors');document.querySelector('#result').textContent='ALL PASSED\n'+checks.map(text=>'✓ '+text).join('\n')+'\nReal billing unit controls and after-sales pages; actual HTTP/SQL; outer rollback.'
+}catch(error){document.querySelector('#result').textContent='FAILED: '+error.stack+'\nCompleted: '+checks.join('; ')}
+</script></body></html>

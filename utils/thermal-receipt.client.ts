@@ -2,6 +2,8 @@ import jsPDF from "jspdf";
 import JsBarcode from "jsbarcode";
 import { loadPrintTemplate } from './load-print-template.client';
 import { createTemplatePDF } from './print-template-renderer.client';
+import { billDocumentLines } from './invoice-flow';
+import { receiptSummary } from './receipt-summary';
 
 function formatCouponDiscount(coupon: any) {
   if (!coupon) return "";
@@ -51,15 +53,11 @@ export async function createThermalReceiptPDF(data: any) {
 
   const headerHeight = 90;
   const generatedCoupons = Array.isArray(data.generatedCoupons) ? data.generatedCoupons : [];
-  const footerHeight = 90 + generatedCoupons.length * 48;
+  const invoiceLines = billDocumentLines(data);
+  const footerHeight = 90 + generatedCoupons.length * 48 + invoiceLines.reduce((sum,line)=>sum+tempDoc.splitTextToSize(line,110).length*6,0);
   const finalHeight = headerHeight + itemHeight + footerHeight;
 
-   const discStr = String(data.discount ?? '')
-   const calculatedDiscount = discStr.startsWith('+')
-      ? 0
-      : Number(data.discount) < 0
-        ? Math.abs(Number(data.discount))
-        : (data.subtotal * Number(data.discount)) / 100;
+  const summary = receiptSummary(data);
 
 
   // Now create final PDF
@@ -205,7 +203,7 @@ doc.text(Number(totalValue).toFixed(2), 102, y);
   y += 5;
 
   doc.text(
-    `DISC/ROUND OFF(+/-): ${discStr.startsWith('+') ? 'Add ' + discStr : data.discount}`,
+    `DISC/ROUND OFF(+/-): ${summary.discountText}`,
     pageWidth / 2,
     y,
     { align: "center" }
@@ -223,6 +221,11 @@ doc.text(Number(totalValue).toFixed(2), 102, y);
   );
   y += 15;
 
+  for (const line of invoiceLines) {
+    const lines=doc.splitTextToSize(line,pageWidth-10);
+    doc.setFontSize(10);doc.text(lines,5,y);y+=lines.length*5;
+  }
+
   if (Number(data.redeemedPoints || 0) > 0) {
     center(`Points Redeemed: ${data.redeemedPoints}`, 10, true);
   }
@@ -234,12 +237,7 @@ doc.text(Number(totalValue).toFixed(2), 102, y);
   doc.setFontSize(12);
   doc.setFont("courier", "bold");
   doc.rect(5, y, pageWidth - 10, 10);
-const saving = Number(
-  calculatedDiscount +
-  (Number(data.tdiscount) || 0) +
-  (Number(data.couponValue) || 0) +
-  (Number(data.redeemedPoints) || 0)
-).toFixed(2);
+const saving = summary.savings.toFixed(2);
 
 doc.text(`YOUR SAVING: ${saving}`, pageWidth / 2, y + 7, {
   align: "center",

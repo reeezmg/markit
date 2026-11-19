@@ -2,6 +2,292 @@ generator client {
     provider      = "prisma-client-js"
 }
 
+// Connect / WhatsApp: raw server APIs only. Credentials are AES-GCM encrypted;
+// one WABA/phone belongs to one Markit company. Disconnect retains message history.
+// Local migration preparation only; never create these tables from request handlers.
+model WhatsAppConnection {
+    id String @id
+    companyId String @unique @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    wabaId String @unique @map("waba_id")
+    phoneId String @unique @map("phone_id")
+    displayPhone String @map("display_phone")
+    verifiedName String @map("verified_name")
+    token String
+    active Boolean @default(true)
+    subscribed Boolean @default(false)
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    messages WhatsAppMessage[]
+    @@deny('all', true)
+    @@map("connect_whatsapp_connections")
+}
+
+// Outbound intent is persisted before sending. Ambiguous network results are
+// UNKNOWN, never automatically retried. Signed webhook receipts are idempotent.
+model WhatsAppMessage {
+    id String @id
+    connectionId String @map("connection_id")
+    connection WhatsAppConnection @relation(fields: [connectionId], references: [id], onDelete: Cascade)
+    metaId String? @unique @map("meta_id")
+    recipient String
+    direction String
+    kind String
+    content Json
+    status String
+    statusAt DateTime? @map("status_at")
+    consentAt DateTime? @map("consent_at")
+    actorId String? @map("actor_id")
+    createdAt DateTime @default(now()) @map("created_at")
+    @@index([connectionId, createdAt])
+    @@deny('all', true)
+    @@map("connect_whatsapp_messages")
+}
+
+
+// Customer notifications: explicit company opt-in, per-client consent and a
+// committed-state scanner. Outbox keys deduplicate events; source observations
+// suppress historical sends on activation. UNKNOWN/SENDING are never auto-retried.
+// Workers revalidate source state, consent and template ownership before sending.
+// Local preparation only; applying its migration needs separate authorization.
+model WhatsAppNotificationSettings {
+    companyId String @id @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    enabled Boolean @default(false)
+    activatedAt DateTime @default(now()) @db.Timestamptz(3) @map("activated_at")
+    rules Json @default("{}")
+    updatedBy String @map("updated_by")
+    updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
+    @@deny('all', true)
+    @@map("whatsapp_notification_settings")
+}
+
+model WhatsAppNotificationContact {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    clientId String @map("client_id")
+    // PostgreSQL restricts recipient to 8-15 digits, starting with a nonzero digit.
+    recipient String
+    clientPhone String @map("client_phone")
+    serviceConsent Boolean @default(false) @map("service_consent")
+    marketingConsent Boolean @default(false) @map("marketing_consent")
+    evidence String
+    updatedBy String @map("updated_by")
+    updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
+    // Consent belongs to this exact number. Signed STOP revokes every matching
+    // company contact; changing a client phone never transfers this consent.
+    @@unique([companyId, clientId])
+    @@index([companyId, recipient])
+    @@deny('all', true)
+    @@map("whatsapp_notification_contacts")
+}
+
+model WhatsAppNotificationSource {
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    sourceType String @map("source_type")
+    sourceId String @map("source_id")
+    snapshot Json
+    observedAt DateTime @default(now()) @db.Timestamptz(3) @map("observed_at")
+    @@id([companyId, sourceType, sourceId])
+    @@deny('all', true)
+    @@map("whatsapp_notification_sources")
+}
+
+model WhatsAppNotificationOutbox {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    eventKey String @map("event_key")
+    eventType String @map("event_type")
+    sourceType String @map("source_type")
+    sourceId String @map("source_id")
+    clientId String @map("client_id")
+    payload Json
+    // PostgreSQL accepts QUEUED, SENDING, ACCEPTED, CANCELLED, SKIPPED, FAILED, UNKNOWN.
+    status String @default("QUEUED")
+    availableAt DateTime @db.Timestamptz(3) @map("available_at")
+    expiresAt DateTime @db.Timestamptz(3) @map("expires_at")
+    messageId String? @map("message_id")
+    reason String @default("")
+    createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+    updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
+    @@unique([companyId, eventKey])
+    @@index([companyId, status, availableAt])
+    @@deny('all', true)
+    @@map("whatsapp_notification_outbox")
+}
+
+model WhatsAppInstallationAppointment {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    customerProductId String @unique @map("customer_product_id")
+    appointmentOn DateTime @db.Timestamptz(3) @map("appointment_on")
+    technician String @default("")
+    // PostgreSQL accepts SCHEDULED and CANCELLED; completion is a product-date action.
+    status String @default("SCHEDULED")
+    updatedBy String @map("updated_by")
+    createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+    updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
+    @@index([companyId, status, appointmentOn])
+    @@deny('all', true)
+    @@map("whatsapp_installation_appointments")
+}
+
+// Dedicated sales CRM. Company-scoped SQL APIs own all access. Preparation only:
+// applying the CRM migration requires separate explicit authorization.
+// Settings JSON contains validated pipelines/stages, sources, tags, contact custom
+// fields, scoring weights, saved segments and internal follow-up automations.
+model CrmSettings {
+    companyId String @id @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    settings Json
+    version Int @default(1)
+    updatedBy String @map("updated_by")
+    updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
+    @@deny('all', true)
+    @@map("crm_settings")
+}
+
+model CrmAccount {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    name String
+    industry String @default("")
+    website String @default("")
+    email String @default("")
+    phone String @default("")
+    address String @default("")
+    ownerId String @map("owner_id")
+    tags String[]
+    description String @default("")
+    archived Boolean @default(false)
+    version Int @default(1)
+    createdBy String @map("created_by")
+    createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+    updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
+    clients CompanyClient[] @ignore
+    deals CrmDeal[]
+    activities CrmActivity[]
+    @@unique([companyId, id])
+    @@index([companyId, archived, name])
+    @@deny('all', true)
+    @@map("crm_accounts")
+}
+
+// Pipeline/stage identifiers reference validated settings; removing a stage in use
+// is rejected. Won/lost requires a matching terminal stage; reopening clears closedAt.
+// Values use the owning company's currency. Optimistic versions reject stale edits.
+model CrmDeal {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    clientId String? @map("client_id")
+    client CompanyClient? @relation(fields: [companyId, clientId], references: [companyId, clientId], onDelete: Restrict)
+    accountId String? @map("account_id")
+    account CrmAccount? @relation(fields: [companyId, accountId], references: [companyId, id], onDelete: Restrict)
+    name String
+    pipelineKey String @map("pipeline_key")
+    stageKey String @map("stage_key")
+    status String @default("OPEN")
+    value Decimal @default(0) @db.Decimal(18, 2)
+    probability Int @default(0)
+    expectedClose DateTime? @db.Date @map("expected_close")
+    closedAt DateTime? @db.Timestamptz(3) @map("closed_at")
+    stageChangedAt DateTime @default(now()) @db.Timestamptz(3) @map("stage_changed_at")
+    lossReason String @default("") @map("loss_reason")
+    ownerId String @map("owner_id")
+    source String @default("Other")
+    tags String[]
+    description String @default("")
+    archived Boolean @default(false)
+    version Int @default(1)
+    createdBy String @map("created_by")
+    createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+    updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
+    activities CrmActivity[]
+    documents CrmDocumentLink[]
+    @@unique([companyId, id])
+    @@index([companyId, archived, pipelineKey, stageKey])
+    @@index([companyId, ownerId, expectedClose])
+    @@deny('all', true)
+    @@map("crm_deals")
+}
+
+// TASK/CALL/MEETING/EMAIL/WHATSAPP/NOTE are logged work, never outbound sends.
+// Due reminders create existing internal SYSTEM_ALERT rows once; recurrence creates
+// one next task on a DONE transition. URLs are explicit HTTPS reference attachments.
+model CrmActivity {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    clientId String? @map("client_id")
+    client CompanyClient? @relation(fields: [companyId, clientId], references: [companyId, clientId], onDelete: Restrict)
+    accountId String? @map("account_id")
+    account CrmAccount? @relation(fields: [companyId, accountId], references: [companyId, id], onDelete: Restrict)
+    dealId String? @map("deal_id")
+    deal CrmDeal? @relation(fields: [companyId, dealId], references: [companyId, id], onDelete: Restrict)
+    kind String @default("TASK")
+    subject String
+    body String @default("")
+    status String @default("OPEN")
+    priority String @default("NORMAL")
+    ownerId String @map("owner_id")
+    dueAt DateTime? @db.Timestamptz(3) @map("due_at")
+    endAt DateTime? @db.Timestamptz(3) @map("end_at")
+    completedAt DateTime? @db.Timestamptz(3) @map("completed_at")
+    remindedAt DateTime? @db.Timestamptz(3) @map("reminded_at")
+    recurrenceDays Int? @map("recurrence_days")
+    recurrenceKey String? @map("recurrence_key")
+    attachments Json @default("[]")
+    archived Boolean @default(false)
+    version Int @default(1)
+    createdBy String @map("created_by")
+    createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+    updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
+    @@unique([companyId, recurrenceKey])
+    @@index([companyId, status, dueAt, ownerId])
+    @@index([companyId, clientId, createdAt])
+    @@deny('all', true)
+    @@map("crm_activities")
+}
+
+model CrmDocumentLink {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    dealId String @map("deal_id")
+    deal CrmDeal @relation(fields: [companyId, dealId], references: [companyId, id], onDelete: Restrict)
+    // QUOTE/BILL/ORDER scalar IDs retain history. APIs validate document company and
+    // the deal's linked client; linking never changes a business document or its status.
+    kind String
+    documentId String @map("document_id")
+    createdBy String @map("created_by")
+    createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+    @@unique([companyId, dealId, kind, documentId])
+    @@deny('all', true)
+    @@map("crm_document_links")
+}
+
+// Append-only actor and before/after evidence; archiving never erases CRM history.
+model CrmAudit {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+    entityType String @map("entity_type")
+    entityId String @map("entity_id")
+    action String
+    actorId String @map("actor_id")
+    summary String
+    changes Json
+    createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
+    @@index([companyId, entityType, entityId, createdAt])
+    @@deny('all', true)
+    @@map("crm_audit")
+}
 
 datasource db {
     provider = 'postgresql'
@@ -139,6 +425,22 @@ model DistributorCompany {
 }
 
 model Company extends Base {
+    crmSettings CrmSettings?
+    crmAccounts CrmAccount[]
+    crmDeals CrmDeal[]
+    crmTasks CrmActivity[]
+    crmDocuments CrmDocumentLink[]
+    crmAudit CrmAudit[]
+    whatsappNotificationSettings WhatsAppNotificationSettings?
+    whatsappNotificationContacts WhatsAppNotificationContact[]
+    whatsappNotificationSources WhatsAppNotificationSource[]
+    whatsappNotificationOutbox WhatsAppNotificationOutbox[]
+    whatsappInstallationAppointments WhatsAppInstallationAppointment[]
+    whatsappConnection WhatsAppConnection?
+    recurringInvoices RecurringInvoice[]
+    recurringInvoiceOccurrences RecurringInvoiceOccurrence[]
+    retainerInvoices RetainerInvoice[]
+    retainerEvents RetainerEvent[]
     recurringExpenses RecurringExpense[]
     accountantStockControl AccountantStockControl?
     accountantUserSettings AccountantUserSettings?
@@ -166,6 +468,7 @@ model Company extends Base {
     accountantAccountTransferRows AccountantAccountTransfer[]
     accountantContactRows AccountantContact[]
     accountantInvestorRows AccountantInvestor[]
+    accountantLoanRows AccountantLoan[]
     accountantProjectRows AccountantProject[]
     accountantAuditRows AccountantAudit[]
     name                      String
@@ -522,7 +825,46 @@ model CustomRelationship {
     @@map("custom_relationships")
 }
 
+// sales-workflow/defaults stores {version:1,includeInvoicing:boolean,includeAfterSales:boolean}
+// for company workflow navigation. Missing flags default to false. Company & Branches
+// edits either workflow for one authorized company; partial saves retain other flags.
+// includeAfterSales controls after-sales navigation, product/sale/return inputs,
+// customer-product numbering and workspace rendering for the owning company.
+// Disabled companies skip new automatic POS/seller-order service registrations;
+// existing registered units retain edit/return/cancellation integrity protections.
+// Saving under a company
+// row lock preserves the preceding JSON at defaults-backup. This controls menu
+// visibility, not authorization or historical document access. Generic model writes
+// to this preference page are blocked by organizationModelScope. No journal effects.
 model GeneralPreference extends Base {
+    // sidebar-navigation/defaults stores {version:1,revision,sections}, with each
+    // ERP/CRM/Storetools/Connect section's enabled flag and hidden page paths.
+    // Without saved choices only ERP is enabled; CRM/Storetools/Connect default
+    // to false. Company exceptions use explicit saved flags, never name matching.
+    // The prior JSON is backed up under defaults-backup. Authorized admin/manager
+    // settings APIs own writes; generic generated mutations must reject this key.
+    // These are company presentation choices, intersected with existing plan/role
+    // and workflow menus. Direct route/API authorization is unchanged. No DDL.
+    // after-sales/service-charge-category stores {version:1,categoryId} for the
+    // company's automatically reused Service Charges category. Charge save and
+    // service invoice issuance ensure it transactionally; catalogue reads never
+    // create it. Service line tax/rate snapshots remain independent of category tax.
+    // invoices/defaults and sales/defaults store versioned billing document/table
+    // defaults (notes, terms, invoice paymentTermId, pageSize, showSummary). The prior
+    // JSON is backed up under defaults-backup; authorized settings APIs own writes.
+    // New/reset local drafts adopt defaults; issued bills and existing drafts retain
+    // their values. Receipt designs remain under printer/templates. No DDL needed.
+    // billing/payment-terms stores versioned named invoice terms ({id,name,days}),
+    // with the prior value in payment-terms-backup. Built-in date rules stay in code.
+    // Existing Bill.invoicePaymentTerms/dueDate retain the issued text/date snapshot.
+    // printer/templates JSON supports receipt paperSize A4/A5/Letter, paged PDF
+    // output and independently positioned embedded images; quotes/defaults stores
+    // optional absolute image coordinates in its A4 documentDesign. No DDL needed.
+    // Quote preferences: page_name='quotes', preference_key='defaults' stores
+    // one A4 documentDesign (ordered sections, text/fields, embedded PNG/JPEG images,
+    // table columns and typography), notes/terms, accepted-edit policy, approval/conversion
+    // invoice due days and retainCustomerNotes/retainTermsAndConditions conversion
+    // choices as versioned JSON. No new database fields are required.
     pageName  String  @map("page_name")
     key       String  @map("preference_key")
     value     Json    @map("preference_value")
@@ -721,6 +1063,8 @@ model User extends Base {
 
 
 model Client extends Base {
+    recurringInvoices RecurringInvoice[]
+    retainerInvoices RetainerInvoice[]
     email                     String?                    @unique @email
     name                      String
     gender                    String?
@@ -1370,6 +1714,9 @@ model Collection {
 }
 
 model Product {
+    // Stocked repair parts share the normal product/variant/item and purchase flows.
+    isServiceProduct Boolean @default(false) @map("is_service_product")
+    serviceLinks    ProductServiceLink[]
     id              String         @id @default(uuid())
     // Company-local, database-assigned on insert; stable across edits and PO links.
     // Migration backfills by created_at/id. Transfers allocate a destination number.
@@ -1412,6 +1759,228 @@ model Product {
     @@allow('read, create, update, delete', company.users?[userId == auth().id])
 
     @@map('products')
+}
+
+// After-sales: API-owned, tenant-scoped records. Source identifiers deliberately
+// have no catalog/document FK: deletion must not erase a customer's service history.
+// Revisions and agreement snapshots are immutable except explicit audited amendments.
+// Date rules alone drive due status; custom readings/instructions are manual evidence.
+model ServiceConfiguration {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    kind String
+    name String
+    archived Boolean @default(false)
+    revision Int @default(1)
+    rules Json
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    versions ServiceConfigurationRevision[]
+    links ProductServiceLink[]
+    @@index([companyId, kind, archived])
+    @@deny('all', true)
+    @@map("service_configurations")
+}
+
+model ServiceConfigurationRevision {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    configurationId String @map("configuration_id")
+    configuration ServiceConfiguration @relation(fields: [configurationId], references: [id])
+    revision Int
+    snapshot Json
+    createdBy String @map("created_by")
+    createdAt DateTime @default(now()) @map("created_at")
+    @@unique([configurationId, revision])
+    @@index([companyId])
+    @@deny('all', true)
+    @@map("service_configuration_revisions")
+}
+
+model ProductServiceLink {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    productId String @map("product_id")
+    product Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+    configurationId String @map("configuration_id")
+    configuration ServiceConfiguration @relation(fields: [configurationId], references: [id])
+    @@unique([productId, configurationId])
+    @@index([companyId, productId])
+    @@deny('all', true)
+    @@map("product_service_links")
+}
+
+model CustomerProduct {
+    // POS unit registration accepts optional serial, delivery and installation dates
+    // from the billing row's details modal. Ecommerce delivery remains carrier/order-owned.
+    // Returned/replaced units retain their original sale quantity slots; editing that
+    // sale must not register them again. Explicitly cancelled edit removals free slots.
+    // An active/replaced unit's entry/item identity cannot change without explicit removal.
+    // Cancelling a source follows audited carry-forward replacement links; an explicit
+    // restart keeps the replacement's independently registered coverage separate.
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    clientId String @map("client_id")
+    // Display reference is company-scoped; UUID remains the internal identity.
+    reference String
+    sourceKey String @map("source_key")
+    productId String? @map("product_id")
+    itemId String? @map("item_id")
+    billId String? @map("bill_id")
+    entryId String? @map("entry_id")
+    orderId String? @map("order_id")
+    serialNumber String? @map("serial_number")
+    name String
+    purchasedOn DateTime @db.Date @map("purchased_on")
+    deliveredOn DateTime? @db.Date @map("delivered_on")
+    installedOn DateTime? @db.Date @map("installed_on")
+    evidence String?
+    status String @default("ACTIVE")
+    replacedById String? @map("replaced_by_id")
+    createdAt DateTime @default(now()) @map("created_at")
+    agreements CustomerServiceAgreement[]
+    readings ServiceReading[]
+    @@unique([companyId, sourceKey])
+    @@unique([companyId, reference])
+    @@index([companyId, clientId])
+    @@index([companyId, billId])
+    @@index([companyId, orderId])
+    @@deny('all', true)
+    @@map("customer_products")
+}
+
+// Shared by POS, manual registration and ecommerce. Prefix changes never reset
+// lastNumber or rewrite issued references; allocation rolls back with registration.
+model CustomerProductNumbering {
+    companyId String @id @map("company_id")
+    prefix String @default("PR")
+    lastNumber BigInt @default(0) @map("last_number")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    @@deny('all', true)
+    @@map("customer_product_numbering")
+}
+
+model CustomerServiceAgreement {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    customerProductId String @map("customer_product_id")
+    customerProduct CustomerProduct @relation(fields: [customerProductId], references: [id])
+    configurationId String @map("configuration_id")
+    revision Int
+    kind String
+    snapshot Json
+    status String @default("PENDING")
+    startsOn DateTime? @db.Date @map("starts_on")
+    endsOn DateTime? @db.Date @map("ends_on")
+    nextDue DateTime? @db.Date @map("next_due")
+    completedVisits Int @default(0) @map("completed_visits")
+    lastCompletedOn DateTime? @db.Date @map("last_completed_on")
+    occurrences MaintenanceOccurrence[]
+    jobs ServiceJob[]
+    // Registration is idempotent at CustomerProduct.sourceKey. Multiple historical
+    // agreements can follow a replacement unit; cancelled agreements are retained.
+    @@index([customerProductId, configurationId])
+    @@index([companyId, status, nextDue])
+    @@deny('all', true)
+    @@map("customer_service_agreements")
+}
+
+model MaintenanceOccurrence {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    agreementId String @map("agreement_id")
+    agreement CustomerServiceAgreement @relation(fields: [agreementId], references: [id])
+    dueOn DateTime @db.Date @map("due_on")
+    status String @default("DUE")
+    snapshot Json
+    @@unique([agreementId, dueOn])
+    @@index([companyId, status, dueOn])
+    @@deny('all', true)
+    @@map("maintenance_occurrences")
+}
+
+model ServiceJob {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    agreementId String @map("agreement_id")
+    agreement CustomerServiceAgreement @relation(fields: [agreementId], references: [id])
+    occurrenceId String? @unique @map("occurrence_id")
+    requestKey String @map("request_key")
+    kind String
+    status String @default("OPEN")
+    assignedTo String? @map("assigned_to")
+    appointmentOn DateTime? @map("appointment_on") @db.Timestamptz(3)
+    completedOn DateTime? @db.Date @map("completed_on")
+    // details.charges snapshots named non-stock lines; details.parts snapshots catalog stock lines.
+    // Legacy charge/tax remain readable. A completed service can issue one invoice, including zero total.
+    details Json
+    snapshot Json
+    charge Float @default(0)
+    tax Float @default(0)
+    billId String? @unique @map("bill_id")
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    @@unique([companyId, requestKey])
+    @@index([companyId, status])
+    @@deny('all', true)
+    @@map("service_jobs")
+}
+
+// Reusable non-stock charges, separate from stocked Product repair parts.
+// Jobs retain line snapshots so renaming/archiving never changes existing work or invoices.
+model ServiceCharge {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    name String
+    description String @default("")
+    rate Float @default(0)
+    tax Float @default(0)
+    unit String @default("Service")
+    archived Boolean @default(false)
+    createdAt DateTime @default(now()) @map("created_at")
+    updatedAt DateTime @updatedAt @map("updated_at")
+    @@index([companyId, archived])
+    @@deny('all', true)
+    @@map("service_charges")
+}
+
+model ServiceReading {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    customerProductId String @map("customer_product_id")
+    customerProduct CustomerProduct @relation(fields: [customerProductId], references: [id])
+    recordedOn DateTime @db.Date @map("recorded_on")
+    values Json
+    createdBy String @map("created_by")
+    @@index([companyId, customerProductId])
+    @@deny('all', true)
+    @@map("service_readings")
+}
+
+model ServiceAudit {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    resourceId String @map("resource_id")
+    action String
+    actorId String @map("actor_id")
+    reason String
+    before Json?
+    after Json?
+    createdAt DateTime @default(now()) @map("created_at")
+    @@index([companyId, resourceId])
+    @@deny('all', true)
+    @@map("service_audit")
+}
+
+model ServiceReminder {
+    id String @id @default(uuid())
+    companyId String @map("company_id")
+    occurrenceId String @map("occurrence_id")
+    leadDays Int @map("lead_days")
+    createdAt DateTime @default(now()) @map("created_at")
+    @@unique([occurrenceId, leadDays])
+    @@deny('all', true)
+    @@map("service_reminders")
 }
 
 model Variant {
@@ -1528,6 +2097,17 @@ model ShippingBox {
 
 
 model Bill extends Base {
+    recurringOccurrences RecurringInvoiceOccurrence[]
+    retainerEvents RetainerEvent[]
+    // ERP customer-facing document text uses the existing notes and
+    // termsAndConditions fields. It persists with drafts/source saves and prints
+    // on receipts. Quote conversion copies only the selected retention fields.
+    // ERP billing modes share type=BILL. Invoice mode issues customer Credit/PENDING
+    // with invoiceCode=INV-<invoiceNumber>, dueDate, invoicePaymentTerms and subject
+    // (customer reference). Actual collections remain dated Payment receipts; balance
+    // is derived from active receipts, never the legacy balanceDue cache. Delivery
+    // attempts use the existing accountant audit resource invoice-send and cannot
+    // change payment status, stock or the invoice date. No new posting function.
     paidAt                            DateTime?                          @map("paid_at") @db.Timestamptz(3)
     createdAt                         DateTime                           @map("created_at")
     updatedAt                         DateTime                           @updatedAt @map("updated_at")
@@ -1872,7 +2452,13 @@ model EcommOrderStatusHistory extends Base {
 }
 
 
-// Carrier pickup requests raised per warehouse/day. custom-api owns writes.
+// Seller pickup bookings are warehouse-level carrier requests. orderIds and
+// per-leg pickupRequestId tags are Markit's handover list, not carrier AWB assignments.
+// pickupDate/pickupTime retain the legacy requested schedule. New writes also
+// preserve requestedPickupDate/requestedPickupTime explicitly. carrierSchedule
+// is nullable JSON {date,startTime,endTime,source,recordedAt}; never infer a
+// carrier allocation from requested times. The public API has no slot readback
+// or AWB attachment operation. carrierResponse retains the creation response.
 model EcommPickupRequest extends Base {
     createdAt       DateTime @default(now()) @map("created_at")
     updatedAt       DateTime @updatedAt @map("updated_at")
@@ -1880,6 +2466,10 @@ model EcommPickupRequest extends Base {
     carrier         String
     pickupDate      String?  @map("pickup_date")
     pickupTime      String?  @map("pickup_time")
+    requestedPickupDate String? @map("requested_pickup_date")
+    requestedPickupTime String? @map("requested_pickup_time")
+    carrierSchedule Json? @map("carrier_schedule")
+    carrierResponse Json? @map("carrier_response")
     packageCount    Int      @default(0) @map("package_count")
     status          String   @default("REQUESTED")
     carrierPickupId String?  @map("carrier_pickup_id")
@@ -2186,6 +2776,121 @@ model Expense extends Base {
 }
 
 // Managed only by the scoped recurring-expense APIs and the authenticated cron.
+// Invoice schedules are source-owned. A unique dated occurrence contains a frozen
+// template draft, or references a normal BILL created through createBillSource.
+// Advancing the schedule and issuing its child commit in one transaction. Drafts
+// have no stock/accounting impact. Paused profiles skip missed dates on resume.
+model RecurringInvoice {
+  id String @id @default(uuid())
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clientId String @map("client_id")
+  client Client @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  name String
+  currency String
+  frequency String
+  interval Int @default(1)
+  startDate DateTime @db.Date @map("start_date")
+  endDate DateTime? @db.Date @map("end_date")
+  nextDate DateTime @db.Date @map("next_date")
+  status String @default("ACTIVE")
+  generationMode String @default("DRAFT") @map("generation_mode")
+  dueDays Int @default(0) @map("due_days")
+  template Json
+  revision String
+  createdBy String @map("created_by")
+  lastError String? @map("last_error")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  occurrences RecurringInvoiceOccurrence[]
+  @@index([companyId])
+  @@index([status, nextDate])
+  @@map("recurring_invoices")
+  @@deny('all', true)
+}
+
+model RecurringInvoiceOccurrence {
+  id String @id @default(uuid())
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  profileId String @map("profile_id")
+  profile RecurringInvoice @relation(fields: [profileId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  invoiceDate DateTime @db.Date @map("invoice_date")
+  dueDate DateTime @db.Date @map("due_date")
+  template Json
+  billId String? @unique @map("bill_id")
+  bill Bill? @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([profileId, invoiceDate])
+  @@index([companyId])
+  @@map("recurring_invoice_occurrences")
+  @@deny('all', true)
+}
+
+// Retainers request advances; creating/sending one never posts revenue, tax,
+// receivables or stock. Collections: Dr cash/bank Cr the frozen liability account.
+// Apply: Dr liability Cr the exact posted invoice receivable, represented in
+// payments as a Retainer receipt. Unapply reverses that receipt and restores credit.
+// Refunds only consume unused collected credit. Financial events are append-only,
+// cents-validated, company/customer/currency scoped and period-lock checked.
+model RetainerInvoice {
+  id String @id @default(uuid())
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  clientId String @map("client_id")
+  client Client @relation(fields: [clientId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  number Int
+  currency String
+  retainerDate DateTime @db.Date @map("retainer_date")
+  status String @default("DRAFT")
+  description String
+  reference String @default("")
+  notes String @default("")
+  termsAndConditions String @default("") @map("terms_and_conditions")
+  amount Decimal @db.Decimal(18, 2)
+  liabilityAccountId String @map("liability_account_id")
+  liabilityAccount AccountantAccountingAccount @relation(fields: [liabilityAccountId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  revision String
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  events RetainerEvent[]
+  @@unique([companyId, number])
+  @@index([companyId, clientId])
+  @@map("retainer_invoices")
+  @@deny('all', true)
+}
+
+model RetainerEvent {
+  id String @id @default(uuid())
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  retainerId String @map("retainer_id")
+  retainer RetainerInvoice @relation(fields: [retainerId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  kind String
+  amount Decimal @db.Decimal(18, 2)
+  eventDate DateTime @db.Date @map("event_date")
+  reference String @default("")
+  paymentMethod String? @map("payment_method")
+  accountId String? @map("account_id")
+  account AccountantAccountingAccount? @relation(fields: [accountId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  billId String? @map("bill_id")
+  bill Bill? @relation(fields: [billId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  paymentId String? @unique @map("payment_id")
+  payment Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  journalId String @unique @map("journal_id")
+  journal AccountantManualJournal @relation(fields: [journalId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  reversesId String? @unique @map("reverses_id")
+  reverses RetainerEvent? @relation("RetainerReversal", fields: [reversesId], references: [id], onDelete: Restrict, onUpdate: NoAction)
+  reversal RetainerEvent? @relation("RetainerReversal")
+  createdBy String @map("created_by")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@index([companyId, retainerId])
+  @@index([companyId, billId])
+  @@map("retainer_events")
+  @@deny('all', true)
+}
+
 model RecurringExpense {
     id String @id @default(uuid())
     companyId String @map("company_id")
@@ -2226,6 +2931,7 @@ model RecurringExpenseOccurrence {
 }
 
 model Payment extends Base {
+    retainerEvent RetainerEvent?
     paymentDate      DateTime @default(now()) @map("payment_date")
     paymentMode      String   @map("payment_mode")
     paymentReference String?  @map("payment_reference")
@@ -2365,6 +3071,20 @@ model CompanyUser {
 }
 
 model CompanyClient {
+    // CRM reuses this membership and the shared Client identity; there is no
+    // separate contact table. Controlled crmData stores only company-local owner,
+    // lifecycle/qualification, source, tags, custom fields, job title and notes,
+    // plus CRM timestamps/creator. It never stores name, email, phone or consent.
+    // crmVersion provides optimistic concurrency for authenticated CRM writes.
+    // These raw-API fields/relations are ignored by generated Prisma operations:
+    // existing client queries must work before the prepared migration is installed.
+    // Client creation/edit/activation stays on the existing /client page.
+    crmData Json @default("{}") @map("crm_data") @ignore
+    crmVersion Int @default(0) @map("crm_version") @ignore
+    crmAccountId String? @map("crm_account_id") @ignore
+    crmAccount CrmAccount? @relation(fields: [companyId, crmAccountId], references: [companyId, id], onDelete: Restrict) @ignore
+    crmDeals CrmDeal[]
+    crmTasks CrmActivity[]
     expenses       Expense[]
     companyId      String  @map('company_id')
     company        Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
@@ -2980,6 +3700,11 @@ model StatementMapping extends Base {
 }
 
 model Quote extends Base {
+    // pdfTemplate retains legacy template names; quotes now render the company's
+    // single GeneralPreference documentDesign. _erpQuote.document stores print
+    // visibility defaults; _erpQuote.workflow stores signed-response revisions,
+    // a draft invoice snapshot or the single linked issued Bill ID, and email state.
+    // Invoice drafts have no Bill/stock/journal effects until explicitly issued.
     quoteNumber        String                 @map("quote_number")
     referenceNumber    String?                @map("reference_number")
     quoteDate          DateTime               @map("quote_date")
@@ -3101,6 +3826,10 @@ model ProjectTask extends Base {
 }
 
 model SalesOrder extends Base {
+    // Dedicated ERP source APIs validate company customer/variants and total pricing.
+    // sales-orders GeneralPreference keys document:<id> keep revision, customer/line
+    // snapshots and subject; defaults holds its independent A4 design/preferences.
+    // Orders never deduct stock or record payment merely by saving/changing status.
     orderNumber          String           @map("order_number")
     referenceNumber      String?          @map("reference_number")
     orderDate            DateTime         @map("order_date")
@@ -3786,8 +4515,8 @@ model StorefrontAgentSession {
     initialPreviewSha     String?   @map("initial_preview_sha")
     initialMainSha        String?   @map("initial_main_sha")
     deploymentTriggered   Boolean   @default(false) @map("deployment_triggered")
-    // Added by the edit-sandbox orchestrator (ALTER ... ADD COLUMN IF NOT EXISTS
-    // in its ensureColumns). Mirrored here or push drops them.
+    // Authoritative orchestrator field contract. Runtime startup validates these
+    // columns with read-only queries; schema application is a separate operation.
     storageUri            String?   @map("storage_uri")
     piSessionId           String?   @map("pi_session_id")
     pendingPrompt         String?   @map("pending_prompt")
@@ -3880,12 +4609,10 @@ model StorefrontDesignProfile {
 // ---------------------------------------------------------------------------
 // Edit-sandbox orchestrator tables.
 //
-// Owned entirely by the `orchestrator/` Cloud Run service via raw SQL — see
-// orchestrator/schema.sql, which is the source of truth for their DDL. They are
-// mirrored here for ONE reason: storetools has no migrations folder and reaches
-// the DB with `prisma db push`, which DROPS tables absent from this schema.
-// Without these blocks a routine storetools schema change deletes live seller
-// sessions.
+// This file is authoritative for their model contract. Local SQL definitions in
+// orchestrator/schema.sql and aws-schema.sql must follow it. Runtime services
+// validate the existing schema and never create or alter database objects.
+// Applying schema changes requires a separate explicit instruction.
 //
 // Deliberately no @@allow rules: ZenStack denies by default, and no seller or
 // storetools user should ever read these through the client.
@@ -4033,6 +4760,8 @@ enum AccountantJournalEntrySide {
 }
 
 model AccountantAccountingAccount {
+  retainerInvoices RetainerInvoice[]
+  retainerEvents RetainerEvent[]
   distributorMappings AccountantDistributorMapping[]
   id                   String                    @id @default(cuid())
   companyId            String                    @map("company_id")
@@ -4074,6 +4803,7 @@ model AccountantAccountingAccount {
 // PostgreSQL implementation: prisma/migrations/20261022180000_source_posting_edits.
 // This policy adds no fields. New source/account edit auditing is deferred.
 model AccountantManualJournal {
+  retainerEvent RetainerEvent?
   distributorSources AccountantDistributorSource[]
   createdById String? @map("created_by_id")
   approvals Json @default("[]")
@@ -4485,13 +5215,18 @@ model AccountantDistributorSource {
   @@deny('all', true)
 }
 
-// Investor profiles and immutable dated terms/events are owned by the Accountant API.
+// Investor profiles, allocation-protected dated terms and immutable movement
+// events are owned by the Accountant API.
+// Native creation includes its initial ownership snapshot; identity, profile and
+// snapshot must commit atomically. Creation request UUIDs are payload-checked in
+// AccountantAudit (investor-create) so retries cannot duplicate the investor.
 model AccountantInvestor {
   id String @id @default(uuid())
   companyId String @map("company_id")
   company Company @relation(fields: [companyId], references: [id], onUpdate: NoAction, onDelete: NoAction)
   terms AccountantInvestorTerm[]
   events AccountantInvestorEvent[]
+  loans AccountantLoan[]
   name String
   // Linked company user for native and imported investor profiles.
   legacyUserId String? @map("legacy_user_id")
@@ -4505,6 +5240,15 @@ model AccountantInvestor {
   @@deny('all', true)
 }
 
+// Internal dated ownership snapshots, not a user agreement workflow. New share
+// purchases/redemptions use the price on each share transaction. There are no
+// agreement commitments or fixed prices; unpaid trade amounts are payment dues.
+// Percentage-mode values are entered on profiles.
+// Historical agreement JSON remains readable and must not be rewritten by rollout.
+// SHARE_BUY/SHARE_REDEEM record ownership separately from payment. Unpaid trade
+// amounts are operational dues; only linked CAPITAL_IN/OUT settlements post cash.
+// Trade, optional confirmed payment and ownership save atomically; same-day changes audit each
+// revision. Protected allocations, company share pool and dependent history remain.
 model AccountantInvestorTerm {
   id String @id @default(uuid())
   companyId String @map("company_id")
@@ -4518,6 +5262,12 @@ model AccountantInvestorTerm {
   @@deny('all', true)
 }
 
+// Capital event details hold transaction price/share quantity, capitalPreview and
+// shareChange before/after snapshots. Reversals compensate both cash and shares;
+// later dependent capital/ownership snapshots must be corrected first.
+// Trade details carry paymentStatus; capital settlements link settleTradeId and
+// cannot change shares again. Confirmed partial/full payments reduce dues; payment
+// reversals reopen dues. Unpaid trades have no journal and are not cash movements.
 model AccountantInvestorEvent {
   id String @id @default(uuid())
   companyId String @map("company_id")
@@ -4537,6 +5287,61 @@ model AccountantInvestorEvent {
   @@unique([companyId, reversedId])
   @@index([companyId, investorId, eventDate], map: "accountant_v2_investor_events_company_id_investor_id_event_date")
   @@map("accountant_v2_investor_events")
+  @@deny('all', true)
+}
+
+// Borrowing agreements: saving records the receipt, freezes terms/accounts/schedule,
+// and opens the loan in one company-locked transaction without a confirmation step.
+// Older unposted drafts can be completed by saving their information once.
+// Scheduled entries transfer due principal from long-term to current liability and
+// recognize interest expense. Twelve-month principal reclassifications reverse the
+// following day. Cash payments clear current liability; only actual principal
+// receipts/repayments project into investor events (details.loanId). All source
+// journals and events are immutable; corrections use reasoned compensating entries.
+// API writes run in the existing company-locked Accountant transaction, with date
+// locks, active same-company accounts, base currency, payload-checked request IDs.
+// Loan account selections are owned by each loan, defaulting from company loan
+// settings. Long-term liability need not match a historical investor account map;
+// investor identity is used for lender attribution. Saved loan snapshots remain
+// authoritative for subsequent postings; changing defaults never rewrites them.
+model AccountantLoan {
+  id String @id @default(uuid())
+  companyId String @map("company_id")
+  company Company @relation(fields: [companyId], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  investorId String @map("investor_id")
+  investor AccountantInvestor @relation(fields: [companyId, investorId], references: [companyId, id], onUpdate: NoAction, onDelete: NoAction)
+  name String
+  status String @default("DRAFT")
+  currency String
+  terms Json
+  accounts Json
+  schedule Json
+  events AccountantLoanEvent[]
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+  @@unique([companyId, id])
+  @@index([companyId, status])
+  @@map("accountant_v2_loans")
+  @@deny('all', true)
+}
+
+model AccountantLoanEvent {
+  id String @id @default(uuid())
+  companyId String @map("company_id")
+  loanId String @map("loan_id")
+  loan AccountantLoan @relation(fields: [companyId, loanId], references: [companyId, id], onUpdate: NoAction, onDelete: NoAction)
+  eventDate DateTime @db.Date @map("event_date")
+  kind String
+  principal Decimal @default(0) @db.Decimal(16, 2)
+  interest Decimal @default(0) @db.Decimal(16, 2)
+  fees Decimal @default(0) @db.Decimal(16, 2)
+  journalId String @map("journal_id")
+  requestId String @map("request_id")
+  details Json @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  @@unique([companyId, requestId])
+  @@index([companyId, loanId, eventDate])
+  @@map("accountant_v2_loan_events")
   @@deny('all', true)
 }
 

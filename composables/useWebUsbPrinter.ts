@@ -336,6 +336,7 @@ export function useWebUsbPrinter() {
 
 export async function prepareReceiptPrint(printData: any, design?: PrintTemplate | null) {
     const template = design === undefined ? await loadPrintTemplate('receipt', printData.companyId) : design;
+    if (template?.paperSize) throw new Error('Print sheet receipts using the system print dialog or download their PDF.');
     let bytes: Uint8Array;
     try {
       bytes = template ? templatePrintBytes(await renderPrintTemplate(template, printData), template) : buildBillReceiptBytes(printData);

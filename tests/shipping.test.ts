@@ -10,6 +10,7 @@ import { createDelhivery, normalizeStatus } from '../server/utils/shipping/delhi
 import { handleShippingWebhook } from '../server/utils/shipping/webhook'
 import { zipFiles } from '../server/utils/shipping/zip'
 import { legacyCarrier } from '../server/utils/shipping/legacy-carriers'
+import { shippingLabelItemRows } from '../utils/shipping-label.client'
 
 const company = 'seller-company'
 function fixture(options: { missingDimensions?: boolean; missingConfig?: boolean; shipped?: boolean; grandTotal?: number; carrierFail?: boolean } = {}) {
@@ -187,8 +188,23 @@ test('label PDF regenerates expired stored URLs and returns bytes', async () => 
   assert.ok(f.requests.some(r => r.url.includes('packing_slip')))
 })
 test('custom label data falls back to the seller trading name and address', async () => {
-  const f = fixture({ shipped: true }), result = await f.run({ method: 'GET', path: 'label-data', query: { waybills: 'AWB-1' } })
+  const f = fixture({ shipped: true })
+  f.order.items = [
+    { itemId: 'blush', name: 'Georgette Hijabs - Multiple Shades', variantName: 'multiple', sizeLabel: 'Shade', size: 'Blush', quantity: 1, sprice: 199 },
+    { itemId: 'mushroom', name: 'Georgette Hijabs - Multiple Shades', variantName: 'multiple', sizeLabel: 'Shade', size: 'Mushroom', quantity: 1, sprice: 199 },
+    { itemId: 'blue', name: 'Georgette Hijabs - Multiple Shades', variantName: 'multiple', sizeLabel: 'Shade', size: 'Dusty Blue', quantity: 1, sprice: 199 },
+    { itemId: 'grey', name: 'Jersey Hijabs', variantName: 'Multiple', sizeLabel: 'Shade', size: 'Light Grey', quantity: 1, sprice: 199 },
+  ]
+  const result = await f.run({ method: 'GET', path: 'label-data', query: { waybills: 'AWB-1' } })
   assert.equal(result.packages[0].snm, 'Seller'); assert.match(result.packages[0].sadd, /Warehouse address/)
+  assert.equal(result.packages[0].items.length, 4)
+  assert.deepEqual(result.packages[0].items.map((item: any) => item.quantity), [1, 1, 1, 1])
+  assert.match(result.packages[0].items[0].name, /Shade: Blush/)
+  assert.match(result.packages[0].items[3].name, /Jersey Hijabs.*Shade: Light Grey/)
+  const tableRows = shippingLabelItemRows(result.packages[0])
+  assert.equal((tableRows.match(/<tr>/g) || []).length, 4)
+  assert.match(tableRows, /Shade: Mushroom/)
+  assert.match(tableRows, /Shade: Dusty Blue/)
 })
 test('approved return manifests Pickup flow and persists both request and order AWBs atomically', async () => {
   const f = fixture({ shipped: true }), result = await f.run({ method: 'POST', path: 'reverse', body: { requestId: 'request-1' } })
@@ -286,6 +302,7 @@ function entryHarness(auth: () => Promise<any>) {
   const modules: Record<string, any> = {
     '../../db': { pool: { connect: async () => { state.connections++; return connection } } },
     '../companyRequestScope': { useCompanyRequestSession: auth },
+    '../after-sales-lifecycle': {},
     './http': { shippingError: (message: string, statusCode: number) => Object.assign(Error(message), { statusCode }) },
     './service': { createShippingService: (_db: any, companyId: string) => {
       state.companyId = companyId

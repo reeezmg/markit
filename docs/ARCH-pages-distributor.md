@@ -1,5 +1,32 @@
 ### Distributor (`/distributor`)
 
+#### Detail-table PDF and Excel downloads (2026-10-23)
+
+`pages/distributor/index.vue` offers the shared `Distributor/TableDownload.vue`
+menu in Accounts, Purchase Orders, Purchase Returns, Payments and the expanded
+PO payments table. Expenses is unchanged. Each menu has Download PDF and Download
+Excel actions, with loading, empty-data and fetch-error guards.
+
+`utils/distributor-table-export.client.ts` creates the files in the browser from
+already company-scoped table data. Exports include every matching row across
+pagination; Accounts also follows its selected sort. The PO and payment tab exports
+use the same filtered arrays as their tables rather than the older register download
+endpoints. Nested PO payments export that PO's settlement rows. Existing individual
+return PDF and main supplier-row Download Transactions actions remain unchanged.
+
+PDFs follow the chart-of-accounts ledger design: company/supplier identity, period,
+navy heading, summary cards, striped tables and generated/page footers. Excel files
+have report information and transaction sheets, frozen headers, column filters,
+wrapped notes and numeric amounts. Accounts exports retain source references,
+descriptions, debit, credit and running payable due; opening and closing dues use
+all posted rows before/through the selected dates, independently of search/type
+filters. Debit and credit summaries total the matching rows. Supplier names and
+company names come from the selected company-scoped data.
+
+`node --import tsx tests/distributor-table-export.test.ts` checks workbook metadata,
+numeric amounts, literal source text, nullable due and complete multi-page PDFs
+without database access.
+
 #### Payment modal allocation and field order (2026-10-12)
 
 The shared payment modal orders distributor/date/amount/payment method before
@@ -97,7 +124,7 @@ The main distributor page's Accounts tab replaces the legacy Transactions table 
 `AccountingTransactions.vue`. It shows only published entries whose journal ID is
 the current distributor source pointer and whose source still exists in the event
 projection. Superseded, reversed, deleted-source and unlinked journal rows are
-excluded, including from CSV and running due. Rows use Purchase/Payment/Credit/Return/Receipt/
+excluded, including from PDF/Excel exports and running due. Rows use Purchase/Payment/Credit/Return/Receipt/
 Opening source types; the table offers no Journal/Reversal filters. The preview joins
 company-scoped source documents to supply `PO-{purchaseOrderNo}`, `DP-{paymentNo}`,
 or `{distributorCreditPrefix}-{creditNo}` references (source IDs when unnumbered), ahead of journal references
@@ -105,7 +132,7 @@ or supplier invoice numbers. Payment and credit prefixes come from the owning co
 Numbering settings, defaulting to DP/DC when null; a saved empty prefix omits the dash.
 All standalone Add Credit records, including received-money credits, display Credit;
 accounting event kinds and amounts remain unchanged. The same source
-references drive table search, sorting, details and CSV. It groups
+references drive table search, sorting, details and PDF/Excel exports. It groups
 current journal lines and computes running payable from Accounts Payable lines
 before date/type/text filtering. Debit/credit details and journal links use current
 source-linked accounting data. Full journal history remains available in accounting. Pay/Add Credit and mapped source edit/delete actions still write
@@ -284,7 +311,7 @@ The `--remaining-due-only` option runs the focused paid-PO edit/settlement regre
 and writes `remaining-due.json` in the same directory.
 
 **Files:**
-- `pages/distributor/index.vue` — Distributor list with two-pane split layout (PO + credit tabs)
+- `pages/distributor/index.vue` — Distributor list with two-pane split layout (Accounts, Purchase Orders, Purchase Returns, Payments, Expenses)
 - `pages/distributor/credit.vue` — Distributor credit/payment ledger per distributor (legacy — functionality now also in index.vue)
 - `pages/distributor/purchaseOrder.vue` — All purchase orders across all distributors
 - `pages/distributor/add-purchase-return.vue` / `pages/distributor/edit-purchase-return/[id].vue` — Purchase return entry/edit forms; rows capture barcode/product/category/size/qty/rate/reason, with subtotal and grand total derived from `qty × rate` only
@@ -322,16 +349,9 @@ Fetches `DistributorCompany` records with distributor info + purchase orders + c
 - **Layout:** Left panel = distributor summary table; Right panel = selected distributor detail with tabs
 - **Summary columns:** Distributor name, Orders, Total (sum of `distributorCredits.amount`), Paid (sum of `distributorPayments.amount`), Return (sum of `distributorPayments` where `paymentType='RETURN'`), Opening Due (`DistributorCompany.openingDue`), Due (`openingDue + Total − Paid`) — all computed client-side
 - **Detail panel tabs:** Accounts, Purchase Orders, Purchase Returns, Payments, Expenses
-  - **Transactions tab** (the main ledger view) — columns: **Date · No · Type · Remarks · Debit · Credit · Actions**.
-    - Row taxonomy (mapped client-side in `distributors` computed):
-      | Source row | Condition | Type label | No | Debit | Credit |
-      |---|---|---|---|---|---|
-      | `PurchaseOrder` | positive total | `PURCHASE` | `PO-{po.purchaseOrderNo}` | – | `totalAmount` |
-      | `DistributorCredit` | no `purchaseOrderId` | `CREDIT` | `DC-{creditNo}` | – | `amount` |
-      | `DistributorPayment` | `paymentType !== 'RETURN'` | `PAYMENT` | `DP-{paymentNo}` | `amount` | – |
-      | `DistributorPayment` | `paymentType === 'RETURN'` (linked via `purchaseReturnId`) | `PURCHASE RETURN` | `PR-{returnNo}` (resolved via `returnMap` built from `purchaseReturns`) | `amount` | – |
-    - Row backgrounds (via `row.class` — same idiom as `pages/accounts/cash.vue`'s `styledLedger`): credit rows green (`bg-green-50 dark:bg-green-900/20`), debit rows red (`bg-red-50 dark:bg-red-900/20`).
-    - Type filter options: `ALL / PURCHASE / PAYMENT / CREDIT / PURCHASE RETURN` — applied as `t.type === filter` in `filteredTransactions`.
+  - **Accounts tab** uses `components/Distributor/AccountingTransactions.vue`: Reference, Date, Type, Debit, Credit, Due and Actions.
+    - `utils/distributor-accounting-transactions.ts` groups current source-linked published journal lines. Only Accounts Payable lines contribute amounts and running due; counterpart lines remain in details.
+    - Type filters: All transactions, Purchase, Payment, Credit, Charge Credit, Return, Receipt, Opening balance and Expense. Date and text filters apply before pagination; sorting is explicit and shared with PDF/Excel exports.
     - Source-backed Accounts purchase rows and Purchase Orders tab rows share Details, Print, Edit, Pay, Clear Due, Restore Due, and Delete actions. Edit opens `/products/add?poId=...&isEdit=true`. Payment rows in Accounts and Payments share Edit/Delete and the same payment form as the standalone Payments page. `CREDIT` rows open the Add Credit modal preloaded with `creditKind` (derived from `moneyTransactionId` presence) and (for AMOUNT credits) `paymentMode`/`bankAccountId` from the linked `moneyTransaction`. The kind toggle is locked during edit (`editingCreditKindLocked = true`).
   - **Purchase Orders tab:** PO list with columns: PO No, Date, Payment Type, Total, Qty (sum of `item.initialQty`), Due (all payment types, calculated from settlements), and the shared PO action menu.
   - **Purchase Returns tab:** date-filtered list with columns: Date, PO No, Subtotal, Tax, Total, Remarks, Actions (Download / Edit / Delete).
@@ -393,7 +413,7 @@ A company-wide list of all purchase orders (not grouped by distributor).
 
 **Edit PO:** navigates to `/products/add?poId={id}&isEdit=true&from=distributor-purchase-order`
 
-The shared `/products/add` editor can search and stage saved products without a PO, alongside new product drafts. Product-list Add purchase order / Link to Purchase order actions preselect a saved product there. Adding/selecting/removing a pending product changes only the local draft; Save attaches the selections and recalculates the PO atomically. Existing settlements are preserved. See `ARCH-pages-products.md` for the draft and ownership checks. Product/variant numbers use the installed `20261029120000_catalog_numbers` migration.
+The shared `/products/add` editor can search and stage saved products without a PO, alongside new product drafts. Product-list Add purchase order / Link to Purchase order actions preselect a saved product there. Adding/selecting/removing a pending product changes only the local draft; Save attaches the selections and recalculates the PO atomically. Existing settlements are preserved. See `ARCH-pages-products.md` for the draft and ownership checks. Product/variant numbers use `20261029120000_catalog_numbers`; deployment status must be verified separately for each database.
 
 ---
 
@@ -421,7 +441,7 @@ Creates a bare PO with only `companyId` — no products, no distributor, no amou
 
 #### Bugs / Issues
 
-- `Form.vue` distributor edit uses `address: { create: {} }` — creates a new address every time the distributor is edited instead of updating the existing one. **Address records accumulate on edit.**
+- **Fixed (2026-10-29):** distributor edits upsert the existing address by `distributorId` in the same transaction as profile/opening/accounting changes.
 - ~~`Dlist.vue` console.log on every data change~~ — **FIXED** (Dlist.vue no longer used; index.vue rewritten without debug logging)
 - `purchaseOrder.vue` has a `watch(rows, val => console.log(...))` — logs all PO rows to console on every update
 

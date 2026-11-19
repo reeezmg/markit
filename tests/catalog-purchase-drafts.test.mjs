@@ -130,18 +130,19 @@ test('product readers return saved catalog numbers without changing stock or PO 
     const db = { release() {}, async query(sql) {
       queries.push(sql)
       if (sql.includes('FROM purchase_orders')) return result([{ id: 'po', company_id: 'branch', purchase_order_no: 2 }])
-      if (sql.includes('FROM products p')) return result([{ id: 'product', company_id: 'branch', product_no: 4, purchaseorder_id: null }])
+      if (sql.includes('FROM products p')) return result([{ id: 'product', company_id: 'branch', product_no: 4, is_service_product: true, purchaseorder_id: null }])
       if (sql.includes('FROM variants')) return result([{ id: 'variant', variant_no: 7, product_id: 'product' }])
       if (sql.includes('FROM items')) return result([{ id: 'item', variant_id: 'variant', qty: 2, initial_qty: 5 }])
       throw Error(`Unexpected query ${sql}`)
     } }
     const handler = load(file, { defineEventHandler: x => x, createError, getRouterParam: () => file.includes('purchaseorder') ? 'po' : 'product',
       readBody: async () => ({ ids: ['product'] }), getReadCompanyIds: async () => ['branch'], getAuthorizedCompanyIds: async () => ['branch'],
-      pool: { connect: async () => db },
+      pool: { connect: async () => db }, afterSalesAvailable: async () => false,
     })
     const response = await handler({})
     const product = Array.isArray(response) ? response[0] : response.products?.[0] || response
     assert.equal(product.productNo, 4)
+    assert.equal(product.isServiceProduct, true)
     assert.equal(product.variants[0].variantNo, 7)
     assert.equal(product.variants[0].items[0].qty, 2)
     assert.equal(product.variants[0].items[0].initialQty, 5)
@@ -185,7 +186,7 @@ async function editor(query = {}, failSave = false) {
   const fn = Object.getPrototypeOf(async function () {}).constructor
   const scope = effectScope()
   const ready = scope.run(() => new fn(...Object.keys(bindings), javascript(code) + `
-    return {addExistingProduct,onDraftProductDeleted,tableProducts,existingProducts,stagedProducts,handleSaveWithPO,handleSaveEditedPurchaseOrder,handleAdd,name,category,variants,editPurchaseOrder,selectingExisting,isSave};
+    return {addExistingProduct,onDraftProductDeleted,tableProducts,existingProducts,stagedProducts,handleSaveWithPO,handleSaveEditedPurchaseOrder,handleAdd,name,category,variants,editPurchaseOrder,selectingExisting,isSave,productIsService,createValue,applyDraftToForm,persistDraftForm};
   `)(...Object.values(bindings)))
   const page = await ready
   draft.isReady.value = true
@@ -237,6 +238,21 @@ test('existing PO opens with selected product ready for Save; new additions also
   assert.equal(save.body.products.length, 1)
   assert.equal(e.page.stagedProducts.value.length, 0)
   assert.equal(e.page.existingProducts.value.length, 0)
+  e.stop()
+})
+
+test('service products reuse normal product drafts and staging without a separate inventory flow', async () => {
+  const e = await editor({ serviceProduct: 'true' })
+  e.page.applyDraftToForm(); await nextTick()
+  assert.equal(e.page.productIsService.value, true, 'Service item entry defaults the shared product flag')
+  e.page.createValue({ name: 'Repair filter', category: { id: 'category', name: 'Parts' }, isServiceProduct: true })
+  await nextTick()
+  assert.equal(e.draft.form.value.isServiceProduct, true)
+  e.page.variants.value = [{ id: 'variant', key: '1', name: 'Standard', sprice: 30, dprice: 30, pprice: 10, items: [{ id: 'item', qty: 2 }], images: [] }]
+  await e.page.handleAdd({ preventDefault() {} })
+  assert.equal(e.page.stagedProducts.value[0].isServiceProduct, true)
+  assert.equal(e.page.stagedProducts.value[0].variants[0].items[0].qty, 2)
+  assert.ok(!e.calls.some(c => /save|create|update/.test(c.url)), 'Adding still stages until normal Save')
   e.stop()
 })
 

@@ -1,13 +1,17 @@
+import { reconcileBillServices, returnBillServices, afterSalesAvailable } from '../../utils/after-sales-lifecycle'
 import { lockCompanyRequest } from '~/server/utils/lockCompanyRequest';
 import { setDocumentStatusContext } from '~/server/utils/document-status-context'
 import { useCompanyRequestSession } from '~/server/utils/companyRequestScope';
 import crypto from 'crypto'
 import { createError } from 'h3'
 import { pool } from '~/server/db'
+import { billAdjustmentValue } from '../../../utils/bill-adjustments'
 import { billCreditCents, preserveCreditTender } from '~/utils/bill-credit'
 import { assertNoBillReceipts } from '~/server/utils/bill-receipts'
 import { generateCouponsForBill } from '~/server/utils/generatedCoupons'
 import { creditAmountFromBill, deleteUserLedgerEntryForSource, upsertUserLedgerEntry } from '~/server/utils/user-ledger'
+import { validateInvoiceSource, writeInvoiceDetails } from '~/server/utils/invoice-flow'
+import { documentNotes } from '~/utils/document-notes'
 
 
 
@@ -98,6 +102,22 @@ export default defineEventHandler(async (event) => {
     }
 
     const existingBill = billResult.rows[0]
+    let savedNotes
+    let savedAdjustment: number | null = null
+    try {
+      savedAdjustment = Object.prototype.hasOwnProperty.call(billData, 'adjustment') ? billAdjustmentValue(billData.adjustment) : null
+      savedNotes = documentNotes({
+        notes: billData.notes === undefined ? existingBill.notes : billData.notes,
+        termsAndConditions: billData.termsAndConditions === undefined ? existingBill.terms_and_conditions : billData.termsAndConditions,
+      })
+    } catch (error: any) { throw createError({ statusCode: 400, statusMessage: error.message }) }
+    const zeroServiceInvoice = Number(billData.grandTotal) === 0 && await afterSalesAvailable(client) &&
+      (await client.query('SELECT id FROM service_jobs WHERE bill_id=$1 AND company_id=$2', [existingBill.id,existingBill.company_id])).rows.length > 0
+    const invoice = existingBill.invoice_code && (!existingBill.type || existingBill.type==='BILL') && !existingBill.is_markit
+      ? await validateInvoiceSource(client,existingBill.company_id,{...billData,
+        dueDate:billData.dueDate ?? (existingBill.due_date ? new Date(existingBill.due_date).toISOString().slice(0,10) : ''),
+        invoicePaymentTerms:billData.invoicePaymentTerms ?? existingBill.invoice_payment_terms,
+        subject:billData.subject ?? existingBill.subject}, {allowZeroTotal:zeroServiceInvoice}) : null
     try { preserveCreditTender(existingBill,billData) }
     catch(e:any) { throw createError({statusCode:409,statusMessage:e.message}) }
     const nextCredit = billCreditCents(billData)
@@ -153,6 +173,9 @@ export default defineEventHandler(async (event) => {
         client_id = $13,
         created_at = $14,
         company_id = $15,
+        notes = $16,
+        terms_and_conditions = $17,
+        adjustment = COALESCE($18, adjustment, 0),
         updated_at = now()
       WHERE id = $1
       `,
@@ -172,9 +195,13 @@ export default defineEventHandler(async (event) => {
         resolvedClientId,
         billData.date,
         resolvedCompanyId,
+        savedNotes.notes,
+        savedNotes.termsAndConditions,
+        savedAdjustment,
       ],
     )
 
+    if (invoice) await writeInvoiceDetails(client,existingBill.company_id,billData.id,invoice)
     if (billData.creditUserId) {
       await upsertUserLedgerEntry(client, {
         companyId: resolvedCompanyId,
@@ -267,7 +294,7 @@ export default defineEventHandler(async (event) => {
       const rows = itemsWithoutId.map((item: any, i: number) => {
         const base = i * COLS
         values.push(
-          crypto.randomUUID(),
+          item.entryId = crypto.randomUUID(),
           item.name || '',
           item.qty || 1,
           item.rate || 0,
@@ -534,6 +561,9 @@ export default defineEventHandler(async (event) => {
       billDate: billData.date,
     })
 
+    const serviceUnits=(body.serviceUnits||[]).map((d:any)=>({...d,...(d.lineKey?{entryId:items.find((i:any)=>i.serviceLineKey===d.lineKey)?.entryId}:{})}))
+    await reconcileBillServices(client, resolvedCompanyId, billData.id, body.removedServiceUnitIds || [], requestSession.data.id, serviceUnits)
+    await returnBillServices(client, resolvedCompanyId, billData.id, body.returnedServiceUnitIds || [], requestSession.data.id)
     await client.query('COMMIT')
 
     return { success: true, generatedCoupons }
@@ -541,6 +571,7 @@ export default defineEventHandler(async (event) => {
     await client.query('ROLLBACK')
 
     console.error('❌ Transaction failed:', error.message)
+    if(error.statusCode) throw error
     throw createError({
       statusCode: 500,
       statusMessage: 'Failed to update bill',

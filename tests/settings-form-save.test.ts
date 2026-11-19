@@ -6,7 +6,7 @@ import { ref } from 'vue';
 
 const handlers = [
   ['onNameUpdate', 'isUpdatingName'], ['onContactDetailsSave', 'isUpdatingContact'],
-  ['onNotesUpdate', 'isUpdatingDescription'], ['onaccSubmit', 'isUpdatingAccount'], ['onaddSubmit', 'isUpdatingAddress'],
+  ['onaccSubmit', 'isUpdatingAccount'], ['onaddSubmit', 'isUpdatingAddress'],
   ['onTaxIncludeChange'], ['onAiImageChange'], ['onUserTrackIncludeChange'], ['onCostIncludeChange'],
   ['onPointsValueChange', 'isUpdatingPointsValue'], ['ontimingChange', 'isUpdatingtiming'],
   ['onCategoryChange', 'isUpdatingCategory'],
@@ -152,6 +152,7 @@ for (const profile of [false, true]) test(`${profile ? 'avatar' : 'logo'} upload
 
 for (const [name, flag, session] of [
   ['onStoreIdentitySave', 'isNameChanged', 'updateStoreUniqueName'],
+  ['onStoreIdentitySave', 'isDescriptionChanged', 'updateStoreNote'],
   ['onContactDetailsSave', 'isPhoneChanged', 'updateStorePhone'],
   ['onAllDeliverySave', 'isDeliveryTypeChanged', 'updateDeliveryType'],
   ['onAllDeliverySave', 'isDeliveryConfigChanged', 'updateDeliveryConfig'],
@@ -168,6 +169,18 @@ test('delivery configuration does not leave the unrelated bank-details form load
   const current = harness('saveDeliveryConfig'); t.after(current.resolve);
   const result = current.run(); current.resolve(); await result;
   assert.equal(current.context.isUpdatingAccount.value, false);
+});
+
+test('store identity description save excludes removed policy fields and preserves their session values', async t => {
+  const current = harness('onStoreIdentitySave', false, undefined, {
+    isNameChanged: ref(false), isImageChanged: ref(false), isCategoryChanged: ref(false), isDescriptionChanged: ref(true),
+    storeDescription: ref('A local clothing store'),
+    useAuth: () => ({ session: ref({ companyId: 'fixture-company', thankYouNote: 'Legacy thanks', refundPolicy: 'Legacy refund', returnPolicy: 'Legacy return' }) }),
+  }); t.after(current.resolve);
+  const save = current.run();
+  assert.deepEqual(current.writes[0].data, { description: 'A local clothing store' });
+  current.resolve(); await save;
+  assert.deepEqual(current.sessions.find(s => s.name === 'updateStoreNote')?.args, ['A local clothing store', 'Legacy thanks', 'Legacy refund', 'Legacy return']);
 });
 
 test('store address reload preserves zero coordinates', () => {

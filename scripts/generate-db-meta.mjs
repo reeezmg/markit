@@ -293,7 +293,7 @@ if (meta.unmodeledRuntimeTables.length) {
 }
 
 for (const [name, model] of Object.entries(parsedModels)) {
-  md.push(`### ${name}`, '', `${model.abstract ? 'Abstract model; no physical table.' : `PostgreSQL table: \`${model.table}\`.`} Source: \`schema.zmodel:${model.sourceLine}\`.${model.extends ? ` Extends \`${model.extends}\`.` : ''}`, '', `Purpose: ${model.description}`, '')
+  md.push(`### ${name}`, '', `${model.abstract ? 'Abstract model; no physical table.' : `PostgreSQL table: \`${model.table}\`.`} Source: \`schema.zmodel:${model.sourceLine}\`.${model.extends ? ` Extends \`${model.extends}\`.` : ''}`, '', `Purpose: ${model.description}`.trimEnd(), '')
   md.push(`Code references (direct text/accessor matches): ${model.codeReferences.map((ref) => `\`${ref}\``).join(', ') || 'No direct match in scanned server code.'}`, '')
   md.push('Declared constraints and policies:', '', '```prisma', ...model.attributes, '```', '')
   if (model.inheritedAttributes?.length) md.push('Inherited attributes (declarations; consult ZenStack policy composition):', '', '```prisma', ...model.inheritedAttributes, '```', '')

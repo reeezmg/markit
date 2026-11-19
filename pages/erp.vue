@@ -11,7 +11,7 @@ definePageMeta({
 <template>
     <UDashboardPage>
         <UDashboardPanel grow>
-            <ErpPageNavbar title="ERP" />
+            <ErpPageNavbar title="Sales" />
 
             <NuxtPage :page-key="route => route.path + String(route.query.entryCompany || '')" />
         </UDashboardPanel>

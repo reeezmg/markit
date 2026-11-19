@@ -13,6 +13,8 @@ delivery and Express-server documentation remains under `docs/`.
 | `database/dbMeta.json` | Machine-readable schema metadata for coding agents |
 | `database/dbExplanations.json` | Editable table purpose and field explanations; new keys start blank |
 | `ARCH-schema.md` | DB tables, field definitions, relations for all models |
+| `ARCH-after-sales.md` | Reusable maintenance/warranty/guarantee configurations, product links, per-unit agreements, claims, visits and internal due alerts |
+| `ARCH-crm.md` | Dedicated CRM sidebar, leads, existing clients/accounts, pipelines, activities/calendar, conversion, segments, campaigns and reports |
 | `ARCH-patterns.md` | Enums, layouts, storetools auth, DB access patterns, ZenStack hooks pattern |
 | `ARCH-pages-erp.md` | ERP pages: billing/POS, sales list, bill edit, expenses, B2B credit accounts |
 | `ARCH-pages-accounts.md` | Existing finance ledgers and independent Accountant area: chart, journals, budgets, assets, controls and adoption |
@@ -28,7 +30,9 @@ delivery and Express-server documentation remains under `docs/`.
 | `ARCH-pages-store.md` | Public/marketing pages and current storefront architecture; removed Nuxt customer routes marked historical |
 | `ARCH-pages-ecommerce-cms.md` | Seller ecommerce CMS: blogs, customers, content, marketing, payment and shipping settings |
 | `ARCH-pages-ai-editor.md` | AI provider/usage pages, bank statement page and storefront editor |
+| `ARCH-sidebar-navigation.md` | Company sidebar section/page selection, shared menus, role/plan gates, Settings and persistence |
 | `ARCH-pages-navigation.md` | Dashboard parent routes, page shells and settings navigation |
+| `ARCH-connect-whatsapp.md` | Connect sidebar, company WhatsApp Embedded Signup, templates, messaging, signed webhooks and operator setup |
 | `ARCH-components.md` | All shared components: notifications, barcode/receipt, dashboard charts, store frontend, checkout, category form, finance, settings modals, template stubs |
 | `ARCH-composables.md` | All custom composables and lib/api utilities: cloud storage, Firebase, printing (WebUSB/Bluetooth/ESC/POS/TSPL/CPCL), notifications, Socket.io events, dashboard data, store products, coupons, utilities |
 | `ARCH-storetools-internals.md` | Plugins, middleware, services, Pinia stores, types, and utils in storetools root |
@@ -45,12 +49,16 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 
 | Looking for... | Go to |
 |---|---|
+| Unified Sales table, Pay now / Invoices / Unpaid tabs and invoice redirects | `ARCH-pages-erp.md` + `ARCH-pages-navigation.md` |
+| Recurring invoices, retainer advances, applications and refunds | `ARCH-pages-erp.md` + `ARCH-storetools-api.md` |
 | Head-office branch settings without a company switch / current company settings | `ARCH-pages-settings.md` + `ARCH-composables.md` |
 | DB table fields / schema | `ARCH-schema.md` |
+| Warranty / guarantee / maintenance / after-sales / customer product / service visit / service items / labour charges | `ARCH-after-sales.md` |
 | Prisma model names, enums | `ARCH-schema.md` + `ARCH-patterns.md` |
 | ZenStack hooks pattern | `ARCH-patterns.md` |
 | Session data structure | `ARCH-patterns.md` + `ARCH-storetools-auth.md` — `AuthSession` type |
-| How layouts work (nav gating by plan) | `ARCH-patterns.md` |
+| How layouts work (nav gating by plan) | `ARCH-patterns.md` + `ARCH-sidebar-navigation.md` |
+| Sidebar settings / select ERP CRM Storetools Connect / hide sidebar pages | `ARCH-sidebar-navigation.md` |
 | Seller login (H3 session) | `ARCH-storetools-auth.md` — login.post.ts, plugins/0.auth.ts |
 | Forgot password / password reset | `ARCH-pages-auth-settings.md` + `ARCH-storetools-auth.md` — forgot-password.vue, resetPassword.post.ts |
 | Client/customer session (store frontend) | `ARCH-storetools-auth.md` — clientauth/ routes, AuthClientSession |
@@ -64,6 +72,8 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | Coupon generation server API | `ARCH-storetools-api.md` — coupons/generate |
 | Cart sync API | `ARCH-storetools-api.md` — cart/ routes |
 | WhatsApp template / webhook | `ARCH-storetools-api.md` — whatsapp/ routes |
+| Tech Provider / Connect / WhatsApp business onboarding / Embedded Signup | `ARCH-connect-whatsapp.md` |
+| Client WhatsApp automation / service reminders / notification permissions / delivery queue | `ARCH-connect-whatsapp.md` + `WHATSAPP-NOTIFICATIONS.md` |
 | TikTok Shop OAuth + products | `ARCH-storetools-api.md` — tiktok/ routes |
 | FCM push token save | `ARCH-storetools-api.md` — savefcmtoken.post.ts, savecaptoken.post.ts |
 | AI image generation (Gemini + R2) | `ARCH-storetools-api.md` — upload.ts, aify.post.ts |
@@ -89,6 +99,9 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | Agentic loop (Gemini + MCP tools) | `ARCH-ai-chat.md` — Agentic Loop section |
 | Discount bulk apply API | `ARCH-storetools-api.md` — discount/apply.post.ts |
 | Bill creation (POS) | `ARCH-pages-erp.md` |
+| Pay now / Invoice billing mode / invoices / payments received | `ARCH-pages-erp.md` — POS Billing; `ARCH-storetools-api.md` — bill/ + billSale/ |
+| ERP sales orders / order editor / order design / local order drafts | `ARCH-pages-erp.md` - Sales orders; `ARCH-storetools-api.md` - sales-orders/ |
+| ERP quotes / quotations / quote editor, A4 design, preferences, customer approval and invoice conversion | `ARCH-pages-erp.md` — Quotes; `ARCH-storetools-api.md` — quotes/ |
 | Markit bill / marketplace settlement | `ARCH-schema.md` + `ARCH-server.md` — `markit_bills`, `checkout/trynbuy/complete` |
 | Bill create raw SQL transaction | `ARCH-pages-erp.md` |
 | Sales return entry lookup by invoice | `ARCH-pages-erp.md` — `/api/bill/findFirstEntry` |
@@ -113,9 +126,10 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | User/staff management | `ARCH-pages-users.md` |
 | Shift policies, paid breaks, overnight checkout, leave balances, compensatory leave | `ARCH-pages-users.md` — Shift policy scenarios; rollout: `../scripts/SHIFT-POLICY.md` |
 | User performance report API | `ARCH-pages-users.md` |
-| Client/CRM pipeline | `ARCH-pages-client.md` |
+| Client/CRM pipeline / customer Service history / purchased products | `ARCH-pages-client.md` + `ARCH-after-sales.md` |
+| Dedicated CRM / lead capture / opportunities / deal forecast / CRM calendar / existing client CRM / CRM segments | `ARCH-crm.md` |
 | Settings (store/general/printer/numbering) | `ARCH-pages-settings.md` |
-| General page preferences / reusable preference rules | Removed from active storetools source in the 2026-06-15 cleanup; schema remains documented in `ARCH-schema.md` |
+| General page preferences / reusable preference rules | Former generic routes were removed in the 2026-06-15 cleanup. Quote defaults now use dedicated `quotes/preferences` routes; see `ARCH-storetools-api.md` — quotes/ and `ARCH-schema.md` — GeneralPreference |
 | Number prefixes & financial year | `ARCH-pages-settings.md` — numbering.vue |
 | Previous bill prefix (closing date aware) | `ARCH-pages-settings.md` — numbering.vue |
 | Auth composable functions | `ARCH-pages-settings.md` |
@@ -242,6 +256,8 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 
 | Location | Bug |
 |---|---|
+| `server/utils/shipping/service.ts`, `utils/shipping-label.client.ts` | **FIXED (2026-11-15):** custom shipping labels rendered Delhivery's aggregated product description and quantity as one product row. Label data now maps the AWB to the original order/request item snapshot and renders every distinct item separately. |
+| `server/utils/shipping/delhivery.ts`, `server/api/ecommerce-cms/pickup/raise.post.ts` | **FIXED (2026-11-15):** a Delhivery HTTP 200 response without `pickup_id` was treated as success, creating a Markit-only pickup. Pickup creation now requires a non-empty carrier ID before local persistence. |
 | `composables/useCompanyScope.ts`, `useSelectedAccounts.ts`, `server/utils/companyRequestScope.ts` | **FIXED (2026-10-21):** active-company pages/requests could retain old cookie settings after another authorized admin edited that branch. Contexts now load current database settings without changing the login company, and account-default reads use that page context. |
 | `pages/settings/numbering.vue`, `pages/settings/printer.vue` | **FIXED** — prefix/label saves showed success and changed sessions before persistence; now await mutation/session, retain loading and guard duplicate saves. |
 | `pages/settings/products.vue`, `server/api/product-custom-fields/index.post.ts` | **FIXED** — built-in/dimension settings used separate writes; now one nested upsert. Custom-field replacement now rejects missing arrays, duplicate IDs and foreign-company IDs atomically. |
@@ -259,6 +275,8 @@ Marketplace, delivery and Express-server docs are owned by the repository-level 
 | `server/` `authMiddleware.js` | `console.log("JWT verification error:", err)` fires on every request including valid ones |
 | `pages/erp/billing.vue` | `console.log` statements left in production |
 | `pages/products/stocks/index.vue` | Debug `console.log` dumps full category breakdown on every load |
+| `server/utils/accountant/accounts.ts` | Subaccount edits validate ancestor depth but not descendant height; moving a parent can push descendants past five levels. Type changes do not validate children or a retained parent when parentId is omitted. See `ARCH-pages-accounts.md`. |
+| `components/Accountant/ChartOfAccountsPage.vue` | Subaccounts sort by parent ID/name rather than tree traversal, so children may precede parents. Parent picker offers descendants; API circular-link checks reject those saves. See `ARCH-pages-accounts.md`. |
 | `components/Distributor/Form.vue` | **Fixed (2026-10-29):** full-page profile/account form uses one scoped save transaction and address upsert; new forms prefill company defaults and edits preserve supplier choices. |
 | `pages/distributor/index.vue` | ~~`console.log(distributors.value)` on every data change~~ **FIXED** (page rewritten; old `Dlist.vue` console.log removed). Transactions tab rebuilt: Date·No·Type·Remarks·Debit·Credit columns, PURCHASE/CREDIT/PAYMENT/PURCHASE-RETURN taxonomy, Add-Credit modal gained PRODUCT vs AMOUNT toggle (AMOUNT path creates a linked MoneyTransaction → flows through cash/bank ledgers). |
 | `pages/distributor/purchaseOrder.vue` | `watch` logs all PO rows on every update |

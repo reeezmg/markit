@@ -1,4 +1,6 @@
 import { companyStorageKey } from '~/utils/companyStorageKey';
+import { billTotal, splitBillDiscount } from '~/utils/bill-adjustments';
+import { newBillingDocumentValues, type BillingDefaults } from '~/utils/billing-preferences';
 /**
  * useBillingDraft
  *
@@ -27,8 +29,11 @@ function makeDefaultBill(billNo = '1') {
     parentUserId: null,
     parentUserName: null,
     discount: 0,
+    adjustment: 0,
     redeemedAmt: 0,
     paymentMethod: 'Cash',
+    billingMode: 'paynow', dueDate: '', invoicePaymentTerms: '', invoiceReference: '',
+    notes: '', termsAndConditions: '',
     phoneNo: '',
     points: 0,
     clientName: '',
@@ -43,10 +48,11 @@ function makeDefaultBill(billNo = '1') {
   }
 }
 
-export function useBillingDraft() {
+export function useBillingDraft(defaults: BillingDefaults = {}) {
   const companyScope = useCompanyScope();
   const $fetch = companyScope.fetch;
   const LOCAL_BILLS_KEY = companyStorageKey('bills', companyScope.companyId.value, useNuxtApp().$auth.session.value?.companyId || '');
+  const BILLING_MODE_KEY = `markit_billing_mode:${companyScope.companyId.value}`;
 
   // ─── Bill state refs ────────────────────────────────────────────────────────
   const billNo = ref('1')
@@ -55,10 +61,20 @@ export function useBillingDraft() {
   const parentUserCode = ref(null)
   const parentUserId = ref(null)
   const parentUserName = ref(null)
-  const discount = ref(0)
+  const discount = ref<string | number>(0)
+  const adjustment = ref<string | number>(0)
   const redeemedAmt = ref(0)
   const redeemedPoints = ref(0)
   const paymentMethod = ref('Cash')
+  const billingMode = ref('paynow')
+  watch(billingMode, (mode) => {
+    if (process.client) localStorage.setItem(BILLING_MODE_KEY, mode)
+  }, { flush: 'sync' })
+  const dueDate = ref('')
+  const invoicePaymentTerms = ref('')
+  const invoiceReference = ref('')
+  const customerNotes = ref('')
+  const termsAndConditions = ref('')
   const phoneNo = ref('')
   const points = ref(0)
   const clientName = ref('')
@@ -71,6 +87,21 @@ export function useBillingDraft() {
     Object.fromEntries(PAYMENT_OPTIONS_IN_SPLIT.map(m => [m, { method: m, amount: null }]))
   )
   const items = ref([makeEmptyItem()])
+
+  function applyNewDocumentDefaults() {
+    const values = newBillingDocumentValues(billingMode.value, toDateInputValue(date.value), defaults)
+    customerNotes.value = values.notes; termsAndConditions.value = values.termsAndConditions
+    dueDate.value = values.dueDate; invoicePaymentTerms.value = values.invoicePaymentTerms
+  }
+  function applyBillingModeDefaults(mode: string) {
+    const previous = newBillingDocumentValues(billingMode.value, dateInput.value, defaults)
+    const next = newBillingDocumentValues(mode, dateInput.value, defaults)
+    if (customerNotes.value === previous.notes) customerNotes.value = next.notes
+    if (termsAndConditions.value === previous.termsAndConditions) termsAndConditions.value = next.termsAndConditions
+    if (mode === 'invoice' && !invoicePaymentTerms.value) {
+      invoicePaymentTerms.value = next.invoicePaymentTerms; dueDate.value = next.dueDate
+    }
+  }
 
   // Draft list state
   const selectedDraft = ref(null)
@@ -98,15 +129,7 @@ export function useBillingDraft() {
       return item.return ? sum - itemValue : sum + itemValue
     }, 0)
 
-    const discStr = String(discount.value ?? '')
-    const discNum = parseFloat(discStr)
-    const afterDiscount = discStr.startsWith('+')
-      ? isNaN(discNum) ? baseTotal : parseFloat((baseTotal + Math.abs(discNum)).toFixed(2))
-      : Number(discount.value) < 0
-        ? parseFloat((baseTotal - Math.abs(Number(discount.value))).toFixed(2))
-        : isNaN(Number(discount.value)) ? baseTotal : parseFloat((baseTotal - (baseTotal * Number(discount.value)) / 100).toFixed(2))
-
-    return afterDiscount - redeemedAmt.value
+    return billTotal(baseTotal, discount.value, adjustment.value, redeemedAmt.value)
   })
 
   const tQty = computed(() =>
@@ -144,9 +167,13 @@ export function useBillingDraft() {
     parentUserId: parentUserId.value,
     parentUserName: parentUserName.value,
     discount: discount.value,
+    adjustment: adjustment.value,
     returnAmt: returnAmt.value,
     redeemedAmt: redeemedAmt.value,
     paymentMethod: paymentMethod.value,
+    billingMode: billingMode.value, dueDate: dueDate.value,
+    invoicePaymentTerms: invoicePaymentTerms.value, invoiceReference: invoiceReference.value,
+    notes: customerNotes.value, termsAndConditions: termsAndConditions.value,
     phoneNo: phoneNo.value,
     points: points.value,
     clientName: clientName.value,
@@ -193,18 +220,26 @@ export function useBillingDraft() {
     parentUserCode.value = bill.parentUserCode ?? null
     parentUserId.value = bill.parentUserId ?? null
     parentUserName.value = bill.parentUserName ?? null
-    discount.value = bill.discount ?? 0
+    const amounts = splitBillDiscount(bill.discount, bill.adjustment)
+    discount.value = amounts.discount
+    adjustment.value = amounts.adjustment
     redeemedAmt.value = bill.redeemedAmt ?? 0
-    paymentMethod.value = bill.paymentMethod ?? 'Cash'
+    const invoice = billingMode.value === 'invoice'
+    paymentMethod.value = invoice ? 'Credit' : bill.billingMode === 'invoice' ? 'Cash' : bill.paymentMethod ?? 'Cash'
+    dueDate.value = bill.dueDate || (invoice ? toDateInputValue(date.value) : '')
+    invoicePaymentTerms.value = bill.invoicePaymentTerms || (invoice ? 'Due on receipt' : '')
+    invoiceReference.value = bill.invoiceReference || ''
+    customerNotes.value = bill.notes || ''
+    termsAndConditions.value = bill.termsAndConditions || ''
     phoneNo.value = bill.phoneNo ?? ''
     points.value = bill.points ?? 0
     clientName.value = bill.clientName ?? ''
     clientId.value = bill.clientId ?? ''
     couponValue.value = bill.couponValue ?? 0
-    splitPayments.value = bill.splitPayments ?? []
+    splitPayments.value = invoice ? [] : bill.splitPayments ?? []
     isRedeemPoint.value = bill.isRedeemPoint ?? false
     redeemedPoints.value = bill.redeemedPoints ?? 0
-    selected.value = bill.selected ?? null
+    selected.value = invoice ? null : bill.selected ?? null
     const defaultSplits = Object.fromEntries(PAYMENT_OPTIONS_IN_SPLIT.map(m => [m, { method: m, amount: null }]))
     tempSplits.value = { ...defaultSplits, ...(bill.tempSplits ?? {}) }
     items.value = (bill.items ?? []).map((item: any) => ({
@@ -225,8 +260,13 @@ export function useBillingDraft() {
     parentUserId.value = null
     parentUserName.value = null
     discount.value = 0
+    adjustment.value = 0
     redeemedAmt.value = 0
-    paymentMethod.value = 'Cash'
+    paymentMethod.value = billingMode.value === 'invoice' ? 'Credit' : 'Cash'
+    dueDate.value = billingMode.value === 'invoice' ? toDateInputValue(date.value) : ''
+    invoicePaymentTerms.value = billingMode.value === 'invoice' ? 'Due on receipt' : ''
+    invoiceReference.value = ''
+    applyNewDocumentDefaults()
     phoneNo.value = ''
     points.value = 0
     clientName.value = ''
@@ -265,13 +305,18 @@ export function useBillingDraft() {
     requestId.value = ''
     items.value = [{ ...makeEmptyItem(), rate: 0, discount: 0, tax: 0 }]
     discount.value = 0
-    paymentMethod.value = 'Cash'
+    adjustment.value = 0
+    date.value = new Date().toISOString()
+    paymentMethod.value = billingMode.value === 'invoice' ? 'Credit' : 'Cash'
+    dueDate.value = billingMode.value === 'invoice' ? toDateInputValue(date.value) : ''
+    invoicePaymentTerms.value = billingMode.value === 'invoice' ? 'Due on receipt' : ''
+    invoiceReference.value = ''
+    applyNewDocumentDefaults()
     clientName.value = ''
     clientId.value = ''
     phoneNo.value = ''
     points.value = 0
     selected.value = null
-    date.value = new Date().toISOString()
     parentUserCode.value = null
     parentUserId.value = null
     parentUserName.value = null
@@ -292,8 +337,13 @@ export function useBillingDraft() {
 
   onMounted(() => {
     const bills = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]')
+    const savedMode = localStorage.getItem(BILLING_MODE_KEY)
+    billingMode.value = savedMode === 'invoice' || savedMode === 'paynow'
+      ? savedMode : bills[0]?.billingMode === 'invoice' ? 'invoice' : 'paynow'
+    localStorage.setItem(BILLING_MODE_KEY, billingMode.value)
     if (bills.length === 0) {
-      localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify([makeDefaultBill()]))
+      localStorage.setItem(LOCAL_BILLS_KEY, JSON.stringify([{ ...makeDefaultBill(), billingMode: billingMode.value,
+        ...newBillingDocumentValues(billingMode.value, toDateInputValue(date.value), defaults) }]))
     }
     const updated = JSON.parse(localStorage.getItem(LOCAL_BILLS_KEY) || '[]')
     if (updated.length > 0) {
@@ -306,7 +356,8 @@ export function useBillingDraft() {
   return {
     // State
     billNo, date, parentUserCode, parentUserId, parentUserName,
-    discount, redeemedAmt, redeemedPoints, paymentMethod,
+    discount, adjustment, redeemedAmt, redeemedPoints, paymentMethod, billingMode, dueDate, invoicePaymentTerms, invoiceReference,
+    customerNotes, termsAndConditions,
     phoneNo, points, clientName, clientId, couponValue,
     splitPayments, isRedeemPoint, selected, tempSplits, items,
     draftBills, selectedDraft, requestId,
@@ -316,6 +367,7 @@ export function useBillingDraft() {
     dateInput, commitDateInput,
     // Functions
     createNewBill, loadDraftBills, loadBill, deleteBill, resetDraft,
+    applyBillingModeDefaults,
     LOCAL_BILLS_KEY, MAX_BILL_DRAFTS,
   }
 }

@@ -3,6 +3,8 @@ import { labelBarcode, requireLabelBarcode } from '../utils/label-barcode';
 import { getReceiptFinishing, receiptFeedBytes } from '../utils/receipt-finishing';
 import moment from 'moment';
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
+import { billDocumentLines } from '../utils/invoice-flow';
+import { receiptSummary } from '../utils/receipt-summary';
 
 function finishReceipt(encoder: ReceiptPrinterEncoder) {
   const settings = getReceiptFinishing();
@@ -217,12 +219,12 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
   const lineSavings = toFiniteNumber(bill.tdiscount);
   const billDiscountBase = bill.ttvalue ?? bill.subtotal;
   const calculatedDiscount = computeBillDiscountAmount(bill.discount, billDiscountBase);
-  const billDiscountText = formatBillDiscountDisplay(bill.discount, calculatedDiscount);
+  const billDiscountText = Number(bill.adjustment) ? receiptSummary(bill).discountText : formatBillDiscountDisplay(bill.discount, calculatedDiscount);
   const couponDiscount = toReceiptAmount(bill.couponValue);
   const redeemedPoints = toReceiptAmount(bill.redeemedPoints);
   const availablePoints = toReceiptAmount(bill.availablePoints);
   const totalSavings = toReceiptAmount(
-    lineSavings + toFiniteNumber(calculatedDiscount) + couponDiscount + redeemedPoints,
+    lineSavings + toFiniteNumber(calculatedDiscount) - toFiniteNumber(bill.adjustment) + couponDiscount + redeemedPoints,
   );
   const savingsText = `SAVINGS: ${formatSavingsMoney(totalSavings)}`;
   const upiPayment = bill.paymentMethod?.toLowerCase() === 'upi'
@@ -439,6 +441,8 @@ export function buildBillReceiptBytes(bill: any): Uint8Array {
       .align('left')
       .newline(1);
   }
+
+  for (const line of billDocumentLines(bill)) encoder.align('left').text(line).newline(1);
 
   encoder
     .align('center')

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { format, sub } from 'date-fns';
 import { distributorAccountingTransactions } from '../../utils/distributor-accounting-transactions';
-const props = defineProps<{ companyId: string; distributorId: string; revision?: unknown }>();
+import type { DistributorTableReport } from '~/utils/distributor-table-export.client';
+const props = defineProps<{ companyId: string; distributorId: string; companyName?: string; revision?: unknown }>();
 const data = ref<any>(null);
 const busy = ref(false);
 const error = ref('');
@@ -75,12 +76,26 @@ const reference = (row:any) => row.reference || row.sourceKey;
 const dateLabel = (date:any) => new Date(date).toLocaleDateString('en-IN',{day:'2-digit',month:'short',year:'numeric'});
 const hasFilters = computed(()=>Boolean(search.value || start.value || end.value || type.value!=='ALL'));
 function clearFilters() { search.value=''; start.value=''; end.value=''; type.value='ALL'; }
-function download() {
-  const quote = (value: any) => `"${String(value ?? '').replace(/^[=+@-]/, "'$&").replaceAll('"','""')}"`;
-  const csv = [['Date','Reference','Type','Description','Debit','Credit','Running due'], ...filtered.value.map(r => [r.date,r.reference,r.type,r.description,r.debit,r.credit,r.due])].map(row => row.map(quote).join(',')).join('\r\n');
-  const url = URL.createObjectURL(new Blob([csv], {type:'text/csv;charset=utf-8'}));
-  const link = document.createElement('a'); link.href=url; link.download='distributor-accounting.csv'; link.click(); URL.revokeObjectURL(url);
-}
+const exportReport = computed<DistributorTableReport>(() => {
+  // Derive period balances chronologically, even when the displayed rows are sorted otherwise.
+  const throughEnd = all.value.filter(row => !end.value || format(new Date(row.date), 'yyyy-MM-dd') <= end.value);
+  const beforeStart = start.value ? all.value.filter(row => format(new Date(row.date), 'yyyy-MM-dd') < start.value) : [];
+  return {
+    title: 'Accounts', supplier: data.value?.distributor?.name || 'Distributor', company: props.companyName,
+    period: start.value && end.value ? `${dateLabel(start.value)} to ${dateLabel(end.value)}`
+      : start.value ? `From ${dateLabel(start.value)}` : end.value ? `Through ${dateLabel(end.value)}` : 'All dates',
+    columns: [{label:'Date'}, {label:'Reference'}, {label:'Type'}, {label:'Description',width:50},
+      {label:'Debit (INR)',numeric:true}, {label:'Credit (INR)',numeric:true}, {label:'Running due (INR)',numeric:true}],
+    rows: sorted.value.map(row => [dateLabel(row.date), reference(row), typeLabels[row.type] || row.type, row.description || '', row.debit, row.credit, row.due]),
+    summary: [
+      {label:'Opening due before period',value:beforeStart.at(-1)?.due || 0},
+      {label:'Debits shown',value:filtered.value.reduce((sum,row) => sum + row.debit,0)},
+      {label:'Credits shown',value:filtered.value.reduce((sum,row) => sum + row.credit,0)},
+      {label:'Closing due through end date',value:throughEnd.at(-1)?.due || 0},
+    ],
+    note: 'Opening and closing dues reflect all posted transactions in the period, regardless of search or type filters.',
+  };
+});
 </script>
 <template>
   <section class="min-w-0 space-y-4">
@@ -114,7 +129,7 @@ function download() {
         <div class="flex items-center gap-1.5"><span class="text-xs text-gray-500">Rows:</span><USelect v-model="pageCount" :options="[5,10,20]" size="xs" class="w-16" /></div>
         <div class="flex items-center gap-1">
           <UButton icon="i-heroicons-funnel" size="xs" :color="hasFilters ? 'primary' : 'gray'" variant="outline" aria-label="Filter transactions" @click="filterOpen=true" />
-          <UButton icon="i-heroicons-arrow-down-tray" size="xs" color="gray" variant="outline" aria-label="Download CSV" :disabled="!filtered.length" @click="download" />
+          <DistributorTableDownload :report="exportReport" :disabled="busy || Boolean(error) || !allowed" />
         </div>
       </div>
       <UTable v-model:sort="sort" :rows="rows" :columns="columns" :loading="busy" sort-mode="manual" sort-asc-icon="i-heroicons-arrow-up" sort-desc-icon="i-heroicons-arrow-down" class="w-full">

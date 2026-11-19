@@ -61,7 +61,7 @@ async function reverse() {
 <template>
   <UModal v-model="open" :prevent-close="saving">
     <UCard>
-      <template #header><div class="font-semibold">Credit bill payments · {{ state?.invoiceNumber || bill?.invoiceNumber }}</div></template>
+      <template #header><div class="font-semibold">Invoice payments · {{ bill?.invoiceCode || state?.invoiceNumber || bill?.invoiceNumber }}</div></template>
       <div class="space-y-4">
         <p v-if="loading">Loading payments…</p>
         <UAlert v-if="error" color="red" :description="error" title="Payment could not be completed" />
@@ -75,7 +75,7 @@ async function reverse() {
             <UFormGroup label="Payment method"><USelect v-model="method" :options="['Cash','UPI','Card','Bank','Cheque']" :disabled="saving" /></UFormGroup>
             <UFormGroup label="Receiving account"><USelect v-model="accountId" :options="accounts" :disabled="saving" /></UFormGroup>
             <UFormGroup label="Reference (optional)"><UInput v-model="reference" maxlength="100" :disabled="saving" /></UFormGroup>
-            <UButton :loading="saving" :disabled="loading || !accountId" label="Collect" @click="save" />
+            <UButton :loading="saving" :disabled="loading || !accountId" label="Record payment" @click="save" />
           </div>
           <div v-if="reversal" class="space-y-3">
             <p>Reverse {{ Number(reversal.amount).toFixed(2) }} received by {{ reversal.payment_mode }}. This reopens the amount due and records an opposite account movement.</p>
@@ -85,7 +85,8 @@ async function reverse() {
           </div>
           <div v-for="p in state.payments" :key="p.id" class="flex items-center justify-between gap-3 border-t pt-3 text-sm">
             <div>{{ new Date(p.payment_date).toLocaleDateString('en-IN',{timeZone:'Asia/Kolkata'}) }} · {{ p.payment_mode }} · {{ Number(p.amount).toFixed(2) }}<br><span class="text-gray-500">{{ p.payment_reference }} {{ p.status !== receiptStatus ? ' · Reversed' : '' }}</span></div>
-            <UButton v-if="p.status === receiptStatus" color="red" variant="ghost" label="Reverse" :disabled="saving" @click="beginReversal(p)" />
+            <NuxtLink v-if="p.status === receiptStatus && p.payment_mode === 'Retainer'" :to="{path:'/erp/retainer-invoices',query:{entryCompany:bill.companyId}}" class="text-primary-600">Manage advance</NuxtLink>
+            <UButton v-else-if="p.status === receiptStatus" color="red" variant="ghost" label="Reverse" :disabled="saving" @click="beginReversal(p)" />
           </div>
         </template>
       </div>

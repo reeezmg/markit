@@ -271,6 +271,10 @@ const requests = ref<any[]>([]);
 const loadingRequests = ref(false);
 const requestDetailsOpen = ref(false);
 const selectedRequest = ref<any | null>(null);
+const addOrdersOpen = ref(false);
+const addOrdersPickup = ref<any | null>(null);
+const carrierScheduleOpen = ref(false);
+const carrierSchedulePickup = ref<any | null>(null);
 const statusColor = (s: string) => (s === 'PICKED' ? 'green' : s === 'CANCELLED' ? 'red' : 'amber');
 
 function requestReference(req: any, index: number) {
@@ -278,14 +282,20 @@ function requestReference(req: any, index: number) {
 }
 
 function pickupSchedule(req: any) {
-  const rawDate = String(req.pickupDate || '').slice(0, 10);
+  const schedule = req.carrierSchedule;
+  if (!schedule?.date) return 'Carrier slot not recorded';
+  return `${schedule.date} · ${schedule.startTime}–${schedule.endTime} IST`;
+}
+
+function requestedSchedule(req: any) {
+  const rawDate = String(req.requestedPickupDate || req.pickupDate || '').slice(0, 10);
   if (!rawDate) return '—';
 
   try {
     const date = new Date(`${rawDate}T00:00:00`);
-    return `${format(date, 'dd MMM yyyy')} at ${req.pickupTime || '—'}`;
+    return `${format(date, 'dd MMM yyyy')} at ${req.requestedPickupTime || req.pickupTime || '—'}`;
   } catch {
-    return `${rawDate} at ${req.pickupTime || '—'}`;
+    return `${rawDate} at ${req.requestedPickupTime || req.pickupTime || '—'}`;
   }
 }
 
@@ -369,6 +379,12 @@ function requestActions(req: any) {
     { label: 'Download labels', icon: 'i-heroicons-arrow-down-tray-20-solid', click: () => downloadPickupLabels(req) },
   ];
   if (req.status !== 'CANCELLED' && req.status !== 'PICKED') {
+    if (req.carrierPickupId) {
+      actions.push(
+        { label: 'Add orders', icon: 'i-heroicons-plus-20-solid', click: () => { addOrdersPickup.value = req; addOrdersOpen.value = true; } },
+        { label: 'Record carrier slot', icon: 'i-heroicons-calendar-20-solid', click: () => { carrierSchedulePickup.value = req; carrierScheduleOpen.value = true; } },
+      );
+    }
     actions.push({
       label: req.carrierPickupId ? 'Cancel in Delhivery' : 'Cancel pickup',
       icon: 'i-heroicons-x-circle-20-solid',
@@ -599,7 +615,10 @@ onMounted(() => {
                 <p v-if="req.carrierPickupId" class="mt-0.5 font-mono text-xs text-gray-400">{{ req.carrierPickupId }}</p>
                 <UBadge v-else color="red" variant="subtle" size="xs" class="mt-1">Not created in Delhivery</UBadge>
               </td>
-              <td class="whitespace-nowrap px-4 py-3 text-gray-700 dark:text-gray-200">{{ pickupSchedule(req) }}</td>
+              <td class="whitespace-nowrap px-4 py-3 text-gray-700 dark:text-gray-200">
+                <p>{{ pickupSchedule(req) }}</p>
+                <p class="mt-1 text-xs text-gray-500">Requested: {{ requestedSchedule(req) }}</p>
+              </td>
               <td class="px-4 py-3 text-gray-700 dark:text-gray-200">{{ req.location || '—' }}</td>
               <td class="px-4 py-3 capitalize text-gray-700 dark:text-gray-200">{{ req.carrier || '—' }}</td>
               <td class="px-4 py-3 text-center font-medium text-gray-900 dark:text-white">{{ req.orderCount ?? 0 }}</td>
@@ -638,6 +657,8 @@ onMounted(() => {
               </UBadge>
             </div>
             <p class="mt-1 text-sm text-gray-500">{{ pickupSchedule(selectedRequest) }}</p>
+            <p class="mt-1 text-xs text-gray-500">Requested: {{ requestedSchedule(selectedRequest) }}</p>
+            <p v-if="selectedRequest.carrierSchedule" class="mt-1 text-xs text-gray-400">Carrier slot recorded from Delhivery One</p>
           </div>
           <UButton icon="i-heroicons-x-mark" color="gray" variant="ghost" @click="requestDetailsOpen = false" />
         </div>
@@ -672,7 +693,7 @@ onMounted(() => {
 
           <div>
             <h3 class="font-semibold text-gray-900 dark:text-white">Products in this pickup</h3>
-            <p class="mt-1 text-sm text-gray-500">Products are grouped by the parcel handed to the carrier.</p>
+            <p class="mt-1 text-sm text-gray-500">Markit's planned handover list, grouped by parcel. Delhivery's warehouse pickup API does not attach these AWBs to the pickup's order list in Delhivery One.</p>
           </div>
 
           <div v-if="!selectedRequest.shipments?.length" class="rounded-xl border border-dashed border-gray-300 py-12 text-center text-sm text-gray-500 dark:border-gray-700">
@@ -832,5 +853,7 @@ onMounted(() => {
       </UCard>
     </UModal>
   </div>
+  <PickupAddOrdersModal v-model="addOrdersOpen" :pickup="addOrdersPickup" @saved="loadRequests(); refreshRemaining()" />
+  <PickupCarrierScheduleModal v-model="carrierScheduleOpen" :pickup="carrierSchedulePickup" @saved="loadRequests" />
   </UDashboardPanelContent>
 </template>
