@@ -71,13 +71,13 @@ try{
   await wait(()=>layout()&&urls().includes('/erp/billing'),'ERP pages load by default');assert(tabs().length===0,'The single ERP section needs no switcher');assert(['CRM','Storetools','Connect'].every(section=>!checkbox('Show '+section+' section').checked),'CRM, Storetools and Connect default to off')
   await checkSectionLayouts()
   toggle('Show ERP section');toggle('Show CRM section');await nextTick();toggle('CRM: Reports');await save()
-  assert(tabs().length===0,'A single CRM section has no switcher');assert(!urls().includes('/crm/reports')&&urls().includes('/crm/leads'),'Only selected CRM pages appear')
+  assert(tabs().length===0,'A single CRM section has no switcher');assert(!urls().includes('/crm/reports')&&urls().includes('/client?from=crm'),'Only selected CRM pages appear')
   const collapse=layout().querySelector('button[aria-label="Collapse sidebar"]');collapse.click();await nextTick();assert(tabs().length===0,'Compact single-section switcher is hidden');assert(!urls().includes('/crm/reports'),'Compact pages are filtered')
   remount.value++;await wait(()=>layout()?.querySelector('button[aria-label="Expand sidebar"]'),'Collapsed selection survives reload');assert(!urls().includes('/crm/reports'),'Selections survive remount')
   layout().querySelector('button[aria-label="Expand sidebar"]').click();await nextTick()
-  target.value='branch';await wait(()=>api.preferences.value.revision===0&&checkbox('Show ERP section').checked,'Branch settings load');toggle('Show Storetools section');await save();assert(tabs().length===0&&urls().includes('/crm/leads'),'Editing branch settings leaves login company sidebar unchanged');assert(records.branch.sections.storefront.enabled,'Storetools can be explicitly enabled for a company')
+  target.value='branch';await wait(()=>api.preferences.value.revision===0&&checkbox('Show ERP section').checked,'Branch settings load');toggle('Show Storetools section');await save();assert(tabs().length===0&&urls().includes('/client?from=crm'),'Editing branch settings leaves login company sidebar unchanged');assert(records.branch.sections.storefront.enabled,'Storetools can be explicitly enabled for a company')
   target.value='a';await wait(()=>!checkbox('Show ERP section').checked,'Original company editor restored')
-  fail=true;toggle('Show ERP section');await save();assert(error.value==='Save rejected'&&tabs().length===0&&urls().includes('/crm/leads'),'Rejected saves preserve sidebar');fail=false
+  fail=true;toggle('Show ERP section');await save();assert(error.value==='Save rejected'&&tabs().length===0&&urls().includes('/client?from=crm'),'Rejected saves preserve sidebar');fail=false
   await click('Show all');await save();await wait(()=>tabs().length===4,'Show all restores sections')
   const accountPath='/accountant/manual-journals';for(const section of sidebarSections)records.a.sections[section].enabled=section==='erp';records.a.sections.erp.hiddenPages=menus.value.erp.flatMap(link=>link.children?.map(child=>child.to)||[link.to]).filter(path=>path&&path!==accountPath);records.a.revision++;await api.load()
   await wait(()=>urls().includes(accountPath),'Selected Account subpage appears');assert(!urls().includes('/accountant/chart-of-accounts'),'Expanded Account excludes hidden subpages')

@@ -3,6 +3,7 @@ const cartStore = useCartStore();
 const cartItemCount = computed(() => cartStore.cartItemCount);
 const useAuth = () => useNuxtApp().$auth;
 const auth = useAuth();
+const route = useRoute();
 definePageMeta({
     auth: true,
 });
@@ -11,7 +12,7 @@ definePageMeta({
 <template>
     <UDashboardPage>
         <UDashboardPanel grow>
-            <ErpPageNavbar title="Client">
+            <ErpPageNavbar :title="route.query.from === 'crm' ? 'Clients / leads' : 'Client'">
 
             </ErpPageNavbar>
             <NuxtPage />

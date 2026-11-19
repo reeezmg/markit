@@ -10,7 +10,7 @@ import { Switch } from '@headlessui/vue';
 import type { Prisma } from '@prisma/client'
 import { BillingAddClient } from '#components';
 import CRMClientPanel from '~/components/CRM/ClientPanel.vue';
-import { crmStaff } from '~/utils/crm';
+import { crmStaff, crmClientLocation } from '~/utils/crm';
 
 import { useUpdateBill } from '~/lib/hooks/bill';
 import { useFindManyCompanyClient, useCountCompanyClient } from '~/lib/company-hooks/company-client';
@@ -27,6 +27,7 @@ const route = useRoute();
 const crmClient = computed(() => typeof route.query.crmClient === 'string' ? route.query.crmClient : '');
 const crmCompany = computed(() => typeof route.query.entryCompany === 'string' ? route.query.entryCompany : companyScope.companyId.value);
 const crmAllowed = computed(() => crmStaff(companyScope.auth.session.value?.role || ''));
+const crmMode = computed(() => route.query.from === 'crm' && crmAllowed.value);
 const crmOpen = computed({ get: () => !!crmClient.value && crmAllowed.value, set: value => { if (!value) { const query = { ...route.query }; delete query.crmClient; void router.replace({ query }); } } });
 const useAuth = () => companyScope.auth;
 const isClientAddModelOpen = ref(false);
@@ -156,7 +157,7 @@ const action = (row) => [
         ...(crmAllowed.value ? [{
             label: 'CRM details',
             icon: 'i-heroicons-user-group',
-            to: { path: '/client', query: { from: 'crm', entryCompany: row.companyId, crmClient: row.clientId } },
+            to: crmClientLocation({ entryCompany: row.companyId, crmClient: row.clientId }),
         }] : []),
         ...(afterSales.isEnabled(row.companyId) ? [{
             label: 'Service history',
@@ -433,6 +434,7 @@ const downloadClientsAsVCF = () => {
 
 <template>
     <UDashboardPanelContent class="pb-24">
+        <p v-if="crmMode" class="text-sm text-gray-500">Select a client or lead to view qualification, deals and follow-ups.</p>
         <UCard
             class="w-full"
             :ui="{
@@ -638,7 +640,8 @@ const downloadClientsAsVCF = () => {
 
                 <template #name-data="{ row }">
                     <div class="flex flex-row items-center">
-                        <div class="ms-3">{{ row.name }}</div>
+                        <NuxtLink v-if="crmMode" :to="crmClientLocation({ entryCompany: row.companyId, crmClient: row.clientId })" class="ms-3 font-medium text-primary-600">{{ row.name }}</NuxtLink>
+                        <div v-else class="ms-3">{{ row.name }}</div>
                     </div>
                 </template>
                  <template #expand="{ row }">

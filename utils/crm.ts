@@ -1,11 +1,12 @@
 export const crmPages = [
-  ['','Overview','i-heroicons-squares-2x2'],['leads','Leads','i-heroicons-user-plus'],
-  ['clients','Clients / contacts','i-heroicons-users'],['accounts','Business accounts','i-heroicons-building-office-2'],
+  ['','Overview','i-heroicons-squares-2x2'],
+  ['clients','Clients / leads','i-heroicons-users'],['accounts','Business accounts','i-heroicons-building-office-2'],
   ['deals','Deals and pipeline','i-heroicons-view-columns'],['activities','Tasks and activities','i-heroicons-check-circle'],
   ['calendar','Calendar','i-heroicons-calendar-days'],['segments','Segments','i-heroicons-funnel'],
   ['campaigns','Campaigns','i-heroicons-megaphone'],['reports','Reports','i-heroicons-chart-bar'],
   ['settings','CRM settings','i-heroicons-cog-6-tooth'],
 ] as const
+export const crmClientLocation = (query:Record<string,any>={}) => ({path:'/client',query:{...query,from:'crm'}})
 export const crmKinds = ['clients','accounts','deals','activities'] as const
 export type CrmKind = typeof crmKinds[number]
 export type CrmStage = { key:string; name:string; probability:number; status:'OPEN'|'WON'|'LOST' }

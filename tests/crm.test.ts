@@ -4,7 +4,8 @@ import { Prisma } from '@prisma/client'
 import { test } from 'node:test'
 import { Readable } from 'node:stream'
 import { createEvent } from 'h3'
-import { defaultCrmSettings, normalizeCrmRecord, normalizeCrmSettings, crmPhone, crmScore, crmCsv, parseCrmCsv } from '../utils/crm'
+import { defaultCrmSettings, normalizeCrmRecord, normalizeCrmSettings, crmPhone, crmScore, crmCsv, parseCrmCsv, crmClientLocation } from '../utils/crm'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { crmWhere, crmList, saveCrmRecord, saveCrmSettings, archiveCrmRecords } from '../server/utils/crm'
 import { crmImport, crmRead, linkCrmDocument } from '../server/utils/crm-workflows'
 import { processCrmReminders } from '../server/utils/crm-reminders'
@@ -15,11 +16,23 @@ import { crmFixture } from './crm-fixture'
 const manager={companyId:'a',userId:'manager',role:'manager',manager:true},sales={...manager,userId:'sales',role:'user',manager:false}
 const contact={name:'Alex',email:'alex@example.com',phone:'+919876543210',ownerId:'sales',source:'Other',tags:[],lifecycle:'LEAD',leadStatus:'QUALIFIED'}
 
-test('Contacts reuse the client page and generated client reads ignore pending raw CRM columns',()=>{
+test('Old leads links open the shared client directory and preserve company and client context',async()=>{
+  const router=createRouter({history:createMemoryHistory(),routes:[
+    {path:'/crm/leads',redirect:to=>crmClientLocation(to.query)},
+    {path:'/client',component:{template:'<div />'}},
+  ]})
+  await router.push('/crm/leads?entryCompany=branch&crmClient=existing-client&from=old')
+  assert.equal(router.currentRoute.value.path,'/client')
+  assert.deepEqual(router.currentRoute.value.query,{entryCompany:'branch',crmClient:'existing-client',from:'crm'})
+})
+
+test('Contacts reuse the client page and physical CRM columns remain excluded from generated client operations',()=>{
   assert(!existsSync('pages/crm/contacts/index.vue'));assert(!existsSync('pages/crm/contacts/[contactId].vue'))
   assert(!/^model CrmContact\s*\{/m.test(readFileSync('schema.zmodel','utf8')))
   const membership=Prisma.dmmf.datamodel.models.find(model=>model.name==='CompanyClient')!
   for(const name of ['crmData','crmVersion','crmAccountId'])assert(!membership.fields.some(field=>field.name===name),'Generated client reads must not select '+name)
+  const physicalSchema=readFileSync('prisma/schema.prisma','utf8')
+  for(const name of ['crmData','crmVersion','crmAccountId'])assert(new RegExp('^\\s*'+name+'\\s+[^\\n]*@ignore','m').test(physicalSchema),'db push must retain ignored physical column '+name)
   assert(!Prisma.dmmf.datamodel.models.some(model=>model.name==='CrmContact'))
 })
 

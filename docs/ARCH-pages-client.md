@@ -2,16 +2,18 @@
 
 ### Dedicated CRM (`/crm`)
 
-CRM reuses this existing `/client` page for all contacts. Its sidebar link opens
-`/client?from=crm`; there is no dedicated contact page or table. Row Actions →
+CRM reuses this existing `/client` page for all clients and leads. Its single
+**Clients / leads** sidebar link opens `/client?from=crm`; `/crm/leads` redirects
+there with company/client query context preserved. The overview's Active leads card
+opens this same directory. In CRM mode, selecting a name or Row Actions →
 **CRM details** opens `CRM/ClientPanel.vue` in a slideover on the same page, preserving
 the membership's company. Deep links use `crmClient` and `entryCompany`.
 Client identity creation/editing and membership activation remain in the existing
 forms below. Company-specific owner, qualification, source, tags and custom fields
 are controlled CRM attributes on CompanyClient; they do not duplicate client identity.
 Deals/activities reference existing company clients directly. See [ARCH-crm.md](ARCH-crm.md).
-The revised prepared migration creates six CRM tables and extends CompanyClient;
-it remains unapplied pending separate authorization.
+The authorized 2026-11-19 schema push completed the missing CompanyClient columns
+and account foreign key; see ARCH-crm.md for the verified installation state.
 
 ### Client (`/client`)
 

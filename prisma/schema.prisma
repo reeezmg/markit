@@ -508,23 +508,24 @@ model CrmSettings {
 }
 
 model CrmAccount {
-  id          String        @id() @default(uuid())
-  companyId   String        @map("company_id")
-  company     Company       @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  id          String          @id() @default(uuid())
+  companyId   String          @map("company_id")
+  company     Company         @relation(fields: [companyId], references: [id], onDelete: Cascade)
   name        String
-  industry    String        @default("")
-  website     String        @default("")
-  email       String        @default("")
-  phone       String        @default("")
-  address     String        @default("")
-  ownerId     String        @map("owner_id")
+  industry    String          @default("")
+  website     String          @default("")
+  email       String          @default("")
+  phone       String          @default("")
+  address     String          @default("")
+  ownerId     String          @map("owner_id")
   tags        String[]
-  description String        @default("")
-  archived    Boolean       @default(false)
-  version     Int           @default(1)
-  createdBy   String        @map("created_by")
-  createdAt   DateTime      @default(now()) @map("created_at") @db.Timestamptz(3)
-  updatedAt   DateTime      @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+  description String          @default("")
+  archived    Boolean         @default(false)
+  version     Int             @default(1)
+  createdBy   String          @map("created_by")
+  createdAt   DateTime        @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt   DateTime        @default(now()) @updatedAt() @map("updated_at") @db.Timestamptz(3)
+  clients     CompanyClient[] @ignore
   deals       CrmDeal[]
   activities  CrmActivity[]
 
@@ -2923,6 +2924,10 @@ model CompanyUser {
 }
 
 model CompanyClient {
+  crmData                   Json          @default("{}") @map("crm_data") @ignore
+  crmVersion                Int           @default(0) @map("crm_version") @ignore
+  crmAccountId              String?       @map("crm_account_id") @ignore
+  crmAccount                CrmAccount?   @relation(fields: [companyId, crmAccountId], references: [companyId, id], onDelete: Restrict) @ignore
   crmDeals                  CrmDeal[]
   crmTasks                  CrmActivity[]
   expenses                  Expense[]

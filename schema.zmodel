@@ -169,7 +169,7 @@ model CrmAccount {
     createdBy String @map("created_by")
     createdAt DateTime @default(now()) @db.Timestamptz(3) @map("created_at")
     updatedAt DateTime @default(now()) @updatedAt @db.Timestamptz(3) @map("updated_at")
-    clients CompanyClient[] @ignore
+    clients CompanyClient[] @prisma.passthrough("@ignore")
     deals CrmDeal[]
     activities CrmActivity[]
     @@unique([companyId, id])
@@ -3080,13 +3080,14 @@ model CompanyClient {
     // lifecycle/qualification, source, tags, custom fields, job title and notes,
     // plus CRM timestamps/creator. It never stores name, email, phone or consent.
     // crmVersion provides optimistic concurrency for authenticated CRM writes.
-    // These raw-API fields/relations are ignored by generated Prisma operations:
-    // existing client queries must work before the prepared migration is installed.
+    // Preserve these fields in the physical Prisma schema for db push, while
+    // Prisma @ignore keeps raw-API attributes out of generated client operations.
+    // ZenStack @ignore would remove them from the physical schema entirely.
     // Client creation/edit/activation stays on the existing /client page.
-    crmData Json @default("{}") @map("crm_data") @ignore
-    crmVersion Int @default(0) @map("crm_version") @ignore
-    crmAccountId String? @map("crm_account_id") @ignore
-    crmAccount CrmAccount? @relation(fields: [companyId, crmAccountId], references: [companyId, id], onDelete: Restrict) @ignore
+    crmData Json @default("{}") @map("crm_data") @prisma.passthrough("@ignore")
+    crmVersion Int @default(0) @map("crm_version") @prisma.passthrough("@ignore")
+    crmAccountId String? @map("crm_account_id") @prisma.passthrough("@ignore")
+    crmAccount CrmAccount? @relation(fields: [companyId, crmAccountId], references: [companyId, id], onDelete: Restrict) @prisma.passthrough("@ignore")
     crmDeals CrmDeal[]
     crmTasks CrmActivity[]
     expenses       Expense[]

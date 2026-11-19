@@ -3,12 +3,16 @@ Dedicated sales CRM (revised 2026-11-19): `CrmSettings`, `CrmAccount`, `CrmDeal`
 Contacts reuse Client + CompanyClient and the existing /client page; CrmContact is
 removed from the unapplied design. CompanyClient's crmData/crmVersion/crmAccountId
 store only company CRM attributes, concurrency and account association. Those fields
-are @ignore for generated operations, preserving pre-installation client reads and
-keeping writes in authenticated CRM APIs. Identity and consent are never copied into
+use @prisma.passthrough("@ignore") so Prisma retains the physical columns for db push
+while excluding them from generated client operations and keeping writes in
+authenticated CRM APIs. Bare ZenStack @ignore removes physical fields from generated
+Prisma schemas. Identity and consent are never copied into
 CRM JSON. Deal/activity composite foreign keys reference CompanyClient directly.
 Versions/audits protect changes. Deal outcomes never post sales/stock/accounting.
-The revised prepared CRM migration adds six tables and three CompanyClient columns;
-it is not applied. See ARCH-crm.md and the separate approval rule in AGENTS.md.
+The CRM contract comprises six tables and three CompanyClient columns. On 2026-11-19,
+an authorized schema push added the missing columns/account foreign key to the configured
+database; the six tables already existed. Live CRM readiness passed. The prepared SQL
+migration was not executed or registered by this push. See ARCH-crm.md and AGENTS.md.
 
 Legacy accounting archive policy (2026-10-06): generated create/update/delete is
 denied on AccountLedgerEntry, MoneyTransaction, AccountTransfer, Investment, BankAccount
